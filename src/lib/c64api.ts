@@ -67,6 +67,13 @@ const READ_REQUEST_BUDGET_WINDOW_MS = 500;
 const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
 const READ_REQUEST_BUDGET_MAX_VALUE_BYTES = 64 * 1024;
 
+// Build a concise HTTP error message. When statusText is empty (common in HTTP/2)
+// omit the trailing colon so the message reads "HTTP 404" instead of "HTTP 404: ".
+const buildHttpErrorMessage = (status: number, statusText: string): string => {
+  const text = statusText?.trim();
+  return text ? `HTTP ${status}: ${text}` : `HTTP ${status}`;
+};
+
 const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
   /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
@@ -577,7 +584,7 @@ export class C64API {
     }
 
     const executeRequest = () =>
-      runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) =>
+      runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
         withRestInteraction(
           {
             action,
@@ -694,7 +701,7 @@ export class C64API {
                 );
                 const responseTrace = await inspectResponsePayload(response);
                 if (!response.ok) {
-                  const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
+                  const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
                   const failure = classifyError(err, "integration");
                   recordRestResponse(action, {
                     method,
@@ -878,7 +885,7 @@ export class C64API {
 
     const method = (options.method || "GET").toString().toUpperCase();
 
-    return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) =>
+    return runWithImplicitAction(`rest.${method.toLowerCase()} ${normalizeUrlPath(url)}`, async (action) =>
       withRestInteraction(
         {
           action,
@@ -1283,7 +1290,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
         "Memory DMA write failed",
         buildErrorLogDetails(error, {
@@ -1374,7 +1381,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
         "Drive mount upload failed",
         buildErrorLogDetails(error, {
@@ -1481,7 +1488,7 @@ export class C64API {
         status = response.status;
 
         if (!response.ok) {
-          const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+          const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
           addErrorLog(
             "SID upload failed",
             buildErrorLogDetails(error, {
@@ -1561,7 +1568,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
         "MOD upload failed",
         buildErrorLogDetails(error, {
@@ -1613,7 +1620,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
         "PRG upload failed",
         buildErrorLogDetails(error, {
@@ -1665,7 +1672,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
         "PRG upload failed",
         buildErrorLogDetails(error, {
@@ -1718,7 +1725,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
         "CRT upload failed",
         buildErrorLogDetails(error, {

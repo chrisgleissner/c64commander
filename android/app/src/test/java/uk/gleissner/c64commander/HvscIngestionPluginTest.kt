@@ -166,6 +166,18 @@ class HvscIngestionPluginTest {
     )
   }
 
+  private fun makeCallWithData(relativeArchivePath: String, offsetBytes: Long?, lengthBytes: Int): PluginCall {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn(relativeArchivePath)
+    `when`(call.getInt("lengthBytes")).thenReturn(lengthBytes)
+    val data = JSObject()
+    if (offsetBytes != null) {
+      data.put("offsetBytes", offsetBytes)
+    }
+    `when`(call.getData()).thenReturn(data)
+    return call
+  }
+
   @Test
   fun readArchiveChunkReturnsBoundedBase64Payload() {
     val archiveDir = File(context.filesDir, "hvsc/cache")
@@ -173,10 +185,7 @@ class HvscIngestionPluginTest {
     val archiveFile = File(archiveDir, "baseline.7z")
     archiveFile.writeBytes(byteArrayOf(1, 2, 3, 4, 5, 6))
 
-    val call = mock(PluginCall::class.java)
-    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc/cache/baseline.7z")
-    `when`(call.getLong("offsetBytes")).thenReturn(2L)
-    `when`(call.getInt("lengthBytes")).thenReturn(3)
+    val call = makeCallWithData("hvsc/cache/baseline.7z", 2L, 3)
 
     val payloadHolder = arrayOfNulls<JSObject>(1)
     doAnswer { invocation ->
@@ -195,16 +204,40 @@ class HvscIngestionPluginTest {
   }
 
   @Test
+  fun readArchiveChunkAcceptsZeroOffsetBytesRegression() {
+    // Regression for R11-001: offsetBytes=0 was incorrectly rejected because
+    // call.getLong("offsetBytes") returns null for JSON integer value 0 in some
+    // Capacitor versions. The fix reads from call.data directly.
+    val archiveDir = File(context.filesDir, "hvsc/cache")
+    archiveDir.mkdirs()
+    val archiveFile = File(archiveDir, "zero-offset.7z")
+    archiveFile.writeBytes(byteArrayOf(7, 8, 9))
+
+    val call = makeCallWithData("hvsc/cache/zero-offset.7z", 0L, 3)
+
+    val payloadHolder = arrayOfNulls<JSObject>(1)
+    doAnswer { invocation ->
+              payloadHolder[0] = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any(JSObject::class.java))
+
+    plugin.readArchiveChunk(call)
+
+    val payload = payloadHolder[0]
+    assertEquals(3, payload?.getInteger("sizeBytes"))
+    assertEquals(true, payload?.getBoolean("eof"))
+  }
+
+  @Test
   fun readArchiveChunkMarksEofWhenOffsetStartsAtFinalByteRange() {
     val archiveDir = File(context.filesDir, "hvsc/cache")
     archiveDir.mkdirs()
     val archiveFile = File(archiveDir, "final-range.7z")
     archiveFile.writeBytes(byteArrayOf(10, 11, 12, 13, 14, 15))
 
-    val call = mock(PluginCall::class.java)
-    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc/cache/final-range.7z")
-    `when`(call.getLong("offsetBytes")).thenReturn(4L)
-    `when`(call.getInt("lengthBytes")).thenReturn(8)
+    val call = makeCallWithData("hvsc/cache/final-range.7z", 4L, 8)
 
     val payloadHolder = arrayOfNulls<JSObject>(1)
     doAnswer { invocation ->
@@ -223,11 +256,18 @@ class HvscIngestionPluginTest {
   }
 
   @Test
+  fun readArchiveChunkRejectsMissingOffsetBytes() {
+    val call = makeCallWithData("hvsc/cache/missing.7z", null, 4)
+
+    plugin.readArchiveChunk(call)
+
+    verify(call).reject("offsetBytes is required")
+    verify(call, never()).resolve(any(JSObject::class.java))
+  }
+
+  @Test
   fun readArchiveChunkRejectsNegativeOffsetsBeforeTouchingFilesystem() {
-    val call = mock(PluginCall::class.java)
-    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc/cache/missing.7z")
-    `when`(call.getLong("offsetBytes")).thenReturn(-1L)
-    `when`(call.getInt("lengthBytes")).thenReturn(4)
+    val call = makeCallWithData("hvsc/cache/missing.7z", -1L, 4)
 
     plugin.readArchiveChunk(call)
 

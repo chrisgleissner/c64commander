@@ -1020,7 +1020,7 @@ export function DiagnosticsDialog({
 
   const visibleCount = filteredEntries.length;
   const totalCount = allEntries.length;
-  const displayEntries = filteredEntries.slice(0, 8);
+  const displayEntries = filteredEntries.slice(0, 20);
   const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
   const healthDetailAvailable =
     headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
@@ -1222,6 +1222,63 @@ export function DiagnosticsDialog({
                 <Filter className="h-3.5 w-3.5" />
               </Button>
             </div>
+
+            {/* Sections index — quick access to all diagnostics surfaces */}
+            <section className="mt-2 shrink-0" data-testid="diagnostics-sections-index">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Sections
+              </p>
+              <div className="flex flex-wrap gap-1" data-testid="sections-index-buttons">
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setConfigDriftOpen(true)}
+                  data-testid="sections-index-config-drift"
+                >
+                  Config drift
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setLatencyOpen(true)}
+                  data-testid="sections-index-latency"
+                >
+                  Latency
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setHistoryOpen(true)}
+                  data-testid="sections-index-health-history"
+                >
+                  Health history
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setHeatMapVariant("REST")}
+                  data-testid="sections-index-rest-heatmap"
+                >
+                  REST heat map
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setHeatMapVariant("FTP")}
+                  data-testid="sections-index-ftp-heatmap"
+                >
+                  FTP heat map
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setHeatMapVariant("CONFIG")}
+                  data-testid="sections-index-config-heatmap"
+                >
+                  Config heat map
+                </button>
+              </div>
+            </section>
 
             {/* Phase 2: Evidence list (immediately visible) */}
             <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">

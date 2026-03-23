@@ -1,235 +1,103 @@
-# Diagnostics, Navigation, and Health Reliability Plan
+# Review 11 — Live Device and HVSC Workflow Fix Plan
 
 Status: IN_PROGRESS
 Classification: DOC_PLUS_CODE, CODE_CHANGE, UI_CHANGE
 Date: 2026-03-23
+Source: doc/research/review-11/findings.md
 
-## Phase 0 - System Discovery and Root Cause Analysis
+## Phase 1 — HVSC Critical Path (BLOCKER)
 
-- [x] Locate REST and FTP execution paths
-- [x] Locate diagnostics dialog and auxiliary analytics surfaces
-- [x] Compare CPU slider against canonical optimistic slider behavior
-- [x] Inspect swipe gesture and runway transition model
-- [x] Trace health check execution and global device health derivation
-- [x] Record exact root causes in WORKLOG.md
+### Targets: R11-001, R11-002
 
-Assumptions
+- [x] R11-001: Fix `offsetBytes: 0` rejection in `HvscIngestionPlugin.kt`
+  - Use `call.data.has("offsetBytes")` + `call.data.getLong()` instead of `call.getLong()`
+  - Add AppLogger debug line showing received offsetBytes
+  - Guard: missing → reject "offsetBytes is required"; negative → reject "offsetBytes must be >= 0"
+- [x] R11-002: Fix `hvscHasCache` to depend on `extraction.status === "success"` not `download.status`
+  - File: `src/pages/playFiles/hooks/useHvscLibrary.ts` line 665
+- [ ] Add unit tests for the offsetBytes and extraction gate fix
 
-- Existing diagnostics traces remain the canonical event stream for exported evidence.
-- Deep links may resolve into the Settings slot as long as the correct diagnostics section initializes immediately.
+Verification:
+- offsetBytes=0 passes; missing fails; negative fails
+- Ingest button disabled when extraction has not succeeded
 
-Risks
+## Phase 2 — Health State Correctness
 
-- Diagnostics behavior currently exists in both a global overlay and a Settings-local dialog, which can drift unless ownership is unified.
-- Deep-link routing can break swipe shell rendering unless path-to-slot resolution is extended carefully.
+### Targets: R11-007, R11-008, R11-012
 
-Verification Criteria
+- [ ] Introduce first-successful-REST-response gating in `useHealthState.ts`
+  - When `latestResult` is null: only derive UNHEALTHY from traces if at least one successful REST response has been observed
+  - Before first success: return Idle state
+- [ ] Add unit tests: cold-launch → Idle; first REST success → Healthy; transient failure → not immediately Unhealthy
 
-- Root-cause notes identify exact files/functions for REST, FTP, diagnostics UI, CPU slider, swipe, health checks, and global badge state.
-- Each problem area A-H has at least one concrete implementation target documented in WORKLOG.md.
+Verification:
+- Badge starts as Idle/Connecting on cold launch
+- Transitions to Healthy after first clean REST response
 
-## Phase 1 - Diagnostics Data Model and Network Instrumentation
+## Phase 3 — Diagnostics Quality
 
-- [ ] Define a strict diagnostics network event schema for REST and FTP
-- [ ] Add centralized diagnostics event builders/parsers
-- [ ] Instrument REST request/response recording with parsed protocol, hostname, path, query, headers, bodies, status, latency
-- [ ] Instrument FTP operations with hostname, command, path, result, latency, payload/error coverage
-- [ ] Ensure error paths emit complete events with no missing critical fields
-- [ ] Update action summary derivation to consume the strict schema
+### Targets: R11-004, R11-005, R11-006
 
-Assumptions
+- [ ] R11-004: Change action name from `rest.get` to `rest.get /path` in `src/lib/c64api.ts`
+- [ ] R11-005: Replace `.slice(0, 8)` with reverse-sorted newest-first rolling window (latest 20)
+- [ ] R11-006: Add sections index (Config Drift, Heat Maps, Latency, Health) at top of diagnostics dialog
 
-- Extending the existing trace event payloads is lower-risk than inventing a second persisted diagnostics store.
+Verification:
+- Collapsed action rows show method + path
+- List shows latest entries and updates live
 
-Risks
+## Phase 4 — Platform Parity: iOS HVSC
 
-- Trace schema changes can break action summary tests, screenshots, and exports if not updated consistently.
+### Targets: R11-003, R11-010
 
-Verification Criteria
+- [ ] Implement `HvscIngestionPlugin.swift` in `ios/App/App/`
+  - `readArchiveChunk`: read raw file bytes at offset from Capacitor data dir
+  - `ingestHvsc`: full 7z extraction + SQLite ingestion using SWCompression
+  - `cancelIngestion`, `getIngestionStats`, progress events via `hvscProgress`
+- [ ] Add `SWCompression` pod to `ios/App/Podfile`
+- [ ] Register plugin in `AppDelegate.swift` or equivalent
 
-- REST events always include protocol, method, url, hostname, path, query, latency, status/error.
-- FTP events always include hostname, command, path, result, latency, error when present.
-- Regression tests cover success and failure event completeness.
+Verification:
+- iOS HVSC download → extraction → ingestion works
+- Progress events fire correctly
 
-## Phase 2 - Diagnostics UI Summary and Rendering
+## Phase 5 — Platform Parity: Web HVSC
 
-- [ ] Redesign collapsed diagnostics activity summaries to show protocol/method, hostname, path or command, latency
-- [ ] Keep expanded details lossless and deterministic
-- [ ] Preserve mobile readability without fallback text hacks
+### Target: R11-011
 
-Assumptions
+- [ ] Show platform-specific message in `HvscControls.tsx` when HVSC is unavailable
+  - Web: "HVSC is not available in web browsers"
+  - iOS (if no plugin): handled by Phase 4
 
-- The most useful collapsed line is the first concrete network effect when present, with action names retained as supporting context.
+## Phase 6 — Playback Error Clarity
 
-Risks
+### Target: R11-009
 
-- Overloading rows with too much text can break compact layouts and screenshot baselines.
+- [ ] Fix trailing colon in `new Error(\`HTTP ${status}: ${statusText}\`)` in `src/lib/c64api.ts`
+  - Trim statusText; if empty use HTTP status label
 
-Verification Criteria
+## Phase 7 — Documentation
 
-- Collapsed entries render key network summary fields for REST/FTP-backed actions.
-- Expanded rows still expose request/response bodies, headers, previews, and errors.
+### Target: R11-014
 
-## Phase 3 - CPU Slider State Model Fix
+- [ ] Update `src/pages/DocsPage.tsx` to list diagnostics sections and deep-link paths
 
-- [ ] Replace the Home CPU slider draft-state path with the canonical optimistic slider state model
-- [ ] Keep interactive preview writes immediate and commit writes deliberate
-- [ ] Prevent device refresh from snapping the thumb backward during active drag
+## Phase 8 — Testing and Coverage
 
-Assumptions
+- [ ] Run `npm run test:coverage` — must reach >= 91% branch coverage
+- [ ] Run `npm run build` — must pass cleanly
+- [ ] Fix any test or lint failures
 
-- The Play volume slider pattern is the canonical slider behavior for device-backed controls.
+## Termination Criteria
 
-Risks
-
-- CPU speed currently has coupled turbo-control side effects that must still run on commit.
-
-Verification Criteria
-
-- CPU slider value remains stable while dragging.
-- No transient jump-back occurs when device data refetches during drag/commit.
-- Turbo Control auto-adjust still occurs after commit.
-
-## Phase 4 - Swipe Navigation Reimplementation
-
-- [ ] Change commit threshold from fixed px to viewport-relative threshold (~30%)
-- [ ] Keep page position following the finger in real time
-- [ ] Separate gesture state from navigation transition state
-- [ ] Preserve snap-back and completion animations
-
-Assumptions
-
-- Existing runway animation infrastructure is reusable if commit logic and state boundaries are tightened.
-
-Risks
-
-- Gesture changes can regress mouse behavior or conflict with interactive child controls.
-
-Verification Criteria
-
-- Drag progress updates the runway continuously.
-- Swipes under threshold snap back.
-- Swipes over threshold complete navigation with animation.
-
-## Phase 5 - Diagnostics Navigation and Discoverability
-
-- [ ] Enumerate all diagnostics surfaces
-- [ ] Add a visible diagnostics sections index in the diagnostics UI
-- [ ] Expose latency, history, config drift, and heat maps through explicit entry points
-- [ ] Remove hidden/orphaned diagnostics features
-
-Assumptions
-
-- Analytics popups can remain modal surfaces if they are reachable from a stable index.
-
-Risks
-
-- Existing dialog layout may need minor restructuring to fit the new index without harming compact layouts.
-
-Verification Criteria
-
-- Every diagnostics surface has a visible trigger.
-- No diagnostics component remains unreachable from the app UI.
-
-## Phase 6 - Deep Linking Architecture
-
-- [ ] Add stable diagnostics routes for each section
-- [ ] Parse route -> diagnostics section on initial load
-- [ ] Keep overlay/page state synchronized with route state
-- [ ] Ensure close/back behavior is deterministic
-
-Assumptions
-
-- Routing diagnostics through the Settings slot is acceptable if the target section opens immediately and consistently.
-
-Risks
-
-- Multiple diagnostics owners can cause duplicated dialogs or conflicting open state.
-
-Verification Criteria
-
-- Routes like /diagnostics/config-diff and /diagnostics/rest-heatmap open the correct section directly.
-- Deep links work on cold load and from in-app navigation.
-
-## Phase 7 - Health Check System Redesign
-
-- [ ] Make the health check result schema explicit and authoritative
-- [ ] Ensure CONFIG runs unless explicitly impossible
-- [ ] Emit explicit skip reasons for unsupported/blocked probes
-- [ ] Persist the latest health check result outside overlay-local component state
-
-Assumptions
-
-- The existing probe order remains valid: REST -> FTP -> CONFIG -> RASTER -> JIFFY.
-
-Risks
-
-- Probe semantics are already used by health history and screenshots, so label/shape changes must be backwards compatible where possible.
-
-Verification Criteria
-
-- CONFIG result is Success, Fail, or Skipped-with-reason, never silently omitted.
-- Latest health result is readable by any consumer without opening diagnostics.
-
-## Phase 8 - Global Device Status Consistency
-
-- [ ] Make latest health check result the primary source for overall health state
-- [ ] Layer post-check degradations only from newer failures or explicit timeout logic
-- [ ] Update the global badge and diagnostics header to use the same source
-- [ ] Remove conflicting local derivations
-
-Assumptions
-
-- Trace-derived contributor data remains useful as secondary evidence and post-check degradation input.
-
-Risks
-
-- Existing badge tests assume purely trace-derived health and will need updated fixtures.
-
-Verification Criteria
-
-- Health badge and diagnostics header always show the same state.
-- A successful health check updates global health immediately.
-- Later failures can degrade health only when newer than the last health check.
-
-## Phase 9 - Documentation Overhaul
-
-- [ ] Update Docs page diagnostics section
-- [ ] Document access paths and deep links for each diagnostics section
-- [ ] Keep wording concise and technically precise
-
-Assumptions
-
-- In-app docs are the right place for operator guidance; no screenshot updates are needed unless visible docs UI changes materially.
-
-Risks
-
-- Deep links documented in docs must match the actual route table exactly.
-
-Verification Criteria
-
-- Docs page lists diagnostics sections, entry points, and deep-link paths.
-- No broken or stale route references remain.
-
-## Phase 10 - Testing and Regression Hardening
-
-- [ ] Add/extend unit tests for diagnostics schema completeness
-- [ ] Add/extend UI tests for collapsed summaries and discoverability
-- [ ] Add slider regression coverage for no jump-back behavior
-- [ ] Add swipe regression coverage for threshold and real-time movement
-- [ ] Add health/global status consistency coverage
-- [ ] Run lint, targeted unit tests, coverage, and build
-
-Assumptions
-
-- Existing diagnostics, runtime, and swipe unit test suites provide the narrowest deterministic proof points.
-
-Risks
-
-- Coverage must stay at or above the repository branch threshold while avoiding test-only overfitting.
-
-Verification Criteria
-
-- Relevant tests pass locally.
-- `npm run test:coverage` passes with >= 91% branch coverage.
-- `npm run build` passes.
+1. HVSC extraction works end-to-end on Android device (R11-001 fixed)
+2. Ingest button disabled unless extraction succeeded (R11-002 fixed)
+3. Health badge starts Idle on cold launch, transitions to Healthy after first REST success (R11-007/R11-012)
+4. Collapsed diagnostics rows show method + path (R11-004)
+5. Diagnostics list shows latest entries, not frozen 8 (R11-005)
+6. iOS HVSC fully implemented (R11-003/R11-010)
+7. Web HVSC limitation clearly explained (R11-011)
+8. Playback errors are non-ambiguous, no trailing colon (R11-009)
+9. DocsPage lists diagnostics sections and deep links (R11-014)
+10. Coverage >= 91% branch coverage
+11. Build passes cleanly

@@ -8,18 +8,18 @@
 
 ## Quick Stats
 
-| Metric | Value |
-| --- | --- |
-| Device | Pixel 4 (Android 13) |
-| App version | 0.6.4-rc8-60266 |
-| C64U firmware | 1.1.0 |
-| C64U host | 192.168.1.167 |
-| HVSC archive size (baseline-84.7z) | 71.3 MB |
-| HVSC download time (LAN) | ~4 seconds |
-| HVSC extraction result | FAILED — offsetBytes rejection |
-| Diagnostics entry cap | 8 entries (hard-coded) |
-| Trace retention window | 30 minutes |
-| REST polling interval (observed) | ~1.5 seconds |
+| Metric                             | Value                          |
+| ---------------------------------- | ------------------------------ |
+| Device                             | Pixel 4 (Android 13)           |
+| App version                        | 0.6.4-rc8-60266                |
+| C64U firmware                      | 1.1.0                          |
+| C64U host                          | 192.168.1.167                  |
+| HVSC archive size (baseline-84.7z) | 71.3 MB                        |
+| HVSC download time (LAN)           | ~4 seconds                     |
+| HVSC extraction result             | FAILED — offsetBytes rejection |
+| Diagnostics entry cap              | 8 entries (hard-coded)         |
+| Trace retention window             | 30 minutes                     |
+| REST polling interval (observed)   | ~1.5 seconds                   |
 
 ---
 
@@ -52,11 +52,13 @@ Root cause trace:
 The value `0` (the correct starting offset) is never received by the native side because `getLong("offsetBytes")` does not accept a JSON integer passed as a JS number when the value happens to be zero — or the JSON serialization path omits the field when it is falsy.
 
 Observed device behavior:
+
 - HVSC status shows "HVSC download failed / Extraction error / offsetBytes must be >= 0" in red immediately after download completes.
 - Tapping "Download HVSC" again re-downloads and fails identically.
 - The downloaded `.7z` file is left in app storage but cannot be read.
 
 Files:
+
 - `src/lib/hvsc/hvscDownload.ts` (line 361)
 - `android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt` (lines 845, 852–853)
 - `src/lib/native/hvscIngestion.ts` (line 86)
@@ -80,6 +82,7 @@ const hvscHasCache =
 Because `download.status === "success"` (download did complete), `hvscHasCache` is `true`, and `hvscCanIngest = hvscAvailable && hvscHasCache && !hvscUpdating` evaluates to `true`. The "Ingest HVSC" button is shown as tappable even though the archive was never successfully extracted. Tapping it will attempt ingestion from a missing or incomplete local HVSC database.
 
 Files:
+
 - `src/pages/playFiles/hooks/useHvscLibrary.ts` (lines 664–665, 841)
 - `src/pages/playFiles/components/HvscControls.tsx` (line 113)
 
@@ -97,6 +100,7 @@ Actual: button is enabled based on download status alone.
 `shouldUseNativeDownload()` gating means this failure occurs silently at extraction — the download completes successfully.
 
 Files:
+
 - `src/lib/hvsc/hvscDownload.ts` (line 395)
 - `src/lib/native/hvscIngestion.ts`
 
@@ -122,6 +126,7 @@ This produces action names like `rest.get` and `rest.put` for every REST call re
 During live device testing, the diagnostics activity list showed four identical "rest.get" entries with timestamps 21:23:31–36. There was no indication of which paths were polled, which succeeded, or which failed.
 
 Files:
+
 - `src/lib/c64api.ts` (line 580)
 - `src/lib/diagnostics/actionSummaries.ts`
 
@@ -145,6 +150,7 @@ During live testing with ~1.5 s REST polling, the diagnostics dialog was open fo
 The 8-entry cap means any session with sustained polling fills the view immediately and the operator cannot scroll to see more recent events.
 
 Files:
+
 - `src/components/diagnostics/DiagnosticsDialog.tsx` (line 1023)
 - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx` (lines 150–154)
 
@@ -166,6 +172,7 @@ From the WORKLOG root-cause notes (problem area C):
 This is documented in PLANS.md Phase 5 as a known gap but not yet resolved.
 
 Files:
+
 - `src/components/diagnostics/DiagnosticsDialog.tsx`
 - `src/components/diagnostics/ConfigDriftView.tsx`
 - `src/components/diagnostics/HeatMapPopup.tsx`
@@ -190,6 +197,7 @@ Observed during live testing: the badge showed UNHEALTHY for ~30 seconds after l
 `latestResult` is not persisted across sessions. On every cold launch, the trace-derived path runs until the user explicitly triggers a health check.
 
 Files:
+
 - `src/hooks/useHealthState.ts` (lines 53–116)
 - `src/lib/diagnostics/healthCheckState.ts`
 
@@ -207,6 +215,7 @@ When `latestResult` is populated, `useHealthState` returns the health check's `o
 This is the inverse of the pre-R11-007 problem: the badge can show HEALTHY while recent FTP errors visible in the activity list suggest a current problem.
 
 Files:
+
 - `src/hooks/useHealthState.ts`
 - `src/lib/diagnostics/healthCheckState.ts`
 
@@ -223,6 +232,7 @@ During live testing, tapping a SID file from the HVSC browse list attempted play
 The error message "Playback failed HTTP 404:" is truncated (trailing colon, empty detail). The UX does not distinguish "file exists on FTP but not playable via REST" from "file not found anywhere".
 
 Files:
+
 - `src/pages/playFiles/` (playback dispatch logic)
 - REST API endpoint: `/v1/machine/run` or equivalent
 
@@ -244,6 +254,7 @@ The HVSC feature flag `hvsc_enabled` defaults to `true`, so the HVSC controls ap
 There is no in-app indication to iOS users that HVSC is not supported. The feature flag infrastructure (`src/lib/config/featureFlags.ts`) does not include a platform-specific default for `hvsc_enabled`.
 
 Files:
+
 - `src/lib/config/featureFlags.ts`
 - `src/lib/hvsc/hvscDownload.ts` (lines 355–396)
 
@@ -256,6 +267,7 @@ Files:
 On web (non-Capacitor), `isHvscBridgeAvailable()` returns `false`. The "Download HVSC" button is disabled without explanation. A user loading the app in a browser sees the HVSC section with a grayed-out download button and no explanatory text.
 
 Files:
+
 - `src/pages/playFiles/components/HvscControls.tsx`
 - `src/lib/native/hvscIngestion.ts`
 
@@ -280,6 +292,7 @@ The correct UX would be a neutral "connecting" or "unknown" state during the ini
 `useSwipeGesture.ts` has both `SWIPE_COMMIT_THRESHOLD_PX = 40` and `SWIPE_COMMIT_THRESHOLD_RATIO = 0.3`. The `resolveSwipeCommitThresholdPx` function uses the ratio when a container width is provided. The WORKLOG documented the 40px fixed value as a problem, but the ratio-based path was already implemented. During live device testing, swipe navigation between tabs felt responsive and committed at approximately the correct viewport fraction. No regression was observed.
 
 Files:
+
 - `src/hooks/useSwipeGesture.ts`
 
 ---
@@ -291,6 +304,7 @@ Files:
 **DocsPage does not list diagnostics sections or deep-link paths**
 
 `src/pages/DocsPage.tsx` references diagnostics conceptually but does not enumerate:
+
 - Latency analysis popup
 - Health history popup
 - Config drift view
@@ -302,6 +316,7 @@ No deep-link routes are documented in-app (e.g., `/diagnostics/config-drift`, `/
 This is tracked in PLANS.md Phase 6 and Phase 9 but not yet implemented.
 
 Files:
+
 - `src/pages/DocsPage.tsx`
 - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx` (lines 93–102)
 
@@ -324,6 +339,7 @@ The error message "offsetBytes must be >= 0" propagates through the JS bridge, i
 ### Post-failure state
 
 After failure:
+
 - `download.status` remains `"success"` (download did complete).
 - `extraction.status` is set to `"failed"`.
 - `hvscHasCache` evaluates to `true` because of `download.status === "success"`.
@@ -343,30 +359,30 @@ The safest fix: change the Kotlin guard to distinguish "field absent" from "fiel
 
 ## 2. Cross-Platform Gap Matrix
 
-| Feature | Android | iOS | Web |
-|---------|---------|-----|-----|
-| HVSC download | Works | Works (download only) | Blocked (bridge unavailable) |
-| HVSC extraction | FAILS (R11-001) | FAILS silently (R11-003/R11-010) | N/A |
-| HVSC ingest | N/A (extraction prerequisite fails) | N/A | N/A |
-| Health check | Works | Works (CI only) | Works |
-| REST API control | Works | Works | Works |
-| FTP file browser | Works | Works | Works |
-| SID playback via REST | Works (with 404 edge case R11-009) | Works | Works |
-| Config diff | Works | Works | Works |
-| Diagnostics deep links | Works | Not verified | Works |
-| Swipe navigation | Works (ratio-based threshold) | Works | N/A |
+| Feature                | Android                             | iOS                              | Web                          |
+| ---------------------- | ----------------------------------- | -------------------------------- | ---------------------------- |
+| HVSC download          | Works                               | Works (download only)            | Blocked (bridge unavailable) |
+| HVSC extraction        | FAILS (R11-001)                     | FAILS silently (R11-003/R11-010) | N/A                          |
+| HVSC ingest            | N/A (extraction prerequisite fails) | N/A                              | N/A                          |
+| Health check           | Works                               | Works (CI only)                  | Works                        |
+| REST API control       | Works                               | Works                            | Works                        |
+| FTP file browser       | Works                               | Works                            | Works                        |
+| SID playback via REST  | Works (with 404 edge case R11-009)  | Works                            | Works                        |
+| Config diff            | Works                               | Works                            | Works                        |
+| Diagnostics deep links | Works                               | Not verified                     | Works                        |
+| Swipe navigation       | Works (ratio-based threshold)       | Works                            | N/A                          |
 
 ---
 
 ## 3. Performance Observations
 
-| Area | Observation |
-|------|-------------|
-| REST polling | ~1.5 s interval; generates ~40 trace events per minute; fills 8-entry diagnostics cap quickly |
-| HVSC download | 71.3 MB in ~4 s on LAN (~18 MB/s); acceptable |
-| App launch to first paint | Not measured precisely; connection badge UNHEALTHY within ~2 s of launch |
-| Health check run time | Not precisely measured; completed within ~5 s |
-| Config page load | Instantaneous on LAN; all 21 config sections rendered without pagination |
+| Area                      | Observation                                                                                   |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| REST polling              | ~1.5 s interval; generates ~40 trace events per minute; fills 8-entry diagnostics cap quickly |
+| HVSC download             | 71.3 MB in ~4 s on LAN (~18 MB/s); acceptable                                                 |
+| App launch to first paint | Not measured precisely; connection badge UNHEALTHY within ~2 s of launch                      |
+| Health check run time     | Not precisely measured; completed within ~5 s                                                 |
+| Config page load          | Instantaneous on LAN; all 21 config sections rendered without pagination                      |
 
 The sustained REST polling rate means the trace store accumulates events rapidly. The 30-minute retention window (`RETENTION_WINDOW_MS`) and 8-entry display cap together create a situation where the diagnostics view is always full but always stale from the operator's perspective.
 
@@ -377,6 +393,7 @@ The sustained REST polling rate means the trace store accumulates events rapidly
 Screenshots in `doc/img/app/play/sections/04-hvsc.png` show the HVSC section in its ready state (Download + Ingest buttons, progress bar). The actual device-observed failure state (red error text) is not reflected in any screenshot in the image corpus.
 
 Key UX gaps observed on device:
+
 - No neutral "connecting..." initial badge state.
 - No in-app platform warning for iOS HVSC limitation.
 - Diagnostics activity labels ("rest.get") provide no actionable context.
@@ -387,22 +404,22 @@ Key UX gaps observed on device:
 
 ## 5. Consolidated Issue List
 
-| ID | Severity | Effort | Area | Title |
-|----|----------|--------|------|-------|
-| R11-001 | Critical | S | HVSC | Extraction fails: offsetBytes rejection |
-| R11-002 | High | S | HVSC | Ingest button enabled after extraction failure |
-| R11-003 | High | M | HVSC/iOS | iOS has no native plugin; extraction silently fails |
-| R11-004 | High | S | Diagnostics | All REST actions opaque "rest.get" in activity list |
-| R11-005 | Medium | S | Diagnostics | 8-entry cap + frozen live update in dialog |
-| R11-006 | Medium | S | Diagnostics | Config Drift and Heat Map not discoverable |
-| R11-007 | High | M | Health | Cold-launch badge shows UNHEALTHY on working device |
-| R11-008 | Medium | M | Health | Badge and diagnostics header can diverge post-check |
-| R11-009 | Medium | S | Playback | SID 404 error message truncated and context-free |
-| R11-010 | High | L | iOS | HVSC feature enabled but non-functional on iOS |
-| R11-011 | Low | S | Web | HVSC download blocked with no explanation |
-| R11-012 | Medium | S | UX | UNHEALTHY badge on first launch misleads operators |
-| R11-013 | Low | — | Swipe | Swipe threshold already viewport-relative — no issue |
-| R11-014 | Low | S | Docs | DocsPage missing diagnostics sections and deep links |
+| ID      | Severity | Effort | Area        | Title                                                |
+| ------- | -------- | ------ | ----------- | ---------------------------------------------------- |
+| R11-001 | Critical | S      | HVSC        | Extraction fails: offsetBytes rejection              |
+| R11-002 | High     | S      | HVSC        | Ingest button enabled after extraction failure       |
+| R11-003 | High     | M      | HVSC/iOS    | iOS has no native plugin; extraction silently fails  |
+| R11-004 | High     | S      | Diagnostics | All REST actions opaque "rest.get" in activity list  |
+| R11-005 | Medium   | S      | Diagnostics | 8-entry cap + frozen live update in dialog           |
+| R11-006 | Medium   | S      | Diagnostics | Config Drift and Heat Map not discoverable           |
+| R11-007 | High     | M      | Health      | Cold-launch badge shows UNHEALTHY on working device  |
+| R11-008 | Medium   | M      | Health      | Badge and diagnostics header can diverge post-check  |
+| R11-009 | Medium   | S      | Playback    | SID 404 error message truncated and context-free     |
+| R11-010 | High     | L      | iOS         | HVSC feature enabled but non-functional on iOS       |
+| R11-011 | Low      | S      | Web         | HVSC download blocked with no explanation            |
+| R11-012 | Medium   | S      | UX          | UNHEALTHY badge on first launch misleads operators   |
+| R11-013 | Low      | —      | Swipe       | Swipe threshold already viewport-relative — no issue |
+| R11-014 | Low      | S      | Docs        | DocsPage missing diagnostics sections and deep links |
 
 ---
 
@@ -426,7 +443,7 @@ Key UX gaps observed on device:
 
 ### Phase 4 — Platform parity and documentation
 
-- Fix R11-003/R11-010: add iOS native plugin or explicitly disable HVSC on iOS with an in-app message.
+- Fix R11-003/R11-010: add iOS native plugin to reach feature parity with Android.
 - Fix R11-009: improve playback error messages to distinguish REST 404 from file-not-found.
 - Fix R11-011: add explanatory text when HVSC download is blocked on web.
 - Fix R11-014: update DocsPage with diagnostics sections and deep-link paths.
@@ -441,7 +458,7 @@ This review is complete when:
 2. HVSC ingest button is disabled in all states where extraction has not succeeded.
 3. Health badge shows a neutral/connecting state on cold launch and transitions to HEALTHY after first successful REST poll without requiring a manual health check.
 4. Collapsed diagnostics activity rows show at minimum: method, hostname, and path for REST actions.
-5. iOS users receive an in-app indication that HVSC is not available on their platform.
+5. iOS users enjoy full HVSC support, just as on Android.
 6. DocsPage lists all reachable diagnostics sections and their deep-link paths.
 7. `npm run test:coverage` passes with >= 91% branch coverage.
 8. `npm run build` passes.

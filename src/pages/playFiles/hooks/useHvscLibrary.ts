@@ -662,7 +662,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
   );
 
   const hvscHasCache =
-    Boolean(hvscCacheBaseline) || hvscCacheUpdates.length > 0 || hvscStatusSummary.download.status === "success";
+    Boolean(hvscCacheBaseline) ||
+    hvscCacheUpdates.length > 0 ||
+    hvscStatusSummary.extraction.status === "success";
 
   const handleHvscIngest = useCallback(
     () =>
