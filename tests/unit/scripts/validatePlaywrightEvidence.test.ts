@@ -121,20 +121,4 @@ describe("validate-playwright-evidence", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Expected exactly one video.webm");
   });
-
-  it("accepts tagged screenshot evidence from non-screenshots spec files when video is disabled", () => {
-    const root = createRoot("validate-playwright-evidence-ocr-");
-    createEvidenceFolder({
-      root,
-      testId:
-        "page-header-ocr--primary-page-header-ocr--all-primary-screens-render-a-non-blank-header-with-ocr-visible-titles",
-      testFile: "/tmp/repo/playwright/page-header-ocr.spec.ts",
-      withVideo: false,
-      videoExpected: false,
-    });
-
-    const result = runValidator(root);
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("Playwright evidence validation passed.");
-  });
 });

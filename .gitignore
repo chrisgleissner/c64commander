@@ -161,6 +161,12 @@ c64scope/**/node_modules/
 # Generated version file (written by scripts/resolve-version.sh at build time)
 src/version.ts
 
+# Generated OCR and swipe-transition screenshots (no longer produced)
+doc/img/app/details/page-headers/**/ocr.txt
+doc/img/app/details/page-headers/**/header.ocr.png
+doc/img/app/details/page-headers/**/screen.png
+doc/img/app/details/swipe-transitions/
+
 # Symlinked projects
 1541ultimate
 android-mcp-server
