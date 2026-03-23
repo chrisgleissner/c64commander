@@ -1225,9 +1225,7 @@ export function DiagnosticsDialog({
 
             {/* Sections index — quick access to all diagnostics surfaces */}
             <section className="mt-2 shrink-0" data-testid="diagnostics-sections-index">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Sections
-              </p>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Sections</p>
               <div className="flex flex-wrap gap-1" data-testid="sections-index-buttons">
                 <button
                   type="button"

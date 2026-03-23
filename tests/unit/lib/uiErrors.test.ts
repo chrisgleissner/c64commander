@@ -164,6 +164,19 @@ describe("uiErrors", () => {
     expect(toastCall).not.toHaveProperty("action");
   });
 
+  it("skips logging and toast when error has already been handled", () => {
+    const handledError = Object.assign(new Error("handled"), { c64uHandled: true });
+    reportUserError({
+      operation: "TEST_OP",
+      title: "Should not show",
+      description: "Already handled",
+      error: handledError,
+    });
+
+    expect(addErrorLog).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it("uses error log with recoverableConnectivityIssue flag for connectivity errors", () => {
     reportUserError({
       operation: "HOME_CPU_SPEED",

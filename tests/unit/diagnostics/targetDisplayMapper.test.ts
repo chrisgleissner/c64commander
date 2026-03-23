@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { mapTargetDisplayLabel } from "@/lib/diagnostics/targetDisplayMapper";
+import { inferConnectedDeviceLabel, mapTargetDisplayLabel } from "@/lib/diagnostics/targetDisplayMapper";
 
 describe("mapTargetDisplayLabel", () => {
   it("maps internal mock target to demo", () => {
@@ -71,5 +71,20 @@ describe("mapTargetDisplayLabel", () => {
     expect(mapTargetDisplayLabel("u64")).toBe("u64");
     expect(mapTargetDisplayLabel("u64e")).toBe("u64e");
     expect(mapTargetDisplayLabel("u64e2")).toBe("u64e2");
+  });
+});
+
+describe("inferConnectedDeviceLabel", () => {
+  it("returns display label for each known product code", () => {
+    expect(inferConnectedDeviceLabel("c64u")).toBe("C64U");
+    expect(inferConnectedDeviceLabel("u64")).toBe("U64");
+    expect(inferConnectedDeviceLabel("u64e")).toBe("U64E");
+    expect(inferConnectedDeviceLabel("u64e2")).toBe("U64E2");
+  });
+
+  it("returns null for unknown or missing product", () => {
+    expect(inferConnectedDeviceLabel(null)).toBeNull();
+    expect(inferConnectedDeviceLabel(undefined)).toBeNull();
+    expect(inferConnectedDeviceLabel("unknown")).toBeNull();
   });
 });

@@ -122,4 +122,106 @@ describe("useHealthState", () => {
 
     expect(result.current.state).toBe("Idle");
   });
+
+  it("counts a REST probe failure as a problem and routes primaryProblem to REST contributor", () => {
+    healthCheckStateMock.latestResult = {
+      runId: "hc-rest",
+      overallHealth: "Unhealthy",
+      endTimestamp: "2024-01-01T00:00:02.000Z",
+      deviceInfo: null,
+      probes: {
+        CONFIG: { probe: "CONFIG", outcome: "Success", reason: null },
+        JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
+        REST: { probe: "REST", outcome: "Fail", reason: "connection refused" },
+        FTP: { probe: "FTP", outcome: "Success", reason: null },
+      },
+    };
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.contributors.REST.state).toBe("Unhealthy");
+    expect(result.current.problemCount).toBe(1);
+    expect(result.current.primaryProblem).toEqual(
+      expect.objectContaining({
+        contributor: "REST",
+        title: "REST health check failed",
+        impactLevel: 2,
+      }),
+    );
+  });
+
+  it("counts an FTP probe failure as a problem and routes primaryProblem to FTP contributor", () => {
+    healthCheckStateMock.latestResult = {
+      runId: "hc-ftp",
+      overallHealth: "Degraded",
+      endTimestamp: "2024-01-01T00:00:03.000Z",
+      deviceInfo: { product: "C64" },
+      probes: {
+        CONFIG: { probe: "CONFIG", outcome: "Success", reason: null },
+        JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
+        REST: { probe: "REST", outcome: "Success", reason: null },
+        FTP: { probe: "FTP", outcome: "Fail", reason: "auth failed" },
+      },
+    };
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.contributors.FTP.state).toBe("Unhealthy");
+    expect(result.current.primaryProblem).toEqual(
+      expect.objectContaining({
+        contributor: "FTP",
+        title: "FTP health check failed",
+        impactLevel: 1,
+      }),
+    );
+  });
+
+  it("returns null primaryProblem and zero problemCount when all probes succeed", () => {
+    healthCheckStateMock.latestResult = {
+      runId: "hc-ok",
+      overallHealth: "Healthy",
+      endTimestamp: "2024-01-01T00:00:04.000Z",
+      deviceInfo: null,
+      probes: {
+        CONFIG: { probe: "CONFIG", outcome: "Success", reason: null },
+        JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
+        REST: { probe: "REST", outcome: "Success", reason: null },
+        FTP: { probe: "FTP", outcome: "Success", reason: null },
+      },
+    };
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.problemCount).toBe(0);
+    expect(result.current.primaryProblem).toBeNull();
+  });
+
+  it("uses deviceInfo from c64Connection when health check deviceInfo is absent", () => {
+    c64ConnectionMock.status.deviceInfo = { product: "Ultimate 64 E" };
+    healthCheckStateMock.latestResult = {
+      runId: "hc-nodevice",
+      overallHealth: "Healthy",
+      endTimestamp: "2024-01-01T00:00:05.000Z",
+      deviceInfo: null,
+      probes: {
+        CONFIG: { probe: "CONFIG", outcome: "Success", reason: null },
+        JIFFY: { probe: "JIFFY", outcome: "Skipped", reason: null },
+        REST: { probe: "REST", outcome: "Success", reason: null },
+        FTP: { probe: "FTP", outcome: "Success", reason: null },
+      },
+    };
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.contributors.App.state).toBe("Idle");
+  });
+
+  it("uses c64Connection deviceInfo in trace-derived path when deviceInfo product is set", () => {
+    c64ConnectionMock.status.deviceInfo = { product: "Ultimate 64 E" };
+    traceEventsMock.events = [{ type: "rest-response", data: { status: 200 } }];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Unhealthy");
+  });
 });
