@@ -13,7 +13,9 @@ import {
   classifyGestureIntent,
   isSwipeExcluded,
   SWIPE_COMMIT_THRESHOLD_PX,
+  SWIPE_COMMIT_THRESHOLD_RATIO,
   AXIS_LOCK_THRESHOLD_PX,
+  resolveSwipeCommitThresholdPx,
   shouldCommitSwipe,
   resolveSwipeDirection,
   useSwipeGesture,
@@ -163,10 +165,17 @@ describe("isSwipeExcluded", () => {
 
 describe("swipe release helpers", () => {
   it("requires at least the commit threshold", () => {
-    expect(shouldCommitSwipe(SWIPE_COMMIT_THRESHOLD_PX - 1)).toBe(false);
-    expect(shouldCommitSwipe(-(SWIPE_COMMIT_THRESHOLD_PX - 1))).toBe(false);
-    expect(shouldCommitSwipe(SWIPE_COMMIT_THRESHOLD_PX)).toBe(true);
-    expect(shouldCommitSwipe(-SWIPE_COMMIT_THRESHOLD_PX)).toBe(true);
+    expect(shouldCommitSwipe(SWIPE_COMMIT_THRESHOLD_PX - 1, 100)).toBe(false);
+    expect(shouldCommitSwipe(-(SWIPE_COMMIT_THRESHOLD_PX - 1), 100)).toBe(false);
+    expect(shouldCommitSwipe(SWIPE_COMMIT_THRESHOLD_PX, 100)).toBe(true);
+    expect(shouldCommitSwipe(-SWIPE_COMMIT_THRESHOLD_PX, 100)).toBe(true);
+  });
+
+  it("scales the commit threshold with container width", () => {
+    expect(resolveSwipeCommitThresholdPx(100)).toBe(SWIPE_COMMIT_THRESHOLD_PX);
+    expect(resolveSwipeCommitThresholdPx(300)).toBe(Math.round(300 * SWIPE_COMMIT_THRESHOLD_RATIO));
+    expect(shouldCommitSwipe(80, 300)).toBe(false);
+    expect(shouldCommitSwipe(90, 300)).toBe(true);
   });
 
   it("maps negative dx to next page and positive dx to previous page", () => {
@@ -198,6 +207,12 @@ describe("tabIndexForPath", () => {
   it("returns Settings index for sub-routes of Settings", () => {
     expect(tabIndexForPath("/settings/open-source-licenses")).toBe(4);
     expect(tabIndexForPath("/settings/anything")).toBe(4);
+  });
+
+  it("returns Settings index for diagnostics deep links", () => {
+    expect(tabIndexForPath("/diagnostics")).toBe(4);
+    expect(tabIndexForPath("/diagnostics/history")).toBe(4);
+    expect(tabIndexForPath("/diagnostics/heatmap/rest")).toBe(4);
   });
 
   it("does NOT match / as prefix (avoids false positives on root)", () => {
@@ -322,14 +337,14 @@ describe("useSwipeGesture integration", () => {
       { ref, "data-testid": "gesture-surface" },
       withExcludedChild
         ? React.createElement(
-            "button",
-            {
-              type: "button",
-              "data-testid": "excluded-origin",
-              "data-swipe-exclude": "true",
-            },
-            "Excluded",
-          )
+          "button",
+          {
+            type: "button",
+            "data-testid": "excluded-origin",
+            "data-swipe-exclude": "true",
+          },
+          "Excluded",
+        )
         : null,
     );
   };

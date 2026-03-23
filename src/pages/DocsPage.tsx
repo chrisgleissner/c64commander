@@ -214,7 +214,7 @@ const docSections: DocSection[] = [
       <div className="space-y-3 text-sm">
         <p>
           Diagnostics helps you inspect activity and share support data. Open it from Settings or the header activity
-          indicator.
+          indicator. The overlay also supports direct routes for the main diagnostics panels.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li>
@@ -230,7 +230,12 @@ const docSections: DocSection[] = [
             without opening another top-level screen.
           </li>
           <li>
-            <strong>Actions</strong> summarizes user operations with REST/FTP counts and outcomes.
+            <strong>Overview</strong> is the default sheet and keeps Problems, Actions, Logs, Errors, and Traces in one
+            place.
+          </li>
+          <li>
+            <strong>Actions</strong> summarizes user operations with REST and FTP targets, commands, outcomes, and
+            latency hints in the collapsed row.
           </li>
           <li>
             <strong>Traces</strong> lists individual REST/FTP requests with timing and status details.
@@ -241,10 +246,21 @@ const docSections: DocSection[] = [
           <li>
             <strong>Errors</strong> collects error reports with context for debugging.
           </li>
+          <li>
+            <strong>Diagnostics tools</strong> in the overlay expose Config Drift, Latency, Health History, REST Heat
+            Map, FTP Heat Map, and Config Heat Map without hidden controls.
+          </li>
         </ul>
         <p className="text-muted-foreground">
-          Use the per-tab filter to narrow results, <strong>Clear</strong> to reset local logs, and{" "}
-          <strong>Share</strong> to export a diagnostic bundle.
+          Deep links: <strong>/diagnostics</strong>, <strong>/diagnostics/latency</strong>,
+          <strong> /diagnostics/history</strong>, <strong>/diagnostics/config-drift</strong>,
+          <strong> /diagnostics/heatmap/rest</strong>, <strong>/diagnostics/heatmap/ftp</strong>, and
+          <strong> /diagnostics/heatmap/config</strong>. Closing a deep-linked diagnostics view returns to Settings.
+        </p>
+        <p className="text-muted-foreground">
+          Use the per-tab filter to narrow results, <strong>Run health check</strong> to refresh the authoritative
+          device status, <strong>Clear</strong> to reset local diagnostics data, and <strong>Share</strong> to export a
+          diagnostic bundle.
         </p>
       </div>
     ),

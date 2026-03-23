@@ -35,19 +35,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogFooter, DialogHeader, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DialogContent } from "@/components/ui/dialog";
-import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
-import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
-import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
-import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
-import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
-import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
-import { consumeDiagnosticsOpenRequest, type DiagnosticsEntryPreset } from "@/lib/diagnostics/diagnosticsOverlay";
-import { useHealthState } from "@/hooks/useHealthState";
-import {
-  primeDiagnosticsOverlaySuppression,
-  setDiagnosticsOverlayActive,
-  withDiagnosticsTraceOverride,
-} from "@/lib/diagnostics/diagnosticsOverlayState";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
+import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { useDeveloperMode } from "@/hooks/useDeveloperMode";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
@@ -160,12 +150,6 @@ export default function SettingsPage() {
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
-  const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const healthState = useHealthState();
-  const [logs, setLogs] = useState(getLogs());
-  const [errorLogs, setErrorLogs] = useState(getErrorLogs());
-  const [traceEvents, setTraceEvents] = useState(getTraceEvents());
-  const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
@@ -222,11 +206,6 @@ export default function SettingsPage() {
     setHvscBaseUrlPreview(resolved);
   }, [hvscBaseUrlInput]);
 
-  const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
-    setDiagnosticsOverlayActive(open);
-    setLogsDialogOpen(open);
-  }, []);
-
   useEffect(() => {
     setPasswordInput(password);
   }, [password]);
@@ -242,23 +221,6 @@ export default function SettingsPage() {
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
   }, [listPreviewLimit]);
-
-  useEffect(() => {
-    const handler = () => {
-      setLogs(getLogs());
-      setErrorLogs(getErrorLogs());
-    };
-    window.addEventListener("c64u-logs-updated", handler);
-    return () => window.removeEventListener("c64u-logs-updated", handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = () => {
-      setTraceEvents(getTraceEvents());
-    };
-    window.addEventListener("c64u-traces-updated", handler);
-    return () => window.removeEventListener("c64u-traces-updated", handler);
-  }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -318,24 +280,6 @@ export default function SettingsPage() {
     return () => window.removeEventListener("c64u-device-safety-updated", handler);
   }, [refreshDeviceSafetyState]);
 
-  useEffect(() => {
-    const handleDiagnosticsRequest = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { preset?: DiagnosticsEntryPreset } | undefined;
-      if (!detail?.preset) return;
-      setDiagnosticsDialogOpen(true);
-    };
-    const pending = consumeDiagnosticsOpenRequest();
-    if (pending) {
-      setDiagnosticsDialogOpen(true);
-    }
-    window.addEventListener("c64u-diagnostics-open-request", handleDiagnosticsRequest);
-    return () => window.removeEventListener("c64u-diagnostics-open-request", handleDiagnosticsRequest);
-  }, [setDiagnosticsDialogOpen]);
-
-  useEffect(() => {
-    return () => setDiagnosticsOverlayActive(false);
-  }, []);
-
   const refreshSafPermissions = async () => {
     if (!isAndroid) return;
     setSafBusy(true);
@@ -385,54 +329,6 @@ export default function SettingsPage() {
     }
   };
 
-  const diagnosticsExportData = useMemo(
-    () => ({
-      "error-logs": errorLogs,
-      logs,
-      traces: traceEvents,
-      actions: actionSummaries,
-    }),
-    [actionSummaries, errorLogs, logs, traceEvents],
-  );
-
-  const handleShareFilteredDiagnostics = trace(async function handleShareFilteredDiagnostics(
-    filteredEntries: unknown[],
-  ) {
-    try {
-      await shareDiagnosticsZip("actions", filteredEntries);
-    } catch (error) {
-      reportUserError({
-        operation: "DIAGNOSTICS_EXPORT",
-        title: "Unable to share",
-        description: (error as Error).message,
-        error,
-      });
-    }
-  });
-
-  const handleShareAllDiagnostics = trace(async function handleShareAllDiagnostics() {
-    try {
-      await shareAllDiagnosticsZip(diagnosticsExportData);
-    } catch (error) {
-      reportUserError({
-        operation: "DIAGNOSTICS_EXPORT",
-        title: "Unable to share",
-        description: (error as Error).message,
-        error,
-      });
-    }
-  });
-
-  const handleClearAllDiagnostics = () => {
-    clearLogs();
-    clearTraceEvents();
-    resetDiagnosticsActivity();
-    setLogs([]);
-    setErrorLogs([]);
-    setTraceEvents([]);
-    toast({ title: "Diagnostics cleared" });
-  };
-
   const handleSaveConnection = trace(async function handleSaveConnection() {
     const hostError = validateDeviceHost(deviceHostInput);
     setHostnameError(hostError);
@@ -474,10 +370,10 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-    { value: "system", icon: Monitor, label: "Auto" },
-    { value: "light", icon: Sun, label: "Light" },
-    { value: "dark", icon: Moon, label: "Dark" },
-  ];
+      { value: "system", icon: Monitor, label: "Auto" },
+      { value: "light", icon: Sun, label: "Light" },
+      { value: "dark", icon: Moon, label: "Dark" },
+    ];
 
   const displayProfileOptions = DISPLAY_PROFILE_OVERRIDE_SEQUENCE.map((value) => ({
     value,
@@ -837,7 +733,7 @@ export default function SettingsPage() {
                   onTouchStartCapture={() => primeDiagnosticsOverlaySuppression()}
                   onClick={() => {
                     primeDiagnosticsOverlaySuppression();
-                    setDiagnosticsDialogOpen(true);
+                    requestDiagnosticsOpen("settings");
                   }}
                   id="diagnostics-open-dialog"
                   data-diagnostics-open-trigger="true"
@@ -1736,20 +1632,6 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <DiagnosticsDialog
-        open={logsDialogOpen}
-        onOpenChange={setDiagnosticsDialogOpen}
-        healthState={healthState}
-        logs={logs}
-        errorLogs={errorLogs}
-        traceEvents={traceEvents}
-        actionSummaries={actionSummaries}
-        onShareFiltered={(entries) => withDiagnosticsTraceOverride(() => handleShareFilteredDiagnostics(entries))}
-        onShareAll={() => withDiagnosticsTraceOverride(handleShareAllDiagnostics)}
-        onClearAll={handleClearAllDiagnostics}
-        onRetryConnection={() => void discoverConnection("manual")}
-      />
     </div>
   );
 }

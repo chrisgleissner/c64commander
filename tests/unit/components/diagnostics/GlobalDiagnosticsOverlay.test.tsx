@@ -5,6 +5,7 @@ import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnos
 import { reportUserError } from "@/lib/uiErrors";
 import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
+import { resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
 const consumeDiagnosticsOpenRequestMock = vi.fn();
 
@@ -116,7 +117,7 @@ vi.mock("@/hooks/useHealthState", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
-  subscribeDiagnosticsSuppression: () => () => {},
+  subscribeDiagnosticsSuppression: () => () => { },
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
@@ -154,7 +155,8 @@ const expandDiagnosticsHeader = () => {
 describe("GlobalDiagnosticsOverlay", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    consumeDiagnosticsOpenRequestMock.mockReturnValue("actions");
+    resetHealthCheckStateSnapshot();
+    consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
     delete (
       window as Window & {
         __c64uDiagnosticsTestBridge?: { getOverlayStateSnapshot?: () => Record<string, unknown> };
@@ -202,10 +204,13 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
   });
 
-  it("renders nothing on the settings route", () => {
-    renderOverlay("/settings");
+  it("opens the requested diagnostics panel from a deep-link route", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    renderOverlay("/diagnostics/history");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("health-history-popup")).toBeVisible();
   });
 
   it("opens from a runtime diagnostics request event", async () => {

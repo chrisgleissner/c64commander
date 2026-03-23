@@ -1,98 +1,94 @@
-# Release Pipeline, Telemetry, and Bottom-Sheet Worklog
+# Diagnostics, Navigation, and Health Worklog
 
 Status: IN_PROGRESS
-Date: 2026-03-22 (updated 2026-03-23)
+Date: 2026-03-23
 
-## 2026-03-23T00:00:00Z - Deterministic Git Versioning — Phase 1 (Analysis)
+## 2026-03-23T00:00:00Z - Classification and scope
 
-- Classification: `CODE_CHANGE` (affects build scripts, vite.config, playwright test)
-- Findings:
-  - All generated files are already gitignored; no pathspec exclusion needed.
-  - `src/version.ts` does not yet exist (not tracked); it will be generated and gitignored.
-  - Current `vite.config.ts` uses `git describe --dirty --always` which is correct for all-tracked-files dirty detection, but uses a 3-char SHA suffix via `shortenGitId` — spec requires 5.
-  - Current test `resolveExpectedVersion()` accepts 8-char SHA suffix and arbitrary suffixes — spec requires strict 5-char lowercase hex or no suffix.
-  - `prebuild` only runs `notices:generate`; the version script must run before it.
-  - CI builds set `VITE_APP_VERSION` (web/android) which bypasses the version label derivation entirely and uses the exact tag — this path is correct and unchanged.
-  - Decision: introduce `scripts/resolve-version.sh`, gitignore `src/version.ts`, add script to `prebuild`, update vite.config.ts local path to prefer generated label, tighten playwright test to strict exact-match assertions.
+- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`, `UI_CHANGE`
+- Objective: resolve diagnostics completeness, diagnostics discoverability, CPU slider flicker, swipe gesture behavior, deep linking, and authoritative health-state consistency.
+- Decision: keep changes tightly scoped to existing diagnostics/tracing/navigation subsystems instead of introducing a parallel observability stack.
 
-## 2026-03-23T00:15:00Z - Deterministic Git Versioning — Phase 2-8 (Implementation)
+## 2026-03-23T00:15:00Z - Root cause discovery findings
 
-- Created `scripts/resolve-version.sh` with:
-  - `git describe --tags --abbrev=0` for tag
-  - `git rev-parse --short=5 HEAD` for 5-char SHA
-  - `git diff --quiet HEAD --` for dirty detection (tracked files only)
-  - Guards: fail if no tag, fail if `src/version.ts` is tracked
-  - Generates `src/version.ts` and prints version to stdout
-- Updated `.gitignore` to add `src/version.ts`
-- Updated `package.json` `prebuild`: prepend `bash scripts/resolve-version.sh &&`
-- Updated `vite.config.ts`: added `readGeneratedVersionLabel()` that reads `src/version.ts`, used as primary version label for local builds (CI path unchanged)
-- Updated `playwright/ui.spec.ts` `resolveExpectedVersion()` to mirror script logic; updated assertion to strict exact text match
-- Ran `npm run lint && npm run test && npm run build` — all pass
+- REST execution path
+  - Primary REST requests are executed in `src/lib/c64api.ts`.
+  - Requests call `recordRestRequest()` and `recordRestResponse()` in `src/lib/tracing/traceSession.ts`.
+- FTP execution path
+  - Primary FTP operations are executed in `src/lib/ftp/ftpClient.ts`.
+  - FTP traces are recorded through `recordFtpOperation()` in `src/lib/tracing/traceSession.ts`.
+- Diagnostics UI ownership
+  - A global owner exists in `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`.
+  - A second, Settings-local diagnostics dialog is rendered in `src/pages/SettingsPage.tsx`.
+  - This split ownership is a structural risk for diverging diagnostics behavior.
 
-## 2026-03-22T00:00:00Z - Step 1 - Phase 1 analysis
+## 2026-03-23T00:25:00Z - Problem area A/B root causes
 
-- Decision: Treat this as a combined `DOC_PLUS_CODE`, `CODE_CHANGE`, and `UI_CHANGE` task because it affects CI workflows, runtime versioning, and visible bottom-sheet layout behavior.
-- Findings:
-  - Version propagation is inconsistent across build paths. `web.yaml` strips `v` from tag refs, while Android and iOS do not. Shared runtime display uses `versionLabel`, which can diverge from the exact injected tag.
-  - Android and local build paths still allow fallback to `package.json` or `git describe`, which can leak stale version data into tagged builds when CI injection is incomplete.
-  - iOS telemetry monitoring already distinguishes confirmed active-flow disappearance (`exit 3`) from degraded simctl visibility (`exit 4`), but the workflow signals one wide lifecycle window around grouped Maestro execution.
-  - Main content clearance uses tab-bar baseline spacing (`calc(5rem + env(safe-area-inset-bottom))`), while bottom sheets only reserve raw safe-area inset, so the sheet contract does not match the main navigation baseline.
-- Validation evidence:
-  - Read and compared `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, `.github/workflows/web.yaml`.
-  - Read `src/lib/buildVersion.ts`, `vite.config.ts`, `src/lib/buildInfo.ts`, `src/pages/home/components/SystemInfo.tsx`, `android/app/build.gradle`, `ci/telemetry/ios/monitor_ios.sh`, `src/components/ui/app-surface.tsx`, and related unit tests.
-- Next step: Implement the shared version/canonical-tag fix, then tighten iOS lifecycle gating, then centralize bottom-sheet clearance in the shared sheet primitive.
+- A. Diagnostics capture incomplete
+  - `recordRestRequest()` stores `method`, `url`, and `normalizedUrl`, but not parsed `protocol`, `hostname`, `path`, or `query` as first-class fields.
+  - `recordRestResponse()` stores `path` loosely and depends on callers to supply it consistently.
+  - `recordFtpOperation()` stores `operation` and `path`, but not `hostname` or explicit command/result schema fields required by the task.
+  - `buildActionSummaries()` reconstructs action effects from loosely-shaped trace payloads, so missing fields stay missing all the way into the UI.
+- B. Diagnostics UI lacks meaningful summaries
+  - `DiagnosticsDialog.tsx` currently renders `summary.actionName` and a generic counts string for action rows.
+  - The collapsed activity list does not promote hostname/path/latency even when the underlying request/response data exists.
 
-## 2026-03-22T00:30:00Z - Step 2 - Diagnostics detail interaction audit
+## 2026-03-23T00:35:00Z - Problem area C/F root causes
 
-- Decision: Extend the current diagnostics dialog instead of introducing a second diagnostics surface. The repository already contains `HealthCheckDetailView.tsx`, which exposes the exact probe-by-probe detail requested by the user.
-- Findings:
-  - `DiagnosticsDialog.tsx` currently uses the health-panel chevron only to reveal a latency stub, not the full health detail view.
-  - Activity rows are rendered as static cards with no expansion state or affordance gating.
-  - `DiagnosticsDialog` receives `healthCheckRunning`, `lastHealthCheckResult`, and `liveHealthCheckProbes`, so the live detail view can be wired without changing overlay ownership.
-- Next step: Rewire the health panel to the existing detail view, add tap-to-toggle activity row expansion with hidden no-op affordances, then lock the behavior with diagnostics unit tests.
+- C. Diagnostics features not reachable
+  - `LatencyAnalysisPopup` and `HealthHistoryPopup` are reachable from `DiagnosticsDialog.tsx`.
+  - `ConfigDriftView` and `HeatMapPopup` exist under `src/components/diagnostics/` but are not surfaced from the current diagnostics UI.
+  - Current diagnostics entry points are only the Settings button and health badge open request helpers; there is no sections index.
+- F. Docs lack navigation clarity and deep links
+  - `src/pages/DocsPage.tsx` documents diagnostics conceptually but does not enumerate all diagnostics surfaces or any stable deep-link paths.
 
-## 2026-03-22T00:45:00Z - Step 3 - Swipe navigation regression triage
+## 2026-03-23T00:45:00Z - Problem area D root cause
 
-- Decision: Treat the new swipe-navigation request as part of the same UI hardening pass because the app already contains a dedicated swipe runway and ordered tab-route model.
-- Findings:
-  - The page-order and wrap-around model already exists in `src/lib/navigation/tabRoutes.ts` and `src/lib/navigation/swipeNavigationModel.ts`.
-  - The active gesture hook in `src/hooks/useSwipeGesture.ts` only starts gestures for primary left-button interactions, which is overly mouse-centric for touch-origin pointer events.
-  - The repository has model-level wrap-around tests, but it lacks a regression that proves real touch-origin page transitions work through the runtime app shell.
-- Next step: Relax touch-origin gesture admission without weakening mouse safeguards, then add touch and wrap-around regression tests.
+- D. CPU slider jump-back
+  - `src/pages/HomePage.tsx` uses a dedicated `cpuSpeedDraftIndex` local state plus direct interactive writes.
+  - The draft state is reset whenever `cpuSpeedValue` changes from config refreshes, which can snap the displayed thumb back mid-interaction.
+  - Canonical slider behavior already exists elsewhere: device-backed sliders keep an optimistic local state and gate remote reconciliation while dragging.
 
-## 2026-03-22T01:05:00Z - Step 4 - Diagnostics screenshot evidence plan
+## 2026-03-23T00:55:00Z - Problem area E root cause
 
-- Decision: Extend the existing Playwright diagnostics screenshot flow instead of adding a second diagnostics-specific screenshot spec. The current gallery already owns diagnostics overview, header, activity, filters, connection, analysis, and tools coverage.
-- Findings:
-  - The existing diagnostics screenshot run already seeds deterministic analytics and overlay state, so completed health-check detail can be captured without invoking live network behavior.
-  - The diagnostics test bridge also supports direct overlay-state injection, which makes it possible to capture an in-flight health-check progress view with stable probe states.
-  - The current gallery proves the collapsed activity list, but it does not yet prove expandable-row behavior or the richer header detail now exposed by the diagnostics dialog.
-- Next step: Add screenshot outputs for expanded activity detail, second-tap collapse, completed health-check detail, and live health-check progress, then refresh the diagnostics screenshot index.
+- E. Swipe navigation delayed/non-authoritative
+  - `useSwipeGesture.ts` tracks live drag progress correctly, but commit logic uses a fixed `40px` threshold in `SWIPE_COMMIT_THRESHOLD_PX`.
+  - The required behavior is width-relative thresholding (~30% of the container), not a fixed absolute pixel value.
+  - `SwipeNavigationLayer.tsx` already separates drag and transition phases, but route-driven deep-link cases are not part of the gesture/diagnostics architecture.
 
-## 2026-03-22T01:25:00Z - Step 5 - Short-label UX follow-up
+## 2026-03-23T01:05:00Z - Problem area G/H root causes
 
-- Decision: Keep the diagnostics overlay strictly compact and move explanatory copy into the Docs page.
-- Findings:
-  - The remaining `Purpose` assertions were only in tests, but the health-check detail and device detail views still carried explanatory sentences that compete with small-screen labels.
-  - The Docs page already has a diagnostics section, so the richer explanation for probe order and expanded activity rows can live there without introducing another documentation surface.
-  - The screenshot catalog still needs per-type expanded activity evidence for Problems, Actions, Logs, and Traces.
-- Next step: Shorten the remaining overlay copy, update tests, extend the screenshot catalog for each expanded activity type, and regenerate the screenshot set.
+- G. Health check not authoritative
+  - `runHealthCheck()` in `src/lib/diagnostics/healthCheckEngine.ts` produces a complete result and pushes health history, but the latest result is only stored in component state inside `GlobalDiagnosticsOverlay.tsx`.
+  - No global store exposes the latest health check result to other UI consumers.
+  - CONFIG currently skips with a generic reason when no roundtrip target is found, but that state is not elevated into a single app-wide authority.
+- H. Global device status diverges from health check
+  - `useHealthState()` computes health entirely from recent trace activity plus connection state in `src/hooks/useHealthState.ts`.
+  - `UnifiedHealthBadge` consumes `useHealthState()`, while `DiagnosticsDialog` separately shows `lastHealthCheckResult` from overlay-local state.
+  - Result: after a successful health check, the diagnostics header can show one state while the global badge still reflects stale or unrelated trace-derived degradation.
 
-## 2026-03-22T02:10:00Z - Step 6 - Diagnostics evidence hardening
+## 2026-03-23T01:15:00Z - Routing/deep-link findings
 
-- Decision: Treat the diagnostics action screenshot and trace redaction as one integrity fix. The screenshot must reflect the same stored trace shape the app uses in production, including partial secret masking and binary preview limits.
-- Findings:
-  - The action-expanded UI already renders request headers, response headers, request body, response body, payload previews, status, and latency.
-  - The deterministic diagnostics seed did not yet include those richer request/response fields for the POST snapshot action, so the screenshot could not prove the documented behavior.
-  - Secret masking was still full-value replacement in redaction tests, and FTP trace payloads were not being redacted before persistence.
-  - Binary payload previews were centrally capped below the newly requested 256-byte requirement.
-- Next step: Switch secret masking to first-3-character partial redaction, extend trace-session redaction to FTP payloads and preview regeneration for sensitive structured payloads, enrich the seeded POST/FTP diagnostics evidence, prune obsolete diagnostics activity screenshots, and rerun focused tests plus screenshot generation.
+- `tabIndexForPath()` in `src/lib/navigation/tabRoutes.ts` only recognizes tab routes and existing tab sub-routes.
+- `/diagnostics/*` currently resolves to no tab slot and would fall through to not-found.
+- The swipe shell can support diagnostics deep links by mapping `/diagnostics/*` into the Settings slot while keeping diagnostics ownership global and route-aware.
 
-## 2026-03-22T16:10:00Z - Step 7 - Diagnostics log evidence and problem coverage
+## 2026-03-23T01:25:00Z - Planned implementation direction
 
-- Decision: Treat the misleading log screenshots as a product bug, not just a screenshot-seed defect. The diagnostics list must render canonical app log lines and expand into exception-aware detail with stack traces, and the Problems view must aggregate failures from both logs and trace events.
-- Findings:
-  - Log rows were rendering only `message` plus raw `details` JSON, which hid the log level and any exception metadata in the collapsed list.
-  - Expanded log detail reused raw JSON rather than a debugger-friendly view with level, message, exception type, and stack trace.
-  - The screenshot trace seeding path was not waiting for `c64u-traces-updated`, which made the Problems gallery prone to omitting trace-derived failures.
-- Next step: Render canonical log lines in the diagnostics list, add exception-aware expanded detail, make trace seeding deterministic, reseed screenshots with realistic DEBUG/INFO/WARN/ERROR samples plus stack traces, and rerun diagnostics screenshots and regression tests.
+- Unify diagnostics ownership around the global overlay.
+- Extend trace payloads through centralized diagnostics event builders rather than patching UI strings.
+- Add route-aware diagnostics section state and visible section entry points.
+- Promote the latest health check result into a shared authoritative store consumed by `useHealthState()` and diagnostics UI.
+- Replace the CPU slider’s draft-state reset behavior with the canonical optimistic slider model.
+
+## 2026-03-23T01:30:00Z - Validation plan
+
+- Targeted unit tests
+  - trace session event completeness
+  - diagnostics dialog summaries/discoverability
+  - swipe navigation threshold and route behavior
+  - health/global-state consistency
+- Required repo validation for code changes
+  - `npm run lint`
+  - `npm run test:coverage`
+  - `npm run build`

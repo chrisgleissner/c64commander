@@ -40,12 +40,14 @@ import type {
   HealthCheckRunResult,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import type { DiagnosticsPanelKey } from "@/lib/diagnostics/diagnosticsOverlay";
 import {
   resolveActionSeverity,
   resolveLogSeverity,
   resolveTraceSeverity,
   type DiagnosticsSeverity,
 } from "@/lib/diagnostics/diagnosticsSeverity";
+import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
 import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
@@ -54,6 +56,8 @@ import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
 import { ActionExpandedContent } from "./ActionExpandedContent";
+import { ConfigDriftView } from "./ConfigDriftView";
+import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
 import { HealthHistoryPopup } from "./HealthHistoryPopup";
 import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
@@ -81,6 +85,7 @@ type Props = {
   onRunHealthCheck?: () => void;
   lastHealthCheckResult?: HealthCheckRunResult | null;
   liveHealthCheckProbes?: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
+  requestedPanel?: DiagnosticsPanelKey | null;
 };
 
 type EvidenceEntry = {
@@ -187,6 +192,58 @@ const summarizeAction = (summary: ActionSummary) => {
   if (ftpCount > 0) parts.push(`FTP ${ftpCount}`);
   if (errCount > 0) parts.push(`ERR ${errCount}`);
   return parts.join(" · ") || summary.outcome;
+};
+
+const formatActionDuration = (durationMs: number | null | undefined) => {
+  if (typeof durationMs !== "number" || !Number.isFinite(durationMs)) return null;
+  return `${Math.round(durationMs)}ms`;
+};
+
+const formatNetworkHost = (hostname: string | null | undefined, port: number | null | undefined) => {
+  if (!hostname) return null;
+  if (typeof port === "number" && Number.isFinite(port)) {
+    return `${hostname}:${port}`;
+  }
+  return hostname;
+};
+
+const getActionPrimaryEffect = (summary: ActionSummary) => {
+  return summary.effects?.find((effect) => effect.type === "REST" || effect.type === "FTP") ?? null;
+};
+
+const buildActionTitle = (summary: ActionSummary) => {
+  const primary = getActionPrimaryEffect(summary);
+  if (!primary) return summary.actionName;
+  if (primary.type === "REST") {
+    const host = formatNetworkHost(primary.hostname, primary.port);
+    const path = primary.normalizedPath ?? `${primary.path}${primary.query ?? ""}`;
+    return [primary.method, host, path].filter(Boolean).join(" ");
+  }
+  const host = formatNetworkHost(primary.hostname, primary.port);
+  return [primary.command ?? primary.operation.toUpperCase(), host ? `${host}${primary.path}` : primary.path]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const buildActionDetail = (summary: ActionSummary) => {
+  const primary = getActionPrimaryEffect(summary);
+  const parts: string[] = [];
+  const title = buildActionTitle(summary);
+  if (summary.actionName !== title) {
+    parts.push(summary.actionName);
+  }
+  if (primary?.type === "REST") {
+    if (typeof primary.status === "number") parts.push(`HTTP ${primary.status}`);
+    if (primary.error) parts.push(primary.error);
+    const duration = formatActionDuration(primary.durationMs);
+    if (duration) parts.push(duration);
+  } else if (primary?.type === "FTP") {
+    if (primary.result) parts.push(primary.result);
+    if (primary.error) parts.push(primary.error);
+    const duration = formatActionDuration(primary.durationMs);
+    if (duration) parts.push(duration);
+  }
+  return parts.join(" · ") || summarizeAction(summary);
 };
 
 const parseConnectionSnapshot = () => {
@@ -744,6 +801,29 @@ const ConnectionSurface = ({
   );
 };
 
+const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => {
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
+        <DialogPrimitive.Content
+          className="fixed inset-x-0 bottom-0 top-[12dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl sm:left-1/2 sm:right-auto sm:top-1/2 sm:h-auto sm:max-h-[80dvh] sm:w-[34rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:border"
+          data-testid="config-drift-surface"
+        >
+          <DialogPrimitive.Title className="sr-only">Config drift</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            Review runtime configuration drift against persisted settings.
+          </DialogPrimitive.Description>
+          <SurfaceHeader title="Config Drift" onClose={() => onOpenChange(false)} />
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <ConfigDriftView onBack={() => onOpenChange(false)} />
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+};
+
 export function DiagnosticsDialog({
   open,
   onOpenChange,
@@ -761,6 +841,7 @@ export function DiagnosticsDialog({
   onRunHealthCheck,
   lastHealthCheckResult = null,
   liveHealthCheckProbes = null,
+  requestedPanel = null,
 }: Props) {
   const { profile } = useDisplayProfile();
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -779,6 +860,8 @@ export function DiagnosticsDialog({
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [latencyOpen, setLatencyOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [configDriftOpen, setConfigDriftOpen] = useState(false);
+  const [heatMapVariant, setHeatMapVariant] = useState<HeatMapVariant | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
@@ -823,8 +906,8 @@ export function DiagnosticsDialog({
       items.push({
         id: `action-${summary.correlationId}`,
         type: "Actions",
-        title: summary.actionName,
-        detail: summarizeAction(summary),
+        title: buildActionTitle(summary),
+        detail: buildActionDetail(summary),
         contributor: getActionContributor(summary),
         severity: resolveActionSeverity(summary.outcome),
         timestamp: summary.startTimestamp ?? summary.endTimestamp ?? new Date(0).toISOString(),
@@ -873,6 +956,8 @@ export function DiagnosticsDialog({
     setConnectionError(null);
     setLatencyOpen(false);
     setHistoryOpen(false);
+    setConfigDriftOpen(false);
+    setHeatMapVariant(null);
     setOverflowOpen(false);
     setExpandedEvidenceId(null);
 
@@ -890,6 +975,8 @@ export function DiagnosticsDialog({
       setConnectionOpen(false);
       setLatencyOpen(false);
       setHistoryOpen(false);
+      setConfigDriftOpen(false);
+      setHeatMapVariant(null);
       setOverflowOpen(false);
     }
   }, [open]);
@@ -899,6 +986,23 @@ export function DiagnosticsDialog({
       setHeaderExpanded(true);
     }
   }, [healthCheckRunning]);
+
+  useEffect(() => {
+    if (!open || !requestedPanel) return;
+    setHeaderExpanded(requestedPanel === "overview");
+    setLatencyOpen(requestedPanel === "latency");
+    setHistoryOpen(requestedPanel === "history");
+    setConfigDriftOpen(requestedPanel === "config-drift");
+    setHeatMapVariant(
+      requestedPanel === "rest-heatmap"
+        ? "REST"
+        : requestedPanel === "ftp-heatmap"
+          ? "FTP"
+          : requestedPanel === "config-heatmap"
+            ? "CONFIG"
+            : null,
+    );
+  }, [open, requestedPanel]);
 
   const filteredEntries = useMemo(
     () =>
@@ -1150,6 +1254,16 @@ export function DiagnosticsDialog({
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs"
+                  onClick={() => setConfigDriftOpen(true)}
+                  data-testid="open-config-drift-screen"
+                >
+                  Config drift
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
                   onClick={() => setLatencyOpen(true)}
                   data-testid="open-latency-screen"
                 >
@@ -1164,6 +1278,36 @@ export function DiagnosticsDialog({
                   data-testid="open-timeline-screen"
                 >
                   Health history
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setHeatMapVariant("REST")}
+                  data-testid="open-rest-heatmap-screen"
+                >
+                  REST heat map
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setHeatMapVariant("FTP")}
+                  data-testid="open-ftp-heatmap-screen"
+                >
+                  FTP heat map
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setHeatMapVariant("CONFIG")}
+                  data-testid="open-config-heatmap-screen"
+                >
+                  Config heat map
                 </Button>
                 <div className="relative">
                   <Button
@@ -1260,8 +1404,15 @@ export function DiagnosticsDialog({
         error={connectionError}
       />
 
+      <ConfigDriftSurface open={open && configDriftOpen} onOpenChange={setConfigDriftOpen} />
       <LatencyAnalysisPopup open={open && latencyOpen} onClose={() => setLatencyOpen(false)} />
       <HealthHistoryPopup open={open && historyOpen} onClose={() => setHistoryOpen(false)} />
+      <HeatMapPopup
+        open={open && heatMapVariant !== null}
+        onClose={() => setHeatMapVariant(null)}
+        variant={heatMapVariant ?? "REST"}
+        traceEvents={traceEvents}
+      />
     </>
   );
 }

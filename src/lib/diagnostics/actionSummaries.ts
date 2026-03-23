@@ -23,7 +23,12 @@ export type RestEffect = {
   type: "REST";
   label: string;
   method: string;
+  protocol: string | null;
+  hostname: string | null;
+  port: number | null;
   path: string;
+  query: string | null;
+  normalizedPath: string | null;
   target: BackendTarget | null;
   product?: string;
   status: number | string | null;
@@ -41,9 +46,13 @@ export type FtpEffect = {
   type: "FTP";
   label: string;
   operation: string;
+  command: string | null;
+  hostname: string | null;
+  port: number | null;
   path: string;
   target: BackendTarget | null;
   result: string | null;
+  durationMs?: number | null;
   requestPayload?: unknown;
   responsePayload?: unknown;
   requestPayloadPreview?: PayloadPreview | null;
@@ -240,7 +249,9 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       const responseData = event.data as Record<string, unknown>;
       const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
       const method = readString(requestData.method) ?? "UNKNOWN";
-      const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? "unknown";
+      const normalizedPath = readString(requestData.normalizedUrl);
+      const path = readString(requestData.path) ?? normalizedPath ?? readString(requestData.url) ?? "unknown";
+      const query = readString(requestData.query);
       const responseBody =
         responseData.body && typeof responseData.body === "object" && !Array.isArray(responseData.body)
           ? (responseData.body as Record<string, unknown>)
@@ -254,9 +265,14 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         : (endStatus ?? null);
       restEffects.push({
         type: "REST",
-        label: `${method} ${path}`,
+        label: `${method} ${normalizedPath ?? path}`,
         method,
+        protocol: readString(requestData.protocol),
+        hostname: readString(requestData.hostname),
+        port: readNumber(requestData.port),
         path,
+        query,
+        normalizedPath,
         target: (readString(requestData.target) as BackendTarget | null) ?? null,
         ...(product ? { product } : {}),
         status: responseStatus,
@@ -279,12 +295,18 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
   pendingRequests.forEach((request) => {
     const requestData = request.data as Record<string, unknown>;
     const method = readString(requestData.method) ?? "UNKNOWN";
-    const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? "unknown";
+    const normalizedPath = readString(requestData.normalizedUrl);
+    const path = readString(requestData.path) ?? normalizedPath ?? readString(requestData.url) ?? "unknown";
     restEffects.push({
       type: "REST",
-      label: `${method} ${path}`,
+      label: `${method} ${normalizedPath ?? path}`,
       method,
+      protocol: readString(requestData.protocol),
+      hostname: readString(requestData.hostname),
+      port: readNumber(requestData.port),
       path,
+      query: readString(requestData.query),
+      normalizedPath,
       target: (readString(requestData.target) as BackendTarget | null) ?? null,
       status: endStatus ?? null,
       durationMs: null,
@@ -312,9 +334,13 @@ const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
         type: "FTP",
         label: `${operation} ${path}`,
         operation,
+        command: readString(data.command),
+        hostname: readString(data.hostname),
+        port: readNumber(data.port),
         path,
         target: (readString(data.target) as BackendTarget | null) ?? null,
         result: readString(data.result),
+        durationMs: readNumber(data.durationMs),
         ...("requestPayload" in data ? { requestPayload: data.requestPayload ?? null } : {}),
         ...("responsePayload" in data ? { responsePayload: data.responsePayload ?? null } : {}),
         ...(readPayloadPreview(data.requestPayloadPreview)

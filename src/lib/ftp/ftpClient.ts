@@ -49,6 +49,9 @@ const executeFtpList = async (
         const responsePayload = { entries: response.entries };
         recordFtpOperation(action, {
           operation: "list",
+          command: "LIST",
+          hostname: ftpOptions.host,
+          port: ftpOptions.port,
           path: normalizedPath,
           durationMs: Math.max(
             0,
@@ -73,6 +76,9 @@ const executeFtpList = async (
         );
         recordFtpOperation(action, {
           operation: "list",
+          command: "LIST",
+          hostname: ftpOptions.host,
+          port: ftpOptions.port,
           path: normalizedPath,
           durationMs: Math.max(
             0,
@@ -143,6 +149,9 @@ const executeFtpRead = async (
         };
         recordFtpOperation(action, {
           operation: "read",
+          command: "RETR",
+          hostname: ftpOptions.host,
+          port: ftpOptions.port,
           path,
           durationMs: Math.max(
             0,
@@ -167,6 +176,9 @@ const executeFtpRead = async (
         );
         recordFtpOperation(action, {
           operation: "read",
+          command: "RETR",
+          hostname: ftpOptions.host,
+          port: ftpOptions.port,
           path,
           durationMs: Math.max(
             0,

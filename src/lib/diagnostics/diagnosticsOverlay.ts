@@ -15,27 +15,49 @@ import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnostic
  * - 'settings': opened from Settings (Problems + Actions, All indicators)
  */
 export type DiagnosticsEntryPreset = "header" | "settings";
+export type DiagnosticsPanelKey =
+  | "overview"
+  | "latency"
+  | "history"
+  | "config-drift"
+  | "rest-heatmap"
+  | "ftp-heatmap"
+  | "config-heatmap";
+
+export type DiagnosticsOpenRequest = {
+  preset: DiagnosticsEntryPreset;
+  panel?: DiagnosticsPanelKey | null;
+};
 
 const DIAGNOSTICS_OPEN_KEY = "c64u_diagnostics_open_preset";
 
-export const requestDiagnosticsOpen = (preset: DiagnosticsEntryPreset) => {
+export const requestDiagnosticsOpen = (preset: DiagnosticsEntryPreset, panel?: DiagnosticsPanelKey | null) => {
   if (typeof window === "undefined") return;
   primeDiagnosticsOverlaySuppression();
+  const request: DiagnosticsOpenRequest = {
+    preset,
+    panel: panel ?? null,
+  };
   try {
-    sessionStorage.setItem(DIAGNOSTICS_OPEN_KEY, preset);
+    sessionStorage.setItem(DIAGNOSTICS_OPEN_KEY, JSON.stringify(request));
   } catch (error) {
     console.warn("Unable to persist diagnostics open request:", error);
   }
-  window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: { preset } }));
+  window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: request }));
 };
 
-export const consumeDiagnosticsOpenRequest = (): DiagnosticsEntryPreset | null => {
+export const consumeDiagnosticsOpenRequest = (): DiagnosticsOpenRequest | null => {
   if (typeof window === "undefined") return null;
   try {
-    const preset = sessionStorage.getItem(DIAGNOSTICS_OPEN_KEY) as DiagnosticsEntryPreset | null;
-    if (preset) {
+    const stored = sessionStorage.getItem(DIAGNOSTICS_OPEN_KEY);
+    if (stored) {
       sessionStorage.removeItem(DIAGNOSTICS_OPEN_KEY);
-      return preset;
+      try {
+        const parsed = JSON.parse(stored) as DiagnosticsOpenRequest;
+        if (parsed?.preset) return parsed;
+      } catch {
+        return { preset: stored as DiagnosticsEntryPreset, panel: null };
+      }
     }
   } catch (error) {
     console.warn("Unable to consume diagnostics open request:", error);
