@@ -547,7 +547,7 @@ jobs:
         if: always() && github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: ios-maestro-evidence-zip
+          name: ios-maestro-evidence-tgz
           path: artifacts/ios/_combined/ios-maestro-evidence.tgz
           if-no-files-found: warn
 
