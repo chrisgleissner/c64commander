@@ -29,6 +29,7 @@ import {
 } from "@/lib/diagnostics/healthHistory";
 import { computeLatencyPercentiles } from "@/lib/diagnostics/latencyTracker";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
 // §11.3 — CONFIG roundtrip mutation targets in priority order
 const CONFIG_ROUNDTRIP_TARGETS = [
@@ -333,9 +334,19 @@ export const runHealthCheck = async (
     return null;
   }
   running = true;
+  setHealthCheckStateSnapshot({
+    running: true,
+    liveProbes: {},
+    latestResult: getHealthCheckStateSnapshot().latestResult,
+  });
   const runId = generateRunId();
   const startTimestamp = new Date().toISOString();
   const runStartMs = Date.now();
+
+  const updateProgress = (partial: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>>) => {
+    onProbeProgress?.(partial);
+    setHealthCheckStateSnapshot({ liveProbes: partial });
+  };
 
   try {
     addLog("info", "Health check started", { runId });
@@ -343,7 +354,7 @@ export const runHealthCheck = async (
     // REST probe (1 of 5)
     const { record: restRecord, deviceInfo } = await probeRest();
     const restFailed = restRecord.outcome === "Fail";
-    onProbeProgress?.({ REST: restRecord });
+    updateProgress({ REST: restRecord });
 
     // FTP probe (2 of 5 — skipped if REST failed)
     let ftpRecord: HealthCheckProbeRecord;
@@ -352,7 +363,7 @@ export const runHealthCheck = async (
     } else {
       ftpRecord = await probeFtp();
     }
-    onProbeProgress?.({ REST: restRecord, FTP: ftpRecord });
+    updateProgress({ REST: restRecord, FTP: ftpRecord });
 
     // CONFIG probe (3 of 5 — skipped if REST failed)
     let configRecord: HealthCheckProbeRecord;
@@ -361,7 +372,7 @@ export const runHealthCheck = async (
     } else {
       configRecord = await probeConfig();
     }
-    onProbeProgress?.({ REST: restRecord, FTP: ftpRecord, CONFIG: configRecord });
+    updateProgress({ REST: restRecord, FTP: ftpRecord, CONFIG: configRecord });
 
     // RASTER probe (4 of 5 — skipped if REST failed)
     let rasterRecord: HealthCheckProbeRecord;
@@ -370,7 +381,7 @@ export const runHealthCheck = async (
     } else {
       rasterRecord = await probeRaster();
     }
-    onProbeProgress?.({ REST: restRecord, FTP: ftpRecord, CONFIG: configRecord, RASTER: rasterRecord });
+    updateProgress({ REST: restRecord, FTP: ftpRecord, CONFIG: configRecord, RASTER: rasterRecord });
 
     // JIFFY probe (5 of 5 — skipped if REST failed)
     let jiffyRecord: HealthCheckProbeRecord;
@@ -382,7 +393,7 @@ export const runHealthCheck = async (
       jiffyRecord = r.record;
       uptimeSeconds = r.uptimeSeconds;
     }
-    onProbeProgress?.({
+    updateProgress({
       REST: restRecord,
       FTP: ftpRecord,
       CONFIG: configRecord,
@@ -483,6 +494,12 @@ export const runHealthCheck = async (
       outcomes: Object.fromEntries(Object.entries(probes).map(([k, v]) => [k, v.outcome])),
     });
 
+    setHealthCheckStateSnapshot({
+      running: false,
+      liveProbes: null,
+      latestResult: result,
+    });
+
     return result;
   } catch (error) {
     const msg = (error as Error).message;
@@ -494,6 +511,7 @@ export const runHealthCheck = async (
     throw error;
   } finally {
     running = false;
+    setHealthCheckStateSnapshot({ running: false, liveProbes: null });
   }
 };
 

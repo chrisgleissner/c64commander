@@ -250,7 +250,8 @@ const tourSettings = async (page: Page) => {
   const dialog = page.getByRole("dialog", { name: "Diagnostics" });
   await expect(dialog).toBeVisible();
   await page.waitForTimeout(SHORT_PAUSE_MS);
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(dialog).toBeHidden();
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
   await smoothScrollToBottom(page, SCROLL_DURATION_MS);
@@ -258,7 +259,7 @@ const tourSettings = async (page: Page) => {
 
 const tourDocs = async (page: Page) => {
   await page.goto("/docs");
-  await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /docs/i })).toBeVisible();
   await pauseAtTop(page);
 
   const buttons = page.locator("main button").filter({ hasText: /^[A-Za-z]/ });

@@ -7,10 +7,15 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useHealthState } from "@/hooks/useHealthState";
+import {
+  resetHealthCheckStateSnapshot,
+  setHealthCheckStateSnapshot,
+  useHealthCheckState,
+} from "@/lib/diagnostics/healthCheckState";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
@@ -18,17 +23,16 @@ import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
-import { consumeDiagnosticsOpenRequest, type DiagnosticsEntryPreset } from "@/lib/diagnostics/diagnosticsOverlay";
+import {
+  clearDiagnosticsOpenRequest,
+  consumeDiagnosticsOpenRequest,
+  type DiagnosticsEntryPreset,
+  type DiagnosticsPanelKey,
+} from "@/lib/diagnostics/diagnosticsOverlay";
 import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { getConfiguredHost, saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
-import {
-  runHealthCheck,
-  isHealthCheckRunning,
-  type HealthCheckRunResult,
-  type HealthCheckProbeType,
-  type HealthCheckProbeRecord,
-} from "@/lib/diagnostics/healthCheckEngine";
+import { runHealthCheck, isHealthCheckRunning } from "@/lib/diagnostics/healthCheckEngine";
 import { clearLatencySamples, getAllLatencySamples } from "@/lib/diagnostics/latencyTracker";
 import { clearHealthHistory, getHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { recordRecentTarget } from "@/lib/diagnostics/recentTargets";
@@ -86,30 +90,53 @@ const validateTarget = async (host: string, port: number) => {
   }
 };
 
+const resolveDiagnosticsPanelFromPath = (pathname: string): DiagnosticsPanelKey | null => {
+  if (pathname === "/diagnostics" || pathname === "/diagnostics/") return "overview";
+  if (pathname === "/diagnostics/latency") return "latency";
+  if (pathname === "/diagnostics/history") return "history";
+  if (pathname === "/diagnostics/config-drift") return "config-drift";
+  if (pathname === "/diagnostics/heatmap/rest") return "rest-heatmap";
+  if (pathname === "/diagnostics/heatmap/ftp") return "ftp-heatmap";
+  if (pathname === "/diagnostics/heatmap/config") return "config-heatmap";
+  return null;
+};
+
 export const GlobalDiagnosticsOverlay = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const trace = useActionTrace("GlobalDiagnosticsOverlay");
-  const isSettingsRoute = location.pathname === "/settings";
   const scrollRestoreRef = useRef<number | null>(null);
   const [overlayOpen, setOverlayOpen] = useState(false);
+  const [requestedPanel, setRequestedPanel] = useState<DiagnosticsPanelKey | null>(null);
   const healthState = useHealthState();
+  const healthCheckState = useHealthCheckState();
+  const routePanel = resolveDiagnosticsPanelFromPath(location.pathname);
 
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
   const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
 
-  // §11 — Health check state
-  const [healthCheckRunning, setHealthCheckRunning] = useState(false);
-  const [lastHealthCheckResult, setLastHealthCheckResult] = useState<HealthCheckRunResult | null>(null);
-  const [liveHealthCheckProbes, setLiveHealthCheckProbes] = useState<Partial<
-    Record<HealthCheckProbeType, HealthCheckProbeRecord>
-  > | null>(null);
-
   const setDialogOpen = useCallback((open: boolean) => {
     setDiagnosticsOverlayActive(open);
     setOverlayOpen(open);
   }, []);
+
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && routePanel !== null) {
+        setRequestedPanel(null);
+        setDialogOpen(false);
+        navigate("/settings");
+        return;
+      }
+      if (!open) {
+        setRequestedPanel(null);
+      }
+      setDialogOpen(open);
+    },
+    [navigate, routePanel, setDialogOpen],
+  );
 
   useEffect(() => {
     const handler = () => {
@@ -127,24 +154,29 @@ export const GlobalDiagnosticsOverlay = () => {
   }, []);
 
   useEffect(() => {
-    if (isSettingsRoute) return;
     const handleRequest = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { preset?: DiagnosticsEntryPreset } | undefined;
+      const detail = (event as CustomEvent).detail as
+        | { preset?: DiagnosticsEntryPreset; panel?: DiagnosticsPanelKey | null }
+        | undefined;
       if (!detail?.preset) return;
+      clearDiagnosticsOpenRequest();
+      setRequestedPanel(detail.panel ?? null);
       setDialogOpen(true);
     };
     const pending = consumeDiagnosticsOpenRequest();
     if (pending) {
+      setRequestedPanel(pending.panel ?? null);
       setDialogOpen(true);
     }
     window.addEventListener("c64u-diagnostics-open-request", handleRequest);
     return () => window.removeEventListener("c64u-diagnostics-open-request", handleRequest);
-  }, [isSettingsRoute, setDialogOpen]);
+  }, [setDialogOpen]);
 
   useEffect(() => {
-    if (!isSettingsRoute || !overlayOpen) return;
-    setDialogOpen(false);
-  }, [isSettingsRoute, overlayOpen, setDialogOpen]);
+    if (routePanel === null) return;
+    setRequestedPanel(routePanel);
+    setDialogOpen(true);
+  }, [routePanel, setDialogOpen]);
 
   useEffect(() => {
     if (overlayOpen) {
@@ -166,9 +198,11 @@ export const GlobalDiagnosticsOverlay = () => {
   useEffect(() => {
     const applyOverlaySeedState = (state: DiagnosticsOverlaySeedState | null | undefined) => {
       if (!state) return;
-      setLastHealthCheckResult(state.lastHealthCheckResult ?? null);
-      setLiveHealthCheckProbes(state.liveHealthCheckProbes ?? null);
-      setHealthCheckRunning(state.healthCheckRunning ?? false);
+      setHealthCheckStateSnapshot({
+        latestResult: state.lastHealthCheckResult ?? null,
+        liveProbes: state.liveHealthCheckProbes ?? null,
+        running: state.healthCheckRunning ?? false,
+      });
     };
 
     const win = window as Window & {
@@ -196,13 +230,13 @@ export const GlobalDiagnosticsOverlay = () => {
       actions: actionSummaries,
       supplemental: {
         healthSnapshot: healthState,
-        lastHealthCheckResult,
+        lastHealthCheckResult: healthCheckState.latestResult,
         healthHistory: getHealthHistorySnapshot(),
         latencySamples: getAllLatencySamples(),
         recoveryEvidence: getRecoveryEvidence(),
       },
     }),
-    [actionSummaries, errorLogs, healthState, lastHealthCheckResult, logs, traceEvents],
+    [actionSummaries, errorLogs, healthCheckState.latestResult, healthState, logs, traceEvents],
   );
 
   const handleShareAll = trace(async function handleShareAll() {
@@ -238,10 +272,10 @@ export const GlobalDiagnosticsOverlay = () => {
     clearLatencySamples();
     clearHealthHistory();
     clearRecoveryEvidence();
+    resetHealthCheckStateSnapshot();
     setLogs([]);
     setErrorLogs([]);
     setTraceEvents([]);
-    setLastHealthCheckResult(null);
     toast({ title: "Diagnostics cleared" });
   };
 
@@ -252,12 +286,9 @@ export const GlobalDiagnosticsOverlay = () => {
   // §11 — Run health check
   const handleRunHealthCheck = useCallback(async () => {
     if (isHealthCheckRunning()) return;
-    setHealthCheckRunning(true);
-    setLiveHealthCheckProbes({});
     try {
-      const result = await runHealthCheck((partial) => setLiveHealthCheckProbes(partial));
+      const result = await runHealthCheck();
       if (result) {
-        setLastHealthCheckResult(result);
         recordRecoveryEvidence({
           kind: "health-check",
           outcome:
@@ -280,9 +311,6 @@ export const GlobalDiagnosticsOverlay = () => {
         description: (error as Error).message,
         error,
       });
-    } finally {
-      setHealthCheckRunning(false);
-      setLiveHealthCheckProbes(null);
     }
   }, [healthState.host]);
 
@@ -407,16 +435,14 @@ export const GlobalDiagnosticsOverlay = () => {
 
   // §14 — Extract device info from last health check result
   const deviceInfo: DeviceDetailInfo | null = useMemo(() => {
-    if (!lastHealthCheckResult?.deviceInfo) return null;
-    return lastHealthCheckResult.deviceInfo;
-  }, [lastHealthCheckResult]);
-
-  if (isSettingsRoute) return null;
+    if (!healthCheckState.latestResult?.deviceInfo) return null;
+    return healthCheckState.latestResult.deviceInfo;
+  }, [healthCheckState.latestResult]);
 
   return (
     <DiagnosticsDialog
       open={overlayOpen}
-      onOpenChange={setDialogOpen}
+      onOpenChange={handleOpenChange}
       healthState={healthState}
       logs={logs}
       errorLogs={errorLogs}
@@ -428,9 +454,10 @@ export const GlobalDiagnosticsOverlay = () => {
       onRetryConnection={handleRetryConnection}
       connectionCallbacks={connectionCallbacks}
       deviceInfo={deviceInfo}
-      healthCheckRunning={healthCheckRunning}
-      lastHealthCheckResult={lastHealthCheckResult}
-      liveHealthCheckProbes={liveHealthCheckProbes}
+      healthCheckRunning={healthCheckState.running}
+      lastHealthCheckResult={healthCheckState.latestResult}
+      liveHealthCheckProbes={healthCheckState.liveProbes}
+      requestedPanel={requestedPanel}
       onRunHealthCheck={() => {
         void handleRunHealthCheck();
       }}

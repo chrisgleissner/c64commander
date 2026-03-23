@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { addLog } from "@/lib/logging";
 
 export const SWIPE_COMMIT_THRESHOLD_PX = 40;
+export const SWIPE_COMMIT_THRESHOLD_RATIO = 0.3;
 export const AXIS_LOCK_THRESHOLD_PX = 10;
 export const SWIPE_VELOCITY_THRESHOLD_PX_PER_MS = 0.25;
 
@@ -54,7 +55,15 @@ export const isSwipeExcluded = (target: EventTarget | null): boolean => {
   return false;
 };
 
-export const shouldCommitSwipe = (dx: number) => Math.abs(dx) >= SWIPE_COMMIT_THRESHOLD_PX;
+export const resolveSwipeCommitThresholdPx = (containerWidth: number | null | undefined) => {
+  if (typeof containerWidth !== "number" || !Number.isFinite(containerWidth) || containerWidth <= 0) {
+    return SWIPE_COMMIT_THRESHOLD_PX;
+  }
+  return Math.max(SWIPE_COMMIT_THRESHOLD_PX, Math.round(containerWidth * SWIPE_COMMIT_THRESHOLD_RATIO));
+};
+
+export const shouldCommitSwipe = (dx: number, containerWidth: number | null | undefined) =>
+  Math.abs(dx) >= resolveSwipeCommitThresholdPx(containerWidth);
 
 export const resolveSwipeDirection = (dx: number): SwipeDirection => (dx < 0 ? 1 : -1);
 
@@ -257,11 +266,13 @@ export function useSwipeGesture(
 
       if (nextState.intent !== "navigating") return;
 
-      if (shouldCommitSwipe(metadata.dx)) {
+      const thresholdPx = resolveSwipeCommitThresholdPx(containerRef.current?.clientWidth ?? null);
+
+      if (shouldCommitSwipe(metadata.dx, containerRef.current?.clientWidth ?? null)) {
         const direction = resolveSwipeDirection(metadata.dx);
         addLog("debug", "[SwipeNav] gesture-commit", {
           direction,
-          thresholdPx: SWIPE_COMMIT_THRESHOLD_PX,
+          thresholdPx,
           velocityThresholdPxPerMs: SWIPE_VELOCITY_THRESHOLD_PX_PER_MS,
           ...metadata,
         });
@@ -270,7 +281,7 @@ export function useSwipeGesture(
       }
 
       addLog("debug", "[SwipeNav] gesture-cancel", {
-        thresholdPx: SWIPE_COMMIT_THRESHOLD_PX,
+        thresholdPx,
         velocityThresholdPxPerMs: SWIPE_VELOCITY_THRESHOLD_PX_PER_MS,
         ...metadata,
       });

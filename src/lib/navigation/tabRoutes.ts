@@ -24,6 +24,9 @@ export type TabRoute = (typeof TAB_ROUTES)[number];
 
 /** Returns the index for a given pathname, or -1 if not a tab route. */
 export const tabIndexForPath = (pathname: string): number => {
+  if (pathname === "/diagnostics" || pathname.startsWith("/diagnostics/")) {
+    return TAB_ROUTES.findIndex((route) => route.path === "/settings");
+  }
   const exact = TAB_ROUTES.findIndex((t) => t.path === pathname);
   if (exact !== -1) return exact;
   // Prefix match for sub-routes (e.g. /settings/open-source-licenses → Settings slot)
