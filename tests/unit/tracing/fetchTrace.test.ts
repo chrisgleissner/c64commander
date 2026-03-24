@@ -163,9 +163,11 @@ describe("fetchTrace", () => {
 
     const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as {
       method: string;
+      headers: Record<string, string | string[]>;
       body: { type: string; sizeBytes: number; mimeType: string } | string;
     };
     expect(payload.method).toBe("PUT");
+    expect(payload.headers["x-upload"]).toBe("1");
     expect(payload.body).toBe("[stream]");
   });
 
