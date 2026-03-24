@@ -29,7 +29,7 @@ describe("traceWriter", () => {
     };
 
     expect(markdown).toContain("## [1] REST GET /v1/version");
-    expect(markdown).toContain("## [4] FTP LIST /");
+    expect(markdown).toContain("## [6] FTP LIST /");
     expect(shell).toContain('DEVICE_HOST="c64u"');
     expect(shell).toContain("--host <hostname>");
     expect(shell).toContain("lftp -u anonymous");
@@ -37,6 +37,8 @@ describe("traceWriter", () => {
     expect(shell).toContain("log_step");
     expect(shell).toContain("Embedded protocol degradation expectations");
     expect(shell).toContain("EXPECTED FTP DEGRADATION");
+    expect(shell).toContain("EXPECTED PING DEGRADATION");
+    expect(shell).toContain("EXPECTED TELNET DEGRADATION");
     expect(manifest.requests).toHaveLength(2);
   });
 });
@@ -103,6 +105,50 @@ function buildTraceEntries(): TraceEntry[] {
     },
     {
       globalSeq: 4,
+      runSessionId: "run-1",
+      correlationId: "corr-health-icmp",
+      clientId: "health-monitor",
+      stageId: "stage-1",
+      testType: "stress",
+      timestamp: "2026-03-24T12:00:00.017Z",
+      launchedAtMs: 1017,
+      hrTimeNs: 10n,
+      protocol: "HEALTH",
+      direction: "probe",
+      probeProtocol: "ICMP",
+      phase: "verification",
+      attempt: 2,
+      source: "spike-01:periodic",
+      state: "DEGRADED",
+      ok: false,
+      status: "ping-failed",
+      error: "Ping failed",
+      latencyMs: 6,
+    },
+    {
+      globalSeq: 5,
+      runSessionId: "run-1",
+      correlationId: "corr-health-telnet",
+      clientId: "health-monitor",
+      stageId: "stage-1",
+      testType: "stress",
+      timestamp: "2026-03-24T12:00:00.019Z",
+      launchedAtMs: 1019,
+      hrTimeNs: 11n,
+      protocol: "HEALTH",
+      direction: "probe",
+      probeProtocol: "TELNET",
+      phase: "verification",
+      attempt: 2,
+      source: "spike-01:periodic",
+      state: "DEGRADED",
+      ok: false,
+      status: "telnet-failed",
+      error: "Telnet failed",
+      latencyMs: 7,
+    },
+    {
+      globalSeq: 6,
       runSessionId: "run-1",
       correlationId: "corr-ftp",
       clientId: "client-2",

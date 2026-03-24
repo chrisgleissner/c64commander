@@ -83,7 +83,8 @@ export function writeReplayManifest(outDir: string, entries: readonly TraceEntry
 
 type ReplayExpectation = {
   anchorRequestSeq: number;
-  protocol: "REST" | "FTP";
+  protocol: HealthProbeEntry["probeProtocol"];
+  displayLabel: string;
   message: string;
 };
 
@@ -336,7 +337,7 @@ function renderCurlReplay(requests: readonly ReplayRequest[], expectations: read
   ];
   for (const [index, request] of requests.entries()) {
     for (const expectation of expectations.filter((item) => item.anchorRequestSeq === request.globalSeq)) {
-      lines.push(`# EXPECTED ${expectation.protocol} DEGRADATION: ${expectation.message}`);
+      lines.push(`# EXPECTED ${expectation.displayLabel} DEGRADATION: ${expectation.message}`);
       lines.push(`log_expectation ${shellQuote(expectation.message)}`);
     }
     if (request.protocol !== "REST") {
@@ -484,7 +485,7 @@ function buildReplayExpectations(entries: readonly TraceEntry[], requests: reado
     if (entry.protocol !== "HEALTH" || entry.direction !== "probe") {
       continue;
     }
-    if ((entry.probeProtocol !== "REST" && entry.probeProtocol !== "FTP") || entry.ok || seenProtocols.has(entry.probeProtocol)) {
+    if (entry.ok || seenProtocols.has(entry.probeProtocol)) {
       continue;
     }
     seenProtocols.add(entry.probeProtocol);
@@ -493,7 +494,8 @@ function buildReplayExpectations(entries: readonly TraceEntry[], requests: reado
     expectations.push({
       anchorRequestSeq,
       protocol: entry.probeProtocol,
-      message: `${entry.probeProtocol} is expected to become unavailable around original trace seq ${entry.globalSeq} (${entry.source}${entry.stageId ? `, stage ${entry.stageId}` : ""}).`,
+      displayLabel: displayExpectationProtocol(entry.probeProtocol),
+      message: `${displayExpectationProtocol(entry.probeProtocol)} is expected to become unavailable around original trace seq ${entry.globalSeq} (${entry.source}${entry.stageId ? `, stage ${entry.stageId}` : ""}).`,
     });
   }
   return expectations;
@@ -506,9 +508,16 @@ function renderExpectationSummary(expectations: readonly ReplayExpectation[]): s
 
   return [
     'log_info "Embedded protocol degradation expectations:"',
-    ...expectations.map((expectation) => `log_info ${shellQuote(`${expectation.protocol}: ${expectation.message}`)}`),
+    ...expectations.map((expectation) => `log_info ${shellQuote(`${expectation.displayLabel}: ${expectation.message}`)}`),
     "",
   ];
+}
+
+function displayExpectationProtocol(protocol: HealthProbeEntry["probeProtocol"]): string {
+  if (protocol === "ICMP") {
+    return "PING";
+  }
+  return protocol;
 }
 
 function renderReplayUrl(originalUrl: string): string {

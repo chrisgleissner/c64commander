@@ -279,6 +279,115 @@ require_cmd() {
   fi
 }
 
+probe_contract_ping() {
+  local host="$1"
+  ping -c 1 -W 2 "$host" >/tmp/c64u-ping.check 2>/tmp/c64u-ping.err
+}
+
+probe_contract_telnet() {
+  local host="$1"
+  local out=""
+  out="$(timeout 5 sh -c 'printf "" | telnet "$1" 23' sh "$host" 2>&1 || true)"
+  printf '%s\n' "$out" >/tmp/c64u-telnet.check
+  [[ "$out" == *"Connected to ${host}."* || "$out" == *"Connected to ${host}"* ]]
+}
+
+probe_contract_ftp() {
+  local host="$1"
+  timeout 5 lftp -u anonymous,"${CONTRACT_PASSWORD:-}" "ftp://${host}" -e 'set net:timeout 2; set net:max-retries 1; quote NOOP; bye' >/tmp/c64u-ftp.check 2>/tmp/c64u-ftp.err
+}
+
+probe_contract_rest() {
+  local base_url="$1"
+  local curl_args=(--silent --show-error --fail --max-time 2)
+  if [[ "${CONTRACT_AUTH^^}" == "ON" && -n "$CONTRACT_PASSWORD" ]]; then
+    curl_args+=(-H "X-Password: ${CONTRACT_PASSWORD}")
+  fi
+  curl "${curl_args[@]}" "${base_url}/v1/info" >/tmp/c64u-rest.check 2>/tmp/c64u-rest.err
+}
+
+perform_contract_power_cycle_gate() {
+  local host="$1"
+  local base_url="$2"
+  local power_cycle_log="/tmp/c64u-powercycle-telnet.log"
+  local saw_outage=0
+  local ping_state="down"
+  local telnet_state="down"
+  local ftp_state="down"
+  local rest_state="down"
+
+  require_cmd curl
+  require_cmd lftp
+  require_cmd ping
+  require_cmd telnet
+
+  log "Power-cycling ${host} via telnet menu sequence"
+  {
+    sleep 1
+    printf '\033OP'
+    sleep 1
+    printf '\r'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\r'
+  } | timeout 20 telnet "$host" 23 >"$power_cycle_log" 2>&1 || true
+
+  if ! grep -q 'Connected to ' "$power_cycle_log"; then
+    echo "ABORT: pre-test power cycle failed because telnet could not connect to ${host}" >&2
+    exit 1
+  fi
+
+  sleep 4
+  log "Verifying ping/telnet/ftp/rest recovery after power cycle"
+  for i in $(seq 1 60); do
+    ping_state="down"
+    telnet_state="down"
+    ftp_state="down"
+    rest_state="down"
+
+    if probe_contract_ping "$host"; then
+      ping_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if probe_contract_telnet "$host"; then
+      telnet_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if probe_contract_ftp "$host"; then
+      ftp_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if probe_contract_rest "$base_url"; then
+      rest_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if [[ "$saw_outage" == "1" && "$ping_state" == "up" && "$telnet_state" == "up" && "$ftp_state" == "up" && "$rest_state" == "up" ]]; then
+      log "Pre-test gate passed: ping/telnet/ftp/rest all recovered after power cycle"
+      return
+    fi
+
+    sleep 2
+  done
+
+  echo "ABORT: pre-test power-cycle gate failed; statuses ping=${ping_state} telnet=${telnet_state} ftp=${ftp_state} rest=${rest_state}" >&2
+  exit 1
+}
+
 resolve_apk_gradle_task() {
   case "$1" in
     debug)
@@ -545,6 +654,10 @@ run_contract_test() {
   trap 'rm -f "$config_path"' RETURN
   base_url="$(write_contract_config "$config_path" "$mode" "$auth")"
 
+  if [[ "${C64U_TARGET,,}" == "real" ]]; then
+    perform_contract_power_cycle_gate "$C64U_HOST" "$base_url"
+  fi
+
   log "Running contract test harness (${mode}/${auth}) against ${base_url}"
   local harness_status=0
   set +e
@@ -573,6 +686,10 @@ run_contract_replay() {
   config_path="$(mktemp -t c64u-contract-replay.XXXXXX.json)"
   trap 'rm -f "$config_path"' RETURN
   base_url="$(write_contract_config "$config_path" "$mode" "$auth")"
+
+  if [[ "${C64U_TARGET,,}" == "real" ]]; then
+    perform_contract_power_cycle_gate "$C64U_HOST" "$base_url"
+  fi
 
   log "Running contract replay against ${base_url}"
   local harness_status=0
