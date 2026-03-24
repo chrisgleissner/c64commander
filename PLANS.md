@@ -1,103 +1,174 @@
-# Review 11 — Live Device and HVSC Workflow Fix Plan
+# Review 12 — Deep Audit Execution Plan
 
-Status: IN_PROGRESS
+Status: COMPLETE
 Classification: DOC_PLUS_CODE, CODE_CHANGE, UI_CHANGE
-Date: 2026-03-23
-Source: doc/research/review-11/findings.md
+Date: 2026-03-24
+Mission: Produce a new evidence-backed research audit covering product-wide consistency, diagnostics, accessibility/readability, real-device workflows, HVSC lifecycle behavior, platform divergence, and documentation/test gaps across Android, iOS, and web.
 
-## Phase 1 — HVSC Critical Path (BLOCKER)
+## Phase 1 — Audit Setup
 
-### Targets: R11-001, R11-002
+Evidence:
 
-- [x] R11-001: Fix `offsetBytes: 0` rejection in `HvscIngestionPlugin.kt`
-  - Use `call.data.has("offsetBytes")` + `call.data.getLong()` instead of `call.getLong()`
-  - Add AppLogger debug line showing received offsetBytes
-  - Guard: missing → reject "offsetBytes is required"; negative → reject "offsetBytes must be >= 0"
-- [x] R11-002: Fix `hvscHasCache` to depend on `extraction.status === "success"` not `download.status`
-  - File: `src/pages/playFiles/hooks/useHvscLibrary.ts` line 665
-- [ ] Add unit tests for the offsetBytes and extraction gate fix
+- Existing review lineage confirmed under `doc/research/review-1` through `review-11`
+- Real Android device inventory confirmed: Pixel 4 serial `9B081FFAZ001WX`
+- Existing diagnostics/HVSC code, docs, and prior review surfaces mapped
 
-Verification:
-- offsetBytes=0 passes; missing fails; negative fails
-- Ingest button disabled when extraction has not succeeded
+Blockers:
 
-## Phase 2 — Health State Correctness
+- None
 
-### Targets: R11-007, R11-008, R11-012
+Next actions:
 
-- [ ] Introduce first-successful-REST-response gating in `useHealthState.ts`
-  - When `latestResult` is null: only derive UNHEALTHY from traces if at least one successful REST response has been observed
-  - Before first success: return Idle state
-- [ ] Add unit tests: cold-launch → Idle; first REST success → Healthy; transient failure → not immediately Unhealthy
+- Create `doc/research/review-12/`
+- Reframe findings around current repo state instead of prior fix plans
 
-Verification:
-- Badge starts as Idle/Connecting on cold launch
-- Transitions to Healthy after first clean REST response
+Tasks:
 
-## Phase 3 — Diagnostics Quality
+- [x] Confirm next numbered research folder target (`review-12`)
+- [x] Inventory current plan/worklog state and prior review material
+- [x] Inventory diagnostics, health, tracing, HVSC, and platform bridge files
+- [x] Create the new research folder and main report stub
 
-### Targets: R11-004, R11-005, R11-006
+## Phase 2 — Product and Documentation Recon
 
-- [ ] R11-004: Change action name from `rest.get` to `rest.get /path` in `src/lib/c64api.ts`
-- [ ] R11-005: Replace `.slice(0, 8)` with reverse-sorted newest-first rolling window (latest 20)
-- [ ] R11-006: Add sections index (Config Drift, Heat Maps, Latency, Health) at top of diagnostics dialog
+Evidence:
 
-Verification:
-- Collapsed action rows show method + path
-- List shows latest entries and updates live
+- README and UX guidance loaded
+- Prior review-11 findings identified for regression follow-up
 
-## Phase 4 — Platform Parity: iOS HVSC
+Blockers:
 
-### Targets: R11-003, R11-010
+- None
 
-- [ ] Implement `HvscIngestionPlugin.swift` in `ios/App/App/`
-  - `readArchiveChunk`: read raw file bytes at offset from Capacitor data dir
-  - `ingestHvsc`: full 7z extraction + SQLite ingestion using SWCompression
-  - `cancelIngestion`, `getIngestionStats`, progress events via `hvscProgress`
-- [ ] Add `SWCompression` pod to `ios/App/Podfile`
-- [ ] Register plugin in `AppDelegate.swift` or equivalent
+Next actions:
 
-Verification:
-- iOS HVSC download → extraction → ingestion works
-- Progress events fire correctly
+- Cross-check README, `doc/`, `docs/`, screenshots, and tests against actual implementation
 
-## Phase 5 — Platform Parity: Web HVSC
+Tasks:
 
-### Target: R11-011
+- [x] Audit README claims against current implementation and screenshots
+- [x] Audit diagnostics docs/specs against current diagnostics UI and trace model
+- [x] Audit HVSC docs/specs against current implementation and platform availability
+- [x] Audit parity docs and developer docs for stale or contradictory claims
 
-- [ ] Show platform-specific message in `HvscControls.tsx` when HVSC is unavailable
-  - Web: "HVSC is not available in web browsers"
-  - iOS (if no plugin): handled by Phase 4
+## Phase 3 — Code and Test Surface Audit
 
-## Phase 6 — Playback Error Clarity
+Evidence:
 
-### Target: R11-009
+- Key diagnostics and HVSC files identified
 
-- [ ] Fix trailing colon in `new Error(\`HTTP ${status}: ${statusText}\`)` in `src/lib/c64api.ts`
-  - Trim statusText; if empty use HTTP status label
+Blockers:
 
-## Phase 7 — Documentation
+- None
 
-### Target: R11-014
+Next actions:
 
-- [ ] Update `src/pages/DocsPage.tsx` to list diagnostics sections and deep-link paths
+- Read critical implementation and test files to identify likely defect clusters and evidence gaps
 
-## Phase 8 — Testing and Coverage
+Tasks:
 
-- [ ] Run `npm run test:coverage` — must reach >= 91% branch coverage
-- [ ] Run `npm run build` — must pass cleanly
-- [ ] Fix any test or lint failures
+- [x] Inspect diagnostics overlay/dialog/health/tracing implementation
+- [x] Inspect HVSC status, download, extraction, ingestion, and browser implementation
+- [x] Inspect Android and iOS native HVSC/diagnostics plugin surfaces
+- [x] Inspect representative Playwright, unit, and Android tests for coverage gaps and weak assertions
+- [x] Record architecture mismatches, duplicated ownership, and instrumentation blind spots
 
-## Termination Criteria
+## Phase 4 — Real Device Audit
 
-1. HVSC extraction works end-to-end on Android device (R11-001 fixed)
-2. Ingest button disabled unless extraction succeeded (R11-002 fixed)
-3. Health badge starts Idle on cold launch, transitions to Healthy after first REST success (R11-007/R11-012)
-4. Collapsed diagnostics rows show method + path (R11-004)
-5. Diagnostics list shows latest entries, not frozen 8 (R11-005)
-6. iOS HVSC fully implemented (R11-003/R11-010)
-7. Web HVSC limitation clearly explained (R11-011)
-8. Playback errors are non-ambiguous, no trailing colon (R11-009)
-9. DocsPage lists diagnostics sections and deep links (R11-014)
-10. Coverage >= 91% branch coverage
-11. Build passes cleanly
+Evidence:
+
+- Pixel 4 attached over adb
+- Target C64U host/IP available: `c64u` / `192.168.1.167`
+
+Blockers:
+
+- Device remained on the Android keyguard/lockscreen, which blocked direct on-screen flow exercise during this audit.
+
+Next actions:
+
+- Launch the app on Pixel 4, verify connectivity path, and exercise diagnostics/HVSC/product flows using the app first
+
+Tasks:
+
+- [x] Confirm installed app package and launchability on Pixel 4
+- [ ] Verify hostname vs IP behavior and configure IP fallback if needed
+- [ ] Exercise home, play, disks, config, settings, docs, and diagnostics flows on device
+- [x] Capture screenshots/logs for material findings
+- [ ] Exercise diagnostics overlay thoroughly on device
+- [ ] Exercise HVSC flow end to end on device to maximum feasible extent
+
+## Phase 5 — Web and iOS Parity Audit
+
+Evidence:
+
+- Web and iOS code entrypoints mapped
+
+Blockers:
+
+- iOS live execution may be unavailable locally
+
+Next actions:
+
+- Use code, tests, docs, and available web execution to separate verified parity from inferred parity
+
+Tasks:
+
+- [x] Exercise the web product path for key flows where practical
+- [x] Identify intentional versus accidental platform divergence
+- [x] Verify iOS capabilities through code/docs/tests and mark unverified claims explicitly
+- [x] Compare terminology, affordances, status reporting, and failure handling across platforms
+
+## Phase 6 — Findings Synthesis
+
+Evidence:
+
+- Pending ongoing investigation
+
+Blockers:
+
+- None
+
+Next actions:
+
+- Distill findings into actionable issue records with severity, repro, root cause, fix guidance, and recommended tests
+
+Tasks:
+
+- [x] Build an issue inventory covering verified defects, design weaknesses, doc contradictions, and test gaps
+- [x] Prioritize issues by severity, regression risk, and fix leverage
+- [x] Record explicit non-findings and disproven hypotheses where relevant
+
+## Phase 7 — Deliverables
+
+Evidence:
+
+- Pending
+
+Blockers:
+
+- None
+
+Next actions:
+
+- Write the report and finalize evidence inventory after all required areas are covered or explicitly blocked
+
+Tasks:
+
+- [x] Write `doc/research/review-12/review-12.md`
+- [x] Ensure every material issue includes repro, evidence, root cause, fix guidance, and tests
+- [x] Include executive summary, scope/method, environment, audited/not-audited areas, prioritization matrix, fix sequence, and appendix
+- [x] Update this plan to reflect actual completion status
+- [x] Append final audit summary to `WORKLOG.md`
+
+## Completion Checklist
+
+- [x] `PLANS.md` is current and every item is completed or explicitly marked blocked/out of scope
+- [x] `WORKLOG.md` contains a truthful chronological record of the audit
+- [x] Exactly one new research folder exists at `doc/research/review-12/`
+- [x] `doc/research/review-12/review-12.md` exists and is actionable
+- [x] Diagnostics subsystem is covered in depth
+- [x] Real-device Pixel 4 + C64U path is exercised to the maximum feasible extent and documented
+- [x] HVSC workflow is exercised to the maximum feasible extent and documented
+- [x] Broader product/documentation/test audit is included beyond diagnostics/HVSC
+- [x] Remaining uncertainty and blocked areas are explicit
+- [x] Temporary investigative artifacts are cleaned up unless intentionally retained

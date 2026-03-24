@@ -1109,9 +1109,9 @@ export function DiagnosticsDialog({
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
-            <div className="flex items-center justify-between">
-              <AppSheetTitle>Diagnostics</AppSheetTitle>
-              <div className="relative mr-7">
+            <div className="relative min-h-8 pr-20">
+              <AppSheetTitle className="pr-4">Diagnostics</AppSheetTitle>
+              <div className="absolute right-14 top-1 z-10">
                 <Button
                   type="button"
                   variant="ghost"

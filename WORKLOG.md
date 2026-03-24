@@ -92,3 +92,41 @@ Date: 2026-03-23
   - `npm run lint`
   - `npm run test:coverage`
   - `npm run build`
+
+## 2026-03-24T11:52:43Z - Review 12 audit kickoff
+
+- Classification for this task: `DOC_ONLY`.
+- Mission reset: perform a deep-dive research and audit pass across the current product/repo state, with primary emphasis on diagnostics, real-device behavior, HVSC, and cross-platform consistency.
+- Confirmed existing review lineage under `doc/research/review-1` through `review-11`; reserved `review-12` for this run.
+- Read current `README.md`, `doc/ux-guidelines.md`, repo memories related to diagnostics/playlists/streaming, and prior review-11 materials.
+- Used code exploration to map the diagnostics overlay/state/tracing surfaces, HVSC workflow surfaces, platform-specific plugin entrypoints, and relevant docs/tests.
+- Confirmed physical Android device presence with `adb devices -l`: Pixel 4 serial `9B081FFAZ001WX` attached over USB.
+- Current working hypothesis: some previously reported gaps may still be present in docs/tests even if code has moved; this run will verify current behavior rather than assume prior findings still apply.
+- Next actions: create the new report folder, inspect implementation/test files in detail, launch the app on the Pixel 4, and gather direct diagnostics/HVSC evidence from the real-device path.
+
+## 2026-03-24T12:08:40Z - Review 12 runtime evidence and report synthesis
+
+- Created `doc/research/review-12/review-12.md` and filled the final audit structure with executive summary, scope/method, environment, audited/not-audited areas, issue matrix, findings, fix sequence, and appendix.
+- Re-checked multiple prior review-11 themes against current code and confirmed several earlier defects are no longer current: health-state gating, diagnostics action labels, diagnostics list depth, HVSC extraction gating, Android HVSC chunk offset parsing, and iOS HVSC native implementation.
+- Verified host-side C64U reachability by both hostname and IP: `http://c64u/v1/info` and `http://192.168.1.167/v1/info` returned matching device metadata.
+- Ran focused diagnostics/HVSC Playwright suites and observed a green result (`24 passed`), which is useful as a contrast point because the live browser HVSC path is still misleading.
+- Reproduced a live web-runtime issue in the built preview path: the Play page exposed an enabled `Download HVSC` action in a desktop browser, then failed with fetch/CORS errors and a generic failed status instead of presenting HVSC as unsupported in browsers.
+- Reproduced a local workflow issue: `npm run dev -- --host 127.0.0.1 --port 4173` failed immediately with `ELOOP: too many symbolic links encountered` on `test-data/sid/hvsc/hvsc`.
+- Confirmed internal doc drift: the iOS parity matrix still claims HVSC is shared TypeScript with no native code even though `HvscIngestionPlugin.swift` exists, is registered in `AppDelegate.swift`, and depends on `SWCompression` in `ios/App/Podfile`.
+- Confirmed diagnostics doc drift: README/UX docs still describe an older diagnostics flow while the implementation now centers around a unified evidence feed, filter editor, footer tools, and overflow actions.
+- Captured Android evidence to the maximum feasible extent despite the device lockscreen blocker. The Pixel 4 remained locked, but logcat still showed app startup and live requests targeting `http://c64u/v1/info` plus additional config endpoints.
+- Cleaned up the temporary Vite preview process started for browser runtime inspection.
+
+## 2026-03-24T12:31:00Z - Review 12 follow-up Android audit, diagnostics fix, and validation
+
+- Unlocked the attached Pixel 4 and exercised the live diagnostics sheet directly on-device.
+- Captured real-device diagnostics screenshots showing the app reporting `C64U · 127.0.0.1:<ephemeral-port>` and localhost action rows on physical hardware, which points to demo/mock routing being active or insufficiently disclosed during a real-device session.
+- Traced that Android finding back to the active connection snapshot used by `DiagnosticsDialog.tsx` and to the explicit demo/mock routing paths in `src/lib/connection/connectionManager.ts`.
+- Mapped a concrete web HVSC implementation strategy grounded in the current codebase: add a web-server HVSC proxy with range support, add an IndexedDB-backed HVSC storage layer, reuse `hvscArchiveExtraction.ts` for browser extraction, reuse the existing songlength service, and route web-installed SID playback through `api.playSidUpload()` using blobs from browser storage.
+- Fixed a mobile diagnostics usability bug in `src/components/diagnostics/DiagnosticsDialog.tsx` by repositioning the overflow menu so it stays clearly left of the close button instead of overlapping its hit area on small screens.
+- Added targeted Playwright regression coverage in `playwright/modalConsistency.spec.ts` for the diagnostics header control separation on a 390x844 viewport.
+- Validation after the follow-up code change:
+  - Targeted Playwright diagnostics regression passed (`2 passed`).
+  - `npm run lint` passed for the changed source files; only pre-existing warnings remain in generated `android/coverage/` files.
+  - `npm run build` passed.
+  - Isolated unit coverage completed with 91.01% branch coverage.
