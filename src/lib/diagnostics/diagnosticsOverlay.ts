@@ -20,6 +20,7 @@ export type DiagnosticsPanelKey =
   | "latency"
   | "history"
   | "config-drift"
+  | "decision-state"
   | "rest-heatmap"
   | "ftp-heatmap"
   | "config-heatmap";

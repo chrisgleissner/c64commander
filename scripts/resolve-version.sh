@@ -56,8 +56,11 @@ if [[ ! "$TAG" =~ ^[0-9A-Za-z._-]+$ ]]; then
   exit 1
 fi
 
-# Resolve 5-character short SHA
-SHA="$(git rev-parse --short=5 HEAD)"
+# Resolve an exact 5-character display SHA.
+# `git rev-parse --short=5` only guarantees a minimum length and may emit more
+# characters for uniqueness, which breaks the repository's fixed-width version
+# label contract.
+SHA="$(git rev-parse HEAD | tr -d '\r\n' | cut -c1-5)"
 
 # Detect dirty state: staged + unstaged changes to tracked files only.
 # Untracked files are excluded because git diff HEAD does not consider them.

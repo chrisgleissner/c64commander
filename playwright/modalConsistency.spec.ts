@@ -123,4 +123,48 @@ test.describe("Modal close-button consistency", () => {
       expect(classAttr, `diagnostics close button should have class: ${cls}`).toContain(cls);
     }
   });
+
+  test("Diagnostics overflow menu stays left of the close button on small screens", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await page.setViewportSize({ width: 390, height: 844 });
+    server = await createMockC64Server({});
+    await page.addInitScript(
+      ({ url }: { url: string }) => {
+        (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = url;
+      },
+      { url: server.baseUrl },
+    );
+    await seedUiMocks(page, server.baseUrl);
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
+    await indicator.click();
+
+    const diagSheet = page.getByTestId("diagnostics-sheet");
+    await expect(diagSheet).toBeVisible({ timeout: 5000 });
+
+    const overflowBtn = diagSheet.getByTestId("diagnostics-overflow-menu");
+    const closeBtn = diagSheet.getByRole("button", { name: "Close" });
+    await expect(overflowBtn).toBeVisible();
+    await expect(closeBtn).toBeVisible();
+
+    const overflowBox = await overflowBtn.boundingBox();
+    const closeBox = await closeBtn.boundingBox();
+
+    expect(overflowBox, "overflow menu should have a measurable hit target").not.toBeNull();
+    expect(closeBox, "close button should have a measurable hit target").not.toBeNull();
+
+    if (!overflowBox || !closeBox) {
+      throw new Error("Diagnostics header controls did not expose bounding boxes.");
+    }
+
+    expect(
+      overflowBox.x + overflowBox.width,
+      "overflow menu should remain clearly to the left of the close button",
+    ).toBeLessThanOrEqual(closeBox.x - 8);
+  });
 });

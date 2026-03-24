@@ -13,8 +13,8 @@
       "args": ["-y", "c64bridge@latest"]
     },
     "c64scope": {
-      "command": "npx",
-      "args": ["-y", "tsx", "c64scope/src/index.ts"],
+      "command": "node",
+      "args": ["c64scope/scripts/start.mjs"],
       "type": "stdio"
     }
   }

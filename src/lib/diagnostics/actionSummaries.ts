@@ -17,7 +17,7 @@ import type {
 import { normalizeTraceHeaderValue } from "@/lib/tracing/payloadPreview";
 
 export type ActionSummaryOrigin = "user" | "system" | "unknown";
-export type ActionSummaryOutcome = "success" | "error" | "blocked" | "timeout" | "incomplete";
+export type ActionSummaryOutcome = "success" | "error" | "blocked" | "timeout" | "in_progress" | "failed";
 
 export type RestEffect = {
   type: "REST";
@@ -125,7 +125,7 @@ const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin =
 };
 
 const resolveOutcome = (status: string | null, isComplete: boolean): ActionSummaryOutcome => {
-  if (!isComplete) return "incomplete";
+  if (!isComplete) return "in_progress";
   switch (status) {
     case "success":
       return "success";
@@ -136,7 +136,7 @@ const resolveOutcome = (status: string | null, isComplete: boolean): ActionSumma
     case "timeout":
       return "timeout";
     default:
-      return "incomplete";
+      return "failed";
   }
 };
 

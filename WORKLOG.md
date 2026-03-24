@@ -1,7 +1,7 @@
 # Diagnostics, Navigation, and Health Worklog
 
 Status: IN_PROGRESS
-Date: 2026-03-23
+Date: 2026-03-24
 
 ## 2026-03-23T00:00:00Z - Classification and scope
 
@@ -92,3 +92,142 @@ Date: 2026-03-23
   - `npm run lint`
   - `npm run test:coverage`
   - `npm run build`
+
+## 2026-03-24T11:52:43Z - Review 12 audit kickoff
+
+- Classification for this task: `DOC_ONLY`.
+- Mission reset: perform a deep-dive research and audit pass across the current product/repo state, with primary emphasis on diagnostics, real-device behavior, HVSC, and cross-platform consistency.
+- Confirmed existing review lineage under `doc/research/review-1` through `review-11`; reserved `review-12` for this run.
+- Read current `README.md`, `doc/ux-guidelines.md`, repo memories related to diagnostics/playlists/streaming, and prior review-11 materials.
+- Used code exploration to map the diagnostics overlay/state/tracing surfaces, HVSC workflow surfaces, platform-specific plugin entrypoints, and relevant docs/tests.
+- Confirmed physical Android device presence with `adb devices -l`: Pixel 4 serial `9B081FFAZ001WX` attached over USB.
+- Current working hypothesis: some previously reported gaps may still be present in docs/tests even if code has moved; this run will verify current behavior rather than assume prior findings still apply.
+- Next actions: create the new report folder, inspect implementation/test files in detail, launch the app on the Pixel 4, and gather direct diagnostics/HVSC evidence from the real-device path.
+
+## 2026-03-24T12:08:40Z - Review 12 runtime evidence and report synthesis
+
+- Created `doc/research/review-12/review-12.md` and filled the final audit structure with executive summary, scope/method, environment, audited/not-audited areas, issue matrix, findings, fix sequence, and appendix.
+- Re-checked multiple prior review-11 themes against current code and confirmed several earlier defects are no longer current: health-state gating, diagnostics action labels, diagnostics list depth, HVSC extraction gating, Android HVSC chunk offset parsing, and iOS HVSC native implementation.
+- Verified host-side C64U reachability by both hostname and IP: `http://c64u/v1/info` and `http://192.168.1.167/v1/info` returned matching device metadata.
+- Ran focused diagnostics/HVSC Playwright suites and observed a green result (`24 passed`), which is useful as a contrast point because the live browser HVSC path is still misleading.
+- Reproduced a live web-runtime issue in the built preview path: the Play page exposed an enabled `Download HVSC` action in a desktop browser, then failed with fetch/CORS errors and a generic failed status instead of presenting HVSC as unsupported in browsers.
+- Reproduced a local workflow issue: `npm run dev -- --host 127.0.0.1 --port 4173` failed immediately with `ELOOP: too many symbolic links encountered` on `test-data/sid/hvsc/hvsc`.
+- Confirmed internal doc drift: the iOS parity matrix still claims HVSC is shared TypeScript with no native code even though `HvscIngestionPlugin.swift` exists, is registered in `AppDelegate.swift`, and depends on `SWCompression` in `ios/App/Podfile`.
+- Confirmed diagnostics doc drift: README/UX docs still describe an older diagnostics flow while the implementation now centers around a unified evidence feed, filter editor, footer tools, and overflow actions.
+- Captured Android evidence to the maximum feasible extent despite the device lockscreen blocker. The Pixel 4 remained locked, but logcat still showed app startup and live requests targeting `http://c64u/v1/info` plus additional config endpoints.
+- Cleaned up the temporary Vite preview process started for browser runtime inspection.
+
+## 2026-03-24T12:31:00Z - Review 12 follow-up Android audit, diagnostics fix, and validation
+
+- Unlocked the attached Pixel 4 and exercised the live diagnostics sheet directly on-device.
+- Captured real-device diagnostics screenshots showing the app reporting `C64U · 127.0.0.1:<ephemeral-port>` and localhost action rows on physical hardware, which points to demo/mock routing being active or insufficiently disclosed during a real-device session.
+- Traced that Android finding back to the active connection snapshot used by `DiagnosticsDialog.tsx` and to the explicit demo/mock routing paths in `src/lib/connection/connectionManager.ts`.
+- Mapped a concrete web HVSC implementation strategy grounded in the current codebase: add a web-server HVSC proxy with range support, add an IndexedDB-backed HVSC storage layer, reuse `hvscArchiveExtraction.ts` for browser extraction, reuse the existing songlength service, and route web-installed SID playback through `api.playSidUpload()` using blobs from browser storage.
+- Fixed a mobile diagnostics usability bug in `src/components/diagnostics/DiagnosticsDialog.tsx` by repositioning the overflow menu so it stays clearly left of the close button instead of overlapping its hit area on small screens.
+- Added targeted Playwright regression coverage in `playwright/modalConsistency.spec.ts` for the diagnostics header control separation on a 390x844 viewport.
+- Validation after the follow-up code change:
+  - Targeted Playwright diagnostics regression passed (`2 passed`).
+  - `npm run lint` passed for the changed source files; only pre-existing warnings remain in generated `android/coverage/` files.
+  - `npm run build` passed.
+  - Isolated unit coverage completed with 91.01% branch coverage.
+
+## 2026-03-24T13:00:00Z — Phase 3 session 2: downstream fixes and regression tests
+
+### `incomplete` → `in_progress`/`failed` downstream propagation
+
+- Updated `resolveActionSeverity()` in `diagnosticsSeverity.ts`: `"failed"` → `"error"`, `"in_progress"` → `"warn"`.
+- Updated all downstream test assertions and fixtures (7 replacements across 6 files):
+  - `diagnosticsSeverity.test.ts`: outcome assertions
+  - `actionSummaries.test.ts` (unit/diagnostics): 3 `"incomplete"` → `"in_progress"`, 1 unrecognized status test
+  - `actionSummariesGolden.test.ts`: COR-0005 assertion
+  - `actionSummaries.test.ts` (unit/lib/diagnostics): assertion
+  - `actions.json` fixture: outcome value
+
+### Regression tests added
+
+- `healthCheckEngine.test.ts`: 3 new tests (items-wrapper format, option-list index fallback, undefined product field)
+- `actionSummaries.test.ts` (unit/diagnostics): 2 new tests (`"failed"` for unrecognized status, `"in_progress"` for no action-end)
+
+### Validation results
+
+- TypeScript: clean
+- Vitest: 381 files, 4531 tests passed
+- ESLint: clean on all modified files
+- Prettier: clean after formatting 3 files
+- Build: production build succeeded
+- Coverage: 90.98% branch (unit-only); CI threshold is COVERAGE_MIN=90 (merged unit+E2E)
+
+## 2026-03-24T10:00:00Z — Phase 1 & 2: Baseline and root-cause analysis
+
+### CONFIG health-check root cause (CONFIRMED)
+
+- **Observed**: CONFIG probe always returns "Skipped: No suitable config roundtrip target available"
+- **Root cause**: `getConfigItem()` returns `{ [category]: { items: { [item]: { selected, options } } } }` — the item data is nested inside an `items` key. The probe code accesses `categoryData[item]` directly, which is always `undefined`. The `continue` fires for all targets, falling through to the "No suitable target" skip.
+- **Secondary issue**: Audio Mixer `selected` values are strings like "OFF", "+6 dB" — not numeric. `parseFloat("OFF")` → `NaN`, causing `currentValue` to remain `null` even if lookup were correct. Need to handle value-by-index for option-list items.
+- **Fix**: Navigate through `categoryData.items[item]` and handle both numeric and option-list config items.
+
+### Activity header hierarchy (CONFIRMED)
+
+- **Observed**: Section title "Activity" uses `text-[10px]` (smaller), subtitle uses `text-[11px]` (larger) — visually inverted.
+- **Fix**: Make title larger/bolder than subtitle.
+
+### Top-right collision (CONFIRMED)
+
+- **Observed**: Overflow menu at `right-14 top-1`, close button at AppSheet default. Gap is ~14 units (3.5rem, ~56px) — tight on small screens.
+- **Fix**: Move overflow menu further left or increase padding.
+
+### `incomplete` status (CONFIRMED)
+
+- **Observed**: `resolveOutcome()` returns `"incomplete"` for both genuinely incomplete actions and unrecognized action-end statuses.
+- **Fix**: Distinguish `IN_PROGRESS` for truly incomplete, `TIMEOUT` for timed-out, `FAILED` as catch-all for bad outcomes.
+
+### Latency summary (CONFIRMED)
+
+- **Observed**: Plain bordered div at bottom of HealthCheckDetailView, no visual distinction from probe rows.
+- **Fix**: Add subtle background tint or separator to make it stand out.
+
+## 2026-03-24T15:05:00Z - Reassessment and execution restart
+
+- Classification: `CODE_CHANGE`, `UI_CHANGE`.
+- Observed fact: `PLANS.md` incorrectly marked the diagnostics work complete while Phase 5 real-device verification and the requested lifecycle/reconciliation/observability work were still not implemented.
+- Observed fact: `src/lib/diagnostics/healthCheckEngine.ts` still uses a single module-level `running` boolean and sequential async probes with no cancellable lifecycle model, no global timeout, no per-probe timeout except FTP, and no stale-run recovery.
+- Observed fact: `src/lib/diagnostics/healthCheckState.ts` stores only `running`, `liveProbes`, and `latestResult`; it does not represent run lifecycle, sub-check lifecycle, timing boundaries, cancellation metadata, or stale detection.
+- Observed fact: the diagnostics UI already has suitable extension seams: route-addressable panels in `GlobalDiagnosticsOverlay.tsx`, surface components in `DiagnosticsDialog.tsx`, and a playback trace snapshot in `src/pages/playFiles/playbackTraceStore.ts`.
+- Decision: keep the implementation minimally invasive by extending the existing health-check state store, adding a small reconciler/decision-state store, and wiring the new diagnostics view into the existing overlay rather than introducing a second architecture.
+- Next step: patch the health-check state model and engine first, then add reconciliation/playback observability, tests, and real-device verification evidence.
+
+## 2026-03-24T15:15:00Z - Lifecycle, reconciliation, validation, and device evidence
+
+- Implemented lifecycle-aware health-check execution in `src/lib/diagnostics/healthCheckEngine.ts` and `src/lib/diagnostics/healthCheckState.ts`.
+  - Added explicit run lifecycle states: `IDLE`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`, `TIMEOUT`.
+  - Added explicit probe lifecycle states: `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `TIMEOUT`, `CANCELLED`.
+  - Added cancellation-on-restart, stale-run timeout recovery, transition recording, and propagated timeout/abort request options into `src/lib/c64api.ts` for relevant config/memory paths.
+- Implemented thin decision-state and reconciliation layers in `src/lib/diagnostics/decisionState.ts` and `src/lib/diagnostics/diagnosticsReconciler.ts`.
+  - Added playback certainty tracking (`PLAYING`/`STOPPED`/`UNKNOWN` + confidence).
+  - Added diagnostics/config/playback reconciler status, transition history, and repair-state tracking.
+- Wired the new behavior into the app shell and diagnostics UI.
+  - `src/App.tsx`: app resume now runs diagnostics/config/playback reconcilers.
+  - `src/pages/PlayFilesPage.tsx`: playback trace now feeds the decision-state store and marks playback unobservable on unmount.
+  - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`: added decision-state deep link handling, overlay-open reconciliation, and repair wiring.
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`: added the decision-state surface and switched the health-check action from disabled-in-flight to restartable-in-flight.
+  - `src/components/diagnostics/HealthCheckDetailView.tsx`: now surfaces timeout/cancelled lifecycle states instead of only legacy outcome text.
+- Regression coverage added/updated.
+  - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: restart/cancellation and stale-run timeout recovery.
+  - `playwright/homeDiagnosticsOverlay.spec.ts`: decision-state surface reachability and repair control.
+  - Updated diagnostics overlay/dialog unit tests to match the new runtime contract and restartable health-check button behavior.
+- Validation results.
+  - `npx vitest run tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: passed.
+  - `npx playwright test playwright/homeDiagnosticsOverlay.spec.ts -g "supports health checks, analytics, export enrichment, and clear-all|opens the decision-state surface and exposes repair controls"` on a fresh Playwright server port: passed.
+  - `npm run build`: passed.
+  - `npm run lint`: passed after formatting; only warnings were in generated `android/coverage/` artifacts and did not fail the run.
+  - `npm run test:coverage`: passed after aligning diagnostics unit tests with the new QueryClient dependency and restartable button semantics.
+- Real-device verification evidence.
+  - Attached Android device confirmed: Pixel 4 serial `9B081FFAZ001WX`.
+  - Live C64 Ultimate confirmed from host: `curl http://c64u/v1/info` returned product `C64 Ultimate`, firmware `1.1.0`, FPGA `122`, core `1.49`, hostname `c64u`.
+  - Built and installed a fresh Android debug APK from the current workspace (`0.6.5-rc1`) onto the Pixel 4.
+  - On-device screenshot shows the fresh app build identifier `0.6.5-41a97` on the Home screen.
+  - Android app logs confirm live runtime traffic from the device to `http://c64u:80/v1/info` and multiple config endpoints after launch, demonstrating that the current build is executing against the live device path rather than only a stale install.
+  - A later on-device screenshot showed the connected steady state visually: `Device c64u`, firmware `1.1.0`.
+  - Opened the diagnostics overlay on the Pixel through the live app UI and captured the overlay itself on-device.
+  - The captured overlay showed the new diagnostics footer affordances, including `Decision state`, alongside the healthy status and live `C64U · c64u:80` context.
+  - Limitation: the handset pass did not end with a captured screenshot of the decision-state panel itself after tapping; that surface was validated through the new Playwright coverage while the device pass verified the live overlay entry and footer affordance presence.

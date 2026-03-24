@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
 import { ActionExpandedContent } from "./ActionExpandedContent";
 import { ConfigDriftView } from "./ConfigDriftView";
+import { DecisionStateView } from "./DecisionStateView";
 import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
 import { HealthHistoryPopup } from "./HealthHistoryPopup";
@@ -86,6 +87,8 @@ type Props = {
   lastHealthCheckResult?: HealthCheckRunResult | null;
   liveHealthCheckProbes?: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
   requestedPanel?: DiagnosticsPanelKey | null;
+  repairRunning?: boolean;
+  onRepair?: () => void | Promise<void>;
 };
 
 type EvidenceEntry = {
@@ -828,6 +831,45 @@ const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 };
 
+const DecisionStateSurface = ({
+  open,
+  onOpenChange,
+  repairRunning,
+  onRepair,
+  actionSummaries,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  repairRunning: boolean;
+  onRepair?: () => void | Promise<void>;
+  actionSummaries: ActionSummary[];
+}) => {
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
+        <DialogPrimitive.Content
+          className="fixed inset-x-0 bottom-0 top-[10dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl sm:left-1/2 sm:right-auto sm:top-1/2 sm:h-[min(80dvh,46rem)] sm:w-[min(42rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:border"
+          data-testid="decision-state-surface"
+        >
+          <DialogPrimitive.Title className="sr-only">Decision state</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            Internal reconciliation, playback uncertainty, and recent diagnostics transitions.
+          </DialogPrimitive.Description>
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <DecisionStateView
+              onBack={() => onOpenChange(false)}
+              onRepair={() => onRepair?.()}
+              repairRunning={repairRunning}
+              actionSummaries={actionSummaries}
+            />
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+};
+
 export function DiagnosticsDialog({
   open,
   onOpenChange,
@@ -846,6 +888,8 @@ export function DiagnosticsDialog({
   lastHealthCheckResult = null,
   liveHealthCheckProbes = null,
   requestedPanel = null,
+  repairRunning = false,
+  onRepair,
 }: Props) {
   const { profile } = useDisplayProfile();
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -865,6 +909,7 @@ export function DiagnosticsDialog({
   const [latencyOpen, setLatencyOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configDriftOpen, setConfigDriftOpen] = useState(false);
+  const [decisionStateOpen, setDecisionStateOpen] = useState(false);
   const [heatMapVariant, setHeatMapVariant] = useState<HeatMapVariant | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
@@ -961,6 +1006,7 @@ export function DiagnosticsDialog({
     setLatencyOpen(false);
     setHistoryOpen(false);
     setConfigDriftOpen(false);
+    setDecisionStateOpen(false);
     setHeatMapVariant(null);
     setOverflowOpen(false);
     setExpandedEvidenceId(null);
@@ -980,6 +1026,7 @@ export function DiagnosticsDialog({
       setLatencyOpen(false);
       setHistoryOpen(false);
       setConfigDriftOpen(false);
+      setDecisionStateOpen(false);
       setHeatMapVariant(null);
       setOverflowOpen(false);
     }
@@ -997,6 +1044,7 @@ export function DiagnosticsDialog({
     setLatencyOpen(requestedPanel === "latency");
     setHistoryOpen(requestedPanel === "history");
     setConfigDriftOpen(requestedPanel === "config-drift");
+    setDecisionStateOpen(requestedPanel === "decision-state");
     setHeatMapVariant(
       requestedPanel === "rest-heatmap"
         ? "REST"
@@ -1109,9 +1157,9 @@ export function DiagnosticsDialog({
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
-            <div className="flex items-center justify-between">
-              <AppSheetTitle>Diagnostics</AppSheetTitle>
-              <div className="relative mr-7">
+            <div className="relative min-h-8 pr-20">
+              <AppSheetTitle className="pr-4">Diagnostics</AppSheetTitle>
+              <div className={cn("absolute top-1 z-10", profile === "compact" ? "right-14" : "right-20")}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1123,13 +1171,21 @@ export function DiagnosticsDialog({
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
                 {overflowOpen ? (
-                  <div className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg">
+                  <div
+                    className={cn(
+                      "rounded-lg border border-border bg-background py-1 shadow-lg",
+                      profile === "compact"
+                        ? "fixed inset-x-4 top-[5.25rem] z-20 max-h-[calc(100dvh-6rem)] overflow-y-auto"
+                        : "absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))]",
+                    )}
+                    data-testid="diagnostics-overflow-panel"
+                  >
                     <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Views
                     </p>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setConfigDriftOpen(true);
@@ -1140,7 +1196,18 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setDecisionStateOpen(true);
+                      }}
+                      data-testid="open-decision-state-screen"
+                    >
+                      Decision state
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setLatencyOpen(true);
@@ -1151,7 +1218,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHistoryOpen(true);
@@ -1162,7 +1229,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHeatMapVariant("REST");
@@ -1173,7 +1240,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHeatMapVariant("FTP");
@@ -1184,7 +1251,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHeatMapVariant("CONFIG");
@@ -1196,7 +1263,7 @@ export function DiagnosticsDialog({
                     <div className="my-1 border-t border-border" />
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         void onShareAll();
@@ -1208,7 +1275,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         handleShareFiltered();
@@ -1222,7 +1289,7 @@ export function DiagnosticsDialog({
                       <AlertDialogTrigger asChild>
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
                           data-testid="footer-diagnostics-clear-all-trigger"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1293,10 +1360,10 @@ export function DiagnosticsDialog({
                       setHeaderExpanded(true);
                       onRunHealthCheck?.();
                     }}
-                    disabled={!onRunHealthCheck || healthCheckRunning}
+                    disabled={!onRunHealthCheck}
                     data-testid="run-health-check"
                   >
-                    {healthCheckRunning ? "Running health check" : "Run health check"}
+                    {healthCheckRunning ? "Restart health check" : "Run health check"}
                   </Button>
                 </div>
                 {lastHealthCheckResult || liveHealthCheckProbes !== null || healthCheckRunning ? (
@@ -1361,13 +1428,10 @@ export function DiagnosticsDialog({
 
             {/* Phase 2: Evidence list (immediately visible) */}
             <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">
-              <p
-                className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                data-testid="evidence-heading"
-              >
+              <p className="mb-1 text-xs font-semibold text-foreground" data-testid="evidence-heading">
                 Activity
               </p>
-              <p className="mb-2 text-[11px] text-muted-foreground" data-testid="activity-kinds-line">
+              <p className="mb-2 text-[10px] text-muted-foreground" data-testid="activity-kinds-line">
                 Problems, actions, logs, and traces
               </p>
               <div className="max-h-72 space-y-1.5 overflow-y-auto" data-testid="evidence-list">
@@ -1399,6 +1463,16 @@ export function DiagnosticsDialog({
                 data-testid="footer-open-config-drift-screen"
               >
                 Config drift
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setDecisionStateOpen(true)}
+                data-testid="footer-open-decision-state-screen"
+              >
+                Decision state
               </Button>
               <Button
                 type="button"
@@ -1545,6 +1619,13 @@ export function DiagnosticsDialog({
       />
 
       <ConfigDriftSurface open={open && configDriftOpen} onOpenChange={setConfigDriftOpen} />
+      <DecisionStateSurface
+        open={open && decisionStateOpen}
+        onOpenChange={setDecisionStateOpen}
+        repairRunning={repairRunning}
+        onRepair={onRepair}
+        actionSummaries={actionSummaries}
+      />
       <LatencyAnalysisPopup open={open && latencyOpen} onClose={() => setLatencyOpen(false)} />
       <HealthHistoryPopup open={open && historyOpen} onClose={() => setHistoryOpen(false)} />
       <HeatMapPopup

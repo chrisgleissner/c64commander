@@ -13,7 +13,7 @@ import path from "path";
 import fs from "fs";
 import { spawnSync } from "child_process";
 import { hasInjectedBuildVersion, resolveBuildAppVersion } from "./src/lib/buildVersion";
-import { deriveVersionLabel } from "./src/lib/versionLabel";
+import { resolveBuildVersionLabel } from "./src/lib/versionLabel";
 
 const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
 
@@ -95,12 +95,8 @@ const resolveAppVersionLabel = (gitDescribeValue: string, gitShaValue: string, f
   if (hasInjectedBuildVersion(process.env)) {
     return fallbackVersion;
   }
-  // Prefer the version written by scripts/resolve-version.sh (5-char SHA, clean
-  // dirty semantics that exclude generated / untracked files).
-  const generated = readGeneratedVersionLabel();
-  if (generated) return generated;
-  // Fallback: derive from git describe when the script has not run yet.
-  return deriveVersionLabel({
+  return resolveBuildVersionLabel({
+    generatedVersionLabel: readGeneratedVersionLabel(),
     gitDescribe: gitDescribeValue,
     gitSha: gitShaValue,
     fallbackVersion,
