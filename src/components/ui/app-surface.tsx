@@ -161,7 +161,7 @@ type AppDialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimiti
 };
 
 const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppDialogContentProps>(
-  ({ className, children, showClose = true, closeTestId, ...props }, ref) => (
+  ({ className, children, showClose = true, closeTestId, style, ...props }, ref) => (
     <AppSurfacePortal>
       <AppSurfaceOverlay />
       <DialogPrimitive.Content
@@ -172,6 +172,17 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
           className,
         )}
         data-app-surface="dialog"
+        // tailwindcss-animate's .animate-in class resets --tw-enter-translate-x/y
+        // to `initial` (→ 0), which overrides the -translate-x/y-1/2 centering
+        // mid-animation.  Inline style wins over class rules and restores the
+        // correct starting translate so the dialog stays centred while scaling.
+        style={
+          {
+            "--tw-enter-translate-x": "-50%",
+            "--tw-enter-translate-y": "-50%",
+            ...style,
+          } as React.CSSProperties
+        }
         {...props}
       >
         {children}
