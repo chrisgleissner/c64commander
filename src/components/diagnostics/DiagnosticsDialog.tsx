@@ -1326,7 +1326,7 @@ export function DiagnosticsDialog({
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
                 {overflowOpen ? (
-                  <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
+                  <div className="absolute bottom-full left-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"

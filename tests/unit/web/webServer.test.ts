@@ -14,6 +14,7 @@ type StartedServer = {
 
 const tempDirs: string[] = [];
 const ftpServers: MockFtpServer[] = [];
+const webServers: StartedServer[] = [];
 
 const makeTempDir = async (prefix: string) => {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
@@ -30,7 +31,7 @@ const startWebServer = async (env: Record<string, string>) => {
   if (!address || typeof address === "string") {
     throw new Error("Unexpected server address");
   }
-  return {
+  const started = {
     baseUrl: `http://127.0.0.1:${address.port}`,
     close: async () => {
       await new Promise<void>((resolve, reject) => {
@@ -44,6 +45,8 @@ const startWebServer = async (env: Record<string, string>) => {
       });
     },
   } satisfies StartedServer;
+  webServers.push(started);
+  return started;
 };
 
 const loginAndGetCookie = async (baseUrl: string, password: string) => {
@@ -60,6 +63,9 @@ const loginAndGetCookie = async (baseUrl: string, password: string) => {
 
 afterEach(async () => {
   process.env = { ...originalEnv };
+  for (const server of webServers.splice(0)) {
+    await server.close().catch(() => {});
+  }
   for (const ftpServer of ftpServers.splice(0)) {
     await ftpServer.close();
   }
