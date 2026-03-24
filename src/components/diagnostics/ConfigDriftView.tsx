@@ -114,10 +114,10 @@ export function ConfigDriftView({ onBack }: Props) {
                       className="rounded border border-border px-2 py-1 text-xs space-y-0.5"
                     >
                       <p className="font-medium">{item.item}</p>
-                      <div className="flex items-center gap-2 text-muted-foreground font-mono">
-                        <span className="truncate">{item.persistedValue}</span>
-                        <span className="shrink-0">→</span>
-                        <span className="truncate text-foreground">{item.runtimeValue}</span>
+                      <div className="flex items-start gap-2 text-muted-foreground font-mono">
+                        <span className="min-w-0 break-all">{item.persistedValue}</span>
+                        <span className="shrink-0 pt-px">→</span>
+                        <span className="min-w-0 break-all text-foreground">{item.runtimeValue}</span>
                       </div>
                     </div>
                   ))}

@@ -252,10 +252,12 @@ describe("DiagnosticsDialog", () => {
     setViewportWidth(600);
     const { rerender } = renderDialog({ healthState: unhealthyHealthState });
 
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-latency-screen"));
     expect(screen.getByTestId("latency-analysis-popup")).toBeVisible();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-timeline-screen"));
     expect(screen.getByTestId("health-history-popup")).toBeVisible();
 
@@ -275,13 +277,16 @@ describe("DiagnosticsDialog", () => {
 
     renderDialog();
 
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-config-drift-screen"));
     expect(screen.getByTestId("config-drift-surface")).toBeVisible();
 
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
     expect(screen.getByTestId("heat-map-popup-rest")).toBeVisible();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-config-heatmap-screen"));
     expect(screen.getByTestId("heat-map-popup-config")).toBeVisible();
   });

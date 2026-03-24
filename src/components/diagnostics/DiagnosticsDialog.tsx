@@ -1165,7 +1165,7 @@ export function DiagnosticsDialog({
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
-                        setHeatMapVariant('REST');
+                        setHeatMapVariant("REST");
                       }}
                       data-testid="open-rest-heatmap-screen"
                     >
@@ -1176,7 +1176,7 @@ export function DiagnosticsDialog({
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
-                        setHeatMapVariant('FTP');
+                        setHeatMapVariant("FTP");
                       }}
                       data-testid="open-ftp-heatmap-screen"
                     >
@@ -1187,7 +1187,7 @@ export function DiagnosticsDialog({
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
-                        setHeatMapVariant('CONFIG');
+                        setHeatMapVariant("CONFIG");
                       }}
                       data-testid="open-config-heatmap-screen"
                     >
@@ -1359,61 +1359,6 @@ export function DiagnosticsDialog({
               </Button>
             </div>
 
-            {/* Sections index — quick access to all diagnostics surfaces */}
-            <section className="mt-2 shrink-0" data-testid="diagnostics-sections-index">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Sections</p>
-              <div className="flex flex-wrap gap-1" data-testid="sections-index-buttons">
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => setConfigDriftOpen(true)}
-                  data-testid="sections-index-config-drift"
-                >
-                  Config drift
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => setLatencyOpen(true)}
-                  data-testid="sections-index-latency"
-                >
-                  Latency
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => setHistoryOpen(true)}
-                  data-testid="sections-index-health-history"
-                >
-                  Health history
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => setHeatMapVariant("REST")}
-                  data-testid="sections-index-rest-heatmap"
-                >
-                  REST heat map
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => setHeatMapVariant("FTP")}
-                  data-testid="sections-index-ftp-heatmap"
-                >
-                  FTP heat map
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => setHeatMapVariant("CONFIG")}
-                  data-testid="sections-index-config-heatmap"
-                >
-                  Config heat map
-                </button>
-              </div>
-            </section>
-
             {/* Phase 2: Evidence list (immediately visible) */}
             <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">
               <p
@@ -1438,136 +1383,6 @@ export function DiagnosticsDialog({
                 {displayEntries.length === 0 ? (
                   <p className="py-2 text-xs text-muted-foreground">No matching activity.</p>
                 ) : null}
-              </div>
-            </section>
-
-            {/* Phase 6: Compact controls */}
-            <section className="mt-2 shrink-0 space-y-2" data-testid="diagnostics-controls">
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setConfigDriftOpen(true)}
-                  data-testid="open-config-drift-screen"
-                >
-                  Config drift
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setLatencyOpen(true)}
-                  data-testid="open-latency-screen"
-                >
-                  Latency
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHistoryOpen(true)}
-                  data-testid="open-timeline-screen"
-                >
-                  Health history
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHeatMapVariant("REST")}
-                  data-testid="open-rest-heatmap-screen"
-                >
-                  REST heat map
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHeatMapVariant("FTP")}
-                  data-testid="open-ftp-heatmap-screen"
-                >
-                  FTP heat map
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHeatMapVariant("CONFIG")}
-                  data-testid="open-config-heatmap-screen"
-                >
-                  Config heat map
-                </Button>
-                <div className="relative">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => setOverflowOpen((v) => !v)}
-                    data-testid="diagnostics-overflow-menu"
-                  >
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                  </Button>
-                  {overflowOpen ? (
-                    <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
-                        onClick={() => {
-                          setOverflowOpen(false);
-                          void onShareAll();
-                        }}
-                        data-testid="diagnostics-share-all"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        Share all
-                      </button>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
-                        onClick={() => {
-                          setOverflowOpen(false);
-                          handleShareFiltered();
-                        }}
-                        data-testid="diagnostics-share-filtered"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        Share filtered
-                      </button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
-                            data-testid="diagnostics-clear-all-trigger"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Clear all
-                          </button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent surface="confirmation">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
-                            <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
-                              Clear
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  ) : null}
-                </div>
               </div>
             </section>
           </div>
