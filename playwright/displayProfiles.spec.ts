@@ -497,6 +497,10 @@ test.describe("display profiles", () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     expect(overflow).toBe(true);
 
+    // Close the overflow menu before resetting font size so the dropdown
+    // does not contribute to boundary checks in afterEach.
+    await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
+
     // Reset font scaling so afterEach boundary checks see the base layout, not
     // the 1.5× scale used for this assertion (which causes a 2 px subpixel
     // overflow that is an artefact of the scaling, not a real content overflow).

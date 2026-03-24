@@ -1109,9 +1109,9 @@ export function DiagnosticsDialog({
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
-            <div className="flex items-center justify-between pr-8">
+            <div className="flex items-center justify-between">
               <AppSheetTitle>Diagnostics</AppSheetTitle>
-              <div className="relative">
+              <div className="relative mr-7">
                 <Button
                   type="button"
                   variant="ghost"
@@ -1123,7 +1123,7 @@ export function DiagnosticsDialog({
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
                 {overflowOpen ? (
-                  <div className="absolute right-0 top-full z-10 mt-1 min-w-[11rem] rounded-lg border border-border bg-background py-1 shadow-lg">
+                  <div className="absolute right-0 top-full z-10 mt-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
                     <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Views
                     </p>
