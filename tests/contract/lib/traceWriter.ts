@@ -65,6 +65,7 @@ export function writeTraceMd(outDir: string, entries: readonly TraceEntry[]): vo
 
 export function writeReplayManifest(outDir: string, entries: readonly TraceEntry[], baseUrl: string): void {
   const requests = buildReplayRequests(entries);
+  const expectations = buildReplayExpectations(entries, requests);
   const manifest: ReplayManifest = {
     runSessionId: entries[0]?.runSessionId ?? "unknown-run",
     generatedAt: new Date().toISOString(),
@@ -77,8 +78,14 @@ export function writeReplayManifest(outDir: string, entries: readonly TraceEntry
   fs.mkdirSync(replayDir, { recursive: true });
   fs.writeFileSync(path.join(replayDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   fs.writeFileSync(path.join(replayDir, "device-replay.http"), `${renderRestClientReplay(requests)}\n`, "utf8");
-  fs.writeFileSync(path.join(replayDir, "device-replay.sh"), `${renderCurlReplay(requests)}\n`, "utf8");
+  fs.writeFileSync(path.join(replayDir, "device-replay.sh"), `${renderCurlReplay(requests, expectations)}\n`, "utf8");
 }
+
+type ReplayExpectation = {
+  anchorRequestSeq: number;
+  protocol: "REST" | "FTP";
+  message: string;
+};
 
 function buildReplayRequests(entries: readonly TraceEntry[]): ReplayRequest[] {
   const requests: ReplayRequest[] = [];
@@ -262,7 +269,7 @@ function renderRestClientReplay(requests: readonly ReplayRequest[]): string {
   return blocks.join("\n\n");
 }
 
-function renderCurlReplay(requests: readonly ReplayRequest[]): string {
+function renderCurlReplay(requests: readonly ReplayRequest[], expectations: readonly ReplayExpectation[]): string {
   const restRequests = requests.filter((request) => request.protocol === "REST");
   const lines = [
     "#!/usr/bin/env bash",
@@ -273,6 +280,11 @@ function renderCurlReplay(requests: readonly ReplayRequest[]): string {
     'TMP_DIR="$(mktemp -d)"',
     'cleanup() { rm -rf "$TMP_DIR"; }',
     "trap cleanup EXIT",
+    "",
+    'STEP_COUNTER=0',
+    'log_info() { printf "[INFO] %s\\n" "$1"; }',
+    'log_step() { STEP_COUNTER=$((STEP_COUNTER + 1)); printf "\\n[STEP %03d] %s\\n" "$STEP_COUNTER" "$1"; }',
+    'log_expectation() { printf "[EXPECT] %s\\n" "$1"; }',
     "",
     "usage() {",
     "  cat <<'EOF'",
@@ -316,13 +328,25 @@ function renderCurlReplay(requests: readonly ReplayRequest[]): string {
     '  PASSWORD_HEADERS=(-H "X-Password: ${DEVICE_PASSWORD}")',
     "fi",
     "",
+    'log_info "Starting replay against host ${DEVICE_HOST}"',
+    'log_info "HTTP base URL: ${HTTP_BASE_URL}"',
+    'log_info "FTP base URL: ${FTP_BASE_URL}"',
+    "",
+    ...renderExpectationSummary(expectations),
   ];
   for (const [index, request] of requests.entries()) {
+    for (const expectation of expectations.filter((item) => item.anchorRequestSeq === request.globalSeq)) {
+      lines.push(`# EXPECTED ${expectation.protocol} DEGRADATION: ${expectation.message}`);
+      lines.push(`log_expectation ${shellQuote(expectation.message)}`);
+    }
     if (request.protocol !== "REST") {
       lines.push(...renderFtpReplayCommand(request));
       continue;
     }
     lines.push(`# REST seq ${request.globalSeq} client ${request.clientId}`);
+    lines.push(
+      `log_step ${shellQuote(`REST seq ${request.globalSeq}: ${request.method ?? "GET"} ${safePathname(request.url ?? "")}`)}`,
+    );
     const curlParts = [
       "curl",
       "--silent",
@@ -371,44 +395,56 @@ function renderFtpReplayCommand(request: ReplayRequest): string[] {
     case "MLST":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`cls ${remotePath}; bye`)}`,
       ];
     case "PWD":
-      return [`# FTP seq ${request.globalSeq} client ${request.clientId}`, `${lftpPrefix}${shellQuote("pwd; bye")}`];
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote("pwd; bye")}`,
+      ];
     case "CWD":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`cd ${argument}; pwd; bye`)}`,
       ];
     case "CDUP":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote("cd ..; pwd; bye")}`,
       ];
     case "MKD":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`mkdir -p ${argument}; bye`)}`,
       ];
     case "RMD":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`rmdir ${argument}; bye`)}`,
       ];
     case "DELE":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`rm ${argument}; bye`)}`,
       ];
     case "RETR":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`get ${argument} -o $TMP_DIR/${safeFileName(argument)}; bye`)}`,
       ];
     case "STOR": {
       const localPath = `$TMP_DIR/upload-${request.globalSeq}.bin`;
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `head -c ${request.byteCount ?? 0} /dev/zero | tr '\\000' 'B' > ${localPath}`,
         `${lftpPrefix}${shellQuote(`put ${localPath} -o ${remotePath}; bye`)}`,
       ];
@@ -420,6 +456,7 @@ function renderFtpReplayCommand(request: ReplayRequest): string[] {
     case "MODE":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`quote ${rawCommand}; bye`)}`,
       ];
     case "USER":
@@ -428,13 +465,50 @@ function renderFtpReplayCommand(request: ReplayRequest): string[] {
     case "PORT":
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}: handled by lftp session defaults (${rawCommand})`,
+        `log_info ${shellQuote(`FTP seq ${request.globalSeq}: handled by lftp session defaults (${rawCommand})`)}`,
       ];
     default:
       return [
         `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
         `${lftpPrefix}${shellQuote(`quote ${rawCommand}; bye`)}`,
       ];
   }
+}
+
+function buildReplayExpectations(entries: readonly TraceEntry[], requests: readonly ReplayRequest[]): ReplayExpectation[] {
+  const expectations: ReplayExpectation[] = [];
+  const seenProtocols = new Set<string>();
+  const requestSeqs = requests.map((request) => request.globalSeq).sort((left, right) => left - right);
+  for (const entry of [...entries].sort((left, right) => left.globalSeq - right.globalSeq)) {
+    if (entry.protocol !== "HEALTH" || entry.direction !== "probe") {
+      continue;
+    }
+    if ((entry.probeProtocol !== "REST" && entry.probeProtocol !== "FTP") || entry.ok || seenProtocols.has(entry.probeProtocol)) {
+      continue;
+    }
+    seenProtocols.add(entry.probeProtocol);
+    const anchorRequestSeq =
+      requestSeqs.find((seq) => seq >= entry.globalSeq) ?? requestSeqs[requestSeqs.length - 1] ?? entry.globalSeq;
+    expectations.push({
+      anchorRequestSeq,
+      protocol: entry.probeProtocol,
+      message: `${entry.probeProtocol} is expected to become unavailable around original trace seq ${entry.globalSeq} (${entry.source}${entry.stageId ? `, stage ${entry.stageId}` : ""}).`,
+    });
+  }
+  return expectations;
+}
+
+function renderExpectationSummary(expectations: readonly ReplayExpectation[]): string[] {
+  if (expectations.length === 0) {
+    return ['log_info "No protocol-unavailability expectations were embedded in this replay."', ""];
+  }
+
+  return [
+    'log_info "Embedded protocol degradation expectations:"',
+    ...expectations.map((expectation) => `log_info ${shellQuote(`${expectation.protocol}: ${expectation.message}`)}`),
+    "",
+  ];
 }
 
 function renderReplayUrl(originalUrl: string): string {

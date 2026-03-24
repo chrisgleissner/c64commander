@@ -29,11 +29,14 @@ describe("traceWriter", () => {
     };
 
     expect(markdown).toContain("## [1] REST GET /v1/version");
-    expect(markdown).toContain("## [3] FTP LIST /");
+    expect(markdown).toContain("## [4] FTP LIST /");
     expect(shell).toContain('DEVICE_HOST="c64u"');
     expect(shell).toContain("--host <hostname>");
     expect(shell).toContain("lftp -u anonymous");
     expect(shell).toContain('HTTP_BASE_URL="http://${DEVICE_HOST}"');
+    expect(shell).toContain("log_step");
+    expect(shell).toContain("Embedded protocol degradation expectations");
+    expect(shell).toContain("EXPECTED FTP DEGRADATION");
     expect(manifest.requests).toHaveLength(2);
   });
 });
@@ -78,6 +81,28 @@ function buildTraceEntries(): TraceEntry[] {
     },
     {
       globalSeq: 3,
+      runSessionId: "run-1",
+      correlationId: "corr-health-ftp",
+      clientId: "health-monitor",
+      stageId: "stage-1",
+      testType: "stress",
+      timestamp: "2026-03-24T12:00:00.015Z",
+      launchedAtMs: 1015,
+      hrTimeNs: 9n,
+      protocol: "HEALTH",
+      direction: "probe",
+      probeProtocol: "FTP",
+      phase: "verification",
+      attempt: 2,
+      source: "spike-01:periodic",
+      state: "DEGRADED",
+      ok: false,
+      status: "ftp-failed",
+      error: "FTP failed",
+      latencyMs: 5,
+    },
+    {
+      globalSeq: 4,
       runSessionId: "run-1",
       correlationId: "corr-ftp",
       clientId: "client-2",

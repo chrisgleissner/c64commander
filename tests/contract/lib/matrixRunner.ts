@@ -8,6 +8,7 @@
 
 import { delay } from "./timing.js";
 import type { HarnessConfig } from "./config.js";
+import type { FtpClient } from "./ftpClient.js";
 import type { LogEventInput } from "./logging.js";
 import type { MultiProtocolHealthMonitor } from "./health.js";
 import type { SharedRestRequest } from "./restRequest.js";
@@ -21,6 +22,11 @@ import {
   type MatrixStage,
 } from "./stressMatrix.js";
 import { runStage } from "./stageRunner.js";
+
+type ProtocolAvailability = {
+  available: Set<"REST" | "FTP">;
+  unavailable: Set<"REST" | "FTP">;
+};
 
 export async function runMatrixProfile(input: {
   config: HarnessConfig;
@@ -36,6 +42,10 @@ export async function runMatrixProfile(input: {
   let abortReason: string | null = null;
   let totalRequestsStarted = 0;
   let totalRequestsCompleted = 0;
+  const protocolAvailability: ProtocolAvailability = {
+    available: new Set(["REST", "FTP"]),
+    unavailable: new Set(),
+  };
 
   for (const stage of stages) {
     if (abortReason) {
@@ -57,6 +67,7 @@ export async function runMatrixProfile(input: {
         stageId: stage.stageId,
         source: `${stage.stageId}:idle`,
       });
+      updateProtocolAvailability(protocolAvailability, assessment.availableProtocols, assessment.unavailableProtocols);
       if (assessment.abort) {
         abortReason = assessment.reason;
         stage.status = "aborted";
@@ -85,6 +96,13 @@ export async function runMatrixProfile(input: {
       healthMonitor: input.healthMonitor,
       getStageId: () => stage.stageId,
       log: input.log,
+      onAssessment: (assessment) => {
+        updateProtocolAvailability(
+          protocolAvailability,
+          assessment.availableProtocols,
+          assessment.unavailableProtocols,
+        );
+      },
       onAbort: (reason) => {
         abortReason ??= reason;
       },
@@ -108,10 +126,14 @@ export async function runMatrixProfile(input: {
               });
             let ftpClient;
             try {
-              ftpClient = pool ? await pool.acquire(clientId) : undefined;
-              const result = await operation.execute({
+              const result = await executeWithAvailability({
+                operation,
+                availability: protocolAvailability,
+                acquireFtpClient: async () => {
+                  ftpClient = pool ? await pool.acquire(clientId) : undefined;
+                  return ftpClient;
+                },
                 restRequest: scopedRestRequest,
-                ftpClient,
                 log: input.log,
                 config: input.config,
               });
@@ -173,6 +195,7 @@ async function runMatrixHealthLoop(input: {
   healthMonitor: MultiProtocolHealthMonitor;
   getStageId: () => string;
   log: (event: LogEventInput) => void;
+  onAssessment: (assessment: Awaited<ReturnType<MultiProtocolHealthMonitor["check"]>>) => void;
   onAbort: (reason: string) => void;
   shouldStop: () => boolean;
 }): Promise<void> {
@@ -187,15 +210,106 @@ async function runMatrixHealthLoop(input: {
       stageId: input.getStageId(),
       source: `${input.getStageId()}:periodic`,
     });
+    input.onAssessment(assessment);
     input.log({
       kind: "health",
       op: `${input.getStageId()}:periodic`,
       status: assessment.state,
-      details: { reason: assessment.reason },
+      details: {
+        reason: assessment.reason,
+        availableProtocols: assessment.availableProtocols,
+        unavailableProtocols: assessment.unavailableProtocols,
+      },
     });
     if (assessment.abort) {
       input.onAbort(assessment.reason);
       return;
+    }
+  }
+}
+
+async function executeWithAvailability(input: {
+  operation: MatrixOp;
+  availability: ProtocolAvailability;
+  acquireFtpClient: () => Promise<FtpClient | undefined>;
+  restRequest: SharedRestRequest;
+  log: (event: LogEventInput) => void;
+  config: HarnessConfig;
+}): Promise<{ ok: boolean; latencyMs: number }> {
+  if (input.operation.protocol !== "mixed") {
+    const ftpClient = input.operation.requiresFtpSession ? await input.acquireFtpClient() : undefined;
+    return input.operation.execute({
+      restRequest: input.restRequest,
+      ftpClient,
+      log: input.log,
+      config: input.config,
+    });
+  }
+
+  const restAvailable = input.availability.available.has("REST");
+  const ftpAvailable = input.availability.available.has("FTP");
+
+  if (restAvailable && ftpAvailable) {
+    const ftpClient = await input.acquireFtpClient();
+    return input.operation.execute({
+      restRequest: input.restRequest,
+      ftpClient,
+      log: input.log,
+      config: input.config,
+    });
+  }
+
+  if (restAvailable && !ftpAvailable) {
+    const start = Date.now();
+    const response = await input.restRequest({ method: "GET", url: "/v1/version" });
+    input.log({
+      kind: "protocol-exercise",
+      op: `${input.operation.id}:rest-fallback`,
+      status: response.status,
+      latencyMs: response.latencyMs,
+      details: { unavailableProtocols: [...input.availability.unavailable] },
+    });
+    return { ok: response.status === 200, latencyMs: Date.now() - start };
+  }
+
+  if (!restAvailable && ftpAvailable) {
+    const start = Date.now();
+    const ftpClient = await input.acquireFtpClient();
+    const response = await ftpClient!.sendCommand("NOOP");
+    input.log({
+      kind: "protocol-exercise",
+      op: `${input.operation.id}:ftp-fallback`,
+      status: response.response.code,
+      latencyMs: response.latencyMs,
+      details: { unavailableProtocols: [...input.availability.unavailable] },
+    });
+    return { ok: response.response.code < 400, latencyMs: Date.now() - start };
+  }
+
+  input.log({
+    kind: "protocol-exercise",
+    op: `${input.operation.id}:no-protocols-available`,
+    status: "unavailable",
+    details: { unavailableProtocols: [...input.availability.unavailable] },
+  });
+  return { ok: false, latencyMs: 0 };
+}
+
+function updateProtocolAvailability(
+  availability: ProtocolAvailability,
+  availableProtocols: readonly string[],
+  unavailableProtocols: readonly string[],
+): void {
+  availability.available.clear();
+  availability.unavailable.clear();
+  for (const protocol of availableProtocols) {
+    if (protocol === "REST" || protocol === "FTP") {
+      availability.available.add(protocol);
+    }
+  }
+  for (const protocol of unavailableProtocols) {
+    if (protocol === "REST" || protocol === "FTP") {
+      availability.unavailable.add(protocol);
     }
   }
 }

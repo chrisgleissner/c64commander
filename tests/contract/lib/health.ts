@@ -51,12 +51,24 @@ export type HealthTransition = {
   stageId?: string;
 };
 
+export type ProtocolAvailabilityTransition = {
+  protocol: HealthProtocol;
+  from: boolean | null;
+  to: boolean;
+  timestamp: string;
+  source: string;
+  stageId?: string;
+  reason: string;
+};
+
 export type HealthAssessment = {
   state: HealthState;
   abort: boolean;
   reason: string;
   batches: ProbeBatch[];
   latestBatch: ProbeBatch;
+  availableProtocols: HealthProtocol[];
+  unavailableProtocols: HealthProtocol[];
   transition?: HealthTransition;
 };
 
@@ -78,10 +90,12 @@ export type MultiProtocolHealthMonitorConfig = {
   requiredProtocols?: HealthProtocol[];
   onBatch?: (batch: ProbeBatch) => void;
   onTransition?: (transition: HealthTransition) => void;
+  onProtocolTransition?: (transition: ProtocolAvailabilityTransition) => void;
 };
 
 export class MultiProtocolHealthMonitor {
   private currentState: HealthState | null = null;
+  private readonly protocolAvailability = new Map<HealthProtocol, boolean>();
   private readonly verificationWindowMs: number;
   private readonly verificationBackoffMs: number[];
   private readonly requiredProtocols: HealthProtocol[];
@@ -124,6 +138,8 @@ export class MultiProtocolHealthMonitor {
       }
     }
 
+    const availability = summarizeProtocolAvailability(batches[batches.length - 1]?.results ?? baseline.results);
+
     const transition =
       this.currentState === nextState
         ? undefined
@@ -146,6 +162,8 @@ export class MultiProtocolHealthMonitor {
       reason,
       batches,
       latestBatch: batches[batches.length - 1] ?? baseline,
+      availableProtocols: availability.availableProtocols,
+      unavailableProtocols: availability.unavailableProtocols,
       transition,
     };
   }
@@ -165,8 +183,30 @@ export class MultiProtocolHealthMonitor {
       timestamp: new Date().toISOString(),
       results: await Promise.all(this.probes.map((probe) => probe(input))),
     };
+    this.emitProtocolTransitions(batch);
     this.config.onBatch?.(batch);
     return batch;
+  }
+
+  private emitProtocolTransitions(batch: ProbeBatch): void {
+    for (const result of batch.results) {
+      const previous = this.protocolAvailability.get(result.protocol) ?? null;
+      if (previous === result.ok) {
+        continue;
+      }
+      this.protocolAvailability.set(result.protocol, result.ok);
+      this.config.onProtocolTransition?.({
+        protocol: result.protocol,
+        from: previous,
+        to: result.ok,
+        timestamp: result.timestamp,
+        source: batch.source,
+        stageId: batch.stageId,
+        reason: result.ok
+          ? `${result.protocol} is available again.`
+          : `${result.protocol} is now unavailable: ${result.error ?? String(result.status ?? "probe failed")}`,
+      });
+    }
   }
 
   private isHealthy(results: ProbeResult[]): boolean {
@@ -385,4 +425,20 @@ function formatExecError(error: unknown): string {
   const stdout = "stdout" in error ? String(error.stdout ?? "") : "";
   const message = "message" in error ? String(error.message ?? "") : String(error);
   return [stderr.trim(), stdout.trim(), message.trim()].filter(Boolean).join(" | ");
+}
+
+function summarizeProtocolAvailability(results: ProbeResult[]): {
+  availableProtocols: HealthProtocol[];
+  unavailableProtocols: HealthProtocol[];
+} {
+  const availableProtocols: HealthProtocol[] = [];
+  const unavailableProtocols: HealthProtocol[] = [];
+  for (const result of results) {
+    if (result.ok) {
+      availableProtocols.push(result.protocol);
+    } else {
+      unavailableProtocols.push(result.protocol);
+    }
+  }
+  return { availableProtocols, unavailableProtocols };
 }

@@ -17,9 +17,9 @@ import { buildFtpScenarios } from "./scenarios/ftp/index.js";
 import { buildMixedScenarios } from "./scenarios/mixed/index.js";
 import {
   createContractHealthMonitor,
-  type HealthAssessment,
   type ProbeBatch,
   type HealthTransition,
+  type ProtocolAvailabilityTransition,
 } from "./lib/health.js";
 import { LatencyTracker, deriveCooldown, delay } from "./lib/timing.js";
 import { SchemaValidator, schemaPath } from "./lib/schema.js";
@@ -166,6 +166,21 @@ function recordHealthTransition(transition: HealthTransition): void {
   });
 }
 
+function recordProtocolTransition(transition: ProtocolAvailabilityTransition): void {
+  log({
+    kind: "health-protocol",
+    op: transition.protocol.toLowerCase(),
+    status: transition.to ? "available" : "unavailable",
+    details: {
+      from: transition.from,
+      to: transition.to,
+      stageId: transition.stageId,
+      reason: transition.reason,
+      message: `${transition.protocol} is now ${transition.to ? "available" : "unavailable"}`,
+    },
+  });
+}
+
 const restClient = new RestClient({
   baseUrl: config.baseUrl,
   auth: config.auth,
@@ -201,6 +216,9 @@ const healthMonitor = createContractHealthMonitor(config, {
   },
   onTransition: (transition) => {
     recordHealthTransition(transition);
+  },
+  onProtocolTransition: (transition) => {
+    recordProtocolTransition(transition);
   },
 });
 

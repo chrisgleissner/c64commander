@@ -16,6 +16,21 @@ describe("MultiProtocolHealthMonitor", () => {
     expect(result.abort).toBe(false);
   });
 
+  it("emits a protocol transition when rest becomes unavailable", async () => {
+    const transitions: string[] = [];
+    const monitor = new MultiProtocolHealthMonitor([failingProbe("REST"), healthyProbe("ICMP"), healthyProbe("FTP")], {
+      verificationWindowMs: 5,
+      verificationBackoffMs: [1],
+      onProtocolTransition: (transition) => {
+        transitions.push(`${transition.protocol}:${transition.to ? "available" : "unavailable"}`);
+      },
+    });
+
+    await monitor.check({ source: "test:protocol-transition" });
+
+    expect(transitions).toContain("REST:unavailable");
+  });
+
   it("classifies transient partial failure as degraded after the verification window", async () => {
     let attempt = 0;
     const monitor = new MultiProtocolHealthMonitor(
@@ -68,7 +83,7 @@ describe("MultiProtocolHealthMonitor", () => {
   });
 });
 
-function failingProbe(protocol: "REST" | "ICMP" | "FTP"): ProbeFn {
+function failingProbe(protocol: "REST" | "ICMP" | "FTP" | "TELNET"): ProbeFn {
   return async () => ({
     protocol,
     ok: false,
