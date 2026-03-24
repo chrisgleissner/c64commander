@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ActionExpandedContent } from "@/components/diagnostics/ActionExpandedContent";
@@ -103,17 +103,19 @@ describe("ActionExpandedContent", () => {
         expect(screen.getByTestId("action-trigger-corr-1")).toHaveTextContent("trigger:");
         expect(screen.getByText("error: Action failed")).toBeInTheDocument();
 
-        expect(screen.getByTestId("action-rest-effect-corr-1-0")).toHaveTextContent("GET /v1/info");
-        expect(screen.getByText("Request headers")).toBeInTheDocument();
-        expect(screen.getByText("Request payload")).toBeInTheDocument();
-        expect(screen.getByText("Request preview")).toBeInTheDocument();
-        expect(screen.getByText("Response headers")).toBeInTheDocument();
-        expect(screen.getByText("Response payload")).toBeInTheDocument();
-        expect(screen.getByText("Response preview")).toBeInTheDocument();
+        const restEffect = screen.getByTestId("action-rest-effect-corr-1-0");
+        expect(restEffect).toHaveTextContent("GET /v1/info");
+        expect(within(restEffect).getByText("Request headers")).toBeInTheDocument();
+        expect(within(restEffect).getByText("Request payload")).toBeInTheDocument();
+        expect(within(restEffect).getByText("Request preview")).toBeInTheDocument();
+        expect(within(restEffect).getByText("Response headers")).toBeInTheDocument();
+        expect(within(restEffect).getByText("Response payload")).toBeInTheDocument();
+        expect(within(restEffect).getByText("Response preview")).toBeInTheDocument();
         expect(screen.getByText("error: Transient HTTP error")).toBeInTheDocument();
 
-        expect(screen.getByTestId("action-ftp-effect-corr-1-0")).toHaveTextContent("LIST /Usb0");
-        expect(screen.getByText("result: unknown")).toBeInTheDocument();
+        const ftpEffect = screen.getByTestId("action-ftp-effect-corr-1-0");
+        expect(ftpEffect).toHaveTextContent("LIST /Usb0");
+        expect(ftpEffect).toHaveTextContent("result: unknown");
         expect(screen.getByText("error: FTP timeout")).toBeInTheDocument();
         expect(screen.getByText("Unexpected diagnostics exception")).toBeInTheDocument();
     });

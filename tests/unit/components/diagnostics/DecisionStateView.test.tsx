@@ -220,4 +220,88 @@ describe("DecisionStateView", () => {
         expect(repairButton).toBeDisabled();
         expect(repairButton).toHaveTextContent("Repairing");
     });
+
+    it("renders transport entries without optional duration or reason text and omits empty transition reasons", () => {
+        setHealthCheckStateSnapshot({
+            transitions: [
+                {
+                    id: "health-transition-2",
+                    timestamp: "2025-01-01T10:00:01.000Z",
+                    scope: "probe",
+                    target: "FTP",
+                    from: null,
+                    to: "SUCCESS",
+                    reason: null,
+                },
+            ],
+        });
+
+        const actionSummaries: ActionSummary[] = [
+            makeActionSummary([
+                {
+                    type: "REST",
+                    label: "Read info",
+                    method: "GET",
+                    protocol: null,
+                    hostname: null,
+                    port: null,
+                    path: "/v1/info",
+                    query: null,
+                    normalizedPath: null,
+                    target: null,
+                    status: null,
+                    durationMs: null,
+                },
+            ]),
+        ];
+
+        render(
+            <DecisionStateView onBack={vi.fn()} onRepair={vi.fn()} repairRunning={false} actionSummaries={actionSummaries} />,
+        );
+
+        expect(screen.getByTestId("decision-state-transport")).toHaveTextContent("GET /v1/info");
+        expect(screen.getByText("status unknown")).toBeInTheDocument();
+
+        const transitions = screen.getByTestId("decision-state-transitions");
+        expect(transitions).toHaveTextContent("FTP");
+        expect(transitions).toHaveTextContent("- to SUCCESS");
+    });
+
+    it("falls back to the latest health result reason and ignores non-transport effects in the transport summary", () => {
+        setHealthCheckStateSnapshot({
+            lastTransitionReason: null,
+            latestResult: {
+                runId: "hc-latest",
+                startTimestamp: "2025-01-01T00:00:00.000Z",
+                endTimestamp: "2025-01-01T00:00:01.000Z",
+                totalDurationMs: 1000,
+                overallHealth: "Healthy",
+                probes: {
+                    REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+                    FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 100 },
+                    CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 200 },
+                    RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 300 },
+                    JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 400 },
+                },
+                latency: { p50: 10, p90: 20, p99: 30 },
+            },
+        });
+
+        const actionSummaries: ActionSummary[] = [
+            makeActionSummary([
+                {
+                    type: "ERROR",
+                    label: "Error",
+                    message: "Ignored for transport metrics",
+                },
+            ]),
+        ];
+
+        render(
+            <DecisionStateView onBack={vi.fn()} onRepair={vi.fn()} repairRunning={false} actionSummaries={actionSummaries} />,
+        );
+
+        expect(screen.getByTestId("decision-state-health-check")).toHaveTextContent("ReasonHealthy");
+        expect(screen.getByText("No recent REST or FTP effects.")).toBeInTheDocument();
+    });
 });

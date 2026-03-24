@@ -7,7 +7,7 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/diagnostics/configDrift", () => ({
     computeConfigDrift: vi.fn(),
@@ -19,6 +19,10 @@ import { computeConfigDrift } from "@/lib/diagnostics/configDrift";
 const computeConfigDriftMock = vi.mocked(computeConfigDrift);
 
 describe("ConfigDriftView", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
     it("renders grouped drift items after a successful load", async () => {
         computeConfigDriftMock.mockResolvedValue({
             timestamp: "2025-01-01T00:00:00.000Z",
