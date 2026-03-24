@@ -42,6 +42,8 @@ interface MockMenuState {
     categoryIndex: number;
     submenuOpen: boolean;
     actionIndex: number;
+    /** Set by ESC; the next key press closes one menu level and is consumed */
+    escapePending: boolean;
 }
 
 /**
@@ -75,7 +77,7 @@ export class TelnetMock implements TelnetTransport {
         }
         this.connected = true;
         this.authenticated = false;
-        this.menu = { open: false, categoryIndex: 0, submenuOpen: false, actionIndex: 0 };
+        this.menu = { open: false, categoryIndex: 0, submenuOpen: false, actionIndex: 0, escapePending: false };
         this.sendCount = 0;
 
         // Emit Telnet init sequence + optional password prompt
@@ -167,12 +169,25 @@ export class TelnetMock implements TelnetTransport {
         }
 
         // Handle key sequences
+        // If ESC was pending, the next key closes one menu level and is consumed
+        if (this.menu.escapePending && text !== '\x1b') {
+            this.menu.escapePending = false;
+            if (this.menu.submenuOpen) {
+                this.menu.submenuOpen = false;
+            } else if (this.menu.open) {
+                this.menu.open = false;
+            }
+            this.pendingOutput.push(new Uint8Array(this.renderScreen()));
+            return;
+        }
+
         if (text === '\x1b[15~' || text === '\x1b[11~') {
             // F5 or F1 — open action menu
             this.menu.open = true;
             this.menu.categoryIndex = 0;
             this.menu.submenuOpen = false;
             this.menu.actionIndex = 0;
+            this.menu.escapePending = false;
         } else if (text === '\x1b[A') {
             // UP
             if (this.menu.submenuOpen) {
@@ -201,9 +216,11 @@ export class TelnetMock implements TelnetTransport {
                 this.menu.actionIndex = 0;
             }
         } else if (text === '\x1b[D') {
-            // LEFT — leave submenu
+            // LEFT — leave submenu, or close top-level menu
             if (this.menu.submenuOpen) {
                 this.menu.submenuOpen = false;
+            } else if (this.menu.open) {
+                this.menu.open = false;
             }
         } else if (text === '\r') {
             // ENTER — execute selected action
@@ -213,12 +230,8 @@ export class TelnetMock implements TelnetTransport {
                 this.menu.submenuOpen = false;
             }
         } else if (text === '\x1b') {
-            // ESCAPE — close menus
-            if (this.menu.submenuOpen) {
-                this.menu.submenuOpen = false;
-            } else if (this.menu.open) {
-                this.menu.open = false;
-            }
+            // ESCAPE — sets pending flag; the next key closes one menu level
+            this.menu.escapePending = true;
         }
 
         this.pendingOutput.push(new Uint8Array(this.renderScreen()));

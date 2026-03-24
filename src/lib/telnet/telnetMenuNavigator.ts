@@ -285,20 +285,20 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
         return screen.menus.find((m) => m.level === level) ?? null;
     }
 
-    /** Attempt to recover from a desynchronized state by pressing ESCAPE */
+    /** Attempt to recover from a desynchronized state by pressing LEFT repeatedly */
     async function _recoverFromDesync(): Promise<TelnetScreen> {
-        addLog('warn', `${LOG_TAG}: attempting desync recovery`);
+        addLog('warn', `${LOG_TAG}: attempting desync recovery using LEFT key`);
         let screen: TelnetScreen | null = null;
         for (let i = 0; i < MAX_ESCAPE_RECOVERY; i++) {
-            await session.sendKey('ESCAPE');
+            await session.sendKey('LEFT');
             screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
             if (screen.menus.length === 0) {
-                addLog('info', `${LOG_TAG}: recovered to file browser after ${i + 1} ESC presses`);
+                addLog('info', `${LOG_TAG}: recovered to file browser after ${i + 1} LEFT presses`);
                 return screen;
             }
         }
         throw new TelnetError(
-            `Could not recover from desync after ${MAX_ESCAPE_RECOVERY} ESCAPE presses`,
+            `Could not recover from desync after ${MAX_ESCAPE_RECOVERY} LEFT presses`,
             'DESYNC',
         );
     }

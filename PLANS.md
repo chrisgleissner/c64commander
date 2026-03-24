@@ -41,3 +41,20 @@ Classification: CODE_CHANGE
 2. `src/lib/tracing/types.ts` — add "telnet-operation" trace event type
 3. `src/lib/tracing/traceSession.ts` — add recordTelnetOperation()
 4. Android plugin: TelnetSocketPlugin.kt
+
+### TODO: Menu close behavior
+
+A menu can be closed in one of two ways:
+
+1. **LEFT** (preferred) — always works, closes one menu level in a single key press.
+2. **ESC followed by any other character** — ESC alone does nothing visible; the
+   _next_ key press (any key) closes one menu level and is consumed (not processed
+   further). ESC should only be used as a fallback if LEFT does not work for some
+   unusual reason.
+
+Implementation:
+
+1. **Navigator**: Use LEFT (not ESCAPE) as the primary key for closing submenus and
+   menus. The `_recoverFromDesync()` function also uses LEFT.
+2. **Mock**: ESC sets a pending flag. The next `send()` call after ESC closes one
+   menu level and consumes the key. LEFT closes immediately without any flag.
