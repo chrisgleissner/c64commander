@@ -123,7 +123,7 @@ describe("actionSummaries", () => {
     const [summary] = buildActionSummaries(events);
     expect(summary.actionName).toBe("Action missing-start");
     expect(summary.origin).toBe("unknown");
-    expect(summary.outcome).toBe("incomplete");
+    expect(summary.outcome).toBe("in_progress");
     expect(summary.durationMs).toBe(1000);
     expect(summary.effects).toEqual(
       expect.arrayContaining([

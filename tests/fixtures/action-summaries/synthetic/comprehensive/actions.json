@@ -120,7 +120,7 @@
     "origin": "system",
     "originalOrigin": "automatic",
     "durationMs": 20,
-    "outcome": "incomplete",
+    "outcome": "in_progress",
     "restCount": 1,
     "effects": [
       {

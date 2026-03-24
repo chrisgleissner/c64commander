@@ -1111,7 +1111,7 @@ export function DiagnosticsDialog({
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
             <div className="relative min-h-8 pr-20">
               <AppSheetTitle className="pr-4">Diagnostics</AppSheetTitle>
-              <div className="absolute right-14 top-1 z-10">
+              <div className="absolute right-20 top-1 z-10">
                 <Button
                   type="button"
                   variant="ghost"
@@ -1361,13 +1361,10 @@ export function DiagnosticsDialog({
 
             {/* Phase 2: Evidence list (immediately visible) */}
             <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">
-              <p
-                className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                data-testid="evidence-heading"
-              >
+              <p className="mb-1 text-xs font-semibold text-foreground" data-testid="evidence-heading">
                 Activity
               </p>
-              <p className="mb-2 text-[11px] text-muted-foreground" data-testid="activity-kinds-line">
+              <p className="mb-2 text-[10px] text-muted-foreground" data-testid="activity-kinds-line">
                 Problems, actions, logs, and traces
               </p>
               <div className="max-h-72 space-y-1.5 overflow-y-auto" data-testid="evidence-list">

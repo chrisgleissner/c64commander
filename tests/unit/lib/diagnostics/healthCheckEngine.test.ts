@@ -549,6 +549,69 @@ describe("runHealthCheck — JIFFY probe null bytes", () => {
 
 // ─── runHealthCheck — CONFIG probe catch block ────────────────────────────────
 
+// Regression: CONFIG probe navigates the `items` intermediate key in real API responses.
+// Before the fix, extractConfigItemData looked for the item directly under the category,
+// skipping the `items` wrapper and always seeing undefined → "No suitable target".
+describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
+  it("succeeds CONFIG when API response uses { items: { [item]: { selected } } } format", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const itemsResp = { "LED Strip Settings": { items: { "Strip Intensity": { selected: 5, options: [] } } } };
+    const itemsReadback = { "LED Strip Settings": { items: { "Strip Intensity": { selected: 6, options: [] } } } };
+    mockGetConfigItem
+      .mockResolvedValueOnce(itemsResp)
+      .mockResolvedValueOnce(itemsReadback)
+      .mockResolvedValueOnce(itemsResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+  });
+
+  it("resolves option-list index for non-numeric string selected values", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    // Audio Mixer returns selected="OFF" with options=["OFF","-50 dB",...] → index 0
+    const audioResp = {
+      "LED Strip Settings": {
+        items: {
+          "Strip Intensity": {
+            selected: "OFF",
+            options: ["OFF", "+1 dB", "+2 dB"],
+          },
+        },
+      },
+    };
+    // After delta, expect index 1 ("+" dB)
+    const audioReadback = {
+      "LED Strip Settings": {
+        items: {
+          "Strip Intensity": {
+            selected: "+1 dB",
+            options: ["OFF", "+1 dB", "+2 dB"],
+          },
+        },
+      },
+    };
+    mockGetConfigItem
+      .mockResolvedValueOnce(audioResp)
+      .mockResolvedValueOnce(audioReadback)
+      .mockResolvedValueOnce(audioResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+  });
+});
+
 describe("runHealthCheck — CONFIG probe exception", () => {
   it("fails CONFIG when getConfigItem throws during the probe", async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);

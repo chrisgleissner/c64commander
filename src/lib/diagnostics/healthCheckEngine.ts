@@ -183,6 +183,47 @@ const probeRaster = async (): Promise<HealthCheckProbeRecord> => {
   }
 };
 
+/** Extract an item's data from a config response, navigating the `items` intermediate key. */
+const extractConfigItemData = (resp: Record<string, unknown>, category: string, item: string): unknown | null => {
+  const categoryData = resp[category];
+  if (!categoryData || typeof categoryData !== "object") return null;
+  const catRecord = categoryData as Record<string, unknown>;
+  // The API returns { [category]: { items: { [item]: { selected, options } } } }
+  const itemsBlock = catRecord.items;
+  if (itemsBlock && typeof itemsBlock === "object") {
+    return (itemsBlock as Record<string, unknown>)[item] ?? null;
+  }
+  // Fallback: item directly under category (legacy or mock format)
+  return catRecord[item] ?? null;
+};
+
+/** Parse a numeric value from a config item, handling both numeric and option-list formats. */
+const parseConfigNumericValue = (itemData: unknown): number | null => {
+  if (typeof itemData === "number") return Number.isFinite(itemData) ? itemData : null;
+  if (!itemData || typeof itemData !== "object") return null;
+
+  const obj = itemData as Record<string, unknown>;
+  const selected = obj.selected;
+
+  // Numeric selected value
+  if (typeof selected === "number") return Number.isFinite(selected) ? selected : null;
+
+  // String selected value — try parsing as number
+  if (typeof selected === "string") {
+    const parsed = parseFloat(selected);
+    if (Number.isFinite(parsed)) return parsed;
+
+    // Option-list: find index of selected in options array for roundtrip
+    const options = Array.isArray(obj.options) ? obj.options : null;
+    if (options) {
+      const idx = options.indexOf(selected);
+      if (idx >= 0) return idx;
+    }
+  }
+
+  return null;
+};
+
 /** §11.3 CONFIG probe: safe write-read-revert roundtrip */
 const probeConfig = async (): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
@@ -195,20 +236,26 @@ const probeConfig = async (): Promise<HealthCheckProbeRecord> => {
         __c64uIntent: "system",
         __c64uBypassCache: true,
       });
-      const categoryData = readResp[target.category];
-      if (!categoryData || typeof categoryData !== "object") continue;
-
-      const itemData = (categoryData as Record<string, unknown>)[target.item];
-      let currentValue: number | null = null;
-
-      if (typeof itemData === "number") {
-        currentValue = itemData;
-      } else if (itemData && typeof itemData === "object" && "selected" in itemData) {
-        const sel = (itemData as { selected?: string | number }).selected;
-        currentValue = typeof sel === "number" ? sel : typeof sel === "string" ? parseFloat(sel) : null;
+      const itemData = extractConfigItemData(readResp, target.category, target.item);
+      if (itemData === null) {
+        addLog("debug", "Health check CONFIG probe: item not found in response", {
+          category: target.category,
+          item: target.item,
+          responseKeys: Object.keys(readResp),
+        });
+        continue;
       }
 
-      if (currentValue === null || !Number.isFinite(currentValue)) continue;
+      const currentValue = parseConfigNumericValue(itemData);
+
+      if (currentValue === null || !Number.isFinite(currentValue)) {
+        addLog("debug", "Health check CONFIG probe: non-numeric value", {
+          category: target.category,
+          item: target.item,
+          itemData: JSON.stringify(itemData).slice(0, 120),
+        });
+        continue;
+      }
 
       // Step 2: write temporary value (small delta, clamped to range)
       const tempValue =
@@ -223,15 +270,8 @@ const probeConfig = async (): Promise<HealthCheckProbeRecord> => {
         __c64uIntent: "system",
         __c64uBypassCache: true,
       });
-      const readBackCategory = readBackResp[target.category];
-      const readBackItem = readBackCategory ? (readBackCategory as Record<string, unknown>)[target.item] : null;
-      let readBackValue: number | null = null;
-      if (typeof readBackItem === "number") {
-        readBackValue = readBackItem;
-      } else if (readBackItem && typeof readBackItem === "object" && "selected" in readBackItem) {
-        const sel = (readBackItem as { selected?: string | number }).selected;
-        readBackValue = typeof sel === "number" ? sel : typeof sel === "string" ? parseFloat(sel) : null;
-      }
+      const readBackItemData = extractConfigItemData(readBackResp, target.category, target.item);
+      const readBackValue = parseConfigNumericValue(readBackItemData);
 
       // Step 4: revert to original value
       await api.setConfigValue(target.category, target.item, currentValue);
@@ -241,15 +281,8 @@ const probeConfig = async (): Promise<HealthCheckProbeRecord> => {
         __c64uIntent: "system",
         __c64uBypassCache: true,
       });
-      const verifyCategory = verifyResp[target.category];
-      const verifyItem = verifyCategory ? (verifyCategory as Record<string, unknown>)[target.item] : null;
-      let verifyValue: number | null = null;
-      if (typeof verifyItem === "number") {
-        verifyValue = verifyItem;
-      } else if (verifyItem && typeof verifyItem === "object" && "selected" in verifyItem) {
-        const sel = (verifyItem as { selected?: string | number }).selected;
-        verifyValue = typeof sel === "number" ? sel : typeof sel === "string" ? parseFloat(sel) : null;
-      }
+      const verifyItemData = extractConfigItemData(verifyResp, target.category, target.item);
+      const verifyValue = parseConfigNumericValue(verifyItemData);
 
       if (readBackValue !== tempValue) {
         return makeRecord(

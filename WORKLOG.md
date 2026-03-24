@@ -1,7 +1,7 @@
 # Diagnostics, Navigation, and Health Worklog
 
 Status: IN_PROGRESS
-Date: 2026-03-23
+Date: 2026-03-24
 
 ## 2026-03-23T00:00:00Z - Classification and scope
 
@@ -130,3 +130,32 @@ Date: 2026-03-23
   - `npm run lint` passed for the changed source files; only pre-existing warnings remain in generated `android/coverage/` files.
   - `npm run build` passed.
   - Isolated unit coverage completed with 91.01% branch coverage.
+
+## 2026-03-24T10:00:00Z — Phase 1 & 2: Baseline and root-cause analysis
+
+### CONFIG health-check root cause (CONFIRMED)
+
+- **Observed**: CONFIG probe always returns "Skipped: No suitable config roundtrip target available"
+- **Root cause**: `getConfigItem()` returns `{ [category]: { items: { [item]: { selected, options } } } }` — the item data is nested inside an `items` key. The probe code accesses `categoryData[item]` directly, which is always `undefined`. The `continue` fires for all targets, falling through to the "No suitable target" skip.
+- **Secondary issue**: Audio Mixer `selected` values are strings like "OFF", "+6 dB" — not numeric. `parseFloat("OFF")` → `NaN`, causing `currentValue` to remain `null` even if lookup were correct. Need to handle value-by-index for option-list items.
+- **Fix**: Navigate through `categoryData.items[item]` and handle both numeric and option-list config items.
+
+### Activity header hierarchy (CONFIRMED)
+
+- **Observed**: Section title "Activity" uses `text-[10px]` (smaller), subtitle uses `text-[11px]` (larger) — visually inverted.
+- **Fix**: Make title larger/bolder than subtitle.
+
+### Top-right collision (CONFIRMED)
+
+- **Observed**: Overflow menu at `right-14 top-1`, close button at AppSheet default. Gap is ~14 units (3.5rem, ~56px) — tight on small screens.
+- **Fix**: Move overflow menu further left or increase padding.
+
+### `incomplete` status (CONFIRMED)
+
+- **Observed**: `resolveOutcome()` returns `"incomplete"` for both genuinely incomplete actions and unrecognized action-end statuses.
+- **Fix**: Distinguish `IN_PROGRESS` for truly incomplete, `TIMEOUT` for timed-out, `FAILED` as catch-all for bad outcomes.
+
+### Latency summary (CONFIRMED)
+
+- **Observed**: Plain bordered div at bottom of HealthCheckDetailView, no visual distinction from probe rows.
+- **Fix**: Add subtle background tint or separator to make it stand out.

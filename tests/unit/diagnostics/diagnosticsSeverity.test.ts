@@ -50,9 +50,10 @@ describe("diagnosticsSeverity", () => {
   it("maps action outcomes to severity", () => {
     expect(resolveActionSeverity("success")).toBe("info");
     expect(resolveActionSeverity("error")).toBe("error");
+    expect(resolveActionSeverity("failed")).toBe("error");
     expect(resolveActionSeverity("blocked")).toBe("warn");
     expect(resolveActionSeverity("timeout")).toBe("warn");
-    expect(resolveActionSeverity("incomplete")).toBe("warn");
+    expect(resolveActionSeverity("in_progress")).toBe("warn");
     expect(resolveActionSeverity("unknown" as Parameters<typeof resolveActionSeverity>[0])).toBe("info");
   });
 

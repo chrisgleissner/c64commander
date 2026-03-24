@@ -32,6 +32,8 @@ const outcomeColorClass: Record<string, string> = {
   Skipped: "text-muted-foreground",
 };
 
+const REASON_COMPACT_LIMIT = 32;
+
 export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }: Props) {
   // During a live run, show liveProbes overlaid over any previous result.
   // A probe is "done" if it appears in liveProbes, "running" if it's the first
@@ -78,43 +80,56 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                 probe = result?.probes[probeName];
               }
 
+              const reasonText = liveStatus === "running" || liveStatus === "pending" ? "" : (probe?.reason ?? "OK");
+              const isDetailRow = reasonText.length > REASON_COMPACT_LIMIT;
+              const durationLabel =
+                liveStatus === "running" || liveStatus === "pending"
+                  ? "—"
+                  : probe?.durationMs != null
+                    ? `${probe.durationMs}ms`
+                    : "—";
+
               return (
                 <div
                   key={probeName}
-                  className="grid grid-cols-[4rem_5.5rem_minmax(0,1fr)_4rem] items-start gap-2 text-xs"
+                  className="text-xs"
                   data-testid={`health-check-probe-${probeName.toLowerCase()}`}
                   data-live-status={liveStatus ?? undefined}
                 >
-                  <span className="font-medium">{probeName}</span>
-                  {liveStatus === "running" ? (
-                    <span className="flex items-center gap-1 text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                      Running
-                    </span>
-                  ) : liveStatus === "pending" ? (
-                    <span className="text-muted-foreground">Pending</span>
-                  ) : probe ? (
-                    <span className={outcomeColorClass[probe.outcome] ?? "text-foreground"}>{probe.outcome}</span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                  <span className="text-muted-foreground break-words">
-                    {liveStatus === "running" || liveStatus === "pending" ? "" : (probe?.reason ?? "OK")}
-                  </span>
-                  <span className="text-right font-mono">
-                    {liveStatus === "running" || liveStatus === "pending"
-                      ? "—"
-                      : probe?.durationMs != null
-                        ? `${probe.durationMs}ms`
-                        : "—"}
-                  </span>
+                  <div className="grid grid-cols-[4rem_5.5rem_minmax(0,1fr)_4rem] items-start gap-2">
+                    <span className="font-medium">{probeName}</span>
+                    {liveStatus === "running" ? (
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                        Running
+                      </span>
+                    ) : liveStatus === "pending" ? (
+                      <span className="text-muted-foreground">Pending</span>
+                    ) : probe ? (
+                      <span className={outcomeColorClass[probe.outcome] ?? "text-foreground"}>{probe.outcome}</span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                    {isDetailRow ? (
+                      <span />
+                    ) : (
+                      <span className="text-muted-foreground truncate" title={reasonText}>
+                        {reasonText}
+                      </span>
+                    )}
+                    <span className="text-right font-mono">{durationLabel}</span>
+                  </div>
+                  {isDetailRow ? (
+                    <p className="mt-0.5 pl-[4rem] text-muted-foreground break-words leading-snug">{reasonText}</p>
+                  ) : null}
                 </div>
               );
             })}
           </div>
 
           {result && !activeLive && (
-            <div className="rounded border border-border p-2 text-xs space-y-1">
+            <div className="rounded border border-primary/30 bg-primary/5 p-2 text-xs space-y-1">
+              <p className="font-semibold text-foreground">Summary</p>
               <p>
                 Latency: <span className="font-mono">p50 {result.latency.p50}ms</span>
                 {" · "}

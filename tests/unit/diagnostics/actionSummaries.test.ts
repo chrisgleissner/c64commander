@@ -145,7 +145,7 @@ describe("buildActionSummaries", () => {
     expect(second.originalOrigin).toBe("automatic");
     expect(second.durationMs).toBeGreaterThanOrEqual(0);
     expect(second.durationMsMissing).toBeUndefined();
-    expect(second.outcome).toBe("incomplete");
+    expect(second.outcome).toBe("in_progress");
     expect(second.restCount).toBe(1);
     expect(second.ftpCount).toBeUndefined();
     expect(second.errorCount).toBeUndefined();
@@ -984,7 +984,7 @@ describe("buildActionSummaries", () => {
         type: "action-end",
         correlationId: "C1",
         relativeMs: 100,
-        data: { status: "incomplete" },
+        data: { status: "unrecognized" },
       }),
     ];
     const [summary] = buildActionSummaries(traces);
@@ -1286,6 +1286,6 @@ describe("buildActionSummaries", () => {
     const [summary] = buildActionSummaries(traces);
     expect(summary.origin).toBe("system");
     expect(summary.originalOrigin).toBe("automatic");
-    expect(summary.outcome).toBe("incomplete");
+    expect(summary.outcome).toBe("in_progress");
   });
 });
