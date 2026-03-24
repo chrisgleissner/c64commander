@@ -20,11 +20,13 @@ class MainActivity : BridgeActivity() {
     try {
       if (pluginsPath.isDirectory && !pluginsPath.deleteRecursively()) {
         AppLogger.warn(
-          this,
-          "MainActivity",
-          "Failed to reset Capacitor plugin asset path",
-          "MainActivity",
-          IllegalStateException("deleteRecursively returned false for ${pluginsPath.absolutePath}"),
+                this,
+                "MainActivity",
+                "Failed to reset Capacitor plugin asset path",
+                "MainActivity",
+                IllegalStateException(
+                        "deleteRecursively returned false for ${pluginsPath.absolutePath}"
+                ),
         )
         return
       }
@@ -32,11 +34,11 @@ class MainActivity : BridgeActivity() {
       val parent = pluginsPath.parentFile
       if (parent != null && !parent.exists() && !parent.mkdirs()) {
         AppLogger.warn(
-          this,
-          "MainActivity",
-          "Failed to create Capacitor plugin asset parent directory",
-          "MainActivity",
-          IllegalStateException("mkdirs returned false for ${parent.absolutePath}"),
+                this,
+                "MainActivity",
+                "Failed to create Capacitor plugin asset parent directory",
+                "MainActivity",
+                IllegalStateException("mkdirs returned false for ${parent.absolutePath}"),
         )
         return
       }
@@ -46,11 +48,11 @@ class MainActivity : BridgeActivity() {
       }
     } catch (error: Exception) {
       AppLogger.warn(
-        this,
-        "MainActivity",
-        "Failed to prepare Capacitor plugin asset path",
-        "MainActivity",
-        error,
+              this,
+              "MainActivity",
+              "Failed to prepare Capacitor plugin asset path",
+              "MainActivity",
+              error,
       )
     }
   }
@@ -72,10 +74,10 @@ class MainActivity : BridgeActivity() {
     val memoryClass = manager?.memoryClass
     val largeMemoryClass = manager?.largeMemoryClass
     AppLogger.info(
-      this,
-      "MainActivity",
-      "Android memory class detected: memoryClass=$memoryClass, largeMemoryClass=$largeMemoryClass",
-      "MainActivity",
+            this,
+            "MainActivity",
+            "Android memory class detected: memoryClass=$memoryClass, largeMemoryClass=$largeMemoryClass",
+            "MainActivity",
     )
   }
 }
