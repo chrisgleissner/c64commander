@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/diagnostics/configDrift", () => ({
-    computeConfigDrift: vi.fn(),
+  computeConfigDrift: vi.fn(),
 }));
 
 import { ConfigDriftView } from "@/components/diagnostics/ConfigDriftView";
@@ -19,65 +19,65 @@ import { computeConfigDrift } from "@/lib/diagnostics/configDrift";
 const computeConfigDriftMock = vi.mocked(computeConfigDrift);
 
 describe("ConfigDriftView", () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders grouped drift items after a successful load", async () => {
+    computeConfigDriftMock.mockResolvedValue({
+      timestamp: "2025-01-01T00:00:00.000Z",
+      error: null,
+      driftItems: [
+        {
+          category: "Audio",
+          item: "Volume",
+          persistedValue: "10",
+          runtimeValue: "12",
+        },
+      ],
     });
 
-    it("renders grouped drift items after a successful load", async () => {
-        computeConfigDriftMock.mockResolvedValue({
-            timestamp: "2025-01-01T00:00:00.000Z",
-            error: null,
-            driftItems: [
-                {
-                    category: "Audio",
-                    item: "Volume",
-                    persistedValue: "10",
-                    runtimeValue: "12",
-                },
-            ],
-        });
+    render(<ConfigDriftView onBack={vi.fn()} />);
 
-        render(<ConfigDriftView onBack={vi.fn()} />);
+    expect(screen.getByTestId("config-drift-loading")).toBeInTheDocument();
 
-        expect(screen.getByTestId("config-drift-loading")).toBeInTheDocument();
-
-        await waitFor(() => {
-            expect(screen.getByTestId("config-drift-results")).toBeInTheDocument();
-        });
-
-        expect(screen.getByText("Audio")).toBeInTheDocument();
-        expect(screen.getByText("Volume")).toBeInTheDocument();
-        expect(screen.getByText("10")).toBeInTheDocument();
-        expect(screen.getByText("12")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("config-drift-results")).toBeInTheDocument();
     });
 
-    it("shows the no-drift state and supports refreshing", async () => {
-        computeConfigDriftMock.mockResolvedValue({
-            timestamp: "2025-01-01T00:00:00.000Z",
-            error: null,
-            driftItems: [],
-        });
+    expect(screen.getByText("Audio")).toBeInTheDocument();
+    expect(screen.getByText("Volume")).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+  });
 
-        render(<ConfigDriftView onBack={vi.fn()} />);
-
-        await waitFor(() => {
-            expect(screen.getByTestId("config-drift-no-drift")).toBeInTheDocument();
-        });
-
-        fireEvent.click(screen.getByTestId("config-drift-refresh"));
-
-        await waitFor(() => {
-            expect(computeConfigDriftMock).toHaveBeenCalledTimes(2);
-        });
+  it("shows the no-drift state and supports refreshing", async () => {
+    computeConfigDriftMock.mockResolvedValue({
+      timestamp: "2025-01-01T00:00:00.000Z",
+      error: null,
+      driftItems: [],
     });
 
-    it("shows an error message when drift loading fails", async () => {
-        computeConfigDriftMock.mockRejectedValue(new Error("drift unavailable"));
+    render(<ConfigDriftView onBack={vi.fn()} />);
 
-        render(<ConfigDriftView onBack={vi.fn()} />);
-
-        await waitFor(() => {
-            expect(screen.getByTestId("config-drift-error")).toHaveTextContent("drift unavailable");
-        });
+    await waitFor(() => {
+      expect(screen.getByTestId("config-drift-no-drift")).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByTestId("config-drift-refresh"));
+
+    await waitFor(() => {
+      expect(computeConfigDriftMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("shows an error message when drift loading fails", async () => {
+    computeConfigDriftMock.mockRejectedValue(new Error("drift unavailable"));
+
+    render(<ConfigDriftView onBack={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("config-drift-error")).toHaveTextContent("drift unavailable");
+    });
+  });
 });

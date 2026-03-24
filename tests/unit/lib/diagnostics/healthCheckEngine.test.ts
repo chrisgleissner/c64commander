@@ -137,6 +137,16 @@ describe("isHealthCheckRunning", () => {
   });
 });
 
+describe("health-check lifecycle helpers", () => {
+  it("returns false when attempting to recover a run that is not stale", () => {
+    expect(recoverStaleHealthCheckRun()).toBe(false);
+  });
+
+  it("returns false when cancelling without an active run", () => {
+    expect(cancelHealthCheck()).toBe(false);
+  });
+});
+
 // ─── runHealthCheck — all-success path ───────────────────────────────────────
 
 describe("runHealthCheck — all-success path", () => {
@@ -245,6 +255,28 @@ describe("runHealthCheck — all-success path", () => {
 
     await expect(runPromise).resolves.toBeNull();
     dateNowSpy.mockRestore();
+  });
+
+  it("cancels an active run and marks the lifecycle as CANCELLED", async () => {
+    let rejectPendingGetInfo: ((reason?: unknown) => void) | null = null;
+    const pendingGetInfo = new Promise<typeof successfulInfo>((_resolve, reject) => {
+      rejectPendingGetInfo = reject;
+    });
+    mockGetInfo.mockImplementation(({ signal }: { signal?: AbortSignal }) => {
+      signal?.addEventListener("abort", () => rejectPendingGetInfo?.(new DOMException("Aborted", "AbortError")), {
+        once: true,
+      });
+      return pendingGetInfo;
+    });
+
+    const runPromise = runHealthCheck();
+    expect(isHealthCheckRunning()).toBe(true);
+
+    expect(cancelHealthCheck("Stopped by user")).toBe(true);
+    expect(getHealthCheckStateSnapshot().runState).toBe("CANCELLED");
+    expect(getHealthCheckStateSnapshot().running).toBe(false);
+
+    await expect(runPromise).resolves.toBeNull();
   });
 });
 
@@ -490,6 +522,47 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     expect(result!.probes.CONFIG.outcome).toBe("Success");
   });
 
+  it("falls back to numeric parsing when string selections are not present in options", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const numericWithMismatchedOptions = {
+      "LED Strip Settings": {
+        "Strip Intensity": {
+          selected: "5",
+          options: ["OFF", "DIM", "BRIGHT"],
+        },
+      },
+    };
+    const numericReadback = {
+      "LED Strip Settings": {
+        "Strip Intensity": {
+          selected: "6",
+          options: ["OFF", "DIM", "BRIGHT"],
+        },
+      },
+    };
+    mockGetConfigItem
+      .mockResolvedValueOnce(numericWithMismatchedOptions)
+      .mockResolvedValueOnce(numericReadback)
+      .mockResolvedValueOnce(numericWithMismatchedOptions);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "LED Strip Settings",
+      "Strip Intensity",
+      6,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
+
   it("applies delta subtraction when currentValue is at max (31)", async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
@@ -530,6 +603,26 @@ describe("runHealthCheck — FTP probe", () => {
     const result = await runHealthCheck();
     expect(result!.probes.FTP.outcome).toBe("Fail");
     expect(result!.probes.FTP.reason).toContain("FTP connection refused");
+  });
+
+  it("marks the run TIMEOUT when the FTP probe times out", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockRejectedValue(new Error("FTP timed out after 1000ms"));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.FTP.outcome).toBe("Fail");
+    expect(result!.probes.FTP.durationMs).toBe(1000);
+    expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
   });
 
   it("normalizes an HTTP device host with a port before probing FTP", async () => {
@@ -686,6 +779,120 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Success");
+  });
+
+  it("round-trips Audio Mixer selections that expose positive dB options", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+
+    const audioResp = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+6 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+    const audioReadback = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+5 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+
+    mockGetConfigItem
+      .mockResolvedValueOnce({ "LED Strip Settings": {} })
+      .mockResolvedValueOnce(audioResp)
+      .mockResolvedValueOnce(audioReadback)
+      .mockResolvedValueOnce(audioResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      2,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      2,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      1,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
+
+  it("steps backward within option bounds when the selected Audio Mixer option is already last", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+
+    const audioResp = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+4 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+    const audioReadback = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+5 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+
+    mockGetConfigItem
+      .mockResolvedValueOnce({ "LED Strip Settings": {} })
+      .mockResolvedValueOnce(audioResp)
+      .mockResolvedValueOnce(audioReadback)
+      .mockResolvedValueOnce(audioResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      2,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      2,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      3,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
   });
 });
 

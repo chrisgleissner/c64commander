@@ -10,10 +10,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
-import {
-  resetHealthCheckStateSnapshot,
-  setHealthCheckStateSnapshot,
-} from "@/lib/diagnostics/healthCheckState";
+import { resetHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 import type {
   HealthCheckProbeRecord,
   HealthCheckProbeType,

@@ -269,11 +269,7 @@ const parseConfigNumericValue = (itemData: unknown): number | null => {
   const obj = itemData as Record<string, unknown>;
   const selected = obj.selected;
 
-  if (typeof selected === "number") return Number.isFinite(selected) ? selected : null;
-
   if (typeof selected === "string") {
-    const parsed = parseFloat(selected);
-    if (Number.isFinite(parsed)) return parsed;
     const options = Array.isArray(obj.options) ? obj.options : null;
     if (options) {
       const idx = options.indexOf(selected);
@@ -281,7 +277,36 @@ const parseConfigNumericValue = (itemData: unknown): number | null => {
     }
   }
 
+  if (typeof selected === "number") return Number.isFinite(selected) ? selected : null;
+
+  if (typeof selected === "string") {
+    const parsed = parseFloat(selected);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
   return null;
+};
+
+const getConfigRoundtripBounds = (
+  itemData: unknown,
+  fallback: Pick<(typeof CONFIG_ROUNDTRIP_TARGETS)[number], "min" | "max">,
+): { min: number; max: number } => {
+  if (!itemData || typeof itemData !== "object") {
+    return fallback;
+  }
+
+  const obj = itemData as Record<string, unknown>;
+  const selected = obj.selected;
+  const options = Array.isArray(obj.options) ? obj.options : null;
+
+  if (typeof selected === "string" && options) {
+    const idx = options.indexOf(selected);
+    if (idx >= 0) {
+      return { min: 0, max: options.length - 1 };
+    }
+  }
+
+  return fallback;
 };
 
 const probeRest = async (
@@ -429,10 +454,12 @@ const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
         continue;
       }
 
+      const bounds = getConfigRoundtripBounds(itemData, target);
+
       const tempValue =
-        currentValue < target.max
-          ? Math.min(currentValue + target.delta, target.max)
-          : Math.max(currentValue - target.delta, target.min);
+        currentValue < bounds.max
+          ? Math.min(currentValue + target.delta, bounds.max)
+          : Math.max(currentValue - target.delta, bounds.min);
 
       await api.setConfigValue(target.category, target.item, tempValue, {
         signal,
