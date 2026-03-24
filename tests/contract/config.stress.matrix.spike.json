@@ -1,17 +1,23 @@
 {
-  "baseUrl": "http://c64u",
-  "mode": "STRESS",
-  "auth": "OFF",
-  "ftpMode": "PASV",
-  "stressMatrix": {
-    "testType": "spike",
-    "operationIds": ["ftp.large-roundtrip", "mixed.burst-and-stor"],
-    "spikeConcurrency": 10,
-    "spikeRateDelayMs": 0,
-    "spikeDurationMs": 5000,
-    "idleDurationMs": 15000,
-    "spikeCount": 5,
-    "failureDetectionTimeoutMs": 3000
-  },
-  "trace": { "enabled": true, "level": "full" }
+    "baseUrl": "http://c64u",
+    "mode": "STRESS",
+    "auth": "OFF",
+    "ftpMode": "PASV",
+    "stressMatrix": {
+        "testType": "spike",
+        "operationIds": [
+            "ftp.large-roundtrip",
+            "mixed.burst-and-stor"
+        ],
+        "spikeConcurrency": 10,
+        "spikeRateDelayMs": 0,
+        "spikeDurationMs": 5000,
+        "idleDurationMs": 15000,
+        "spikeCount": 5,
+        "failureDetectionTimeoutMs": 3000
+    },
+    "trace": {
+        "enabled": true,
+        "level": "full"
+    }
 }
