@@ -67,25 +67,25 @@ type NormalizedActionSummary = {
 
 type NormalizedEffect =
   | {
-      type: "REST";
-      method: string;
-      path: string;
-      target: string | null;
-      status: number | string | null;
-      error?: string;
-    }
+    type: "REST";
+    method: string;
+    path: string;
+    target: string | null;
+    status: number | string | null;
+    error?: string;
+  }
   | {
-      type: "FTP";
-      operation: string;
-      path: string;
-      target: string | null;
-      result: string | null;
-      error?: string;
-    }
+    type: "FTP";
+    operation: string;
+    path: string;
+    target: string | null;
+    result: string | null;
+    error?: string;
+  }
   | {
-      type: "ERROR";
-      message: string;
-    };
+    type: "ERROR";
+    message: string;
+  };
 
 const normalizeEffect = (effect: ActionSummaryEffect): NormalizedEffect => {
   if (effect.type === "REST") {

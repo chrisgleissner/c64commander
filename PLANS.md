@@ -25,37 +25,46 @@ Mission: Fix diagnostics UX and data consistency issues minimally invasively, pr
 ## Phase 3 — Implementation
 
 ### 3.1 CONFIG health-check root-cause fix
+
 - [ ] Fix item lookup via `items` intermediate key in `probeConfig()`
 - [ ] Handle string `selected` values properly
 - [ ] Add diagnostic logging for debugging production issues
 
 ### 3.2 Health-check row layout for long text
+
 - [ ] Add detail-row render mode for probes with long reason text
 - [ ] Ensure no per-character wrapping; keep compact layout
 
 ### 3.3 Expanded REST/FTP action detail completeness
+
 - [ ] Ensure REST expanded shows: host, IP, method, path, headers, body, status, latency
 - [ ] Ensure FTP expanded shows: host, operation, path, result, payloads, latency
 - [ ] Binary payload: use existing PayloadPreviewBlock consistently
 
 ### 3.4 Collapsed action-row info density
+
 - [ ] Show key request info in scrollable collapsed row
 - [ ] Center meaningful segment for small-screen visibility
 
 ### 3.5 Replace ambiguous `incomplete` status
+
 - [ ] Map `incomplete` to deterministic states (TIMEOUT/FAILED/IN_PROGRESS)
 - [ ] Apply consistently across diagnostics/action rendering
 
 ### 3.6 Activity header hierarchy
+
 - [ ] Make section title outrank subtitle visually
 
 ### 3.7 Top-right action collision risk
+
 - [ ] Increase separation between overflow menu and close button
 
 ### 3.8 Latency summary visibility
+
 - [ ] Improve visual separation without height bloat
 
 ### 3.9 Health-check execution robustness
+
 - [ ] Per-sub-check and global run timeouts
 - [ ] Cancellation support (abort in-flight, mark CANCELLED)
 - [ ] Always-restartable (cancel current, start new)
@@ -64,21 +73,25 @@ Mission: Fix diagnostics UX and data consistency issues minimally invasively, pr
 - [ ] Observability: timing, state, reason per check
 
 ### 3.10 Reconciliation system
+
 - [ ] ConfigReconciler: device as source of truth
 - [ ] PlaybackReconciler: confidence-based state
 - [ ] DiagnosticsReconciler: lifecycle enforcement
 - [ ] User-triggerable "Resync / Repair" action
 
 ### 3.11 Playback state under limited observability
+
 - [ ] PLAYING/STOPPED/UNKNOWN with HIGH/MEDIUM/LOW confidence
 - [ ] Time decay and error transitions
 - [ ] UI reflects uncertainty truthfully
 
 ### 3.12 Internal decision-state diagnostics page
+
 - [ ] Accessible via context menu
 - [ ] Shows playback, reconciliation, health-check, transport, transitions
 
 ### 3.13 Additional failure mode handling
+
 - [ ] Silent request loss, partial FTP, device unavailability
 - [ ] Stale cache, race conditions, resume-from-background
 
