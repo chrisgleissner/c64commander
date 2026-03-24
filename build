@@ -31,6 +31,7 @@ RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
+RUN_DUMP_C64_TELNET_SCREENS=false
 RUN_CONTRACT_TEST=false
 RUN_CONTRACT_REPLAY=false
 RUN_DOCKER_BUILD=false
@@ -128,6 +129,7 @@ Primary actions (exactly one; default build when omitted):
   --video
   --emulator
   --dump-c64u-config
+  --dump-c64-telnet-screens
 
 Build domain (default build only):
   --skip-install
@@ -205,6 +207,7 @@ Examples:
   ./build --screenshots
   ./build --screenshots-only
   ./build --video
+  ./build --dump-c64-telnet-screens
   ./build --test-e2e --record-traces --trace-suite playback
   ./build --test-e2e-native
   ./build --docker-build
@@ -848,6 +851,10 @@ while [[ $# -gt 0 ]]; do
       set_primary_action "dump-c64u-config" "$1"
       shift
       ;;
+    --dump-c64-telnet-screens)
+      set_primary_action "dump-c64-telnet-screens" "$1"
+      shift
+      ;;
     --docker-build)
       set_primary_action "docker-build" "$1"
       shift
@@ -1156,7 +1163,7 @@ if [[ -z "$PRIMARY_ACTION" ]]; then
   PRIMARY_ACTION="build"
 fi
 
-if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" ]]; then
+if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" || "$PRIMARY_ACTION" == "dump-c64-telnet-screens" ]]; then
   if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 || ${#DOCKER_FLAGS[@]} -gt 0 ]]; then
     echo "Tooling actions must run in isolation" >&2
     exit 1
@@ -1283,6 +1290,7 @@ RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_EMULATOR=false
 RUN_DUMP_C64U_CONFIG=false
+RUN_DUMP_C64_TELNET_SCREENS=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
 
@@ -1392,6 +1400,9 @@ case "$PRIMARY_ACTION" in
   dump-c64u-config)
     RUN_DUMP_C64U_CONFIG=true
     ;;
+  dump-c64-telnet-screens)
+    RUN_DUMP_C64_TELNET_SCREENS=true
+    ;;
   docker-build)
     RUN_INSTALL=false
     RUN_BUILD=false
@@ -1437,6 +1448,19 @@ if [[ "$RUN_DUMP_C64U_CONFIG" == "true" ]]; then
   (cd "$ROOT_DIR/scripts" && ./dump_c64u_config.py \
     --base-url "http://${CONFIG_HOST}" \
     --output "$ROOT_DIR/doc/c64/c64u-config.yaml")
+  exit 0
+fi
+
+if [[ "$RUN_DUMP_C64_TELNET_SCREENS" == "true" ]]; then
+  CONFIG_HOST="c64u"
+  if [[ "$C64U_HOST_SET" == "true" ]]; then
+    CONFIG_HOST="$C64U_HOST"
+  fi
+  log "Dumping C64U telnet screens"
+  (cd "$ROOT_DIR/scripts" && ./dump_c64_telnet_screens.py \
+    --base-url "http://${CONFIG_HOST}" \
+    --output "$ROOT_DIR/doc/c64u-telnet.yaml" \
+    --mirror-output "$ROOT_DIR/doc/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml")
   exit 0
 fi
 

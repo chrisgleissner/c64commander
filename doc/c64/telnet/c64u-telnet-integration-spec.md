@@ -911,7 +911,7 @@ CommoServe provides a content search and download experience that should be surf
 
 #### 11.9.1 Recommended Placement
 
-A **"Browse Online"** or **"CommoServe"** entry point in the navigation — either:
+A **"CommoServe"** entry point in the navigation — either:
 
 - A card in the Home page Quick Actions section (icon: `Search` or `Globe`), or
 - A dedicated tab/page accessible from the tab bar or a prominent Home page link
@@ -1226,10 +1226,535 @@ When firmware REST API gains coverage for a currently Telnet-only action:
 
 3. **Authentication timing**: The firmware implements exponential delay on failed login attempts (250ms → 4s over 5 attempts). C64 Commander should pass the correct password on the first attempt. If the password is wrong, the user should be prompted to correct it rather than retrying automatically.
 
-4. **CommoServe branding**: The C64 Ultimate shows "CommoServe File Search" while the Ultimate 64 shows "Assembly 64 Query Form". The parser must recognize both title strings to detect the search form screen. The UI should use a neutral label like "Browse Online" or allow both brands.
+4. **CommoServe branding**: The C64 Ultimate shows "CommoServe File Search" while the Ultimate 64 shows "Assembly 64 Query Form". The parser must recognize both title strings to detect the search form screen. The UI uses either "CommoServe" (if using a C64U) or "Assembly 64" (all other devices).
 
 5. **CommoServe preset stability**: Dropdown presets (Category, Date, Type, Sort, Order) are fetched from the Assembly64 server at runtime. If the server changes presets, the UI must adapt. The native search UI should populate dropdown options from the fetched presets rather than hardcoding values.
 
 6. **CommoServe session exclusivity**: While a CommoServe search session is active on the Telnet connection, action menu operations cannot be performed simultaneously (the firmware routes keys to the `AssemblySearch` TreeBrowser, not the main browser). The Telnet scheduler must prevent action menu operations while a CommoServe session is open, or close CommoServe first.
 
 7. **File download latency**: When a user selects "Run Disk" on a CommoServe result, the firmware downloads the file from the Assembly64 server to `/Temp/` before executing. This introduces variable latency (seconds to tens of seconds depending on file size and network). The UI must show appropriate loading state and the timeout must account for this.
+
+---
+
+## 18. UX Integration Design
+
+This chapter specifies how Telnet-only features integrate into C64 Commander's existing user experience. The design follows the project's established UX principles — progressive disclosure, source transparency, intent-driven language, and small-screen-first layout — so that users experience a single cohesive app regardless of whether a feature uses REST, FTP, or Telnet.
+
+### 18.1 Design Principles
+
+#### 18.1.1 Transport Transparency
+
+Users never see "Telnet", "REST", or "FTP" in the UI. The transport layer is an implementation detail. A user tapping "Power Cycle" on the Home page does not know or care that it uses Telnet while "Reset" uses REST. Both feel identical: tap → loading spinner → done/error toast.
+
+This follows the existing pattern where FTP-based file browsing and REST-based config reads appear as a single unified experience. The `doc/ux-guidelines.md` principle of source transparency ("consistent handling, no source-kind text labels") extends directly to Telnet actions.
+
+#### 18.1.2 Progressive Disclosure
+
+Telnet-only features are introduced at the appropriate level of detail for each surface:
+
+- **Quick Actions grid**: Power Cycle and Reboot (Clear RAM) already appear alongside REST-based Reset and Reboot — no additional disclosure needed.
+- **Drive, Printer, and IEC cards**: Telnet-only controls (Flush, Reset, Turn On) appear inline within existing cards, revealed only when the card is expanded or the device is in a relevant state.
+- **CommoServe**: Appears as a content source alongside Local, C64U, and HVSC — not as a separate "Telnet feature" but as another way to find and run C64 software.
+
+#### 18.1.3 Intent-Driven Language
+
+Following `doc/ux-guidelines.md`, all labels describe what the user wants to accomplish, not how it is achieved:
+
+| Telnet action label    | Intent-driven label used in UI |
+| ---------------------- | ------------------------------ |
+| Power Cycle            | Power Cycle                    |
+| Reboot (Clr Mem)       | Reboot (Clear RAM)             |
+| Save C64 Memory        | Save RAM (already exists)      |
+| Save REU Memory        | Save REU                       |
+| Software IEC → Turn On | Turn On / Turn Off             |
+| Software IEC → Reset   | Reset                          |
+| Printer → Flush/Eject  | Flush                          |
+| Printer → Reset        | Reset                          |
+| Printer → Turn On      | Turn On / Turn Off             |
+| CommoServe search      | CommoServe                     |
+
+#### 18.1.4 Small Screen First
+
+All Telnet features must work on compact-profile devices (narrowest supported width). The existing `ProfileActionGrid` component handles responsive column layout (2 columns compact, 4 columns medium/expanded). New action buttons use `QuickActionCard` with the same density-adaptive sizing. Cards and inline controls use the existing `useDisplayProfile()` hook to adjust layout.
+
+### 18.2 Home Page — Quick Actions Grid
+
+The existing Quick Actions grid (`MachineControls.tsx`) uses a `ProfileActionGrid` with `QuickActionCard` components in a 2×4 / 4×2 responsive layout. It currently has 8 buttons: Reset, Reboot, Pause/Resume, Menu, Save RAM, Load RAM, Reboot (Clear RAM), Power Off.
+
+#### 18.2.1 Additions
+
+Add **Power Cycle** to the grid. This is the only new Quick Action button needed — it is a common power management operation that belongs alongside Reset, Reboot, and Power Off.
+
+| Button      | Icon                | Variant  | Grid Position              |
+| ----------- | ------------------- | -------- | -------------------------- |
+| Power Cycle | `RefreshCw` + `Zap` | `danger` | After Reboot, before Pause |
+
+The grid grows from 8 to 9 items. On compact screens (2 columns) this adds one half-row. On medium/expanded (4 columns) it flows into a third row.
+
+#### 18.2.2 Existing Buttons Backed by Telnet
+
+Two existing Quick Action buttons currently trigger placeholder operations or incomplete flows. With Telnet, they gain real implementations:
+
+| Button             | Current transport | With Telnet                                    |
+| ------------------ | ----------------- | ---------------------------------------------- |
+| Reboot (Clear RAM) | Placeholder/REST  | Telnet → Power & Reset → Reboot (Clr Mem)      |
+| Save RAM           | REST (partial)    | Existing dialog stays; "Save REU" option added |
+
+No visual change is needed for these buttons. The transport switch is invisible to the user.
+
+#### 18.2.3 Power Cycle Button Behavior
+
+- **Tap**: Executes immediately (no confirmation dialog) — matches Reset and Reboot behavior.
+- **Loading**: Icon pulses while Telnet action is in progress.
+- **Disabled**: When disconnected, when another machine task is busy, or on web platform.
+- **Error**: Toast notification on failure, matching existing error pattern.
+- **Platform gating**: On web, this button is hidden entirely (not disabled) because Telnet is unavailable and there is no REST fallback for Power Cycle.
+
+#### 18.2.4 Platform Visibility Rules
+
+On web platform where Telnet is unavailable, buttons that have no REST fallback are hidden rather than disabled. This prevents clutter and avoids user confusion. The grid adjusts layout automatically.
+
+| Button             | REST available | Web behavior |
+| ------------------ | -------------- | ------------ |
+| Reset              | Yes            | Visible      |
+| Reboot             | Yes            | Visible      |
+| Pause / Resume     | Yes            | Visible      |
+| Menu               | Yes            | Visible      |
+| Save RAM           | Yes (partial)  | Visible      |
+| Load RAM           | Yes            | Visible      |
+| Reboot (Clear RAM) | No             | Hidden       |
+| Power Cycle        | No             | Hidden       |
+| Power Off          | Yes            | Visible      |
+
+### 18.3 Home Page — Save RAM Dialog
+
+The existing Save RAM dialog (`SaveRamDialog.tsx`) presents snapshot type options: Program Snapshot, Basic Snapshot, Screen Snapshot, Custom Snapshot. Each is a card button in a vertical list.
+
+#### 18.3.1 Save REU Addition
+
+Add a **Save REU** option to the Save RAM dialog as an additional card at the bottom of the list:
+
+```text
+Save RAM
+Choose the memory region to snapshot.
+
+  [ Program Snapshot          ]
+  [ Basic Snapshot            ]   ← existing
+  [ Screen Snapshot           ]
+  [ Custom Snapshot           ]
+  [ Save REU                  ]   ← new, Telnet-only
+
+  [ Cancel ]
+```
+
+- **Label**: "Save REU"
+- **Subtitle**: "REU expansion memory"
+- **Behavior**: Tap triggers Telnet action `Power & Reset → Save REU Memory`
+- **Platform gating**: The Save REU card is hidden on web platform. The dialog otherwise renders identically.
+- **Loading state**: The card shows a spinner while the Telnet action runs. Other cards are disabled during this time (existing mutual-exclusion pattern).
+
+This approach is preferred over a separate button because saving REU memory is conceptually the same operation class as saving C64 RAM — selecting a memory region to snapshot. Grouping them in one dialog follows progressive disclosure.
+
+### 18.4 Home Page — Drives Section
+
+The existing Drives section (`DriveManager.tsx`) shows cards for Drive A, Drive B, and Soft IEC Drive. Each card has an ON/OFF toggle, mount/eject controls, bus ID and type selectors, and status display.
+
+#### 18.4.1 Soft IEC Drive — Telnet Controls
+
+The Soft IEC Drive card currently shows ON/OFF toggle, path, bus ID, and status. Add Telnet-only controls inline:
+
+```text
+┌─────────────────────────────────────────┐
+│ SOFT IEC DRIVE                    [OFF] │
+│                                         │
+│ Path  /USB0/                            │
+│ Bus ID  11                              │
+│ Status  OK                              │
+│                                         │
+│         [ Reset ]  [ Set Dir ]          │  ← new Telnet actions
+└─────────────────────────────────────────┘
+```
+
+| Control | Telnet Path                  | Appearance                                     |
+| ------- | ---------------------------- | ---------------------------------------------- |
+| Reset   | Software IEC → Reset         | Outline button, matches existing Reset buttons |
+| Set Dir | Software IEC → Set dir. here | Outline button                                 |
+
+- **Visibility**: These buttons appear only when the Soft IEC Drive is ON and Telnet is available. When OFF or on web platform, they are hidden.
+- **Layout**: A row of small outline buttons below the status line, using the same spacing as the existing printer control rows. On compact profile, buttons stack vertically.
+- **Loading state**: Individual button shows spinner; other buttons disabled.
+
+The existing ON/OFF toggle for Soft IEC uses REST config writes. The Turn On action via Telnet (`Software IEC → Turn On`) is used only as a fallback when the REST config path is unavailable or when the firmware requires the Telnet command path for initial activation. This is transparent to the user — the ON/OFF toggle always works.
+
+### 18.5 Home Page — Printers Section
+
+The existing Printer section (`PrinterManager.tsx`) shows a card with ON/OFF toggle, bus ID, and configuration dropdowns (Output type, Ink density, Emulation, etc.).
+
+#### 18.5.1 Printer Telnet Controls
+
+Add Telnet-only controls as a button row at the bottom of the Printer card:
+
+```text
+┌─────────────────────────────────────────┐
+│ PRINTER                           [OFF] │
+│                                         │
+│ Bus ID  4    Type  PNG B/W              │
+│ Ink  Medium  Emulation  MPS             │
+│ CBM charset  US/UK  Epson  Basic        │
+│ IBM  Intl 1                             │
+│                                         │
+│   [ Flush ]   [ Reset ]                 │  ← new Telnet actions
+└─────────────────────────────────────────┘
+```
+
+| Control | Telnet Path           | Appearance     |
+| ------- | --------------------- | -------------- |
+| Flush   | Printer → Flush/Eject | Outline button |
+| Reset   | Printer → Reset       | Outline button |
+
+- **Visibility**: Buttons appear only when the Printer is ON and Telnet is available. When OFF or on web, hidden.
+- **Turn On/Off**: The existing ON/OFF toggle already covers enable/disable via REST config writes. The Telnet `Printer → Turn On` path serves as fallback.
+- **Layout**: Same pattern as Section 18.4.1 — a row of small outline buttons at the card bottom.
+- **Section Reset button**: The existing "Reset" button in the Printers section header (`SectionHeader` with `resetAction`) continues to use the REST reset endpoint. The new per-printer "Reset" button inside the card uses the Telnet path. Labels match intentionally — both reset the printer — but they are visually distinguished by position (section-level vs card-level).
+
+### 18.6 Home Page — Config Section
+
+The existing Config section at the bottom of the Home page uses a `ProfileActionGrid` with `QuickActionCard` buttons: Save (to flash), Load (from flash), Reset (to default), Save (to App), Load (from App), Revert Changes, Manage App Configs.
+
+#### 18.6.1 Config Telnet Additions
+
+Add two Telnet-only config actions to the grid:
+
+| Button       | Icon       | Telnet Path                        | Position                         |
+| ------------ | ---------- | ---------------------------------- | -------------------------------- |
+| Save to File | `FileDown` | Configuration → Save to File       | After existing Save/Load buttons |
+| Clear Flash  | `Trash2`   | Configuration → Clear Flash Config | After Save to File               |
+
+- **Save to File**: Saves the current device configuration to a file on the device's USB storage. This is a convenience action for backup purposes.
+- **Clear Flash**: Clears all saved configuration from flash, resetting to factory defaults. This is a destructive action.
+
+#### 18.6.2 Clear Flash Confirmation
+
+Because Clear Flash is destructive and irreversible, it requires a confirmation dialog before execution:
+
+```text
+Clear Flash Configuration?
+This will reset all saved settings to factory defaults.
+This cannot be undone.
+
+  [ Cancel ]   [ Clear Flash ]
+```
+
+This follows the existing pattern of `PowerOffDialog` — a simple confirmation modal with a destructive-styled confirm button.
+
+#### 18.6.3 Platform Gating
+
+Both buttons are hidden on web platform. The Config section grid adjusts layout automatically.
+
+### 18.7 CommoServe
+
+CommoServe is the most significant UX addition. Rather than exposing it as a Telnet feature, it is presented as a **content source** — a way to find and run C64 software from an online database, conceptually parallel to the existing Local, C64U, and HVSC sources.
+
+#### 18.7.1 Entry Point: Home Page Quick Actions
+
+Add a **CommoServe** button to the Quick Actions grid:
+
+| Button     | Icon    | Variant   | Grid Position         |
+| ---------- | ------- | --------- | --------------------- |
+| CommoServe | `Globe` | `default` | Last position in grid |
+
+This brings the grid to 10 items (or 9 on web, since Power Cycle is hidden). On compact screens (2 columns) this is 5 rows; on medium/expanded (4 columns) this is 3 rows with 2 remaining slots.
+
+Tapping "CommoServe" opens the CommoServe search sheet (section 18.7.3).
+
+#### 18.7.2 Entry Point: Play Page Source Picker
+
+The existing "Add items" dialog (`ItemSelectionDialog`) shows source options: Local, C64U, HVSC. Add a fourth source:
+
+```text
+Add items
+Select items from the chosen source to add.
+
+Choose source
+
+  [ Local                     ]
+  [ C64U                      ]
+  [ HVSC                      ]
+  [ CommoServe                ]   ← new
+
+  [ Cancel ]
+```
+
+- **Label**: "CommoServe"
+- **Subtitle**: "Search online content database"
+- **Icon**: `Globe` (using `FileOriginIcon` pattern)
+- **Platform gating**: Hidden on web platform. Hidden when Telnet is not connected.
+- **Behavior**: Selecting this source opens the CommoServe search flow within the ItemSelectionDialog, replacing the file browser with the search form.
+
+This is the most natural placement because CommoServe is functionally a content source — users search for SID files, disk images, and cartridges, then add them to their playlist or run them. The source picker already abstracts away whether files come from local storage, the device's USB, or the HVSC database.
+
+#### 18.7.3 CommoServe Search Sheet
+
+The search UI is a bottom sheet (on compact/medium) or dialog (on expanded), following the existing `AppSheet` / `AppDialog` pattern used by `ItemSelectionDialog`. It presents a native search form that maps to the CommoServe Telnet form fields.
+
+**Layout — Compact Profile:**
+
+```text
+┌─────────────────────────────────────┐
+│ CommoServe                    ✕  │
+│ Search the online content database. │
+│                                     │
+│ Name     [________________________] │
+│ Group    [________________________] │
+│ Category [  Any              ▼    ] │
+│ Type     [  Any              ▼    ] │
+│ Year     [  Any              ▼    ] │
+│                                     │
+│ Sort by  [ Name ▼]  [ Asc ▼]       │
+│                                     │
+│         [ Search ]                  │
+└─────────────────────────────────────┘
+```
+
+**Field layout decisions:**
+
+- **Name** is always visible and auto-focused — it is the most common search parameter.
+- **Group** is visible below Name — the second most common search parameter for demoscene content.
+- **Handle** and **Event** are hidden behind an "Advanced" disclosure toggle. These are specialist fields used rarely. This follows progressive disclosure.
+- **Category**, **Type**, and **Year** use native `Select` dropdowns. Each has an "Any" default option that means "do not filter". Dropdown options are populated from server presets fetched via Telnet at search form open time.
+- **Sort** and **Order** are combined on a single row as a `Select` + `Select` pair.
+- The **Search** button is a primary-styled `Button` at the bottom.
+
+**Advanced fields (disclosed on tap):**
+
+```text
+│ ▼ Advanced                          │
+│ Handle   [________________________] │
+│ Event    [________________________] │
+```
+
+#### 18.7.4 CommoServe Results View
+
+After search submission, results replace the form (with a back arrow to return to the form):
+
+```text
+┌─────────────────────────────────────┐
+│ ← Results for "joyride"         ✕   │
+│ 12 results                          │
+│                                     │
+│ Q Filter results...                 │
+│                                     │
+│ ┌─────────────────────────────────┐ │
+│ │ Joyride                         │ │
+│ │ TRIAD · 2018                    │ │
+│ └─────────────────────────────────┘ │
+│ ┌─────────────────────────────────┐ │
+│ │ Joyride (Competition)           │ │
+│ │ CENSOR · 1993                   │ │
+│ └─────────────────────────────────┘ │
+│ ...                                 │
+└─────────────────────────────────────┘
+```
+
+- Results use the `SelectableActionList` pattern — tappable cards in a scrollable list.
+- Each card shows the release name as primary text and group + year as secondary text.
+- A filter input at the top filters results client-side by name (same pattern as disk library filter).
+- Tapping a result navigates into file entries.
+
+#### 18.7.5 CommoServe File Entries View
+
+File entries for a selected result:
+
+```text
+┌─────────────────────────────────────┐
+│ ← Joyride                       ✕  │
+│ TRIAD · 2018                        │
+│                                     │
+│ ┌─────────────────────────────────┐ │
+│ │ 💾 joyride.d64            171K  │ │
+│ │    Disk Image                   │ │
+│ └─────────────────────────────────┘ │
+│ ┌─────────────────────────────────┐ │
+│ │ 📄 joyride_readme.txt      2K  │ │
+│ │    Text File                    │ │
+│ └─────────────────────────────────┘ │
+│ ...                                 │
+└─────────────────────────────────────┘
+```
+
+- Each file entry shows filename, file type icon (based on extension), and size.
+- File type description (e.g., "Disk Image" for .d64) appears as secondary text.
+- Tapping a file entry opens a context action sheet.
+
+#### 18.7.6 CommoServe File Action Sheet
+
+When a file entry is tapped, a bottom action sheet presents available actions:
+
+```text
+┌─────────────────────────────────────┐
+│ joyride.d64                         │
+│ Disk Image · 171K                   │
+│                                     │
+│ [ ▶ Run Disk                      ] │
+│ [ 💿 Mount Disk                   ] │
+│ [ 💿 Mount Disk (Read Only)       ] │
+│ [ 👁 View                         ] │
+│                                     │
+│ [ Cancel                          ] │
+└─────────────────────────────────────┘
+```
+
+- Available actions come from the firmware — they depend on the file extension (see `c64u-telnet.yaml` filesystem context menus for the full mapping).
+- Action labels use intent-driven language matching the firmware labels.
+- Tapping an action triggers the Telnet executor, shows a loading spinner on the tapped action, and disables other actions during execution.
+- The file download latency (firmware downloads from Assembly64 server to `/Temp/`) is communicated via a "Downloading..." intermediate state before the action executes.
+
+#### 18.7.7 CommoServe Loading States
+
+CommoServe involves network-dependent operations with variable latency. Loading states must be prominent and informative:
+
+| Phase            | UI State                                               | Duration     |
+| ---------------- | ------------------------------------------------------ | ------------ |
+| Opening search   | Sheet opens immediately; fields disabled with skeleton | 1–5 seconds  |
+| Preset loading   | Dropdown fields show "Loading..." placeholder          | 1–3 seconds  |
+| Searching        | Search button shows spinner; "Searching..." text       | 2–15 seconds |
+| Loading entries  | Result card shows inline spinner                       | 1–10 seconds |
+| Downloading file | Action button shows spinner; "Downloading..." text     | 2–30 seconds |
+| Executing action | Action button shows spinner; "Running..." text         | 1–3 seconds  |
+
+The extended timeouts require more prominent loading indicators than typical REST operations. A determinate or indeterminate progress bar below the sheet header communicates that a network operation is in progress.
+
+#### 18.7.8 CommoServe Error States
+
+Errors are shown as inline banners within the sheet, not as toasts, because the user needs to take action within the search context:
+
+| Error                  | Display                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| Device has no internet | Banner: "Your C64 device needs an internet connection to search online content." |
+| Server unreachable     | Banner: "Online content server is not responding. Try again later."              |
+| Search timeout         | Banner: "Search took too long. Try a more specific query."                       |
+| No results             | Empty state: "No results found. Try different search terms."                     |
+| Connection lost        | Banner: "Connection to device lost." with Retry button.                          |
+
+#### 18.7.9 CommoServe on Play Page
+
+When CommoServe is accessed from the Play page source picker (section 18.7.2), the flow operates within the `ItemSelectionDialog`:
+
+1. User taps "CommoServe" in source picker
+2. Source picker transitions to the CommoServe search form (replacing the file browser)
+3. User searches, selects a result, sees file entries
+4. For SID files: user can select entries and tap "Add to playlist" (matching the existing add-items flow)
+5. For disk/cartridge files: user can tap to run/mount directly (these are not playlist items)
+
+The key distinction: SID files from CommoServe can enter the playlist workflow (search → select → add to playlist → play). Disk images and cartridges are run/mounted directly because they are not playlist-compatible content.
+
+### 18.8 Developer Actions
+
+Developer Telnet actions (Clear Debug Log, Save Debug Log, Save EDID to File) are not placed on the Home page. They belong behind Settings → Diagnostics, which is the existing location for developer-facing tools.
+
+#### 18.8.1 Diagnostics Panel Additions
+
+Add Telnet developer actions as a new section within the diagnostics overlay:
+
+| Action          | Telnet Path                   | Control             |
+| --------------- | ----------------------------- | ------------------- |
+| Clear Debug Log | Developer → Clear Debug Log   | Button with confirm |
+| Save Debug Log  | Developer → Save Debug Log    | Button              |
+| Save EDID       | Developer → Save EDID to file | Button              |
+
+These are hidden on web platform. They follow the existing diagnostics panel layout — a list of labeled buttons with descriptive text.
+
+### 18.9 Connection and Status Indicators
+
+#### 18.9.1 Telnet Connection State
+
+The existing `ConnectivityIndicator` in the `AppBar` shows device connection status. Telnet connection state is tracked separately but is **not** surfaced as a distinct indicator. Rationale:
+
+- Telnet connects lazily on first Telnet action — showing "Telnet disconnected" before any Telnet action would confuse users.
+- When a Telnet action fails due to connection issues, the error toast provides sufficient feedback.
+- Adding a second connection indicator adds visual clutter without actionable information.
+
+#### 18.9.2 Telnet in Diagnostics
+
+The diagnostics panel (`DiagnosticsActivityIndicator`) is extended to show Telnet session state when active:
+
+- **Session idle**: "Telnet: connected (idle)" — shown only when a session exists
+- **Session active**: "Telnet: action in progress" — shown during Telnet action execution
+- **Session disconnected**: Not shown (lazy connection means no persistent state to display)
+
+This gives power users visibility into Telnet without cluttering the main UI.
+
+### 18.10 Interaction Timing and Feedback
+
+Telnet actions have different timing characteristics than REST. The UI must account for this:
+
+#### 18.10.1 Action Duration Expectations
+
+| Action Class         | Typical Duration | UI Feedback                                    |
+| -------------------- | ---------------- | ---------------------------------------------- |
+| Simple device action | 1–3 seconds      | Button spinner (same as REST)                  |
+| CommoServe form open | 2–5 seconds      | Sheet skeleton / shimmer                       |
+| CommoServe search    | 3–15 seconds     | Progress bar + "Searching..." text             |
+| CommoServe file run  | 3–30 seconds     | Progress bar + "Downloading..." / "Running..." |
+
+#### 18.10.2 Mutual Exclusion
+
+While a Telnet action is in progress, all other Telnet-backed buttons are disabled. This is the same pattern as the existing `machineTaskBusy` gate in `MachineControls`. REST-backed buttons remain enabled — the schedulers are independent.
+
+The `machineTaskBusy` state is extended to cover Telnet actions:
+
+```typescript
+const isAnyTelnetActionActive = useTelnetActionState();
+const effectiveBusy = machineTaskBusy || isAnyTelnetActionActive;
+```
+
+Telnet-only buttons use `effectiveBusy` for their disabled state. REST-only buttons continue using `machineTaskBusy` alone.
+
+### 18.11 Responsive Layout Summary
+
+The following table summarizes how each Telnet feature adapts across display profiles:
+
+| Feature                 | Compact (2 col)         | Medium (4 col)       | Expanded (4 col)     |
+| ----------------------- | ----------------------- | -------------------- | -------------------- |
+| Quick Actions grid      | 5 rows × 2              | 3 rows × 4 (partial) | 3 rows × 4 (partial) |
+| Power Cycle button      | Full-width in grid cell | Standard grid cell   | Standard grid cell   |
+| Save REU in dialog      | Full-width card         | Full-width card      | Full-width card      |
+| IEC inline buttons      | Stacked vertically      | Row of buttons       | Row of buttons       |
+| Printer inline buttons  | Stacked vertically      | Row of buttons       | Row of buttons       |
+| Config actions grid     | 2 col grid              | 4 col grid           | 4 col grid           |
+| CommoServe sheet        | Full-screen sheet       | Centered sheet (80%) | Centered dialog      |
+| CommoServe results      | Full-width list         | Full-width list      | Full-width list      |
+| CommoServe file actions | Bottom action sheet     | Bottom action sheet  | Dialog               |
+
+### 18.12 Accessibility
+
+- All Telnet-backed buttons have `aria-label` attributes describing the action.
+- Loading states set `aria-busy="true"` on the active element.
+- Disabled states set `aria-disabled="true"` and `tabindex="-1"`.
+- CommoServe search form fields have proper `label` associations.
+- Error banners use `role="alert"` for screen reader announcement.
+- Action sheets use `role="dialog"` with `aria-modal="true"`.
+
+### 18.13 UX Acceptance Criteria
+
+- [ ] Power Cycle button appears in Quick Actions grid on native platforms
+- [ ] Power Cycle button is hidden on web platform
+- [ ] Save REU appears in Save RAM dialog on native platforms
+- [ ] Soft IEC Drive card shows Reset and Set Dir buttons when drive is ON and Telnet available
+- [ ] Printer card shows Flush and Reset buttons when printer is ON and Telnet available
+- [ ] Config section shows Save to File and Clear Flash buttons on native platforms
+- [ ] Clear Flash shows confirmation dialog before executing
+- [ ] CommoServe button appears in Quick Actions on native platforms
+- [ ] CommoServe source appears in Play page Add Items source picker on native platforms
+- [ ] CommoServe search sheet opens with native form controls
+- [ ] CommoServe dropdown fields populate from server presets
+- [ ] CommoServe results display in scrollable card list
+- [ ] CommoServe file entries show filename, type, and size
+- [ ] CommoServe file action sheet presents available actions for file type
+- [ ] Loading states are prominent and descriptive for all network-dependent operations
+- [ ] Error states display as inline banners with actionable messages
+- [ ] All Telnet features are hidden on web platform
+- [ ] All Telnet-backed buttons disable during active Telnet action
+- [ ] REST-backed buttons remain functional during Telnet actions
+- [ ] Layout adapts correctly across compact, medium, and expanded profiles
+- [ ] No UI element exposes transport terminology (Telnet, REST, FTP) to the user
