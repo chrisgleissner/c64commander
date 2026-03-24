@@ -310,6 +310,33 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getAllByTestId("open-config-heatmap-screen")).toHaveLength(1);
   });
 
+  it("anchors the compact diagnostics overflow panel flush to the viewport edge", () => {
+    setViewportWidth(360);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+
+    const panel = screen.getByTestId("diagnostics-overflow-panel");
+    expect(panel.className).toContain("fixed");
+    expect(panel.className).toContain("inset-x-4");
+    expect(panel).toHaveTextContent("Health history");
+  });
+
+  it("opens decision-state and FTP heat map views from the compact overflow menu", () => {
+    setViewportWidth(360);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-decision-state-screen"));
+    expect(screen.getByTestId("decision-state-surface")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-ftp-heatmap-screen"));
+    expect(screen.getByTestId("heat-map-popup-ftp")).toBeVisible();
+  });
+
   it("shares only the filtered evidence set", () => {
     setViewportWidth(600);
     const onShareFiltered = vi.fn();
@@ -480,7 +507,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("health-check-probe-jiffy")).toHaveTextContent("Pending");
 
     fireEvent.click(screen.getByTestId("run-health-check"));
-    expect(onRunHealthCheck).not.toHaveBeenCalled();
+    expect(onRunHealthCheck).toHaveBeenCalledTimes(1);
   });
 
   it("opens the latest health detail when the run button is pressed", () => {

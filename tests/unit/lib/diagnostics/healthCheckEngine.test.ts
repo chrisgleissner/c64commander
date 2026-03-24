@@ -77,8 +77,14 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
-import { isHealthCheckRunning, runHealthCheck } from "@/lib/diagnostics/healthCheckEngine";
+import {
+  cancelHealthCheck,
+  isHealthCheckRunning,
+  recoverStaleHealthCheckRun,
+  runHealthCheck,
+} from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
+import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -114,9 +120,12 @@ const setupAllProbesSuccess = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   clearHealthHistory();
+  resetHealthCheckStateSnapshot();
 });
 
 afterEach(() => {
+  cancelHealthCheck("Test cleanup");
+  resetHealthCheckStateSnapshot();
   vi.clearAllMocks();
 });
 
@@ -125,6 +134,16 @@ afterEach(() => {
 describe("isHealthCheckRunning", () => {
   it("returns false when no run is in progress", () => {
     expect(isHealthCheckRunning()).toBe(false);
+  });
+});
+
+describe("health-check lifecycle helpers", () => {
+  it("returns false when attempting to recover a run that is not stale", () => {
+    expect(recoverStaleHealthCheckRun()).toBe(false);
+  });
+
+  it("returns false when cancelling without an active run", () => {
+    expect(cancelHealthCheck()).toBe(false);
   });
 });
 
@@ -175,12 +194,89 @@ describe("runHealthCheck — all-success path", () => {
     expect(result!.latency).toEqual({ p50: 10, p90: 20, p99: 30 });
   });
 
-  it("returns null when a run is already in progress (concurrent guard)", async () => {
+  it("restarts an in-flight run and records cancellation for the superseded run", async () => {
+    let rejectFirstGetInfo: ((reason?: unknown) => void) | null = null;
+    const firstGetInfo = new Promise<typeof successfulInfo>((_resolve, reject) => {
+      rejectFirstGetInfo = reject;
+    });
+    mockGetInfo.mockImplementationOnce(({ signal }: { signal?: AbortSignal }) => {
+      signal?.addEventListener("abort", () => rejectFirstGetInfo?.(new DOMException("Aborted", "AbortError")), {
+        once: true,
+      });
+      return firstGetInfo;
+    });
     setupAllProbesSuccess();
-    const first = runHealthCheck();
-    const second = await runHealthCheck();
-    expect(second).toBeNull();
-    await first;
+
+    const firstRun = runHealthCheck();
+    expect(isHealthCheckRunning()).toBe(true);
+
+    const secondRun = await runHealthCheck();
+    const firstResult = await firstRun;
+    const snapshot = getHealthCheckStateSnapshot();
+
+    expect(firstResult).toBeNull();
+    expect(secondRun).not.toBeNull();
+    expect(snapshot.currentRunId).toBe(secondRun?.runId ?? null);
+    expect(snapshot.runState).not.toBe("CANCELLED");
+    expect(
+      snapshot.transitions.some(
+        (entry) => entry.to === "CANCELLED" && entry.reason === "Superseded by a new health check run",
+      ),
+    ).toBe(true);
+  });
+
+  it("marks a stale run as timed out and clears the running flag", async () => {
+    const dateNowSpy = vi.spyOn(Date, "now");
+    const startNow = 1_000_000;
+    dateNowSpy.mockReturnValue(startNow);
+
+    let rejectPendingGetInfo: ((reason?: unknown) => void) | null = null;
+    const pendingGetInfo = new Promise<typeof successfulInfo>((_resolve, reject) => {
+      rejectPendingGetInfo = reject;
+    });
+    mockGetInfo.mockImplementation(({ signal }: { signal?: AbortSignal }) => {
+      signal?.addEventListener("abort", () => rejectPendingGetInfo?.(new DOMException("Aborted", "AbortError")), {
+        once: true,
+      });
+      return pendingGetInfo;
+    });
+
+    void pendingGetInfo;
+    const runPromise = runHealthCheck();
+    expect(getHealthCheckStateSnapshot().runState).toBe("RUNNING");
+
+    const staleAfter = getHealthCheckStateSnapshot().staleAfterMs;
+    expect(staleAfter).not.toBeNull();
+    dateNowSpy.mockReturnValue((staleAfter ?? startNow) + 1);
+
+    expect(recoverStaleHealthCheckRun()).toBe(true);
+    expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
+    expect(getHealthCheckStateSnapshot().running).toBe(false);
+
+    await expect(runPromise).resolves.toBeNull();
+    dateNowSpy.mockRestore();
+  });
+
+  it("cancels an active run and marks the lifecycle as CANCELLED", async () => {
+    let rejectPendingGetInfo: ((reason?: unknown) => void) | null = null;
+    const pendingGetInfo = new Promise<typeof successfulInfo>((_resolve, reject) => {
+      rejectPendingGetInfo = reject;
+    });
+    mockGetInfo.mockImplementation(({ signal }: { signal?: AbortSignal }) => {
+      signal?.addEventListener("abort", () => rejectPendingGetInfo?.(new DOMException("Aborted", "AbortError")), {
+        once: true,
+      });
+      return pendingGetInfo;
+    });
+
+    const runPromise = runHealthCheck();
+    expect(isHealthCheckRunning()).toBe(true);
+
+    expect(cancelHealthCheck("Stopped by user")).toBe(true);
+    expect(getHealthCheckStateSnapshot().runState).toBe("CANCELLED");
+    expect(getHealthCheckStateSnapshot().running).toBe(false);
+
+    await expect(runPromise).resolves.toBeNull();
   });
 });
 
@@ -426,6 +522,47 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     expect(result!.probes.CONFIG.outcome).toBe("Success");
   });
 
+  it("falls back to numeric parsing when string selections are not present in options", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const numericWithMismatchedOptions = {
+      "LED Strip Settings": {
+        "Strip Intensity": {
+          selected: "5",
+          options: ["OFF", "DIM", "BRIGHT"],
+        },
+      },
+    };
+    const numericReadback = {
+      "LED Strip Settings": {
+        "Strip Intensity": {
+          selected: "6",
+          options: ["OFF", "DIM", "BRIGHT"],
+        },
+      },
+    };
+    mockGetConfigItem
+      .mockResolvedValueOnce(numericWithMismatchedOptions)
+      .mockResolvedValueOnce(numericReadback)
+      .mockResolvedValueOnce(numericWithMismatchedOptions);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "LED Strip Settings",
+      "Strip Intensity",
+      6,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
+
   it("applies delta subtraction when currentValue is at max (31)", async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
@@ -466,6 +603,26 @@ describe("runHealthCheck — FTP probe", () => {
     const result = await runHealthCheck();
     expect(result!.probes.FTP.outcome).toBe("Fail");
     expect(result!.probes.FTP.reason).toContain("FTP connection refused");
+  });
+
+  it("marks the run TIMEOUT when the FTP probe times out", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockRejectedValue(new Error("FTP timed out after 1000ms"));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.FTP.outcome).toBe("Fail");
+    expect(result!.probes.FTP.durationMs).toBe(1000);
+    expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
   });
 
   it("normalizes an HTTP device host with a port before probing FTP", async () => {
@@ -523,6 +680,19 @@ describe("runHealthCheck — REST probe optional fields", () => {
     expect(result!.deviceInfo?.fpga).toBeNull();
     expect(result!.deviceInfo?.core).toBeNull();
   });
+
+  it("sets product to null when info.product is undefined", async () => {
+    mockGetInfo.mockResolvedValue({
+      product: undefined,
+      errors: [],
+    });
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+    expect(result!.probes.REST.outcome).toBe("Fail");
+    expect(result!.probes.REST.reason).toContain("No product info");
+    expect(result!.deviceInfo?.product).toBeNull();
+  });
 });
 
 // ─── runHealthCheck — JIFFY probe with null bytes ────────────────────────────
@@ -548,6 +718,183 @@ describe("runHealthCheck — JIFFY probe null bytes", () => {
 });
 
 // ─── runHealthCheck — CONFIG probe catch block ────────────────────────────────
+
+// Regression: CONFIG probe navigates the `items` intermediate key in real API responses.
+// Before the fix, extractConfigItemData looked for the item directly under the category,
+// skipping the `items` wrapper and always seeing undefined → "No suitable target".
+describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
+  it("succeeds CONFIG when API response uses { items: { [item]: { selected } } } format", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const itemsResp = { "LED Strip Settings": { items: { "Strip Intensity": { selected: 5, options: [] } } } };
+    const itemsReadback = { "LED Strip Settings": { items: { "Strip Intensity": { selected: 6, options: [] } } } };
+    mockGetConfigItem
+      .mockResolvedValueOnce(itemsResp)
+      .mockResolvedValueOnce(itemsReadback)
+      .mockResolvedValueOnce(itemsResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+  });
+
+  it("resolves option-list index for non-numeric string selected values", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    // Audio Mixer returns selected="OFF" with options=["OFF","-50 dB",...] → index 0
+    const audioResp = {
+      "LED Strip Settings": {
+        items: {
+          "Strip Intensity": {
+            selected: "OFF",
+            options: ["OFF", "+1 dB", "+2 dB"],
+          },
+        },
+      },
+    };
+    // After delta, expect index 1 ("+" dB)
+    const audioReadback = {
+      "LED Strip Settings": {
+        items: {
+          "Strip Intensity": {
+            selected: "+1 dB",
+            options: ["OFF", "+1 dB", "+2 dB"],
+          },
+        },
+      },
+    };
+    mockGetConfigItem
+      .mockResolvedValueOnce(audioResp)
+      .mockResolvedValueOnce(audioReadback)
+      .mockResolvedValueOnce(audioResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+  });
+
+  it("round-trips Audio Mixer selections that expose positive dB options", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+
+    const audioResp = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+6 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+    const audioReadback = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+5 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+
+    mockGetConfigItem
+      .mockResolvedValueOnce({ "LED Strip Settings": {} })
+      .mockResolvedValueOnce(audioResp)
+      .mockResolvedValueOnce(audioReadback)
+      .mockResolvedValueOnce(audioResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      2,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      2,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      1,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
+
+  it("steps backward within option bounds when the selected Audio Mixer option is already last", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+
+    const audioResp = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+4 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+    const audioReadback = {
+      "LED Strip Settings": {},
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": {
+            selected: "+5 dB",
+            options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
+          },
+        },
+      },
+    };
+
+    mockGetConfigItem
+      .mockResolvedValueOnce({ "LED Strip Settings": {} })
+      .mockResolvedValueOnce(audioResp)
+      .mockResolvedValueOnce(audioReadback)
+      .mockResolvedValueOnce(audioResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      2,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      2,
+      "Audio Mixer",
+      "Vol UltiSid 1",
+      3,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
+});
 
 describe("runHealthCheck — CONFIG probe exception", () => {
   it("fails CONFIG when getConfigItem throws during the probe", async () => {
