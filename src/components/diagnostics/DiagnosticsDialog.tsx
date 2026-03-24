@@ -1396,7 +1396,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setConfigDriftOpen(true)}
-                data-testid="open-config-drift-screen"
+                data-testid="footer-open-config-drift-screen"
               >
                 Config drift
               </Button>
@@ -1406,7 +1406,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setLatencyOpen(true)}
-                data-testid="open-latency-screen"
+                data-testid="footer-open-latency-screen"
               >
                 Latency
               </Button>
@@ -1416,7 +1416,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHistoryOpen(true)}
-                data-testid="open-timeline-screen"
+                data-testid="footer-open-timeline-screen"
               >
                 Health history
               </Button>
@@ -1426,7 +1426,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHeatMapVariant("REST")}
-                data-testid="open-rest-heatmap-screen"
+                data-testid="footer-open-rest-heatmap-screen"
               >
                 REST heat map
               </Button>
@@ -1436,7 +1436,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHeatMapVariant("FTP")}
-                data-testid="open-ftp-heatmap-screen"
+                data-testid="footer-open-ftp-heatmap-screen"
               >
                 FTP heat map
               </Button>
@@ -1446,7 +1446,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHeatMapVariant("CONFIG")}
-                data-testid="open-config-heatmap-screen"
+                data-testid="footer-open-config-heatmap-screen"
               >
                 Config heat map
               </Button>
@@ -1457,7 +1457,7 @@ export function DiagnosticsDialog({
                   size="sm"
                   className="h-7 w-7 p-0"
                   onClick={() => setOverflowOpen((v) => !v)}
-                  data-testid="diagnostics-overflow-menu"
+                  data-testid="footer-diagnostics-overflow-menu"
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
@@ -1470,7 +1470,7 @@ export function DiagnosticsDialog({
                         setOverflowOpen(false);
                         void onShareAll();
                       }}
-                      data-testid="diagnostics-share-all"
+                      data-testid="footer-diagnostics-share-all"
                     >
                       <Share2 className="h-3.5 w-3.5" />
                       Share all
@@ -1482,7 +1482,7 @@ export function DiagnosticsDialog({
                         setOverflowOpen(false);
                         handleShareFiltered();
                       }}
-                      data-testid="diagnostics-share-filtered"
+                      data-testid="footer-diagnostics-share-filtered"
                     >
                       <Share2 className="h-3.5 w-3.5" />
                       Share filtered

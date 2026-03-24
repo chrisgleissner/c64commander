@@ -291,6 +291,24 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("heat-map-popup-config")).toBeVisible();
   });
 
+  it("keeps the primary diagnostics menu controls uniquely addressable", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    expect(screen.getAllByTestId("diagnostics-overflow-menu")).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+
+    expect(screen.getAllByTestId("diagnostics-share-all")).toHaveLength(1);
+    expect(screen.getAllByTestId("diagnostics-share-filtered")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-latency-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-timeline-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-config-drift-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-rest-heatmap-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-config-heatmap-screen")).toHaveLength(1);
+  });
+
   it("shares only the filtered evidence set", () => {
     setViewportWidth(600);
     const onShareFiltered = vi.fn();
