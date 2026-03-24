@@ -672,9 +672,9 @@ const buildRunResult = (args: {
     App: {
       state:
         args.jiffy.lifecycle === "FAILED" ||
-          args.config.lifecycle === "FAILED" ||
-          args.jiffy.lifecycle === "TIMEOUT" ||
-          args.config.lifecycle === "TIMEOUT"
+        args.config.lifecycle === "FAILED" ||
+        args.jiffy.lifecycle === "TIMEOUT" ||
+        args.config.lifecycle === "TIMEOUT"
           ? ("Degraded" as const)
           : args.jiffy.lifecycle === "CANCELLED" && args.config.lifecycle === "CANCELLED"
             ? ("Idle" as const)
@@ -841,54 +841,54 @@ export const runHealthCheck = async (
     const ftp = restFailed
       ? setSkippedProbe("FTP", "Skipped: REST probe failed")
       : await runProbe(
-        run,
-        "FTP",
-        async () => probeFtp(),
-        (record) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-        }),
-      );
+          run,
+          "FTP",
+          async () => probeFtp(),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), FTP: ftp.record });
 
     const config = restFailed
       ? setSkippedProbe("CONFIG", "Skipped: REST probe failed")
       : await runProbe(
-        run,
-        "CONFIG",
-        (signal) => probeConfig(signal),
-        (record) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-        }),
-      );
+          run,
+          "CONFIG",
+          (signal) => probeConfig(signal),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), CONFIG: config.record });
 
     const raster = restFailed
       ? setSkippedProbe("RASTER", "Skipped: REST probe failed")
       : await runProbe(
-        run,
-        "RASTER",
-        (signal) => probeRaster(signal),
-        (record) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-        }),
-      );
+          run,
+          "RASTER",
+          (signal) => probeRaster(signal),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), RASTER: raster.record });
 
     const jiffy = restFailed
       ? setSkippedProbe("JIFFY", "Skipped: REST probe failed")
       : await runProbe(
-        run,
-        "JIFFY",
-        (signal) => probeJiffy(signal),
-        ({ record, uptimeSeconds }) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-          uptimeSeconds,
-        }),
-      );
+          run,
+          "JIFFY",
+          (signal) => probeJiffy(signal),
+          ({ record, uptimeSeconds }) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+            uptimeSeconds,
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), JIFFY: jiffy.record });
 
     if (!isCurrentRun(token)) {
