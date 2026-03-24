@@ -1223,7 +1223,7 @@ export function DiagnosticsDialog({
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
-                          data-testid="diagnostics-clear-all-trigger"
+                          data-testid="footer-diagnostics-clear-all-trigger"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Clear all
@@ -1236,7 +1236,7 @@ export function DiagnosticsDialog({
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
+                          <AlertDialogAction onClick={onClearAll} data-testid="footer-diagnostics-clear-all-confirm">
                             Clear
                           </AlertDialogAction>
                         </AlertDialogFooter>

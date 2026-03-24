@@ -302,6 +302,7 @@ describe("DiagnosticsDialog", () => {
 
     expect(screen.getAllByTestId("diagnostics-share-all")).toHaveLength(1);
     expect(screen.getAllByTestId("diagnostics-share-filtered")).toHaveLength(1);
+    expect(screen.getAllByTestId("diagnostics-clear-all-trigger")).toHaveLength(1);
     expect(screen.getAllByTestId("open-latency-screen")).toHaveLength(1);
     expect(screen.getAllByTestId("open-timeline-screen")).toHaveLength(1);
     expect(screen.getAllByTestId("open-config-drift-screen")).toHaveLength(1);
