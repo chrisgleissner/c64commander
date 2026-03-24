@@ -159,7 +159,7 @@ export function createBreakpointFailureSummary(input: {
 }
 
 export function shouldSkipRecovery(input: { config: HarnessConfig; outcome: RecoveryOutcome }): boolean {
-  return input.outcome === "device-unresponsive";
+  return input.outcome === "device-unresponsive" || input.config.allowMachineReset !== true;
 }
 
 export class TraceTailBuffer {

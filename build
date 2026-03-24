@@ -69,9 +69,12 @@ DOCKER_CONFIG_DIR="$ROOT_DIR/.tmp/web-config"
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 CONTRACT_MODE="safe"
+CONTRACT_MODE_SET=false
 CONTRACT_AUTH="off"
+CONTRACT_AUTH_SET=false
 CONTRACT_PASSWORD=""
 CONTRACT_ALLOW_RESET=false
+CONTRACT_CONFIG_PATH=""
 CONTRACT_DISK_PATH=""
 CONTRACT_DISK_DRIVE="a"
 CONTRACT_DISK_TYPE="d64"
@@ -164,6 +167,7 @@ Fuzz modifiers (require --test-fuzz):
   --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
 
 Contract test modifiers (require --test-contract):
+  --contract-config <path> Base JSON config template for the contract harness
   --contract-mode safe|unsafe
   --contract-auth on|off
   --contract-password <pw>
@@ -358,22 +362,28 @@ ensure_playwright_port() {
 }
 
 run_contract_test() {
-  local mode_raw="${CONTRACT_MODE,,}"
-  local mode="SAFE"
-  if [[ "$mode_raw" == "unsafe" ]]; then
-    mode="STRESS"
-  elif [[ "$mode_raw" != "safe" ]]; then
-    echo "Invalid --contract-mode: ${CONTRACT_MODE}" >&2
-    exit 1
+  local mode=""
+  if [[ "$CONTRACT_MODE_SET" == "true" || -z "$CONTRACT_CONFIG_PATH" ]]; then
+    local mode_raw="${CONTRACT_MODE,,}"
+    mode="SAFE"
+    if [[ "$mode_raw" == "unsafe" ]]; then
+      mode="STRESS"
+    elif [[ "$mode_raw" != "safe" ]]; then
+      echo "Invalid --contract-mode: ${CONTRACT_MODE}" >&2
+      exit 1
+    fi
   fi
 
-  local auth_raw="${CONTRACT_AUTH,,}"
-  local auth="OFF"
-  if [[ "$auth_raw" == "on" ]]; then
-    auth="ON"
-  elif [[ "$auth_raw" != "off" ]]; then
-    echo "Invalid --contract-auth: ${CONTRACT_AUTH}" >&2
-    exit 1
+  local auth=""
+  if [[ "$CONTRACT_AUTH_SET" == "true" || -z "$CONTRACT_CONFIG_PATH" ]]; then
+    local auth_raw="${CONTRACT_AUTH,,}"
+    auth="OFF"
+    if [[ "$auth_raw" == "on" ]]; then
+      auth="ON"
+    elif [[ "$auth_raw" != "off" ]]; then
+      echo "Invalid --contract-auth: ${CONTRACT_AUTH}" >&2
+      exit 1
+    fi
   fi
 
   if [[ "$auth" == "ON" && -z "$CONTRACT_PASSWORD" ]]; then
@@ -406,6 +416,7 @@ run_contract_test() {
   export CONTRACT_TEST_AUTH_UPPER="$auth"
   export CONTRACT_TEST_PASSWORD
   export CONTRACT_TEST_ALLOW_RESET
+  export CONTRACT_TEST_CONFIG_PATH="$CONTRACT_CONFIG_PATH"
   export CONTRACT_TEST_DISK_PATH
   export CONTRACT_TEST_DISK_DRIVE
   export CONTRACT_TEST_DISK_TYPE
@@ -418,9 +429,10 @@ run_contract_test() {
 
   node --input-type=module - "$config_path" <<'NODE'
 import fs from 'node:fs';
+import path from 'node:path';
 
 const outPath = process.argv[2];
-const cfg = {
+let cfg = {
   baseUrl: process.env.CONTRACT_TEST_BASE_URL,
   mode: process.env.CONTRACT_TEST_MODE_UPPER,
   auth: process.env.CONTRACT_TEST_AUTH_UPPER,
@@ -434,8 +446,28 @@ const cfg = {
   scratch: { ftpDir: '/Temp/contract-test' },
 };
 
+if (process.env.CONTRACT_TEST_CONFIG_PATH) {
+  const configPath = path.isAbsolute(process.env.CONTRACT_TEST_CONFIG_PATH)
+    ? process.env.CONTRACT_TEST_CONFIG_PATH
+    : path.join(process.cwd(), process.env.CONTRACT_TEST_CONFIG_PATH);
+  const fileData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  cfg = mergeObjects(cfg, fileData);
+}
+
+  cfg.baseUrl = process.env.CONTRACT_TEST_BASE_URL;
+  if (process.env.CONTRACT_TEST_MODE_UPPER) {
+    cfg.mode = process.env.CONTRACT_TEST_MODE_UPPER;
+  }
+  if (process.env.CONTRACT_TEST_AUTH_UPPER) {
+    cfg.auth = process.env.CONTRACT_TEST_AUTH_UPPER;
+  }
+
 if (cfg.auth === 'ON') {
-  cfg.password = process.env.CONTRACT_TEST_PASSWORD;
+  if (process.env.CONTRACT_TEST_PASSWORD) {
+    cfg.password = process.env.CONTRACT_TEST_PASSWORD;
+  }
+} else {
+ delete cfg.password;
 }
 
 if (process.env.CONTRACT_TEST_ALLOW_RESET === 'true') {
@@ -465,6 +497,26 @@ if (Object.keys(media).length) {
 }
 
 fs.writeFileSync(outPath, JSON.stringify(cfg, null, 2));
+
+function mergeObjects(base, override) {
+  if (!isPlainObject(base) || !isPlainObject(override)) {
+    return override;
+  }
+
+  const result = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (isPlainObject(value) && isPlainObject(result[key])) {
+      result[key] = mergeObjects(result[key], value);
+      continue;
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 NODE
 
   log "Running contract test harness (${mode}/${auth}) against ${base_url}"
@@ -817,12 +869,20 @@ while [[ $# -gt 0 ]]; do
       record_flag CONTRACT_FLAGS "$1"
       require_value "$1" "${2:-}"
       CONTRACT_MODE="$2"
+      CONTRACT_MODE_SET=true
+      shift 2
+      ;;
+    --contract-config)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_CONFIG_PATH="$2"
       shift 2
       ;;
     --contract-auth)
       record_flag CONTRACT_FLAGS "$1"
       require_value "$1" "${2:-}"
       CONTRACT_AUTH="$2"
+      CONTRACT_AUTH_SET=true
       shift 2
       ;;
     --contract-password)

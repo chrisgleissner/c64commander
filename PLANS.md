@@ -1,103 +1,125 @@
-# Review 11 — Live Device and HVSC Workflow Fix Plan
+# C64U Failure Boundary Stress Plan
 
 Status: IN_PROGRESS
-Classification: DOC_PLUS_CODE, CODE_CHANGE, UI_CHANGE
-Date: 2026-03-23
-Source: doc/research/review-11/findings.md
+Date: 2026-03-24
+Classification: DOC_PLUS_CODE, CODE_CHANGE
+Target device: c64u
+Base config: tests/contract/config.stress.matrix.spike.json
+Execution rule: all contract execution goes through ./build
 
-## Phase 1 — HVSC Critical Path (BLOCKER)
+## Objective
 
-### Targets: R11-001, R11-002
+Identify the smallest reproducible stress boundary that transitions the C64 Ultimate from normal responses into a verified failure state, capture the full trace, and prove deterministic replay from a clean state.
 
-- [x] R11-001: Fix `offsetBytes: 0` rejection in `HvscIngestionPlugin.kt`
-  - Use `call.data.has("offsetBytes")` + `call.data.getLong()` instead of `call.getLong()`
-  - Add AppLogger debug line showing received offsetBytes
-  - Guard: missing → reject "offsetBytes is required"; negative → reject "offsetBytes must be >= 0"
-- [x] R11-002: Fix `hvscHasCache` to depend on `extraction.status === "success"` not `download.status`
-  - File: `src/pages/playFiles/hooks/useHvscLibrary.ts` line 665
-- [ ] Add unit tests for the offsetBytes and extraction gate fix
+## Safety Constraints
 
-Verification:
-- offsetBytes=0 passes; missing fails; negative fails
-- Ingest button disabled when extraction has not succeeded
+- Escalate gradually.
+- After every escalation step, run a REST health probe and an independent curl probe.
+- Stop escalation immediately after the first verified failure.
+- Do not use destructive endpoints.
+- Keep all runs deterministic and documented.
 
-## Phase 2 — Health State Correctness
+## Exit Criteria
 
-### Targets: R11-007, R11-008, R11-012
+- [ ] Build helper supports contract runs based on tests/contract/config.stress.matrix.spike.json.
+- [ ] Baseline real-device contract run completes and records artifacts.
+- [ ] Full trace captures REST request/response headers, body, and timing plus FTP command/response timing.
+- [ ] A failure boundary is observed during controlled escalation.
+- [ ] Independent verification with `curl http://c64u/v1/info` shows the same failure condition.
+- [ ] Minimal reproducing trace is extracted.
+- [ ] Replay reproduces the failure from a clean state.
+- [ ] Replay succeeds at least twice with the same failure signature.
 
-- [ ] Introduce first-successful-REST-response gating in `useHealthState.ts`
-  - When `latestResult` is null: only derive UNHEALTHY from traces if at least one successful REST response has been observed
-  - Before first success: return Idle state
-- [ ] Add unit tests: cold-launch → Idle; first REST success → Healthy; transient failure → not immediately Unhealthy
+## Phase 1 - Plan Initialization
 
-Verification:
-- Badge starts as Idle/Connecting on cold launch
-- Transitions to Healthy after first clean REST response
+- [x] Replace PLANS.md with this execution plan.
+- [ ] Add any harness capability needed to force contract runs to inherit the spike matrix config via ./build.
 
-## Phase 3 — Diagnostics Quality
+## Phase 2 - Baseline Validation
 
-### Targets: R11-004, R11-005, R11-006
+Command:
 
-- [ ] R11-004: Change action name from `rest.get` to `rest.get /path` in `src/lib/c64api.ts`
-- [ ] R11-005: Replace `.slice(0, 8)` with reverse-sorted newest-first rolling window (latest 20)
-- [ ] R11-006: Add sections index (Config Drift, Heat Maps, Latency, Health) at top of diagnostics dialog
+```bash
+./build --test-contract --c64u-target real --c64u-host c64u --contract-config tests/contract/config.stress.matrix.spike.json
+```
 
-Verification:
-- Collapsed action rows show method + path
-- List shows latest entries and updates live
+Expected evidence:
 
-## Phase 4 — Platform Parity: iOS HVSC
+- Healthy device at start
+- Contract artifacts under `test-results/contract/runs/RUN_ID`
+- Baseline trace and latency data captured
 
-### Targets: R11-003, R11-010
+## Phase 3 - Trace Hardening
 
-- [ ] Implement `HvscIngestionPlugin.swift` in `ios/App/App/`
-  - `readArchiveChunk`: read raw file bytes at offset from Capacitor data dir
-  - `ingestHvsc`: full 7z extraction + SQLite ingestion using SWCompression
-  - `cancelIngestion`, `getIngestionStats`, progress events via `hvscProgress`
-- [ ] Add `SWCompression` pod to `ios/App/Podfile`
-- [ ] Register plugin in `AppDelegate.swift` or equivalent
+Acceptance checks:
 
-Verification:
-- iOS HVSC download → extraction → ingestion works
-- Progress events fire correctly
+- trace.jsonl present
+- replay/manifest.json present
+- REST entries include method, URL, headers, body, latency
+- FTP entries include command, response, session ID, latency
 
-## Phase 5 — Platform Parity: Web HVSC
+## Phase 4 - Controlled Escalation
 
-### Target: R11-011
+Escalation ladder:
 
-- [ ] Show platform-specific message in `HvscControls.tsx` when HVSC is unavailable
-  - Web: "HVSC is not available in web browsers"
-  - iOS (if no plugin): handled by Phase 4
+1. Baseline spike config unchanged: concurrency 10, delay 0 ms, duration 5000 ms, count 5.
+2. If no failure, increase spikeConcurrency to 12.
+3. If no failure, increase spikeConcurrency to 14.
+4. If no failure, keep concurrency 14 and reduce failure detection tolerance only for observation, not load increase.
+5. If still no failure, add a reproducible config variant interleaving sensitive REST operations already covered by the matrix operation set.
 
-## Phase 6 — Playback Error Clarity
+Rules per step:
 
-### Target: R11-009
+- Run one step at a time.
+- Record exact config delta.
+- Run independent curl probe after the step.
+- Stop on first verified failure.
 
-- [ ] Fix trailing colon in `new Error(\`HTTP ${status}: ${statusText}\`)` in `src/lib/c64api.ts`
-  - Trim statusText; if empty use HTTP status label
+## Phase 5 - Failure Detection
 
-## Phase 7 — Documentation
+Failure definition:
 
-### Target: R11-014
+- Contract harness aborts with device-unresponsive outcome, timeout, or repeated failure.
+- Independent `curl http://c64u/v1/info` also times out or fails consistently.
 
-- [ ] Update `src/pages/DocsPage.tsx` to list diagnostics sections and deep-link paths
+Record on failure:
 
-## Phase 8 — Testing and Coverage
+- Last successful step
+- First failing step
+- First failing interaction or stage
+- Last successful health probe
+- First failing curl probe
 
-- [ ] Run `npm run test:coverage` — must reach >= 91% branch coverage
-- [ ] Run `npm run build` — must pass cleanly
-- [ ] Fix any test or lint failures
+## Phase 6 - Trace Extraction
 
-## Termination Criteria
+Artifacts to preserve:
 
-1. HVSC extraction works end-to-end on Android device (R11-001 fixed)
-2. Ingest button disabled unless extraction succeeded (R11-002 fixed)
-3. Health badge starts Idle on cold launch, transitions to Healthy after first REST success (R11-007/R11-012)
-4. Collapsed diagnostics rows show method + path (R11-004)
-5. Diagnostics list shows latest entries, not frozen 8 (R11-005)
-6. iOS HVSC fully implemented (R11-003/R11-010)
-7. Web HVSC limitation clearly explained (R11-011)
-8. Playback errors are non-ambiguous, no trailing colon (R11-009)
-9. DocsPage lists diagnostics sections and deep links (R11-014)
-10. Coverage >= 91% branch coverage
-11. Build passes cleanly
+- Full run trace
+- matrix-failure-summary.json or equivalent
+- Minimal replay manifest
+- Request tail around the first failure
+
+## Phase 7 - Replay
+
+Replay process:
+
+1. Start from a clean, healthy device state.
+2. Replay the minimal manifest.
+3. Verify the same endpoint failure occurs.
+4. Repeat once more.
+
+## Phase 8 - Validation
+
+- [ ] Failure boundary confirmed.
+- [ ] curl verification confirmed.
+- [ ] Replay run 1 confirmed.
+- [ ] Replay run 2 confirmed.
+
+## Worklog
+
+### 2026-03-24T00:00:00Z
+
+- Task started.
+- Reviewed build helper, contract harness, spike matrix config, replay engine, and instrumentation validation.
+- Identified a blocking gap: ./build did not support inheriting a supplied contract config template, so it could not honestly run against tests/contract/config.stress.matrix.spike.json.
+- Next action: patch ./build to accept --contract-config, then execute the baseline real-device run immediately.

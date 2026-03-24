@@ -20,7 +20,7 @@ describe("breakpoint stage planning", () => {
     ]);
   });
 
-  it("builds failure summaries and skips recovery only for breakpoint aborts", () => {
+  it("builds failure summaries and skips recovery when the run aborts or resets are disabled", () => {
     const stages = buildBreakpointStagePlan(buildConfig());
     const summary = createBreakpointFailureSummary({
       stage: {
@@ -56,6 +56,12 @@ describe("breakpoint stage planning", () => {
     expect(
       shouldSkipRecovery({
         config: { ...buildConfig(), stressBreakpoint: undefined, mode: "SAFE" },
+        outcome: "completed",
+      }),
+    ).toBe(true);
+    expect(
+      shouldSkipRecovery({
+        config: { ...buildConfig(), allowMachineReset: true, stressBreakpoint: undefined, mode: "SAFE" },
         outcome: "completed",
       }),
     ).toBe(false);
