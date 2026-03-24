@@ -195,3 +195,39 @@ Date: 2026-03-24
 - Observed fact: the diagnostics UI already has suitable extension seams: route-addressable panels in `GlobalDiagnosticsOverlay.tsx`, surface components in `DiagnosticsDialog.tsx`, and a playback trace snapshot in `src/pages/playFiles/playbackTraceStore.ts`.
 - Decision: keep the implementation minimally invasive by extending the existing health-check state store, adding a small reconciler/decision-state store, and wiring the new diagnostics view into the existing overlay rather than introducing a second architecture.
 - Next step: patch the health-check state model and engine first, then add reconciliation/playback observability, tests, and real-device verification evidence.
+
+## 2026-03-24T15:15:00Z - Lifecycle, reconciliation, validation, and device evidence
+
+- Implemented lifecycle-aware health-check execution in `src/lib/diagnostics/healthCheckEngine.ts` and `src/lib/diagnostics/healthCheckState.ts`.
+  - Added explicit run lifecycle states: `IDLE`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`, `TIMEOUT`.
+  - Added explicit probe lifecycle states: `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `TIMEOUT`, `CANCELLED`.
+  - Added cancellation-on-restart, stale-run timeout recovery, transition recording, and propagated timeout/abort request options into `src/lib/c64api.ts` for relevant config/memory paths.
+- Implemented thin decision-state and reconciliation layers in `src/lib/diagnostics/decisionState.ts` and `src/lib/diagnostics/diagnosticsReconciler.ts`.
+  - Added playback certainty tracking (`PLAYING`/`STOPPED`/`UNKNOWN` + confidence).
+  - Added diagnostics/config/playback reconciler status, transition history, and repair-state tracking.
+- Wired the new behavior into the app shell and diagnostics UI.
+  - `src/App.tsx`: app resume now runs diagnostics/config/playback reconcilers.
+  - `src/pages/PlayFilesPage.tsx`: playback trace now feeds the decision-state store and marks playback unobservable on unmount.
+  - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`: added decision-state deep link handling, overlay-open reconciliation, and repair wiring.
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`: added the decision-state surface and switched the health-check action from disabled-in-flight to restartable-in-flight.
+  - `src/components/diagnostics/HealthCheckDetailView.tsx`: now surfaces timeout/cancelled lifecycle states instead of only legacy outcome text.
+- Regression coverage added/updated.
+  - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: restart/cancellation and stale-run timeout recovery.
+  - `playwright/homeDiagnosticsOverlay.spec.ts`: decision-state surface reachability and repair control.
+  - Updated diagnostics overlay/dialog unit tests to match the new runtime contract and restartable health-check button behavior.
+- Validation results.
+  - `npx vitest run tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: passed.
+  - `npx playwright test playwright/homeDiagnosticsOverlay.spec.ts -g "supports health checks, analytics, export enrichment, and clear-all|opens the decision-state surface and exposes repair controls"` on a fresh Playwright server port: passed.
+  - `npm run build`: passed.
+  - `npm run lint`: passed after formatting; only warnings were in generated `android/coverage/` artifacts and did not fail the run.
+  - `npm run test:coverage`: passed after aligning diagnostics unit tests with the new QueryClient dependency and restartable button semantics.
+- Real-device verification evidence.
+  - Attached Android device confirmed: Pixel 4 serial `9B081FFAZ001WX`.
+  - Live C64 Ultimate confirmed from host: `curl http://c64u/v1/info` returned product `C64 Ultimate`, firmware `1.1.0`, FPGA `122`, core `1.49`, hostname `c64u`.
+  - Built and installed a fresh Android debug APK from the current workspace (`0.6.5-rc1`) onto the Pixel 4.
+  - On-device screenshot shows the fresh app build identifier `0.6.5-41a97` on the Home screen.
+  - Android app logs confirm live runtime traffic from the device to `http://c64u:80/v1/info` and multiple config endpoints after launch, demonstrating that the current build is executing against the live device path rather than only a stale install.
+  - A later on-device screenshot showed the connected steady state visually: `Device c64u`, firmware `1.1.0`.
+  - Opened the diagnostics overlay on the Pixel through the live app UI and captured the overlay itself on-device.
+  - The captured overlay showed the new diagnostics footer affordances, including `Decision state`, alongside the healthy status and live `C64U · c64u:80` context.
+  - Limitation: the handset pass did not end with a captured screenshot of the decision-state panel itself after tapping; that surface was validated through the new Playwright coverage while the device pass verified the live overlay entry and footer affordance presence.

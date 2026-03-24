@@ -86,7 +86,11 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
         <MetricRow label="Confidence" value={decisionState.playback.confidence} />
         <MetricRow
           label="Last update"
-          value={decisionState.playback.lastUpdatedAt ? formatDiagnosticsTimestamp(decisionState.playback.lastUpdatedAt) : "-"}
+          value={
+            decisionState.playback.lastUpdatedAt
+              ? formatDiagnosticsTimestamp(decisionState.playback.lastUpdatedAt)
+              : "-"
+          }
         />
         <MetricRow label="Reason" value={decisionState.playback.reason ?? "-"} />
       </section>
@@ -143,8 +147,13 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
             <p className="text-xs text-muted-foreground">No recent REST or FTP effects.</p>
           ) : (
             recentEffects.map(({ summary, effect }) => (
-              <div key={`${summary.correlationId}-${effect.type}-${effect.label}`} className="rounded border border-border/60 bg-muted/20 p-2 text-xs">
-                <p className="font-medium text-foreground">{effect.type === "REST" ? `${effect.method} ${effect.path}` : `${effect.operation} ${effect.path}`}</p>
+              <div
+                key={`${summary.correlationId}-${effect.type}-${effect.label}`}
+                className="rounded border border-border/60 bg-muted/20 p-2 text-xs"
+              >
+                <p className="font-medium text-foreground">
+                  {effect.type === "REST" ? `${effect.method} ${effect.path}` : `${effect.operation} ${effect.path}`}
+                </p>
                 <p className="text-muted-foreground">
                   {effect.type === "REST"
                     ? `status ${effect.status ?? "unknown"}`

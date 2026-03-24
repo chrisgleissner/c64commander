@@ -39,17 +39,20 @@ export type HealthCheckTransitionEvent = {
 const PROBE_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "CONFIG", "RASTER", "JIFFY"];
 
 const buildDefaultProbeStates = (): Record<HealthCheckProbeType, HealthCheckProbeExecutionState> =>
-  PROBE_ORDER.reduce<Record<HealthCheckProbeType, HealthCheckProbeExecutionState>>((acc, probe) => {
-    acc[probe] = {
-      state: "PENDING",
-      outcome: null,
-      startedAt: null,
-      endedAt: null,
-      durationMs: null,
-      reason: null,
-    };
-    return acc;
-  }, {} as Record<HealthCheckProbeType, HealthCheckProbeExecutionState>);
+  PROBE_ORDER.reduce<Record<HealthCheckProbeType, HealthCheckProbeExecutionState>>(
+    (acc, probe) => {
+      acc[probe] = {
+        state: "PENDING",
+        outcome: null,
+        startedAt: null,
+        endedAt: null,
+        durationMs: null,
+        reason: null,
+      };
+      return acc;
+    },
+    {} as Record<HealthCheckProbeType, HealthCheckProbeExecutionState>,
+  );
 
 export type HealthCheckStateSnapshot = {
   running: boolean;

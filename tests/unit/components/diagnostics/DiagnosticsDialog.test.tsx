@@ -480,7 +480,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("health-check-probe-jiffy")).toHaveTextContent("Pending");
 
     fireEvent.click(screen.getByTestId("run-health-check"));
-    expect(onRunHealthCheck).not.toHaveBeenCalled();
+    expect(onRunHealthCheck).toHaveBeenCalledTimes(1);
   });
 
   it("opens the latest health detail when the run button is pressed", () => {

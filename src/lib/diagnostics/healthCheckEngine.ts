@@ -127,7 +127,11 @@ const isTimeoutLike = (error: unknown) => {
 
 const buildProbeStates = () => resetHealthCheckProbeStates();
 
-const setRunLifecycle = (nextState: HealthCheckRunLifecycle, reason: string | null, extra: Record<string, unknown> = {}) => {
+const setRunLifecycle = (
+  nextState: HealthCheckRunLifecycle,
+  reason: string | null,
+  extra: Record<string, unknown> = {},
+) => {
   const snapshot = getHealthCheckStateSnapshot();
   if (snapshot.runState !== nextState) {
     appendHealthCheckTransition({
@@ -280,7 +284,9 @@ const parseConfigNumericValue = (itemData: unknown): number | null => {
   return null;
 };
 
-const probeRest = async (signal: AbortSignal): Promise<{
+const probeRest = async (
+  signal: AbortSignal,
+): Promise<{
   record: HealthCheckProbeRecord;
   deviceInfo: HealthCheckRunResult["deviceInfo"];
 }> => {
@@ -328,7 +334,9 @@ const probeRest = async (signal: AbortSignal): Promise<{
   }
 };
 
-const probeJiffy = async (signal: AbortSignal): Promise<{
+const probeJiffy = async (
+  signal: AbortSignal,
+): Promise<{
   record: HealthCheckProbeRecord;
   uptimeSeconds: number | null;
 }> => {
@@ -340,7 +348,13 @@ const probeJiffy = async (signal: AbortSignal): Promise<{
     );
     if (!bytes || bytes.length !== 3) {
       return {
-        record: makeRecord("JIFFY", "Fail", Date.now() - startMs, `Expected 3 bytes, got ${bytes?.length ?? 0}`, startMs),
+        record: makeRecord(
+          "JIFFY",
+          "Fail",
+          Date.now() - startMs,
+          `Expected 3 bytes, got ${bytes?.length ?? 0}`,
+          startMs,
+        ),
         uptimeSeconds: null,
       };
     }
@@ -431,9 +445,7 @@ const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
         __c64uIntent: "system",
         __c64uBypassCache: true,
       });
-      const readBackValue = parseConfigNumericValue(
-        extractConfigItemData(readBackResp, target.category, target.item),
-      );
+      const readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
 
       await api.setConfigValue(target.category, target.item, currentValue, {
         signal,
@@ -574,13 +586,7 @@ const runProbe = async <T>(
     const reason = error instanceof Error ? error.message : String(error ?? `${probe} failed`);
     const timeout = isTimeoutLike(error);
     const cancelled = isAbortLike(error) || !isCurrentRun(run.token);
-    const record = makeRecord(
-      probe,
-      timeout ? "Fail" : "Skipped",
-      timeout ? timeoutMs : null,
-      reason,
-      Date.now(),
-    );
+    const record = makeRecord(probe, timeout ? "Fail" : "Skipped", timeout ? timeoutMs : null, reason, Date.now());
     const lifecycle: ProbeExecution["lifecycle"] = timeout ? "TIMEOUT" : cancelled ? "CANCELLED" : "FAILED";
     const endedAt = new Date().toISOString();
     setProbeLifecycle(
@@ -638,7 +644,10 @@ const buildRunResult = (args: {
   const contributors = {
     App: {
       state:
-        args.jiffy.lifecycle === "FAILED" || args.config.lifecycle === "FAILED" || args.jiffy.lifecycle === "TIMEOUT" || args.config.lifecycle === "TIMEOUT"
+        args.jiffy.lifecycle === "FAILED" ||
+        args.config.lifecycle === "FAILED" ||
+        args.jiffy.lifecycle === "TIMEOUT" ||
+        args.config.lifecycle === "TIMEOUT"
           ? ("Degraded" as const)
           : args.jiffy.lifecycle === "CANCELLED" && args.config.lifecycle === "CANCELLED"
             ? ("Idle" as const)
@@ -700,11 +709,31 @@ const recordHealthHistory = (result: HealthCheckRunResult) => {
     overallHealth: result.overallHealth,
     durationMs: result.totalDurationMs,
     probes: {
-      rest: { outcome: result.probes.REST.outcome, durationMs: result.probes.REST.durationMs, reason: result.probes.REST.reason },
-      jiffy: { outcome: result.probes.JIFFY.outcome, durationMs: result.probes.JIFFY.durationMs, reason: result.probes.JIFFY.reason },
-      raster: { outcome: result.probes.RASTER.outcome, durationMs: result.probes.RASTER.durationMs, reason: result.probes.RASTER.reason },
-      config: { outcome: result.probes.CONFIG.outcome, durationMs: result.probes.CONFIG.durationMs, reason: result.probes.CONFIG.reason },
-      ftp: { outcome: result.probes.FTP.outcome, durationMs: result.probes.FTP.durationMs, reason: result.probes.FTP.reason },
+      rest: {
+        outcome: result.probes.REST.outcome,
+        durationMs: result.probes.REST.durationMs,
+        reason: result.probes.REST.reason,
+      },
+      jiffy: {
+        outcome: result.probes.JIFFY.outcome,
+        durationMs: result.probes.JIFFY.durationMs,
+        reason: result.probes.JIFFY.reason,
+      },
+      raster: {
+        outcome: result.probes.RASTER.outcome,
+        durationMs: result.probes.RASTER.durationMs,
+        reason: result.probes.RASTER.reason,
+      },
+      config: {
+        outcome: result.probes.CONFIG.outcome,
+        durationMs: result.probes.CONFIG.durationMs,
+        reason: result.probes.CONFIG.reason,
+      },
+      ftp: {
+        outcome: result.probes.FTP.outcome,
+        durationMs: result.probes.FTP.durationMs,
+        reason: result.probes.FTP.reason,
+      },
     },
     latency: result.latency,
   });
@@ -768,46 +797,71 @@ export const runHealthCheck = async (
   try {
     addLog("info", "Health check started", { runId });
 
-    const rest = await runProbe(run, "REST", (signal) => probeRest(signal), ({ record, deviceInfo }) => ({
-      record,
-      lifecycle: lifecycleFromRecord(record.outcome),
-      deviceInfo,
-    }));
+    const rest = await runProbe(
+      run,
+      "REST",
+      (signal) => probeRest(signal),
+      ({ record, deviceInfo }) => ({
+        record,
+        lifecycle: lifecycleFromRecord(record.outcome),
+        deviceInfo,
+      }),
+    );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), REST: rest.record });
 
     const restFailed = rest.lifecycle === "FAILED" || rest.lifecycle === "TIMEOUT";
 
     const ftp = restFailed
       ? setSkippedProbe("FTP", "Skipped: REST probe failed")
-      : await runProbe(run, "FTP", async () => probeFtp(), (record) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-        }));
+      : await runProbe(
+          run,
+          "FTP",
+          async () => probeFtp(),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), FTP: ftp.record });
 
     const config = restFailed
       ? setSkippedProbe("CONFIG", "Skipped: REST probe failed")
-      : await runProbe(run, "CONFIG", (signal) => probeConfig(signal), (record) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-        }));
+      : await runProbe(
+          run,
+          "CONFIG",
+          (signal) => probeConfig(signal),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), CONFIG: config.record });
 
     const raster = restFailed
       ? setSkippedProbe("RASTER", "Skipped: REST probe failed")
-      : await runProbe(run, "RASTER", (signal) => probeRaster(signal), (record) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-        }));
+      : await runProbe(
+          run,
+          "RASTER",
+          (signal) => probeRaster(signal),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), RASTER: raster.record });
 
     const jiffy = restFailed
       ? setSkippedProbe("JIFFY", "Skipped: REST probe failed")
-      : await runProbe(run, "JIFFY", (signal) => probeJiffy(signal), ({ record, uptimeSeconds }) => ({
-          record,
-          lifecycle: lifecycleFromRecord(record.outcome),
-          uptimeSeconds,
-        }));
+      : await runProbe(
+          run,
+          "JIFFY",
+          (signal) => probeJiffy(signal),
+          ({ record, uptimeSeconds }) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+            uptimeSeconds,
+          }),
+        );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), JIFFY: jiffy.record });
 
     if (!isCurrentRun(token)) {
@@ -832,12 +886,13 @@ export const runHealthCheck = async (
 
     recordHealthHistory(result);
 
-    const terminalRunState: HealthCheckRunLifecycle =
-      [rest, ftp, config, raster, jiffy].some((probe) => probe.lifecycle === "TIMEOUT")
-        ? "TIMEOUT"
-        : [rest, ftp, config, raster, jiffy].some((probe) => probe.lifecycle === "FAILED")
-          ? "FAILED"
-          : "COMPLETED";
+    const terminalRunState: HealthCheckRunLifecycle = [rest, ftp, config, raster, jiffy].some(
+      (probe) => probe.lifecycle === "TIMEOUT",
+    )
+      ? "TIMEOUT"
+      : [rest, ftp, config, raster, jiffy].some((probe) => probe.lifecycle === "FAILED")
+        ? "FAILED"
+        : "COMPLETED";
 
     addLog("info", "Health check completed", {
       runId,
@@ -878,4 +933,5 @@ export const runHealthCheck = async (
   }
 };
 
-export const isHealthCheckRunning = (): boolean => activeRun !== null && getHealthCheckStateSnapshot().runState === "RUNNING";
+export const isHealthCheckRunning = (): boolean =>
+  activeRun !== null && getHealthCheckStateSnapshot().runState === "RUNNING";

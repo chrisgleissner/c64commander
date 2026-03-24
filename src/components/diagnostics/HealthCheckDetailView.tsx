@@ -96,7 +96,7 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
               const reasonText =
                 liveStatus === "running" || liveStatus === "pending"
                   ? ""
-                  : executionState?.reason ?? probe?.reason ?? "OK";
+                  : (executionState?.reason ?? probe?.reason ?? "OK");
               const isDetailRow = reasonText.length > REASON_COMPACT_LIMIT;
               const durationLabel =
                 liveStatus === "running" || liveStatus === "pending"
@@ -105,21 +105,23 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                     ? `${executionState.durationMs}ms`
                     : probe?.durationMs != null
                       ? `${probe.durationMs}ms`
-                    : "—";
+                      : "—";
               const finalStatusLabel =
                 executionState?.state === "SUCCESS"
-                  ? probe?.outcome ?? "Success"
+                  ? (probe?.outcome ?? "Success")
                   : executionState?.state === "FAILED"
-                    ? probe?.outcome ?? "Fail"
+                    ? (probe?.outcome ?? "Fail")
                     : executionState?.state === "TIMEOUT"
                       ? "Timeout"
                       : executionState?.state === "CANCELLED"
                         ? "Cancelled"
-                        : probe?.outcome ?? "—";
+                        : (probe?.outcome ?? "—");
               const finalStatusClass =
                 executionState?.state != null
-                  ? outcomeColorClass[executionState.state] ?? outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground"
-                  : outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground";
+                  ? (outcomeColorClass[executionState.state] ??
+                    outcomeColorClass[probe?.outcome ?? ""] ??
+                    "text-foreground")
+                  : (outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground");
 
               return (
                 <div

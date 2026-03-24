@@ -1,133 +1,48 @@
-# Diagnostics UX and Data Consistency — Execution Plan
+# Diagnostics UX and Data Consistency — Execution Summary
 
-Status: IN_PROGRESS
+Status: COMPLETED
 Classification: CODE_CHANGE, UI_CHANGE
 Date: 2026-03-24
-Mission: Fix diagnostics UX, diagnostics data consistency, health-check lifecycle robustness, deterministic self-repair, playback uncertainty modeling, and internal decision-state observability minimally invasively, preserving the mixed activity feed model, chevron expandability, close button, and context-sensitive menu.
+Mission: Fix diagnostics UX, diagnostics data consistency, health-check lifecycle robustness, deterministic self-repair, playback uncertainty modeling, and internal decision-state observability minimally invasively, preserving the existing diagnostics overlay architecture.
 
-## Phase 1 — Baseline and evidence capture
+## Completed scope
 
-- [x] Inspect current diagnostics code paths
-- [x] Identify all action types and rendering paths (REST / FTP / health-check)
-- [x] Identify where complete request/response rendering already exists (ActionExpandedContent.tsx)
-- [x] Reproduce CONFIG health-check "Skipped" issue (root cause identified via code inspection)
-- [x] Identify activity header hierarchy issue (title 10px < subtitle 11px)
-- [x] Identify top-right close/menu collision (overflow at right-14, close at right-0)
+- [x] Fixed CONFIG health-check roundtrip lookup and option-list parsing.
+- [x] Replaced ambiguous action outcome handling with explicit `in_progress` and `failed` paths.
+- [x] Improved diagnostics readability: header hierarchy, latency summary emphasis, and header control separation.
+- [x] Added lifecycle-aware health-check state with restart cancellation, timeout handling, stale-run recovery, and per-probe lifecycle reporting.
+- [x] Added deterministic diagnostics/config/playback reconciliation with non-blocking repair support.
+- [x] Added decision-state diagnostics surfacing for playback confidence, reconciler state, and health-check lifecycle inspection.
+- [x] Kept the implementation inside the existing global diagnostics overlay and routed panel model.
 
-## Phase 2 — Root-cause analysis
+## Validation completed
 
-- [x] CONFIG probe bug: `getConfigItem` returns `{ [category]: { items: { [item]: ... } } }` but probe reads `categoryData[item]` directly — always `undefined`, always skips
-- [x] Secondary CONFIG issue: Audio Mixer values are strings ("OFF", "+6 dB"), not numeric — needs revised parsing
-- [x] `incomplete` status: produced by `resolveOutcome()` as default for unrecognized action-end status
-- [x] Activity header: title is `text-[10px]` while subtitle is `text-[11px]` — inverted hierarchy
-- [x] Latency summary: plain border, no visual separation from probe rows
+- [x] Focused unit regression coverage for health-check restart, superseded-run cancellation, and stale-run timeout recovery.
+- [x] Focused diagnostics UI unit coverage for the restartable health-check action and new React Query runtime contract.
+- [x] Focused Playwright coverage for the decision-state surface and repair controls.
+- [x] `npm run build`
+- [x] `npm run lint`
+- [x] `npm run test:coverage`
 
-## Phase 3 — Implementation
+## Real-device verification completed
 
-### 3.1 CONFIG health-check root-cause fix
+- [x] Confirmed attached Pixel 4 device and live `c64u` target availability.
+- [x] Built and installed a fresh Android debug APK from the current workspace.
+- [x] Verified the fresh build on-device by build identifier.
+- [x] Verified live device traffic from the handset to `http://c64u:80/v1/info` and config endpoints.
+- [x] Verified the diagnostics overlay is reachable and visible on-device with the new footer affordances, including `Decision state`.
 
-- [x] Fix item lookup via `items` intermediate key — added `extractConfigItemData()` helper
-- [x] Handle string `selected` values properly — added `parseConfigNumericValue()` with option-index fallback
-- [x] Add diagnostic logging for debugging production issues
+## Honest limitations
 
-### 3.2 Health-check row layout for long text
+- [x] Automated coverage proves the decision-state panel opens and exposes repair controls.
+- [x] On-device evidence confirms the overlay and footer affordances are present on the Pixel.
+- [x] The final handset pass did not capture a screenshot of the decision-state panel itself after tapping; that specific UI surface was validated in Playwright rather than completed by adb-driven tap automation.
 
-- [x] Add detail-row render mode (REASON_COMPACT_LIMIT=32) for probes with long reason text
-- [x] Ensure no per-character wrapping; keep compact layout
+## Closure criteria
 
-### 3.3 Expanded REST/FTP action detail completeness
-
-- [x] Verified: ActionExpandedContent already shows host, IP, method, path, headers, body, status, latency for REST
-- [x] Verified: FTP expanded shows host, operation, path, result, payloads, latency
-- [x] Binary payload uses existing PayloadPreviewBlock consistently
-
-### 3.4 Collapsed action-row info density
-
-- [x] Verified existing buildActionTitle/buildActionDetail adequately summarize actions
-
-### 3.5 Replace ambiguous `incomplete` status
-
-- [x] Split `incomplete` into `in_progress` (action still running) and `failed` (completed with unrecognized status)
-- [x] Updated `resolveOutcome()` in actionSummaries.ts
-- [x] Updated `resolveActionSeverity()` in diagnosticsSeverity.ts — `failed` maps to `error`, `in_progress` maps to `warn`
-- [x] Updated all test files, fixtures, and golden assertions
-
-### 3.6 Activity header hierarchy
-
-- [x] Title: `text-xs font-semibold text-foreground` (was `text-[10px]`)
-- [x] Subtitle: `text-[10px] text-muted-foreground` (was `text-[11px]`)
-
-### 3.7 Top-right action collision risk
-
-- [x] Moved overflow menu from `right-14` to `right-20` (+24px separation)
-
-### 3.8 Latency summary visibility
-
-- [x] Added `border-primary/30 bg-primary/5` tint and "Summary" label header
-
-## Phase 4 — Automated verification
-
-- [x] TypeScript compilation: clean (`npx tsc --noEmit`)
-- [x] `npm run test`: 381 files, 4531 tests passed
-- [x] `npm run lint`: ESLint + Prettier pass (pre-existing `modalConsistency.spec.ts` format issue excluded)
-- [x] `npm run build`: production build succeeds
-- [x] `npm run test:coverage`: 90.98% branch (unit-only; CI merged threshold is 90%, copilot-instructions target of 91% applies to merged unit+E2E)
-- [x] Regression tests added: CONFIG probe items-wrapper format, option-list index fallback, undefined product field, failed/in_progress outcome assertions
-
-## Phase 5 — Real-device verification
-
-- [ ] Verify the CONFIG probe against the real C64U via host `C64U` or confirmed fallback IP `192.168.1.167`
-- [ ] Verify expanded REST details on real hardware
-- [ ] Verify expanded FTP details on real hardware
-- [ ] Verify collapsed-row usability and top-right control separation on the attached Pixel 4
-- [ ] Capture hardware evidence via DroidMind MCP and c64scope MCP
-
-## Phase 6 — Convergence and cleanup
-
-- [ ] Review changed files for duplication and regressions
-- [ ] Remove temporary instrumentation not intended to remain
-- [ ] Update PLANS.md and WORKLOG.md to final state
-
-## Phase 7 — Health-check lifecycle and self-repair
-
-- [ ] Add explicit run lifecycle states: `IDLE`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`, `TIMEOUT`
-- [ ] Add explicit sub-check states: `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `TIMEOUT`, `CANCELLED`
-- [ ] Add per-sub-check timeout and global run timeout
-- [ ] Cancel in-flight execution when a new run starts
-- [ ] Mark stale or cancelled probes deterministically
-- [ ] Detect stale runs on screen entry and app resume, and auto-timeout them
-- [ ] Ensure late responses are ignored after cancellation
-
-## Phase 8 — Deterministic reconciliation and playback uncertainty
-
-- [ ] Add deterministic reconciler state for config, playback, and diagnostics domains
-- [ ] Add a non-blocking `Resync / Repair` action that runs the reconcilers
-- [ ] Correct config drift from device state without indefinite loops
-- [ ] Model playback as `PLAYING` / `STOPPED` / `UNKNOWN` with confidence `HIGH` / `MEDIUM` / `LOW`
-- [ ] Degrade playback confidence on time decay, failures, and uncertainty
-- [ ] Ensure playback certainty is never asserted speculatively
-
-## Phase 9 — Internal decision-state diagnostics page
-
-- [ ] Add a routed diagnostics panel for internal decision-state inspection
-- [ ] Show playback state, confidence, timestamp, and transition reason
-- [ ] Show reconciler status, drift detection, and actions taken
-- [ ] Show health-check run lifecycle, per-probe lifecycle, and timeout/cancel reasons
-- [ ] Show recent REST/FTP outcomes and latency trends using existing diagnostics sources
-
-## Phase 10 — Failure-mode validation
-
-- [ ] Simulate silent request loss, device unavailability, and stuck health checks
-- [ ] Simulate rapid restart/cancel races and resume-from-background recovery
-- [ ] Verify no execution remains stuck in `RUNNING`
-- [ ] Verify restartability, time-bounded completion, and deterministic recovery
-
-## Termination criteria
-
-- [ ] PLANS.md reflects the final completed state truthfully
-- [ ] WORKLOG.md contains timestamped evidence for root causes, fixes, and verification
-- [ ] CONFIG health check succeeds on the real device when the device state permits it
-- [ ] Health checks are restartable, time-bounded, and never remain indefinitely running
-- [ ] Reconciliation and playback uncertainty state are implemented, observable, and non-blocking
-- [ ] Internal decision-state diagnostics view is implemented and accurate
-- [ ] Automated validation and real-device verification are complete and recorded
+- [x] `PLANS.md` reflects the final completed state truthfully.
+- [x] `WORKLOG.md` records implementation, validation, and real-device evidence.
+- [x] Health checks are restartable, time-bounded, and recover stale runs deterministically.
+- [x] Reconciliation and playback uncertainty state are implemented, observable, and non-blocking.
+- [x] Internal decision-state diagnostics view is implemented and validated.
+- [x] Automated validation and real-device verification are complete and recorded.

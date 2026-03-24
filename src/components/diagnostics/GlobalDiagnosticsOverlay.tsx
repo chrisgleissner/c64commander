@@ -34,11 +34,7 @@ import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { getConfiguredHost, saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 import { runHealthCheck } from "@/lib/diagnostics/healthCheckEngine";
-import {
-  runDiagnosticsReconciler,
-  runPlaybackReconciler,
-  runRepair,
-} from "@/lib/diagnostics/diagnosticsReconciler";
+import { runDiagnosticsReconciler, runPlaybackReconciler, runRepair } from "@/lib/diagnostics/diagnosticsReconciler";
 import { clearLatencySamples, getAllLatencySamples } from "@/lib/diagnostics/latencyTracker";
 import { clearHealthHistory, getHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { recordRecentTarget } from "@/lib/diagnostics/recentTargets";

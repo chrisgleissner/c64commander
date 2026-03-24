@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +92,12 @@ vi.mock("@/lib/diagnostics/diagnosticsExport", () => ({
   shareDiagnosticsZip: vi.fn(),
 }));
 
+vi.mock("@/lib/diagnostics/diagnosticsReconciler", () => ({
+  runDiagnosticsReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
+  runPlaybackReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
+  runRepair: vi.fn(async () => undefined),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsActivity", () => ({
   resetDiagnosticsActivity: vi.fn(),
 }));
@@ -121,7 +128,7 @@ vi.mock("@/hooks/useHealthState", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
-  subscribeDiagnosticsSuppression: () => () => {},
+  subscribeDiagnosticsSuppression: () => () => { },
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
@@ -143,14 +150,24 @@ vi.mock("@/components/diagnostics/ActionSummaryListItem", () => ({
   ),
 }));
 
-const renderOverlay = (initialPath = "/") =>
-  render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route path="*" element={<GlobalDiagnosticsOverlay />} />
-      </Routes>
-    </MemoryRouter>,
+const renderOverlay = (initialPath = "/") => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>
+          <Route path="*" element={<GlobalDiagnosticsOverlay />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
+};
 
 const expandDiagnosticsHeader = () => {
   fireEvent.click(screen.getByTestId("diagnostics-header-toggle"));
@@ -304,9 +321,9 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("run-health-check")).toHaveTextContent("Running health check");
+      expect(screen.getByTestId("run-health-check")).toHaveTextContent("Restart health check");
     });
-    expect(screen.getByTestId("run-health-check")).toBeDisabled();
+    expect(screen.getByTestId("run-health-check")).toBeEnabled();
   });
 
   it("ignores runtime diagnostics open requests without a preset", async () => {

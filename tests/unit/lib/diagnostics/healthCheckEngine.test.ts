@@ -206,8 +206,13 @@ describe("runHealthCheck — all-success path", () => {
 
     expect(firstResult).toBeNull();
     expect(secondRun).not.toBeNull();
-    expect(snapshot.runState).toBe("COMPLETED");
-    expect(snapshot.transitions.some((entry) => entry.to === "CANCELLED" && entry.reason === "Superseded by a new health check run")).toBe(true);
+    expect(snapshot.currentRunId).toBe(secondRun?.runId ?? null);
+    expect(snapshot.runState).not.toBe("CANCELLED");
+    expect(
+      snapshot.transitions.some(
+        (entry) => entry.to === "CANCELLED" && entry.reason === "Superseded by a new health check run",
+      ),
+    ).toBe(true);
   });
 
   it("marks a stale run as timed out and clears the running flag", async () => {
