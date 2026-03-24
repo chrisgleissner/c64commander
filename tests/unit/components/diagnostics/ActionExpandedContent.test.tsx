@@ -1,0 +1,143 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { ActionExpandedContent } from "@/components/diagnostics/ActionExpandedContent";
+import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
+
+const richSummary: ActionSummary = {
+  correlationId: "corr-1",
+  actionName: "Refresh diagnostics",
+  origin: "user",
+  originalOrigin: "user",
+  trigger: "tap",
+  startTimestamp: "2025-01-01T00:00:00.000Z",
+  endTimestamp: "2025-01-01T00:00:01.000Z",
+  durationMs: 1000,
+  outcome: "error",
+  errorMessage: "Action failed",
+  startRelativeMs: 0,
+  effects: [
+    {
+      type: "REST",
+      label: "Read info",
+      method: "GET",
+      protocol: null,
+      hostname: null,
+      port: null,
+      path: "/v1/info",
+      query: null,
+      normalizedPath: null,
+      target: null,
+      product: "C64U",
+      status: 200,
+      durationMs: 45,
+      requestHeaders: { accept: "application/json" },
+      requestBody: { probe: true },
+      requestPayloadPreview: {
+        byteCount: 8,
+        previewByteCount: 4,
+        hex: "dead",
+        ascii: "test",
+        truncated: true,
+      },
+      responseHeaders: { "content-type": "application/json" },
+      responseBody: { ok: true },
+      responsePayloadPreview: {
+        byteCount: 6,
+        previewByteCount: 6,
+        hex: "beef",
+        ascii: "reply",
+        truncated: false,
+      },
+      error: "Transient HTTP error",
+    },
+    {
+      type: "FTP",
+      label: "List disk",
+      operation: "LIST",
+      command: null,
+      hostname: null,
+      port: null,
+      path: "/Usb0",
+      target: null,
+      result: null,
+      requestPayload: { path: "/Usb0" },
+      requestPayloadPreview: {
+        byteCount: 5,
+        previewByteCount: 5,
+        hex: "cafe",
+        ascii: "disk",
+        truncated: false,
+      },
+      responsePayload: { entries: [] },
+      responsePayloadPreview: {
+        byteCount: 7,
+        previewByteCount: 7,
+        hex: "f00d",
+        ascii: "result",
+        truncated: false,
+      },
+      error: "FTP timeout",
+    },
+    {
+      type: "ERROR",
+      label: "Error",
+      message: "Unexpected diagnostics exception",
+    },
+  ],
+};
+
+describe("ActionExpandedContent", () => {
+  it("renders trigger, REST, FTP, and error details when they are present", () => {
+    render(<ActionExpandedContent summary={richSummary} />);
+
+    expect(screen.getByText(/origin:/)).toBeInTheDocument();
+    expect(screen.getByTestId("action-trigger-corr-1")).toHaveTextContent("trigger:");
+    expect(screen.getByText("error: Action failed")).toBeInTheDocument();
+
+    expect(screen.getByTestId("action-rest-effect-corr-1-0")).toHaveTextContent("GET /v1/info");
+    expect(screen.getByText("Request headers")).toBeInTheDocument();
+    expect(screen.getByText("Request payload")).toBeInTheDocument();
+    expect(screen.getByText("Request preview")).toBeInTheDocument();
+    expect(screen.getByText("Response headers")).toBeInTheDocument();
+    expect(screen.getByText("Response payload")).toBeInTheDocument();
+    expect(screen.getByText("Response preview")).toBeInTheDocument();
+    expect(screen.getByText("error: Transient HTTP error")).toBeInTheDocument();
+
+    expect(screen.getByTestId("action-ftp-effect-corr-1-0")).toHaveTextContent("LIST /Usb0");
+    expect(screen.getByText("result: unknown")).toBeInTheDocument();
+    expect(screen.getByText("error: FTP timeout")).toBeInTheDocument();
+    expect(screen.getByText("Unexpected diagnostics exception")).toBeInTheDocument();
+  });
+
+  it("omits optional sections when the summary has no trigger or effects", () => {
+    render(
+      <ActionExpandedContent
+        summary={{
+          correlationId: "corr-2",
+          actionName: "Idle action",
+          origin: "unknown",
+          startTimestamp: null,
+          endTimestamp: null,
+          durationMs: null,
+          outcome: "success",
+          startRelativeMs: 0,
+          effects: [],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("REST")).not.toBeInTheDocument();
+    expect(screen.queryByText("FTP")).not.toBeInTheDocument();
+    expect(screen.queryByText("Errors")).not.toBeInTheDocument();
+    expect(screen.queryByText(/trigger:/)).not.toBeInTheDocument();
+  });
+});
