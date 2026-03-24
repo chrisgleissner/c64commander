@@ -9,8 +9,8 @@ Read required documents:
 
 - `doc/architecture.md` — React+Vite+Capacitor app, REST+FTP to C64U, TanStack Query
 - `doc/c64/c64u-openapi.yaml` — REST API spec, X-Password auth
-- `doc/c64/telnet/telnet-spec.md` — Normative telnet spec (contains F-key mapping errors, see below)
-- `doc/c64/telnet/telnet-action-walkthrough.md` — Captured telnet screens
+- `doc/c64/telnet/c64u-telnet-spec.md` — Normative telnet spec (contains F-key mapping errors, see below)
+- `doc/c64/telnet/c64u-telnet-action-walkthrough.md` — Captured telnet screens
 
 Key: Telnet-only actions include Power Cycle, Reboot (Clear Memory), Save C64/REU Memory, IEC controls, Printer controls, Config file ops, Debug log ops.
 

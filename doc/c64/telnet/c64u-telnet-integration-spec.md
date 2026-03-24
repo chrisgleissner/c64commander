@@ -89,7 +89,7 @@ Can Telnet be interacted with independently of FTP and REST, or must all protoco
 **Action menu key**: On Ultimate 64 devices, the action menu is opened with **F5**, not F1. F1 is Page Up. Confirmed from firmware source: `userinterface.cc:615` — `case KEY_F5: c = KEY_TASKS; break;`. On C64 Ultimate devices, F1 opens the action menu directly. The client must detect the device type and use the correct key.
 
 | Key | VT100 Sequence | Firmware Internal Code          | Purpose                          |
-|-----|----------------|---------------------------------|----------------------------------|
+| --- | -------------- | ------------------------------- | -------------------------------- |
 | F6  | `\e[17~`       | `KEY_F6` → `KEY_SEARCH` (0x1FD) | **Open CommoServe / Assembly64** |
 
 F6 opens the CommoServe / Assembly64 online content search. This key mapping is consistent across both C64U and U64 devices. See section 10b for the full CommoServe integration design.
@@ -328,14 +328,14 @@ interface FormField {
 
 The parser classifies the screen based on these heuristics:
 
-| Screen Type      | Detection Signal                                                       |
-|------------------|------------------------------------------------------------------------|
-| `file_browser`   | No overlays; status bar visible at bottom                              |
-| `action_menu`    | Bordered menu overlay with category labels (Power & Reset, etc.)       |
-| `search_form`    | 40-column modal with title containing "File Search" or "Query Form"    |
-| `search_results` | 40-column modal with item list (no field labels)                       |
-| `file_entries`   | 40-column modal with filename + extension + size columns               |
-| `unknown`        | None of the above patterns match                                       |
+| Screen Type      | Detection Signal                                                    |
+| ---------------- | ------------------------------------------------------------------- |
+| `file_browser`   | No overlays; status bar visible at bottom                           |
+| `action_menu`    | Bordered menu overlay with category labels (Power & Reset, etc.)    |
+| `search_form`    | 40-column modal with title containing "File Search" or "Query Form" |
+| `search_results` | 40-column modal with item list (no field labels)                    |
+| `file_entries`   | 40-column modal with filename + extension + size columns            |
+| `unknown`        | None of the above patterns match                                    |
 
 ### 7.4 Form Field Parsing
 
@@ -519,16 +519,16 @@ interface CommoServeFileEntry {
 
 #### 8.6.6 CommoServe Error Recovery
 
-| Condition                              | Recovery                                                 |
-| -------------------------------------- | -------------------------------------------------------- |
-| Search form not visible after F6       | Retry F6 once; if popup detected, report error and close |
-| Network error popup                    | Close popup (ENTER), fail with descriptive network error |
-| Empty results (`< No Items >`)         | Return empty result set (not an error)                   |
-| Dropdown option not found              | Fail with error listing available options                |
-| File entry not found                   | Fail with error listing available files                  |
-| File action not found in context menu  | Fail with error listing available actions                |
-| Timeout waiting for results            | Fail after 15 seconds (network query can be slow)        |
-| Connection lost during search          | Reconnect and retry from beginning                       |
+| Condition                             | Recovery                                                 |
+| ------------------------------------- | -------------------------------------------------------- |
+| Search form not visible after F6      | Retry F6 once; if popup detected, report error and close |
+| Network error popup                   | Close popup (ENTER), fail with descriptive network error |
+| Empty results (`< No Items >`)        | Return empty result set (not an error)                   |
+| Dropdown option not found             | Fail with error listing available options                |
+| File entry not found                  | Fail with error listing available files                  |
+| File action not found in context menu | Fail with error listing available actions                |
+| Timeout waiting for results           | Fail after 15 seconds (network query can be slow)        |
+| Connection lost during search         | Reconnect and retry from beginning                       |
 
 #### 8.6.7 CommoServe Timeout Budget
 
@@ -585,7 +585,7 @@ const DEFAULT_MENU_FIXTURE: MenuFixture = {
         { label: "Save REU Memory", enabled: true },
       ],
     },
-    // ... remaining categories from telnet-spec.md section 5.1
+    // ... remaining categories from c64u-telnet-spec.md section 5.1
   ],
 };
 
@@ -757,17 +757,17 @@ This is fundamentally different from the action menu (section 10): instead of na
 
 ### 10b.2 Firmware Architecture (Evidence)
 
-| Component                    | Source                                                      | Role                                                                  |
-| ---------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
-| `AssemblyInGui`              | `assembly_search.h:384-442`                                 | Registers as `ObjectWithMenu`, handles F6 via `S_OpenSearch()`        |
-| `AssemblySearch`             | `assembly_search.h:40-51`, `assembly_search.cc:37-56`       | TreeBrowser subclass; manages search UI lifecycle                     |
-| `AssemblySearchForm`         | `assembly_search.h:13-26`, `assembly_search.cc:190-321`     | Form state: field navigation, text edit, dropdown, submit             |
-| `AssemblyResultsView`        | `assembly_search.h:28-38`, `assembly_search.cc:323-355`     | Results list navigation; delegates file browsing to TreeBrowser       |
-| `BrowsableQueryField`        | `assembly_search.h:53-206`                                  | Individual form field with text or dropdown behavior                  |
-| `BrowsableQueryResult`       | `assembly_search.h:281-356`                                 | Single search result with path to `/a64/{id}/{category}/`             |
-| `BrowsableDirEntryAssembly`  | `assembly_entry.h:9-83`                                     | File entry wrapping standard `BrowsableDirEntry` for FileType actions |
-| `Assembly`                   | `assembly.h:18-48`                                          | Network client: `get_presets()`, `send_query()`, `request_entries()`  |
-| `FileSystemA64`              | `filesystem_a64.cc:23-121`                                  | Virtual filesystem; downloads files to `/Temp/` cache on demand       |
+| Component                   | Source                                                  | Role                                                                  |
+| --------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `AssemblyInGui`             | `assembly_search.h:384-442`                             | Registers as `ObjectWithMenu`, handles F6 via `S_OpenSearch()`        |
+| `AssemblySearch`            | `assembly_search.h:40-51`, `assembly_search.cc:37-56`   | TreeBrowser subclass; manages search UI lifecycle                     |
+| `AssemblySearchForm`        | `assembly_search.h:13-26`, `assembly_search.cc:190-321` | Form state: field navigation, text edit, dropdown, submit             |
+| `AssemblyResultsView`       | `assembly_search.h:28-38`, `assembly_search.cc:323-355` | Results list navigation; delegates file browsing to TreeBrowser       |
+| `BrowsableQueryField`       | `assembly_search.h:53-206`                              | Individual form field with text or dropdown behavior                  |
+| `BrowsableQueryResult`      | `assembly_search.h:281-356`                             | Single search result with path to `/a64/{id}/{category}/`             |
+| `BrowsableDirEntryAssembly` | `assembly_entry.h:9-83`                                 | File entry wrapping standard `BrowsableDirEntry` for FileType actions |
+| `Assembly`                  | `assembly.h:18-48`                                      | Network client: `get_presets()`, `send_query()`, `request_entries()`  |
+| `FileSystemA64`             | `filesystem_a64.cc:23-121`                              | Virtual filesystem; downloads files to `/Temp/` cache on demand       |
 
 ### 10b.3 Key Firmware Behaviors
 
@@ -794,10 +794,7 @@ interface CommoServeExecutor {
   getEntries(resultIndex: number): Promise<CommoServeFileEntry[]>;
 
   /** Execute a file action (e.g., "Run Disk") on a specific file entry */
-  executeFileAction(
-    fileIndex: number,
-    action: string
-  ): Promise<void>;
+  executeFileAction(fileIndex: number, action: string): Promise<void>;
 
   /** Close the CommoServe search and return to file browser */
   close(): Promise<void>;
@@ -925,17 +922,17 @@ The entry point opens a native search UI that translates user input into CommoSe
 
 The search page should present the CommoServe query fields as native form controls rather than exposing the raw Telnet form:
 
-| Field    | Control Type                 | Source                          |
-| -------- | ---------------------------- | ------------------------------- |
-| Name     | Text input                   | Free text                       |
-| Group    | Text input                   | Free text                       |
-| Handle   | Text input                   | Free text                       |
-| Event    | Text input                   | Free text                       |
-| Category | Native dropdown / chip group | Presets from server             |
-| Date     | Native dropdown / picker     | Year presets from server        |
-| Type     | Native dropdown / chip group | File type presets from server   |
-| Sort     | Native dropdown              | Sort presets from server        |
-| Order    | Toggle (Asc/Desc)            | Order presets from server       |
+| Field    | Control Type                 | Source                        |
+| -------- | ---------------------------- | ----------------------------- |
+| Name     | Text input                   | Free text                     |
+| Group    | Text input                   | Free text                     |
+| Handle   | Text input                   | Free text                     |
+| Event    | Text input                   | Free text                     |
+| Category | Native dropdown / chip group | Presets from server           |
+| Date     | Native dropdown / picker     | Year presets from server      |
+| Type     | Native dropdown / chip group | File type presets from server |
+| Sort     | Native dropdown              | Sort presets from server      |
+| Order    | Toggle (Asc/Desc)            | Order presets from server     |
 
 #### 11.9.3 Results Page Design
 
@@ -1223,7 +1220,7 @@ When firmware REST API gains coverage for a currently Telnet-only action:
 
 ## 17. Open Questions
 
-1. **Action menu key mapping**: On Ultimate 64 devices, F5 opens the action menu (firmware keymapper: F5 → KEY_TASKS). On C64 Ultimate devices, F1 opens the action menu directly. The client must detect the device type from the title line and use the correct key. **Resolution**: `telnet-spec.md` has been updated to document both mappings.
+1. **Action menu key mapping**: On Ultimate 64 devices, F5 opens the action menu (firmware keymapper: F5 → KEY_TASKS). On C64 Ultimate devices, F1 opens the action menu directly. The client must detect the device type from the title line and use the correct key. **Resolution**: `c64u-telnet-spec.md` has been updated to document both mappings.
 
 2. **Listen backlog limit**: The firmware Telnet server has a listen backlog of 2. If a Telnet session is already active (e.g., from a real terminal client) and C64 Commander connects, the firmware accepts the connection and creates a second independent UserInterface instance. Both sessions are fully independent. However, if the listen backlog is exhausted, connection will fail. **Mitigation**: C64 Commander maintains only one Telnet session per device and reconnects as needed.
 

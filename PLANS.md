@@ -10,7 +10,7 @@ Deep research and design pass for Telnet-based control support for C64 Ultimate 
 
 ## TODO
 
-- [x] Read required documents (architecture.md, openapi.yaml, telnet-spec.md, telnet-action-walkthrough.md)
+- [x] Read required documents (architecture.md, openapi.yaml, c64u-telnet-spec.md, c64u-telnet-action-walkthrough.md)
 - [x] Inspect C64 Commander REST client implementation and concurrency model
 - [x] Inspect C64 Commander FTP client implementation and concurrency model
 - [x] Inspect request scheduling, queueing, retries, timeouts, cancellation
