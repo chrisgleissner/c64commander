@@ -7,11 +7,20 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AUTOSTART_SEQUENCE, injectAutostart } from "@/lib/playback/autostart";
+import { AUTOSTART_SEQUENCE, buildAutostartSequence, injectAutostart } from "@/lib/playback/autostart";
 
 const createApiMock = () => ({
   readMemory: vi.fn<[], Promise<Uint8Array>>(),
   writeMemory: vi.fn<[], Promise<{ errors: string[] }>>(),
+});
+
+describe("buildAutostartSequence", () => {
+  it("falls back to busId 8 for non-finite or negative input", () => {
+    const defaultSeq = buildAutostartSequence(8);
+    expect(buildAutostartSequence(Infinity)).toEqual(defaultSeq);
+    expect(buildAutostartSequence(-1)).toEqual(defaultSeq);
+    expect(buildAutostartSequence(NaN)).toEqual(defaultSeq);
+  });
 });
 
 describe("autostart", () => {

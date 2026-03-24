@@ -1637,11 +1637,13 @@ test.describe("App screenshots", () => {
       await dialog.getByTestId("diagnostics-overflow-menu").click();
       await expect(page.getByTestId("diagnostics-share-all")).toBeHidden();
 
+      await dialog.getByTestId("diagnostics-overflow-menu").click();
       await dialog.getByTestId("open-latency-screen").click();
       await expect(page.getByTestId("latency-analysis-popup")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "analysis/01-latency.png");
       await page.getByTestId("analytic-popup-close").click();
 
+      await dialog.getByTestId("diagnostics-overflow-menu").click();
       await dialog.getByTestId("open-timeline-screen").click();
       await expect(page.getByTestId("health-history-popup")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "analysis/02-history.png");

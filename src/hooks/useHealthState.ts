@@ -92,6 +92,33 @@ export function useHealthState(): OverallHealthState {
       };
     }
 
+    // Gate trace-derived health on having seen at least one successful REST response.
+    // Before the first clean response, the badge stays Idle (connecting) rather than
+    // flipping to Unhealthy from early probe failures or connection-retry noise.
+    const hasFirstRestSuccess = traceEvents.some(
+      (e) => e.type === "rest-response" && typeof e.data.status === "number" && e.data.status < 400,
+    );
+
+    const idleContributors = {
+      App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    } as const;
+
+    if (!hasFirstRestSuccess) {
+      return {
+        state: "Idle",
+        connectivity,
+        host,
+        connectedDeviceLabel: inferConnectedDeviceLabel(deviceInfo?.product),
+        problemCount: 0,
+        contributors: idleContributors,
+        lastRestActivity: deriveLastRestActivity(traceEvents),
+        lastFtpActivity: deriveLastFtpActivity(traceEvents),
+        primaryProblem: null,
+      };
+    }
+
     const contributors = {
       App: deriveAppContributorHealth(traceEvents),
       REST: deriveRestContributorHealth(traceEvents),

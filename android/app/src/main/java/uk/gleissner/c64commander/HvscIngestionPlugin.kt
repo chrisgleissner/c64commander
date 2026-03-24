@@ -842,11 +842,25 @@ open class HvscIngestionPlugin : Plugin() {
   @PluginMethod
   fun readArchiveChunk(call: PluginCall) {
     val relativeArchivePath = call.getString("relativeArchivePath")
-    val offsetBytes = call.getLong("offsetBytes") ?: -1L
+    // Use call.data directly to distinguish absent field (null) from zero value (0L).
+    // call.getLong() returns null for both absent and zero on some Capacitor versions.
+    val offsetBytes: Long? =
+      if (call.data.has("offsetBytes")) call.data.getLong("offsetBytes") else null
     val requestedLength = call.getInt("lengthBytes") ?: 0
+
+    AppLogger.debug(
+      pluginContextOrNull(),
+      logTag,
+      "readArchiveChunk: offsetBytes=${offsetBytes} lengthBytes=${requestedLength} path=${relativeArchivePath}",
+      "HvscIngestionPlugin",
+    )
 
     if (relativeArchivePath.isNullOrBlank()) {
       call.reject("relativeArchivePath is required")
+      return
+    }
+    if (offsetBytes == null) {
+      call.reject("offsetBytes is required")
       return
     }
     if (offsetBytes < 0L) {

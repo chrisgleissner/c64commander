@@ -556,6 +556,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         bridge.registerPluginInstance(BackgroundExecutionPlugin())
         bridge.registerPluginInstance(DiagnosticsBridgePlugin())
         bridge.registerPluginInstance(MockC64UPlugin())
+        bridge.registerPluginInstance(HvscIngestionPlugin())
         nativePluginsBridge = bridge
     }
 

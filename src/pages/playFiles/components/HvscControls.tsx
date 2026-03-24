@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { Capacitor } from "@capacitor/core";
 import { Button } from "@/components/ui/button";
 
 export type HvscControlsProps = {
@@ -165,7 +166,9 @@ export const HvscControls = ({
 
       {!hvscAvailable && (
         <p className="text-xs text-muted-foreground">
-          HVSC controls are available on native builds or when a mock bridge is enabled.
+          {Capacitor.getPlatform() === "web"
+            ? "HVSC is not available in web browsers. Install the Android or iOS app to use HVSC."
+            : "HVSC controls are available on native builds or when a mock bridge is enabled."}
         </p>
       )}
       {hvscAvailable && !hvscInstalled && !hvscUpdating && !hvscCanIngest && (

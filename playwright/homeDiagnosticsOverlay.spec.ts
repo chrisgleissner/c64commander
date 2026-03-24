@@ -150,6 +150,7 @@ test.describe("Home diagnostics overlay", () => {
     await expect(runHealthCheckBtn).not.toHaveText("Running health check", { timeout: 15000 });
     await snap(page, testInfo, "health-check-finished");
 
+    await openOverflowMenu();
     await dialog.getByTestId("open-latency-screen").click();
     const latencyPopup = page.getByTestId("latency-analysis-popup");
     await expect(latencyPopup).toBeVisible();
@@ -159,6 +160,7 @@ test.describe("Home diagnostics overlay", () => {
     await latencyPopup.getByRole("button", { name: /Close/i }).click();
     await expect(latencyPopup).toBeHidden();
 
+    await openOverflowMenu();
     await dialog.getByTestId("open-timeline-screen").click();
     const historyPopup = page.getByTestId("health-history-popup");
     await expect(historyPopup).toBeVisible();
