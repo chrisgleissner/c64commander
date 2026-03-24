@@ -1,7 +1,7 @@
 {
   "name": "c64commander",
   "private": true,
-  "version": "0.6.4-rc7",
+  "version": "0.6.5-rc1",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "engines": {
