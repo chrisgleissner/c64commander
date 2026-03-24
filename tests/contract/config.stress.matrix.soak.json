@@ -1,18 +1,18 @@
 {
-    "baseUrl": "http://c64u",
-    "mode": "STRESS",
-    "auth": "OFF",
-    "ftpMode": "PASV",
-    "stressMatrix": {
-        "testType": "soak",
-        "operationId": "ftp.dir-list",
-        "concurrency": 2,
-        "rateDelayMs": 500,
-        "durationMs": 3600000,
-        "failureDetectionTimeoutMs": 5000
-    },
-    "trace": {
-        "enabled": true,
-        "level": "full"
-    }
+  "baseUrl": "http://c64u",
+  "mode": "STRESS",
+  "auth": "OFF",
+  "ftpMode": "PASV",
+  "stressMatrix": {
+    "testType": "soak",
+    "operationId": "ftp.dir-list",
+    "concurrency": 2,
+    "rateDelayMs": 500,
+    "durationMs": 3600000,
+    "failureDetectionTimeoutMs": 5000
+  },
+  "trace": {
+    "enabled": true,
+    "level": "full"
+  }
 }

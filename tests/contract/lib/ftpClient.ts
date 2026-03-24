@@ -350,7 +350,12 @@ export class FtpClient {
     };
   }
 
-  private emitCommand(input: { correlationId: string; launchedAtMs: number; hrTimeNs: bigint; rawCommand: string }): void {
+  private emitCommand(input: {
+    correlationId: string;
+    launchedAtMs: number;
+    hrTimeNs: bigint;
+    rawCommand: string;
+  }): void {
     this.config.traceCollector?.emit({
       protocol: "FTP",
       direction: "command",

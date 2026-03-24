@@ -50,7 +50,9 @@ export type MatrixRunResult = {
   aborted: boolean;
 };
 
-export function hasStressMatrix(config: HarnessConfig): config is HarnessConfig & { stressMatrix: NonNullable<HarnessConfig["stressMatrix"]> } {
+export function hasStressMatrix(
+  config: HarnessConfig,
+): config is HarnessConfig & { stressMatrix: NonNullable<HarnessConfig["stressMatrix"]> } {
   return config.mode === "STRESS" && Boolean(config.stressMatrix);
 }
 

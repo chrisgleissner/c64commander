@@ -158,17 +158,14 @@ export function createBreakpointFailureSummary(input: {
   };
 }
 
-export function shouldSkipRecovery(input: {
-  config: HarnessConfig;
-  outcome: RecoveryOutcome;
-}): boolean {
+export function shouldSkipRecovery(input: { config: HarnessConfig; outcome: RecoveryOutcome }): boolean {
   return input.outcome === "device-unresponsive";
 }
 
 export class TraceTailBuffer {
   private readonly entries: BreakpointTraceEntry[] = [];
 
-  constructor(private readonly limit: number) { }
+  constructor(private readonly limit: number) {}
 
   push(entry: BreakpointTraceEntry): void {
     this.entries.push(entry);

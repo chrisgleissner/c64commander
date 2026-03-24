@@ -55,7 +55,9 @@ function readMockRestServerOptionsFromEnv(): Parameters<typeof createMockRestSer
         ? Number.parseInt(process.env.CONTRACT_MOCK_BREAKPOINT_STATUS, 10)
         : 503,
       methods: process.env.CONTRACT_MOCK_BREAKPOINT_METHODS
-        ? process.env.CONTRACT_MOCK_BREAKPOINT_METHODS.split(",").map((value) => value.trim()).filter(Boolean)
+        ? process.env.CONTRACT_MOCK_BREAKPOINT_METHODS.split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
         : undefined,
       pathIncludes: process.env.CONTRACT_MOCK_BREAKPOINT_PATH_INCLUDES,
     },

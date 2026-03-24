@@ -53,7 +53,10 @@ export async function runReplay(input: {
     const t0 = requests[0].launchedAtMs;
     for (const request of requests) {
       const offset = request.launchedAtMs - t0;
-      const label = request.protocol === "REST" ? `${request.method ?? "GET"} ${request.url ?? ""}` : request.rawCommand ?? request.commandVerb ?? "FTP";
+      const label =
+        request.protocol === "REST"
+          ? `${request.method ?? "GET"} ${request.url ?? ""}`
+          : (request.rawCommand ?? request.commandVerb ?? "FTP");
       process.stdout.write(
         `${String(request.globalSeq).padStart(4, " ")} +${offset}ms client=${request.clientId} ${request.protocol} ${label}\n`,
       );
@@ -111,42 +114,45 @@ export async function runReplay(input: {
   const completion = requests.map(
     (request) =>
       new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          pendingTimers.delete(timer);
-          const previous = requestQueues.get(request.clientId) ?? Promise.resolve();
-          const next = previous
-            .catch(() => undefined)
-            .then(async () => {
-              if (stopped) {
-                return;
-              }
-              try {
-                await executeReplayRequest({
-                  request,
-                  config: input.config,
-                  restRequest,
-                  ftpSessions,
-                  log: input.log,
-                });
-                successCount += 1;
-                const abort = healthMonitor.shouldAbort();
-                if (abort.abort) {
-                  stopped = true;
+        const timer = setTimeout(
+          () => {
+            pendingTimers.delete(timer);
+            const previous = requestQueues.get(request.clientId) ?? Promise.resolve();
+            const next = previous
+              .catch(() => undefined)
+              .then(async () => {
+                if (stopped) {
+                  return;
                 }
-              } catch (error) {
-                failureCount += 1;
-                stopped = true;
-                input.log({
-                  kind: "replay",
-                  op: `seq-${request.globalSeq}`,
-                  status: "error",
-                  details: { message: String(error) },
-                });
-              }
-            })
-            .finally(resolve);
-          requestQueues.set(request.clientId, next);
-        }, Math.max(0, request.launchedAtMs - t0));
+                try {
+                  await executeReplayRequest({
+                    request,
+                    config: input.config,
+                    restRequest,
+                    ftpSessions,
+                    log: input.log,
+                  });
+                  successCount += 1;
+                  const abort = healthMonitor.shouldAbort();
+                  if (abort.abort) {
+                    stopped = true;
+                  }
+                } catch (error) {
+                  failureCount += 1;
+                  stopped = true;
+                  input.log({
+                    kind: "replay",
+                    op: `seq-${request.globalSeq}`,
+                    status: "error",
+                    details: { message: String(error) },
+                  });
+                }
+              })
+              .finally(resolve);
+            requestQueues.set(request.clientId, next);
+          },
+          Math.max(0, request.launchedAtMs - t0),
+        );
         pendingTimers.add(timer);
       }),
   );
@@ -268,7 +274,11 @@ async function executeReplayRequest(input: {
   await executeFtpReplayRequest(client, input.request, input.config);
 }
 
-async function executeFtpReplayRequest(client: FtpClient, request: ReplayRequest, config: HarnessConfig): Promise<void> {
+async function executeFtpReplayRequest(
+  client: FtpClient,
+  request: ReplayRequest,
+  config: HarnessConfig,
+): Promise<void> {
   const rawCommand = request.rawCommand ?? request.commandVerb ?? "";
   const [verb, ...parts] = rawCommand.split(" ");
   const arg = parts.join(" ").trim();

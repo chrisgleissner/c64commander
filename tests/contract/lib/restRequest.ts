@@ -234,7 +234,8 @@ function emitTrace(input: {
 
 function buildTraceUrl(client: RestClient, requestPath: string): string {
   try {
-    const clientBaseUrl = (client as unknown as { client?: { defaults?: { baseURL?: string } } }).client?.defaults?.baseURL;
+    const clientBaseUrl = (client as unknown as { client?: { defaults?: { baseURL?: string } } }).client?.defaults
+      ?.baseURL;
     return new URL(requestPath, clientBaseUrl ?? "http://invalid.local").toString();
   } catch {
     return requestPath;

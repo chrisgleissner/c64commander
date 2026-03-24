@@ -46,7 +46,9 @@ describe("runReplay dry-run", () => {
 
     expect(result.totalRequests).toBe(2);
     expect(writeSpy).toHaveBeenCalled();
-    expect(writeSpy.mock.calls.map((call) => call[0]).join("")).toContain("1 +0ms client=client-1 REST GET http://127.0.0.1:8080/v1/version");
+    expect(writeSpy.mock.calls.map((call) => call[0]).join("")).toContain(
+      "1 +0ms client=client-1 REST GET http://127.0.0.1:8080/v1/version",
+    );
     expect(writeSpy.mock.calls.map((call) => call[0]).join("")).toContain("2 +500ms client=client-2 FTP LIST /");
   });
 });

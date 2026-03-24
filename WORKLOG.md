@@ -92,3 +92,14 @@ Date: 2026-03-23
   - `npm run lint`
   - `npm run test:coverage`
   - `npm run build`
+
+## 2026-03-24T00:00:00Z - Contract harness trace/matrix/replay delivery
+
+- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`
+- Implemented a forensic recorder for the contract harness with structured REST and FTP trace entries, incremental JSONL output, grouped markdown summaries, and replay-manifest generation.
+- Added structured matrix execution for `stress`, `soak`, and `spike` profiles, including reusable stage planning, FTP session pooling, stage-tagged tracing, and CLI `--test-type` override support.
+- Added deterministic replay via `tests/contract/replay.ts`, including dry-run schedule output, REST/FTP preflight checks, and replay-run artifact generation.
+- Added device-unresponsive outcome handling with `meta.json` outcome tracking, `DEVICE_UNRESPONSIVE` sentinel emission, and exit code `2` for aborted runs.
+- Preserved the legacy breakpoint artifact contract while extracting shared stage execution primitives for reuse.
+- Validation completed with `npx tsc -p tests/contract/tsconfig.json`, `npm run lint`, `npm run test:coverage` at 91% branch coverage, trace-enabled SAFE mock runs, trace-disabled SAFE mock runs, matrix quick and soak-override mock runs, simulated device-unresponsive mock runs, breakpoint regression runs, and replay dry-run verification.
+- Added `tests/contract/instrumentation-validation.md` to capture the concrete run IDs, artifact inventories, redaction proof, replay sample output, and regression evidence.

@@ -216,7 +216,10 @@ try {
     if (matrixResult.aborted) {
       deviceUnresponsiveReason = matrixResult.failureSummary.abortReason;
       lastStageId = matrixResult.failureSummary.stageId;
-      runError = new DeviceUnresponsiveError(deviceUnresponsiveReason ?? "Matrix health abort", lastStageId ?? undefined);
+      runError = new DeviceUnresponsiveError(
+        deviceUnresponsiveReason ?? "Matrix health abort",
+        lastStageId ?? undefined,
+      );
     }
   } else {
     await runScenarioGroup("rest", restScenarios, async (scenario) => {
@@ -808,10 +811,7 @@ function resolveFailureDetectionTimeout(cfg: typeof config): number {
   return 30000;
 }
 
-function applyTestTypeOverride(
-  cfg: typeof config,
-  override: TraceTestType | undefined,
-): typeof config {
+function applyTestTypeOverride(cfg: typeof config, override: TraceTestType | undefined): typeof config {
   if (!override) {
     return cfg;
   }
@@ -832,11 +832,14 @@ function applyTestTypeOverride(
           : {
               testType: "soak",
               operationId: source.operationIds[0] ?? "rest.read-version",
-              concurrency: source.testType === "stress" ? source.concurrencyLevels[0] ?? 1 : source.spikeConcurrency,
-              rateDelayMs: source.testType === "stress" ? source.rateRampMs[0] ?? 0 : source.spikeRateDelayMs,
+              concurrency: source.testType === "stress" ? (source.concurrencyLevels[0] ?? 1) : source.spikeConcurrency,
+              rateDelayMs: source.testType === "stress" ? (source.rateRampMs[0] ?? 0) : source.spikeRateDelayMs,
               durationMs: source.testType === "stress" ? source.stageDurationMs : source.spikeDurationMs,
               failureDetectionTimeoutMs: source.failureDetectionTimeoutMs,
-              ftpSessionMode: source.testType === "stress" ? source.ftpSessionModes[0] ?? "shared" : source.ftpSessionModes?.[0] ?? "shared",
+              ftpSessionMode:
+                source.testType === "stress"
+                  ? (source.ftpSessionModes[0] ?? "shared")
+                  : (source.ftpSessionModes?.[0] ?? "shared"),
             },
     };
   }
@@ -853,7 +856,10 @@ function applyTestTypeOverride(
               operationIds: source.testType === "soak" ? [source.operationId] : source.operationIds,
               concurrencyLevels: source.testType === "soak" ? [source.concurrency] : [source.spikeConcurrency],
               rateRampMs: source.testType === "soak" ? [source.rateDelayMs] : [source.spikeRateDelayMs],
-              ftpSessionModes: source.testType === "soak" ? [source.ftpSessionMode ?? "shared"] : source.ftpSessionModes ?? ["shared"],
+              ftpSessionModes:
+                source.testType === "soak"
+                  ? [source.ftpSessionMode ?? "shared"]
+                  : (source.ftpSessionModes ?? ["shared"]),
               stageDurationMs: source.testType === "soak" ? source.durationMs : source.spikeDurationMs,
               failureDetectionTimeoutMs: source.failureDetectionTimeoutMs,
               tailRequestCount: 50,
@@ -870,8 +876,8 @@ function applyTestTypeOverride(
         : {
             testType: "spike",
             operationIds: source.testType === "soak" ? [source.operationId] : source.operationIds,
-            spikeConcurrency: source.testType === "soak" ? source.concurrency : source.concurrencyLevels[0] ?? 1,
-            spikeRateDelayMs: source.testType === "soak" ? source.rateDelayMs : source.rateRampMs[0] ?? 0,
+            spikeConcurrency: source.testType === "soak" ? source.concurrency : (source.concurrencyLevels[0] ?? 1),
+            spikeRateDelayMs: source.testType === "soak" ? source.rateDelayMs : (source.rateRampMs[0] ?? 0),
             spikeDurationMs: source.testType === "soak" ? source.durationMs : source.stageDurationMs,
             idleDurationMs: source.failureDetectionTimeoutMs,
             spikeCount: 1,

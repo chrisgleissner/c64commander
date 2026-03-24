@@ -49,113 +49,159 @@ export function buildMatrixOperations(): Map<string, MatrixOp> {
 
   const add = (operation: MatrixOp) => operations.set(operation.id, operation);
 
-  add(restOperation("rest.read-version", async ({ restRequest }) => {
-    const response = await restRequest({ method: "GET", url: "/v1/version" });
-    return { ok: response.status === 200, latencyMs: response.latencyMs };
-  }));
-  add(restOperation("rest.read-configs", async ({ restRequest }) => {
-    const response = await restRequest({ method: "GET", url: "/v1/configs" });
-    return { ok: response.status === 200, latencyMs: response.latencyMs };
-  }));
-  add(restOperation("rest.read-drives", async ({ restRequest }) => {
-    const response = await restRequest({ method: "GET", url: "/v1/drives" });
-    return { ok: response.status === 200, latencyMs: response.latencyMs };
-  }));
-  add(restOperation("rest.read-burst", async ({ restRequest }) => {
-    const start = Date.now();
-    const responses = await Promise.all([
-      restRequest({ method: "GET", url: "/v1/version" }),
-      restRequest({ method: "GET", url: "/v1/configs" }),
-      restRequest({ method: "GET", url: "/v1/drives" }),
-    ]);
-    return { ok: responses.every((response) => response.status === 200), latencyMs: Date.now() - start };
-  }));
-  add(restOperation("rest.write-config", async (ctx) => {
-    const target = await nextSafeConfigTarget(ctx);
-    if (!target) {
-      return { ok: false, latencyMs: 0 };
-    }
-    const value = target.values[target.nextIndex % target.values.length];
-    target.nextIndex = (target.nextIndex + 1) % target.values.length;
-    const response = await ctx.restRequest({
-      method: "PUT",
-      url: `/v1/configs/${encodeURIComponent(target.category)}/${encodeURIComponent(target.item)}`,
-      params: { value },
-    });
-    return { ok: response.status === 200, latencyMs: response.latencyMs };
-  }));
-
-  add(ftpOperation("ftp.control-only", async ({ ftpClient }) => {
-    const start = Date.now();
-    const responses = await Promise.all([ftpClient!.pwd(), ftpClient!.sendCommand("NOOP"), ftpClient!.mlst()]);
-    return { ok: responses.every((response) => response.response.code < 400), latencyMs: Date.now() - start };
-  }));
-  add(ftpOperation("ftp.dir-list", async ({ ftpClient }) => {
-    const response = await ftpClient!.list("/");
-    return { ok: response.result.response.code < 400, latencyMs: response.result.latencyMs };
-  }));
-  add(ftpOperation("ftp.dir-mlsd", async ({ ftpClient }) => {
-    const response = await ftpClient!.mlsd("/");
-    return { ok: response.result.response.code < 400, latencyMs: response.result.latencyMs };
-  }));
-  add(ftpOperation("ftp.small-upload", async ({ ftpClient, config }) => uploadFile(ftpClient!, config, SMALL_UPLOAD_BUFFER)));
-  add(ftpOperation("ftp.small-roundtrip", async ({ ftpClient, config }) => roundTripFile(ftpClient!, config, SMALL_UPLOAD_BUFFER)));
-  add(ftpOperation("ftp.large-upload", async ({ ftpClient, config }) => uploadFile(ftpClient!, config, LARGE_UPLOAD_BUFFER)));
-  add(ftpOperation("ftp.large-roundtrip", async ({ ftpClient, config }) => roundTripFile(ftpClient!, config, LARGE_UPLOAD_BUFFER)));
-
-  add(mixedOperation("mixed.read-and-list", async ({ restRequest, ftpClient }) => {
-    const start = Date.now();
-    const [restResponse, ftpResponse] = await Promise.all([
-      restRequest({ method: "GET", url: "/v1/version" }),
-      ftpClient!.list("/"),
-    ]);
-    return { ok: restResponse.status === 200 && ftpResponse.result.response.code < 400, latencyMs: Date.now() - start };
-  }));
-  add(mixedOperation("mixed.read-and-stor", async ({ restRequest, ftpClient, config }) => {
-    const start = Date.now();
-    const [restResponse, ftpResponse] = await Promise.all([
-      restRequest({ method: "GET", url: "/v1/configs" }),
-      uploadFile(ftpClient!, config, SMALL_UPLOAD_BUFFER),
-    ]);
-    return { ok: restResponse.status === 200 && ftpResponse.ok, latencyMs: Date.now() - start };
-  }));
-  add(mixedOperation("mixed.write-and-list", async (ctx) => {
-    const start = Date.now();
-    const target = await nextSafeConfigTarget(ctx);
-    if (!target) {
-      return { ok: false, latencyMs: 0 };
-    }
-    const value = target.values[target.nextIndex % target.values.length];
-    target.nextIndex = (target.nextIndex + 1) % target.values.length;
-    const [restResponse, ftpResponse] = await Promise.all([
-      ctx.restRequest({
+  add(
+    restOperation("rest.read-version", async ({ restRequest }) => {
+      const response = await restRequest({ method: "GET", url: "/v1/version" });
+      return { ok: response.status === 200, latencyMs: response.latencyMs };
+    }),
+  );
+  add(
+    restOperation("rest.read-configs", async ({ restRequest }) => {
+      const response = await restRequest({ method: "GET", url: "/v1/configs" });
+      return { ok: response.status === 200, latencyMs: response.latencyMs };
+    }),
+  );
+  add(
+    restOperation("rest.read-drives", async ({ restRequest }) => {
+      const response = await restRequest({ method: "GET", url: "/v1/drives" });
+      return { ok: response.status === 200, latencyMs: response.latencyMs };
+    }),
+  );
+  add(
+    restOperation("rest.read-burst", async ({ restRequest }) => {
+      const start = Date.now();
+      const responses = await Promise.all([
+        restRequest({ method: "GET", url: "/v1/version" }),
+        restRequest({ method: "GET", url: "/v1/configs" }),
+        restRequest({ method: "GET", url: "/v1/drives" }),
+      ]);
+      return { ok: responses.every((response) => response.status === 200), latencyMs: Date.now() - start };
+    }),
+  );
+  add(
+    restOperation("rest.write-config", async (ctx) => {
+      const target = await nextSafeConfigTarget(ctx);
+      if (!target) {
+        return { ok: false, latencyMs: 0 };
+      }
+      const value = target.values[target.nextIndex % target.values.length];
+      target.nextIndex = (target.nextIndex + 1) % target.values.length;
+      const response = await ctx.restRequest({
         method: "PUT",
         url: `/v1/configs/${encodeURIComponent(target.category)}/${encodeURIComponent(target.item)}`,
         params: { value },
-      }),
-      ctx.ftpClient!.list("/"),
-    ]);
-    return {
-      ok: restResponse.status === 200 && ftpResponse.result.response.code < 400,
-      latencyMs: Date.now() - start,
-    };
-  }));
-  add(mixedOperation("mixed.burst-and-stor", async ({ restRequest, ftpClient, config }) => {
-    const start = Date.now();
-    for (let index = 0; index < 3; index += 1) {
-      const response = await restRequest({ method: "GET", url: "/v1/version" });
-      if (response.status !== 200) {
-        return { ok: false, latencyMs: Date.now() - start };
+      });
+      return { ok: response.status === 200, latencyMs: response.latencyMs };
+    }),
+  );
+
+  add(
+    ftpOperation("ftp.control-only", async ({ ftpClient }) => {
+      const start = Date.now();
+      const responses = await Promise.all([ftpClient!.pwd(), ftpClient!.sendCommand("NOOP"), ftpClient!.mlst()]);
+      return { ok: responses.every((response) => response.response.code < 400), latencyMs: Date.now() - start };
+    }),
+  );
+  add(
+    ftpOperation("ftp.dir-list", async ({ ftpClient }) => {
+      const response = await ftpClient!.list("/");
+      return { ok: response.result.response.code < 400, latencyMs: response.result.latencyMs };
+    }),
+  );
+  add(
+    ftpOperation("ftp.dir-mlsd", async ({ ftpClient }) => {
+      const response = await ftpClient!.mlsd("/");
+      return { ok: response.result.response.code < 400, latencyMs: response.result.latencyMs };
+    }),
+  );
+  add(
+    ftpOperation("ftp.small-upload", async ({ ftpClient, config }) =>
+      uploadFile(ftpClient!, config, SMALL_UPLOAD_BUFFER),
+    ),
+  );
+  add(
+    ftpOperation("ftp.small-roundtrip", async ({ ftpClient, config }) =>
+      roundTripFile(ftpClient!, config, SMALL_UPLOAD_BUFFER),
+    ),
+  );
+  add(
+    ftpOperation("ftp.large-upload", async ({ ftpClient, config }) =>
+      uploadFile(ftpClient!, config, LARGE_UPLOAD_BUFFER),
+    ),
+  );
+  add(
+    ftpOperation("ftp.large-roundtrip", async ({ ftpClient, config }) =>
+      roundTripFile(ftpClient!, config, LARGE_UPLOAD_BUFFER),
+    ),
+  );
+
+  add(
+    mixedOperation("mixed.read-and-list", async ({ restRequest, ftpClient }) => {
+      const start = Date.now();
+      const [restResponse, ftpResponse] = await Promise.all([
+        restRequest({ method: "GET", url: "/v1/version" }),
+        ftpClient!.list("/"),
+      ]);
+      return {
+        ok: restResponse.status === 200 && ftpResponse.result.response.code < 400,
+        latencyMs: Date.now() - start,
+      };
+    }),
+  );
+  add(
+    mixedOperation("mixed.read-and-stor", async ({ restRequest, ftpClient, config }) => {
+      const start = Date.now();
+      const [restResponse, ftpResponse] = await Promise.all([
+        restRequest({ method: "GET", url: "/v1/configs" }),
+        uploadFile(ftpClient!, config, SMALL_UPLOAD_BUFFER),
+      ]);
+      return { ok: restResponse.status === 200 && ftpResponse.ok, latencyMs: Date.now() - start };
+    }),
+  );
+  add(
+    mixedOperation("mixed.write-and-list", async (ctx) => {
+      const start = Date.now();
+      const target = await nextSafeConfigTarget(ctx);
+      if (!target) {
+        return { ok: false, latencyMs: 0 };
       }
-    }
-    const ftpResponse = await uploadFile(ftpClient!, config, LARGE_UPLOAD_BUFFER);
-    return { ok: ftpResponse.ok, latencyMs: Date.now() - start };
-  }));
+      const value = target.values[target.nextIndex % target.values.length];
+      target.nextIndex = (target.nextIndex + 1) % target.values.length;
+      const [restResponse, ftpResponse] = await Promise.all([
+        ctx.restRequest({
+          method: "PUT",
+          url: `/v1/configs/${encodeURIComponent(target.category)}/${encodeURIComponent(target.item)}`,
+          params: { value },
+        }),
+        ctx.ftpClient!.list("/"),
+      ]);
+      return {
+        ok: restResponse.status === 200 && ftpResponse.result.response.code < 400,
+        latencyMs: Date.now() - start,
+      };
+    }),
+  );
+  add(
+    mixedOperation("mixed.burst-and-stor", async ({ restRequest, ftpClient, config }) => {
+      const start = Date.now();
+      for (let index = 0; index < 3; index += 1) {
+        const response = await restRequest({ method: "GET", url: "/v1/version" });
+        if (response.status !== 200) {
+          return { ok: false, latencyMs: Date.now() - start };
+        }
+      }
+      const ftpResponse = await uploadFile(ftpClient!, config, LARGE_UPLOAD_BUFFER);
+      return { ok: ftpResponse.ok, latencyMs: Date.now() - start };
+    }),
+  );
 
   return operations;
 }
 
-function restOperation(id: string, operation: (ctx: MatrixOpContext) => Promise<{ ok: boolean; latencyMs: number }>): MatrixOp {
+function restOperation(
+  id: string,
+  operation: (ctx: MatrixOpContext) => Promise<{ ok: boolean; latencyMs: number }>,
+): MatrixOp {
   return {
     id,
     protocol: "rest",
@@ -164,7 +210,10 @@ function restOperation(id: string, operation: (ctx: MatrixOpContext) => Promise<
   };
 }
 
-function ftpOperation(id: string, operation: (ctx: MatrixOpContext) => Promise<{ ok: boolean; latencyMs: number }>): MatrixOp {
+function ftpOperation(
+  id: string,
+  operation: (ctx: MatrixOpContext) => Promise<{ ok: boolean; latencyMs: number }>,
+): MatrixOp {
   return {
     id,
     protocol: "ftp",
@@ -173,7 +222,10 @@ function ftpOperation(id: string, operation: (ctx: MatrixOpContext) => Promise<{
   };
 }
 
-function mixedOperation(id: string, operation: (ctx: MatrixOpContext) => Promise<{ ok: boolean; latencyMs: number }>): MatrixOp {
+function mixedOperation(
+  id: string,
+  operation: (ctx: MatrixOpContext) => Promise<{ ok: boolean; latencyMs: number }>,
+): MatrixOp {
   return {
     id,
     protocol: "mixed",
@@ -256,7 +308,11 @@ async function nextSafeConfigTarget(ctx: MatrixOpContext): Promise<SafeConfigTar
   return safeConfigTargetCache[0] ?? null;
 }
 
-async function uploadFile(ftpClient: FtpClient, config: HarnessConfig, data: Buffer): Promise<{ ok: boolean; latencyMs: number }> {
+async function uploadFile(
+  ftpClient: FtpClient,
+  config: HarnessConfig,
+  data: Buffer,
+): Promise<{ ok: boolean; latencyMs: number }> {
   const fileName = matrixProbeFileName(data.length);
   await ftpClient.cwd(config.scratch.ftpDir).catch(async () => {
     await ftpClient.mkd(config.scratch.ftpDir);
@@ -266,7 +322,11 @@ async function uploadFile(ftpClient: FtpClient, config: HarnessConfig, data: Buf
   return { ok: response.response.code < 400, latencyMs: response.latencyMs };
 }
 
-async function roundTripFile(ftpClient: FtpClient, config: HarnessConfig, data: Buffer): Promise<{ ok: boolean; latencyMs: number }> {
+async function roundTripFile(
+  ftpClient: FtpClient,
+  config: HarnessConfig,
+  data: Buffer,
+): Promise<{ ok: boolean; latencyMs: number }> {
   const fileName = matrixProbeFileName(data.length);
   const start = Date.now();
   const upload = await uploadFile(ftpClient, config, data);

@@ -1,45 +1,31 @@
 {
-    "baseUrl": "http://c64u",
-    "mode": "STRESS",
-    "auth": "OFF",
-    "ftpMode": "PASV",
-    "stressMatrix": {
-        "testType": "stress",
-        "operationIds": [
-            "rest.read-version",
-            "rest.read-burst",
-            "rest.write-config",
-            "ftp.control-only",
-            "ftp.dir-list",
-            "ftp.small-roundtrip",
-            "ftp.large-roundtrip",
-            "mixed.read-and-list",
-            "mixed.read-and-stor",
-            "mixed.burst-and-stor"
-        ],
-        "concurrencyLevels": [
-            1,
-            2,
-            4,
-            8
-        ],
-        "rateRampMs": [
-            2000,
-            500,
-            100,
-            50,
-            0
-        ],
-        "ftpSessionModes": [
-            "shared",
-            "per-request"
-        ],
-        "stageDurationMs": 15000,
-        "failureDetectionTimeoutMs": 4000,
-        "tailRequestCount": 100
-    },
-    "trace": {
-        "enabled": true,
-        "level": "full"
-    }
+  "baseUrl": "http://c64u",
+  "mode": "STRESS",
+  "auth": "OFF",
+  "ftpMode": "PASV",
+  "stressMatrix": {
+    "testType": "stress",
+    "operationIds": [
+      "rest.read-version",
+      "rest.read-burst",
+      "rest.write-config",
+      "ftp.control-only",
+      "ftp.dir-list",
+      "ftp.small-roundtrip",
+      "ftp.large-roundtrip",
+      "mixed.read-and-list",
+      "mixed.read-and-stor",
+      "mixed.burst-and-stor"
+    ],
+    "concurrencyLevels": [1, 2, 4, 8],
+    "rateRampMs": [2000, 500, 100, 50, 0],
+    "ftpSessionModes": ["shared", "per-request"],
+    "stageDurationMs": 15000,
+    "failureDetectionTimeoutMs": 4000,
+    "tailRequestCount": 100
+  },
+  "trace": {
+    "enabled": true,
+    "level": "full"
+  }
 }

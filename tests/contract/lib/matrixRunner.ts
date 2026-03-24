@@ -14,7 +14,12 @@ import type { SharedRestRequest } from "./restRequest.js";
 import type { TraceCollector } from "./traceCollector.js";
 import { createFtpSessionPool } from "./matrixFtpPool.js";
 import type { MatrixOp } from "./matrixOperations.js";
-import { createMatrixFailureSummary, createMatrixStageRecords, type MatrixRunResult, type MatrixStage } from "./stressMatrix.js";
+import {
+  createMatrixFailureSummary,
+  createMatrixStageRecords,
+  type MatrixRunResult,
+  type MatrixStage,
+} from "./stressMatrix.js";
 import { runStage } from "./stageRunner.js";
 
 export async function runMatrixProfile(input: {
@@ -50,7 +55,8 @@ export async function runMatrixProfile(input: {
     if (stage.spikePhase === "idle") {
       await delay(stage.durationMs);
       const restResult = await input.healthMonitor.check();
-      const ftpResult = shouldUseFtpHealth(stage) && input.ftpHealthMonitor ? await input.ftpHealthMonitor.check() : null;
+      const ftpResult =
+        shouldUseFtpHealth(stage) && input.ftpHealthMonitor ? await input.ftpHealthMonitor.check() : null;
       const reason = healthAbortReason(input.healthMonitor, input.ftpHealthMonitor, ftpResult);
       if (reason) {
         abortReason = reason;
