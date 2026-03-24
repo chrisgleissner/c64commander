@@ -1,6 +1,6 @@
 # C64U Failure Boundary Stress Plan
 
-Status: IN_PROGRESS
+Status: COMPLETE
 Date: 2026-03-24
 Classification: DOC_PLUS_CODE, CODE_CHANGE
 Target device: c64u
@@ -21,19 +21,19 @@ Identify the smallest reproducible stress boundary that transitions the C64 Ulti
 
 ## Exit Criteria
 
-- [ ] Build helper supports contract runs based on tests/contract/config.stress.matrix.spike.json.
-- [ ] Baseline real-device contract run completes and records artifacts.
-- [ ] Full trace captures REST request/response headers, body, and timing plus FTP command/response timing.
-- [ ] A failure boundary is observed during controlled escalation.
-- [ ] Independent verification with `curl http://c64u/v1/info` shows the same failure condition.
-- [ ] Minimal reproducing trace is extracted.
-- [ ] Replay reproduces the failure from a clean state.
-- [ ] Replay succeeds at least twice with the same failure signature.
+- [x] Build helper supports contract runs based on tests/contract/config.stress.matrix.spike.json.
+- [x] Baseline real-device contract run completes and records artifacts.
+- [x] Full trace captures REST request/response headers, body, and timing plus FTP command/response timing.
+- [x] A failure boundary is observed during controlled escalation.
+- [x] Independent verification with `curl http://c64u/v1/info` shows the same failure condition.
+- [x] Minimal reproducing trace is extracted.
+- [x] Replay reproduces the failure from a clean state.
+- [x] Replay succeeds at least twice with the same failure signature.
 
 ## Phase 1 - Plan Initialization
 
 - [x] Replace PLANS.md with this execution plan.
-- [ ] Add any harness capability needed to force contract runs to inherit the spike matrix config via ./build.
+- [x] Add any harness capability needed to force contract runs to inherit the spike matrix config via ./build.
 
 ## Phase 2 - Baseline Validation
 
@@ -110,10 +110,10 @@ Replay process:
 
 ## Phase 8 - Validation
 
-- [ ] Failure boundary confirmed.
-- [ ] curl verification confirmed.
-- [ ] Replay run 1 confirmed.
-- [ ] Replay run 2 confirmed.
+- [x] Failure boundary confirmed.
+- [x] curl verification confirmed.
+- [x] Replay run 1 confirmed.
+- [x] Replay run 2 confirmed.
 
 ## Worklog
 
@@ -123,3 +123,72 @@ Replay process:
 - Reviewed build helper, contract harness, spike matrix config, replay engine, and instrumentation validation.
 - Identified a blocking gap: ./build did not support inheriting a supplied contract config template, so it could not honestly run against tests/contract/config.stress.matrix.spike.json.
 - Next action: patch ./build to accept --contract-config, then execute the baseline real-device run immediately.
+
+### 2026-03-24T16:56:34Z
+
+- Executed baseline through `./build --test-contract --c64u-target real --c64u-host c64u --contract-config tests/contract/config.stress.matrix.spike.json`.
+- Evidence:
+  - `test-results/contract/runs/20260324-165634-STRESS-OFF/trace.jsonl`
+  - `test-results/contract/runs/20260324-170038-STRESS-OFF/trace.jsonl`
+- Observation: the unchanged spike config hit an FTP session-setup boundary first, but that path did not yet provide the required `/v1/info` curl failure evidence.
+- Harness fixes applied after this step:
+  - `./build` now preserves template STRESS mode unless explicitly overridden.
+  - Automatic post-run reboot/recovery now respects `allowMachineReset=false`.
+  - `./build` now supports `--test-contract-replay` with `--contract-manifest`.
+
+### 2026-03-24T17:02:35Z
+
+- Derived a controlled variant from `tests/contract/config.stress.matrix.spike.json` at `.tmp/contract-configs/spike-mixed-c4.json` with these bounded deltas:
+  - `operationIds: ["mixed.burst-and-stor"]`
+  - `ftpSessionModes: ["per-request"]`
+  - `spikeConcurrency: 4`
+  - `spikeCount: 1`
+  - `health.endpoint: "/v1/info"`
+- Executed via `./build --test-contract --c64u-target real --c64u-host c64u --contract-config .tmp/contract-configs/spike-mixed-c4.json`.
+- Independent curl evidence captured during execution:
+  - `.tmp/contract-monitor/20260324T170230Z-mixed-c4-curl-info.log`
+  - First failure timestamp: `2026-03-24T17:02:35Z`
+  - Failure signature: `curl: (56) Recv failure: Connection reset by peer`, `http_code=000`
+- Contract evidence captured:
+  - Run directory: `test-results/contract/runs/20260324-170235-STRESS-OFF`
+  - `DEVICE_UNRESPONSIVE`: abort reason `Error: read ECONNRESET`
+  - `matrix-failure-summary.json`: stage `spike-01-mixed.burst-and-stor-cycle1-spike`
+  - `matrix-stages.json`: `requestsStarted=12`, `requestsCompleted=10`, `failureCount=10`
+  - `trace.jsonl` and `trace.md` present
+  - `replay/manifest.json` present
+- Boundary characterization from this step:
+  - Smallest verified reproducing concurrency in the controlled mixed profile: `4`
+  - Protocol mix: repeated REST `GET /v1/version` plus FTP upload setup
+  - First user-visible independent failure: `/v1/info` connection reset while the spike stage was active
+- Escalation stopped immediately after the first verified failure.
+
+### 2026-03-24T17:05:59Z
+
+- Extracted a smaller replay artifact from the failing run:
+  - `test-results/contract/runs/20260324-170235-STRESS-OFF/replay/manifest-minimal.json`
+  - Request count: `39`
+  - Sequence span: global sequence `1` through `59`
+- Cutoff was chosen to include only requests launched through the first failure window.
+
+### 2026-03-24T17:06:23Z
+
+- Replay pass 1 executed through `./build --test-contract-replay --c64u-target real --c64u-host c64u --contract-config .tmp/contract-configs/spike-mixed-c4.json --contract-manifest test-results/contract/runs/20260324-170235-STRESS-OFF/replay/manifest-minimal.json`.
+- Independent curl evidence:
+  - `.tmp/contract-monitor/20260324T170618Z-replay1-curl-info.log`
+  - Same failure signature observed at `2026-03-24T17:06:23Z`: `curl: (56) Recv failure: Connection reset by peer`, `http_code=000`
+
+### 2026-03-24T17:06:53Z
+
+- Replay pass 2 executed with the same command and the same minimal manifest.
+- Independent curl evidence:
+  - `.tmp/contract-monitor/20260324T170647Z-replay2-curl-info.log`
+  - Same failure signature observed at `2026-03-24T17:06:53Z`: `curl: (56) Recv failure: Connection reset by peer`, `http_code=000`
+
+### 2026-03-24T17:15:08Z
+
+- Final recovery check: `curl http://c64u/v1/info` returned `200 OK` again after the second replay-induced reset.
+- Validation summary:
+  - Focused regression test passed: `tests/contract/lib/breakpoint.test.ts`
+  - `npm run test:coverage` exited `0`
+  - `npm run build` exited `0`
+  - `npm run lint` had no errors in touched files; existing warnings remained in generated `android/coverage` assets

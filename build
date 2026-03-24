@@ -32,6 +32,7 @@ RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
 RUN_CONTRACT_TEST=false
+RUN_CONTRACT_REPLAY=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
 PLAYWRIGHT_DEVICES=""
@@ -75,6 +76,7 @@ CONTRACT_AUTH_SET=false
 CONTRACT_PASSWORD=""
 CONTRACT_ALLOW_RESET=false
 CONTRACT_CONFIG_PATH=""
+CONTRACT_MANIFEST_PATH=""
 CONTRACT_DISK_PATH=""
 CONTRACT_DISK_DRIVE="a"
 CONTRACT_DISK_TYPE="d64"
@@ -117,6 +119,7 @@ Primary actions (exactly one; default build when omitted):
   --test-maestro-docker
   --test-fuzz
   --test-contract
+  --test-contract-replay
   --test-smoke
   --docker-build
   --docker-start
@@ -166,8 +169,9 @@ Fuzz modifiers (require --test-fuzz):
   --fuzz-no-progress-steps N End session after N unchanged steps (default 20)
   --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
 
-Contract test modifiers (require --test-contract):
+Contract test modifiers (require --test-contract or --test-contract-replay):
   --contract-config <path> Base JSON config template for the contract harness
+  --contract-manifest <path> Replay manifest path for contract replay runs
   --contract-mode safe|unsafe
   --contract-auth on|off
   --contract-password <pw>
@@ -207,6 +211,7 @@ Examples:
   ./build --docker-start
   ./build --test-maestro-docker
   ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off
+  ./build --test-contract-replay --c64u-target real --c64u-host c64u --contract-config tests/contract/config.stress.matrix.spike.json --contract-manifest test-results/contract/runs/RUN_ID/replay/manifest.json
   ./build --test-smoke --c64u-target real --c64u-host C64U
 
 Notes:
@@ -246,7 +251,7 @@ set_primary_action() {
 
 is_test_action() {
   case "$PRIMARY_ACTION" in
-    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-smoke)
+    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-contract-replay|test-smoke)
       return 0
       ;;
     test-maestro-docker)
@@ -361,7 +366,7 @@ ensure_playwright_port() {
   fi
 }
 
-run_contract_test() {
+resolve_contract_mode() {
   local mode=""
   if [[ "$CONTRACT_MODE_SET" == "true" || -z "$CONTRACT_CONFIG_PATH" ]]; then
     local mode_raw="${CONTRACT_MODE,,}"
@@ -373,7 +378,10 @@ run_contract_test() {
       exit 1
     fi
   fi
+  printf '%s' "$mode"
+}
 
+resolve_contract_auth() {
   local auth=""
   if [[ "$CONTRACT_AUTH_SET" == "true" || -z "$CONTRACT_CONFIG_PATH" ]]; then
     local auth_raw="${CONTRACT_AUTH,,}"
@@ -385,6 +393,13 @@ run_contract_test() {
       exit 1
     fi
   fi
+  printf '%s' "$auth"
+}
+
+write_contract_config() {
+  local config_path="$1"
+  local mode="$2"
+  local auth="$3"
 
   if [[ "$auth" == "ON" && -z "$CONTRACT_PASSWORD" ]]; then
     echo "--contract-password is required when auth=on" >&2
@@ -407,9 +422,6 @@ run_contract_test() {
   fi
 
   local base_url="http://${C64U_HOST}"
-  local config_path
-  config_path="$(mktemp -t c64u-contract-test.XXXXXX.json)"
-  trap 'rm -f "$config_path"' RETURN
 
   export CONTRACT_TEST_BASE_URL="$base_url"
   export CONTRACT_TEST_MODE_UPPER="$mode"
@@ -519,6 +531,20 @@ function isPlainObject(value) {
 }
 NODE
 
+  printf '%s' "$base_url"
+}
+
+run_contract_test() {
+  local mode
+  local auth
+  local config_path
+  local base_url
+  mode="$(resolve_contract_mode)"
+  auth="$(resolve_contract_auth)"
+  config_path="$(mktemp -t c64u-contract-test.XXXXXX.json)"
+  trap 'rm -f "$config_path"' RETURN
+  base_url="$(write_contract_config "$config_path" "$mode" "$auth")"
+
   log "Running contract test harness (${mode}/${auth}) against ${base_url}"
   local harness_status=0
   set +e
@@ -529,6 +555,35 @@ NODE
   set -e
   if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
     echo "Contract test harness failed (tsc=${tsc_status}, run=${run_status})" >&2
+    harness_status=1
+  fi
+
+  if [[ "$harness_status" -ne 0 ]]; then
+    exit 1
+  fi
+}
+
+run_contract_replay() {
+  local mode
+  local auth
+  local config_path
+  local base_url
+  mode="$(resolve_contract_mode)"
+  auth="$(resolve_contract_auth)"
+  config_path="$(mktemp -t c64u-contract-replay.XXXXXX.json)"
+  trap 'rm -f "$config_path"' RETURN
+  base_url="$(write_contract_config "$config_path" "$mode" "$auth")"
+
+  log "Running contract replay against ${base_url}"
+  local harness_status=0
+  set +e
+  (cd "$ROOT_DIR" && npx tsc -p tests/contract/tsconfig.json)
+  local tsc_status=$?
+  (cd "$ROOT_DIR" && node tests/contract/dist/replay.js --manifest "$CONTRACT_MANIFEST_PATH" --config "$config_path")
+  local run_status=$?
+  set -e
+  if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
+    echo "Contract replay failed (tsc=${tsc_status}, run=${run_status})" >&2
     harness_status=1
   fi
 
@@ -646,6 +701,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --test-contract)
       set_primary_action "test-contract" "$1"
+      shift
+      ;;
+    --test-contract-replay)
+      set_primary_action "test-contract-replay" "$1"
       shift
       ;;
     --test-smoke)
@@ -878,6 +937,12 @@ while [[ $# -gt 0 ]]; do
       CONTRACT_CONFIG_PATH="$2"
       shift 2
       ;;
+    --contract-manifest)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_MANIFEST_PATH="$2"
+      shift 2
+      ;;
     --contract-auth)
       record_flag CONTRACT_FLAGS "$1"
       require_value "$1" "${2:-}"
@@ -1010,14 +1075,14 @@ if [[ "$PRIMARY_ACTION" != "test-fuzz" && ${#FUZZ_FLAGS[@]} -gt 0 ]]; then
   exit 1
 fi
 
-if [[ "$PRIMARY_ACTION" != "test-contract" && ${#CONTRACT_FLAGS[@]} -gt 0 ]]; then
-  echo "Contract test modifiers require --test-contract" >&2
+if [[ "$PRIMARY_ACTION" != "test-contract" && "$PRIMARY_ACTION" != "test-contract-replay" && ${#CONTRACT_FLAGS[@]} -gt 0 ]]; then
+  echo "Contract test modifiers require --test-contract or --test-contract-replay" >&2
   exit 1
 fi
 
 if [[ ${#TARGET_FLAGS[@]} -gt 0 ]]; then
   case "$PRIMARY_ACTION" in
-    test-contract|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
+    test-contract|test-contract-replay|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
       ;;
     *)
       echo "--c64u-target/--c64u-host are only valid with contract, Maestro, or smoke tests" >&2
@@ -1044,6 +1109,16 @@ fi
 
 if [[ "$PRIMARY_ACTION" == "test-contract" && "$C64U_TARGET_SET" != "true" ]]; then
   echo "Contract tests require --c64u-target mock|real" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-contract-replay" && "$C64U_TARGET_SET" != "true" ]]; then
+  echo "Contract replay requires --c64u-target mock|real" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-contract-replay" && -z "$CONTRACT_MANIFEST_PATH" ]]; then
+  echo "Contract replay requires --contract-manifest <path>" >&2
   exit 1
 fi
 
@@ -1086,6 +1161,7 @@ RUN_TEST_MAESTRO_TAGS=false
 RUN_TEST_MAESTRO_DOCKER=false
 RUN_FUZZ=false
 RUN_CONTRACT_TEST=false
+RUN_CONTRACT_REPLAY=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_EMULATOR=false
@@ -1150,6 +1226,12 @@ case "$PRIMARY_ACTION" in
     RUN_BUILD=false
     RUN_APK=false
     RUN_CONTRACT_TEST=true
+    ;;
+  test-contract-replay)
+    RUN_TEST=false
+    RUN_BUILD=false
+    RUN_APK=false
+    RUN_CONTRACT_REPLAY=true
     ;;
   test-smoke)
     RUN_TEST=false
@@ -1295,6 +1377,10 @@ fi
 
 if [[ "$RUN_CONTRACT_TEST" == "true" ]]; then
   run_contract_test
+fi
+
+if [[ "$RUN_CONTRACT_REPLAY" == "true" ]]; then
+  run_contract_replay
 fi
 
 if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then
