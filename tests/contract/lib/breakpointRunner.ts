@@ -9,6 +9,7 @@
 import { delay } from "./timing.js";
 import type { LogEventInput } from "./logging.js";
 import type { ProbeResult, HealthMonitor } from "./health.js";
+import { runStage } from "./stageRunner.js";
 import {
   type BreakpointFailureSummary,
   type BreakpointHealthStatus,
@@ -146,10 +147,13 @@ export async function runStressBreakpointProfile(input: {
 
       const stageAbort = await runStage({
         stage,
-        scenario,
+        mutation: {
+          mutate: ({ clientId }) => scenario.mutate({ clientId }),
+        },
         onAbort: (reason) => {
           abortReason ??= reason;
         },
+        shouldAbort: () => abortReason,
       });
 
       stage.endedAt = new Date().toISOString();
@@ -189,60 +193,6 @@ export async function runStressBreakpointProfile(input: {
     traceTail: traceTail.snapshot(),
     aborted: Boolean(abortReason),
   };
-}
-
-async function runStage(input: {
-  stage: BreakpointStageRecord;
-  scenario: PreparedBreakpointScenario;
-  onAbort: (reason: string) => void;
-}): Promise<string | null> {
-  const stageDeadline = Date.now() + input.stage.durationMs;
-  const inFlight = new Set<Promise<void>>();
-  const availableClientIds = Array.from({ length: input.stage.concurrency }, (_, index) => `client-${index + 1}`);
-  let nextLaunchAt = Date.now();
-  let abortReason: string | null = null;
-
-  const waitForSlot = async (): Promise<string | null> => {
-    while (availableClientIds.length === 0 && !abortReason) {
-      if (inFlight.size === 0) {
-        break;
-      }
-      await Promise.race(inFlight);
-    }
-    return availableClientIds.shift() ?? null;
-  };
-
-  while (Date.now() < stageDeadline && !abortReason) {
-    const waitMs = nextLaunchAt - Date.now();
-    if (waitMs > 0) {
-      await delay(waitMs);
-    }
-    nextLaunchAt += input.stage.rateDelayMs;
-    if (Date.now() >= stageDeadline || abortReason) {
-      break;
-    }
-
-    const clientId = await waitForSlot();
-    if (!clientId) {
-      abortReason = abortReason ?? `No client slot available for ${input.stage.stageId}`;
-      break;
-    }
-
-    const task = input.scenario
-      .mutate({ clientId })
-      .catch((error) => {
-        abortReason ??= String(error);
-        input.onAbort(abortReason);
-      })
-      .finally(() => {
-        availableClientIds.push(clientId);
-        inFlight.delete(task);
-      });
-    inFlight.add(task);
-  }
-
-  await Promise.allSettled(inFlight);
-  return abortReason;
 }
 
 async function runHealthLoop(input: {

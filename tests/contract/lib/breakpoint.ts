@@ -78,6 +78,8 @@ export type BreakpointTraceEntry = {
   retryDelayMs?: number;
 };
 
+export type RecoveryOutcome = "completed" | "device-unresponsive";
+
 export type BreakpointRequestTraceContext = {
   stageId?: string;
   clientId?: string;
@@ -156,11 +158,11 @@ export function createBreakpointFailureSummary(input: {
   };
 }
 
-export function shouldSkipRecoveryAfterBreakpointFailure(input: {
+export function shouldSkipRecovery(input: {
   config: HarnessConfig;
-  abortReason: string | null;
+  outcome: RecoveryOutcome;
 }): boolean {
-  return hasStressBreakpoint(input.config) && Boolean(input.abortReason);
+  return input.outcome === "device-unresponsive";
 }
 
 export class TraceTailBuffer {
