@@ -14,6 +14,8 @@ import yaml from "js-yaml";
 const ModeSchema = z.union([z.literal("SAFE"), z.literal("STRESS")]);
 const AuthSchema = z.union([z.literal("ON"), z.literal("OFF")]);
 const FtpModeSchema = z.union([z.literal("PASV"), z.literal("PORT")]);
+const MatrixTestTypeSchema = z.union([z.literal("soak"), z.literal("stress"), z.literal("spike")]);
+const FtpSessionModeSchema = z.union([z.literal("shared"), z.literal("per-request")]);
 const PrgActionSchema = z.union([z.literal("run"), z.literal("load")]);
 const BreakpointScenarioIdSchema = z.literal("rest.breakpoint.sid-volume");
 
@@ -45,6 +47,54 @@ const StressBreakpointSchema = z
       });
     }
   });
+
+const StressMatrixSoakSchema = z.object({
+  testType: z.literal("soak"),
+  operationId: z.string().min(1),
+  concurrency: z.number().int().min(1),
+  rateDelayMs: z.number().int().min(0),
+  durationMs: z.number().int().min(0),
+  failureDetectionTimeoutMs: z.number().int().min(100),
+  ftpSessionMode: FtpSessionModeSchema.default("shared").optional(),
+});
+
+const StressMatrixStressSchema = z.object({
+  testType: z.literal("stress"),
+  operationIds: z.array(z.string().min(1)).min(1),
+  concurrencyLevels: z.array(z.number().int().min(1)).min(1),
+  rateRampMs: z.array(z.number().int().min(0)).min(1),
+  ftpSessionModes: z.array(FtpSessionModeSchema).min(1),
+  stageDurationMs: z.number().int().min(100),
+  failureDetectionTimeoutMs: z.number().int().min(100),
+  tailRequestCount: z.number().int().min(1),
+});
+
+const StressMatrixSpikeSchema = z.object({
+  testType: z.literal("spike"),
+  operationIds: z.array(z.string().min(1)).min(1),
+  spikeConcurrency: z.number().int().min(1),
+  spikeRateDelayMs: z.number().int().min(0),
+  spikeDurationMs: z.number().int().min(100),
+  idleDurationMs: z.number().int().min(100),
+  spikeCount: z.number().int().min(1),
+  failureDetectionTimeoutMs: z.number().int().min(100),
+  ftpSessionModes: z.array(FtpSessionModeSchema).min(1).default(["shared"]).optional(),
+});
+
+const TraceLevelSchema = z.union([z.literal("minimal"), z.literal("full")]);
+
+const TraceSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    level: TraceLevelSchema.default("full"),
+  })
+  .optional();
+
+const StressMatrixSchema = z.discriminatedUnion("testType", [
+  StressMatrixSoakSchema,
+  StressMatrixStressSchema,
+  StressMatrixSpikeSchema,
+]);
 
 export const ConfigSchema = z
   .object({
@@ -106,7 +156,9 @@ export const ConfigSchema = z
         maxSockets: z.number().int().min(1).optional(),
       })
       .optional(),
+    trace: TraceSchema,
     stressBreakpoint: StressBreakpointSchema.optional(),
+    stressMatrix: StressMatrixSchema.optional(),
   })
   .refine((value) => (value.auth === "ON" ? Boolean(value.password) : true), {
     message: "password is required when auth is ON",
@@ -115,11 +167,22 @@ export const ConfigSchema = z
   .refine((value) => (value.stressBreakpoint ? value.mode === "STRESS" : true), {
     message: "stressBreakpoint is only supported when mode is STRESS",
     path: ["stressBreakpoint"],
+  })
+  .refine((value) => (value.stressMatrix ? value.mode === "STRESS" : true), {
+    message: "stressMatrix is only supported when mode is STRESS",
+    path: ["stressMatrix"],
+  })
+  .refine((value) => !(value.stressBreakpoint && value.stressMatrix), {
+    message: "stressBreakpoint and stressMatrix are mutually exclusive",
+    path: ["stressMatrix"],
   });
 
 export type HarnessConfig = z.infer<typeof ConfigSchema>;
 export type StressBreakpointConfig = z.infer<typeof StressBreakpointSchema>;
 export type StressBreakpointTarget = z.infer<typeof StressBreakpointTargetSchema>;
+export type StressMatrixConfig = z.infer<typeof StressMatrixSchema>;
+export type StressMatrixTestType = z.infer<typeof MatrixTestTypeSchema>;
+export type FtpSessionMode = z.infer<typeof FtpSessionModeSchema>;
 
 export const DefaultConfig: HarnessConfig = {
   baseUrl: "http://c64u",
@@ -157,6 +220,10 @@ export const DefaultConfig: HarnessConfig = {
     prgAction: "run",
   },
   allowMachineReset: false,
+  trace: {
+    enabled: false,
+    level: "full",
+  },
 };
 
 export function loadConfig(configPath?: string): HarnessConfig {

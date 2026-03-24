@@ -57,3 +57,31 @@ export class HealthMonitor {
     return { abort: false };
   }
 }
+
+import { FtpClient } from "./ftpClient.js";
+import type { HarnessConfig } from "./config.js";
+
+export function createFtpHealthProbe(config: HarnessConfig): () => Promise<ProbeResult> {
+  return async () => {
+    const client = new FtpClient({
+      host: new URL(config.baseUrl).hostname,
+      port: config.ftpPort ?? 21,
+      user: "anonymous",
+      password: config.auth === "ON" ? config.password || "" : "",
+      mode: config.ftpMode,
+      timeoutMs: config.timeouts.ftpTimeoutMs,
+    });
+    const start = Date.now();
+    try {
+      await client.connect();
+      await client.sendCommand("NOOP");
+      return { ok: true, latencyMs: Date.now() - start };
+    } catch (error) {
+      return { ok: false, error: String(error), latencyMs: Date.now() - start };
+    } finally {
+      await client.close().catch((error) => {
+        console.warn("FTP health probe close failed", { error: String(error) });
+      });
+    }
+  };
+}

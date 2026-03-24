@@ -51,21 +51,22 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
       const hrTimeNs = nowNs();
       const method = (requestConfig.method ?? "GET").toUpperCase();
       const fullUrl = buildTraceUrl(client, requestConfig.url ?? "");
-      options.traceCollector?.emit({
-        protocol: "REST",
-        direction: "request",
-        correlationId: "pending",
-        clientId,
-        timestamp: new Date().toISOString(),
-        launchedAtMs,
-        hrTimeNs,
-        method,
-        url: fullUrl,
-        headers: sanitizeTraceHeaders(requestConfig.headers as Record<string, unknown> | undefined),
-        body: serializeTraceValue(requestConfig.data),
-      });
       try {
         const response = await client.request(requestConfig);
+        options.traceCollector?.emit({
+          protocol: "REST",
+          direction: "request",
+          correlationId: response.correlationId,
+          clientId,
+          timestamp: new Date().toISOString(),
+          launchedAtMs,
+          hrTimeNs,
+          method,
+          url: fullUrl,
+          headers: sanitizeTraceHeaders(response.requestHeaders),
+          body: serializeTraceValue(requestConfig.data),
+        });
+        const preview = makeBodyPreview(response.data);
         options.traceCollector?.emit({
           protocol: "REST",
           direction: "response",
@@ -78,7 +79,8 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
           headers: sanitizeTraceHeaders(response.headers),
           body: serializeTraceValue(response.data),
           latencyMs: response.latencyMs,
-          ...makeBodyPreview(response.data),
+          bodyPreviewHex: preview.hex,
+          bodyPreviewAscii: preview.ascii,
         });
         const retryable = response.status >= 500 && attempt <= maxRetries;
         const retryDelayMs = retryable ? computeRetryDelay(shouldTrace, baseDelayMs, attempt) : undefined;
@@ -107,6 +109,19 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
         }
         return response;
       } catch (error) {
+        options.traceCollector?.emit({
+          protocol: "REST",
+          direction: "request",
+          correlationId: `error-${launchedAtMs}-${attempt}`,
+          clientId,
+          timestamp: new Date().toISOString(),
+          launchedAtMs,
+          hrTimeNs,
+          method,
+          url: fullUrl,
+          headers: sanitizeTraceHeaders(requestConfig.headers as Record<string, unknown> | undefined),
+          body: serializeTraceValue(requestConfig.data),
+        });
         const willRetry = attempt <= maxRetries;
         const retryDelayMs = willRetry ? computeRetryDelay(shouldTrace, baseDelayMs, attempt) : undefined;
         if (shouldTrace) {

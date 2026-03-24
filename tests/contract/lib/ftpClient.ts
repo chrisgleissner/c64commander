@@ -65,9 +65,13 @@ export class FtpClient {
       "FTP control connect timeout",
     );
     await this.readResponse();
-    await this.sendCommand(`USER ${this.config.user}`);
+    const userResponse = await this.sendCommand(`USER ${this.config.user}`);
+    if (userResponse.response.code === 230) {
+      this.connected = true;
+      return;
+    }
     const passResponse = await this.sendCommand(`PASS ${this.config.password}`);
-    if (passResponse.response.code !== 230) {
+    if (![202, 230].includes(passResponse.response.code)) {
       throw new Error(`FTP auth failed: ${passResponse.response.code} ${passResponse.response.message}`);
     }
     this.connected = true;

@@ -40,6 +40,48 @@ describe("contract config stressBreakpoint", () => {
       ),
     ).toThrow(/Unknown config target/);
   });
+
+  it("parses a stress matrix profile with tracing", () => {
+    const config = loadConfig(
+      writeConfigFile(
+        buildConfig({
+          stressBreakpoint: undefined,
+          stressMatrix: {
+            testType: "stress",
+            operationIds: ["rest.read-version", "ftp.dir-list"],
+            concurrencyLevels: [1, 2],
+            rateRampMs: [1000, 0],
+            ftpSessionModes: ["shared"],
+            stageDurationMs: 500,
+            failureDetectionTimeoutMs: 300,
+            tailRequestCount: 10,
+          },
+          trace: { enabled: true, level: "full" },
+        }),
+      ),
+    );
+    expect(config.trace?.enabled).toBe(true);
+    expect(config.stressMatrix?.testType).toBe("stress");
+  });
+
+  it("rejects simultaneous stress breakpoint and stress matrix configs", () => {
+    expect(() =>
+      loadConfig(
+        writeConfigFile(
+          buildConfig({
+            stressMatrix: {
+              testType: "soak",
+              operationId: "ftp.dir-list",
+              concurrency: 2,
+              rateDelayMs: 500,
+              durationMs: 1000,
+              failureDetectionTimeoutMs: 300,
+            },
+          }),
+        ),
+      ),
+    ).toThrow(/mutually exclusive/);
+  });
 });
 
 function writeConfigFile(config: Record<string, unknown>): string {
@@ -94,6 +136,10 @@ function buildConfig(overrides: Record<string, unknown> = {}): Record<string, un
         { category: "Audio Mixer", item: "Vol UltiSid 1" },
         { category: "Audio Mixer", item: "Vol UltiSid 2" },
       ],
+    },
+    trace: {
+      enabled: false,
+      level: "full",
     },
     ...overrides,
   };

@@ -1,0 +1,7 @@
+{
+  "baseUrl": "http://c64u",
+  "mode": "SAFE",
+  "auth": "OFF",
+  "ftpMode": "PASV",
+  "trace": { "enabled": true, "level": "full" }
+}

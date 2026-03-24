@@ -168,7 +168,7 @@ export function shouldSkipRecovery(input: {
 export class TraceTailBuffer {
   private readonly entries: BreakpointTraceEntry[] = [];
 
-  constructor(private readonly limit: number) {}
+  constructor(private readonly limit: number) { }
 
   push(entry: BreakpointTraceEntry): void {
     this.entries.push(entry);

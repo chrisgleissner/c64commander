@@ -15,16 +15,22 @@ import { RestClient } from "./lib/restClient.js";
 import { buildRestScenarios } from "./scenarios/rest/index.js";
 import { buildFtpScenarios } from "./scenarios/ftp/index.js";
 import { buildMixedScenarios } from "./scenarios/mixed/index.js";
-import { HealthMonitor } from "./lib/health.js";
+import { createFtpHealthProbe, HealthMonitor } from "./lib/health.js";
 import { LatencyTracker, deriveCooldown, delay } from "./lib/timing.js";
 import { SchemaValidator, schemaPath } from "./lib/schema.js";
 import type { LogEventInput } from "./lib/logging.js";
 import yaml from "js-yaml";
 import { createRestRequest } from "./lib/restRequest.js";
 import type { BreakpointRequestTraceContext, BreakpointTraceEntry } from "./lib/breakpoint.js";
-import { hasStressBreakpoint, shouldSkipRecoveryAfterBreakpointFailure } from "./lib/breakpoint.js";
+import { hasStressBreakpoint, shouldSkipRecovery } from "./lib/breakpoint.js";
 import { runStressBreakpointProfile, type BreakpointRunResult } from "./lib/breakpointRunner.js";
 import { prepareSidVolumeBreakpointScenario } from "./scenarios/rest/breakpointSidVolume.js";
+import { buildMatrixOperations } from "./lib/matrixOperations.js";
+import { runMatrixProfile } from "./lib/matrixRunner.js";
+import { buildMatrixStagePlan, hasStressMatrix, type MatrixRunResult } from "./lib/stressMatrix.js";
+import { TraceCollector } from "./lib/traceCollector.js";
+import { writeReplayManifest, writeTraceLine, writeTraceMd } from "./lib/traceWriter.js";
+import type { RunOutcome, TraceTestType } from "./lib/traceSchema.js";
 
 type LogEvent = LogEventInput & { timestamp: string };
 type ConcurrencyObservation = {
@@ -33,6 +39,16 @@ type ConcurrencyObservation = {
   failureMode: string;
   notes?: string;
 };
+
+class DeviceUnresponsiveError extends Error {
+  readonly stageId?: string;
+
+  constructor(message: string, stageId?: string) {
+    super(message);
+    this.name = "DeviceUnresponsiveError";
+    this.stageId = stageId;
+  }
+}
 
 const args = parseArgs(process.argv.slice(2));
 let config = loadConfig(args.configPath);
@@ -45,6 +61,7 @@ if (process.env.CONTRACT_TEST_TARGET?.toLowerCase() === "mock") {
     ftpPort: mockServers.ftpPort,
   };
 }
+config = applyTestTypeOverride(config, args.testTypeOverride);
 
 const runId = `${formatTimestamp(new Date())}-${config.mode}-${config.auth}`;
 const runRoot = path.join(process.cwd(), config.outputDir, "runs", runId);
@@ -56,6 +73,13 @@ fs.mkdirSync(latestRoot, { recursive: true });
 const logStream = fs.createWriteStream(path.join(runRoot, "logs.jsonl"), {
   flags: "a",
 });
+const traceCollector = config.trace?.enabled ? new TraceCollector(runId) : undefined;
+let traceStream: fs.WriteStream | undefined;
+if (traceCollector) {
+  fs.mkdirSync(path.join(runRoot, "replay"), { recursive: true });
+  traceStream = fs.createWriteStream(path.join(runRoot, "trace.jsonl"), { flags: "a" });
+  traceCollector.onEmit((entry) => writeTraceLine(traceStream!, entry));
+}
 const latencyMap = new Map<string, { kind: "REST" | "FTP"; tracker: LatencyTracker }>();
 const concurrencyObservations: ConcurrencyObservation[] = [];
 
@@ -87,6 +111,8 @@ let currentTraceDefaults: BreakpointRequestTraceContext | null = null;
 const traceListeners = new Set<(entry: BreakpointTraceEntry) => void>();
 const restRequest = createRestRequest(restClient, {
   mode: config.mode,
+  traceCollector,
+  defaultClientId: "rest-client",
   breakpointTrace: hasStressBreakpoint(config)
     ? {
         runId,
@@ -100,6 +126,13 @@ const restRequest = createRestRequest(restClient, {
       }
     : undefined,
 });
+
+const ftpHealthMonitor = hasStressMatrix(config)
+  ? new HealthMonitor(createFtpHealthProbe(config), {
+      maxConsecutiveFailures: 2,
+      maxUnreachableMs: resolveFailureDetectionTimeout(config),
+    })
+  : undefined;
 
 const healthMonitor = new HealthMonitor(
   async () => {
@@ -131,8 +164,8 @@ const healthMonitor = new HealthMonitor(
     }
   },
   {
-    maxConsecutiveFailures: hasStressBreakpoint(config) ? 2 : 3,
-    maxUnreachableMs: hasStressBreakpoint(config) ? config.stressBreakpoint.failureDetectionTimeoutMs : 30000,
+    maxConsecutiveFailures: config.mode === "STRESS" ? 2 : 3,
+    maxUnreachableMs: resolveFailureDetectionTimeout(config),
   },
 );
 
@@ -141,7 +174,10 @@ const restScenarios = filterScenarios(allRestScenarios, config.scenarios?.rest);
 const ftpScenarios = filterScenarios(buildFtpScenarios(), config.scenarios?.ftp);
 const mixedScenarios = filterScenarios(buildMixedScenarios(), config.scenarios?.mixed);
 let breakpointResult: BreakpointRunResult | null = null;
+let matrixResult: MatrixRunResult | null = null;
 let runError: unknown = null;
+let deviceUnresponsiveReason: string | null = null;
+let lastStageId: string | null = null;
 
 try {
   if (hasStressBreakpoint(config)) {
@@ -161,6 +197,27 @@ try {
         traceListeners.add(listener);
       },
     });
+    if (breakpointResult.failureSummary.healthStatus.abortReason) {
+      deviceUnresponsiveReason = breakpointResult.failureSummary.healthStatus.abortReason;
+      lastStageId = breakpointResult.failureSummary.stageId;
+      runError = new DeviceUnresponsiveError(deviceUnresponsiveReason, lastStageId ?? undefined);
+    }
+  } else if (hasStressMatrix(config)) {
+    matrixResult = await runMatrixProfile({
+      config,
+      log,
+      healthMonitor,
+      ftpHealthMonitor,
+      traceCollector,
+      stages: buildMatrixStagePlan(config),
+      operations: buildMatrixOperations(),
+      restRequest,
+    });
+    if (matrixResult.aborted) {
+      deviceUnresponsiveReason = matrixResult.failureSummary.abortReason;
+      lastStageId = matrixResult.failureSummary.stageId;
+      runError = new DeviceUnresponsiveError(deviceUnresponsiveReason ?? "Matrix health abort", lastStageId ?? undefined);
+    }
   } else {
     await runScenarioGroup("rest", restScenarios, async (scenario) => {
       await runScenario(scenario.id, scenario.safe, () =>
@@ -177,18 +234,24 @@ try {
     });
 
     await runScenarioGroup("ftp", ftpScenarios, async (scenario) => {
-      await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log }));
+      await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log, traceCollector }));
     });
 
     await runScenarioGroup("mixed", mixedScenarios, async (scenario) => {
       await runScenario(scenario.id, scenario.safe, () =>
-        scenario.run({ rest: restClient, request: restRequest, config, log }),
+        scenario.run({ rest: restClient, request: restRequest, config, log, traceCollector }),
       );
     });
   }
 } catch (error) {
   runError = error;
+  if (error instanceof DeviceUnresponsiveError) {
+    deviceUnresponsiveReason = error.message;
+    lastStageId = error.stageId ?? lastStageId;
+  }
 }
+
+const outcome: RunOutcome = deviceUnresponsiveReason ? "device-unresponsive" : "completed";
 
 try {
   const latencyStats = buildLatencyStats(latencyMap, config);
@@ -285,7 +348,16 @@ try {
     return results;
   }
 
-  const meta = await buildMeta(config);
+  const meta = await buildMeta(config, outcome);
+
+  if (deviceUnresponsiveReason) {
+    writeDeviceUnresponsiveSentinel({
+      runRoot,
+      runId,
+      abortReason: deviceUnresponsiveReason,
+      lastStageId,
+    });
+  }
 
   writeJson(path.join(runRoot, "meta.json"), meta);
   writeJson(path.join(runRoot, "endpoints.json"), endpointsPayload);
@@ -325,6 +397,18 @@ try {
     }
   }
 
+  if (matrixResult) {
+    writeJson(path.join(runRoot, "matrix-stages.json"), matrixResult.stages);
+    writeJson(path.join(runRoot, "matrix-failure-summary.json"), matrixResult.failureSummary);
+  }
+
+  if (traceCollector) {
+    const entries = traceCollector.snapshot();
+    writeTraceMd(runRoot, entries);
+    writeReplayManifest(runRoot, entries, config.baseUrl);
+    traceStream?.end();
+  }
+
   copyLatest(runRoot, latestRoot, [
     "meta.json",
     "logs.jsonl",
@@ -337,15 +421,18 @@ try {
     "breakpoint-stages.json",
     "failure-summary.json",
     "request-trace-tail.json",
+    "matrix-stages.json",
+    "matrix-failure-summary.json",
+    "trace.jsonl",
+    "trace.md",
+    "DEVICE_UNRESPONSIVE",
+    "replay/manifest.json",
+    "replay/device-replay.http",
+    "replay/device-replay.sh",
   ]);
 } finally {
   try {
-    if (
-      !shouldSkipRecoveryAfterBreakpointFailure({
-        config,
-        abortReason: breakpointResult?.failureSummary.abortReason ?? null,
-      })
-    ) {
+    if (!shouldSkipRecovery({ config, outcome })) {
       await rebootAndRecover(restClient, config);
     }
   } finally {
@@ -356,7 +443,17 @@ try {
   }
 }
 
-if (runError) {
+if (outcome === "device-unresponsive") {
+  process.exitCode = 2;
+  process.stderr.write(
+    `[DEVICE UNRESPONSIVE] stage=${lastStageId ?? "none"} reason=${deviceUnresponsiveReason ?? "unknown"} runId=${runId}\n`,
+  );
+} else {
+  const stageCount = breakpointResult?.stages.length ?? matrixResult?.stages.length ?? 0;
+  process.stderr.write(`[COMPLETED] runId=${runId} stages=${stageCount}\n`);
+}
+
+if (runError && !(runError instanceof DeviceUnresponsiveError)) {
   throw runError;
 }
 
@@ -369,7 +466,7 @@ async function runScenarioGroup<T extends { id: string }>(
     await runner(scenario);
     const abort = healthMonitor.shouldAbort();
     if (abort.abort) {
-      throw new Error(`Abort after ${label}:${scenario.id} - ${abort.reason}`);
+      throw new DeviceUnresponsiveError(`Abort after ${label}:${scenario.id} - ${abort.reason}`, scenario.id);
     }
     await delay(config.pacing.restMinDelayMs);
   }
@@ -411,7 +508,7 @@ async function runScenario(id: string, safe: boolean, run: () => Promise<void>):
         });
         const abort = healthMonitor.shouldAbort();
         if (abort.abort && !abortError) {
-          abortError = new Error(`Abort during ${id}: ${abort.reason}`);
+          abortError = new DeviceUnresponsiveError(`Abort during ${id}: ${abort.reason}`, id);
         }
       })
       .catch((error) => {
@@ -526,7 +623,7 @@ function buildCooldowns(
   };
 }
 
-async function buildMeta(cfg: typeof config) {
+async function buildMeta(cfg: typeof config, outcome: RunOutcome, replayOf?: string) {
   const openapiPath = path.join(process.cwd(), "doc/c64/c64u-openapi.yaml");
   const openapiHash = fs.existsSync(openapiPath) ? hashFile(openapiPath) : "";
   const firmwareHash = getGitHash(path.join(process.cwd(), "1541ultimate"));
@@ -547,11 +644,14 @@ async function buildMeta(cfg: typeof config) {
   }
 
   return {
+    runId,
     startedAt: new Date().toISOString(),
     baseUrl: cfg.baseUrl,
     mode: cfg.mode,
     auth: cfg.auth,
     ftpMode: cfg.ftpMode,
+    outcome,
+    replayOf,
     openapiHash,
     firmwareHash,
     repoHash,
@@ -623,6 +723,7 @@ function copyLatest(sourceDir: string, targetDir: string, files: string[]): void
     if (!fs.existsSync(src)) {
       continue;
     }
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(src, dest);
   }
 }
@@ -676,15 +777,123 @@ function getGitHash(repoPath: string): string {
   }
 }
 
-function parseArgs(argv: string[]): { configPath?: string } {
-  const result: { configPath?: string } = {};
+function parseArgs(argv: string[]): { configPath?: string; testTypeOverride?: TraceTestType } {
+  const result: { configPath?: string; testTypeOverride?: TraceTestType } = {};
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--config") {
       result.configPath = argv[i + 1];
       i += 1;
+      continue;
+    }
+    if (argv[i] === "--test-type") {
+      const candidate = argv[i + 1];
+      if (candidate === "soak" || candidate === "stress" || candidate === "spike") {
+        result.testTypeOverride = candidate;
+      } else {
+        throw new Error(`Invalid --test-type value: ${candidate ?? "<missing>"}`);
+      }
+      i += 1;
     }
   }
   return result;
+}
+
+function resolveFailureDetectionTimeout(cfg: typeof config): number {
+  if (cfg.stressBreakpoint) {
+    return cfg.stressBreakpoint.failureDetectionTimeoutMs;
+  }
+  if (cfg.stressMatrix) {
+    return cfg.stressMatrix.failureDetectionTimeoutMs;
+  }
+  return 30000;
+}
+
+function applyTestTypeOverride(
+  cfg: typeof config,
+  override: TraceTestType | undefined,
+): typeof config {
+  if (!override) {
+    return cfg;
+  }
+  if (!cfg.stressMatrix) {
+    throw new Error("--test-type requires stressMatrix in the resolved config");
+  }
+  if (cfg.stressMatrix.testType === override) {
+    return cfg;
+  }
+
+  if (override === "soak") {
+    const source = cfg.stressMatrix;
+    return {
+      ...cfg,
+      stressMatrix:
+        source.testType === "soak"
+          ? source
+          : {
+              testType: "soak",
+              operationId: source.operationIds[0] ?? "rest.read-version",
+              concurrency: source.testType === "stress" ? source.concurrencyLevels[0] ?? 1 : source.spikeConcurrency,
+              rateDelayMs: source.testType === "stress" ? source.rateRampMs[0] ?? 0 : source.spikeRateDelayMs,
+              durationMs: source.testType === "stress" ? source.stageDurationMs : source.spikeDurationMs,
+              failureDetectionTimeoutMs: source.failureDetectionTimeoutMs,
+              ftpSessionMode: source.testType === "stress" ? source.ftpSessionModes[0] ?? "shared" : source.ftpSessionModes?.[0] ?? "shared",
+            },
+    };
+  }
+
+  if (override === "stress") {
+    const source = cfg.stressMatrix;
+    return {
+      ...cfg,
+      stressMatrix:
+        source.testType === "stress"
+          ? source
+          : {
+              testType: "stress",
+              operationIds: source.testType === "soak" ? [source.operationId] : source.operationIds,
+              concurrencyLevels: source.testType === "soak" ? [source.concurrency] : [source.spikeConcurrency],
+              rateRampMs: source.testType === "soak" ? [source.rateDelayMs] : [source.spikeRateDelayMs],
+              ftpSessionModes: source.testType === "soak" ? [source.ftpSessionMode ?? "shared"] : source.ftpSessionModes ?? ["shared"],
+              stageDurationMs: source.testType === "soak" ? source.durationMs : source.spikeDurationMs,
+              failureDetectionTimeoutMs: source.failureDetectionTimeoutMs,
+              tailRequestCount: 50,
+            },
+    };
+  }
+
+  const source = cfg.stressMatrix;
+  return {
+    ...cfg,
+    stressMatrix:
+      source.testType === "spike"
+        ? source
+        : {
+            testType: "spike",
+            operationIds: source.testType === "soak" ? [source.operationId] : source.operationIds,
+            spikeConcurrency: source.testType === "soak" ? source.concurrency : source.concurrencyLevels[0] ?? 1,
+            spikeRateDelayMs: source.testType === "soak" ? source.rateDelayMs : source.rateRampMs[0] ?? 0,
+            spikeDurationMs: source.testType === "soak" ? source.durationMs : source.stageDurationMs,
+            idleDurationMs: source.failureDetectionTimeoutMs,
+            spikeCount: 1,
+            failureDetectionTimeoutMs: source.failureDetectionTimeoutMs,
+            ftpSessionModes: source.testType === "soak" ? [source.ftpSessionMode ?? "shared"] : source.ftpSessionModes,
+          },
+  };
+}
+
+function writeDeviceUnresponsiveSentinel(input: {
+  runRoot: string;
+  runId: string;
+  abortReason: string;
+  lastStageId: string | null;
+}): void {
+  const content = [
+    `runId: ${input.runId}`,
+    `timestamp: ${new Date().toISOString()}`,
+    `abortReason: ${input.abortReason}`,
+    `lastStageId: ${input.lastStageId ?? "none"}`,
+  ].join("\n");
+  fs.writeFileSync(path.join(input.runRoot, "DEVICE_UNRESPONSIVE"), `${content}\n`, "utf8");
 }
 
 function formatTimestamp(date: Date): string {

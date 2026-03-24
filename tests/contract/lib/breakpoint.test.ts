@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBreakpointStagePlan,
   createBreakpointFailureSummary,
-  shouldSkipRecoveryAfterBreakpointFailure,
+  shouldSkipRecovery,
   TraceTailBuffer,
 } from "./breakpoint.js";
 import type { HarnessConfig } from "./config.js";
@@ -48,15 +48,15 @@ describe("breakpoint stage planning", () => {
     expect(summary.stageId).toBe("stage-02-r2000-c3");
     expect(summary.abortReason).toBe("PUT /v1/configs failed");
     expect(
-      shouldSkipRecoveryAfterBreakpointFailure({
+      shouldSkipRecovery({
         config: buildConfig(),
-        abortReason: summary.abortReason,
+        outcome: "device-unresponsive",
       }),
     ).toBe(true);
     expect(
-      shouldSkipRecoveryAfterBreakpointFailure({
+      shouldSkipRecovery({
         config: { ...buildConfig(), stressBreakpoint: undefined, mode: "SAFE" },
-        abortReason: summary.abortReason,
+        outcome: "completed",
       }),
     ).toBe(false);
   });

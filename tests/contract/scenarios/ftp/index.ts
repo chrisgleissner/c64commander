@@ -10,10 +10,12 @@ import type { HarnessConfig } from "../../lib/config.js";
 import { FtpClient } from "../../lib/ftpClient.js";
 import { delay } from "../../lib/timing.js";
 import type { LogEventInput } from "../../lib/logging.js";
+import type { TraceCollector } from "../../lib/traceCollector.js";
 
 export type FtpScenarioContext = {
   config: HarnessConfig;
   log: (event: LogEventInput) => void;
+  traceCollector?: TraceCollector;
 };
 
 export type FtpScenario = {
@@ -22,7 +24,7 @@ export type FtpScenario = {
   run: (ctx: FtpScenarioContext) => Promise<void>;
 };
 
-function makeFtpClient(config: HarnessConfig): FtpClient {
+export function makeFtpClient(config: HarnessConfig, traceCollector?: TraceCollector, clientId?: string): FtpClient {
   return new FtpClient({
     host: new URL(config.baseUrl).hostname,
     port: config.ftpPort ?? 21,
@@ -30,6 +32,8 @@ function makeFtpClient(config: HarnessConfig): FtpClient {
     password: config.auth === "ON" ? config.password || "" : "",
     mode: config.ftpMode,
     timeoutMs: config.timeouts.ftpTimeoutMs,
+    traceCollector,
+    clientId,
   });
 }
 
@@ -40,8 +44,8 @@ export function buildFtpScenarios(): FtpScenario[] {
     {
       id: "ftp.basic",
       safe: true,
-      run: async ({ config, log }) => {
-        const client = makeFtpClient(config);
+      run: async ({ config, log, traceCollector }) => {
+        const client = makeFtpClient(config, traceCollector);
         try {
           await client.connect();
           log({
@@ -285,9 +289,9 @@ export function buildFtpScenarios(): FtpScenario[] {
     {
       id: "ftp.concurrent-sessions",
       safe: true,
-      run: async ({ config, log }) => {
+      run: async ({ config, log, traceCollector }) => {
         for (const n of [2, 3]) {
-          const sessions = Array.from({ length: n }, () => makeFtpClient(config));
+          const sessions = Array.from({ length: n }, (_value, index) => makeFtpClient(config, traceCollector, `client-${index + 1}`));
           const results: Array<{ ok: boolean; latencyMs: number }> = [];
           try {
             // Connect all sessions
@@ -374,8 +378,8 @@ export function buildFtpScenarios(): FtpScenario[] {
     {
       id: "ftp.large-transfer",
       safe: true,
-      run: async ({ config, log }) => {
-        const client = makeFtpClient(config);
+      run: async ({ config, log, traceCollector }) => {
+        const client = makeFtpClient(config, traceCollector);
         try {
           await client.connect();
           await client.cwd(config.scratch.ftpDir);
@@ -433,10 +437,10 @@ export function buildFtpScenarios(): FtpScenario[] {
     {
       id: "ftp.during-rest-load",
       safe: true,
-      run: async ({ config, log }) => {
+      run: async ({ config, log, traceCollector }) => {
         // This tests FTP stability when REST requests are in-flight
         // Mixed scenario is handled in mixed/index.ts but we add FTP-side perspective here
-        const client = makeFtpClient(config);
+        const client = makeFtpClient(config, traceCollector);
         try {
           await client.connect();
           await client.cwd(config.scratch.ftpDir);
