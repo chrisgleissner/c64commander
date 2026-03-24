@@ -184,7 +184,7 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                         return
                     }
 
-                    guard !entry.info.isDirectory,
+                    guard entry.info.type != .directory,
                           let rawPath = entry.info.name,
                           !rawPath.isEmpty else {
                         processedEntries += 1
