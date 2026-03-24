@@ -6,17 +6,17 @@ Classification: CODE_CHANGE
 
 ## Phase Overview
 
-| Phase | Description                  | Status      |
-| ----- | ---------------------------- | ----------- |
-| 0     | Document ingestion           | ✅ COMPLETE |
-| 1     | Architecture integration     | 🔄 ACTIVE  |
-| 2     | VT100 screen parser          | ⬜ PENDING  |
-| 3     | Menu navigator               | ⬜ PENDING  |
-| 4     | Action execution layer       | ⬜ PENDING  |
-| 5     | UI integration               | ⬜ PENDING  |
-| 6     | Screenshots                  | ⬜ PENDING  |
-| 7     | Test coverage enforcement    | ⬜ PENDING  |
-| 8     | Final validation             | ⬜ PENDING  |
+| Phase | Description               | Status      |
+| ----- | ------------------------- | ----------- |
+| 0     | Document ingestion        | ✅ COMPLETE |
+| 1     | Architecture integration  | 🔄 ACTIVE   |
+| 2     | VT100 screen parser       | ⬜ PENDING  |
+| 3     | Menu navigator            | ⬜ PENDING  |
+| 4     | Action execution layer    | ⬜ PENDING  |
+| 5     | UI integration            | ⬜ PENDING  |
+| 6     | Screenshots               | ⬜ PENDING  |
+| 7     | Test coverage enforcement | ⬜ PENDING  |
+| 8     | Final validation          | ⬜ PENDING  |
 
 ## Spec Reference
 
