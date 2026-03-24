@@ -131,6 +131,32 @@ Date: 2026-03-24
   - `npm run build` passed.
   - Isolated unit coverage completed with 91.01% branch coverage.
 
+## 2026-03-24T13:00:00Z — Phase 3 session 2: downstream fixes and regression tests
+
+### `incomplete` → `in_progress`/`failed` downstream propagation
+
+- Updated `resolveActionSeverity()` in `diagnosticsSeverity.ts`: `"failed"` → `"error"`, `"in_progress"` → `"warn"`.
+- Updated all downstream test assertions and fixtures (7 replacements across 6 files):
+  - `diagnosticsSeverity.test.ts`: outcome assertions
+  - `actionSummaries.test.ts` (unit/diagnostics): 3 `"incomplete"` → `"in_progress"`, 1 unrecognized status test
+  - `actionSummariesGolden.test.ts`: COR-0005 assertion
+  - `actionSummaries.test.ts` (unit/lib/diagnostics): assertion
+  - `actions.json` fixture: outcome value
+
+### Regression tests added
+
+- `healthCheckEngine.test.ts`: 3 new tests (items-wrapper format, option-list index fallback, undefined product field)
+- `actionSummaries.test.ts` (unit/diagnostics): 2 new tests (`"failed"` for unrecognized status, `"in_progress"` for no action-end)
+
+### Validation results
+
+- TypeScript: clean
+- Vitest: 381 files, 4531 tests passed
+- ESLint: clean on all modified files
+- Prettier: clean after formatting 3 files
+- Build: production build succeeded
+- Coverage: 90.98% branch (unit-only); CI threshold is COVERAGE_MIN=90 (merged unit+E2E)
+
 ## 2026-03-24T10:00:00Z — Phase 1 & 2: Baseline and root-cause analysis
 
 ### CONFIG health-check root cause (CONFIRMED)

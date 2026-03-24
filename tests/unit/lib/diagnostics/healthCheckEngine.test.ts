@@ -523,6 +523,19 @@ describe("runHealthCheck — REST probe optional fields", () => {
     expect(result!.deviceInfo?.fpga).toBeNull();
     expect(result!.deviceInfo?.core).toBeNull();
   });
+
+  it("sets product to null when info.product is undefined", async () => {
+    mockGetInfo.mockResolvedValue({
+      product: undefined,
+      errors: [],
+    });
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+    expect(result!.probes.REST.outcome).toBe("Fail");
+    expect(result!.probes.REST.reason).toContain("No product info");
+    expect(result!.deviceInfo?.product).toBeNull();
+  });
 });
 
 // ─── runHealthCheck — JIFFY probe with null bytes ────────────────────────────
