@@ -323,6 +323,20 @@ describe("DiagnosticsDialog", () => {
     expect(panel).toHaveTextContent("Health history");
   });
 
+  it("opens decision-state and FTP heat map views from the compact overflow menu", () => {
+    setViewportWidth(360);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-decision-state-screen"));
+    expect(screen.getByTestId("decision-state-surface")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-ftp-heatmap-screen"));
+    expect(screen.getByTestId("heat-map-popup-ftp")).toBeVisible();
+  });
+
   it("shares only the filtered evidence set", () => {
     setViewportWidth(600);
     const onShareFiltered = vi.fn();

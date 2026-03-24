@@ -7,9 +7,13 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
+import {
+  resetHealthCheckStateSnapshot,
+  setHealthCheckStateSnapshot,
+} from "@/lib/diagnostics/healthCheckState";
 import type {
   HealthCheckProbeRecord,
   HealthCheckProbeType,
@@ -47,6 +51,14 @@ const makeResult = (overrides?: Partial<HealthCheckRunResult>): HealthCheckRunRe
 });
 
 describe("HealthCheckDetailView", () => {
+  beforeEach(() => {
+    resetHealthCheckStateSnapshot();
+  });
+
+  afterEach(() => {
+    resetHealthCheckStateSnapshot();
+  });
+
   describe("empty state", () => {
     it("shows placeholder when result is null and not running", () => {
       render(<HealthCheckDetailView result={null} onBack={vi.fn()} />);
@@ -112,6 +124,16 @@ describe("HealthCheckDetailView", () => {
       const row = screen.getByTestId("health-check-probe-rest");
       expect(row).toHaveTextContent("Short mobile-safe reason");
       expect(screen.queryByText("Short mobile-safe reason", { selector: "p" })).not.toBeInTheDocument();
+    });
+
+    it("moves long failure reasons into the dedicated detail row", () => {
+      const result = makeResult();
+      const longReason = "REST probe exceeded the compact inline reason limit during diagnostics capture";
+      result.probes.REST = makeProbe("REST", "Fail", 42, longReason);
+
+      render(<HealthCheckDetailView result={result} onBack={vi.fn()} />);
+
+      expect(screen.getByText(longReason, { selector: "p" })).toBeInTheDocument();
     });
 
     it("renders latency summary when result present and not running", () => {
@@ -198,6 +220,118 @@ describe("HealthCheckDetailView", () => {
       expect(screen.getByTestId("health-check-probe-ftp").getAttribute("data-live-status")).toBe("running");
       expect(screen.getByTestId("health-check-probe-config").getAttribute("data-live-status")).toBe("done");
       expect(screen.getByTestId("health-check-probe-raster").getAttribute("data-live-status")).toBe("pending");
+    });
+
+    it("surfaces timeout execution state details even without a completed probe payload", () => {
+      const timeoutReason = "REST probe timed out while waiting for the diagnostics endpoint";
+      setHealthCheckStateSnapshot({
+        probeStates: {
+          REST: {
+            state: "TIMEOUT",
+            outcome: null,
+            startedAt: "2025-01-01T00:00:00.000Z",
+            endedAt: "2025-01-01T00:00:01.000Z",
+            durationMs: 987,
+            reason: timeoutReason,
+          },
+          FTP: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          CONFIG: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          RASTER: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          JIFFY: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+        },
+      });
+
+      render(<HealthCheckDetailView result={null} liveProbes={{}} isRunning={true} onBack={vi.fn()} />);
+
+      const row = screen.getByTestId("health-check-probe-rest");
+      expect(row.getAttribute("data-live-status")).toBe("done");
+      expect(row).toHaveTextContent("Timeout");
+      expect(row).toHaveTextContent("987ms");
+      expect(screen.getByText(timeoutReason, { selector: "p" })).toBeInTheDocument();
+    });
+
+    it("shows cancelled execution state with the inline reason when a live probe is aborted", () => {
+      setHealthCheckStateSnapshot({
+        probeStates: {
+          REST: {
+            state: "CANCELLED",
+            outcome: null,
+            startedAt: "2025-01-01T00:00:00.000Z",
+            endedAt: "2025-01-01T00:00:00.500Z",
+            durationMs: null,
+            reason: "User aborted the probe",
+          },
+          FTP: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          CONFIG: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          RASTER: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          JIFFY: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+        },
+      });
+
+      render(<HealthCheckDetailView result={null} liveProbes={{}} isRunning={true} onBack={vi.fn()} />);
+
+      const row = screen.getByTestId("health-check-probe-rest");
+      expect(row.getAttribute("data-live-status")).toBe("done");
+      expect(row).toHaveTextContent("Cancelled");
+      expect(row).toHaveTextContent("User aborted the probe");
+      expect(row).toHaveTextContent("—");
+      expect(screen.queryByText("User aborted the probe", { selector: "p" })).not.toBeInTheDocument();
     });
   });
 
