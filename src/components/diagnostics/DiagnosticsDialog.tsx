@@ -1123,7 +1123,7 @@ export function DiagnosticsDialog({
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
                 {overflowOpen ? (
-                  <div className="absolute right-0 top-full z-10 mt-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
+                  <div className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg">
                     <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Views
                     </p>
