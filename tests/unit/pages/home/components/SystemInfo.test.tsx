@@ -42,7 +42,7 @@ vi.mock("framer-motion", () => ({
 }));
 
 describe("SystemInfo", () => {
-  it("falls back to versionLabel when appVersion is empty", () => {
+  it("displays versionLabel as the app version", () => {
     mockUseC64Connection.mockReturnValue({
       status: { isConnected: false, deviceInfo: null },
     });
@@ -80,7 +80,7 @@ describe("SystemInfo", () => {
     });
     render(<SystemInfo />);
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("home-system-version")).toHaveTextContent("1.2.3-exact");
+    expect(screen.getByTestId("home-system-version")).toHaveTextContent("1.2.3");
   });
 
   it("shows device hostname and firmware when connected", () => {

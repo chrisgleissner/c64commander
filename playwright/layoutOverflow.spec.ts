@@ -277,17 +277,7 @@ test.describe("Layout overflow safeguards", () => {
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, "diagnostics-dialog");
     await expectNoHorizontalOverflow(page);
-
-    const dialogBox = await dialog.boundingBox();
-    const viewport = page.viewportSize();
-    expect(dialogBox).not.toBeNull();
-    expect(viewport).not.toBeNull();
-    if (dialogBox && viewport) {
-      expect(dialogBox.x).toBeGreaterThanOrEqual(0);
-      expect(dialogBox.y).toBeGreaterThanOrEqual(0);
-      expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width);
-      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
-    }
+    await expectDialogWithinViewport(page, dialog);
   });
 
   layoutTest("settings page handles long hostnames without overflow @layout", async ({ page }, testInfo) => {
