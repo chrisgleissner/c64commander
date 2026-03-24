@@ -31,11 +31,11 @@ After connection, the device presents:
 
 ### 2.3 Enter Action Menu
 
-| Action                    | Key             | Notes                                       |
-| ------------------------- | --------------- | ------------------------------------------- |
-| Open action menu          | `F1` or `F5`   | C64U uses F1; Ultimate 64 uses F5           |
-| Open CommoServe / A64     | `F6`            | Online content search (requires internet)   |
-| Exit Telnet               | `CTRL + ] quit` |                                             |
+| Action                | Key             | Notes                                     |
+| --------------------- | --------------- | ----------------------------------------- |
+| Open action menu      | `F1` or `F5`    | C64U uses F1; Ultimate 64 uses F5         |
+| Open CommoServe / A64 | `F6`            | Online content search (requires internet) |
+| Exit Telnet           | `CTRL + ] quit` |                                           |
 
 NOTE: On C64 Ultimate devices, F1 opens the action menu directly. On Ultimate 64 devices, the keymapper remaps F5 → KEY_TASKS (action menu) and F1 → KEY_PAGEUP. Clients must detect the device type and use the correct key.
 
@@ -161,17 +161,17 @@ File Actions (Run Disk, Mount Disk, etc.)
 
 ### 5b.3 Search Form Fields
 
-| Field    | Input Type | Values                                          |
-| -------- | ---------- | ----------------------------------------------- |
-| Name     | Free text  | Any string                                      |
-| Group    | Free text  | Any string                                      |
-| Handle   | Free text  | Any string                                      |
-| Event    | Free text  | Any string                                      |
-| Category | Dropdown   | Apps, Demos, Games, Graphics, Music             |
-| Date     | Dropdown   | Years (1980–1996+)                              |
-| Type     | Dropdown   | crt, d64, d71, d81, sid, t64, tap               |
-| Sort     | Dropdown   | Name, Year                                      |
-| Order    | Dropdown   | Ascending, Descending                           |
+| Field    | Input Type | Values                              |
+| -------- | ---------- | ----------------------------------- |
+| Name     | Free text  | Any string                          |
+| Group    | Free text  | Any string                          |
+| Handle   | Free text  | Any string                          |
+| Event    | Free text  | Any string                          |
+| Category | Dropdown   | Apps, Demos, Games, Graphics, Music |
+| Date     | Dropdown   | Years (1980–2026+)                  |
+| Type     | Dropdown   | crt, d64, d71, d81, sid, t64, tap   |
+| Sort     | Dropdown   | Name, Year                          |
+| Order    | Dropdown   | Ascending, Descending               |
 
 NOTE: Dropdown presets are fetched from the Assembly64 server at connection time and may change. The values above are observed from firmware V1.49 1.1.0.
 
@@ -223,16 +223,16 @@ joyride_license.txt         TXT    1K
 
 ENTER on a file entry opens the standard file context menu:
 
-| Action                  |
-| ----------------------- |
-| Run Disk                |
-| Mount Disk              |
-| Mount Disk Read Only    |
-| Mount Disk Unlinked     |
-| Mount Disk on B         |
-| Mount Disk R/O on B     |
-| Mount Disk Unl. on B    |
-| View                    |
+| Action               |
+| -------------------- |
+| Run Disk             |
+| Mount Disk           |
+| Mount Disk Read Only |
+| Mount Disk Unlinked  |
+| Mount Disk on B      |
+| Mount Disk R/O on B  |
+| Mount Disk Unl. on B |
+| View                 |
 
 NOTE: Available actions depend on the file type. The actions above are for `.d64` files. Other file types (`.sid`, `.crt`, `.t64`, etc.) have their own context menus determined by the firmware's FileType system.
 
