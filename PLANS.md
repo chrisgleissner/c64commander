@@ -1,9 +1,9 @@
 # Diagnostics UX and Data Consistency — Execution Plan
 
-Status: COMPLETED (core fixes)
+Status: IN_PROGRESS
 Classification: CODE_CHANGE, UI_CHANGE
 Date: 2026-03-24
-Mission: Fix diagnostics UX and data consistency issues minimally invasively, preserving the mixed activity feed model, chevron expandability, close button, and context-sensitive menu.
+Mission: Fix diagnostics UX, diagnostics data consistency, health-check lifecycle robustness, deterministic self-repair, playback uncertainty modeling, and internal decision-state observability minimally invasively, preserving the mixed activity feed model, chevron expandability, close button, and context-sensitive menu.
 
 ## Phase 1 — Baseline and evidence capture
 
@@ -76,19 +76,58 @@ Mission: Fix diagnostics UX and data consistency issues minimally invasively, pr
 
 ## Phase 5 — Real-device verification
 
-Deferred: requires physical Pixel 4 + C64U hardware session.
+- [ ] Verify the CONFIG probe against the real C64U via host `C64U` or confirmed fallback IP `192.168.1.167`
+- [ ] Verify expanded REST details on real hardware
+- [ ] Verify expanded FTP details on real hardware
+- [ ] Verify collapsed-row usability and top-right control separation on the attached Pixel 4
+- [ ] Capture hardware evidence via DroidMind MCP and c64scope MCP
 
 ## Phase 6 — Convergence and cleanup
 
-- [x] Reviewed changed files for duplication and regressions
-- [x] PLANS.md and WORKLOG.md updated to final state
+- [ ] Review changed files for duplication and regressions
+- [ ] Remove temporary instrumentation not intended to remain
+- [ ] Update PLANS.md and WORKLOG.md to final state
 
-## Deferred items (Phase 3.9–3.13)
+## Phase 7 — Health-check lifecycle and self-repair
 
-The following architectural items were scoped out of the immediate fix as they represent significant new subsystems. They should be addressed in dedicated follow-up tasks:
+- [ ] Add explicit run lifecycle states: `IDLE`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`, `TIMEOUT`
+- [ ] Add explicit sub-check states: `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `TIMEOUT`, `CANCELLED`
+- [ ] Add per-sub-check timeout and global run timeout
+- [ ] Cancel in-flight execution when a new run starts
+- [ ] Mark stale or cancelled probes deterministically
+- [ ] Detect stale runs on screen entry and app resume, and auto-timeout them
+- [ ] Ensure late responses are ignored after cancellation
 
-- 3.9: Health-check execution robustness (timeouts, cancellation, lifecycle model)
-- 3.10: Reconciliation system (ConfigReconciler, PlaybackReconciler, DiagnosticsReconciler)
-- 3.11: Playback state model (PLAYING/STOPPED/UNKNOWN with confidence)
-- 3.12: Internal decision-state diagnostics page
-- 3.13: Additional failure mode handling
+## Phase 8 — Deterministic reconciliation and playback uncertainty
+
+- [ ] Add deterministic reconciler state for config, playback, and diagnostics domains
+- [ ] Add a non-blocking `Resync / Repair` action that runs the reconcilers
+- [ ] Correct config drift from device state without indefinite loops
+- [ ] Model playback as `PLAYING` / `STOPPED` / `UNKNOWN` with confidence `HIGH` / `MEDIUM` / `LOW`
+- [ ] Degrade playback confidence on time decay, failures, and uncertainty
+- [ ] Ensure playback certainty is never asserted speculatively
+
+## Phase 9 — Internal decision-state diagnostics page
+
+- [ ] Add a routed diagnostics panel for internal decision-state inspection
+- [ ] Show playback state, confidence, timestamp, and transition reason
+- [ ] Show reconciler status, drift detection, and actions taken
+- [ ] Show health-check run lifecycle, per-probe lifecycle, and timeout/cancel reasons
+- [ ] Show recent REST/FTP outcomes and latency trends using existing diagnostics sources
+
+## Phase 10 — Failure-mode validation
+
+- [ ] Simulate silent request loss, device unavailability, and stuck health checks
+- [ ] Simulate rapid restart/cancel races and resume-from-background recovery
+- [ ] Verify no execution remains stuck in `RUNNING`
+- [ ] Verify restartability, time-bounded completion, and deterministic recovery
+
+## Termination criteria
+
+- [ ] PLANS.md reflects the final completed state truthfully
+- [ ] WORKLOG.md contains timestamped evidence for root causes, fixes, and verification
+- [ ] CONFIG health check succeeds on the real device when the device state permits it
+- [ ] Health checks are restartable, time-bounded, and never remain indefinitely running
+- [ ] Reconciliation and playback uncertainty state are implemented, observable, and non-blocking
+- [ ] Internal decision-state diagnostics view is implemented and accurate
+- [ ] Automated validation and real-device verification are complete and recorded

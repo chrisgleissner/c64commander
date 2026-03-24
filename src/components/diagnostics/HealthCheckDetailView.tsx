@@ -12,6 +12,7 @@ import type {
   HealthCheckProbeType,
   HealthCheckProbeRecord,
 } from "@/lib/diagnostics/healthCheckEngine";
+import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 type Props = {
@@ -30,11 +31,18 @@ const outcomeColorClass: Record<string, string> = {
   Partial: "text-amber-500",
   Fail: "text-destructive",
   Skipped: "text-muted-foreground",
+  SUCCESS: "text-success",
+  FAILED: "text-destructive",
+  TIMEOUT: "text-amber-500",
+  CANCELLED: "text-muted-foreground",
+  RUNNING: "text-muted-foreground",
+  PENDING: "text-muted-foreground",
 };
 
 const REASON_COMPACT_LIMIT = 32;
 
 export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }: Props) {
+  const healthCheckState = useHealthCheckState();
   // During a live run, show liveProbes overlaid over any previous result.
   // A probe is "done" if it appears in liveProbes, "running" if it's the first
   // missing probe in presentation order, and "pending" otherwise.
@@ -66,10 +74,15 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
               // Live run: use liveProbes for completed entries; derive status for in-flight / pending
               let probe: HealthCheckProbeRecord | undefined;
               let liveStatus: "done" | "running" | "pending" | null = null;
+              const executionState = healthCheckState.probeStates[probeName];
 
               if (activeLive) {
                 probe = liveProbes[probeName] ?? undefined;
-                if (probe != null) {
+                if (executionState?.state === "RUNNING") {
+                  liveStatus = "running";
+                } else if (probe != null || executionState?.state === "SUCCESS" || executionState?.state === "FAILED") {
+                  liveStatus = "done";
+                } else if (executionState?.state === "TIMEOUT" || executionState?.state === "CANCELLED") {
                   liveStatus = "done";
                 } else if (idx === firstPendingIndex) {
                   liveStatus = "running";
@@ -80,14 +93,33 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                 probe = result?.probes[probeName];
               }
 
-              const reasonText = liveStatus === "running" || liveStatus === "pending" ? "" : (probe?.reason ?? "OK");
+              const reasonText =
+                liveStatus === "running" || liveStatus === "pending"
+                  ? ""
+                  : executionState?.reason ?? probe?.reason ?? "OK";
               const isDetailRow = reasonText.length > REASON_COMPACT_LIMIT;
               const durationLabel =
                 liveStatus === "running" || liveStatus === "pending"
                   ? "—"
-                  : probe?.durationMs != null
-                    ? `${probe.durationMs}ms`
+                  : executionState?.durationMs != null
+                    ? `${executionState.durationMs}ms`
+                    : probe?.durationMs != null
+                      ? `${probe.durationMs}ms`
                     : "—";
+              const finalStatusLabel =
+                executionState?.state === "SUCCESS"
+                  ? probe?.outcome ?? "Success"
+                  : executionState?.state === "FAILED"
+                    ? probe?.outcome ?? "Fail"
+                    : executionState?.state === "TIMEOUT"
+                      ? "Timeout"
+                      : executionState?.state === "CANCELLED"
+                        ? "Cancelled"
+                        : probe?.outcome ?? "—";
+              const finalStatusClass =
+                executionState?.state != null
+                  ? outcomeColorClass[executionState.state] ?? outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground"
+                  : outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground";
 
               return (
                 <div
@@ -106,7 +138,9 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                     ) : liveStatus === "pending" ? (
                       <span className="text-muted-foreground">Pending</span>
                     ) : probe ? (
-                      <span className={outcomeColorClass[probe.outcome] ?? "text-foreground"}>{probe.outcome}</span>
+                      <span className={finalStatusClass}>{finalStatusLabel}</span>
+                    ) : executionState?.state === "TIMEOUT" || executionState?.state === "CANCELLED" ? (
+                      <span className={finalStatusClass}>{finalStatusLabel}</span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}

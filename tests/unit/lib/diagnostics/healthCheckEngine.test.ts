@@ -77,8 +77,14 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
-import { isHealthCheckRunning, runHealthCheck } from "@/lib/diagnostics/healthCheckEngine";
+import {
+  cancelHealthCheck,
+  isHealthCheckRunning,
+  recoverStaleHealthCheckRun,
+  runHealthCheck,
+} from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
+import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -114,9 +120,12 @@ const setupAllProbesSuccess = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   clearHealthHistory();
+  resetHealthCheckStateSnapshot();
 });
 
 afterEach(() => {
+  cancelHealthCheck("Test cleanup");
+  resetHealthCheckStateSnapshot();
   vi.clearAllMocks();
 });
 
@@ -175,12 +184,62 @@ describe("runHealthCheck — all-success path", () => {
     expect(result!.latency).toEqual({ p50: 10, p90: 20, p99: 30 });
   });
 
-  it("returns null when a run is already in progress (concurrent guard)", async () => {
+  it("restarts an in-flight run and records cancellation for the superseded run", async () => {
+    let rejectFirstGetInfo: ((reason?: unknown) => void) | null = null;
+    const firstGetInfo = new Promise<typeof successfulInfo>((_resolve, reject) => {
+      rejectFirstGetInfo = reject;
+    });
+    mockGetInfo.mockImplementationOnce(({ signal }: { signal?: AbortSignal }) => {
+      signal?.addEventListener("abort", () => rejectFirstGetInfo?.(new DOMException("Aborted", "AbortError")), {
+        once: true,
+      });
+      return firstGetInfo;
+    });
     setupAllProbesSuccess();
-    const first = runHealthCheck();
-    const second = await runHealthCheck();
-    expect(second).toBeNull();
-    await first;
+
+    const firstRun = runHealthCheck();
+    expect(isHealthCheckRunning()).toBe(true);
+
+    const secondRun = await runHealthCheck();
+    const firstResult = await firstRun;
+    const snapshot = getHealthCheckStateSnapshot();
+
+    expect(firstResult).toBeNull();
+    expect(secondRun).not.toBeNull();
+    expect(snapshot.runState).toBe("COMPLETED");
+    expect(snapshot.transitions.some((entry) => entry.to === "CANCELLED" && entry.reason === "Superseded by a new health check run")).toBe(true);
+  });
+
+  it("marks a stale run as timed out and clears the running flag", async () => {
+    const dateNowSpy = vi.spyOn(Date, "now");
+    const startNow = 1_000_000;
+    dateNowSpy.mockReturnValue(startNow);
+
+    let rejectPendingGetInfo: ((reason?: unknown) => void) | null = null;
+    const pendingGetInfo = new Promise<typeof successfulInfo>((_resolve, reject) => {
+      rejectPendingGetInfo = reject;
+    });
+    mockGetInfo.mockImplementation(({ signal }: { signal?: AbortSignal }) => {
+      signal?.addEventListener("abort", () => rejectPendingGetInfo?.(new DOMException("Aborted", "AbortError")), {
+        once: true,
+      });
+      return pendingGetInfo;
+    });
+
+    void pendingGetInfo;
+    const runPromise = runHealthCheck();
+    expect(getHealthCheckStateSnapshot().runState).toBe("RUNNING");
+
+    const staleAfter = getHealthCheckStateSnapshot().staleAfterMs;
+    expect(staleAfter).not.toBeNull();
+    dateNowSpy.mockReturnValue((staleAfter ?? startNow) + 1);
+
+    expect(recoverStaleHealthCheckRun()).toBe(true);
+    expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
+    expect(getHealthCheckStateSnapshot().running).toBe(false);
+
+    await expect(runPromise).resolves.toBeNull();
+    dateNowSpy.mockRestore();
   });
 });
 

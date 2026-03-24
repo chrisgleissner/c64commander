@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
 import { ActionExpandedContent } from "./ActionExpandedContent";
 import { ConfigDriftView } from "./ConfigDriftView";
+import { DecisionStateView } from "./DecisionStateView";
 import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
 import { HealthHistoryPopup } from "./HealthHistoryPopup";
@@ -86,6 +87,8 @@ type Props = {
   lastHealthCheckResult?: HealthCheckRunResult | null;
   liveHealthCheckProbes?: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
   requestedPanel?: DiagnosticsPanelKey | null;
+  repairRunning?: boolean;
+  onRepair?: () => void | Promise<void>;
 };
 
 type EvidenceEntry = {
@@ -828,6 +831,45 @@ const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 };
 
+const DecisionStateSurface = ({
+  open,
+  onOpenChange,
+  repairRunning,
+  onRepair,
+  actionSummaries,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  repairRunning: boolean;
+  onRepair?: () => void | Promise<void>;
+  actionSummaries: ActionSummary[];
+}) => {
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
+        <DialogPrimitive.Content
+          className="fixed inset-x-0 bottom-0 top-[10dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl sm:left-1/2 sm:right-auto sm:top-1/2 sm:h-[min(80dvh,46rem)] sm:w-[min(42rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:border"
+          data-testid="decision-state-surface"
+        >
+          <DialogPrimitive.Title className="sr-only">Decision state</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            Internal reconciliation, playback uncertainty, and recent diagnostics transitions.
+          </DialogPrimitive.Description>
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <DecisionStateView
+              onBack={() => onOpenChange(false)}
+              onRepair={() => onRepair?.()}
+              repairRunning={repairRunning}
+              actionSummaries={actionSummaries}
+            />
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+};
+
 export function DiagnosticsDialog({
   open,
   onOpenChange,
@@ -846,6 +888,8 @@ export function DiagnosticsDialog({
   lastHealthCheckResult = null,
   liveHealthCheckProbes = null,
   requestedPanel = null,
+  repairRunning = false,
+  onRepair,
 }: Props) {
   const { profile } = useDisplayProfile();
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -865,6 +909,7 @@ export function DiagnosticsDialog({
   const [latencyOpen, setLatencyOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configDriftOpen, setConfigDriftOpen] = useState(false);
+  const [decisionStateOpen, setDecisionStateOpen] = useState(false);
   const [heatMapVariant, setHeatMapVariant] = useState<HeatMapVariant | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
@@ -961,6 +1006,7 @@ export function DiagnosticsDialog({
     setLatencyOpen(false);
     setHistoryOpen(false);
     setConfigDriftOpen(false);
+    setDecisionStateOpen(false);
     setHeatMapVariant(null);
     setOverflowOpen(false);
     setExpandedEvidenceId(null);
@@ -980,6 +1026,7 @@ export function DiagnosticsDialog({
       setLatencyOpen(false);
       setHistoryOpen(false);
       setConfigDriftOpen(false);
+      setDecisionStateOpen(false);
       setHeatMapVariant(null);
       setOverflowOpen(false);
     }
@@ -997,6 +1044,7 @@ export function DiagnosticsDialog({
     setLatencyOpen(requestedPanel === "latency");
     setHistoryOpen(requestedPanel === "history");
     setConfigDriftOpen(requestedPanel === "config-drift");
+    setDecisionStateOpen(requestedPanel === "decision-state");
     setHeatMapVariant(
       requestedPanel === "rest-heatmap"
         ? "REST"
@@ -1137,6 +1185,17 @@ export function DiagnosticsDialog({
                       data-testid="open-config-drift-screen"
                     >
                       Config drift
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setDecisionStateOpen(true);
+                      }}
+                      data-testid="open-decision-state-screen"
+                    >
+                      Decision state
                     </button>
                     <button
                       type="button"
@@ -1293,10 +1352,10 @@ export function DiagnosticsDialog({
                       setHeaderExpanded(true);
                       onRunHealthCheck?.();
                     }}
-                    disabled={!onRunHealthCheck || healthCheckRunning}
+                    disabled={!onRunHealthCheck}
                     data-testid="run-health-check"
                   >
-                    {healthCheckRunning ? "Running health check" : "Run health check"}
+                    {healthCheckRunning ? "Restart health check" : "Run health check"}
                   </Button>
                 </div>
                 {lastHealthCheckResult || liveHealthCheckProbes !== null || healthCheckRunning ? (
@@ -1396,6 +1455,16 @@ export function DiagnosticsDialog({
                 data-testid="footer-open-config-drift-screen"
               >
                 Config drift
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setDecisionStateOpen(true)}
+                data-testid="footer-open-decision-state-screen"
+              >
+                Decision state
               </Button>
               <Button
                 type="button"
@@ -1542,6 +1611,13 @@ export function DiagnosticsDialog({
       />
 
       <ConfigDriftSurface open={open && configDriftOpen} onOpenChange={setConfigDriftOpen} />
+      <DecisionStateSurface
+        open={open && decisionStateOpen}
+        onOpenChange={setDecisionStateOpen}
+        repairRunning={repairRunning}
+        onRepair={onRepair}
+        actionSummaries={actionSummaries}
+      />
       <LatencyAnalysisPopup open={open && latencyOpen} onClose={() => setLatencyOpen(false)} />
       <HealthHistoryPopup open={open && historyOpen} onClose={() => setHistoryOpen(false)} />
       <HeatMapPopup

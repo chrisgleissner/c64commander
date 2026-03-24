@@ -185,3 +185,13 @@ Date: 2026-03-24
 
 - **Observed**: Plain bordered div at bottom of HealthCheckDetailView, no visual distinction from probe rows.
 - **Fix**: Add subtle background tint or separator to make it stand out.
+
+## 2026-03-24T15:05:00Z - Reassessment and execution restart
+
+- Classification: `CODE_CHANGE`, `UI_CHANGE`.
+- Observed fact: `PLANS.md` incorrectly marked the diagnostics work complete while Phase 5 real-device verification and the requested lifecycle/reconciliation/observability work were still not implemented.
+- Observed fact: `src/lib/diagnostics/healthCheckEngine.ts` still uses a single module-level `running` boolean and sequential async probes with no cancellable lifecycle model, no global timeout, no per-probe timeout except FTP, and no stale-run recovery.
+- Observed fact: `src/lib/diagnostics/healthCheckState.ts` stores only `running`, `liveProbes`, and `latestResult`; it does not represent run lifecycle, sub-check lifecycle, timing boundaries, cancellation metadata, or stale detection.
+- Observed fact: the diagnostics UI already has suitable extension seams: route-addressable panels in `GlobalDiagnosticsOverlay.tsx`, surface components in `DiagnosticsDialog.tsx`, and a playback trace snapshot in `src/pages/playFiles/playbackTraceStore.ts`.
+- Decision: keep the implementation minimally invasive by extending the existing health-check state store, adding a small reconciler/decision-state store, and wiring the new diagnostics view into the existing overlay rather than introducing a second architecture.
+- Next step: patch the health-check state model and engine first, then add reconciliation/playback observability, tests, and real-device verification evidence.

@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useHealthState } from "@/hooks/useHealthState";
@@ -32,7 +33,12 @@ import {
 import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { getConfiguredHost, saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
-import { runHealthCheck, isHealthCheckRunning } from "@/lib/diagnostics/healthCheckEngine";
+import { runHealthCheck } from "@/lib/diagnostics/healthCheckEngine";
+import {
+  runDiagnosticsReconciler,
+  runPlaybackReconciler,
+  runRepair,
+} from "@/lib/diagnostics/diagnosticsReconciler";
 import { clearLatencySamples, getAllLatencySamples } from "@/lib/diagnostics/latencyTracker";
 import { clearHealthHistory, getHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { recordRecentTarget } from "@/lib/diagnostics/recentTargets";
@@ -95,6 +101,7 @@ const resolveDiagnosticsPanelFromPath = (pathname: string): DiagnosticsPanelKey 
   if (pathname === "/diagnostics/latency") return "latency";
   if (pathname === "/diagnostics/history") return "history";
   if (pathname === "/diagnostics/config-drift") return "config-drift";
+  if (pathname === "/diagnostics/decision-state") return "decision-state";
   if (pathname === "/diagnostics/heatmap/rest") return "rest-heatmap";
   if (pathname === "/diagnostics/heatmap/ftp") return "ftp-heatmap";
   if (pathname === "/diagnostics/heatmap/config") return "config-heatmap";
@@ -104,10 +111,12 @@ const resolveDiagnosticsPanelFromPath = (pathname: string): DiagnosticsPanelKey 
 export const GlobalDiagnosticsOverlay = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const trace = useActionTrace("GlobalDiagnosticsOverlay");
   const scrollRestoreRef = useRef<number | null>(null);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [requestedPanel, setRequestedPanel] = useState<DiagnosticsPanelKey | null>(null);
+  const [repairRunning, setRepairRunning] = useState(false);
   const healthState = useHealthState();
   const healthCheckState = useHealthCheckState();
   const routePanel = resolveDiagnosticsPanelFromPath(location.pathname);
@@ -177,6 +186,12 @@ export const GlobalDiagnosticsOverlay = () => {
     setRequestedPanel(routePanel);
     setDialogOpen(true);
   }, [routePanel, setDialogOpen]);
+
+  useEffect(() => {
+    if (!overlayOpen) return;
+    void runDiagnosticsReconciler("Diagnostics overlay opened");
+    void runPlaybackReconciler("Diagnostics overlay opened");
+  }, [overlayOpen]);
 
   useEffect(() => {
     if (overlayOpen) {
@@ -285,7 +300,6 @@ export const GlobalDiagnosticsOverlay = () => {
 
   // §11 — Run health check
   const handleRunHealthCheck = useCallback(async () => {
-    if (isHealthCheckRunning()) return;
     try {
       const result = await runHealthCheck();
       if (result) {
@@ -313,6 +327,23 @@ export const GlobalDiagnosticsOverlay = () => {
       });
     }
   }, [healthState.host]);
+
+  const handleRepair = useCallback(async () => {
+    setRepairRunning(true);
+    try {
+      await runRepair(queryClient, location.pathname, "Manual diagnostics repair requested");
+      toast({ title: "Diagnostics repaired" });
+    } catch (error) {
+      reportUserError({
+        operation: "DIAGNOSTICS_REPAIR",
+        title: "Repair failed",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setRepairRunning(false);
+    }
+  }, [location.pathname, queryClient]);
 
   // §8.1 — Async retry with inline feedback (used by ConnectionActionsRegion)
   const handleRetryConnectionAsync = useCallback(async (): Promise<{ success: boolean; message: string }> => {
@@ -458,6 +489,8 @@ export const GlobalDiagnosticsOverlay = () => {
       lastHealthCheckResult={healthCheckState.latestResult}
       liveHealthCheckProbes={healthCheckState.liveProbes}
       requestedPanel={requestedPanel}
+      repairRunning={repairRunning}
+      onRepair={handleRepair}
       onRunHealthCheck={() => {
         void handleRunHealthCheck();
       }}

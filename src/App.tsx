@@ -30,7 +30,11 @@ import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace"
 import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
 import { registerGlobalButtonInteractionModel } from "@/lib/ui/buttonInteraction";
 import { installConsoleDiagnosticsBridge } from "@/lib/diagnostics/logger";
-import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation";
+import {
+  runConfigReconciler,
+  runDiagnosticsReconciler,
+  runPlaybackReconciler,
+} from "@/lib/diagnostics/diagnosticsReconciler";
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { t } from "@/lib/i18n";
@@ -59,7 +63,9 @@ const RouteRefresher = () => {
     const handleVisibility = () => {
       const visible = !document.hidden;
       if (visible) {
-        invalidateForVisibilityResume(client, location.pathname);
+        void runDiagnosticsReconciler("App resumed while diagnostics runtime was active");
+        void runConfigReconciler(client, location.pathname, "App resumed and route-backed config needs refresh");
+        void runPlaybackReconciler("App resumed and playback certainty may have decayed");
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
