@@ -8,11 +8,11 @@
 
 import { WebPlugin } from '@capacitor/core';
 import type {
-  TelnetSocketPlugin,
-  TelnetSocketConnectOptions,
-  TelnetSocketSendOptions,
-  TelnetSocketReadOptions,
-  TelnetSocketReadResult,
+    TelnetSocketPlugin,
+    TelnetSocketConnectOptions,
+    TelnetSocketSendOptions,
+    TelnetSocketReadOptions,
+    TelnetSocketReadResult,
 } from '@/lib/native/telnetSocket';
 import { TelnetError } from '@/lib/telnet/telnetTypes';
 
@@ -22,32 +22,32 @@ import { TelnetError } from '@/lib/telnet/telnetTypes';
  * Telnet UI surfaces should be hidden on web.
  */
 export class TelnetSocketWeb extends WebPlugin implements TelnetSocketPlugin {
-  async connect(_options: TelnetSocketConnectOptions): Promise<void> {
-    throw new TelnetError(
-      'Telnet is not supported on the web platform',
-      'CONNECTION_FAILED',
-    );
-  }
+    async connect(_options: TelnetSocketConnectOptions): Promise<void> {
+        throw new TelnetError(
+            'Telnet is not supported on the web platform',
+            'CONNECTION_FAILED',
+        );
+    }
 
-  async disconnect(): Promise<void> {
-    // No-op — nothing to disconnect on web
-  }
+    async disconnect(): Promise<void> {
+        // No-op — nothing to disconnect on web
+    }
 
-  async send(_options: TelnetSocketSendOptions): Promise<void> {
-    throw new TelnetError(
-      'Telnet is not supported on the web platform',
-      'CONNECTION_FAILED',
-    );
-  }
+    async send(_options: TelnetSocketSendOptions): Promise<void> {
+        throw new TelnetError(
+            'Telnet is not supported on the web platform',
+            'CONNECTION_FAILED',
+        );
+    }
 
-  async read(_options: TelnetSocketReadOptions): Promise<TelnetSocketReadResult> {
-    throw new TelnetError(
-      'Telnet is not supported on the web platform',
-      'CONNECTION_FAILED',
-    );
-  }
+    async read(_options: TelnetSocketReadOptions): Promise<TelnetSocketReadResult> {
+        throw new TelnetError(
+            'Telnet is not supported on the web platform',
+            'CONNECTION_FAILED',
+        );
+    }
 
-  async isConnected(): Promise<{ connected: boolean }> {
-    return { connected: false };
-  }
+    async isConnected(): Promise<{ connected: boolean }> {
+        return { connected: false };
+    }
 }

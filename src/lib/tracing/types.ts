@@ -36,6 +36,7 @@ export type TraceEventType =
   | "rest-request"
   | "rest-response"
   | "ftp-operation"
+  | "telnet-operation"
   | "error";
 
 export type TraceEventContextFields = {

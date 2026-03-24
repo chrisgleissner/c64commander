@@ -51,6 +51,12 @@ type FtpRequestMeta = {
   intent: InteractionIntent;
 };
 
+type TelnetRequestMeta = {
+  action: TraceActionContext;
+  actionId: string;
+  intent: InteractionIntent;
+};
+
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
@@ -189,6 +195,9 @@ const updateConfig = () => {
   ftpErrorStreak = 0;
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
+  telnetErrorStreak = 0;
+  telnetBackoffUntilMs = 0;
+  telnetCircuitUntilMs = 0;
   setCircuitOpenUntil(null);
   addLog("info", "Device safety config updated", { mode: config.mode, config });
 };
@@ -205,6 +214,9 @@ export const resetInteractionState = (reason: string) => {
   ftpErrorStreak = 0;
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
+  telnetErrorStreak = 0;
+  telnetBackoffUntilMs = 0;
+  telnetCircuitUntilMs = 0;
   setCircuitOpenUntil(null);
   addLog("info", "Device interaction state reset", { reason });
 };
@@ -212,11 +224,13 @@ export const resetInteractionState = (reason: string) => {
 subscribeDeviceSafetyUpdates(updateConfig);
 
 const REST_MAX_CONCURRENCY = 1;
+const TELNET_MAX_CONCURRENCY = 1;
 const MACHINE_CONTROL_COOLDOWN_MS = 250;
 const CONFIG_MUTATION_COOLDOWN_MS = 120;
 
 const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY);
 const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency);
+const telnetScheduler = new InteractionScheduler(() => TELNET_MAX_CONCURRENCY);
 
 const restCache = new Map<string, CacheEntry<unknown>>();
 const restInflight = new Map<string, Promise<unknown>>();
@@ -232,6 +246,10 @@ let restCircuitUntilMs = 0;
 let ftpErrorStreak = 0;
 let ftpBackoffUntilMs = 0;
 let ftpCircuitUntilMs = 0;
+
+let telnetErrorStreak = 0;
+let telnetBackoffUntilMs = 0;
+let telnetCircuitUntilMs = 0;
 
 const isCriticalRestError = (error: Error) => {
   const message = error.message.toLowerCase();
@@ -292,6 +310,24 @@ const resetFtpFailure = () => {
   ftpErrorStreak = 0;
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
+};
+
+const updateTelnetFailure = (error: Error) => {
+  telnetErrorStreak += 1;
+  const backoffMs = computeBackoff(telnetErrorStreak);
+  const now = Date.now();
+  if (backoffMs > 0) {
+    telnetBackoffUntilMs = Math.max(telnetBackoffUntilMs, now + backoffMs);
+  }
+  if (config.circuitBreakerThreshold > 0 && telnetErrorStreak >= config.circuitBreakerThreshold) {
+    telnetCircuitUntilMs = Math.max(telnetCircuitUntilMs, now + config.circuitBreakerCooldownMs);
+  }
+};
+
+const resetTelnetFailure = () => {
+  telnetErrorStreak = 0;
+  telnetBackoffUntilMs = 0;
+  telnetCircuitUntilMs = 0;
 };
 
 const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
@@ -661,4 +697,79 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
 
   ftpInflight.set(key, scheduledPromise as Promise<unknown>);
   return scheduledPromise;
+};
+
+export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler: () => Promise<T>): Promise<T> => {
+  if (isTestEnv()) {
+    markDeviceRequestStart();
+    try {
+      const result = await handler();
+      markDeviceRequestEnd({ success: true });
+      return result;
+    } catch (error) {
+      const err = error as Error;
+      markDeviceRequestEnd({ success: false, errorMessage: err.message });
+      throw error;
+    }
+  }
+  if (shouldBlockForState(meta.intent, false)) {
+    const error = new Error("Device not ready for Telnet");
+    recordDeviceGuard(meta.action, {
+      decision: "block",
+      reason: "state",
+      state: getDeviceStateSnapshot().state,
+    });
+    throw error;
+  }
+
+  const now = Date.now();
+  if (telnetCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
+    recordDeviceGuard(meta.action, {
+      decision: "block",
+      reason: "circuit-open",
+      untilMs: telnetCircuitUntilMs,
+    });
+    throw new Error("Telnet circuit open");
+  }
+  if (telnetCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
+    recordDeviceGuard(meta.action, {
+      decision: "override",
+      reason: "circuit-open",
+      untilMs: telnetCircuitUntilMs,
+    });
+  }
+
+  const scheduleTask = async () => {
+    if (telnetBackoffUntilMs > Date.now()) {
+      const waitMs = telnetBackoffUntilMs - Date.now();
+      recordDeviceGuard(meta.action, {
+        decision: "defer",
+        reason: "backoff",
+        waitMs,
+      });
+      await sleep(waitMs);
+    }
+
+    markDeviceRequestStart();
+    try {
+      const result = await handler();
+      resetTelnetFailure();
+      markDeviceRequestEnd({ success: true });
+      return result;
+    } catch (error) {
+      const err = error as Error;
+      updateTelnetFailure(err);
+      markDeviceRequestEnd({ success: false, errorMessage: err.message });
+      addErrorLog("Telnet request failed", {
+        error: err.message,
+        actionId: meta.actionId,
+      });
+      throw error;
+    }
+  };
+
+  return telnetScheduler.schedule<T>({
+    intent: meta.intent,
+    run: scheduleTask,
+  });
 };

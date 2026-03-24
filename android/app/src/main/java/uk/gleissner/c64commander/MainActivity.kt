@@ -65,6 +65,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(FtpClientPlugin::class.java)
     registerPlugin(HvscIngestionPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
+    registerPlugin(TelnetSocketPlugin::class.java)
     super.onCreate(savedInstanceState)
 
     val manager = getSystemService(ACTIVITY_SERVICE) as? ActivityManager
