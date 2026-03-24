@@ -150,22 +150,24 @@ describe("fetchTrace", () => {
     expect(recordRestRequestMock).toHaveBeenCalledTimes(1);
   });
 
-  it("extracts headers and blob body from Request inputs", async () => {
+  it("extracts headers and stream body from Request inputs", async () => {
     registerFetchTrace();
 
     const request = new Request("http://localhost/api/rest/v1/info", {
       method: "PUT",
       headers: new Headers({ "x-upload": "1" }),
-      body: new Blob(["abc"], { type: "text/plain" }),
+      body: "abc",
     });
 
     await window.fetch(request);
 
     const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as {
       method: string;
+      headers: Record<string, string | string[]>;
       body: { type: string; sizeBytes: number; mimeType: string } | string;
     };
     expect(payload.method).toBe("PUT");
+    expect(payload.headers["x-upload"]).toBe("1");
     expect(payload.body).toBe("[stream]");
   });
 

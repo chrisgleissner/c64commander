@@ -1,7 +1,7 @@
 {
   "name": "c64commander",
   "private": true,
-  "version": "0.6.4-rc7",
+  "version": "0.6.5-rc1",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "engines": {
@@ -27,7 +27,7 @@
     "build:dev": "node scripts/run-vite.mjs build --mode development",
     "lint": "npm run format:check:ts && eslint . && npm run lint:display-profiles",
     "lint:display-profiles": "node scripts/check-display-profile-breakpoints.mjs",
-    "postinstall": "patch-package && node --input-type=module -e \"import { existsSync } from 'node:fs'; if (existsSync('./scripts/install-git-hooks.mjs')) await import('./scripts/install-git-hooks.mjs');\"",
+    "postinstall": "patch-package && node --input-type=module -e \"import { existsSync } from 'node:fs'; import { execFileSync } from 'node:child_process'; if (existsSync('./c64scope/package.json')) execFileSync('npm', ['install', '--prefix', 'c64scope'], { stdio: 'inherit' }); if (existsSync('./scripts/install-git-hooks.mjs')) await import('./scripts/install-git-hooks.mjs');\"",
     "preview": "node scripts/run-vite.mjs preview",
     "start:web": "node web/server/dist/index.js",
     "test": "vitest run",
