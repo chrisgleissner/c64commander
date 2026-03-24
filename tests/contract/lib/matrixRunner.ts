@@ -9,7 +9,7 @@
 import { delay } from "./timing.js";
 import type { HarnessConfig } from "./config.js";
 import type { LogEventInput } from "./logging.js";
-import type { ProbeResult, HealthMonitor } from "./health.js";
+import type { MultiProtocolHealthMonitor } from "./health.js";
 import type { SharedRestRequest } from "./restRequest.js";
 import type { TraceCollector } from "./traceCollector.js";
 import { createFtpSessionPool } from "./matrixFtpPool.js";
@@ -25,8 +25,7 @@ import { runStage } from "./stageRunner.js";
 export async function runMatrixProfile(input: {
   config: HarnessConfig;
   log: (event: LogEventInput) => void;
-  healthMonitor: HealthMonitor;
-  ftpHealthMonitor?: HealthMonitor;
+  healthMonitor: MultiProtocolHealthMonitor;
   traceCollector?: TraceCollector;
   stages: MatrixStage[];
   operations: Map<string, MatrixOp>;
@@ -54,19 +53,19 @@ export async function runMatrixProfile(input: {
 
     if (stage.spikePhase === "idle") {
       await delay(stage.durationMs);
-      const restResult = await input.healthMonitor.check();
-      const ftpResult =
-        shouldUseFtpHealth(stage) && input.ftpHealthMonitor ? await input.ftpHealthMonitor.check() : null;
-      const reason = healthAbortReason(input.healthMonitor, input.ftpHealthMonitor, ftpResult);
-      if (reason) {
-        abortReason = reason;
+      const assessment = await input.healthMonitor.check({
+        stageId: stage.stageId,
+        source: `${stage.stageId}:idle`,
+      });
+      if (assessment.abort) {
+        abortReason = assessment.reason;
         stage.status = "aborted";
       } else {
         stage.status = "completed";
       }
       stage.requestsStarted = 0;
       stage.requestsCompleted = 0;
-      stage.successCount = restResult.ok && (!ftpResult || ftpResult.ok) ? 1 : 0;
+      stage.successCount = assessment.state === "HEALTHY" ? 1 : 0;
       stage.failureCount = stage.successCount === 1 ? 0 : 1;
       stage.endedAt = new Date().toISOString();
       continue;
@@ -84,7 +83,6 @@ export async function runMatrixProfile(input: {
     const stageHealthLoop = runMatrixHealthLoop({
       config: input.config,
       healthMonitor: input.healthMonitor,
-      ftpHealthMonitor: shouldUseFtpHealth(stage) ? input.ftpHealthMonitor : undefined,
       getStageId: () => stage.stageId,
       log: input.log,
       onAbort: (reason) => {
@@ -108,8 +106,9 @@ export async function runMatrixProfile(input: {
                   clientId,
                 },
               });
-            const ftpClient = pool ? await pool.acquire(clientId) : undefined;
+            let ftpClient;
             try {
+              ftpClient = pool ? await pool.acquire(clientId) : undefined;
               const result = await operation.execute({
                 restRequest: scopedRestRequest,
                 ftpClient,
@@ -126,6 +125,16 @@ export async function runMatrixProfile(input: {
                 stage.firstFailureAtMs ??= Date.now();
                 stage.firstFailureError ??= `Matrix operation failed: ${operation.id}`;
               }
+            } catch (error) {
+              input.log({
+                kind: "matrix-op",
+                op: operation.id,
+                status: "error",
+                details: { message: String(error), clientId },
+              });
+              stage.failureCount += 1;
+              stage.firstFailureAtMs ??= Date.now();
+              stage.firstFailureError ??= String(error);
             } finally {
               if (ftpClient && pool) {
                 await pool.release(ftpClient);
@@ -161,8 +170,7 @@ export async function runMatrixProfile(input: {
 
 async function runMatrixHealthLoop(input: {
   config: HarnessConfig;
-  healthMonitor: HealthMonitor;
-  ftpHealthMonitor?: HealthMonitor;
+  healthMonitor: MultiProtocolHealthMonitor;
   getStageId: () => string;
   log: (event: LogEventInput) => void;
   onAbort: (reason: string) => void;
@@ -175,50 +183,19 @@ async function runMatrixHealthLoop(input: {
     if (input.shouldStop()) {
       break;
     }
-    const restResult = await input.healthMonitor.check();
+    const assessment = await input.healthMonitor.check({
+      stageId: input.getStageId(),
+      source: `${input.getStageId()}:periodic`,
+    });
     input.log({
       kind: "health",
-      op: `${input.getStageId()}:rest`,
-      status: restResult.status ?? (restResult.ok ? 200 : "fail"),
-      latencyMs: restResult.latencyMs,
-      details: { error: restResult.error },
+      op: `${input.getStageId()}:periodic`,
+      status: assessment.state,
+      details: { reason: assessment.reason },
     });
-    const ftpResult = input.ftpHealthMonitor ? await input.ftpHealthMonitor.check() : null;
-    if (ftpResult) {
-      input.log({
-        kind: "health",
-        op: `${input.getStageId()}:ftp`,
-        status: ftpResult.status ?? (ftpResult.ok ? 200 : "fail"),
-        latencyMs: ftpResult.latencyMs,
-        details: { error: ftpResult.error },
-      });
-    }
-    const reason = healthAbortReason(input.healthMonitor, input.ftpHealthMonitor, ftpResult);
-    if (reason) {
-      input.onAbort(reason);
+    if (assessment.abort) {
+      input.onAbort(assessment.reason);
       return;
     }
   }
-}
-
-function healthAbortReason(
-  restMonitor: HealthMonitor,
-  ftpMonitor?: HealthMonitor,
-  _ftpResult?: ProbeResult | null,
-): string | null {
-  const restAbort = restMonitor.shouldAbort();
-  if (restAbort.abort) {
-    return restAbort.reason ?? "REST health probe aborted";
-  }
-  if (ftpMonitor) {
-    const ftpAbort = ftpMonitor.shouldAbort();
-    if (ftpAbort.abort) {
-      return ftpAbort.reason ?? "FTP health probe aborted";
-    }
-  }
-  return null;
-}
-
-function shouldUseFtpHealth(stage: MatrixStage): boolean {
-  return stage.protocol === "ftp" || stage.protocol === "mixed";
 }

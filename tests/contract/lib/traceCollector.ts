@@ -10,6 +10,8 @@ import type {
   FtpCommandEntry,
   FtpDataEntry,
   FtpResponseEntry,
+  HealthProbeEntry,
+  HealthStateEntry,
   RestRequestEntry,
   RestResponseEntry,
   TraceEntry,
@@ -22,7 +24,9 @@ type EmittableTraceEntry =
   | Omit<RestResponseEntry, "globalSeq" | "runSessionId" | "stageId" | "testType">
   | Omit<FtpCommandEntry, "globalSeq" | "runSessionId" | "stageId" | "testType">
   | Omit<FtpResponseEntry, "globalSeq" | "runSessionId" | "stageId" | "testType">
-  | Omit<FtpDataEntry, "globalSeq" | "runSessionId" | "stageId" | "testType">;
+  | Omit<FtpDataEntry, "globalSeq" | "runSessionId" | "stageId" | "testType">
+  | Omit<HealthProbeEntry, "globalSeq" | "runSessionId" | "stageId" | "testType">
+  | Omit<HealthStateEntry, "globalSeq" | "runSessionId" | "stageId" | "testType">;
 
 export class TraceCollector {
   private seq = 0;

@@ -14,7 +14,7 @@ import type { LogEventInput } from "./logging.js";
 import type { TraceCollector } from "./traceCollector.js";
 import type { ReplayManifest, ReplayRequest, RunOutcome } from "./traceSchema.js";
 import { FtpClient } from "./ftpClient.js";
-import { createFtpHealthProbe, HealthMonitor } from "./health.js";
+import { createContractHealthMonitor } from "./health.js";
 
 export type ReplayResult = {
   runId: string;
@@ -84,22 +84,8 @@ export async function runReplay(input: {
     traceCollector: input.traceCollector,
     defaultClientId: "replay-rest-client",
   });
-  const healthMonitor = new HealthMonitor(
-    async () => {
-      try {
-        const response = await restRequest({ method: "GET", url: input.config.health.endpoint });
-        return { ok: response.status === 200, status: response.status, latencyMs: response.latencyMs };
-      } catch (error) {
-        return { ok: false, error: String(error) };
-      }
-    },
-    {
-      maxConsecutiveFailures: 2,
-      maxUnreachableMs: input.config.health.timeoutMs,
-    },
-  );
-
-  const ftpProbe = createFtpHealthProbe(input.config);
+  const healthMonitor = createContractHealthMonitor(input.config);
+  const ftpProbe = healthMonitor;
   const ftpSessions = new Map<string, Promise<FtpClient>>();
   const requestQueues = new Map<string, Promise<void>>();
   const pendingTimers = new Set<NodeJS.Timeout>();
@@ -133,18 +119,25 @@ export async function runReplay(input: {
                     log: input.log,
                   });
                   successCount += 1;
-                  const abort = healthMonitor.shouldAbort();
-                  if (abort.abort) {
+                  const assessment = await healthMonitor.check({
+                    stageId: request.stageId,
+                    source: `replay:${request.globalSeq}:post`,
+                  });
+                  if (assessment.abort) {
                     stopped = true;
                   }
                 } catch (error) {
                   failureCount += 1;
-                  stopped = true;
+                  const assessment = await healthMonitor.check({
+                    stageId: request.stageId,
+                    source: `replay:${request.globalSeq}:failure`,
+                  });
+                  stopped = assessment.abort;
                   input.log({
                     kind: "replay",
                     op: `seq-${request.globalSeq}`,
                     status: "error",
-                    details: { message: String(error) },
+                    details: { message: String(error), healthState: assessment.state, reason: assessment.reason },
                   });
                 }
               })
@@ -178,22 +171,22 @@ export async function runReplay(input: {
     totalRequests: requests.length,
     successCount,
     failureCount,
-    outcome: stopped && failureCount > 0 ? "device-unresponsive" : "completed",
+    outcome: stopped ? "device-unresponsive" : "completed",
   };
 }
 
 async function assertReplayPreflight(input: {
   config: HarnessConfig;
   restRequest: ReturnType<typeof createRestRequest>;
-  ftpProbe: ReturnType<typeof createFtpHealthProbe>;
+  ftpProbe: { check: (input: { source: string; stageId?: string }) => Promise<{ abort: boolean; state: string; reason: string }> };
 }): Promise<void> {
   const restResult = await input.restRequest({ method: "GET", url: "/v1/version" });
   if (restResult.status !== 200) {
     throw new Error(`Replay pre-flight REST probe failed: ${restResult.status}`);
   }
-  const ftpResult = await input.ftpProbe();
-  if (!ftpResult.ok) {
-    throw new Error(`Replay pre-flight FTP probe failed: ${ftpResult.error ?? "unknown"}`);
+  const assessment = await input.ftpProbe.check({ source: "replay:preflight" });
+  if (assessment.abort) {
+    throw new Error(`Replay pre-flight health check failed: ${assessment.reason}`);
   }
 }
 

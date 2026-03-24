@@ -15,7 +15,12 @@ import { RestClient } from "./lib/restClient.js";
 import { buildRestScenarios } from "./scenarios/rest/index.js";
 import { buildFtpScenarios } from "./scenarios/ftp/index.js";
 import { buildMixedScenarios } from "./scenarios/mixed/index.js";
-import { createFtpHealthProbe, HealthMonitor } from "./lib/health.js";
+import {
+  createContractHealthMonitor,
+  type HealthAssessment,
+  type ProbeBatch,
+  type HealthTransition,
+} from "./lib/health.js";
 import { LatencyTracker, deriveCooldown, delay } from "./lib/timing.js";
 import { SchemaValidator, schemaPath } from "./lib/schema.js";
 import type { LogEventInput } from "./lib/logging.js";
@@ -98,6 +103,69 @@ const log = (event: LogEventInput) => {
   }
 };
 
+function recordHealthBatch(batch: ProbeBatch): void {
+  for (const result of batch.results) {
+    log({
+      kind: "health-probe",
+      op: `${batch.source}:${result.protocol.toLowerCase()}`,
+      status: result.status ?? (result.ok ? "ok" : "fail"),
+      latencyMs: result.latencyMs,
+      details: {
+        batchId: batch.batchId,
+        phase: batch.phase,
+        attempt: batch.attempt,
+        stageId: batch.stageId,
+        error: result.error,
+      },
+    });
+    traceCollector?.emit({
+      protocol: "HEALTH",
+      direction: "probe",
+      correlationId: `${batch.batchId}:${result.protocol}`,
+      clientId: "health-monitor",
+      timestamp: result.timestamp,
+      launchedAtMs: Date.parse(result.timestamp),
+      hrTimeNs: process.hrtime.bigint(),
+      source: batch.source,
+      probeProtocol: result.protocol,
+      phase: batch.phase,
+      attempt: batch.attempt,
+      state: result.ok ? "HEALTHY" : "DEGRADED",
+      ok: result.ok,
+      status: result.status,
+      error: result.error,
+      latencyMs: result.latencyMs,
+    });
+  }
+}
+
+function recordHealthTransition(transition: HealthTransition): void {
+  log({
+    kind: "health-state",
+    op: transition.source,
+    status: transition.to,
+    details: {
+      from: transition.from,
+      to: transition.to,
+      stageId: transition.stageId,
+      reason: transition.reason,
+    },
+  });
+  traceCollector?.emit({
+    protocol: "HEALTH",
+    direction: "state",
+    correlationId: `health-state:${transition.timestamp}:${transition.to}`,
+    clientId: "health-monitor",
+    timestamp: transition.timestamp,
+    launchedAtMs: Date.parse(transition.timestamp),
+    hrTimeNs: process.hrtime.bigint(),
+    source: transition.source,
+    state: transition.to,
+    previousState: transition.from ?? undefined,
+    reason: transition.reason,
+  });
+}
+
 const restClient = new RestClient({
   baseUrl: config.baseUrl,
   auth: config.auth,
@@ -127,47 +195,14 @@ const restRequest = createRestRequest(restClient, {
     : undefined,
 });
 
-const ftpHealthMonitor = hasStressMatrix(config)
-  ? new HealthMonitor(createFtpHealthProbe(config), {
-      maxConsecutiveFailures: 2,
-      maxUnreachableMs: resolveFailureDetectionTimeout(config),
-    })
-  : undefined;
-
-const healthMonitor = new HealthMonitor(
-  async () => {
-    try {
-      const response = await withTimeout(
-        restRequest(
-          hasStressBreakpoint(config)
-            ? {
-                method: "GET",
-                url: config.health.endpoint,
-                trace: {
-                  clientId: "health-monitor",
-                  target: { category: null, item: null },
-                },
-              }
-            : { method: "GET", url: config.health.endpoint },
-        ),
-        config.health.timeoutMs,
-        `Health probe timeout: ${config.health.endpoint}`,
-      );
-      return {
-        ok: response.status === 200,
-        status: response.status,
-        latencyMs: response.latencyMs,
-      };
-    } catch (error) {
-      console.warn("Health probe failed", { error: String(error) });
-      return { ok: false, error: String(error) };
-    }
+const healthMonitor = createContractHealthMonitor(config, {
+  onBatch: (batch) => {
+    recordHealthBatch(batch);
   },
-  {
-    maxConsecutiveFailures: config.mode === "STRESS" ? 2 : 3,
-    maxUnreachableMs: resolveFailureDetectionTimeout(config),
+  onTransition: (transition) => {
+    recordHealthTransition(transition);
   },
-);
+});
 
 const allRestScenarios = buildRestScenarios();
 const restScenarios = filterScenarios(allRestScenarios, config.scenarios?.rest);
@@ -207,7 +242,6 @@ try {
       config,
       log,
       healthMonitor,
-      ftpHealthMonitor,
       traceCollector,
       stages: buildMatrixStagePlan(config),
       operations: buildMatrixOperations(),
@@ -467,9 +501,12 @@ async function runScenarioGroup<T extends { id: string }>(
 ): Promise<void> {
   for (const scenario of scenarios) {
     await runner(scenario);
-    const abort = healthMonitor.shouldAbort();
-    if (abort.abort) {
-      throw new DeviceUnresponsiveError(`Abort after ${label}:${scenario.id} - ${abort.reason}`, scenario.id);
+    const assessment = await healthMonitor.check({
+      stageId: scenario.id,
+      source: `${label}:${scenario.id}:post-check`,
+    });
+    if (assessment.abort) {
+      throw new DeviceUnresponsiveError(`Abort after ${label}:${scenario.id} - ${assessment.reason}`, scenario.id);
     }
     await delay(config.pacing.restMinDelayMs);
   }
@@ -485,12 +522,12 @@ async function runScenario(id: string, safe: boolean, run: () => Promise<void>):
     });
     return;
   }
-  const pre = await healthMonitor.check();
+  const pre = await healthMonitor.check({ stageId: id, source: `${id}:pre` });
   log({
     kind: "health",
     op: `${id}:pre`,
-    status: pre.status ?? "fail",
-    latencyMs: pre.latencyMs,
+    status: pre.state,
+    details: { reason: pre.reason },
   });
 
   let abortError: Error | null = null;
@@ -501,17 +538,16 @@ async function runScenario(id: string, safe: boolean, run: () => Promise<void>):
     }
     checking = true;
     healthMonitor
-      .check()
+      .check({ stageId: id, source: `${id}:periodic` })
       .then((result) => {
         log({
           kind: "health",
           op: `${id}:periodic`,
-          status: result.status ?? "fail",
-          latencyMs: result.latencyMs,
+          status: result.state,
+          details: { reason: result.reason },
         });
-        const abort = healthMonitor.shouldAbort();
-        if (abort.abort && !abortError) {
-          abortError = new DeviceUnresponsiveError(`Abort during ${id}: ${abort.reason}`, id);
+        if (result.abort && !abortError) {
+          abortError = new DeviceUnresponsiveError(`Abort during ${id}: ${result.reason}`, id);
         }
       })
       .catch((error) => {
@@ -543,12 +579,12 @@ async function runScenario(id: string, safe: boolean, run: () => Promise<void>):
     clearInterval(interval);
   }
 
-  const post = await healthMonitor.check();
+  const post = await healthMonitor.check({ stageId: id, source: `${id}:post` });
   log({
     kind: "health",
     op: `${id}:post`,
-    status: post.status ?? "fail",
-    latencyMs: post.latencyMs,
+    status: post.state,
+    details: { reason: post.reason },
   });
 }
 

@@ -31,7 +31,7 @@ export type BreakpointStageRecord = BreakpointStage & {
 
 export type BreakpointHealthStatus = {
   ok: boolean;
-  status?: number;
+  status?: number | string;
   error?: string;
   latencyMs?: number;
   checkedAt?: string;

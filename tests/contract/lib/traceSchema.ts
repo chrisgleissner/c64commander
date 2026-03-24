@@ -10,6 +10,7 @@ import { serializeTraceValue } from "./traceSerialization.js";
 
 export type TraceTestType = "soak" | "stress" | "spike";
 export type RunOutcome = "completed" | "device-unresponsive";
+export type HealthState = "HEALTHY" | "DEGRADED" | "UNRESPONSIVE";
 
 export type TraceEntryBase = {
   globalSeq: number;
@@ -72,7 +73,37 @@ export type FtpDataEntry = TraceEntryBase & {
   first256Ascii: string;
 };
 
-export type TraceEntry = RestRequestEntry | RestResponseEntry | FtpCommandEntry | FtpResponseEntry | FtpDataEntry;
+export type HealthProbeEntry = TraceEntryBase & {
+  protocol: "HEALTH";
+  direction: "probe";
+  probeProtocol: "REST" | "ICMP" | "FTP" | "TELNET";
+  phase: "baseline" | "verification";
+  attempt: number;
+  source: string;
+  state: HealthState;
+  ok: boolean;
+  status?: number | string;
+  error?: string;
+  latencyMs?: number;
+};
+
+export type HealthStateEntry = TraceEntryBase & {
+  protocol: "HEALTH";
+  direction: "state";
+  source: string;
+  state: HealthState;
+  previousState?: HealthState;
+  reason: string;
+};
+
+export type TraceEntry =
+  | RestRequestEntry
+  | RestResponseEntry
+  | FtpCommandEntry
+  | FtpResponseEntry
+  | FtpDataEntry
+  | HealthProbeEntry
+  | HealthStateEntry;
 
 export type ReplayRequest = {
   globalSeq: number;

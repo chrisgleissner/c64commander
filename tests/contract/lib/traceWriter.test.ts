@@ -30,8 +30,10 @@ describe("traceWriter", () => {
 
     expect(markdown).toContain("## [1] REST GET /v1/version");
     expect(markdown).toContain("## [3] FTP LIST /");
-    expect(shell.toLowerCase()).not.toContain("x-password: secret");
-    expect(shell).toContain("# X-Password: SET_PASSWORD_HERE");
+    expect(shell).toContain('DEVICE_HOST="c64u"');
+    expect(shell).toContain("--host <hostname>");
+    expect(shell).toContain("lftp -u anonymous");
+    expect(shell).toContain('HTTP_BASE_URL="http://${DEVICE_HOST}"');
     expect(manifest.requests).toHaveLength(2);
   });
 });

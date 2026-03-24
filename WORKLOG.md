@@ -103,3 +103,17 @@ Date: 2026-03-23
 - Preserved the legacy breakpoint artifact contract while extracting shared stage execution primitives for reuse.
 - Validation completed with `npx tsc -p tests/contract/tsconfig.json`, `npm run lint`, `npm run test:coverage` at 91% branch coverage, trace-enabled SAFE mock runs, trace-disabled SAFE mock runs, matrix quick and soak-override mock runs, simulated device-unresponsive mock runs, breakpoint regression runs, and replay dry-run verification.
 - Added `tests/contract/instrumentation-validation.md` to capture the concrete run IDs, artifact inventories, redaction proof, replay sample output, and regression evidence.
+
+## 2026-03-24T18:03:34Z - Contract failure-classification correction
+
+- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`
+- Corrected the contract harness failure model so it now distinguishes `HEALTHY`, `DEGRADED`, and `UNRESPONSIVE` instead of treating a single `ECONNRESET` as terminal.
+- Added a multi-protocol verification monitor in `tests/contract/lib/health.ts` that checks REST `/v1/info`, ICMP ping, FTP connect/NOOP, and telnet reachability, then requires a 5-second persistence window before classifying `UNRESPONSIVE`.
+- Wired health probe batches and state transitions into `logs.jsonl` and `trace.jsonl`, and updated matrix, breakpoint, and replay execution paths to stop only on verified persistent unresponsiveness.
+- Corrected replay artifact generation in `tests/contract/lib/traceWriter.ts` so FTP uploads carry byte counts and `device-replay.sh` now replays FTP steps through `lftp`.
+- Added CLI replay overrides at script start: `--host <hostname>` now defaults to `c64u`, and `--password <password>` overrides `DEVICE_PASSWORD` when needed.
+- Added focused regression coverage in `tests/contract/lib/health.test.ts` and updated replay writer assertions.
+- Commands run:
+  - `npx tsc -p tests/contract/tsconfig.json`
+  - `npx vitest run tests/contract/lib/health.test.ts tests/contract/lib/traceWriter.test.ts tests/contract/lib/breakpointRunner.test.ts tests/contract/lib/replayEngine.test.ts tests/contract/lib/stressMatrix.test.ts tests/contract/lib/restRequest.test.ts tests/contract/lib/config.test.ts tests/contract/lib/breakpoint.test.ts`
+- Observation: the refactor and focused contract regression suite are green locally; the next unresolved step is the real-device rerun needed to prove a persistent cross-protocol unresponsive state and replay it from a clean device.

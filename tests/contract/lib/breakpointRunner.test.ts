@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createMockRestServer } from "../mockRestServer.js";
 import { RestClient } from "./restClient.js";
-import { HealthMonitor } from "./health.js";
+import { MultiProtocolHealthMonitor } from "./health.js";
 import { createRestRequest } from "./restRequest.js";
 import { runStressBreakpointProfile } from "./breakpointRunner.js";
 import { prepareSidVolumeBreakpointScenario } from "../scenarios/rest/breakpointSidVolume.js";
@@ -52,25 +52,31 @@ describe("runStressBreakpointProfile", () => {
         },
       },
     });
-    const healthMonitor = new HealthMonitor(
-      async () => {
-        const response = await restRequest({
-          method: "GET",
-          url: config.health.endpoint,
-          trace: {
-            clientId: "health-monitor",
-            target: { category: null, item: null },
-          },
-        });
-        return {
-          ok: response.status === 200,
-          status: response.status,
-          latencyMs: response.latencyMs,
-        };
-      },
+    const healthMonitor = new MultiProtocolHealthMonitor(
+      [
+        async () => {
+          const response = await restRequest({
+            method: "GET",
+            url: config.health.endpoint,
+            trace: {
+              clientId: "health-monitor",
+              target: { category: null, item: null },
+            },
+          });
+          return {
+            protocol: "REST",
+            ok: response.status === 200,
+            timestamp: new Date().toISOString(),
+            status: response.status,
+            latencyMs: response.latencyMs,
+          };
+        },
+        async () => ({ protocol: "ICMP", ok: true, timestamp: new Date().toISOString(), status: 0, latencyMs: 1 }),
+        async () => ({ protocol: "FTP", ok: true, timestamp: new Date().toISOString(), status: 200, latencyMs: 1 }),
+      ],
       {
-        maxConsecutiveFailures: 2,
-        maxUnreachableMs: config.stressBreakpoint!.failureDetectionTimeoutMs,
+        verificationWindowMs: 10,
+        verificationBackoffMs: [1],
       },
     );
 

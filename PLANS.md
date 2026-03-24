@@ -1,6 +1,6 @@
 # C64U Failure Boundary Stress Plan
 
-Status: COMPLETE
+Status: IN_PROGRESS
 Date: 2026-03-24
 Classification: DOC_PLUS_CODE, CODE_CHANGE
 Target device: c64u
@@ -9,7 +9,17 @@ Execution rule: all contract execution goes through ./build
 
 ## Objective
 
-Identify the smallest reproducible stress boundary that transitions the C64 Ultimate from normal responses into a verified failure state, capture the full trace, and prove deterministic replay from a clean state.
+Correct the contract harness so transient resets and partial outages are classified as `DEGRADED`, only persistent cross-protocol outages are classified as `UNRESPONSIVE`, then continue the real-device stress run until the true unresponsive state is reproduced and replay-verified.
+
+## Correction Scope
+
+- [x] Replace the single-failure health trigger with a failure state machine.
+- [x] Add a multi-protocol verifier covering REST `/v1/info`, ICMP ping, FTP connect/NOOP, and optional telnet reachability.
+- [x] Require a persistence window before declaring `UNRESPONSIVE`.
+- [x] Emit health probe results and state transitions into trace artifacts.
+- [x] Fix replay shell generation to include FTP via `lftp` and accept a CLI host override.
+- [ ] Re-run the real-device `mixed.burst-and-stor` escalation until persistent `UNRESPONSIVE` is observed for at least 5 seconds.
+- [ ] Extract the minimal reproducer and prove replay from a clean device reaches the same persistent state.
 
 ## Safety Constraints
 
@@ -24,11 +34,29 @@ Identify the smallest reproducible stress boundary that transitions the C64 Ulti
 - [x] Build helper supports contract runs based on tests/contract/config.stress.matrix.spike.json.
 - [x] Baseline real-device contract run completes and records artifacts.
 - [x] Full trace captures REST request/response headers, body, and timing plus FTP command/response timing.
-- [x] A failure boundary is observed during controlled escalation.
-- [x] Independent verification with `curl http://c64u/v1/info` shows the same failure condition.
-- [x] Minimal reproducing trace is extracted.
-- [x] Replay reproduces the failure from a clean state.
-- [x] Replay succeeds at least twice with the same failure signature.
+- [ ] A failure boundary is observed during controlled escalation.
+- [ ] Independent verification shows `curl /v1/info`, `ping`, and FTP all fail together.
+- [ ] Failure persists without recovery for at least 5 seconds.
+- [ ] Minimal reproducing trace is extracted.
+- [ ] Replay reproduces the same persistent cross-protocol failure from a clean state.
+- [ ] Replay succeeds at least twice with the same persistent failure signature.
+
+## Phase 0 - False Positive Correction
+
+- [x] Mark the prior ECONNRESET-only result as a false positive.
+- [x] Re-scope the plan so transient recovery no longer counts as success.
+
+## Phase 3A - Failure Model Refactor
+
+- [x] Implement `HEALTHY`, `DEGRADED`, and `UNRESPONSIVE` states in the contract harness.
+- [x] Record probe timestamps, latency, and protocol-specific failures during the verification window.
+- [x] Stop aborting on a single `ECONNRESET` or timeout.
+
+## Phase 3B - Replay Artifact Correction
+
+- [x] Attach FTP upload byte counts to replay requests.
+- [x] Generate `device-replay.sh` with `lftp` FTP steps.
+- [x] Add `--host` override support at the beginning of the replay shell script.
 
 ## Phase 1 - Plan Initialization
 
