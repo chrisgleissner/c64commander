@@ -1,119 +1,160 @@
-# Diagnostics, Navigation, and Health Worklog
+# Telnet Integration Research Worklog
 
-Status: IN_PROGRESS
-Date: 2026-03-23
+Status: COMPLETE
+Date: 2026-03-24
 
-## 2026-03-23T00:00:00Z - Classification and scope
+## 2026-03-24 — Initial Document Review
 
-- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`, `UI_CHANGE`
-- Objective: resolve diagnostics completeness, diagnostics discoverability, CPU slider flicker, swipe gesture behavior, deep linking, and authoritative health-state consistency.
-- Decision: keep changes tightly scoped to existing diagnostics/tracing/navigation subsystems instead of introducing a parallel observability stack.
+Read required documents:
 
-## 2026-03-23T00:15:00Z - Root cause discovery findings
+- `doc/architecture.md` — React+Vite+Capacitor app, REST+FTP to C64U, TanStack Query
+- `doc/c64/c64u-openapi.yaml` — REST API spec, X-Password auth
+- `doc/c64/telnet/telnet-spec.md` — Normative telnet spec (contains F-key mapping errors, see below)
+- `doc/c64/telnet/telnet-action-walkthrough.md` — Captured telnet screens
 
-- REST execution path
-  - Primary REST requests are executed in `src/lib/c64api.ts`.
-  - Requests call `recordRestRequest()` and `recordRestResponse()` in `src/lib/tracing/traceSession.ts`.
-- FTP execution path
-  - Primary FTP operations are executed in `src/lib/ftp/ftpClient.ts`.
-  - FTP traces are recorded through `recordFtpOperation()` in `src/lib/tracing/traceSession.ts`.
-- Diagnostics UI ownership
-  - A global owner exists in `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`.
-  - A second, Settings-local diagnostics dialog is rendered in `src/pages/SettingsPage.tsx`.
-  - This split ownership is a structural risk for diverging diagnostics behavior.
+Key: Telnet-only actions include Power Cycle, Reboot (Clear Memory), Save C64/REU Memory, IEC controls, Printer controls, Config file ops, Debug log ops.
 
-## 2026-03-23T00:25:00Z - Problem area A/B root causes
+## 2026-03-24 — C64 Commander REST/FTP Concurrency Model
 
-- A. Diagnostics capture incomplete
-  - `recordRestRequest()` stores `method`, `url`, and `normalizedUrl`, but not parsed `protocol`, `hostname`, `path`, or `query` as first-class fields.
-  - `recordRestResponse()` stores `path` loosely and depends on callers to supply it consistently.
-  - `recordFtpOperation()` stores `operation` and `path`, but not `hostname` or explicit command/result schema fields required by the task.
-  - `buildActionSummaries()` reconstructs action effects from loosely-shaped trace payloads, so missing fields stay missing all the way into the UI.
-- B. Diagnostics UI lacks meaningful summaries
-  - `DiagnosticsDialog.tsx` currently renders `summary.actionName` and a generic counts string for action rows.
-  - The collapsed activity list does not promote hostname/path/latency even when the underlying request/response data exists.
+### REST Client (`src/lib/c64api.ts`)
 
-## 2026-03-23T00:35:00Z - Problem area C/F root causes
+- Uses native `fetch()` with AbortController for timeouts
+- Request IDs: sequential `c64req-{timestamp}-{seq}`
+- Timeouts: 3s control, 5s upload/playback, 15s RAM write
+- SID upload retries: max 3 attempts on 502/503/504
+- Read request deduplication via in-flight map
+- Read request budget (256 entries, 64KB, 500ms window)
 
-- C. Diagnostics features not reachable
-  - `LatencyAnalysisPopup` and `HealthHistoryPopup` are reachable from `DiagnosticsDialog.tsx`.
-  - `ConfigDriftView` and `HeatMapPopup` exist under `src/components/diagnostics/` but are not surfaced from the current diagnostics UI.
-  - Current diagnostics entry points are only the Settings button and health badge open request helpers; there is no sections index.
-- F. Docs lack navigation clarity and deep links
-  - `src/pages/DocsPage.tsx` documents diagnostics conceptually but does not enumerate all diagnostics surfaces or any stable deep-link paths.
+### FTP Client (`src/lib/ftp/ftpClient.ts`)
 
-## 2026-03-23T00:45:00Z - Problem area D root cause
+- Delegates to `FtpClient` native plugin (Capacitor bridge)
+- Records trace events via `recordFtpOperation()`
+- Uses implicit action wrapping for FTP calls outside user actions
 
-- D. CPU slider jump-back
-  - `src/pages/HomePage.tsx` uses a dedicated `cpuSpeedDraftIndex` local state plus direct interactive writes.
-  - The draft state is reset whenever `cpuSpeedValue` changes from config refreshes, which can snap the displayed thumb back mid-interaction.
-  - Canonical slider behavior already exists elsewhere: device-backed sliders keep an optimistic local state and gate remote reconciliation while dragging.
+### Device Interaction Manager (`src/lib/deviceInteraction/deviceInteractionManager.ts`)
 
-## 2026-03-23T00:55:00Z - Problem area E root cause
+- **REST scheduler**: `InteractionScheduler` with `REST_MAX_CONCURRENCY = 1` (fully serialized)
+- **FTP scheduler**: `InteractionScheduler` with configurable `ftpMaxConcurrency` (default 2)
+- **REST and FTP schedulers are independent** — no shared queue
+- Priority queue: user > system > background intent ordering
+- Per-endpoint cooldowns: machine control 250ms, config mutation 120ms
+- Per-protocol circuit breaker with configurable threshold and cooldown
+- Exponential backoff on critical errors
+- Device state gating: blocks during UNKNOWN/DISCOVERING/ERROR states
+- Background read gating: defers background reads when device is BUSY
+- Read request caching with policy-based TTL
+- In-flight request coalescing
 
-- E. Swipe navigation delayed/non-authoritative
-  - `useSwipeGesture.ts` tracks live drag progress correctly, but commit logic uses a fixed `40px` threshold in `SWIPE_COMMIT_THRESHOLD_PX`.
-  - The required behavior is width-relative thresholding (~30% of the container), not a fixed absolute pixel value.
-  - `SwipeNavigationLayer.tsx` already separates drag and transition phases, but route-driven deep-link cases are not part of the gesture/diagnostics architecture.
+### Device Safety Config (`src/lib/config/deviceSafetySettings.ts`)
 
-## 2026-03-23T01:05:00Z - Problem area G/H root causes
+- Four modes: RELAXED, BALANCED (default), CONSERVATIVE, TROUBLESHOOTING
+- FTP concurrency: 1-4 depending on mode
+- All parameters user-overridable via localStorage
 
-- G. Health check not authoritative
-  - `runHealthCheck()` in `src/lib/diagnostics/healthCheckEngine.ts` produces a complete result and pushes health history, but the latest result is only stored in component state inside `GlobalDiagnosticsOverlay.tsx`.
-  - No global store exposes the latest health check result to other UI consumers.
-  - CONFIG currently skips with a generic reason when no roundtrip target is found, but that state is not elevated into a single app-wide authority.
-- H. Global device status diverges from health check
-  - `useHealthState()` computes health entirely from recent trace activity plus connection state in `src/hooks/useHealthState.ts`.
-  - `UnifiedHealthBadge` consumes `useHealthState()`, while `DiagnosticsDialog` separately shows `lastHealthCheckResult` from overlay-local state.
-  - Result: after a successful health check, the diagnostics header can show one state while the global badge still reflects stale or unrelated trace-derived degradation.
+## 2026-03-24 — Home Page and Machine Controls
 
-## 2026-03-23T01:15:00Z - Routing/deep-link findings
+### Machine Controls (`src/pages/home/components/MachineControls.tsx`)
 
-- `tabIndexForPath()` in `src/lib/navigation/tabRoutes.ts` only recognizes tab routes and existing tab sub-routes.
-- `/diagnostics/*` currently resolves to no tab slot and would fall through to not-found.
-- The swipe shell can support diagnostics deep links by mapping `/diagnostics/*` into the Settings slot while keeping diagnostics ownership global and route-aware.
+- Quick Actions grid: Reset, Reboot, Pause/Resume, Power Off, Menu Button, Save RAM, Restore Snapshot
+- Controls come from `useC64MachineControl()` hook → `useMutation()` calling `api.machineReset()` etc.
+- `runMachineTask()` gates one task at a time via ref+state
 
-## 2026-03-23T01:25:00Z - Planned implementation direction
+### Missing from UI
 
-- Unify diagnostics ownership around the global overlay.
-- Extend trace payloads through centralized diagnostics event builders rather than patching UI strings.
-- Add route-aware diagnostics section state and visible section entry points.
-- Promote the latest health check result into a shared authoritative store consumed by `useHealthState()` and diagnostics UI.
-- Replace the CPU slider’s draft-state reset behavior with the canonical optimistic slider model.
+Power Cycle, Reboot (Clear Memory), Save C64 Memory, Save REU Memory — all Telnet-only.
 
-## 2026-03-23T01:30:00Z - Validation plan
+### Mock Infrastructure
 
-- Targeted unit tests
-  - trace session event completeness
-  - diagnostics dialog summaries/discoverability
-  - swipe navigation threshold and route behavior
-  - health/global-state consistency
-- Required repo validation for code changes
-  - `npm run lint`
-  - `npm run test:coverage`
-  - `npm run build`
+- `src/lib/mock/mockServer.ts` — MockC64U native plugin for REST mock
+- `src/lib/native/mockC64u.ts` / `mockC64u.web.ts` — Capacitor mock bridge
+- No Telnet mock exists
 
-## 2026-03-24T00:00:00Z - Contract harness trace/matrix/replay delivery
+## 2026-03-24 — Firmware Telnet Server Analysis
 
-- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`
-- Implemented a forensic recorder for the contract harness with structured REST and FTP trace entries, incremental JSONL output, grouped markdown summaries, and replay-manifest generation.
-- Added structured matrix execution for `stress`, `soak`, and `spike` profiles, including reusable stage planning, FTP session pooling, stage-tagged tracing, and CLI `--test-type` override support.
-- Added deterministic replay via `tests/contract/replay.ts`, including dry-run schedule output, REST/FTP preflight checks, and replay-run artifact generation.
-- Added device-unresponsive outcome handling with `meta.json` outcome tracking, `DEVICE_UNRESPONSIVE` sentinel emission, and exit code `2` for aborted runs.
-- Preserved the legacy breakpoint artifact contract while extracting shared stage execution primitives for reuse.
-- Validation completed with `npx tsc -p tests/contract/tsconfig.json`, `npm run lint`, `npm run test:coverage` at 91% branch coverage, trace-enabled SAFE mock runs, trace-disabled SAFE mock runs, matrix quick and soak-override mock runs, simulated device-unresponsive mock runs, breakpoint regression runs, and replay dry-run verification.
-- Added `tests/contract/instrumentation-validation.md` to capture the concrete run IDs, artifact inventories, redaction proof, replay sample output, and regression evidence.
+### Connection Handling (`1541ultimate/software/network/socket_gui.cc`)
 
-## 2026-03-24T18:03:34Z - Contract failure-classification correction
+- Telnet server listens on port 23, backlog 2
+- Each connection spawns a FreeRTOS task (`socket_gui_task`) at `PRIO_USERIFACE`
+- Each task creates independent: `HostStream`, `UserInterface`, `BrowsableRoot`, `TreeBrowser`
+- Socket receive timeout: 200ms
+- Authentication: plaintext password prompt, exponential delay on failure (250ms → 4s)
 
-- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`
-- Corrected the contract harness failure model so it now distinguishes `HEALTHY`, `DEGRADED`, and `UNRESPONSIVE` instead of treating a single `ECONNRESET` as terminal.
-- Added a multi-protocol verification monitor in `tests/contract/lib/health.ts` that checks REST `/v1/info`, ICMP ping, FTP connect/NOOP, and telnet reachability, then requires a 5-second persistence window before classifying `UNRESPONSIVE`.
-- Wired health probe batches and state transitions into `logs.jsonl` and `trace.jsonl`, and updated matrix, breakpoint, and replay execution paths to stop only on verified persistent unresponsiveness.
-- Corrected replay artifact generation in `tests/contract/lib/traceWriter.ts` so FTP uploads carry byte counts and `device-replay.sh` now replays FTP steps through `lftp`.
-- Added CLI replay overrides at script start: `--host <hostname>` now defaults to `c64u`, and `--password <password>` overrides `DEVICE_PASSWORD` when needed.
-- Added focused regression coverage in `tests/contract/lib/health.test.ts` and updated replay writer assertions.
-- Commands run:
-  - `npx tsc -p tests/contract/tsconfig.json`
-  - `npx vitest run tests/contract/lib/health.test.ts tests/contract/lib/traceWriter.test.ts tests/contract/lib/breakpointRunner.test.ts tests/contract/lib/replayEngine.test.ts tests/contract/lib/stressMatrix.test.ts tests/contract/lib/restRequest.test.ts tests/contract/lib/config.test.ts tests/contract/lib/breakpoint.test.ts`
-- Observation: the refactor and focused contract regression suite are green locally; the next unresolved step is the real-device rerun needed to prove a persistent cross-protocol unresponsive state and replay it from a clean device.
+### Screen Rendering (`1541ultimate/software/io/stream/screen_vt100.cc`)
+
+- Fixed 60×24 grid
+- VT100 escape sequences: cursor positioning (`\e[r;cH`), color (SGR), reverse (`\e[7m`)
+- Line-drawing via alternate charset (`\e(0` / `\e(B`)
+- Screen clear via RIS (`\ec`)
+- Init: Telnet DONT LINEMODE + WILL ECHO + RIS
+
+### Key Input (`1541ultimate/software/io/stream/keyboard_vt100.cc`)
+
+- Standard VT100 escape sequences: `\e[A`-`\e[D` for arrows, `\e[N~` for function keys
+- F1=`\e[11~`, F5=`\e[15~`, F7=`\e[18~`
+
+### Critical F-key Mapping (`userinterface.cc:612-616`)
+
+- `KEY_F1 → KEY_PAGEUP` (Page Up, NOT action menu)
+- `KEY_F3 → KEY_HELP` (Help)
+- **`KEY_F5 → KEY_TASKS` (Action Menu)**
+- `KEY_F7 → KEY_PAGEDOWN` (Page Down)
+- **The existing `telnet-spec.md` incorrectly says F1 opens the action menu. It is F5.**
+
+### Menu System (`1541ultimate/software/userinterface/task_menu.cc`)
+
+- `TaskMenu` collects actions from all `ObjectWithMenu` subsystems
+- Actions organized into `TaskCategory` groups (Power & Reset, Built-in Drive A, etc.)
+- Category names and action labels come from subsystem registrations
+- Menu items dynamically enabled/disabled based on current device state
+
+## 2026-03-24 — Firmware Concurrency Model (Critical Finding)
+
+### SubSystem Mutex (`1541ultimate/software/infra/subsys.h:53-61`)
+
+- Each `SubSystem` instance has its own FreeRTOS mutex (`xSemaphoreCreateMutex()`)
+- SubSystem IDs: C64(1), Drive_A(2), Drive_B(3), Drive_C(4), IEC(7), Printer(10), etc.
+
+### SubsysCommand Execution (`1541ultimate/software/infra/subsys.cc:4-31`)
+
+- `SubsysCommand::execute()` looks up subsystem by ID
+- Takes per-subsystem mutex with **1-second timeout** (`xSemaphoreTake(myMutex, 1000)`)
+- If lock acquired: executes command, releases lock
+- If lock NOT acquired: returns `SSRET_NO_LOCK` (maps to HTTP 423 Locked)
+
+### REST → SubSystem Path (`1541ultimate/software/api/route_machine.cc`)
+
+- REST handlers (reset, reboot, poweroff) create `SubsysCommand` and call `execute()`
+- HTTP daemon is single-threaded (`HTTPServerRunLoop`)
+- REST operations are inherently serialized by the HTTP server loop
+
+### Telnet → SubSystem Path (`1541ultimate/software/userinterface/context_menu.cc:124-141`)
+
+- Menu action selection calls `ContextMenu::executeSelected()`
+- Creates `SubsysCommand` with the Telnet session's `UserInterface` reference
+- Calls `execute()` — same path as REST, same per-subsystem mutex
+
+### Conclusion
+
+- **REST, FTP, and Telnet converge on the same SubsysCommand::execute() path**
+- **Per-subsystem mutex provides thread safety** — not a global lock
+- **Cross-subsystem operations are fully concurrent** (e.g., REST config read + Telnet C64 power cycle)
+- **Same-subsystem operations are serialized** by the firmware mutex with 1s timeout
+- **No global device-wide lock exists** — C64 Commander does NOT need a cross-protocol queue
+
+## 2026-03-24 — Specification Written
+
+Created `doc/c64/telnet/telnet-integration-spec.md` with:
+
+- Evidence-backed concurrency answer
+- Telnet protocol findings with VT100 details
+- Transport architecture (native TCP for Android/iOS, disabled on web)
+- Independent Telnet scheduler design (concurrency 1, parallel to REST/FTP)
+- VT100 screen parser design
+- Label-based menu navigator state machine
+- Deterministic mock with failure injection
+- Action abstraction and capability mapping
+- UI placement for Home page Quick Actions
+- Platform support strategy
+- Firmware compatibility strategy
+- 4-phase implementation plan
+- Acceptance criteria
