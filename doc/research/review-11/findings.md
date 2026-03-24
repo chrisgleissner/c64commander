@@ -49,7 +49,7 @@ Root cause trace:
 3. The guard at line 852 (`if (offsetBytes < 0L)`) triggers, and the call is rejected with "offsetBytes must be >= 0".
 4. No chunks are ever read; the extraction loop in `hvscDownload.ts:360–377` never completes; the error propagates up as an `Error` and is displayed in the HVSC status row.
 
-The value `0` (the correct starting offset) is never received by the native side because `getLong("offsetBytes")` does not accept a JSON integer passed as a JS number when the value happens to be zero — or the JSON serialization path omits the field when it is falsy.
+The value `0` (the correct starting offset) is never received by the native side because Capacitor's `getLong("offsetBytes")` call does not correctly resolve the `offsetBytes` parameter from the bridged JS payload when it is passed as a JS `number` (including `0`); this is a bridge/parameter-parsing issue, not JSON dropping falsy values.
 
 Observed device behavior:
 
