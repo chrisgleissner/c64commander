@@ -103,6 +103,17 @@ describe("HealthCheckDetailView", () => {
       expect(screen.getByTestId("health-check-probe-config")).toHaveTextContent("Skipped");
     });
 
+    it("keeps short failure reasons readable inline without the detail-row fallback", () => {
+      const result = makeResult();
+      result.probes.REST = makeProbe("REST", "Fail", 42, "Short mobile-safe reason");
+
+      render(<HealthCheckDetailView result={result} onBack={vi.fn()} />);
+
+      const row = screen.getByTestId("health-check-probe-rest");
+      expect(row).toHaveTextContent("Short mobile-safe reason");
+      expect(screen.queryByText("Short mobile-safe reason", { selector: "p" })).not.toBeInTheDocument();
+    });
+
     it("renders latency summary when result present and not running", () => {
       render(<HealthCheckDetailView result={makeResult()} onBack={vi.fn()} />);
       expect(screen.getByText(/p50/)).toBeInTheDocument();

@@ -9,6 +9,7 @@ cd c64scope
 npm install
 npm run check          # build + test
 npm run mcp            # start MCP server (stdio transport)
+node scripts/start.mjs # bootstrap deps if needed, then start from TypeScript
 ```
 
 ## Repository scripts (from root)
@@ -21,6 +22,8 @@ npm run scope:check          # build + test
 npm run scope:mcp            # start MCP server
 npm run scope:preflight      # check lab prerequisites
 ```
+
+The workspace MCP launcher at `.vscode/mcp.json` now starts `c64scope/scripts/start.mjs`, so `c64scope` remains self-contained and can bootstrap its own package dependencies on first start.
 
 ## Preflight checks
 
@@ -60,11 +63,11 @@ Both `artifacts/` and `logs/` are gitignored.
 
 Three-peer-server model orchestrated by a single LLM:
 
-| Peer | Role |
-| --- | --- |
-| Mobile controller (droidmind) | App lifecycle, UI interaction, screenshots, logcat |
-| C64 bridge (c64bridge) | Stream start/stop, RAM reads, emergency recovery |
-| C64 Scope (this server) | Evidence capture, session timeline, assertions, artifacts |
+| Peer                          | Role                                                      |
+| ----------------------------- | --------------------------------------------------------- |
+| Mobile controller (droidmind) | App lifecycle, UI interaction, screenshots, logcat        |
+| C64 bridge (c64bridge)        | Stream start/stop, RAM reads, emergency recovery          |
+| C64 Scope (this server)       | Evidence capture, session timeline, assertions, artifacts |
 
 ## Design documents
 

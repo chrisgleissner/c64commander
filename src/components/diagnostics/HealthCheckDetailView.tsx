@@ -149,7 +149,7 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                     {isDetailRow ? (
                       <span />
                     ) : (
-                      <span className="text-muted-foreground truncate" title={reasonText}>
+                      <span className="text-muted-foreground break-words leading-snug" title={reasonText}>
                         {reasonText}
                       </span>
                     )}

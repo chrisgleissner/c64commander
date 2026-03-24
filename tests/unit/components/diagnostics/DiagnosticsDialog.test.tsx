@@ -310,6 +310,19 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getAllByTestId("open-config-heatmap-screen")).toHaveLength(1);
   });
 
+  it("anchors the compact diagnostics overflow panel flush to the viewport edge", () => {
+    setViewportWidth(360);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+
+    const panel = screen.getByTestId("diagnostics-overflow-panel");
+    expect(panel.className).toContain("fixed");
+    expect(panel.className).toContain("inset-x-4");
+    expect(panel).toHaveTextContent("Health history");
+  });
+
   it("shares only the filtered evidence set", () => {
     setViewportWidth(600);
     const onShareFiltered = vi.fn();

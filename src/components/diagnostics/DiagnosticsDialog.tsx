@@ -1159,7 +1159,7 @@ export function DiagnosticsDialog({
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
             <div className="relative min-h-8 pr-20">
               <AppSheetTitle className="pr-4">Diagnostics</AppSheetTitle>
-              <div className="absolute right-20 top-1 z-10">
+              <div className={cn("absolute top-1 z-10", profile === "compact" ? "right-14" : "right-20")}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1171,13 +1171,21 @@ export function DiagnosticsDialog({
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
                 {overflowOpen ? (
-                  <div className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg">
+                  <div
+                    className={cn(
+                      "rounded-lg border border-border bg-background py-1 shadow-lg",
+                      profile === "compact"
+                        ? "fixed inset-x-4 top-[5.25rem] z-20 max-h-[calc(100dvh-6rem)] overflow-y-auto"
+                        : "absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))]",
+                    )}
+                    data-testid="diagnostics-overflow-panel"
+                  >
                     <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Views
                     </p>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setConfigDriftOpen(true);
@@ -1188,7 +1196,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setDecisionStateOpen(true);
@@ -1199,7 +1207,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setLatencyOpen(true);
@@ -1210,7 +1218,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHistoryOpen(true);
@@ -1221,7 +1229,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHeatMapVariant("REST");
@@ -1232,7 +1240,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHeatMapVariant("FTP");
@@ -1243,7 +1251,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         setHeatMapVariant("CONFIG");
@@ -1255,7 +1263,7 @@ export function DiagnosticsDialog({
                     <div className="my-1 border-t border-border" />
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         void onShareAll();
@@ -1267,7 +1275,7 @@ export function DiagnosticsDialog({
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
                       onClick={() => {
                         setOverflowOpen(false);
                         handleShareFiltered();
@@ -1281,7 +1289,7 @@ export function DiagnosticsDialog({
                       <AlertDialogTrigger asChild>
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
                           data-testid="footer-diagnostics-clear-all-trigger"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { deriveVersionLabel, shortenGitId } from "@/lib/versionLabel";
+import { deriveVersionLabel, resolveBuildVersionLabel, shortenGitId } from "@/lib/versionLabel";
 
 describe("versionLabel", () => {
   describe("shortenGitId", () => {
@@ -109,6 +109,41 @@ describe("versionLabel", () => {
 
     it("returns the em-dash placeholder when describe and fallback are both absent", () => {
       expect(deriveVersionLabel({})).toBe("—");
+    });
+  });
+
+  describe("resolveBuildVersionLabel", () => {
+    it("prefers the generated version label when present", () => {
+      expect(
+        resolveBuildVersionLabel({
+          generatedVersionLabel: "0.6.5-rc1-903c8",
+          gitDescribe: "0.6.5-0-g903c83e8",
+          gitSha: "903c83e8fcf087998b4f50e310ec62fe82710c4b",
+          fallbackVersion: "0.6.5-rc1",
+        }),
+      ).toBe("0.6.5-rc1-903c8");
+    });
+
+    it("keeps the fallback version for branch builds even when git describe finds an older tag", () => {
+      expect(
+        resolveBuildVersionLabel({
+          generatedVersionLabel: "",
+          gitDescribe: "0.6.5-0-g903c83e8",
+          gitSha: "903c83e8fcf087998b4f50e310ec62fe82710c4b",
+          fallbackVersion: "0.6.5-rc1",
+        }),
+      ).toBe("0.6.5-rc1");
+    });
+
+    it("falls back to git-derived labeling only when no generated or fallback version exists", () => {
+      expect(
+        resolveBuildVersionLabel({
+          generatedVersionLabel: "",
+          gitDescribe: "0.6.5-3-g903c83e8",
+          gitSha: "903c83e8fcf087998b4f50e310ec62fe82710c4b",
+          fallbackVersion: "",
+        }),
+      ).toBe("0.6.5-903c8");
     });
   });
 });
