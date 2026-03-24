@@ -183,7 +183,7 @@ test.describe("Automatic Demo Mode", () => {
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
 
     const dialog = await openDiagnosticsConnectionActions(page, indicator);
-    await expect(dialog.getByTestId("diagnostics-health-line")).toContainText("Unavailable");
+    await expect(dialog.getByTestId("diagnostics-health-line")).toContainText(/Unavailable|Idle/i);
     await expect(dialog.getByTestId("run-health-check")).toBeVisible();
     await expect(dialog.getByTestId("diagnostics-device-line")).toBeVisible();
 

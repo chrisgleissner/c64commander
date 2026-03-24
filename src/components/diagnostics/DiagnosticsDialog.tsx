@@ -1109,7 +1109,7 @@ export function DiagnosticsDialog({
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pr-8">
               <AppSheetTitle>Diagnostics</AppSheetTitle>
               <div className="relative">
                 <Button
