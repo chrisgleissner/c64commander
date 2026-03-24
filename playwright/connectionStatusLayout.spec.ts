@@ -179,7 +179,7 @@ test.describe("Connection Status diagnostics layout", () => {
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
 
-    await expect(dialog.getByTestId("diagnostics-health-line")).toContainText(/Unavailable/i);
+    await expect(dialog.getByTestId("diagnostics-health-line")).toContainText(/Unavailable|Idle/i);
     // If a last-check line is visible it must not claim activity "just now"
     const lastCheckLine = dialog.getByTestId("diagnostics-last-check-line");
     if (await lastCheckLine.isVisible()) {

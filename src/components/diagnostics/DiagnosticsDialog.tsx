@@ -1020,7 +1020,7 @@ export function DiagnosticsDialog({
 
   const visibleCount = filteredEntries.length;
   const totalCount = allEntries.length;
-  const displayEntries = filteredEntries.slice(0, 8);
+  const displayEntries = filteredEntries.slice(0, 20);
   const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
   const healthDetailAvailable =
     headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
@@ -1109,7 +1109,143 @@ export function DiagnosticsDialog({
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
-            <AppSheetTitle>Diagnostics</AppSheetTitle>
+            <div className="flex items-center justify-between">
+              <AppSheetTitle>Diagnostics</AppSheetTitle>
+              <div className="relative mr-7">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setOverflowOpen((v) => !v)}
+                  data-testid="diagnostics-overflow-menu"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+                {overflowOpen ? (
+                  <div className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg">
+                    <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Views
+                    </p>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setConfigDriftOpen(true);
+                      }}
+                      data-testid="open-config-drift-screen"
+                    >
+                      Config drift
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setLatencyOpen(true);
+                      }}
+                      data-testid="open-latency-screen"
+                    >
+                      Latency
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setHistoryOpen(true);
+                      }}
+                      data-testid="open-timeline-screen"
+                    >
+                      Health history
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setHeatMapVariant("REST");
+                      }}
+                      data-testid="open-rest-heatmap-screen"
+                    >
+                      REST heat map
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setHeatMapVariant("FTP");
+                      }}
+                      data-testid="open-ftp-heatmap-screen"
+                    >
+                      FTP heat map
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setHeatMapVariant("CONFIG");
+                      }}
+                      data-testid="open-config-heatmap-screen"
+                    >
+                      Config heat map
+                    </button>
+                    <div className="my-1 border-t border-border" />
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        void onShareAll();
+                      }}
+                      data-testid="diagnostics-share-all"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share all
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        handleShareFiltered();
+                      }}
+                      data-testid="diagnostics-share-filtered"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share filtered
+                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
+                          data-testid="footer-diagnostics-clear-all-trigger"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Clear all
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent surface="confirmation">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
+                          <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={onClearAll} data-testid="footer-diagnostics-clear-all-confirm">
+                            Clear
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                ) : null}
+              </div>
+            </div>
             <AppSheetDescription className="sr-only">Diagnostic activity and health status.</AppSheetDescription>
           </AppSheetHeader>
 
@@ -1260,7 +1396,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setConfigDriftOpen(true)}
-                data-testid="open-config-drift-screen"
+                data-testid="footer-open-config-drift-screen"
               >
                 Config drift
               </Button>
@@ -1270,7 +1406,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setLatencyOpen(true)}
-                data-testid="open-latency-screen"
+                data-testid="footer-open-latency-screen"
               >
                 Latency
               </Button>
@@ -1280,7 +1416,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHistoryOpen(true)}
-                data-testid="open-timeline-screen"
+                data-testid="footer-open-timeline-screen"
               >
                 Health history
               </Button>
@@ -1290,7 +1426,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHeatMapVariant("REST")}
-                data-testid="open-rest-heatmap-screen"
+                data-testid="footer-open-rest-heatmap-screen"
               >
                 REST heat map
               </Button>
@@ -1300,7 +1436,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHeatMapVariant("FTP")}
-                data-testid="open-ftp-heatmap-screen"
+                data-testid="footer-open-ftp-heatmap-screen"
               >
                 FTP heat map
               </Button>
@@ -1310,7 +1446,7 @@ export function DiagnosticsDialog({
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => setHeatMapVariant("CONFIG")}
-                data-testid="open-config-heatmap-screen"
+                data-testid="footer-open-config-heatmap-screen"
               >
                 Config heat map
               </Button>
@@ -1321,7 +1457,7 @@ export function DiagnosticsDialog({
                   size="sm"
                   className="h-7 w-7 p-0"
                   onClick={() => setOverflowOpen((v) => !v)}
-                  data-testid="diagnostics-overflow-menu"
+                  data-testid="footer-diagnostics-overflow-menu"
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
@@ -1334,7 +1470,7 @@ export function DiagnosticsDialog({
                         setOverflowOpen(false);
                         void onShareAll();
                       }}
-                      data-testid="diagnostics-share-all"
+                      data-testid="footer-diagnostics-share-all"
                     >
                       <Share2 className="h-3.5 w-3.5" />
                       Share all
@@ -1346,7 +1482,7 @@ export function DiagnosticsDialog({
                         setOverflowOpen(false);
                         handleShareFiltered();
                       }}
-                      data-testid="diagnostics-share-filtered"
+                      data-testid="footer-diagnostics-share-filtered"
                     >
                       <Share2 className="h-3.5 w-3.5" />
                       Share filtered

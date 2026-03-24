@@ -252,10 +252,12 @@ describe("DiagnosticsDialog", () => {
     setViewportWidth(600);
     const { rerender } = renderDialog({ healthState: unhealthyHealthState });
 
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-latency-screen"));
     expect(screen.getByTestId("latency-analysis-popup")).toBeVisible();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-timeline-screen"));
     expect(screen.getByTestId("health-history-popup")).toBeVisible();
 
@@ -275,15 +277,37 @@ describe("DiagnosticsDialog", () => {
 
     renderDialog();
 
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-config-drift-screen"));
     expect(screen.getByTestId("config-drift-surface")).toBeVisible();
 
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
     expect(screen.getByTestId("heat-map-popup-rest")).toBeVisible();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-config-heatmap-screen"));
     expect(screen.getByTestId("heat-map-popup-config")).toBeVisible();
+  });
+
+  it("keeps the primary diagnostics menu controls uniquely addressable", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    expect(screen.getAllByTestId("diagnostics-overflow-menu")).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+
+    expect(screen.getAllByTestId("diagnostics-share-all")).toHaveLength(1);
+    expect(screen.getAllByTestId("diagnostics-share-filtered")).toHaveLength(1);
+    expect(screen.getAllByTestId("diagnostics-clear-all-trigger")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-latency-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-timeline-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-config-drift-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-rest-heatmap-screen")).toHaveLength(1);
+    expect(screen.getAllByTestId("open-config-heatmap-screen")).toHaveLength(1);
   });
 
   it("shares only the filtered evidence set", () => {

@@ -17,7 +17,8 @@ end
 
 target 'App' do
   capacitor_pods
-  # Add your Pods here
+  # SWCompression: pure-Swift 7z/LZMA2 archive support for HVSC ingestion
+  pod 'SWCompression', '~> 4.8'
 end
 
 post_install do |installer|

@@ -71,6 +71,20 @@ describe("DiagnosticsListItem", () => {
     expect(screen.getByLabelText("origin: unknown")).toBeInTheDocument();
   });
 
+  it("renders system origin dot with correct background class", () => {
+    render(
+      <DiagnosticsListItem
+        mode="action"
+        severity="info"
+        title="System action"
+        timestamp={new Date("2024-01-01T00:00:00.000Z")}
+        origin="system"
+        testId="system-action"
+      />,
+    );
+    expect(screen.getByLabelText("origin: system")).toHaveClass("bg-diagnostics-system");
+  });
+
   it("renders secondary row in trace mode when secondaryLeft and secondaryRight are provided", () => {
     render(
       <DiagnosticsListItem

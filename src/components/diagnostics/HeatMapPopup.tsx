@@ -242,23 +242,20 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
           </div>
         ) : (
           <div className="overflow-auto flex-1">
-            <table
-              className="w-full table-fixed border-separate border-spacing-1 text-xs"
-              aria-label={`${variant} heat map`}
-            >
+            <table className="border-separate border-spacing-1 text-xs" aria-label={`${variant} heat map`}>
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 w-[9.5rem] rounded-md bg-background px-2 pb-1 text-left font-normal text-muted-foreground sm:w-[10.5rem]">
+                  <th className="sticky left-0 z-20 min-w-[10rem] rounded-md bg-background px-2 pb-1 text-left font-normal text-muted-foreground sm:min-w-[12rem]">
                     Group
                   </th>
                   {matrix.columnItems.map((col) => (
                     <th
                       key={col}
-                      className="rounded-md bg-background px-0.5 pb-1 font-normal text-muted-foreground"
+                      className="min-w-[3rem] rounded-md bg-background px-0.5 pb-1 font-normal text-muted-foreground"
                       style={{ writingMode: "vertical-lr", textOrientation: "mixed", transform: "rotate(180deg)" }}
                       title={col}
                     >
-                      <span className="block max-h-[6rem] overflow-hidden text-[10px] tracking-[0.08em]">{col}</span>
+                      <span className="block max-h-[8rem] overflow-hidden text-[10px] tracking-[0.08em]">{col}</span>
                     </th>
                   ))}
                 </tr>
@@ -266,7 +263,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
               <tbody>
                 {matrix.rowGroups.map((rowGroup) => (
                   <tr key={rowGroup}>
-                    <td className="sticky left-0 z-10 rounded-md border border-border/60 bg-background px-2 py-1.5 font-medium leading-tight text-muted-foreground whitespace-normal break-words">
+                    <td className="sticky left-0 z-10 min-w-[10rem] rounded-md border border-border/60 bg-background px-2 py-1.5 font-medium leading-tight text-muted-foreground whitespace-normal break-words sm:min-w-[12rem]">
                       {rowGroup}
                     </td>
                     {matrix.columnItems.map((col) => {
