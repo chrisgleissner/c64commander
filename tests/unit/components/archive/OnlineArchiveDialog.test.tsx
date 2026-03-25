@@ -91,42 +91,42 @@ describe("OnlineArchiveDialog", () => {
   it("maps preset selects back to empty values when the user chooses Any", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
-      state: { phase: 'idle' },
+      state: { phase: "idle" },
     } as never);
 
     render(
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'apps' } });
-    fireEvent.change(selects[0], { target: { value: '__any__' } });
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'demo' } });
-    fireEvent.click(screen.getByRole('button', { name: /search archive/i }));
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "apps" } });
+    fireEvent.change(selects[0], { target: { value: "__any__" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "demo" } });
+    fireEvent.click(screen.getByRole("button", { name: /search archive/i }));
 
-    expect(baseReturn.search).toHaveBeenCalledWith(expect.objectContaining({ name: 'demo', category: '' }));
+    expect(baseReturn.search).toHaveBeenCalledWith(expect.objectContaining({ name: "demo", category: "" }));
   });
 
   it("falls back to aql keys when a preset value has no display name", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
-      presets: [{ type: 'category', description: 'Category', values: [{ aqlKey: 'apps' }] }],
-      state: { phase: 'idle' },
+      presets: [{ type: "category", description: "Category", values: [{ aqlKey: "apps" }] }],
+      state: { phase: "idle" },
     } as never);
 
     render(
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    expect(screen.getByRole('option', { name: 'apps' })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "apps" })).toBeInTheDocument();
   });
 
   it("renders entry execution states and reports archive errors", async () => {
@@ -219,8 +219,8 @@ describe("OnlineArchiveDialog", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
       state: {
-        phase: 'error',
-        message: 'Archive failed',
+        phase: "error",
+        message: "Archive failed",
         recoverableState: null,
       },
     } as never);
@@ -229,7 +229,7 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
@@ -237,7 +237,7 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open={false}
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
@@ -274,10 +274,10 @@ describe("OnlineArchiveDialog", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
       state: {
-        phase: 'loadingEntries',
-        params: { name: 'joyride', category: 'apps' },
-        result: { id: '100', category: 40, name: 'Joyride', group: 'Protovision' },
-        results: [{ id: '100', category: 40, name: 'Joyride', group: 'Protovision' }],
+        phase: "loadingEntries",
+        params: { name: "joyride", category: "apps" },
+        result: { id: "100", category: 40, name: "Joyride", group: "Protovision" },
+        results: [{ id: "100", category: 40, name: "Joyride", group: "Protovision" }],
       },
     } as never);
 
@@ -285,14 +285,14 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'new search' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Results' }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "new search" } });
+    fireEvent.click(screen.getByRole("button", { name: "Results" }));
 
-    expect(baseReturn.search).toHaveBeenCalledWith(expect.objectContaining({ name: 'new search' }));
+    expect(baseReturn.search).toHaveBeenCalledWith(expect.objectContaining({ name: "new search" }));
   });
 
   it("shows the empty results state before a search", () => {
@@ -317,8 +317,8 @@ describe("OnlineArchiveDialog", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
       state: {
-        phase: 'idle',
-        results: [{ id: '100', category: 40, name: 'Joyride' }],
+        phase: "idle",
+        results: [{ id: "100", category: 40, name: "Joyride" }],
       },
     } as never);
 
@@ -326,17 +326,17 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'fresh form' } });
-    fireEvent.click(screen.getByRole('button', { name: /Joyride Unknown group/i }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "fresh form" } });
+    fireEvent.click(screen.getByRole("button", { name: /Joyride Unknown group/i }));
 
     expect(screen.getByText(/Unknown group • Unknown year • No update date/i)).toBeInTheDocument();
     expect(baseReturn.openEntries).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'fresh form' }),
-      expect.objectContaining({ id: '100' }),
+      expect.objectContaining({ name: "fresh form" }),
+      expect.objectContaining({ id: "100" }),
       expect.any(Array),
     );
   });
@@ -344,19 +344,19 @@ describe("OnlineArchiveDialog", () => {
   it("shows the searching state on the submit button", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
-      state: { phase: 'searching' },
+      state: { phase: "searching" },
     } as never);
 
     render(
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    expect(screen.getByRole('button', { name: /Search archive/i })).toBeDisabled();
-    expect(document.querySelector('.animate-spin')).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Search archive/i })).toBeDisabled();
+    expect(document.querySelector(".animate-spin")).not.toBeNull();
   });
 
   it("shows the empty entries state and lets the user return to results", () => {
@@ -412,11 +412,11 @@ describe("OnlineArchiveDialog", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
       state: {
-        phase: 'loadingEntries',
-        params: { name: 'joyride', category: 'apps' },
-        result: { id: '100', category: 40, name: 'Joyride', group: 'Protovision' },
-        results: [{ id: '100', category: 40, name: 'Joyride', group: 'Protovision' }],
-        entries: [{ id: 0, path: 'joyride.prg', size: 3, date: 1710374400000 }],
+        phase: "loadingEntries",
+        params: { name: "joyride", category: "apps" },
+        result: { id: "100", category: 40, name: "Joyride", group: "Protovision" },
+        results: [{ id: "100", category: 40, name: "Joyride", group: "Protovision" }],
+        entries: [{ id: 0, path: "joyride.prg", size: 3, date: 1710374400000 }],
       },
     } as never);
 
@@ -424,19 +424,19 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'fresh form' } });
-    const actionButton = screen.getByRole('button', { name: /^Run$/i });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "fresh form" } });
+    const actionButton = screen.getByRole("button", { name: /^Run$/i });
     fireEvent.click(actionButton);
 
     expect(baseReturn.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'fresh form' }),
-      expect.objectContaining({ id: '100' }),
+      expect.objectContaining({ name: "fresh form" }),
+      expect.objectContaining({ id: "100" }),
       expect.any(Array),
-      expect.objectContaining({ id: 0, path: 'joyride.prg' }),
+      expect.objectContaining({ id: 0, path: "joyride.prg" }),
       expect.any(Array),
     );
   });
@@ -445,11 +445,11 @@ describe("OnlineArchiveDialog", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
       state: {
-        phase: 'entries',
-        params: { name: 'joyride', category: 'apps' },
-        result: { id: '100', category: 40, name: 'Joyride', group: 'Protovision' },
-        results: [{ id: '100', category: 40, name: 'Joyride', group: 'Protovision' }],
-        entries: [{ id: 0, path: 'joyride.prg', size: 3, date: 1710374400000 }],
+        phase: "entries",
+        params: { name: "joyride", category: "apps" },
+        result: { id: "100", category: 40, name: "Joyride", group: "Protovision" },
+        results: [{ id: "100", category: 40, name: "Joyride", group: "Protovision" }],
+        entries: [{ id: 0, path: "joyride.prg", size: 3, date: 1710374400000 }],
       },
     } as never);
 
@@ -457,18 +457,18 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'fresh form' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Run$/i }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "fresh form" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Run$/i }));
 
     expect(baseReturn.execute).toHaveBeenCalledWith(
-      { name: 'joyride', category: 'apps' },
-      expect.objectContaining({ id: '100' }),
+      { name: "joyride", category: "apps" },
+      expect.objectContaining({ id: "100" }),
       expect.any(Array),
-      expect.objectContaining({ id: 0, path: 'joyride.prg' }),
+      expect.objectContaining({ id: 0, path: "joyride.prg" }),
       expect.any(Array),
     );
   });
@@ -477,11 +477,11 @@ describe("OnlineArchiveDialog", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
       state: {
-        phase: 'entries',
-        params: { name: 'joyride', category: 'apps' },
-        result: { id: '100', category: 40, name: 'Joyride', group: 'Protovision' },
-        results: [{ id: '100', category: 40, name: 'Joyride', group: 'Protovision' }],
-        entries: [{ id: 0, path: 'joyride.prg' }],
+        phase: "entries",
+        params: { name: "joyride", category: "apps" },
+        result: { id: "100", category: 40, name: "Joyride", group: "Protovision" },
+        results: [{ id: "100", category: 40, name: "Joyride", group: "Protovision" }],
+        entries: [{ id: 0, path: "joyride.prg" }],
       },
     } as never);
 
@@ -489,10 +489,10 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{ backend: 'commodore', hostOverride: '', clientIdOverride: '', userAgentOverride: '' }}
+        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
       />,
     );
 
-    expect(screen.getByText('No metadata')).toBeInTheDocument();
+    expect(screen.getByText("No metadata")).toBeInTheDocument();
   });
 });

@@ -165,15 +165,15 @@ describe("archive client", () => {
         throw new Error('Expected signal ("AbortSignal {}") to be an instance of AbortSignal.');
       })
       .mockResolvedValueOnce(
-        new Response(JSON.stringify([{ id: '1', name: 'Latest uploads' }]), {
+        new Response(JSON.stringify([{ id: "1", name: "Latest uploads" }]), {
           status: 200,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { "Content-Type": "application/json" },
         }),
       );
 
-    const client = createArchiveClient({ backend: 'commodore', hostOverride: 'archive.local' }, fetchMock);
+    const client = createArchiveClient({ backend: "commodore", hostOverride: "archive.local" }, fetchMock);
 
-    await expect(client.getPresets()).resolves.toEqual([{ id: '1', name: 'Latest uploads' }]);
+    await expect(client.getPresets()).resolves.toEqual([{ id: "1", name: "Latest uploads" }]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       expect.any(String),
@@ -193,11 +193,11 @@ describe("archive client", () => {
 
   it("does not invoke fetch when the caller signal is already aborted", async () => {
     const controller = new AbortController();
-    controller.abort(new Error('aborted before start'));
+    controller.abort(new Error("aborted before start"));
     const fetchMock = vi.fn<typeof fetch>();
-    const client = createArchiveClient({ backend: 'commodore' }, fetchMock);
+    const client = createArchiveClient({ backend: "commodore" }, fetchMock);
 
-    await expect(client.getPresets({ signal: controller.signal })).rejects.toThrow('aborted before start');
+    await expect(client.getPresets({ signal: controller.signal })).rejects.toThrow("aborted before start");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -219,26 +219,26 @@ describe("archive client", () => {
 
   it("returns an empty entry list when the archive response omits contentEntry", async () => {
     const client = createArchiveClient(
-      { backend: 'commodore' },
+      { backend: "commodore" },
       vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ totalRows: 0 }), {
           status: 200,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { "Content-Type": "application/json" },
         }),
       ),
     );
 
-    await expect(client.getEntries('100', 40)).resolves.toEqual([]);
+    await expect(client.getEntries("100", 40)).resolves.toEqual([]);
   });
 
   it("wraps archive binary download failures with backend and host context", async () => {
     const client = createArchiveClient(
-      { backend: 'commodore', hostOverride: 'archive.local' },
-      vi.fn().mockResolvedValue(new Response('nope', { status: 503, statusText: 'Unavailable' })),
+      { backend: "commodore", hostOverride: "archive.local" },
+      vi.fn().mockResolvedValue(new Response("nope", { status: 503, statusText: "Unavailable" })),
     );
 
-    await expect(client.downloadBinary('100', 40, 0, 'broken.prg')).rejects.toThrow(
-      'commodore archive download failed for archive.local: Archive binary download failed with 503 Unavailable',
+    await expect(client.downloadBinary("100", 40, 0, "broken.prg")).rejects.toThrow(
+      "commodore archive download failed for archive.local: Archive binary download failed with 503 Unavailable",
     );
   });
 
@@ -246,11 +246,11 @@ describe("archive client", () => {
     class TestBinaryClient extends BaseArchiveClient {
       constructor() {
         super(
-          { backend: 'commodore', hostOverride: 'archive.local' },
+          { backend: "commodore", hostOverride: "archive.local" },
           vi.fn().mockResolvedValue(
             new Response(new Uint8Array([1, 8, 96]), {
               status: 200,
-              headers: { 'Content-Type': 'application/octet-stream' },
+              headers: { "Content-Type": "application/octet-stream" },
             }),
           ),
         );
@@ -261,7 +261,7 @@ describe("archive client", () => {
           ...request,
           headers: {
             ...(request.headers as Record<string, string>),
-            'X-Binary-Test': '1',
+            "X-Binary-Test": "1",
           },
         };
       }
@@ -269,8 +269,8 @@ describe("archive client", () => {
 
     const client = new TestBinaryClient();
 
-    await expect(client.downloadBinary('100', 40, 0, 'joyride.prg')).resolves.toMatchObject({
-      fileName: 'joyride.prg',
+    await expect(client.downloadBinary("100", 40, 0, "joyride.prg")).resolves.toMatchObject({
+      fileName: "joyride.prg",
     });
   });
 
@@ -336,12 +336,12 @@ describe("archive client", () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(CapacitorHttp.request).mockResolvedValue({
       status: 200,
-      data: 'AQhg',
-      headers: { 'content-type': 'application/octet-stream' },
+      data: "AQhg",
+      headers: { "content-type": "application/octet-stream" },
     } as never);
 
-    const client = createArchiveClient({ backend: 'commodore' });
-    const binary = await client.downloadBinary('100', 40, 0, 'joyride.prg');
+    const client = createArchiveClient({ backend: "commodore" });
+    const binary = await client.downloadBinary("100", 40, 0, "joyride.prg");
 
     expect(binary.bytes).toEqual(new Uint8Array([1, 8, 96]));
   });

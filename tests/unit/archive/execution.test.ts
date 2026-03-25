@@ -38,10 +38,10 @@ describe("archive execution", () => {
   it("keeps runtime file buffers trimmed to the archive byte range", async () => {
     const bytes = new Uint8Array([0, 1, 8, 96, 0]).subarray(1, 4);
     const plan = buildArchivePlayPlan({
-      fileName: 'demo.prg',
+      fileName: "demo.prg",
       bytes,
-      contentType: 'application/octet-stream',
-      url: 'http://example.invalid/file',
+      contentType: "application/octet-stream",
+      url: "http://example.invalid/file",
     });
 
     await expect(plan.file.arrayBuffer()).resolves.toEqual(Uint8Array.from([1, 8, 96]).buffer);
