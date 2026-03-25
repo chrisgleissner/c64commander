@@ -272,7 +272,15 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => "kernal"),
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
+  loadArchiveBackend: vi.fn(() => "commodore"),
+  loadArchiveHostOverride: vi.fn(() => ""),
+  loadArchiveClientIdOverride: vi.fn(() => ""),
+  loadArchiveUserAgentOverride: vi.fn(() => ""),
   saveAutomaticDemoModeEnabled: vi.fn(),
+  saveArchiveBackend: vi.fn(),
+  saveArchiveHostOverride: vi.fn(),
+  saveArchiveClientIdOverride: vi.fn(),
+  saveArchiveUserAgentOverride: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveStartupDiscoveryWindowMs: vi.fn(),
@@ -762,7 +770,9 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const trigger = screen.getAllByRole("combobox")[1];
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    expect(deviceSafetySection).toBeTruthy();
+    const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "RELAXED" } });
 
     const warningDialog = await screen.findByRole("dialog", {
@@ -854,7 +864,9 @@ describe("SettingsPage", () => {
   it("enables debug logging when switching to troubleshooting mode", () => {
     renderSettingsPage();
 
-    const trigger = screen.getAllByRole("combobox")[1];
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    expect(deviceSafetySection).toBeTruthy();
+    const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "TROUBLESHOOTING" } });
 
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);

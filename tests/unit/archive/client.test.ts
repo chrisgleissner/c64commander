@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildArchiveQuery } from "@/lib/archive/queryBuilder";
-import { createArchiveClient } from "@/lib/archive/client";
+import { BaseArchiveClient, createArchiveClient } from "@/lib/archive/client";
 import { createAssembly64Mock } from "../../mocks/assembly64Mock";
 import { createCommoserveMock } from "../../mocks/commoserveMock";
 
@@ -52,5 +52,73 @@ describe("archive client", () => {
     expect(binary.fileName).toBe("joyride.prg");
     expect(binary.bytes).toEqual(new Uint8Array([0x01, 0x08, 0x60]));
     expect(client.getBinaryUrl("100", 40, 0)).toBe(`${server.baseUrl}/leet/search/bin/100/40/0`);
+  });
+
+  it("applies optional request and response transform hooks", async () => {
+    const server = await createCommoserveMock();
+    closers.push(server.close);
+
+    class TestClient extends BaseArchiveClient {
+      constructor() {
+        super({ backend: "commodore", hostOverride: server.host });
+      }
+
+      protected override transformRequest(request: RequestInit & { url: string }) {
+        return {
+          ...request,
+          headers: {
+            ...(request.headers as Record<string, string>),
+            "X-Test": "1",
+          },
+        };
+      }
+
+      protected override transformResponse<T>(response: T): T {
+        if (Array.isArray(response)) {
+          return [...response, { id: "999", category: 40, name: "Injected" }] as T;
+        }
+        return response;
+      }
+    }
+
+    const client = new TestClient();
+    const results = await client.search({ name: "joyride", category: "apps" });
+
+    expect(results.at(-1)).toMatchObject({ name: "Injected" });
+    expect(server.requests.at(-1)?.headers["x-test"]).toBe("1");
+  });
+
+  it("includes backend and host context when the archive server returns a protocol error payload", async () => {
+    const server = await createCommoserveMock();
+    closers.push(server.close);
+    const client = createArchiveClient({
+      backend: "commodore",
+      hostOverride: server.host,
+      clientIdOverride: "Wrong",
+    });
+
+    await expect(client.search({ name: "joyride", category: "apps" })).rejects.toThrow(
+      `commodore archive request failed for ${server.host}: Archive server returned error 464`,
+    );
+  });
+
+  it("rejects timed out requests", async () => {
+    vi.useFakeTimers();
+    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+
+    const expectation = expect(client.getPresets()).rejects.toThrow("commodore archive request failed");
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expectation;
+    vi.useRealTimers();
+  });
+
+  it("rejects aborted requests", async () => {
+    const controller = new AbortController();
+    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+
+    const promise = client.getPresets({ signal: controller.signal });
+    controller.abort(new Error("aborted by test"));
+
+    await expect(promise).rejects.toThrow("aborted by test");
   });
 });

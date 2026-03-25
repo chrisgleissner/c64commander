@@ -32,6 +32,28 @@ describe("archive execution", () => {
     expect(plan).toMatchObject({ source: "local", category: "prg", path: "demo.prg" });
   });
 
+  it("adds an extension when binary detection succeeds for an extensionless archive file", () => {
+    const plan = buildArchivePlayPlan({
+      fileName: "wizball",
+      bytes: new Uint8Array(174848),
+      contentType: "application/octet-stream",
+      url: "http://example.invalid/wizball",
+    });
+
+    expect(plan).toMatchObject({ category: "disk", path: "wizball.d64", mountType: "d64" });
+  });
+
+  it("rejects unsupported archive payloads before execution", () => {
+    expect(() =>
+      buildArchivePlayPlan({
+        fileName: "broken.bin",
+        bytes: new Uint8Array([0x01]),
+        contentType: "application/octet-stream",
+        url: "http://example.invalid/broken.bin",
+      }),
+    ).toThrow("Unsupported archive file broken.bin");
+  });
+
   it("routes downloaded PRG files into the existing REST playback pipeline", async () => {
     await executeArchiveEntry({
       result: { id: "100", category: 40, name: "Joyride" },

@@ -57,4 +57,23 @@ describe("useOnlineArchive", () => {
     expect(commodore.requests.some((request) => request.url.includes("wizball"))).toBe(false);
     expect(assembly.requests.some((request) => request.url.includes("wizball"))).toBe(true);
   });
+
+  it("clears an error state back to idle after a failed preset load", async () => {
+    const { result } = renderHook(() =>
+      useOnlineArchive({
+        backend: "commodore",
+        hostOverride: "127.0.0.1:1",
+        clientIdOverride: "",
+        userAgentOverride: "",
+      }),
+    );
+
+    await waitFor(() => expect(result.current.state.phase).toBe("error"));
+
+    act(() => {
+      result.current.clearError();
+    });
+
+    expect(result.current.state.phase).toBe("idle");
+  });
 });
