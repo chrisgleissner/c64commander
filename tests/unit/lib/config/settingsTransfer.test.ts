@@ -20,6 +20,10 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadDiscoveryProbeTimeoutMs: vi.fn(),
   loadDiskAutostartMode: vi.fn(),
   loadVolumeSliderPreviewIntervalMs: vi.fn(),
+  loadArchiveBackend: vi.fn(),
+  loadArchiveHostOverride: vi.fn(),
+  loadArchiveClientIdOverride: vi.fn(),
+  loadArchiveUserAgentOverride: vi.fn(),
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
@@ -29,6 +33,10 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
   saveVolumeSliderPreviewIntervalMs: vi.fn(),
+  saveArchiveBackend: vi.fn(),
+  saveArchiveHostOverride: vi.fn(),
+  saveArchiveClientIdOverride: vi.fn(),
+  saveArchiveUserAgentOverride: vi.fn(),
 
   clampConfigWriteIntervalMs: (v: number) => v,
   clampStartupDiscoveryWindowMs: (v: number) => v,
@@ -65,6 +73,10 @@ describe("settingsTransfer", () => {
     it("collects all settings", () => {
       vi.mocked(appSettings.loadDebugLoggingEnabled).mockReturnValue(true);
       vi.mocked(appSettings.loadVolumeSliderPreviewIntervalMs).mockReturnValue(250);
+      vi.mocked(appSettings.loadArchiveBackend).mockReturnValue("commodore");
+      vi.mocked(appSettings.loadArchiveHostOverride).mockReturnValue("");
+      vi.mocked(appSettings.loadArchiveClientIdOverride).mockReturnValue("");
+      vi.mocked(appSettings.loadArchiveUserAgentOverride).mockReturnValue("");
       vi.mocked(deviceSafetySettings.loadDeviceSafetyConfig).mockReturnValue({
         mode: "RELAXED",
         // other props... spread mock return
@@ -90,6 +102,10 @@ describe("settingsTransfer", () => {
         discoveryProbeTimeoutMs: 2000,
         diskAutostartMode: "dma",
         volumeSliderPreviewIntervalMs: 200,
+        archiveBackend: "commodore",
+        archiveHostOverride: "",
+        archiveClientIdOverride: "",
+        archiveUserAgentOverride: "",
       },
       deviceSafety: {
         mode: "BALANCED",
@@ -115,6 +131,7 @@ describe("settingsTransfer", () => {
 
       expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
       expect(appSettings.saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(200);
+      expect(appSettings.saveArchiveBackend).toHaveBeenCalledWith("commodore");
       expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
     });
 
@@ -196,6 +213,10 @@ describe("settingsTransfer", () => {
         ["discoveryProbeTimeoutMs", "notanumber", "discoveryProbeTimeoutMs must be a number."],
         ["diskAutostartMode", "usb", "diskAutostartMode must be kernal or dma."],
         ["volumeSliderPreviewIntervalMs", "slow", "volumeSliderPreviewIntervalMs must be a number."],
+        ["archiveBackend", "other", "archiveBackend must be commodore or assembly64."],
+        ["archiveHostOverride", 1, "archiveHostOverride must be a string."],
+        ["archiveClientIdOverride", 1, "archiveClientIdOverride must be a string."],
+        ["archiveUserAgentOverride", 1, "archiveUserAgentOverride must be a string."],
       ];
       for (const [field, value, expectedError] of fields) {
         const invalid = {

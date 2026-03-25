@@ -8,7 +8,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Wifi, Moon, Sun, Monitor, Lock, RefreshCw, ExternalLink, Info, FileText, Cpu, Play, Bell } from "lucide-react";
+import {
+  Wifi,
+  Moon,
+  Sun,
+  Monitor,
+  Lock,
+  RefreshCw,
+  ExternalLink,
+  Info,
+  FileText,
+  Cpu,
+  Play,
+  Bell,
+  Globe,
+} from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { AppBar } from "@/components/AppBar";
@@ -47,6 +61,10 @@ import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
 import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
+  loadArchiveBackend,
+  loadArchiveClientIdOverride,
+  loadArchiveHostOverride,
+  loadArchiveUserAgentOverride,
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
   clampVolumeSliderPreviewIntervalMs,
@@ -75,7 +93,12 @@ import {
   NOTIFICATION_DURATION_MIN_MS,
   NOTIFICATION_DURATION_MAX_MS,
   loadAutoRotationEnabled,
+  saveArchiveBackend,
+  saveArchiveClientIdOverride,
+  saveArchiveHostOverride,
+  saveArchiveUserAgentOverride,
   saveAutoRotationEnabled,
+  type ArchiveBackend,
   type DiskAutostartMode,
   type NotificationVisibility,
 } from "@/lib/config/appSettings";
@@ -109,6 +132,8 @@ import { useNavigate } from "react-router-dom";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
 import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
+import { validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
+import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
 
 type Theme = "light" | "dark" | "system";
 
@@ -190,6 +215,14 @@ export default function SettingsPage() {
     useState<NotificationVisibility>(loadNotificationVisibility);
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
+  const [archiveBackend, setArchiveBackend] = useState<ArchiveBackend>(loadArchiveBackend());
+  const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
+  const [archiveClientIdOverride, setArchiveClientIdOverride] = useState(loadArchiveClientIdOverride());
+  const [archiveUserAgentOverride, setArchiveUserAgentOverride] = useState(loadArchiveUserAgentOverride());
+  const [archiveHostError, setArchiveHostError] = useState<string | null>(() =>
+    validateArchiveHost(loadArchiveHostOverride()),
+  );
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
   const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
   const [safBusy, setSafBusy] = useState(false);
@@ -197,6 +230,16 @@ export default function SettingsPage() {
   const devTapTimestamps = useRef<number[]>([]);
   const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
   const isAndroid = getPlatform() === "android";
+  const resolvedArchiveConfig = useMemo(
+    () =>
+      resolveArchiveClientConfig({
+        backend: archiveBackend,
+        hostOverride: archiveHostOverride,
+        clientIdOverride: archiveClientIdOverride,
+        userAgentOverride: archiveUserAgentOverride,
+      }),
+    [archiveBackend, archiveClientIdOverride, archiveHostOverride, archiveUserAgentOverride],
+  );
 
   const commitHvscBaseUrl = useCallback(() => {
     const trimmed = hvscBaseUrlInput.trim();
@@ -249,6 +292,20 @@ export default function SettingsPage() {
       }
       if (detail.key === "c64u_volume_slider_preview_interval_ms") {
         setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
+      }
+      if (detail.key === "c64u_archive_backend") {
+        setArchiveBackend(loadArchiveBackend());
+      }
+      if (detail.key === "c64u_archive_host_override") {
+        const next = loadArchiveHostOverride();
+        setArchiveHostOverride(next);
+        setArchiveHostError(validateArchiveHost(next));
+      }
+      if (detail.key === "c64u_archive_client_id_override") {
+        setArchiveClientIdOverride(loadArchiveClientIdOverride());
+      }
+      if (detail.key === "c64u_archive_user_agent_override") {
+        setArchiveUserAgentOverride(loadArchiveUserAgentOverride());
       }
     };
     window.addEventListener("c64u-app-settings-updated", handler);
@@ -487,6 +544,12 @@ export default function SettingsPage() {
       setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
+      setArchiveBackend(loadArchiveBackend());
+      const importedArchiveHostOverride = loadArchiveHostOverride();
+      setArchiveHostOverride(importedArchiveHostOverride);
+      setArchiveHostError(validateArchiveHost(importedArchiveHostOverride));
+      setArchiveClientIdOverride(loadArchiveClientIdOverride());
+      setArchiveUserAgentOverride(loadArchiveUserAgentOverride());
       toast({ title: "Settings imported" });
     } catch (error) {
       reportUserError({
@@ -1050,7 +1113,138 @@ export default function SettingsPage() {
             </div>
           </motion.div>
 
-          {/* 7. Device Safety */}
+          {/* 7. Online Archive */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
+            data-testid="settings-online-archive"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Globe className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">Online Archive</h2>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="archive-backend" className="text-sm font-medium">
+                  Archive backend
+                </Label>
+                <Select
+                  value={archiveBackend}
+                  onValueChange={(value) => {
+                    const next = value as ArchiveBackend;
+                    setArchiveBackend(next);
+                    saveArchiveBackend(next);
+                  }}
+                >
+                  <SelectTrigger id="archive-backend" data-testid="archive-backend-select">
+                    <SelectValue placeholder="Select archive backend" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="commodore">CommoServe</SelectItem>
+                    <SelectItem value="assembly64">Assembly64</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Switching backends recreates the archive client immediately. Current client host:{" "}
+                  <span className="font-sans">{resolvedArchiveConfig.host}</span>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="archive-host-override" className="text-sm font-medium">
+                  Host override
+                </Label>
+                <Input
+                  id="archive-host-override"
+                  value={archiveHostOverride}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setArchiveHostOverride(next);
+                    setArchiveHostError(validateArchiveHost(next));
+                    saveArchiveHostOverride(next);
+                  }}
+                  placeholder={resolvedArchiveConfig.host}
+                  aria-describedby={archiveHostError ? "archive-host-override-error" : undefined}
+                  aria-invalid={archiveHostError ? true : undefined}
+                  data-testid="archive-host-override"
+                />
+                {archiveHostError ? (
+                  <p id="archive-host-override-error" className="text-xs text-destructive" role="alert">
+                    {archiveHostError}
+                  </p>
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Enter a hostname only. Invalid values fall back to the backend default immediately.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="archive-client-id-override" className="text-sm font-medium">
+                  Client-Id override
+                </Label>
+                <Input
+                  id="archive-client-id-override"
+                  value={archiveClientIdOverride}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setArchiveClientIdOverride(next);
+                    saveArchiveClientIdOverride(next);
+                  }}
+                  placeholder={resolvedArchiveConfig.clientId}
+                  data-testid="archive-client-id-override"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="archive-user-agent-override" className="text-sm font-medium">
+                  User-Agent override
+                </Label>
+                <Input
+                  id="archive-user-agent-override"
+                  value={archiveUserAgentOverride}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setArchiveUserAgentOverride(next);
+                    saveArchiveUserAgentOverride(next);
+                  }}
+                  placeholder={resolvedArchiveConfig.userAgent}
+                  data-testid="archive-user-agent-override"
+                />
+              </div>
+
+              <div className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground">
+                <div>
+                  Resolved host: <span className="font-sans text-foreground">{resolvedArchiveConfig.host}</span>
+                </div>
+                <div>
+                  Resolved Client-Id: <span className="text-foreground">{resolvedArchiveConfig.clientId}</span>
+                </div>
+                <div>
+                  Resolved User-Agent: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
+                </div>
+                <div className="mt-2">
+                  Native apps allow the default cleartext hosts. Override hosts can be blocked by platform security,
+                  especially on iOS, until the native allow-list is updated.
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setArchiveDialogOpen(true)}
+                data-testid="open-online-archive"
+              >
+                Open archive browser
+              </Button>
+            </div>
+          </motion.div>
+
+          {/* 8. Device Safety */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1612,6 +1806,19 @@ export default function SettingsPage() {
           </motion.div>
         </PageStack>
       </PageContainer>
+
+      {archiveDialogOpen ? (
+        <OnlineArchiveDialog
+          open={archiveDialogOpen}
+          onOpenChange={setArchiveDialogOpen}
+          config={{
+            backend: archiveBackend,
+            hostOverride: archiveHostOverride,
+            clientIdOverride: archiveClientIdOverride,
+            userAgentOverride: archiveUserAgentOverride,
+          }}
+        />
+      ) : null}
 
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>
