@@ -281,50 +281,50 @@ describe('TelnetMock', () => {
             const screen = parseTelnetScreen(data);
             expect(screen.menus.length).toBe(0);
         });
-        });
     });
+});
 
-    describe('missingItems', () => {
-        it('filters out actions specified in missingItems', async () => {
-            const mock = new TelnetMock({
-                missingItems: ['Reset C64', 'Power Cycle'],
-            });
-            await mock.connect('localhost', 23);
-            await mock.read(1000);
-            await mock.send(encode(TELNET_KEYS.F5));
-            await mock.read(1000);
-
-            // Enter first category submenu
-            await mock.send(encode(TELNET_KEYS.RIGHT));
-            const data = await mock.read(1000);
-            const screen = parseTelnetScreen(data);
-
-            if (screen.menus.length >= 2) {
-                const submenuLabels = screen.menus[1].items.map((i) => i.label);
-                expect(submenuLabels).not.toContain('Reset C64');
-                expect(submenuLabels).not.toContain('Power Cycle');
-            }
+describe('missingItems', () => {
+    it('filters out actions specified in missingItems', async () => {
+        const mock = new TelnetMock({
+            missingItems: ['Reset C64', 'Power Cycle'],
         });
-    });
+        await mock.connect('localhost', 23);
+        await mock.read(1000);
+        await mock.send(encode(TELNET_KEYS.F5));
+        await mock.read(1000);
 
-    describe('no-password mode', () => {
-        it('renders file browser screen immediately', async () => {
-            const mock = new TelnetMock();
-            await mock.connect('localhost', 23);
-            const data = await mock.read(1000);
-            const screen = parseTelnetScreen(data);
-            expect(screen.titleLine).toContain('Ultimate-II+');
-            expect(screen.screenType).toBe('file_browser');
-        });
-    });
+        // Enter first category submenu
+        await mock.send(encode(TELNET_KEYS.RIGHT));
+        const data = await mock.read(1000);
+        const screen = parseTelnetScreen(data);
 
-    describe('read returns empty when no pending output', () => {
-        it('returns empty Uint8Array after consuming all output', async () => {
-            const mock = new TelnetMock();
-            await mock.connect('localhost', 23);
-            await mock.read(1000); // consume initial screen
-            const data = await mock.read(1000);
-            expect(data.length).toBe(0);
-        });
+        if (screen.menus.length >= 2) {
+            const submenuLabels = screen.menus[1].items.map((i) => i.label);
+            expect(submenuLabels).not.toContain('Reset C64');
+            expect(submenuLabels).not.toContain('Power Cycle');
+        }
     });
+});
+
+describe('no-password mode', () => {
+    it('renders file browser screen immediately', async () => {
+        const mock = new TelnetMock();
+        await mock.connect('localhost', 23);
+        const data = await mock.read(1000);
+        const screen = parseTelnetScreen(data);
+        expect(screen.titleLine).toContain('Ultimate-II+');
+        expect(screen.screenType).toBe('file_browser');
+    });
+});
+
+describe('read returns empty when no pending output', () => {
+    it('returns empty Uint8Array after consuming all output', async () => {
+        const mock = new TelnetMock();
+        await mock.connect('localhost', 23);
+        await mock.read(1000); // consume initial screen
+        const data = await mock.read(1000);
+        expect(data.length).toBe(0);
+    });
+});
 });
