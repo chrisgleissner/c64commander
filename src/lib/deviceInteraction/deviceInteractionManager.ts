@@ -107,7 +107,7 @@ class InteractionScheduler {
     background: [],
   };
 
-  constructor(private readonly maxConcurrency: () => number) { }
+  constructor(private readonly maxConcurrency: () => number) {}
 
   schedule<T>(task: QueueTask<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -573,15 +573,15 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     run: scheduleTask,
     getReadyAtMs: defersReadWaitsInScheduler
       ? () => {
-        let readyAtMs = Date.now();
-        if (!meta.bypassBackoff) {
-          readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
+          let readyAtMs = Date.now();
+          if (!meta.bypassBackoff) {
+            readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
+          }
+          if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
+            readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
+          }
+          return readyAtMs;
         }
-        if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
-          readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
-        }
-        return readyAtMs;
-      }
       : undefined,
   });
 

@@ -1077,11 +1077,11 @@ describe("HomePage SID status", () => {
     await waitFor(() => expect(machineControlPayloadRef.current.powerOff.mutateAsync).toHaveBeenCalled());
   });
 
-  it("renders exactly eight machine controls with one pause-resume control", async () => {
+  it("renders exactly seven machine controls with one pause-resume control", async () => {
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
-    expect(within(machineControls).getAllByRole("button")).toHaveLength(8);
+    expect(within(machineControls).getAllByRole("button")).toHaveLength(7);
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
     expect(within(machineControls).queryByRole("button", { name: /^resume$/i })).toBeNull();
 

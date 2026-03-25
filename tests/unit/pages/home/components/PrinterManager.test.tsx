@@ -186,3 +186,66 @@ describe("PrinterManager", () => {
     expect(screen.getByTestId("home-printer-reset")).toHaveAttribute("data-resetting", "false");
   });
 });
+
+describe("PrinterManager – telnet controls", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolveConfigValueSpy.mockImplementation(
+      (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
+    );
+  });
+
+  it("hides telnet buttons when telnetAvailable is false", () => {
+    render(<PrinterManager {...defaultProps} telnetAvailable={false} />);
+    expect(screen.queryByTestId("home-printer-flush")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("home-printer-telnet-reset")).not.toBeInTheDocument();
+  });
+
+  it("shows telnet buttons when telnetAvailable and printer enabled", () => {
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} />);
+    expect(screen.getByTestId("home-printer-flush")).toBeInTheDocument();
+    expect(screen.getByTestId("home-printer-telnet-reset")).toBeInTheDocument();
+  });
+
+  it("hides telnet buttons when printer is disabled", () => {
+    resolveConfigValueSpy.mockImplementation(
+      (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
+        if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";
+        return _fallback;
+      },
+    );
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} />);
+    expect(screen.queryByTestId("home-printer-flush")).not.toBeInTheDocument();
+  });
+
+  it("calls onTelnetAction with printerFlush when Flush is clicked", () => {
+    const onTelnetAction = vi.fn().mockResolvedValue(undefined);
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} onTelnetAction={onTelnetAction} />);
+    fireEvent.click(screen.getByTestId("home-printer-flush"));
+    expect(onTelnetAction).toHaveBeenCalledWith("printerFlush");
+  });
+
+  it("calls onTelnetAction with printerReset when Reset is clicked", () => {
+    const onTelnetAction = vi.fn().mockResolvedValue(undefined);
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} onTelnetAction={onTelnetAction} />);
+    fireEvent.click(screen.getByTestId("home-printer-telnet-reset"));
+    expect(onTelnetAction).toHaveBeenCalledWith("printerReset");
+  });
+
+  it("disables telnet buttons when telnetBusy", () => {
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} telnetBusy={true} />);
+    expect(screen.getByTestId("home-printer-flush")).toBeDisabled();
+    expect(screen.getByTestId("home-printer-telnet-reset")).toBeDisabled();
+  });
+
+  it("disables telnet buttons when machineTaskBusy", () => {
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} machineTaskBusy={true} />);
+    expect(screen.getByTestId("home-printer-flush")).toBeDisabled();
+    expect(screen.getByTestId("home-printer-telnet-reset")).toBeDisabled();
+  });
+
+  it("shows loading text for active telnet action", () => {
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} telnetActiveActionId="printerFlush" />);
+    expect(screen.getByTestId("home-printer-flush")).toHaveTextContent("Flushing…");
+  });
+});

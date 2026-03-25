@@ -39,6 +39,7 @@ import { buildSidSilenceTargets, silenceSidTargets } from "@/lib/sid/sidSilence"
 import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
 import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
 import { SnapshotManagerDialog } from "./home/dialogs/SnapshotManagerDialog";
+import { ClearFlashDialog } from "./home/dialogs/ClearFlashDialog";
 import { useSnapshotStore } from "@/lib/snapshot/snapshotStore";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { deriveRamDumpFolderDisplayPath } from "@/lib/config/ramDumpFolderStore";
@@ -60,6 +61,7 @@ import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
+import { useTelnetActions } from "@/hooks/useTelnetActions";
 
 export default function HomePage() {
   return (
@@ -128,6 +130,7 @@ function HomePageContent() {
     handleResetPrinter,
     runMachineTask,
   } = useHomeActions();
+  const telnet = useTelnetActions();
   const {
     appConfigs,
     hasChanges,
@@ -146,6 +149,7 @@ function HomePageContent() {
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [saveRamDialogOpen, setSaveRamDialogOpen] = useState(false);
+  const [clearFlashDialogOpen, setClearFlashDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<SnapshotStorageEntry | null>(null);
   const [cpuSpeedOptimisticValue, setCpuSpeedOptimisticValue] = useState<string | null>(null);
@@ -169,6 +173,23 @@ function HomePageContent() {
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
+
+  const handlePowerCycle = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    try {
+      await telnet.executeAction("powerCycle");
+      toast({ title: "Power cycled" });
+      setMachineExecutionState("running");
+    } catch (error) {
+      reportUserError({
+        operation: "HOME_POWER_CYCLE",
+        title: "Power cycle failed",
+        description: (error as Error).message,
+        error,
+      });
+    }
+  };
+
   const ramDumpFolderDisplayPath = ramDumpFolder
     ? (ramDumpFolder.displayPath ?? deriveRamDumpFolderDisplayPath(ramDumpFolder.treeUri, ramDumpFolder.rootName))
     : null;
@@ -510,7 +531,11 @@ function HomePageContent() {
             onLoadRam={() => setSnapshotManagerOpen(true)}
             onRebootClearMemory={handleRebootClearMemory}
             onPowerOff={handlePowerOff}
+            onPowerCycle={() => void handlePowerCycle()}
             onAction={handleAction}
+            telnetAvailable={telnet.isAvailable}
+            telnetBusy={telnet.isBusy}
+            telnetActiveActionId={telnet.activeActionId}
             footer={ramDumpFolderCard}
           />
 
@@ -913,6 +938,26 @@ function HomePageContent() {
               machineTaskBusy={machineTaskBusy}
               machineTaskId={machineTaskId}
               onResetDrives={handleResetDrives}
+              telnetAvailable={telnet.isAvailable}
+              telnetBusy={telnet.isBusy}
+              telnetActiveActionId={telnet.activeActionId}
+              onTelnetAction={async (actionId) => {
+                try {
+                  await telnet.executeAction(actionId);
+                  const labels: Record<string, string> = {
+                    iecReset: "Soft IEC Drive reset",
+                    iecSetDir: "Soft IEC directory set",
+                  };
+                  toast({ title: labels[actionId] ?? "Drive action completed" });
+                } catch (error) {
+                  reportUserError({
+                    operation: "HOME_DRIVE_TELNET",
+                    title: "Drive action failed",
+                    description: (error as Error).message,
+                    error,
+                  });
+                }
+              }}
             />
           </motion.div>
 
@@ -928,6 +973,22 @@ function HomePageContent() {
               machineTaskBusy={machineTaskBusy}
               machineTaskId={machineTaskId}
               onResetPrinter={handleResetPrinter}
+              telnetAvailable={telnet.isAvailable}
+              telnetBusy={telnet.isBusy}
+              telnetActiveActionId={telnet.activeActionId}
+              onTelnetAction={async (actionId) => {
+                try {
+                  await telnet.executeAction(actionId);
+                  toast({ title: actionId === "printerFlush" ? "Printer flushed" : "Printer reset" });
+                } catch (error) {
+                  reportUserError({
+                    operation: "HOME_PRINTER_TELNET",
+                    title: `Printer ${actionId === "printerFlush" ? "flush" : "reset"} failed`,
+                    description: (error as Error).message,
+                    error,
+                  });
+                }
+              }}
             />
           </motion.div>
 
@@ -1008,6 +1069,41 @@ function HomePageContent() {
                 onClick={() => setManageDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
               />
+              {telnet.isAvailable && (
+                <QuickActionCard
+                  icon={Download}
+                  label="Save"
+                  description="To File"
+                  dataTestId="home-config-save-file"
+                  onClick={async () => {
+                    try {
+                      await telnet.executeAction("saveConfigToFile");
+                      toast({ title: "Config saved to file" });
+                    } catch (error) {
+                      reportUserError({
+                        operation: "HOME_CONFIG_SAVE_FILE",
+                        title: "Save config to file failed",
+                        description: (error as Error).message,
+                        error,
+                      });
+                    }
+                  }}
+                  disabled={!isActive || machineTaskBusy || telnet.isBusy}
+                  loading={telnet.activeActionId === "saveConfigToFile"}
+                />
+              )}
+              {telnet.isAvailable && (
+                <QuickActionCard
+                  icon={Trash2}
+                  label="Clear Flash"
+                  description="Factory Reset"
+                  variant="danger"
+                  dataTestId="home-config-clear-flash"
+                  onClick={() => setClearFlashDialogOpen(true)}
+                  disabled={!isActive || machineTaskBusy || telnet.isBusy}
+                  loading={telnet.activeActionId === "clearFlashConfig"}
+                />
+              )}
             </ProfileActionGrid>
           </motion.div>
 
@@ -1081,7 +1177,22 @@ function HomePageContent() {
           setSaveRamDialogOpen(false);
           void handleSaveRam(type, customRanges);
         }}
+        onSaveReu={async () => {
+          try {
+            await telnet.executeAction("saveReuMemory");
+            toast({ title: "REU memory saved" });
+          } catch (error) {
+            reportUserError({
+              operation: "HOME_SAVE_REU",
+              title: "Save REU failed",
+              description: (error as Error).message,
+              error,
+            });
+          }
+        }}
         isSaving={machineTaskId === "save-ram"}
+        telnetAvailable={telnet.isAvailable}
+        telnetBusy={telnet.isBusy}
       />
 
       <SnapshotManagerDialog
@@ -1113,6 +1224,28 @@ function HomePageContent() {
           }
         }}
         isPending={machineTaskId === "load-ram"}
+      />
+
+      <ClearFlashDialog
+        open={clearFlashDialogOpen}
+        onOpenChange={setClearFlashDialogOpen}
+        onConfirm={() => {
+          setClearFlashDialogOpen(false);
+          void (async () => {
+            try {
+              await telnet.executeAction("clearFlashConfig");
+              toast({ title: "Flash configuration cleared" });
+            } catch (error) {
+              reportUserError({
+                operation: "HOME_CLEAR_FLASH",
+                title: "Clear flash failed",
+                description: (error as Error).message,
+                error,
+              });
+            }
+          })();
+        }}
+        isPending={telnet.activeActionId === "clearFlashConfig"}
       />
     </div>
   );

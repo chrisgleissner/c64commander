@@ -282,7 +282,7 @@ function renderCurlReplay(requests: readonly ReplayRequest[], expectations: read
     'cleanup() { rm -rf "$TMP_DIR"; }',
     "trap cleanup EXIT",
     "",
-    'STEP_COUNTER=0',
+    "STEP_COUNTER=0",
     'log_info() { printf "[INFO] %s\\n" "$1"; }',
     'log_step() { STEP_COUNTER=$((STEP_COUNTER + 1)); printf "\\n[STEP %03d] %s\\n" "$STEP_COUNTER" "$1"; }',
     'log_expectation() { printf "[EXPECT] %s\\n" "$1"; }',
@@ -477,7 +477,10 @@ function renderFtpReplayCommand(request: ReplayRequest): string[] {
   }
 }
 
-function buildReplayExpectations(entries: readonly TraceEntry[], requests: readonly ReplayRequest[]): ReplayExpectation[] {
+function buildReplayExpectations(
+  entries: readonly TraceEntry[],
+  requests: readonly ReplayRequest[],
+): ReplayExpectation[] {
   const expectations: ReplayExpectation[] = [];
   const seenProtocols = new Set<string>();
   const requestSeqs = requests.map((request) => request.globalSeq).sort((left, right) => left - right);
@@ -508,7 +511,9 @@ function renderExpectationSummary(expectations: readonly ReplayExpectation[]): s
 
   return [
     'log_info "Embedded protocol degradation expectations:"',
-    ...expectations.map((expectation) => `log_info ${shellQuote(`${expectation.displayLabel}: ${expectation.message}`)}`),
+    ...expectations.map(
+      (expectation) => `log_info ${shellQuote(`${expectation.displayLabel}: ${expectation.message}`)}`,
+    ),
     "",
   ];
 }

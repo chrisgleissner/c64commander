@@ -13,6 +13,7 @@ import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useDriveData } from "../hooks/useDriveData";
 import { DriveCard } from "../DriveCard";
 import { SectionHeader } from "@/components/SectionHeader";
+import { Button } from "@/components/ui/button";
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
@@ -48,6 +49,10 @@ interface DriveManagerProps {
   machineTaskBusy: boolean;
   machineTaskId: string | null;
   onResetDrives: (callback: () => Promise<void>) => Promise<void>;
+  telnetAvailable?: boolean;
+  telnetBusy?: boolean;
+  telnetActiveActionId?: string | null;
+  onTelnetAction?: (actionId: string) => Promise<void>;
 }
 
 export function DriveManager({
@@ -56,6 +61,10 @@ export function DriveManager({
   machineTaskBusy,
   machineTaskId,
   onResetDrives,
+  telnetAvailable = false,
+  telnetBusy = false,
+  telnetActiveActionId = null,
+  onTelnetAction,
 }: DriveManagerProps) {
   const { profile } = useDisplayProfile();
   const api = getC64API();
@@ -293,6 +302,32 @@ export function DriveManager({
               pathPending={pathPending}
               isConnected={isConnected}
               testIdSuffix={testIdSuffix}
+              footer={
+                isSoftIec && telnetAvailable && enabled ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      data-testid="home-softiec-reset"
+                      disabled={!isConnected || machineTaskBusy || telnetBusy}
+                      onClick={() => void onTelnetAction?.("iecReset")}
+                    >
+                      {telnetActiveActionId === "iecReset" ? "Resetting…" : "Reset"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      data-testid="home-softiec-setdir"
+                      disabled={!isConnected || machineTaskBusy || telnetBusy}
+                      onClick={() => void onTelnetAction?.("iecSetDir")}
+                    >
+                      {telnetActiveActionId === "iecSetDir" ? "Setting…" : "Set Dir"}
+                    </Button>
+                  </div>
+                ) : undefined
+              }
             />
           );
         })}

@@ -51,6 +51,7 @@ export interface DriveCardProps {
   isConnected: boolean;
   className?: string;
   testIdSuffix: string;
+  footer?: React.ReactNode;
 }
 
 const inlineSelectTriggerClass =
@@ -82,6 +83,7 @@ export function DriveCard({
   isConnected,
   className,
   testIdSuffix,
+  footer,
 }: DriveCardProps) {
   const { profile } = useDisplayProfile();
   const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
@@ -177,6 +179,8 @@ export function DriveCard({
           {statusSummary}
         </button>
       </div>
+
+      {footer}
     </div>
   );
 }

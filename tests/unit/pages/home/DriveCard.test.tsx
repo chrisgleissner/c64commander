@@ -124,4 +124,15 @@ describe("DriveCard", () => {
     render(<DriveCard {...defaultProps} isConnected={false} />);
     expect(screen.getByTestId("home-drive-toggle-d8")).toBeDisabled();
   });
+
+  it("renders footer when provided", () => {
+    render(<DriveCard {...defaultProps} footer={<div data-testid="drive-footer">footer content</div>} />);
+    expect(screen.getByTestId("drive-footer")).toBeInTheDocument();
+    expect(screen.getByTestId("drive-footer")).toHaveTextContent("footer content");
+  });
+
+  it("does not render footer when not provided", () => {
+    render(<DriveCard {...defaultProps} />);
+    expect(screen.queryByTestId("drive-footer")).not.toBeInTheDocument();
+  });
 });

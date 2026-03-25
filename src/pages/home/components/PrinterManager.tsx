@@ -30,9 +30,22 @@ interface PrinterManagerProps {
   machineTaskBusy: boolean;
   machineTaskId: string | null;
   onResetPrinter: (callback: () => Promise<void>) => Promise<void>;
+  telnetAvailable?: boolean;
+  telnetBusy?: boolean;
+  telnetActiveActionId?: string | null;
+  onTelnetAction?: (actionId: string) => Promise<void>;
 }
 
-export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, onResetPrinter }: PrinterManagerProps) {
+export function PrinterManager({
+  isConnected,
+  machineTaskBusy,
+  machineTaskId,
+  onResetPrinter,
+  telnetAvailable = false,
+  telnetBusy = false,
+  telnetActiveActionId = null,
+  onTelnetAction,
+}: PrinterManagerProps) {
   const { profile } = useDisplayProfile();
   const trace = useActionTrace("PrinterManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
@@ -212,6 +225,30 @@ export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, on
                 </div>
               ))}
           </div>
+          {telnetAvailable && printerEnabled && (
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                data-testid="home-printer-flush"
+                disabled={!isConnected || machineTaskBusy || telnetBusy}
+                onClick={() => void onTelnetAction?.("printerFlush")}
+              >
+                {telnetActiveActionId === "printerFlush" ? "Flushing…" : "Flush"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                data-testid="home-printer-telnet-reset"
+                disabled={!isConnected || machineTaskBusy || telnetBusy}
+                onClick={() => void onTelnetAction?.("printerReset")}
+              >
+                {telnetActiveActionId === "printerReset" ? "Resetting…" : "Reset"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
