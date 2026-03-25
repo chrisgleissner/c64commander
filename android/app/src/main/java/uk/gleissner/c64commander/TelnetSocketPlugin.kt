@@ -198,13 +198,37 @@ class TelnetSocketPlugin : Plugin() {
   private fun closeSocket() {
     try {
       inputStream?.close()
-    } catch (_: Exception) {}
+    } catch (error: Exception) {
+      AppLogger.warn(
+              context,
+              logTag,
+              "Failed to close Telnet input stream: ${error.message}",
+              "TelnetSocketPlugin",
+              error,
+      )
+    }
     try {
       outputStream?.close()
-    } catch (_: Exception) {}
+    } catch (error: Exception) {
+      AppLogger.warn(
+              context,
+              logTag,
+              "Failed to close Telnet output stream: ${error.message}",
+              "TelnetSocketPlugin",
+              error,
+      )
+    }
     try {
       socket?.close()
-    } catch (_: Exception) {}
+    } catch (error: Exception) {
+      AppLogger.warn(
+              context,
+              logTag,
+              "Failed to close Telnet socket: ${error.message}",
+              "TelnetSocketPlugin",
+              error,
+      )
+    }
     inputStream = null
     outputStream = null
     socket = null

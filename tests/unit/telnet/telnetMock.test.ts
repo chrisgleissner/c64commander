@@ -303,6 +303,32 @@ describe("missingItems", () => {
       expect(submenuLabels).not.toContain("Power Cycle");
     }
   });
+
+  it("keeps submenu selection index non-negative when every action is filtered out", async () => {
+    const mock = new TelnetMock({
+      missingItems: [
+        "Reset C64",
+        "Reboot C64",
+        "Reboot (Clr Mem)",
+        "Power OFF",
+        "Power Cycle",
+        "Save C64 Memory",
+        "Save REU Memory",
+      ],
+    });
+    await mock.connect("localhost", 23);
+    await mock.read(1000);
+    await mock.send(encode(TELNET_KEYS.F5));
+    await mock.read(1000);
+    await mock.send(encode(TELNET_KEYS.RIGHT));
+    await mock.read(1000);
+
+    await mock.send(encode(TELNET_KEYS.DOWN));
+    const data = await mock.read(1000);
+    const screen = parseTelnetScreen(data);
+
+    expect(screen.menus[1]?.selectedIndex ?? 0).toBeGreaterThanOrEqual(0);
+  });
 });
 
 describe("no-password mode", () => {

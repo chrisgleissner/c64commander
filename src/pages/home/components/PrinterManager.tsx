@@ -60,6 +60,7 @@ export function PrinterManager({
     ),
   );
   const printerEnabled = printerEnabledValue.trim().toLowerCase() === "enabled";
+  const showTelnetControls = telnetAvailable && printerEnabled && typeof onTelnetAction === "function";
 
   const printerBusValue = Number(
     resolveConfigValue(
@@ -225,7 +226,7 @@ export function PrinterManager({
                 </div>
               ))}
           </div>
-          {telnetAvailable && printerEnabled && (
+          {showTelnetControls && (
             <div className="flex items-center gap-2 pt-1">
               <Button
                 variant="outline"
@@ -233,7 +234,7 @@ export function PrinterManager({
                 className="h-6 px-2 text-xs"
                 data-testid="home-printer-flush"
                 disabled={!isConnected || machineTaskBusy || telnetBusy}
-                onClick={() => void onTelnetAction?.("printerFlush")}
+                onClick={() => void onTelnetAction("printerFlush")}
               >
                 {telnetActiveActionId === "printerFlush" ? "Flushing…" : "Flush"}
               </Button>
@@ -243,7 +244,7 @@ export function PrinterManager({
                 className="h-6 px-2 text-xs"
                 data-testid="home-printer-telnet-reset"
                 disabled={!isConnected || machineTaskBusy || telnetBusy}
-                onClick={() => void onTelnetAction?.("printerReset")}
+                onClick={() => void onTelnetAction("printerReset")}
               >
                 {telnetActiveActionId === "printerReset" ? "Resetting…" : "Reset"}
               </Button>

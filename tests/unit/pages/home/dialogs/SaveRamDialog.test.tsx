@@ -220,6 +220,15 @@ describe("SaveRamDialog – Save REU", () => {
     expect(screen.getByTestId("save-ram-type-reu")).toBeInTheDocument();
   });
 
+  it("hides Save REU button when no handler is provided", () => {
+    const onSave = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <SaveRamDialog open={true} onOpenChange={onOpenChange} onSave={onSave} isSaving={false} telnetAvailable={true} />,
+    );
+    expect(screen.queryByTestId("save-ram-type-reu")).not.toBeInTheDocument();
+  });
+
   it("hides Save REU button when telnetAvailable is false", () => {
     renderDialogWithTelnet({ telnetAvailable: false });
     expect(screen.queryByTestId("save-ram-type-reu")).not.toBeInTheDocument();
