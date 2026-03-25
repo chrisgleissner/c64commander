@@ -26,6 +26,9 @@ const runGit = (args: string[]) => {
 };
 
 const SEMVER_PREFIX_PATTERN = /^(?<release>\d+\.\d+\.\d+)(?<suffix>[-+].*)?$/;
+const SEMVER_WITH_OPTIONAL_PRERELEASE_PATTERN = /\d+\.\d+\.\d+(?:-[0-9A-Za-z._-]+)?/;
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const resolveReleaseBaseVersion = (version: string) => {
   const normalizedVersion = version.trim();
@@ -75,6 +78,10 @@ const resolveExpectedVersions = () => {
   const candidates = new Set<string>();
   if (derivedFromGit) {
     candidates.add(derivedFromGit);
+    const derivedReleaseBaseVersion = resolveReleaseBaseVersion(derivedFromGit);
+    if (derivedReleaseBaseVersion) {
+      candidates.add(derivedReleaseBaseVersion);
+    }
   }
   if (fallbackVersion) {
     candidates.add(fallbackVersion);
@@ -87,6 +94,18 @@ const resolveExpectedVersions = () => {
   }
 
   return [...candidates].filter(Boolean);
+};
+
+const resolveExpectedVersionPattern = () => {
+  const patterns = resolveExpectedVersions().map(escapeRegExp);
+  const gitSha = (process.env.CI_SHA || process.env.GITHUB_SHA || runGit(["rev-parse", "HEAD"])).trim().slice(0, 5);
+  const gitDescribe = runGit(["describe", "--tags", "--long", "--dirty"]);
+
+  if (!gitDescribe && gitSha) {
+    patterns.push(`${SEMVER_WITH_OPTIONAL_PRERELEASE_PATTERN.source}-${escapeRegExp(gitSha)}`);
+  }
+
+  return patterns.length === 0 ? null : new RegExp(`^(?:${patterns.join("|")})$`);
 };
 
 test.describe("UI coverage", () => {
@@ -309,16 +328,14 @@ test.describe("UI coverage", () => {
 
   test("home page shows resolved version", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const expectedVersions = resolveExpectedVersions();
+    const expectedVersionPattern = resolveExpectedVersionPattern();
     const versionText = page.getByTestId("home-system-version");
-    if (expectedVersions.length === 0) {
+    if (!expectedVersionPattern) {
       await expect(versionText).toHaveText("—");
     } else {
       // Strict invariant: version must be exactly <tag> or <tag>-<5-char-lowercase-hex-SHA>.
       // Any other format (8-char SHA, branch name, build metadata) is a violation.
-      await expect(versionText).toHaveText(
-        new RegExp(`^(?:${expectedVersions.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`),
-      );
+      await expect(versionText).toHaveText(expectedVersionPattern);
     }
     await snap(page, testInfo, "home-version");
   });

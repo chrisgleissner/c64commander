@@ -1,48 +1,41 @@
-# Diagnostics UX and Data Consistency — Execution Summary
+# Telnet Integration Research & Design
 
-Status: COMPLETED
-Classification: CODE_CHANGE, UI_CHANGE
+Status: COMPLETE
 Date: 2026-03-24
-Mission: Fix diagnostics UX, diagnostics data consistency, health-check lifecycle robustness, deterministic self-repair, playback uncertainty modeling, and internal decision-state observability minimally invasively, preserving the existing diagnostics overlay architecture.
+Classification: DOC_ONLY
 
-## Completed scope
+## Task Summary
 
-- [x] Fixed CONFIG health-check roundtrip lookup and option-list parsing.
-- [x] Replaced ambiguous action outcome handling with explicit `in_progress` and `failed` paths.
-- [x] Improved diagnostics readability: header hierarchy, latency summary emphasis, and header control separation.
-- [x] Added lifecycle-aware health-check state with restart cancellation, timeout handling, stale-run recovery, and per-probe lifecycle reporting.
-- [x] Added deterministic diagnostics/config/playback reconciliation with non-blocking repair support.
-- [x] Added decision-state diagnostics surfacing for playback confidence, reconciler state, and health-check lifecycle inspection.
-- [x] Kept the implementation inside the existing global diagnostics overlay and routed panel model.
+Deep research and design pass for Telnet-based control support for C64 Ultimate action-menu functionality not exposed via REST. Produces an implementation-ready specification at `doc/c64/telnet/telnet-integration-spec.md`.
 
-## Validation completed
+## TODO
 
-- [x] Focused unit regression coverage for health-check restart, superseded-run cancellation, and stale-run timeout recovery.
-- [x] Focused diagnostics UI unit coverage for the restartable health-check action and new React Query runtime contract.
-- [x] Focused Playwright coverage for the decision-state surface and repair controls.
-- [x] `npm run build`
-- [x] `npm run lint`
-- [x] `npm run test:coverage`
+- [x] Read required documents (architecture.md, openapi.yaml, c64u-telnet-spec.md, c64u-telnet-action-walkthrough.md)
+- [x] Inspect C64 Commander REST client implementation and concurrency model
+- [x] Inspect C64 Commander FTP client implementation and concurrency model
+- [x] Inspect request scheduling, queueing, retries, timeouts, cancellation
+- [x] Inspect device action models and diagnostics
+- [x] Inspect Home page UI and existing reset/reboot controls
+- [x] Inspect existing mocks and test infrastructure
+- [x] Inspect 1541 Ultimate firmware Telnet server implementation
+- [x] Inspect firmware remote-control / console / terminal handling
+- [x] Inspect firmware shared locks, event loops, UI threads, command dispatchers
+- [x] Determine if concurrent REST/FTP/Telnet is safe from firmware evidence
+- [x] Design Telnet transport architecture
+- [x] Design scheduling / serialization model
+- [x] Design Telnet client
+- [x] Design Telnet parser / navigator
+- [x] Design Telnet mock
+- [x] Design action abstraction and capability mapping
+- [x] Design UI placement
+- [x] Define platform support strategy (Android, iOS, web)
+- [x] Write telnet-integration-spec.md
+- [x] Final review for concision and implementation readiness
+- [x] Finalize WORKLOG.md
+- [x] Finalize PLANS.md
 
-## Real-device verification completed
+## Deliverables
 
-- [x] Confirmed attached Pixel 4 device and live `c64u` target availability.
-- [x] Built and installed a fresh Android debug APK from the current workspace.
-- [x] Verified the fresh build on-device by build identifier.
-- [x] Verified live device traffic from the handset to `http://c64u:80/v1/info` and config endpoints.
-- [x] Verified the diagnostics overlay is reachable and visible on-device with the new footer affordances, including `Decision state`.
-
-## Honest limitations
-
-- [x] Automated coverage proves the decision-state panel opens and exposes repair controls.
-- [x] On-device evidence confirms the overlay and footer affordances are present on the Pixel.
-- [x] The final handset pass did not capture a screenshot of the decision-state panel itself after tapping; that specific UI surface was validated in Playwright rather than completed by adb-driven tap automation.
-
-## Closure criteria
-
-- [x] `PLANS.md` reflects the final completed state truthfully.
-- [x] `WORKLOG.md` records implementation, validation, and real-device evidence.
-- [x] Health checks are restartable, time-bounded, and recover stale runs deterministically.
-- [x] Reconciliation and playback uncertainty state are implemented, observable, and non-blocking.
-- [x] Internal decision-state diagnostics view is implemented and validated.
-- [x] Automated validation and real-device verification are complete and recorded.
+- `doc/c64/telnet/telnet-integration-spec.md` — Implementation-ready specification
+- `WORKLOG.md` — Investigation history with evidence sources
+- `PLANS.md` — This file

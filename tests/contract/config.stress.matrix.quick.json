@@ -1,0 +1,20 @@
+{
+  "baseUrl": "http://c64u",
+  "mode": "STRESS",
+  "auth": "OFF",
+  "ftpMode": "PASV",
+  "stressMatrix": {
+    "testType": "stress",
+    "operationIds": ["rest.read-version", "ftp.dir-list", "ftp.small-roundtrip"],
+    "concurrencyLevels": [1, 4],
+    "rateRampMs": [1000, 0],
+    "ftpSessionModes": ["shared"],
+    "stageDurationMs": 5000,
+    "failureDetectionTimeoutMs": 3000,
+    "tailRequestCount": 50
+  },
+  "trace": {
+    "enabled": true,
+    "level": "full"
+  }
+}

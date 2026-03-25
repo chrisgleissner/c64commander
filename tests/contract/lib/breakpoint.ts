@@ -31,7 +31,7 @@ export type BreakpointStageRecord = BreakpointStage & {
 
 export type BreakpointHealthStatus = {
   ok: boolean;
-  status?: number;
+  status?: number | string;
   error?: string;
   latencyMs?: number;
   checkedAt?: string;
@@ -77,6 +77,8 @@ export type BreakpointTraceEntry = {
   willRetry?: boolean;
   retryDelayMs?: number;
 };
+
+export type RecoveryOutcome = "completed" | "device-unresponsive";
 
 export type BreakpointRequestTraceContext = {
   stageId?: string;
@@ -156,17 +158,24 @@ export function createBreakpointFailureSummary(input: {
   };
 }
 
+export function shouldSkipRecovery(input: { config: HarnessConfig; outcome: RecoveryOutcome }): boolean {
+  return input.outcome === "device-unresponsive" || input.config.allowMachineReset !== true;
+}
+
 export function shouldSkipRecoveryAfterBreakpointFailure(input: {
   config: HarnessConfig;
-  abortReason: string | null;
+  abortReason: RecoveryOutcome;
 }): boolean {
-  return hasStressBreakpoint(input.config) && Boolean(input.abortReason);
+  return shouldSkipRecovery({
+    config: input.config,
+    outcome: input.abortReason,
+  });
 }
 
 export class TraceTailBuffer {
   private readonly entries: BreakpointTraceEntry[] = [];
 
-  constructor(private readonly limit: number) {}
+  constructor(private readonly limit: number) { }
 
   push(entry: BreakpointTraceEntry): void {
     this.entries.push(entry);

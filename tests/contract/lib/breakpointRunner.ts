@@ -8,7 +8,8 @@
 
 import { delay } from "./timing.js";
 import type { LogEventInput } from "./logging.js";
-import type { ProbeResult, HealthMonitor } from "./health.js";
+import type { HealthAssessment, MultiProtocolHealthMonitor } from "./health.js";
+import { runStage } from "./stageRunner.js";
 import {
   type BreakpointFailureSummary,
   type BreakpointHealthStatus,
@@ -38,7 +39,7 @@ export type BreakpointRunResult = {
 export async function runStressBreakpointProfile(input: {
   config: HarnessConfig;
   log: (event: LogEventInput) => void;
-  healthMonitor: HealthMonitor;
+  healthMonitor: MultiProtocolHealthMonitor;
   prepareScenario: () => Promise<PreparedBreakpointScenario>;
   setTraceDefaults: (defaults: BreakpointRequestTraceContext | null) => void;
   onTrace: (listener: (entry: BreakpointTraceEntry) => void) => void;
@@ -146,10 +147,13 @@ export async function runStressBreakpointProfile(input: {
 
       const stageAbort = await runStage({
         stage,
-        scenario,
+        mutation: {
+          mutate: ({ clientId }) => scenario.mutate({ clientId }),
+        },
         onAbort: (reason) => {
           abortReason ??= reason;
         },
+        shouldAbort: () => abortReason,
       });
 
       stage.endedAt = new Date().toISOString();
@@ -191,63 +195,9 @@ export async function runStressBreakpointProfile(input: {
   };
 }
 
-async function runStage(input: {
-  stage: BreakpointStageRecord;
-  scenario: PreparedBreakpointScenario;
-  onAbort: (reason: string) => void;
-}): Promise<string | null> {
-  const stageDeadline = Date.now() + input.stage.durationMs;
-  const inFlight = new Set<Promise<void>>();
-  const availableClientIds = Array.from({ length: input.stage.concurrency }, (_, index) => `client-${index + 1}`);
-  let nextLaunchAt = Date.now();
-  let abortReason: string | null = null;
-
-  const waitForSlot = async (): Promise<string | null> => {
-    while (availableClientIds.length === 0 && !abortReason) {
-      if (inFlight.size === 0) {
-        break;
-      }
-      await Promise.race(inFlight);
-    }
-    return availableClientIds.shift() ?? null;
-  };
-
-  while (Date.now() < stageDeadline && !abortReason) {
-    const waitMs = nextLaunchAt - Date.now();
-    if (waitMs > 0) {
-      await delay(waitMs);
-    }
-    nextLaunchAt += input.stage.rateDelayMs;
-    if (Date.now() >= stageDeadline || abortReason) {
-      break;
-    }
-
-    const clientId = await waitForSlot();
-    if (!clientId) {
-      abortReason = abortReason ?? `No client slot available for ${input.stage.stageId}`;
-      break;
-    }
-
-    const task = input.scenario
-      .mutate({ clientId })
-      .catch((error) => {
-        abortReason ??= String(error);
-        input.onAbort(abortReason);
-      })
-      .finally(() => {
-        availableClientIds.push(clientId);
-        inFlight.delete(task);
-      });
-    inFlight.add(task);
-  }
-
-  await Promise.allSettled(inFlight);
-  return abortReason;
-}
-
 async function runHealthLoop(input: {
   config: HarnessConfig;
-  healthMonitor: HealthMonitor;
+  healthMonitor: MultiProtocolHealthMonitor;
   log: (event: LogEventInput) => void;
   getCurrentStage: () => BreakpointStageRecord | null;
   onHealthStatus: (status: BreakpointHealthStatus) => void;
@@ -261,33 +211,33 @@ async function runHealthLoop(input: {
     if (input.shouldStop()) {
       break;
     }
-    const result = await input.healthMonitor.check();
-    const abort = input.healthMonitor.shouldAbort();
-    const status = mapHealthStatus(result, abort.reason);
+    const result = await input.healthMonitor.check({
+      stageId: input.getCurrentStage()?.stageId ?? undefined,
+      source: `${input.getCurrentStage()?.stageId ?? "breakpoint"}:periodic`,
+    });
+    const status = mapHealthStatus(result);
     input.onHealthStatus(status);
     input.log({
       kind: "health",
       op: `${input.getCurrentStage()?.stageId ?? "breakpoint"}:periodic`,
-      status: result.status ?? "fail",
-      latencyMs: result.latencyMs,
+      status: result.state,
       details: {
-        error: result.error,
-        abortReason: abort.reason,
+        reason: result.reason,
       },
     });
-    if (abort.abort) {
+    if (result.abort) {
       return;
     }
   }
 }
 
-function mapHealthStatus(result: ProbeResult, abortReason?: string): BreakpointHealthStatus {
+function mapHealthStatus(result: HealthAssessment): BreakpointHealthStatus {
   return {
-    ok: result.ok,
-    status: result.status,
-    error: result.error,
-    latencyMs: result.latencyMs,
+    ok: result.state === "HEALTHY",
+    status: result.state,
+    error: result.state === "HEALTHY" ? undefined : result.reason,
+    latencyMs: result.latestBatch.results.find((probe) => probe.protocol === "REST")?.latencyMs,
     checkedAt: new Date().toISOString(),
-    abortReason,
+    abortReason: result.abort ? result.reason : undefined,
   };
 }

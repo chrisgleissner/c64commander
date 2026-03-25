@@ -8,16 +8,18 @@
 
 import type { HarnessConfig } from "../../lib/config.js";
 import { RestClient } from "../../lib/restClient.js";
-import { FtpClient } from "../../lib/ftpClient.js";
 import { delay } from "../../lib/timing.js";
 import type { LogEventInput } from "../../lib/logging.js";
 import type { SharedRestRequest } from "../../lib/restRequest.js";
+import type { TraceCollector } from "../../lib/traceCollector.js";
+import { makeFtpClient } from "../ftp/index.js";
 
 export type MixedScenarioContext = {
   rest: RestClient;
   request: SharedRestRequest;
   config: HarnessConfig;
   log: (event: LogEventInput) => void;
+  traceCollector?: TraceCollector;
 };
 
 export type MixedScenario = {
@@ -25,17 +27,6 @@ export type MixedScenario = {
   safe: boolean;
   run: (ctx: MixedScenarioContext) => Promise<void>;
 };
-
-function makeFtpClient(config: HarnessConfig): FtpClient {
-  return new FtpClient({
-    host: new URL(config.baseUrl).hostname,
-    port: config.ftpPort ?? 21,
-    user: "anonymous",
-    password: config.auth === "ON" ? config.password || "" : "",
-    mode: config.ftpMode,
-    timeoutMs: config.timeouts.ftpTimeoutMs,
-  });
-}
 
 export function buildMixedScenarios(): MixedScenario[] {
   return [
@@ -143,10 +134,10 @@ export function buildMixedScenarios(): MixedScenario[] {
     {
       id: "conflict.ftp-x-ftp",
       safe: true,
-      run: async ({ config, log }) => {
+      run: async ({ config, log, traceCollector }) => {
         const cooldownMs = config.pacing.ftpMinDelayMs;
-        const clientA = makeFtpClient(config);
-        const clientB = makeFtpClient(config);
+        const clientA = makeFtpClient(config, traceCollector, "client-1");
+        const clientB = makeFtpClient(config, traceCollector, "client-2");
         try {
           await clientA.connect();
           await clientB.connect();
@@ -274,9 +265,9 @@ export function buildMixedScenarios(): MixedScenario[] {
     {
       id: "conflict.rest-x-ftp",
       safe: true,
-      run: async ({ request, config, log }) => {
+      run: async ({ request, config, log, traceCollector }) => {
         const cooldownMs = config.pacing.restMinDelayMs;
-        const ftp = makeFtpClient(config);
+        const ftp = makeFtpClient(config, traceCollector, "client-1");
         try {
           await ftp.connect();
 
@@ -421,8 +412,8 @@ export function buildMixedScenarios(): MixedScenario[] {
     {
       id: "conflict.sequential-rest-then-ftp",
       safe: true,
-      run: async ({ request, config, log }) => {
-        const ftp = makeFtpClient(config);
+      run: async ({ request, config, log, traceCollector }) => {
+        const ftp = makeFtpClient(config, traceCollector, "client-1");
         try {
           // Fire REST requests rapidly
           for (let i = 0; i < 5; i++) {

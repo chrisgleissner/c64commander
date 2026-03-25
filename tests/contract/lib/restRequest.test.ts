@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRestRequest } from "./restRequest.js";
 import type { RestClient } from "./restClient.js";
+import { TraceCollector } from "./traceCollector.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -140,6 +141,48 @@ describe("createRestRequest breakpoint tracing", () => {
       status: 503,
       attempt: 0,
       waitMs: 237,
+    });
+  });
+
+  it("emits sanitized forensic REST trace entries with the response correlation id", async () => {
+    const collector = new TraceCollector("run-trace");
+    const client = {
+      request: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { ok: true },
+        headers: { "content-type": "application/json" },
+        requestHeaders: { "X-Correlation-Id": "corr-9", "X-Password": "secret" },
+        latencyMs: 8,
+        correlationId: "corr-9",
+      }),
+    };
+
+    const request = createRestRequest(client as unknown as RestClient, {
+      mode: "SAFE",
+      traceCollector: collector,
+    });
+
+    await request({
+      method: "POST",
+      url: "/v1/test",
+      headers: { "X-Password": "secret" },
+      data: { demo: true },
+    });
+
+    const entries = collector.snapshot();
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      protocol: "REST",
+      direction: "request",
+      correlationId: "corr-9",
+      headers: { "X-Correlation-Id": "corr-9" },
+    });
+    expect(entries[1]).toMatchObject({
+      protocol: "REST",
+      direction: "response",
+      correlationId: "corr-9",
+      bodyPreviewHex: expect.any(String),
+      bodyPreviewAscii: expect.any(String),
     });
   });
 });

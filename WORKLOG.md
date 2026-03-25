@@ -1,233 +1,160 @@
-# Diagnostics, Navigation, and Health Worklog
+# Telnet Integration Research Worklog
 
-Status: IN_PROGRESS
+Status: COMPLETE
 Date: 2026-03-24
 
-## 2026-03-23T00:00:00Z - Classification and scope
+## 2026-03-24 — Initial Document Review
 
-- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`, `UI_CHANGE`
-- Objective: resolve diagnostics completeness, diagnostics discoverability, CPU slider flicker, swipe gesture behavior, deep linking, and authoritative health-state consistency.
-- Decision: keep changes tightly scoped to existing diagnostics/tracing/navigation subsystems instead of introducing a parallel observability stack.
+Read required documents:
 
-## 2026-03-23T00:15:00Z - Root cause discovery findings
+- `doc/architecture.md` — React+Vite+Capacitor app, REST+FTP to C64U, TanStack Query
+- `doc/c64/c64u-openapi.yaml` — REST API spec, X-Password auth
+- `doc/c64/telnet/c64u-telnet-spec.md` — Normative telnet spec (contains F-key mapping errors, see below)
+- `doc/c64/telnet/c64u-telnet-action-walkthrough.md` — Captured telnet screens
 
-- REST execution path
-  - Primary REST requests are executed in `src/lib/c64api.ts`.
-  - Requests call `recordRestRequest()` and `recordRestResponse()` in `src/lib/tracing/traceSession.ts`.
-- FTP execution path
-  - Primary FTP operations are executed in `src/lib/ftp/ftpClient.ts`.
-  - FTP traces are recorded through `recordFtpOperation()` in `src/lib/tracing/traceSession.ts`.
-- Diagnostics UI ownership
-  - A global owner exists in `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`.
-  - A second, Settings-local diagnostics dialog is rendered in `src/pages/SettingsPage.tsx`.
-  - This split ownership is a structural risk for diverging diagnostics behavior.
+Key: Telnet-only actions include Power Cycle, Reboot (Clear Memory), Save C64/REU Memory, IEC controls, Printer controls, Config file ops, Debug log ops.
 
-## 2026-03-23T00:25:00Z - Problem area A/B root causes
+## 2026-03-24 — C64 Commander REST/FTP Concurrency Model
 
-- A. Diagnostics capture incomplete
-  - `recordRestRequest()` stores `method`, `url`, and `normalizedUrl`, but not parsed `protocol`, `hostname`, `path`, or `query` as first-class fields.
-  - `recordRestResponse()` stores `path` loosely and depends on callers to supply it consistently.
-  - `recordFtpOperation()` stores `operation` and `path`, but not `hostname` or explicit command/result schema fields required by the task.
-  - `buildActionSummaries()` reconstructs action effects from loosely-shaped trace payloads, so missing fields stay missing all the way into the UI.
-- B. Diagnostics UI lacks meaningful summaries
-  - `DiagnosticsDialog.tsx` currently renders `summary.actionName` and a generic counts string for action rows.
-  - The collapsed activity list does not promote hostname/path/latency even when the underlying request/response data exists.
+### REST Client (`src/lib/c64api.ts`)
 
-## 2026-03-23T00:35:00Z - Problem area C/F root causes
+- Uses native `fetch()` with AbortController for timeouts
+- Request IDs: sequential `c64req-{timestamp}-{seq}`
+- Timeouts: 3s control, 5s upload/playback, 15s RAM write
+- SID upload retries: max 3 attempts on 502/503/504
+- Read request deduplication via in-flight map
+- Read request budget (256 entries, 64KB, 500ms window)
 
-- C. Diagnostics features not reachable
-  - `LatencyAnalysisPopup` and `HealthHistoryPopup` are reachable from `DiagnosticsDialog.tsx`.
-  - `ConfigDriftView` and `HeatMapPopup` exist under `src/components/diagnostics/` but are not surfaced from the current diagnostics UI.
-  - Current diagnostics entry points are only the Settings button and health badge open request helpers; there is no sections index.
-- F. Docs lack navigation clarity and deep links
-  - `src/pages/DocsPage.tsx` documents diagnostics conceptually but does not enumerate all diagnostics surfaces or any stable deep-link paths.
+### FTP Client (`src/lib/ftp/ftpClient.ts`)
 
-## 2026-03-23T00:45:00Z - Problem area D root cause
+- Delegates to `FtpClient` native plugin (Capacitor bridge)
+- Records trace events via `recordFtpOperation()`
+- Uses implicit action wrapping for FTP calls outside user actions
 
-- D. CPU slider jump-back
-  - `src/pages/HomePage.tsx` uses a dedicated `cpuSpeedDraftIndex` local state plus direct interactive writes.
-  - The draft state is reset whenever `cpuSpeedValue` changes from config refreshes, which can snap the displayed thumb back mid-interaction.
-  - Canonical slider behavior already exists elsewhere: device-backed sliders keep an optimistic local state and gate remote reconciliation while dragging.
+### Device Interaction Manager (`src/lib/deviceInteraction/deviceInteractionManager.ts`)
 
-## 2026-03-23T00:55:00Z - Problem area E root cause
+- **REST scheduler**: `InteractionScheduler` with `REST_MAX_CONCURRENCY = 1` (fully serialized)
+- **FTP scheduler**: `InteractionScheduler` with configurable `ftpMaxConcurrency` (default 2)
+- **REST and FTP schedulers are independent** — no shared queue
+- Priority queue: user > system > background intent ordering
+- Per-endpoint cooldowns: machine control 250ms, config mutation 120ms
+- Per-protocol circuit breaker with configurable threshold and cooldown
+- Exponential backoff on critical errors
+- Device state gating: blocks during UNKNOWN/DISCOVERING/ERROR states
+- Background read gating: defers background reads when device is BUSY
+- Read request caching with policy-based TTL
+- In-flight request coalescing
 
-- E. Swipe navigation delayed/non-authoritative
-  - `useSwipeGesture.ts` tracks live drag progress correctly, but commit logic uses a fixed `40px` threshold in `SWIPE_COMMIT_THRESHOLD_PX`.
-  - The required behavior is width-relative thresholding (~30% of the container), not a fixed absolute pixel value.
-  - `SwipeNavigationLayer.tsx` already separates drag and transition phases, but route-driven deep-link cases are not part of the gesture/diagnostics architecture.
+### Device Safety Config (`src/lib/config/deviceSafetySettings.ts`)
 
-## 2026-03-23T01:05:00Z - Problem area G/H root causes
+- Four modes: RELAXED, BALANCED (default), CONSERVATIVE, TROUBLESHOOTING
+- FTP concurrency: 1-4 depending on mode
+- All parameters user-overridable via localStorage
 
-- G. Health check not authoritative
-  - `runHealthCheck()` in `src/lib/diagnostics/healthCheckEngine.ts` produces a complete result and pushes health history, but the latest result is only stored in component state inside `GlobalDiagnosticsOverlay.tsx`.
-  - No global store exposes the latest health check result to other UI consumers.
-  - CONFIG currently skips with a generic reason when no roundtrip target is found, but that state is not elevated into a single app-wide authority.
-- H. Global device status diverges from health check
-  - `useHealthState()` computes health entirely from recent trace activity plus connection state in `src/hooks/useHealthState.ts`.
-  - `UnifiedHealthBadge` consumes `useHealthState()`, while `DiagnosticsDialog` separately shows `lastHealthCheckResult` from overlay-local state.
-  - Result: after a successful health check, the diagnostics header can show one state while the global badge still reflects stale or unrelated trace-derived degradation.
+## 2026-03-24 — Home Page and Machine Controls
 
-## 2026-03-23T01:15:00Z - Routing/deep-link findings
+### Machine Controls (`src/pages/home/components/MachineControls.tsx`)
 
-- `tabIndexForPath()` in `src/lib/navigation/tabRoutes.ts` only recognizes tab routes and existing tab sub-routes.
-- `/diagnostics/*` currently resolves to no tab slot and would fall through to not-found.
-- The swipe shell can support diagnostics deep links by mapping `/diagnostics/*` into the Settings slot while keeping diagnostics ownership global and route-aware.
+- Quick Actions grid: Reset, Reboot, Pause/Resume, Power Off, Menu Button, Save RAM, Restore Snapshot
+- Controls come from `useC64MachineControl()` hook → `useMutation()` calling `api.machineReset()` etc.
+- `runMachineTask()` gates one task at a time via ref+state
 
-## 2026-03-23T01:25:00Z - Planned implementation direction
+### Missing from UI
 
-- Unify diagnostics ownership around the global overlay.
-- Extend trace payloads through centralized diagnostics event builders rather than patching UI strings.
-- Add route-aware diagnostics section state and visible section entry points.
-- Promote the latest health check result into a shared authoritative store consumed by `useHealthState()` and diagnostics UI.
-- Replace the CPU slider’s draft-state reset behavior with the canonical optimistic slider model.
+Power Cycle, Reboot (Clear Memory), Save C64 Memory, Save REU Memory — all Telnet-only.
 
-## 2026-03-23T01:30:00Z - Validation plan
+### Mock Infrastructure
 
-- Targeted unit tests
-  - trace session event completeness
-  - diagnostics dialog summaries/discoverability
-  - swipe navigation threshold and route behavior
-  - health/global-state consistency
-- Required repo validation for code changes
-  - `npm run lint`
-  - `npm run test:coverage`
-  - `npm run build`
+- `src/lib/mock/mockServer.ts` — MockC64U native plugin for REST mock
+- `src/lib/native/mockC64u.ts` / `mockC64u.web.ts` — Capacitor mock bridge
+- No Telnet mock exists
 
-## 2026-03-24T11:52:43Z - Review 12 audit kickoff
+## 2026-03-24 — Firmware Telnet Server Analysis
 
-- Classification for this task: `DOC_ONLY`.
-- Mission reset: perform a deep-dive research and audit pass across the current product/repo state, with primary emphasis on diagnostics, real-device behavior, HVSC, and cross-platform consistency.
-- Confirmed existing review lineage under `doc/research/review-1` through `review-11`; reserved `review-12` for this run.
-- Read current `README.md`, `doc/ux-guidelines.md`, repo memories related to diagnostics/playlists/streaming, and prior review-11 materials.
-- Used code exploration to map the diagnostics overlay/state/tracing surfaces, HVSC workflow surfaces, platform-specific plugin entrypoints, and relevant docs/tests.
-- Confirmed physical Android device presence with `adb devices -l`: Pixel 4 serial `9B081FFAZ001WX` attached over USB.
-- Current working hypothesis: some previously reported gaps may still be present in docs/tests even if code has moved; this run will verify current behavior rather than assume prior findings still apply.
-- Next actions: create the new report folder, inspect implementation/test files in detail, launch the app on the Pixel 4, and gather direct diagnostics/HVSC evidence from the real-device path.
+### Connection Handling (`1541ultimate/software/network/socket_gui.cc`)
 
-## 2026-03-24T12:08:40Z - Review 12 runtime evidence and report synthesis
+- Telnet server listens on port 23, backlog 2
+- Each connection spawns a FreeRTOS task (`socket_gui_task`) at `PRIO_USERIFACE`
+- Each task creates independent: `HostStream`, `UserInterface`, `BrowsableRoot`, `TreeBrowser`
+- Socket receive timeout: 200ms
+- Authentication: plaintext password prompt, exponential delay on failure (250ms → 4s)
 
-- Created `doc/research/review-12/review-12.md` and filled the final audit structure with executive summary, scope/method, environment, audited/not-audited areas, issue matrix, findings, fix sequence, and appendix.
-- Re-checked multiple prior review-11 themes against current code and confirmed several earlier defects are no longer current: health-state gating, diagnostics action labels, diagnostics list depth, HVSC extraction gating, Android HVSC chunk offset parsing, and iOS HVSC native implementation.
-- Verified host-side C64U reachability by both hostname and IP: `http://c64u/v1/info` and `http://192.168.1.167/v1/info` returned matching device metadata.
-- Ran focused diagnostics/HVSC Playwright suites and observed a green result (`24 passed`), which is useful as a contrast point because the live browser HVSC path is still misleading.
-- Reproduced a live web-runtime issue in the built preview path: the Play page exposed an enabled `Download HVSC` action in a desktop browser, then failed with fetch/CORS errors and a generic failed status instead of presenting HVSC as unsupported in browsers.
-- Reproduced a local workflow issue: `npm run dev -- --host 127.0.0.1 --port 4173` failed immediately with `ELOOP: too many symbolic links encountered` on `test-data/sid/hvsc/hvsc`.
-- Confirmed internal doc drift: the iOS parity matrix still claims HVSC is shared TypeScript with no native code even though `HvscIngestionPlugin.swift` exists, is registered in `AppDelegate.swift`, and depends on `SWCompression` in `ios/App/Podfile`.
-- Confirmed diagnostics doc drift: README/UX docs still describe an older diagnostics flow while the implementation now centers around a unified evidence feed, filter editor, footer tools, and overflow actions.
-- Captured Android evidence to the maximum feasible extent despite the device lockscreen blocker. The Pixel 4 remained locked, but logcat still showed app startup and live requests targeting `http://c64u/v1/info` plus additional config endpoints.
-- Cleaned up the temporary Vite preview process started for browser runtime inspection.
+### Screen Rendering (`1541ultimate/software/io/stream/screen_vt100.cc`)
 
-## 2026-03-24T12:31:00Z - Review 12 follow-up Android audit, diagnostics fix, and validation
+- Fixed 60×24 grid
+- VT100 escape sequences: cursor positioning (`\e[r;cH`), color (SGR), reverse (`\e[7m`)
+- Line-drawing via alternate charset (`\e(0` / `\e(B`)
+- Screen clear via RIS (`\ec`)
+- Init: Telnet DONT LINEMODE + WILL ECHO + RIS
 
-- Unlocked the attached Pixel 4 and exercised the live diagnostics sheet directly on-device.
-- Captured real-device diagnostics screenshots showing the app reporting `C64U · 127.0.0.1:<ephemeral-port>` and localhost action rows on physical hardware, which points to demo/mock routing being active or insufficiently disclosed during a real-device session.
-- Traced that Android finding back to the active connection snapshot used by `DiagnosticsDialog.tsx` and to the explicit demo/mock routing paths in `src/lib/connection/connectionManager.ts`.
-- Mapped a concrete web HVSC implementation strategy grounded in the current codebase: add a web-server HVSC proxy with range support, add an IndexedDB-backed HVSC storage layer, reuse `hvscArchiveExtraction.ts` for browser extraction, reuse the existing songlength service, and route web-installed SID playback through `api.playSidUpload()` using blobs from browser storage.
-- Fixed a mobile diagnostics usability bug in `src/components/diagnostics/DiagnosticsDialog.tsx` by repositioning the overflow menu so it stays clearly left of the close button instead of overlapping its hit area on small screens.
-- Added targeted Playwright regression coverage in `playwright/modalConsistency.spec.ts` for the diagnostics header control separation on a 390x844 viewport.
-- Validation after the follow-up code change:
-  - Targeted Playwright diagnostics regression passed (`2 passed`).
-  - `npm run lint` passed for the changed source files; only pre-existing warnings remain in generated `android/coverage/` files.
-  - `npm run build` passed.
-  - Isolated unit coverage completed with 91.01% branch coverage.
+### Key Input (`1541ultimate/software/io/stream/keyboard_vt100.cc`)
 
-## 2026-03-24T13:00:00Z — Phase 3 session 2: downstream fixes and regression tests
+- Standard VT100 escape sequences: `\e[A`-`\e[D` for arrows, `\e[N~` for function keys
+- F1=`\e[11~`, F5=`\e[15~`, F7=`\e[18~`
 
-### `incomplete` → `in_progress`/`failed` downstream propagation
+### Critical F-key Mapping (`userinterface.cc:612-616`)
 
-- Updated `resolveActionSeverity()` in `diagnosticsSeverity.ts`: `"failed"` → `"error"`, `"in_progress"` → `"warn"`.
-- Updated all downstream test assertions and fixtures (7 replacements across 6 files):
-  - `diagnosticsSeverity.test.ts`: outcome assertions
-  - `actionSummaries.test.ts` (unit/diagnostics): 3 `"incomplete"` → `"in_progress"`, 1 unrecognized status test
-  - `actionSummariesGolden.test.ts`: COR-0005 assertion
-  - `actionSummaries.test.ts` (unit/lib/diagnostics): assertion
-  - `actions.json` fixture: outcome value
+- `KEY_F1 → KEY_PAGEUP` (Page Up, NOT action menu)
+- `KEY_F3 → KEY_HELP` (Help)
+- **`KEY_F5 → KEY_TASKS` (Action Menu)**
+- `KEY_F7 → KEY_PAGEDOWN` (Page Down)
+- **The existing `telnet-spec.md` incorrectly says F1 opens the action menu. It is F5.**
 
-### Regression tests added
+### Menu System (`1541ultimate/software/userinterface/task_menu.cc`)
 
-- `healthCheckEngine.test.ts`: 3 new tests (items-wrapper format, option-list index fallback, undefined product field)
-- `actionSummaries.test.ts` (unit/diagnostics): 2 new tests (`"failed"` for unrecognized status, `"in_progress"` for no action-end)
+- `TaskMenu` collects actions from all `ObjectWithMenu` subsystems
+- Actions organized into `TaskCategory` groups (Power & Reset, Built-in Drive A, etc.)
+- Category names and action labels come from subsystem registrations
+- Menu items dynamically enabled/disabled based on current device state
 
-### Validation results
+## 2026-03-24 — Firmware Concurrency Model (Critical Finding)
 
-- TypeScript: clean
-- Vitest: 381 files, 4531 tests passed
-- ESLint: clean on all modified files
-- Prettier: clean after formatting 3 files
-- Build: production build succeeded
-- Coverage: 90.98% branch (unit-only); CI threshold is COVERAGE_MIN=90 (merged unit+E2E)
+### SubSystem Mutex (`1541ultimate/software/infra/subsys.h:53-61`)
 
-## 2026-03-24T10:00:00Z — Phase 1 & 2: Baseline and root-cause analysis
+- Each `SubSystem` instance has its own FreeRTOS mutex (`xSemaphoreCreateMutex()`)
+- SubSystem IDs: C64(1), Drive_A(2), Drive_B(3), Drive_C(4), IEC(7), Printer(10), etc.
 
-### CONFIG health-check root cause (CONFIRMED)
+### SubsysCommand Execution (`1541ultimate/software/infra/subsys.cc:4-31`)
 
-- **Observed**: CONFIG probe always returns "Skipped: No suitable config roundtrip target available"
-- **Root cause**: `getConfigItem()` returns `{ [category]: { items: { [item]: { selected, options } } } }` — the item data is nested inside an `items` key. The probe code accesses `categoryData[item]` directly, which is always `undefined`. The `continue` fires for all targets, falling through to the "No suitable target" skip.
-- **Secondary issue**: Audio Mixer `selected` values are strings like "OFF", "+6 dB" — not numeric. `parseFloat("OFF")` → `NaN`, causing `currentValue` to remain `null` even if lookup were correct. Need to handle value-by-index for option-list items.
-- **Fix**: Navigate through `categoryData.items[item]` and handle both numeric and option-list config items.
+- `SubsysCommand::execute()` looks up subsystem by ID
+- Takes per-subsystem mutex with **1-second timeout** (`xSemaphoreTake(myMutex, 1000)`)
+- If lock acquired: executes command, releases lock
+- If lock NOT acquired: returns `SSRET_NO_LOCK` (maps to HTTP 423 Locked)
 
-### Activity header hierarchy (CONFIRMED)
+### REST → SubSystem Path (`1541ultimate/software/api/route_machine.cc`)
 
-- **Observed**: Section title "Activity" uses `text-[10px]` (smaller), subtitle uses `text-[11px]` (larger) — visually inverted.
-- **Fix**: Make title larger/bolder than subtitle.
+- REST handlers (reset, reboot, poweroff) create `SubsysCommand` and call `execute()`
+- HTTP daemon is single-threaded (`HTTPServerRunLoop`)
+- REST operations are inherently serialized by the HTTP server loop
 
-### Top-right collision (CONFIRMED)
+### Telnet → SubSystem Path (`1541ultimate/software/userinterface/context_menu.cc:124-141`)
 
-- **Observed**: Overflow menu at `right-14 top-1`, close button at AppSheet default. Gap is ~14 units (3.5rem, ~56px) — tight on small screens.
-- **Fix**: Move overflow menu further left or increase padding.
+- Menu action selection calls `ContextMenu::executeSelected()`
+- Creates `SubsysCommand` with the Telnet session's `UserInterface` reference
+- Calls `execute()` — same path as REST, same per-subsystem mutex
 
-### `incomplete` status (CONFIRMED)
+### Conclusion
 
-- **Observed**: `resolveOutcome()` returns `"incomplete"` for both genuinely incomplete actions and unrecognized action-end statuses.
-- **Fix**: Distinguish `IN_PROGRESS` for truly incomplete, `TIMEOUT` for timed-out, `FAILED` as catch-all for bad outcomes.
+- **REST, FTP, and Telnet converge on the same SubsysCommand::execute() path**
+- **Per-subsystem mutex provides thread safety** — not a global lock
+- **Cross-subsystem operations are fully concurrent** (e.g., REST config read + Telnet C64 power cycle)
+- **Same-subsystem operations are serialized** by the firmware mutex with 1s timeout
+- **No global device-wide lock exists** — C64 Commander does NOT need a cross-protocol queue
 
-### Latency summary (CONFIRMED)
+## 2026-03-24 — Specification Written
 
-- **Observed**: Plain bordered div at bottom of HealthCheckDetailView, no visual distinction from probe rows.
-- **Fix**: Add subtle background tint or separator to make it stand out.
+Created `doc/c64/telnet/telnet-integration-spec.md` with:
 
-## 2026-03-24T15:05:00Z - Reassessment and execution restart
-
-- Classification: `CODE_CHANGE`, `UI_CHANGE`.
-- Observed fact: `PLANS.md` incorrectly marked the diagnostics work complete while Phase 5 real-device verification and the requested lifecycle/reconciliation/observability work were still not implemented.
-- Observed fact: `src/lib/diagnostics/healthCheckEngine.ts` still uses a single module-level `running` boolean and sequential async probes with no cancellable lifecycle model, no global timeout, no per-probe timeout except FTP, and no stale-run recovery.
-- Observed fact: `src/lib/diagnostics/healthCheckState.ts` stores only `running`, `liveProbes`, and `latestResult`; it does not represent run lifecycle, sub-check lifecycle, timing boundaries, cancellation metadata, or stale detection.
-- Observed fact: the diagnostics UI already has suitable extension seams: route-addressable panels in `GlobalDiagnosticsOverlay.tsx`, surface components in `DiagnosticsDialog.tsx`, and a playback trace snapshot in `src/pages/playFiles/playbackTraceStore.ts`.
-- Decision: keep the implementation minimally invasive by extending the existing health-check state store, adding a small reconciler/decision-state store, and wiring the new diagnostics view into the existing overlay rather than introducing a second architecture.
-- Next step: patch the health-check state model and engine first, then add reconciliation/playback observability, tests, and real-device verification evidence.
-
-## 2026-03-24T15:15:00Z - Lifecycle, reconciliation, validation, and device evidence
-
-- Implemented lifecycle-aware health-check execution in `src/lib/diagnostics/healthCheckEngine.ts` and `src/lib/diagnostics/healthCheckState.ts`.
-  - Added explicit run lifecycle states: `IDLE`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`, `TIMEOUT`.
-  - Added explicit probe lifecycle states: `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `TIMEOUT`, `CANCELLED`.
-  - Added cancellation-on-restart, stale-run timeout recovery, transition recording, and propagated timeout/abort request options into `src/lib/c64api.ts` for relevant config/memory paths.
-- Implemented thin decision-state and reconciliation layers in `src/lib/diagnostics/decisionState.ts` and `src/lib/diagnostics/diagnosticsReconciler.ts`.
-  - Added playback certainty tracking (`PLAYING`/`STOPPED`/`UNKNOWN` + confidence).
-  - Added diagnostics/config/playback reconciler status, transition history, and repair-state tracking.
-- Wired the new behavior into the app shell and diagnostics UI.
-  - `src/App.tsx`: app resume now runs diagnostics/config/playback reconcilers.
-  - `src/pages/PlayFilesPage.tsx`: playback trace now feeds the decision-state store and marks playback unobservable on unmount.
-  - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`: added decision-state deep link handling, overlay-open reconciliation, and repair wiring.
-  - `src/components/diagnostics/DiagnosticsDialog.tsx`: added the decision-state surface and switched the health-check action from disabled-in-flight to restartable-in-flight.
-  - `src/components/diagnostics/HealthCheckDetailView.tsx`: now surfaces timeout/cancelled lifecycle states instead of only legacy outcome text.
-- Regression coverage added/updated.
-  - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: restart/cancellation and stale-run timeout recovery.
-  - `playwright/homeDiagnosticsOverlay.spec.ts`: decision-state surface reachability and repair control.
-  - Updated diagnostics overlay/dialog unit tests to match the new runtime contract and restartable health-check button behavior.
-- Validation results.
-  - `npx vitest run tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: passed.
-  - `npx playwright test playwright/homeDiagnosticsOverlay.spec.ts -g "supports health checks, analytics, export enrichment, and clear-all|opens the decision-state surface and exposes repair controls"` on a fresh Playwright server port: passed.
-  - `npm run build`: passed.
-  - `npm run lint`: passed after formatting; only warnings were in generated `android/coverage/` artifacts and did not fail the run.
-  - `npm run test:coverage`: passed after aligning diagnostics unit tests with the new QueryClient dependency and restartable button semantics.
-- Real-device verification evidence.
-  - Attached Android device confirmed: Pixel 4 serial `9B081FFAZ001WX`.
-  - Live C64 Ultimate confirmed from host: `curl http://c64u/v1/info` returned product `C64 Ultimate`, firmware `1.1.0`, FPGA `122`, core `1.49`, hostname `c64u`.
-  - Built and installed a fresh Android debug APK from the current workspace (`0.6.5-rc1`) onto the Pixel 4.
-  - On-device screenshot shows the fresh app build identifier `0.6.5-41a97` on the Home screen.
-  - Android app logs confirm live runtime traffic from the device to `http://c64u:80/v1/info` and multiple config endpoints after launch, demonstrating that the current build is executing against the live device path rather than only a stale install.
-  - A later on-device screenshot showed the connected steady state visually: `Device c64u`, firmware `1.1.0`.
-  - Opened the diagnostics overlay on the Pixel through the live app UI and captured the overlay itself on-device.
-  - The captured overlay showed the new diagnostics footer affordances, including `Decision state`, alongside the healthy status and live `C64U · c64u:80` context.
-  - Limitation: the handset pass did not end with a captured screenshot of the decision-state panel itself after tapping; that surface was validated through the new Playwright coverage while the device pass verified the live overlay entry and footer affordance presence.
+- Evidence-backed concurrency answer
+- Telnet protocol findings with VT100 details
+- Transport architecture (native TCP for Android/iOS, disabled on web)
+- Independent Telnet scheduler design (concurrency 1, parallel to REST/FTP)
+- VT100 screen parser design
+- Label-based menu navigator state machine
+- Deterministic mock with failure injection
+- Action abstraction and capability mapping
+- UI placement for Home page Quick Actions
+- Platform support strategy
+- Firmware compatibility strategy
+- 4-phase implementation plan
+- Acceptance criteria

@@ -11,6 +11,9 @@ import { delay } from "./timing.js";
 import type { RestClient, RestResponse } from "./restClient.js";
 import type { LogEventInput } from "./logging.js";
 import type { BreakpointRequestTraceContext, BreakpointTraceEntry } from "./breakpoint.js";
+import type { TraceCollector } from "./traceCollector.js";
+import { makeBodyPreview, nowMs, nowNs } from "./traceSchema.js";
+import { sanitizeTraceHeaders, serializeTraceValue } from "./traceSerialization.js";
 
 export type SharedRestRequestConfig = AxiosRequestConfig & {
   trace?: BreakpointRequestTraceContext;
@@ -28,6 +31,8 @@ type CreateRestRequestOptions = {
     maxRetries?: number;
     baseDelayMs?: number;
   };
+  traceCollector?: TraceCollector;
+  defaultClientId?: string;
 };
 
 export function createRestRequest(client: RestClient, options: CreateRestRequestOptions): SharedRestRequest {
@@ -41,8 +46,42 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt += 1) {
       const requestConfig = stripTraceConfig(config);
+      const clientId = config.trace?.clientId ?? options.defaultClientId ?? "rest-client";
+      const launchedAtMs = nowMs();
+      const hrTimeNs = nowNs();
+      const method = (requestConfig.method ?? "GET").toUpperCase();
+      const fullUrl = buildTraceUrl(client, requestConfig.url ?? "");
       try {
         const response = await client.request(requestConfig);
+        options.traceCollector?.emit({
+          protocol: "REST",
+          direction: "request",
+          correlationId: response.correlationId,
+          clientId,
+          timestamp: new Date().toISOString(),
+          launchedAtMs,
+          hrTimeNs,
+          method,
+          url: fullUrl,
+          headers: sanitizeTraceHeaders(response.requestHeaders),
+          body: serializeTraceValue(requestConfig.data),
+        });
+        const preview = makeBodyPreview(response.data);
+        options.traceCollector?.emit({
+          protocol: "REST",
+          direction: "response",
+          correlationId: response.correlationId,
+          clientId,
+          timestamp: new Date().toISOString(),
+          launchedAtMs,
+          hrTimeNs,
+          status: response.status,
+          headers: sanitizeTraceHeaders(response.headers),
+          body: serializeTraceValue(response.data),
+          latencyMs: response.latencyMs,
+          bodyPreviewHex: preview.bodyPreviewHex,
+          bodyPreviewAscii: preview.bodyPreviewAscii,
+        });
         const retryable = response.status >= 500 && attempt <= maxRetries;
         const retryDelayMs = retryable ? computeRetryDelay(shouldTrace, baseDelayMs, attempt) : undefined;
         if (shouldTrace) {
@@ -70,6 +109,19 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
         }
         return response;
       } catch (error) {
+        options.traceCollector?.emit({
+          protocol: "REST",
+          direction: "request",
+          correlationId: `error-${launchedAtMs}-${attempt}`,
+          clientId,
+          timestamp: new Date().toISOString(),
+          launchedAtMs,
+          hrTimeNs,
+          method,
+          url: fullUrl,
+          headers: sanitizeTraceHeaders(requestConfig.headers as Record<string, unknown> | undefined),
+          body: serializeTraceValue(requestConfig.data),
+        });
         const willRetry = attempt <= maxRetries;
         const retryDelayMs = willRetry ? computeRetryDelay(shouldTrace, baseDelayMs, attempt) : undefined;
         if (shouldTrace) {
@@ -155,11 +207,13 @@ function emitTrace(input: {
     clientId: mergedTrace.clientId,
     method: (input.config.method ?? "GET").toUpperCase(),
     url: input.config.url ?? "",
-    headers: input.response?.requestHeaders ?? serializeTraceValue(input.config.headers),
+    headers: input.response?.requestHeaders
+      ? sanitizeTraceHeaders(input.response.requestHeaders)
+      : sanitizeTraceHeaders(input.config.headers as Record<string, unknown> | undefined),
     params: serializeTraceValue(input.config.params),
     payload: serializeTraceValue(input.config.data),
     responseStatus: input.response?.status,
-    responseHeaders: input.response?.headers,
+    responseHeaders: input.response?.headers ? sanitizeTraceHeaders(input.response.headers) : undefined,
     responseBody: serializeTraceValue(input.response?.data),
     latencyMs: input.response?.latencyMs,
     concurrencyLevel: mergedTrace.concurrencyLevel,
@@ -178,30 +232,14 @@ function emitTrace(input: {
   });
 }
 
-function serializeTraceValue(value: unknown): unknown {
-  if (value === undefined || value === null) {
-    return value;
+function buildTraceUrl(client: RestClient, requestPath: string): string {
+  try {
+    const clientBaseUrl = (client as unknown as { client?: { defaults?: { baseURL?: string } } }).client?.defaults
+      ?.baseURL;
+    return new URL(requestPath, clientBaseUrl ?? "http://invalid.local").toString();
+  } catch {
+    return requestPath;
   }
-  if (Buffer.isBuffer(value)) {
-    return { type: "Buffer", base64: value.toString("base64") };
-  }
-  if (ArrayBuffer.isView(value)) {
-    return {
-      type: value.constructor.name,
-      base64: Buffer.from(value.buffer, value.byteOffset, value.byteLength).toString("base64"),
-    };
-  }
-  if (value instanceof ArrayBuffer) {
-    return { type: "ArrayBuffer", base64: Buffer.from(value).toString("base64") };
-  }
-  if (typeof value === "object") {
-    if (typeof (value as { getHeaders?: () => unknown }).getHeaders === "function") {
-      return {
-        type: "FormData",
-        headers: serializeTraceValue((value as { getHeaders: () => unknown }).getHeaders()),
-      };
-    }
-    return value;
-  }
-  return value;
 }
+
+export { serializeTraceValue };
