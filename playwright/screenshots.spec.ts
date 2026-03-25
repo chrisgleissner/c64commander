@@ -1508,8 +1508,8 @@ test.describe("App screenshots", () => {
       await captureDiagnosticsScreenshot(page, testInfo, "header/02-health-check-detail.png");
 
       await seedLiveDiagnosticsHealthProgress(page);
-      await expect(dialog.getByTestId("health-check-probe-config")).toHaveAttribute("data-live-status", "running");
-      await expect(dialog.getByTestId("health-check-probe-raster")).toHaveAttribute("data-live-status", "pending");
+      await expect(dialog.getByTestId("health-check-probe-telnet")).toHaveAttribute("data-live-status", "running");
+      await expect(dialog.getByTestId("health-check-probe-config")).toHaveAttribute("data-live-status", "pending");
       await captureDiagnosticsScreenshot(page, testInfo, "header/03-health-check-live-progress.png");
       await clearLiveDiagnosticsHealthProgress(page);
       await seedDiagnosticsAnalytics(page);

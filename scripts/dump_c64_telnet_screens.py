@@ -914,6 +914,7 @@ def capture_selected_directory_action_menus(
                 session.send_key("DOWN", settle=FAST_SETTLE)
             session.send_key(action_key, settle=ACTION_MENU_SETTLE)
             try:
+                wait_for_menu_box(session, retry_delays=(0.0, 0.1, 0.3, 0.6, 1.0, 1.5))
                 action_menu = capture_menu_tree(session)
             except RuntimeError:
                 continue
@@ -1001,6 +1002,7 @@ def dump_yaml(document: dict[str, Any]) -> str:
         default_flow_style=False,
         allow_unicode=True,
         indent=2,
+        width=float("inf"),
     )
     return _quote_mapping_values_with_spaces(
         _convert_single_quoted_scalars(_indent_sequences(yaml_text))
@@ -1225,7 +1227,7 @@ def main() -> int:
         base_url=base_url,
         host=host,
         metadata=metadata,
-        requested_test_data_paths=[args.preferred_test_data_path, *args.fallback_test_data_path],
+        requested_test_data_paths=list(dict.fromkeys([args.preferred_test_data_path, *args.fallback_test_data_path])),
         resolved_test_data_path=resolved_test_data_path,
         initial_action_menus=initial_action_menus,
         selected_directory_action_menus=selected_directory_action_menus,

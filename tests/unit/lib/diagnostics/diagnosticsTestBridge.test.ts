@@ -70,6 +70,7 @@ describe("registerDiagnosticsTestBridge", () => {
             raster: { outcome: "Success", durationMs: 25, reason: null },
             config: { outcome: "Success", durationMs: 60, reason: null },
             ftp: { outcome: "Success", durationMs: 45, reason: null },
+            telnet: { outcome: "Success", durationMs: 35, reason: null },
           },
           latency: { p50: 52, p90: 75, p99: 96 },
         },
@@ -113,6 +114,7 @@ describe("registerDiagnosticsTestBridge", () => {
         probes: {
           REST: { probe: "REST", outcome: "Success", durationMs: 50, reason: null, startMs: now - 60_000 },
           FTP: { probe: "FTP", outcome: "Success", durationMs: 90, reason: null, startMs: now - 59_900 },
+          TELNET: { probe: "TELNET", outcome: "Success", durationMs: 95, reason: null, startMs: now - 59_850 },
           CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 140, reason: null, startMs: now - 59_800 },
           RASTER: { probe: "RASTER", outcome: "Success", durationMs: 60, reason: null, startMs: now - 59_700 },
           JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 70, reason: null, startMs: now - 59_600 },
@@ -167,6 +169,7 @@ describe("registerDiagnosticsTestBridge", () => {
             raster: { outcome: "Success", durationMs: 20, reason: null },
             config: { outcome: "Success", durationMs: 50, reason: null },
             ftp: { outcome: "Success", durationMs: 55, reason: null },
+            telnet: { outcome: "Success", durationMs: 40, reason: null },
           },
           latency: { p50: 40, p90: 60, p99: 80 },
         },

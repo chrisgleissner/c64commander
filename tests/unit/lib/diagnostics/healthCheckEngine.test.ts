@@ -10,15 +10,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ─── Hoisted mocks (accessible in vi.mock factories) ─────────────────────────
 
-const { mockGetInfo, mockReadMemory, mockGetConfigItem, mockSetConfigValue, mockLoadConfig, mockListFtpDirectory } =
-  vi.hoisted(() => ({
-    mockGetInfo: vi.fn(),
-    mockReadMemory: vi.fn(),
-    mockGetConfigItem: vi.fn(),
-    mockSetConfigValue: vi.fn(),
-    mockLoadConfig: vi.fn(),
-    mockListFtpDirectory: vi.fn(),
-  }));
+const {
+  mockGetInfo,
+  mockReadMemory,
+  mockGetConfigItem,
+  mockSetConfigValue,
+  mockLoadConfig,
+  mockListFtpDirectory,
+  mockTelnetConnect,
+  mockTelnetReadScreen,
+  mockTelnetDisconnect,
+} = vi.hoisted(() => ({
+  mockGetInfo: vi.fn(),
+  mockReadMemory: vi.fn(),
+  mockGetConfigItem: vi.fn(),
+  mockSetConfigValue: vi.fn(),
+  mockLoadConfig: vi.fn(),
+  mockListFtpDirectory: vi.fn(),
+  mockTelnetConnect: vi.fn(),
+  mockTelnetReadScreen: vi.fn(),
+  mockTelnetDisconnect: vi.fn(),
+}));
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -56,6 +68,18 @@ vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: mockListFtpDirectory,
 }));
 
+vi.mock("@/lib/telnet/telnetClient", () => ({
+  createTelnetClient: vi.fn(() => ({ mocked: true })),
+}));
+
+vi.mock("@/lib/telnet/telnetSession", () => ({
+  createTelnetSession: vi.fn(() => ({
+    connect: mockTelnetConnect,
+    readScreen: mockTelnetReadScreen,
+    disconnect: mockTelnetDisconnect,
+  })),
+}));
+
 vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", () => ({
   normalizeFtpHost: vi.fn((host: string) => {
     if (!host) return host;
@@ -77,6 +101,7 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
+import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import {
   cancelHealthCheck,
   isHealthCheckRunning,
@@ -101,6 +126,16 @@ const jiffyBytes = new Uint8Array([0x00, 0x3c, 0x00]);
 
 const ledResp = { "LED Strip Settings": { "Strip Intensity": { selected: 5 } } };
 const ledReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: 6 } } };
+const telnetScreen = {
+  width: 60,
+  height: 24,
+  cells: [],
+  menus: [],
+  form: null,
+  selectedItem: null,
+  titleLine: "Ultimate-II+ V3.11 - C64 Ultimate",
+  screenType: "file_browser" as const,
+};
 
 const setupAllProbesSuccess = () => {
   mockGetInfo.mockResolvedValue(successfulInfo);
@@ -115,12 +150,16 @@ const setupAllProbesSuccess = () => {
     .mockResolvedValueOnce(ledResp); // verify revert: value=5
   mockSetConfigValue.mockResolvedValue(undefined);
   mockListFtpDirectory.mockResolvedValue([]);
+  mockTelnetConnect.mockResolvedValue(undefined);
+  mockTelnetReadScreen.mockResolvedValue(telnetScreen);
+  mockTelnetDisconnect.mockResolvedValue(undefined);
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   clearHealthHistory();
   resetHealthCheckStateSnapshot();
+  vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "c64u.local" });
 });
 
 afterEach(() => {
@@ -158,6 +197,7 @@ describe("runHealthCheck — all-success path", () => {
     expect(result!.probes.JIFFY.outcome).toBe("Success");
     expect(result!.probes.CONFIG.outcome).toBe("Success");
     expect(result!.probes.FTP.outcome).toBe("Success");
+    expect(result!.probes.TELNET.outcome).toBe("Success");
   });
 
   it("returns overallHealth Healthy when all probes pass", async () => {
@@ -300,6 +340,13 @@ describe("runHealthCheck — REST probe failure", () => {
 
     const result = await runHealthCheck();
     expect(result!.probes.FTP.outcome).toBe("Skipped");
+  });
+
+  it("skips TELNET when REST fails", async () => {
+    mockGetInfo.mockRejectedValue(new Error("Connection refused"));
+
+    const result = await runHealthCheck();
+    expect(result!.probes.TELNET.outcome).toBe("Skipped");
   });
 
   it("sets REST Fail reason from error message", async () => {
@@ -654,6 +701,57 @@ describe("runHealthCheck — FTP probe", () => {
   });
 });
 
+describe("runHealthCheck — TELNET probe", () => {
+  it("fails TELNET when the session returns an unexpected screen title", async () => {
+    setupAllProbesSuccess();
+    mockTelnetReadScreen.mockResolvedValue({
+      ...telnetScreen,
+      titleLine: "Storage Browser",
+    });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Fail");
+    expect(result!.probes.TELNET.reason).toContain("Unexpected Telnet screen");
+  });
+
+  it("fails TELNET when the session returns a blank screen title", async () => {
+    setupAllProbesSuccess();
+    mockTelnetReadScreen.mockResolvedValue({
+      ...telnetScreen,
+      titleLine: "   ",
+    });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Fail");
+    expect(result!.probes.TELNET.reason).toBe("Unexpected blank Telnet screen");
+  });
+
+  it("fails TELNET when the session connect step throws", async () => {
+    setupAllProbesSuccess();
+    mockTelnetConnect.mockRejectedValue(new Error("Telnet connection refused"));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Fail");
+    expect(result!.probes.TELNET.reason).toContain("Telnet connection refused");
+    expect(mockTelnetDisconnect).toHaveBeenCalled();
+  });
+
+  it("connects TELNET with the normalized host and configured password", async () => {
+    setupAllProbesSuccess();
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
+      deviceHost: "10.0.0.2:6400",
+      password: "secret",
+    });
+
+    await runHealthCheck();
+
+    expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23, "secret");
+  });
+});
+
 // ─── runHealthCheck — REST probe with undefined optional fields ───────────────
 
 describe("runHealthCheck — REST probe optional fields", () => {
@@ -930,17 +1028,18 @@ describe("runHealthCheck — outer catch block", () => {
 // ─── runHealthCheck — onProbeProgress callback ────────────────────────────────
 
 describe("runHealthCheck — onProbeProgress callback", () => {
-  it("invokes callback after each probe in REST→FTP→CONFIG→RASTER→JIFFY order", async () => {
+  it("invokes callback after each probe in REST→FTP→TELNET→CONFIG→RASTER→JIFFY order", async () => {
     setupAllProbesSuccess();
     const calls: string[][] = [];
     await runHealthCheck((partial) => calls.push(Object.keys(partial)));
     // Each call adds one more probe key in execution order
     expect(calls[0]).toEqual(["REST"]);
     expect(calls[1]).toEqual(["REST", "FTP"]);
-    expect(calls[2]).toEqual(["REST", "FTP", "CONFIG"]);
-    expect(calls[3]).toEqual(["REST", "FTP", "CONFIG", "RASTER"]);
-    expect(calls[4]).toEqual(["REST", "FTP", "CONFIG", "RASTER", "JIFFY"]);
-    expect(calls).toHaveLength(5);
+    expect(calls[2]).toEqual(["REST", "FTP", "TELNET"]);
+    expect(calls[3]).toEqual(["REST", "FTP", "TELNET", "CONFIG"]);
+    expect(calls[4]).toEqual(["REST", "FTP", "TELNET", "CONFIG", "RASTER"]);
+    expect(calls[5]).toEqual(["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"]);
+    expect(calls).toHaveLength(6);
   });
 
   it("callback receives all probes as Skipped after REST failure", async () => {
@@ -952,6 +1051,7 @@ describe("runHealthCheck — onProbeProgress callback", () => {
     });
     expect(lastPartial["REST"]).toBe("Fail");
     expect(lastPartial["FTP"]).toBe("Skipped");
+    expect(lastPartial["TELNET"]).toBe("Skipped");
     expect(lastPartial["CONFIG"]).toBe("Skipped");
     expect(lastPartial["RASTER"]).toBe("Skipped");
     expect(lastPartial["JIFFY"]).toBe("Skipped");

@@ -106,8 +106,19 @@ describe("createTelnetSession", () => {
 
       // First readScreen should return the initial file browser
       const screen = await session.readScreen(500);
-      // The screen may be empty or partial since connect consumed initial data
       expect(screen.width).toBe(60);
+      expect(screen.titleLine).toContain("C64 Ultimate");
+    });
+
+    it("preserves the first authenticated screen after password login", async () => {
+      const mock = new TelnetMock({ password: "test123" });
+      const session = createTelnetSession(mock);
+      await session.connect("localhost", 23, "test123");
+
+      const screen = await session.readScreen(500);
+
+      expect(screen.width).toBe(60);
+      expect(screen.titleLine).toContain("C64 Ultimate");
     });
   });
 

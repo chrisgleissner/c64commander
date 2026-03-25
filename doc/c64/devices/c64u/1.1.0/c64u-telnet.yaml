@@ -41,9 +41,7 @@ telnet:
             - Reset
             - Switch to 1571
             - Switch to 1581
-            - Remove Disk
-            - Save as Binary
-            - Save as GCR
+            - Insert Blank
           default_item: "Built-in Dri┐Turn Off"
         Built-in Drive B:
           items:
@@ -72,9 +70,20 @@ telnet:
             - Reset to Defaults
             - Clear Flash Config
           default_item: "Save to Flash"
+        Streams:
+          items:
+            - Streams     ┐  VIC Stream
+            - Audio Stream
+          default_item: "Streams     ┐  VIC Stream"
+        Developer:
+          items:
+            - Clear Debug Log
+            - Save Debug Log
+            - Save EDID to file
+            - Developer┐  Debug Stream
+          default_item: "Clear Debug Log"
   selected_directory_action_menus:
-    screen_context: "filesystem browser with a directory selected and the action menu"
-      opened via function key
+    screen_context: "filesystem browser with a directory selected and the action menu opened via function key"
     path: /USB1/test-data
     browser_path: /USB1/
     selected_entry: test-data
@@ -106,7 +115,7 @@ telnet:
             - DNP Image
             - Directory
           default_item: "D64 Image"
-        Built-in Drive A:
+        Power & Reset:
           items:
             - Power & Re┐Reset C64
             - Reboot C64
@@ -116,47 +125,69 @@ telnet:
             - Save C64 Memory
             - Save REU Memory
             - Save Cartridge
+            - Save MP3 Drv D
           default_item: "Power & Re┐Reset C64"
-        Software IEC:
+        Built-in Drive A:
           items:
             - Built-in Dri┐Turn Off
             - Reset
             - Switch to 1571
             - Switch to 1581
-            - Remove Disk
-            - Save as Binary
-            - Save as GCR
+            - Insert Blank
           default_item: "Built-in Dri┐Turn Off"
-        Tape:
+        Built-in Drive B:
           items:
             - Built-in Dri┐Turn On
             - Switch to 1541
             - Switch to 1571
             - Switch to 1581
           default_item: "Built-in Dri┐Turn On"
-        Configuration:
+        Software IEC:
           items:
             - Software IEC ┐Turn On
             - Reset
             - Set dir. here
           default_item: "Software IEC ┐Turn On"
+        UltiCopy:
+          items:
+            - UltiCopy          ┐Drive 8
+            - Drive 9
+            - Drive 10
+            - Drive 11
+          default_item: "UltiCopy          ┐Drive 8"
+        Tape:
+          items:
+            - Tape   ┐Sample tape to TAP
+            - Capture save to TAP
+          default_item: "Tape   ┐Sample tape to TAP"
+        Printer:
+          items:
+            - Printer        ┐Flush/Eject
+            - Reset
+            - Turn On
+          default_item: "Printer        ┐Flush/Eject"
+        Configuration:
+          items:
+            - Save to Flash
+            - Save to File
+            - Configur┐Reset from Flash
+            - Reset to Defaults
+            - Clear Flash Config
+          default_item: "Save to Flash"
+        Streams:
+          items:
+            - Streams     ┐  VIC Stream
+            - Audio Stream
+          default_item: "Streams     ┐  VIC Stream"
         Developer:
           items:
-            - UltiCopy          ┐Drive 8
-            - Drive 9
-            - Drive 10
-            - Drive 11
-          default_item: "UltiCopy          ┐Drive 8"
-        Return to Main Menu:
-          items:
-            - UltiCopy          ┐Drive 8
-            - Drive 9
-            - Drive 10
-            - Drive 11
-          default_item: "UltiCopy          ┐Drive 8"
+            - Clear Debug Log
+            - Save Debug Log
+            - Save EDID to file
+            - Developer┐  Debug Stream
+          default_item: "Clear Debug Log"
   filesystem_context_menus:
-    screen_context: "filesystem browser with a selected entry and its ENTER-opened"
-      context menu
+    screen_context: "filesystem browser with a selected entry and its ENTER-opened context menu"
     selected_directory:
       path: /USB1/test-data
       browser_path: /USB1/
@@ -192,6 +223,7 @@ telnet:
           - Mount Disk on B
           - Mount Disk R/O on B
           - Mount Disk Unl. on B
+          - Load into MP3 Drv D
           - View
           - Rename
           - Delete
@@ -244,8 +276,13 @@ telnet:
         default_item: Run
       sid:
         representative_file: /USB1/test-data/SID/10_Orbyte.sid
-        items: []
-        default_item: null
+        items:
+          - Play Main Tune
+          - Show Info
+          - View
+          - Rename
+          - Delete
+        default_item: "Play Main Tune"
   commoserve:
     screen_context: "CommoServe file search dialog opened via F6"
     search_form:

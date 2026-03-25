@@ -556,7 +556,9 @@ const probeFtp = async (): Promise<HealthCheckProbeRecord> => {
 
 const hasExpectedTelnetScreen = (titleLine: string): boolean => {
   const normalized = titleLine.trim().toLowerCase();
-  return normalized.includes("ultimate-ii+") || normalized.includes("c64 ultimate") || normalized.includes("ultimate 64");
+  return (
+    normalized.includes("ultimate-ii+") || normalized.includes("c64 ultimate") || normalized.includes("ultimate 64")
+  );
 };
 
 const probeTelnet = async (signal: AbortSignal): Promise<HealthCheckProbeRecord> => {
@@ -575,7 +577,8 @@ const probeTelnet = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
     const screen = await session.readScreen(PROBE_TIMEOUT_MS.TELNET);
     const titleLine = screen.titleLine.trim();
     if (!hasExpectedTelnetScreen(titleLine)) {
-      const reason = titleLine.length > 0 ? `Unexpected Telnet screen: ${titleLine.slice(0, 80)}` : "Unexpected blank Telnet screen";
+      const reason =
+        titleLine.length > 0 ? `Unexpected Telnet screen: ${titleLine.slice(0, 80)}` : "Unexpected blank Telnet screen";
       return makeRecord("TELNET", "Fail", Date.now() - startMs, reason, startMs);
     }
 

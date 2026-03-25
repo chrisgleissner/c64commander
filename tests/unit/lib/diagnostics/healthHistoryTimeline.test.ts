@@ -34,6 +34,7 @@ const makeEntry = (
     raster: { outcome: "Success", durationMs: 22, reason: null },
     config: { outcome: "Success", durationMs: 36, reason: null },
     ftp: { outcome: "Success", durationMs: 51, reason: null },
+    telnet: { outcome: "Success", durationMs: 29, reason: null },
   },
   latency: { p50: 12, p90: 24, p99: 48 },
   ...overrides,

@@ -74,6 +74,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -134,6 +135,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Fail", reason: "connection refused" },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -161,6 +163,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Fail", reason: "auth failed" },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -187,6 +190,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -208,6 +212,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Skipped", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
