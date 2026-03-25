@@ -219,6 +219,15 @@ vi.mock("@/pages/home/DriveCard", () => ({
   DriveCard: () => <div data-testid="drive-card" />,
 }));
 
+vi.mock("@/hooks/useTelnetActions", () => ({
+  useTelnetActions: () => ({
+    isBusy: false,
+    activeActionId: null,
+    executeAction: vi.fn(),
+    isAvailable: true,
+  }),
+}));
+
 describe("HomePage RAM actions", () => {
   vi.setConfig({ testTimeout: 15000 });
 
