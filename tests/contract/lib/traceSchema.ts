@@ -138,13 +138,13 @@ export function nowNs(): bigint {
   return process.hrtime.bigint();
 }
 
-export function makeBodyPreview(body: unknown): { hex: string; ascii: string } {
+export function makeBodyPreview(body: unknown): { bodyPreviewHex: string; bodyPreviewAscii: string } {
   const serialized = serializeTraceValue(body);
   const json = JSON.stringify(serialized ?? null);
   const buffer = Buffer.from(json, "utf8").subarray(0, 256);
   return {
-    hex: buffer.toString("hex"),
-    ascii: Array.from(buffer)
+    bodyPreviewHex: buffer.toString("hex"),
+    bodyPreviewAscii: Array.from(buffer)
       .map((byte) => (byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : "."))
       .join(""),
   };

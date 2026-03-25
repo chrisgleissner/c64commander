@@ -1,60 +1,41 @@
-# Telnet Integration — Execution Plan
+# Telnet Integration Research & Design
 
-Status: PHASE 1 IN PROGRESS
+Status: COMPLETE
 Date: 2026-03-24
-Classification: CODE_CHANGE
+Classification: DOC_ONLY
 
-## Phase Overview
+## Task Summary
 
-| Phase | Description               | Status      |
-| ----- | ------------------------- | ----------- |
-| 0     | Document ingestion        | ✅ COMPLETE |
-| 1     | Architecture integration  | 🔄 ACTIVE   |
-| 2     | VT100 screen parser       | ⬜ PENDING  |
-| 3     | Menu navigator            | ⬜ PENDING  |
-| 4     | Action execution layer    | ⬜ PENDING  |
-| 5     | UI integration            | ⬜ PENDING  |
-| 6     | Screenshots               | ⬜ PENDING  |
-| 7     | Test coverage enforcement | ⬜ PENDING  |
-| 8     | Final validation          | ⬜ PENDING  |
+Deep research and design pass for Telnet-based control support for C64 Ultimate action-menu functionality not exposed via REST. Produces an implementation-ready specification at `doc/c64/telnet/telnet-integration-spec.md`.
 
-## Spec Reference
+## TODO
 
-- `doc/c64/telnet/c64u-telnet-integration-spec.md` — Implementation-ready specification
+- [x] Read required documents (architecture.md, openapi.yaml, c64u-telnet-spec.md, c64u-telnet-action-walkthrough.md)
+- [x] Inspect C64 Commander REST client implementation and concurrency model
+- [x] Inspect C64 Commander FTP client implementation and concurrency model
+- [x] Inspect request scheduling, queueing, retries, timeouts, cancellation
+- [x] Inspect device action models and diagnostics
+- [x] Inspect Home page UI and existing reset/reboot controls
+- [x] Inspect existing mocks and test infrastructure
+- [x] Inspect 1541 Ultimate firmware Telnet server implementation
+- [x] Inspect firmware remote-control / console / terminal handling
+- [x] Inspect firmware shared locks, event loops, UI threads, command dispatchers
+- [x] Determine if concurrent REST/FTP/Telnet is safe from firmware evidence
+- [x] Design Telnet transport architecture
+- [x] Design scheduling / serialization model
+- [x] Design Telnet client
+- [x] Design Telnet parser / navigator
+- [x] Design Telnet mock
+- [x] Design action abstraction and capability mapping
+- [x] Design UI placement
+- [x] Define platform support strategy (Android, iOS, web)
+- [x] Write telnet-integration-spec.md
+- [x] Final review for concision and implementation readiness
+- [x] Finalize WORKLOG.md
+- [x] Finalize PLANS.md
 
-## Phase 1 — Architecture Integration
+## Deliverables
 
-### Modules to create
-
-1. `src/lib/telnet/telnetTypes.ts` — shared types
-2. `src/lib/telnet/telnetClient.ts` — transport abstraction
-3. `src/lib/telnet/telnetSession.ts` — session lifecycle
-4. `src/lib/telnet/telnetScreenParser.ts` — VT100 buffer parser
-5. `src/lib/telnet/telnetMenuNavigator.ts` — label-based navigation
-6. `src/lib/telnet/telnetActionExecutor.ts` — high-level action API
-7. `src/lib/telnet/telnetMock.ts` — deterministic mock
-8. `src/lib/native/telnetSocket.ts` — Capacitor plugin bridge
-
-### Integration points
-
-1. `deviceInteractionManager.ts` — add telnetScheduler + withTelnetInteraction()
-2. `src/lib/tracing/types.ts` — add "telnet-operation" trace event type
-3. `src/lib/tracing/traceSession.ts` — add recordTelnetOperation()
-4. Android plugin: TelnetSocketPlugin.kt
-
-### TODO: Menu close behavior
-
-A menu can be closed in one of two ways:
-
-1. **LEFT** (preferred) — always works, closes one menu level in a single key press.
-2. **ESC followed by any other character** — ESC alone does nothing visible; the
-   _next_ key press (any key) closes one menu level and is consumed (not processed
-   further). ESC should only be used as a fallback if LEFT does not work for some
-   unusual reason.
-
-Implementation:
-
-1. **Navigator**: Use LEFT (not ESCAPE) as the primary key for closing submenus and
-   menus. The `_recoverFromDesync()` function also uses LEFT.
-2. **Mock**: ESC sets a pending flag. The next `send()` call after ESC closes one
-   menu level and consumes the key. LEFT closes immediately without any flag.
+- `doc/c64/telnet/telnet-integration-spec.md` — Implementation-ready specification
+- `WORKLOG.md` — Investigation history with evidence sources
+- `PLANS.md` — This file

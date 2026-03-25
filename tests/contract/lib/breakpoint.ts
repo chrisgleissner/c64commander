@@ -162,10 +162,20 @@ export function shouldSkipRecovery(input: { config: HarnessConfig; outcome: Reco
   return input.outcome === "device-unresponsive" || input.config.allowMachineReset !== true;
 }
 
+export function shouldSkipRecoveryAfterBreakpointFailure(input: {
+  config: HarnessConfig;
+  abortReason: RecoveryOutcome;
+}): boolean {
+  return shouldSkipRecovery({
+    config: input.config,
+    outcome: input.abortReason,
+  });
+}
+
 export class TraceTailBuffer {
   private readonly entries: BreakpointTraceEntry[] = [];
 
-  constructor(private readonly limit: number) {}
+  constructor(private readonly limit: number) { }
 
   push(entry: BreakpointTraceEntry): void {
     this.entries.push(entry);

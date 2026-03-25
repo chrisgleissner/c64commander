@@ -555,6 +555,7 @@ export class C64API {
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
+    const requestSignal = requestOptions.signal ?? undefined;
     const readRequestKey = buildReadRequestDedupeKey(method, url, headers, requestOptions.body);
     const allowInFlightDedupe = Boolean(readRequestKey) && !bypassCache;
     const allowBudgetReplay = allowInFlightDedupe && !bypassCooldown;
@@ -567,7 +568,7 @@ export class C64API {
           path,
           readRequestKey,
         });
-        return awaitPromiseWithAbortSignal(Promise.resolve(cachedValue), requestOptions.signal);
+        return awaitPromiseWithAbortSignal(Promise.resolve(cachedValue), requestSignal);
       }
     }
 
@@ -579,7 +580,7 @@ export class C64API {
           path,
           readRequestKey,
         });
-        return awaitPromiseWithAbortSignal(inFlight as Promise<T>, requestOptions.signal);
+        return awaitPromiseWithAbortSignal(inFlight as Promise<T>, requestSignal);
       }
     }
 
@@ -604,7 +605,6 @@ export class C64API {
             const canRetryAfterIdle = RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
             const maxAttempts = canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
             const requestTrace = await inspectRequestPayload(requestOptions.body);
-            const requestSignal = requestOptions.signal;
             let lastError: unknown = null;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -872,7 +872,7 @@ export class C64API {
         this.inFlightReadRequests.delete(readRequestKey);
       });
     this.inFlightReadRequests.set(readRequestKey, sharedPromise as Promise<unknown>);
-    return awaitPromiseWithAbortSignal(sharedPromise, requestOptions.signal);
+    return awaitPromiseWithAbortSignal(sharedPromise, requestSignal);
   }
 
   private async fetchWithTimeout(
@@ -1128,34 +1128,40 @@ export class C64API {
     } as ConfigResponse;
   }
 
-  async setConfigValue(category: string, item: string, value: string | number): Promise<ConfigResponse> {
+  async setConfigValue(
+    category: string,
+    item: string,
+    value: string | number,
+    options: C64ReadRequestOptions = {},
+  ): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
     const valEncoded = encodeURIComponent(String(value));
     return scheduleConfigWrite(() =>
       this.request(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
         method: "PUT",
+        ...options,
       }),
     );
   }
 
-  async saveConfig(): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() => this.request("/v1/configs:save_to_flash", { method: "PUT" }));
+  async saveConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
+    return scheduleConfigWrite(() => this.request("/v1/configs:save_to_flash", { method: "PUT", ...options }));
   }
 
-  async loadConfig(): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() => this.request("/v1/configs:load_from_flash", { method: "PUT" }));
+  async loadConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
+    return scheduleConfigWrite(() => this.request("/v1/configs:load_from_flash", { method: "PUT", ...options }));
   }
 
-  async resetConfig(): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() => this.request("/v1/configs:reset_to_default", { method: "PUT" }));
+  async resetConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
+    return scheduleConfigWrite(() => this.request("/v1/configs:reset_to_default", { method: "PUT", ...options }));
   }
 
   async updateConfigBatch(
     payload: Record<string, Record<string, string | number>>,
     options: { immediate?: boolean } = {},
   ): Promise<{ errors: string[] }> {
-    const run = () =>
+    const run = (): Promise<{ errors: string[] }> =>
       this.request("/v1/configs", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -1223,14 +1229,18 @@ export class C64API {
     });
   }
 
-  async readMemory(address: string, length = 1): Promise<Uint8Array> {
+  async readMemory(address: string, length = 1, options: C64ReadRequestOptions = {}): Promise<Uint8Array> {
     const path = `/v1/machine:readmem?address=${address}&length=${length}`;
     const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}${path}`;
     const headers: Record<string, string> = {
       ...this.buildAuthHeaders(),
     };
-    const response = await this.fetchWithTimeout(url, { headers }, CONTROL_REQUEST_TIMEOUT_MS);
+    const response = await this.fetchWithTimeout(
+      url,
+      { headers, signal: options.signal },
+      options.timeoutMs ?? CONTROL_REQUEST_TIMEOUT_MS,
+    );
     if (!response.ok) {
       throw new Error(`readMemory failed: HTTP ${response.status}`);
     }

@@ -46,10 +46,11 @@ export const resolveTraceSeverity = (event: Pick<TraceEvent, "type">): Diagnosti
 export const resolveActionSeverity = (outcome: ActionSummaryOutcome): DiagnosticsSeverity => {
   switch (outcome) {
     case "error":
+    case "failed":
       return "error";
     case "blocked":
     case "timeout":
-    case "incomplete":
+    case "in_progress":
       return "warn";
     case "success":
       return "info";

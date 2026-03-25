@@ -78,6 +78,7 @@ import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
+import { syncPlaybackDecisionFromTrace } from "@/lib/diagnostics/decisionState";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
@@ -613,9 +614,16 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     setPlaybackTraceSnapshot(playbackTraceContext);
+    syncPlaybackDecisionFromTrace(playbackTraceContext, "Play page playback state updated");
   }, [playbackTraceContext]);
 
-  useEffect(() => () => setPlaybackTraceSnapshot(null), []);
+  useEffect(
+    () => () => {
+      setPlaybackTraceSnapshot(null);
+      syncPlaybackDecisionFromTrace(null, "Play page unmounted; playback state is no longer directly observable");
+    },
+    [],
+  );
   useEffect(() => {
     setPlaybackContext({
       sourceBucket:

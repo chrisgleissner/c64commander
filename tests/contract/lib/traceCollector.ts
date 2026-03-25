@@ -65,7 +65,19 @@ export class TraceCollector {
       this.entries.push(entry);
       this.streamCallback?.(entry);
     } catch (error) {
-      console.warn("TraceCollector.emit failed", { error: String(error) });
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.warn("TraceCollector.emit failed", {
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+        runSessionId: this.runSessionId,
+        stageId: this.currentStageId,
+        testType: this.currentTestType,
+        partial,
+        seq: this.seq,
+      });
     }
   }
 

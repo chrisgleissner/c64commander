@@ -12,6 +12,13 @@ type VersionLabelInput = {
   fallbackVersion?: string;
 };
 
+type BuildVersionLabelInput = {
+  generatedVersionLabel?: string;
+  gitDescribe?: string;
+  gitSha?: string;
+  fallbackVersion?: string;
+};
+
 const TAGGED_DESCRIBE_PATTERN = /^(?<tag>.+)-(?<distance>\d+)-g(?<sha>[0-9a-f]+)(?<dirty>-dirty)?$/i;
 const BARE_SHA_PATTERN = /^(?<sha>[0-9a-f]+)(?<dirty>-dirty)?$/i;
 
@@ -39,4 +46,23 @@ export const deriveVersionLabel = ({
   }
 
   return normalizedDescribe || normalizedFallback || "—";
+};
+
+export const resolveBuildVersionLabel = ({
+  generatedVersionLabel = "",
+  gitDescribe = "",
+  gitSha = "",
+  fallbackVersion = "",
+}: BuildVersionLabelInput): string => {
+  const normalizedGenerated = generatedVersionLabel.trim();
+  if (normalizedGenerated) return normalizedGenerated;
+
+  const normalizedFallback = fallbackVersion.trim();
+  if (normalizedFallback) return normalizedFallback;
+
+  return deriveVersionLabel({
+    gitDescribe,
+    gitSha,
+    fallbackVersion: normalizedFallback,
+  });
 };

@@ -118,18 +118,19 @@ function buildReplayRequests(entries: readonly TraceEntry[]): ReplayRequest[] {
       });
       continue;
     }
-    if (entry.protocol === "FTP" && entry.direction === "data" && entry.transferDirection === "upload") {
-      const uploadRequest = [...requests]
+    if (entry.protocol === "FTP" && entry.direction === "data") {
+      const ftpRequest = [...requests]
         .reverse()
         .find(
           (request) =>
             request.protocol === "FTP" &&
             request.ftpSessionId === entry.ftpSessionId &&
-            request.commandVerb === "STOR" &&
-            request.byteCount === undefined,
+            request.byteCount === undefined &&
+            (entry.transferDirection === "upload" ? request.commandVerb === "STOR" : request.commandVerb !== "STOR"),
         );
-      if (uploadRequest) {
-        uploadRequest.byteCount = entry.byteCount;
+      if (ftpRequest) {
+        ftpRequest.transferDirection = entry.transferDirection;
+        ftpRequest.byteCount = entry.byteCount;
       }
     }
   }
@@ -254,9 +255,7 @@ function renderRestClientReplay(requests: readonly ReplayRequest[]): string {
       const headers = Object.entries(request.headers ?? {})
         .map(([key, value]) => `${key}: ${value}`)
         .join("\n");
-      const authComment = Object.keys(request.headers ?? {}).some((key) => key.toLowerCase() === "authorization")
-        ? "# X-Password: SET_PASSWORD_HERE\n"
-        : "";
+      const authComment = "# X-Password: SET_PASSWORD_HERE\n";
       const body = request.body === undefined ? "" : `\n${JSON.stringify(request.body, null, 2)}`;
       return [
         `### seq ${request.globalSeq} client ${request.clientId}`,

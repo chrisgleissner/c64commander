@@ -32,6 +32,31 @@ describe("deviceRegistry", () => {
     vi.clearAllMocks();
   });
 
+  const restoreRegistry = (snapshot: Array<{ id: string; name: string; serialOrPrefix: string }>) => {
+    snapshot.forEach((device, index) => {
+      (physicalTestDevices as unknown as Array<{ id: string; name: string; serialOrPrefix: string }>)[index] = device;
+    });
+  };
+
+  const withMutatedRegistry = async (
+    mutate: (devices: Array<{ id: string; name: string; serialOrPrefix: string }>) => void,
+    run: () => Promise<void>,
+  ) => {
+    const mutableDevices = physicalTestDevices as unknown as Array<{
+      id: string;
+      name: string;
+      serialOrPrefix: string;
+    }>;
+    const snapshot = mutableDevices.map((device) => ({ ...device }));
+    mutate(mutableDevices);
+
+    try {
+      await run();
+    } finally {
+      restoreRegistry(snapshot);
+    }
+  };
+
   it("passes through full serials without adb lookup", async () => {
     await expect(resolveAdbSerial("R5C12345678")).resolves.toBe("R5C12345678");
     expect(vi.mocked(execFile)).not.toHaveBeenCalled();
@@ -109,12 +134,55 @@ describe("deviceRegistry", () => {
     await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("211");
   });
 
+  it("prefers an exact configured serial before evaluating fallback prefixes", async () => {
+    await withMutatedRegistry(
+      (devices) => {
+        devices[0] = {
+          ...devices[0],
+          serialOrPrefix: "R5C12345678",
+        };
+      },
+      async () => {
+        mockAdbDevicesOutput(
+          [
+            "List of devices attached",
+            "R5C12345678\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:1",
+            "211\tdevice product:hlte model:SM_N9005 device:hlte transport_id:2",
+          ].join("\n"),
+        );
+
+        await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5C12345678");
+      },
+    );
+  });
+
   it("falls back to s21 fe when primary is unavailable", async () => {
     mockAdbDevicesOutput(
       ["List of devices attached", "R5C\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2"].join("\n"),
     );
 
     await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5C");
+  });
+
+  it("skips unmatched exact serial selectors and continues to later fallback prefixes", async () => {
+    await withMutatedRegistry(
+      (devices) => {
+        devices[0] = {
+          ...devices[0],
+          serialOrPrefix: "R5C12345678",
+        };
+      },
+      async () => {
+        mockAdbDevicesOutput(
+          [
+            "List of devices attached",
+            "R5CABCDEFGH\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2",
+          ].join("\n"),
+        );
+
+        await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5CABCDEFGH");
+      },
+    );
   });
 
   it("fails when multiple fallback devices match a configured prefix", async () => {

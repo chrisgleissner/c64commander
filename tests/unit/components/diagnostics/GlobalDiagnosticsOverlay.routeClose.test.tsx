@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -58,6 +59,12 @@ vi.mock("@/lib/diagnostics/diagnosticsExport", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsActivity", () => ({
   resetDiagnosticsActivity: vi.fn(),
+}));
+
+vi.mock("@/lib/diagnostics/diagnosticsReconciler", () => ({
+  runDiagnosticsReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
+  runPlaybackReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
+  runRepair: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
@@ -156,22 +163,32 @@ const LocationProbe = () => {
   return <div data-testid="location-path">{location.pathname}</div>;
 };
 
-const renderOverlay = (initialPath: string) =>
-  render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route
-          path="*"
-          element={
-            <>
-              <LocationProbe />
-              <GlobalDiagnosticsOverlay />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
+const renderOverlay = (initialPath: string) => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <>
+                <LocationProbe />
+                <GlobalDiagnosticsOverlay />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
+};
 
 describe("GlobalDiagnosticsOverlay route close", () => {
   beforeEach(() => {
