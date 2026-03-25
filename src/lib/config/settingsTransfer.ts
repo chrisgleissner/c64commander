@@ -7,6 +7,10 @@
  */
 
 import {
+  loadArchiveBackend,
+  loadArchiveClientIdOverride,
+  loadArchiveHostOverride,
+  loadArchiveUserAgentOverride,
   clampBackgroundRediscoveryIntervalMs,
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -21,6 +25,10 @@ import {
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
+  saveArchiveBackend,
+  saveArchiveClientIdOverride,
+  saveArchiveHostOverride,
+  saveArchiveUserAgentOverride,
   saveBackgroundRediscoveryIntervalMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
@@ -28,6 +36,7 @@ import {
   saveDiskAutostartMode,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
+  type ArchiveBackend,
   type DiskAutostartMode,
 } from "@/lib/config/appSettings";
 import {
@@ -62,6 +71,10 @@ export type SettingsExportPayload = {
     discoveryProbeTimeoutMs: number;
     diskAutostartMode: DiskAutostartMode;
     volumeSliderPreviewIntervalMs: number;
+    archiveBackend: ArchiveBackend;
+    archiveHostOverride: string;
+    archiveClientIdOverride: string;
+    archiveUserAgentOverride: string;
   };
   deviceSafety: {
     mode: DeviceSafetyMode;
@@ -90,6 +103,10 @@ const APP_SETTINGS_KEYS = [
   "discoveryProbeTimeoutMs",
   "diskAutostartMode",
   "volumeSliderPreviewIntervalMs",
+  "archiveBackend",
+  "archiveHostOverride",
+  "archiveClientIdOverride",
+  "archiveUserAgentOverride",
 ] as const;
 
 const DEVICE_SAFETY_KEYS = [
@@ -117,6 +134,7 @@ const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
 };
 
 const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => value === "kernal" || value === "dma";
+const isArchiveBackend = (value: unknown): value is ArchiveBackend => value === "commodore" || value === "assembly64";
 
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
   value === "RELAXED" || value === "BALANCED" || value === "CONSERVATIVE" || value === "TROUBLESHOOTING";
@@ -134,6 +152,10 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
       discoveryProbeTimeoutMs: loadDiscoveryProbeTimeoutMs(),
       diskAutostartMode: loadDiskAutostartMode(),
       volumeSliderPreviewIntervalMs: loadVolumeSliderPreviewIntervalMs(),
+      archiveBackend: loadArchiveBackend(),
+      archiveHostOverride: loadArchiveHostOverride(),
+      archiveClientIdOverride: loadArchiveClientIdOverride(),
+      archiveUserAgentOverride: loadArchiveUserAgentOverride(),
     },
     deviceSafety: {
       mode: safety.mode,
@@ -169,6 +191,10 @@ const validateAppSettings = (value: unknown) => {
   if (!Number.isFinite(record.discoveryProbeTimeoutMs)) return "discoveryProbeTimeoutMs must be a number.";
   if (!isDiskAutostartMode(record.diskAutostartMode)) return "diskAutostartMode must be kernal or dma.";
   if (!Number.isFinite(record.volumeSliderPreviewIntervalMs)) return "volumeSliderPreviewIntervalMs must be a number.";
+  if (!isArchiveBackend(record.archiveBackend)) return "archiveBackend must be commodore or assembly64.";
+  if (typeof record.archiveHostOverride !== "string") return "archiveHostOverride must be a string.";
+  if (typeof record.archiveClientIdOverride !== "string") return "archiveClientIdOverride must be a string.";
+  if (typeof record.archiveUserAgentOverride !== "string") return "archiveUserAgentOverride must be a string.";
   return null;
 };
 
@@ -219,6 +245,10 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   saveDiscoveryProbeTimeoutMs(clampDiscoveryProbeTimeoutMs(safeApp.discoveryProbeTimeoutMs));
   saveDiskAutostartMode(safeApp.diskAutostartMode);
   saveVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(safeApp.volumeSliderPreviewIntervalMs));
+  saveArchiveBackend(safeApp.archiveBackend);
+  saveArchiveHostOverride(safeApp.archiveHostOverride);
+  saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);
+  saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
 
   saveDeviceSafetyMode(safeSafety.mode);
   saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);
