@@ -84,13 +84,13 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
   }, [clearError, open, state.phase]);
 
   useEffect(() => {
-    if (state.phase !== "error") return;
+    if (!open || state.phase !== "error") return;
     reportUserError({
       operation: "ONLINE_ARCHIVE",
       title: "Online archive failed",
       description: state.message,
     });
-  }, [state]);
+  }, [open, state]);
 
   const queryPreview = useMemo(() => {
     try {
@@ -102,18 +102,11 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
 
   const currentDefaults = ARCHIVE_BACKEND_DEFAULTS[resolvedConfig.backend];
 
-  const resultRows =
-    state.phase === "results" ||
-    state.phase === "entries" ||
-    state.phase === "downloading" ||
-    state.phase === "executing"
-      ? state.results
-      : [];
-  const entryRows =
-    state.phase === "entries" || state.phase === "downloading" || state.phase === "executing" ? state.entries : [];
-  const selectedResult =
-    state.phase === "entries" || state.phase === "downloading" || state.phase === "executing" ? state.result : null;
-  const activeEntryId = state.phase === "downloading" || state.phase === "executing" ? state.entry.id : null;
+  const resultRows = "results" in state ? state.results : [];
+  const entryRows = "entries" in state ? state.entries : [];
+  const selectedResult = "result" in state ? state.result : null;
+  const activeEntryId = "entry" in state ? state.entry.id : null;
+  const entriesLoading = state.phase === "loadingEntries";
 
   const handleSearch = async () => {
     await search(form);
@@ -277,7 +270,13 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
               </div>
             ) : (
               <div className="space-y-2" data-testid="online-archive-entries">
-                {!entryRows.length ? (
+                {entriesLoading ? (
+                  <div className="rounded-lg border border-border/70 p-3 text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                    Loading entries…
+                  </div>
+                ) : null}
+                {!entriesLoading && !entryRows.length ? (
                   <p className="rounded-lg border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
                     No executable files found for this result.
                   </p>

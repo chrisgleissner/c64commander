@@ -1807,16 +1807,18 @@ export default function SettingsPage() {
         </PageStack>
       </PageContainer>
 
-      <OnlineArchiveDialog
-        open={archiveDialogOpen}
-        onOpenChange={setArchiveDialogOpen}
-        config={{
-          backend: archiveBackend,
-          hostOverride: archiveHostOverride,
-          clientIdOverride: archiveClientIdOverride,
-          userAgentOverride: archiveUserAgentOverride,
-        }}
-      />
+      {archiveDialogOpen ? (
+        <OnlineArchiveDialog
+          open={archiveDialogOpen}
+          onOpenChange={setArchiveDialogOpen}
+          config={{
+            backend: archiveBackend,
+            hostOverride: archiveHostOverride,
+            clientIdOverride: archiveClientIdOverride,
+            userAgentOverride: archiveUserAgentOverride,
+          }}
+        />
+      ) : null}
 
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>

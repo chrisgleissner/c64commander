@@ -6,7 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type ArchiveBackend = "commodore" | "assembly64";
+import type { ArchiveBackend } from "@/lib/config/appSettings";
+
+export type { ArchiveBackend };
 
 export type ArchivePresetType = "category" | "date" | "type" | "sort" | "order";
 

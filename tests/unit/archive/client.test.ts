@@ -1,11 +1,26 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildArchiveQuery } from "@/lib/archive/queryBuilder";
 import { BaseArchiveClient, createArchiveClient } from "@/lib/archive/client";
 import { createAssembly64Mock } from "../../mocks/assembly64Mock";
 import { createCommoserveMock } from "../../mocks/commoserveMock";
 
+vi.mock("@capacitor/core", () => ({
+  Capacitor: {
+    isNativePlatform: vi.fn(() => false),
+  },
+  CapacitorHttp: {
+    request: vi.fn(),
+  },
+}));
+
 describe("archive client", () => {
   const closers: Array<() => Promise<void>> = [];
+
+  beforeEach(() => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    vi.mocked(CapacitorHttp.request).mockReset();
+  });
 
   afterEach(async () => {
     await Promise.allSettled(closers.splice(0).map((close) => close()));
@@ -120,5 +135,168 @@ describe("archive client", () => {
     controller.abort(new Error("aborted by test"));
 
     await expect(promise).rejects.toThrow("aborted by test");
+  });
+
+  it("does not treat errorCode 0 as a protocol failure", async () => {
+    const client = createArchiveClient(
+      { backend: "commodore" },
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify([{ id: "1", category: 40, name: "Okay", errorCode: 0 }]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(client.search({ name: "ok", category: "apps" })).resolves.toEqual([
+      { id: "1", category: 40, name: "Okay", errorCode: 0 },
+    ]);
+  });
+
+  it("uses CapacitorHttp on native platforms for JSON archive requests", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: [{ id: "100", category: 40, name: "Joyride" }],
+      headers: { "content-type": "application/json" },
+    } as never);
+
+    const client = createArchiveClient({ backend: "commodore" });
+    await expect(client.search({ name: "joyride", category: "apps" })).resolves.toEqual([
+      { id: "100", category: 40, name: "Joyride" },
+    ]);
+    expect(vi.mocked(CapacitorHttp.request)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        responseType: "json",
+        headers: expect.objectContaining({
+          "accept-encoding": "identity",
+          "client-id": "Commodore",
+          "user-agent": "Assembly Query",
+        }),
+      }),
+    );
+  });
+
+  it("parses string JSON payloads returned by CapacitorHttp", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: JSON.stringify([{ id: "100", category: 40, name: "Joyride" }]),
+      headers: { "content-type": "application/json" },
+    } as never);
+
+    const client = createArchiveClient({ backend: "commodore" });
+    await expect(client.search({ name: "joyride", category: "apps" })).resolves.toEqual([
+      { id: "100", category: 40, name: "Joyride" },
+    ]);
+  });
+
+  it("uses CapacitorHttp on native platforms for binary archive downloads", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: [1, 8, 96],
+      headers: { "content-type": "application/octet-stream" },
+    } as never);
+
+    const client = createArchiveClient({ backend: "commodore" });
+    const binary = await client.downloadBinary("100", 40, 0, "joyride.prg");
+
+    expect(binary.bytes).toEqual(new Uint8Array([1, 8, 96]));
+    expect(vi.mocked(CapacitorHttp.request)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        responseType: "arraybuffer",
+      }),
+    );
+  });
+
+  it("falls back to fetch when native platform detection throws", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+      throw new Error("platform probe failed");
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ id: "100", category: 40, name: "Joyride" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const client = createArchiveClient({ backend: "commodore" }, fetchMock);
+    await expect(client.search({ name: "joyride", category: "apps" })).resolves.toEqual([
+      { id: "100", category: 40, name: "Joyride" },
+    ]);
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("decodes base64 native binary payloads", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: "AQhg",
+      headers: { "content-type": "application/octet-stream" },
+    } as never);
+
+    const client = createArchiveClient({ backend: "commodore" });
+    await expect(client.downloadBinary("100", 40, 0, "joyride.prg")).resolves.toMatchObject({
+      bytes: new Uint8Array([1, 8, 96]),
+    });
+  });
+
+  it("decodes Uint8Array native binary payloads", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: new Uint8Array([1, 8, 96]),
+      headers: { "content-type": "application/octet-stream" },
+    } as never);
+
+    const client = createArchiveClient({ backend: "commodore" });
+    await expect(client.downloadBinary("100", 40, 0, "joyride.prg")).resolves.toMatchObject({
+      bytes: new Uint8Array([1, 8, 96]),
+    });
+  });
+
+  it("surfaces non-ok archive responses", async () => {
+    const client = createArchiveClient(
+      { backend: "commodore", hostOverride: "archive.local" },
+      vi.fn().mockResolvedValue(new Response("boom", { status: 503, statusText: "Service Unavailable" })),
+    );
+
+    await expect(client.getPresets()).rejects.toThrow(
+      "commodore archive request failed for archive.local: Archive request failed with 503 Service Unavailable",
+    );
+  });
+
+  it("rejects immediately when an external signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("already aborted"));
+    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+
+    await expect(client.getPresets({ signal: controller.signal })).rejects.toThrow("already aborted");
+  });
+
+  it("rejects when an external signal aborts after the request has started", async () => {
+    const controller = new AbortController();
+    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+    const expectation = expect(client.getPresets({ signal: controller.signal })).rejects.toThrow("aborted after start");
+
+    controller.abort(new Error("aborted after start"));
+
+    await expectation;
+  });
+
+  it("fails native binary downloads with unsupported payload shapes", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: { invalid: true },
+      headers: { "content-type": "application/octet-stream" },
+    } as never);
+
+    const client = createArchiveClient({ backend: "commodore" });
+    await expect(client.downloadBinary("100", 40, 0, "joyride.prg")).rejects.toThrow(
+      "Archive native HTTP returned an unsupported binary payload.",
+    );
   });
 });

@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { buildPayloadPreviewFromBytes } from "@/lib/tracing/payloadPreview";
 import { buildArchiveQueryParam } from "./queryBuilder";
@@ -34,37 +35,108 @@ type RequestKind = keyof typeof REQUEST_TIMEOUT_MS;
 
 type ArchiveFetch = typeof fetch;
 
-const runWithDeadline = async <T>(promiseFactory: () => Promise<T>, timeoutMs: number, signal?: AbortSignal) => {
-  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
-  let abortHandler: (() => void) | null = null;
+const isNativeArchiveRuntime = () => {
   try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = globalThis.setTimeout(
-        () => reject(new DOMException("Archive request timed out", "AbortError")),
-        timeoutMs,
-      );
-    });
-    const abortPromise = signal
-      ? new Promise<never>((_, reject) => {
-          abortHandler = () => reject(signal.reason ?? new DOMException("Archive request aborted", "AbortError"));
-          signal.addEventListener("abort", abortHandler, { once: true });
-        })
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+};
+
+const normalizeHeaderMap = (headers?: HeadersInit): Record<string, string> => Object.fromEntries(new Headers(headers));
+
+const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
+  if (value instanceof ArrayBuffer) return value;
+  if (ArrayBuffer.isView(value)) {
+    return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+  }
+  if (Array.isArray(value)) {
+    return Uint8Array.from(value).buffer;
+  }
+  if (typeof value === "string") {
+    if (typeof atob === "function") {
+      const decoded = atob(value);
+      return Uint8Array.from(decoded, (char) => char.charCodeAt(0)).buffer;
+    }
+    if (typeof Buffer !== "undefined") {
+      return Uint8Array.from(Buffer.from(value, "base64")).buffer;
+    }
+  }
+  throw new Error("Archive native HTTP returned an unsupported binary payload.");
+};
+
+const runWithDeadline = async <T>(
+  promiseFactory: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
+) => {
+  const controller = new AbortController();
+  const { signal } = controller;
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+  let signalAbortHandler: (() => void) | null = null;
+  const externalAbortHandler =
+    externalSignal != null
+      ? () => {
+          if (!signal.aborted) {
+            controller.abort(
+              (externalSignal as AbortSignal & { reason?: unknown }).reason ??
+                new DOMException("Archive request aborted", "AbortError"),
+            );
+          }
+        }
       : null;
-    return await Promise.race([promiseFactory(), timeoutPromise, ...(abortPromise ? [abortPromise] : [])]);
+  try {
+    if (externalSignal?.aborted && !signal.aborted) {
+      controller.abort(
+        (externalSignal as AbortSignal & { reason?: unknown }).reason ??
+          new DOMException("Archive request aborted", "AbortError"),
+      );
+    } else if (externalSignal && externalAbortHandler) {
+      externalSignal.addEventListener("abort", externalAbortHandler, { once: true });
+    }
+
+    timeoutId = globalThis.setTimeout(() => {
+      if (!signal.aborted) {
+        controller.abort(new DOMException("Archive request timed out", "AbortError"));
+      }
+    }, timeoutMs);
+
+    if (signal.aborted) {
+      throw (
+        (signal as AbortSignal & { reason?: unknown }).reason ??
+        new DOMException("Archive request aborted", "AbortError")
+      );
+    }
+
+    const abortPromise = new Promise<never>((_, reject) => {
+      signalAbortHandler = () => {
+        reject(
+          (signal as AbortSignal & { reason?: unknown }).reason ??
+            new DOMException("Archive request aborted", "AbortError"),
+        );
+      };
+      signal.addEventListener("abort", signalAbortHandler, { once: true });
+    });
+
+    return await Promise.race([promiseFactory(signal), abortPromise]);
   } finally {
     if (timeoutId !== null) {
       globalThis.clearTimeout(timeoutId);
     }
-    if (signal && abortHandler) {
-      signal.removeEventListener("abort", abortHandler);
+    if (externalSignal && externalAbortHandler) {
+      externalSignal.removeEventListener("abort", externalAbortHandler);
+    }
+    if (signalAbortHandler) {
+      signal.removeEventListener("abort", signalAbortHandler);
     }
   }
 };
 
 const parseJsonResponse = async <T>(response: Response): Promise<T> => {
-  const payload = (await response.json()) as T | { errorCode?: number };
-  if ((payload as { errorCode?: number }).errorCode) {
-    throw new Error(`Archive server returned error ${(payload as { errorCode: number }).errorCode}`);
+  const payload = (await response.json()) as T | { errorCode?: unknown };
+  const maybeError = payload as { errorCode?: unknown };
+  if (typeof maybeError.errorCode === "number" && maybeError.errorCode > 0) {
+    throw new Error(`Archive server returned error ${maybeError.errorCode}`);
   }
   return payload as T;
 };
@@ -106,6 +178,48 @@ export abstract class BaseArchiveClient implements ArchiveClient {
     return `${this.resolvedConfig.baseUrl}${path}`;
   }
 
+  private async requestWithTransport(
+    request: RequestInit & { url: string },
+    timeoutMs: number,
+    responseType: "json" | "arraybuffer",
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    if (this.fetchImpl === fetch && isNativeArchiveRuntime()) {
+      const response = await CapacitorHttp.request({
+        url: request.url,
+        method: request.method ?? "GET",
+        headers: normalizeHeaderMap(request.headers),
+        connectTimeout: timeoutMs,
+        readTimeout: timeoutMs,
+        responseType,
+      });
+      const headers = new Headers(
+        Object.entries((response.headers ?? {}) as Record<string, string>).map(([key, value]) => [key, String(value)]),
+      );
+      if (responseType === "arraybuffer") {
+        return new Response(decodeNativeBinaryData(response.data), {
+          status: response.status,
+          statusText: String(response.status),
+          headers,
+        });
+      }
+      const payload = typeof response.data === "string" ? response.data : JSON.stringify(response.data ?? {});
+      return new Response(payload, {
+        status: response.status,
+        statusText: String(response.status),
+        headers,
+      });
+    }
+
+    const shouldAttachSignal = this.fetchImpl !== fetch;
+    return runWithDeadline(
+      (combinedSignal) =>
+        this.fetchImpl(request.url, shouldAttachSignal ? { ...request, signal: combinedSignal } : request),
+      timeoutMs,
+      shouldAttachSignal ? signal : undefined,
+    );
+  }
+
   private async requestJson<T>(kind: RequestKind, path: string, options?: ArchiveRequestOptions): Promise<T> {
     const url = this.buildUrl(path);
     const headers = this.getHeaders();
@@ -128,11 +242,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         headers: sanitizeArchiveHeadersForLogging(headers),
         operation: kind,
       });
-      const response = await runWithDeadline(
-        () => this.fetchImpl(request.url, request),
-        REQUEST_TIMEOUT_MS[kind],
-        options?.signal,
-      );
+      const response = await this.requestWithTransport(request, REQUEST_TIMEOUT_MS[kind], "json", options?.signal);
       if (!response.ok) {
         throw new Error(`Archive request failed with ${response.status} ${response.statusText}`);
       }
@@ -161,8 +271,6 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         }),
       );
       throw new Error(`${this.resolvedConfig.backend} archive request failed for ${this.getHost()}: ${err.message}`);
-    } finally {
-      // no-op
     }
   }
 
@@ -218,9 +326,10 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         requestUrl: url,
         headers: sanitizeArchiveHeadersForLogging(headers),
       });
-      const response = await runWithDeadline(
-        () => this.fetchImpl(request.url, request),
+      const response = await this.requestWithTransport(
+        request,
         REQUEST_TIMEOUT_MS.binary,
+        "arraybuffer",
         options?.signal,
       );
       if (!response.ok) {
@@ -254,8 +363,6 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         }),
       );
       throw new Error(`${this.resolvedConfig.backend} archive download failed for ${this.getHost()}: ${err.message}`);
-    } finally {
-      // no-op
     }
   }
 

@@ -24,6 +24,12 @@ export type OnlineArchiveState =
   | { phase: "searching" }
   | { phase: "results"; params: ArchiveSearchParams; results: ArchiveSearchResult[] }
   | {
+      phase: "loadingEntries";
+      params: ArchiveSearchParams;
+      result: ArchiveSearchResult;
+      results: ArchiveSearchResult[];
+    }
+  | {
       phase: "entries";
       params: ArchiveSearchParams;
       result: ArchiveSearchResult;
@@ -53,6 +59,9 @@ const toErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const resetIfPresetError = (current: OnlineArchiveState): OnlineArchiveState =>
+  current.phase === "error" && current.recoverableState === null ? { phase: "idle" } : current;
+
 export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   const resolvedConfig = useMemo<ArchiveClientResolvedConfig>(
     () => resolveArchiveClientConfig(config),
@@ -75,6 +84,18 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
       if (current.phase === "error") {
         return current.recoverableState ?? { phase: "idle" };
       }
+      if (current.phase === "loadingEntries") {
+        return { phase: "results", params: current.params, results: current.results };
+      }
+      if (current.phase === "downloading" || current.phase === "executing") {
+        return {
+          phase: "entries",
+          params: current.params,
+          result: current.result,
+          results: current.results,
+          entries: current.entries,
+        };
+      }
       if (current.phase === "searching") {
         return { phase: "idle" };
       }
@@ -87,10 +108,12 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = controller;
     setPresetsLoading(true);
+    setState((current) => resetIfPresetError(current));
     void client
       .getPresets({ signal: controller.signal })
       .then((next) => {
         setPresets(next);
+        setState((current) => resetIfPresetError(current));
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
@@ -153,7 +176,7 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   const openEntries = useCallback(
     async (params: ArchiveSearchParams, result: ArchiveSearchResult, results: ArchiveSearchResult[]) => {
       await runRequest<ArchiveEntry[]>(
-        { phase: "searching" },
+        { phase: "loadingEntries", params, result, results },
         (entries) => ({ phase: "entries", params, result, results, entries }),
         (signal) => client.getEntries(result.id, result.category, { signal }),
         "Failed to load archive entries.",
@@ -170,19 +193,33 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
       entry: ArchiveEntry,
       entries: ArchiveEntry[],
     ) => {
+      const version = requestVersionRef.current + 1;
+      requestVersionRef.current = version;
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       const recoverableState: OnlineArchiveState = { phase: "entries", params, result, results, entries };
       setState({ phase: "downloading", params, result, results, entry, entries });
       try {
-        const binary = await client.downloadBinary(result.id, result.category, entry.id, entry.path);
+        const binary = await client.downloadBinary(result.id, result.category, entry.id, entry.path, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted || requestVersionRef.current !== version) return;
         setState({ phase: "executing", params, result, results, entry, entries });
         await executeArchiveEntry({ result, entry, binary });
+        if (controller.signal.aborted || requestVersionRef.current !== version) return;
         setState(recoverableState);
       } catch (error) {
+        if (controller.signal.aborted || requestVersionRef.current !== version) return;
         setState({
           phase: "error",
           message: toErrorMessage(error, "Archive execution failed."),
           recoverableState,
         });
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
       }
     },
     [client],
