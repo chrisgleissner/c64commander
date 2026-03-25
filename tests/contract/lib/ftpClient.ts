@@ -8,6 +8,9 @@
 
 import net from "node:net";
 import { randomUUID } from "node:crypto";
+import type { TraceCollector } from "./traceCollector.js";
+import { nowMs, nowNs, previewBuffer } from "./traceSchema.js";
+import { maskFtpCommand } from "./traceSerialization.js";
 
 export type FtpMode = "PASV" | "PORT";
 
@@ -18,6 +21,8 @@ export type FtpClientConfig = {
   password: string;
   mode: FtpMode;
   timeoutMs: number;
+  traceCollector?: TraceCollector;
+  clientId?: string;
 };
 
 export type FtpResponse = {
@@ -36,12 +41,18 @@ export class FtpClient {
   private buffer = "";
   private readonly config: FtpClientConfig;
   private connected = false;
+  private traceClientId: string;
   readonly sessionId = randomUUID();
 
   constructor(config: FtpClientConfig) {
     this.config = config;
+    this.traceClientId = config.clientId ?? "ftp-client";
     this.control = new net.Socket();
     this.control.setEncoding("utf8");
+  }
+
+  setTraceClientId(clientId: string): void {
+    this.traceClientId = clientId;
   }
 
   async connect(): Promise<void> {
@@ -54,9 +65,13 @@ export class FtpClient {
       "FTP control connect timeout",
     );
     await this.readResponse();
-    await this.sendCommand(`USER ${this.config.user}`);
+    const userResponse = await this.sendCommand(`USER ${this.config.user}`);
+    if (userResponse.response.code === 230) {
+      this.connected = true;
+      return;
+    }
     const passResponse = await this.sendCommand(`PASS ${this.config.password}`);
-    if (passResponse.response.code !== 230) {
+    if (![202, 230].includes(passResponse.response.code)) {
       throw new Error(`FTP auth failed: ${passResponse.response.code} ${passResponse.response.message}`);
     }
     this.connected = true;
@@ -128,8 +143,12 @@ export class FtpClient {
     const { socket, close } = await this.openDataConnection();
     const start = Date.now();
     const correlationId = randomUUID();
+    const launchedAtMs = nowMs();
+    const hrTimeNs = nowNs();
+    this.emitCommand({ correlationId, launchedAtMs, hrTimeNs, rawCommand: `RETR ${path}` });
     this.control.write(`RETR ${path}\r\n`);
     const pre = await this.readResponse();
+    this.emitResponse({ correlationId, launchedAtMs, hrTimeNs, response: pre, latencyMs: Date.now() - start });
     if (pre.code >= 400) {
       close();
       return {
@@ -140,6 +159,15 @@ export class FtpClient {
     const data = await readAll(socket, this.config.timeoutMs);
     close();
     const post = await this.readResponse();
+    this.emitData({
+      correlationId,
+      launchedAtMs,
+      hrTimeNs,
+      transferDirection: "download",
+      data,
+      durationMs: Date.now() - start,
+    });
+    this.emitResponse({ correlationId, launchedAtMs, hrTimeNs, response: post, latencyMs: Date.now() - start });
     return {
       result: { response: post, latencyMs: Date.now() - start, correlationId },
       data,
@@ -150,8 +178,12 @@ export class FtpClient {
     const { socket, close } = await this.openDataConnection();
     const start = Date.now();
     const correlationId = randomUUID();
+    const launchedAtMs = nowMs();
+    const hrTimeNs = nowNs();
+    this.emitCommand({ correlationId, launchedAtMs, hrTimeNs, rawCommand: `STOR ${path}` });
     this.control.write(`STOR ${path}\r\n`);
     const pre = await this.readResponse();
+    this.emitResponse({ correlationId, launchedAtMs, hrTimeNs, response: pre, latencyMs: Date.now() - start });
     if (pre.code >= 400) {
       close();
       return { response: pre, latencyMs: Date.now() - start, correlationId };
@@ -164,6 +196,15 @@ export class FtpClient {
       close();
     }
     const post = await this.readResponse();
+    this.emitData({
+      correlationId,
+      launchedAtMs,
+      hrTimeNs,
+      transferDirection: "upload",
+      data,
+      durationMs: Date.now() - start,
+    });
+    this.emitResponse({ correlationId, launchedAtMs, hrTimeNs, response: post, latencyMs: Date.now() - start });
     return { response: post, latencyMs: Date.now() - start, correlationId };
   }
 
@@ -206,8 +247,12 @@ export class FtpClient {
   async sendCommand(command: string): Promise<FtpCommandResult> {
     const start = Date.now();
     const correlationId = randomUUID();
+    const launchedAtMs = nowMs();
+    const hrTimeNs = nowNs();
+    this.emitCommand({ correlationId, launchedAtMs, hrTimeNs, rawCommand: command });
     this.control.write(`${command}\r\n`);
     const response = await this.readResponse();
+    this.emitResponse({ correlationId, launchedAtMs, hrTimeNs, response, latencyMs: Date.now() - start });
     return { response, latencyMs: Date.now() - start, correlationId };
   }
 
@@ -273,8 +318,12 @@ export class FtpClient {
     const { socket, close } = await this.openDataConnection();
     const start = Date.now();
     const correlationId = randomUUID();
+    const launchedAtMs = nowMs();
+    const hrTimeNs = nowNs();
+    this.emitCommand({ correlationId, launchedAtMs, hrTimeNs, rawCommand: command });
     this.control.write(`${command}\r\n`);
     const pre = await this.readResponse();
+    this.emitResponse({ correlationId, launchedAtMs, hrTimeNs, response: pre, latencyMs: Date.now() - start });
     if (pre.code >= 400) {
       close();
       return {
@@ -282,13 +331,92 @@ export class FtpClient {
         data: "",
       };
     }
-    const data = (await readAll(socket, this.config.timeoutMs)).toString("utf8");
+    const dataBuffer = await readAll(socket, this.config.timeoutMs);
+    const data = dataBuffer.toString("utf8");
     close();
     const post = await this.readResponse();
+    this.emitData({
+      correlationId,
+      launchedAtMs,
+      hrTimeNs,
+      transferDirection: "download",
+      data: dataBuffer,
+      durationMs: Date.now() - start,
+    });
+    this.emitResponse({ correlationId, launchedAtMs, hrTimeNs, response: post, latencyMs: Date.now() - start });
     return {
       result: { response: post, latencyMs: Date.now() - start, correlationId },
       data,
     };
+  }
+
+  private emitCommand(input: {
+    correlationId: string;
+    launchedAtMs: number;
+    hrTimeNs: bigint;
+    rawCommand: string;
+  }): void {
+    this.config.traceCollector?.emit({
+      protocol: "FTP",
+      direction: "command",
+      correlationId: input.correlationId,
+      clientId: this.traceClientId,
+      timestamp: new Date().toISOString(),
+      launchedAtMs: input.launchedAtMs,
+      hrTimeNs: input.hrTimeNs,
+      ftpSessionId: this.sessionId,
+      rawCommand: maskFtpCommand(input.rawCommand),
+      commandVerb: input.rawCommand.split(" ")[0]?.toUpperCase() ?? input.rawCommand.toUpperCase(),
+    });
+  }
+
+  private emitResponse(input: {
+    correlationId: string;
+    launchedAtMs: number;
+    hrTimeNs: bigint;
+    response: FtpResponse;
+    latencyMs: number;
+  }): void {
+    this.config.traceCollector?.emit({
+      protocol: "FTP",
+      direction: "response",
+      correlationId: input.correlationId,
+      clientId: this.traceClientId,
+      timestamp: new Date().toISOString(),
+      launchedAtMs: input.launchedAtMs,
+      hrTimeNs: input.hrTimeNs,
+      ftpSessionId: this.sessionId,
+      code: input.response.code,
+      rawResponse: input.response.message,
+      latencyMs: input.latencyMs,
+    });
+  }
+
+  private emitData(input: {
+    correlationId: string;
+    launchedAtMs: number;
+    hrTimeNs: bigint;
+    transferDirection: "upload" | "download";
+    data: Buffer;
+    durationMs: number;
+  }): void {
+    const preview = previewBuffer(input.data);
+    this.config.traceCollector?.emit({
+      protocol: "FTP",
+      direction: "data",
+      correlationId: input.correlationId,
+      parentCorrelationId: input.correlationId,
+      clientId: this.traceClientId,
+      timestamp: new Date().toISOString(),
+      launchedAtMs: input.launchedAtMs,
+      hrTimeNs: input.hrTimeNs,
+      ftpSessionId: this.sessionId,
+      transferDirection: input.transferDirection,
+      byteCount: input.data.length,
+      durationMs: input.durationMs,
+      first256Hex: preview.hex,
+      first256Ascii: preview.ascii,
+    });
   }
 
   private async openDataConnection(): Promise<{

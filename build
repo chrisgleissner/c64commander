@@ -31,7 +31,9 @@ RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
+RUN_DUMP_C64_TELNET_SCREENS=false
 RUN_CONTRACT_TEST=false
+RUN_CONTRACT_REPLAY=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
 PLAYWRIGHT_DEVICES=""
@@ -69,9 +71,13 @@ DOCKER_CONFIG_DIR="$ROOT_DIR/.tmp/web-config"
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 CONTRACT_MODE="safe"
+CONTRACT_MODE_SET=false
 CONTRACT_AUTH="off"
+CONTRACT_AUTH_SET=false
 CONTRACT_PASSWORD=""
 CONTRACT_ALLOW_RESET=false
+CONTRACT_CONFIG_PATH=""
+CONTRACT_MANIFEST_PATH=""
 CONTRACT_DISK_PATH=""
 CONTRACT_DISK_DRIVE="a"
 CONTRACT_DISK_TYPE="d64"
@@ -114,6 +120,7 @@ Primary actions (exactly one; default build when omitted):
   --test-maestro-docker
   --test-fuzz
   --test-contract
+  --test-contract-replay
   --test-smoke
   --docker-build
   --docker-start
@@ -122,6 +129,7 @@ Primary actions (exactly one; default build when omitted):
   --video
   --emulator
   --dump-c64u-config
+  --dump-c64-telnet-screens
 
 Build domain (default build only):
   --skip-install
@@ -163,7 +171,9 @@ Fuzz modifiers (require --test-fuzz):
   --fuzz-no-progress-steps N End session after N unchanged steps (default 20)
   --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
 
-Contract test modifiers (require --test-contract):
+Contract test modifiers (require --test-contract or --test-contract-replay):
+  --contract-config <path> Base JSON config template for the contract harness
+  --contract-manifest <path> Replay manifest path for contract replay runs
   --contract-mode safe|unsafe
   --contract-auth on|off
   --contract-password <pw>
@@ -197,12 +207,14 @@ Examples:
   ./build --screenshots
   ./build --screenshots-only
   ./build --video
+  ./build --dump-c64-telnet-screens
   ./build --test-e2e --record-traces --trace-suite playback
   ./build --test-e2e-native
   ./build --docker-build
   ./build --docker-start
   ./build --test-maestro-docker
   ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off
+  ./build --test-contract-replay --c64u-target real --c64u-host c64u --contract-config tests/contract/config.stress.matrix.spike.json --contract-manifest test-results/contract/runs/RUN_ID/replay/manifest.json
   ./build --test-smoke --c64u-target real --c64u-host C64U
 
 Notes:
@@ -242,7 +254,7 @@ set_primary_action() {
 
 is_test_action() {
   case "$PRIMARY_ACTION" in
-    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-smoke)
+    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-contract-replay|test-smoke)
       return 0
       ;;
     test-maestro-docker)
@@ -268,6 +280,115 @@ require_cmd() {
     echo "Missing command: $1" >&2
     exit 1
   fi
+}
+
+probe_contract_ping() {
+  local host="$1"
+  ping -c 1 -W 2 "$host" >/tmp/c64u-ping.check 2>/tmp/c64u-ping.err
+}
+
+probe_contract_telnet() {
+  local host="$1"
+  local out=""
+  out="$(timeout 5 sh -c 'printf "" | telnet "$1" 23' sh "$host" 2>&1 || true)"
+  printf '%s\n' "$out" >/tmp/c64u-telnet.check
+  [[ "$out" == *"Connected to ${host}."* || "$out" == *"Connected to ${host}"* ]]
+}
+
+probe_contract_ftp() {
+  local host="$1"
+  timeout 5 lftp -u anonymous,"${CONTRACT_PASSWORD:-}" "ftp://${host}" -e 'set net:timeout 2; set net:max-retries 1; quote NOOP; bye' >/tmp/c64u-ftp.check 2>/tmp/c64u-ftp.err
+}
+
+probe_contract_rest() {
+  local base_url="$1"
+  local curl_args=(--silent --show-error --fail --max-time 2)
+  if [[ "${CONTRACT_AUTH^^}" == "ON" && -n "$CONTRACT_PASSWORD" ]]; then
+    curl_args+=(-H "X-Password: ${CONTRACT_PASSWORD}")
+  fi
+  curl "${curl_args[@]}" "${base_url}/v1/info" >/tmp/c64u-rest.check 2>/tmp/c64u-rest.err
+}
+
+perform_contract_power_cycle_gate() {
+  local host="$1"
+  local base_url="$2"
+  local power_cycle_log="/tmp/c64u-powercycle-telnet.log"
+  local saw_outage=0
+  local ping_state="down"
+  local telnet_state="down"
+  local ftp_state="down"
+  local rest_state="down"
+
+  require_cmd curl
+  require_cmd lftp
+  require_cmd ping
+  require_cmd telnet
+
+  log "Power-cycling ${host} via telnet menu sequence"
+  {
+    sleep 1
+    printf '\033OP'
+    sleep 1
+    printf '\r'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\033[B'
+    sleep 1
+    printf '\r'
+  } | timeout 20 telnet "$host" 23 >"$power_cycle_log" 2>&1 || true
+
+  if ! grep -q 'Connected to ' "$power_cycle_log"; then
+    echo "ABORT: pre-test power cycle failed because telnet could not connect to ${host}" >&2
+    exit 1
+  fi
+
+  sleep 4
+  log "Verifying ping/telnet/ftp/rest recovery after power cycle"
+  for i in $(seq 1 60); do
+    ping_state="down"
+    telnet_state="down"
+    ftp_state="down"
+    rest_state="down"
+
+    if probe_contract_ping "$host"; then
+      ping_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if probe_contract_telnet "$host"; then
+      telnet_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if probe_contract_ftp "$host"; then
+      ftp_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if probe_contract_rest "$base_url"; then
+      rest_state="up"
+    else
+      saw_outage=1
+    fi
+
+    if [[ "$saw_outage" == "1" && "$ping_state" == "up" && "$telnet_state" == "up" && "$ftp_state" == "up" && "$rest_state" == "up" ]]; then
+      log "Pre-test gate passed: ping/telnet/ftp/rest all recovered after power cycle"
+      return
+    fi
+
+    sleep 2
+  done
+
+  echo "ABORT: pre-test power-cycle gate failed; statuses ping=${ping_state} telnet=${telnet_state} ftp=${ftp_state} rest=${rest_state}" >&2
+  exit 1
 }
 
 resolve_apk_gradle_task() {
@@ -357,24 +478,40 @@ ensure_playwright_port() {
   fi
 }
 
-run_contract_test() {
-  local mode_raw="${CONTRACT_MODE,,}"
-  local mode="SAFE"
-  if [[ "$mode_raw" == "unsafe" ]]; then
-    mode="STRESS"
-  elif [[ "$mode_raw" != "safe" ]]; then
-    echo "Invalid --contract-mode: ${CONTRACT_MODE}" >&2
-    exit 1
+resolve_contract_mode() {
+  local mode=""
+  if [[ "$CONTRACT_MODE_SET" == "true" || -z "$CONTRACT_CONFIG_PATH" ]]; then
+    local mode_raw="${CONTRACT_MODE,,}"
+    mode="SAFE"
+    if [[ "$mode_raw" == "unsafe" ]]; then
+      mode="STRESS"
+    elif [[ "$mode_raw" != "safe" ]]; then
+      echo "Invalid --contract-mode: ${CONTRACT_MODE}" >&2
+      exit 1
+    fi
   fi
+  printf '%s' "$mode"
+}
 
-  local auth_raw="${CONTRACT_AUTH,,}"
-  local auth="OFF"
-  if [[ "$auth_raw" == "on" ]]; then
-    auth="ON"
-  elif [[ "$auth_raw" != "off" ]]; then
-    echo "Invalid --contract-auth: ${CONTRACT_AUTH}" >&2
-    exit 1
+resolve_contract_auth() {
+  local auth=""
+  if [[ "$CONTRACT_AUTH_SET" == "true" || -z "$CONTRACT_CONFIG_PATH" ]]; then
+    local auth_raw="${CONTRACT_AUTH,,}"
+    auth="OFF"
+    if [[ "$auth_raw" == "on" ]]; then
+      auth="ON"
+    elif [[ "$auth_raw" != "off" ]]; then
+      echo "Invalid --contract-auth: ${CONTRACT_AUTH}" >&2
+      exit 1
+    fi
   fi
+  printf '%s' "$auth"
+}
+
+write_contract_config() {
+  local config_path="$1"
+  local mode="$2"
+  local auth="$3"
 
   if [[ "$auth" == "ON" && -z "$CONTRACT_PASSWORD" ]]; then
     echo "--contract-password is required when auth=on" >&2
@@ -397,15 +534,13 @@ run_contract_test() {
   fi
 
   local base_url="http://${C64U_HOST}"
-  local config_path
-  config_path="$(mktemp -t c64u-contract-test.XXXXXX.json)"
-  trap 'rm -f "$config_path"' RETURN
 
   export CONTRACT_TEST_BASE_URL="$base_url"
   export CONTRACT_TEST_MODE_UPPER="$mode"
   export CONTRACT_TEST_AUTH_UPPER="$auth"
   export CONTRACT_TEST_PASSWORD
   export CONTRACT_TEST_ALLOW_RESET
+  export CONTRACT_TEST_CONFIG_PATH="$CONTRACT_CONFIG_PATH"
   export CONTRACT_TEST_DISK_PATH
   export CONTRACT_TEST_DISK_DRIVE
   export CONTRACT_TEST_DISK_TYPE
@@ -418,9 +553,10 @@ run_contract_test() {
 
   node --input-type=module - "$config_path" <<'NODE'
 import fs from 'node:fs';
+import path from 'node:path';
 
 const outPath = process.argv[2];
-const cfg = {
+let cfg = {
   baseUrl: process.env.CONTRACT_TEST_BASE_URL,
   mode: process.env.CONTRACT_TEST_MODE_UPPER,
   auth: process.env.CONTRACT_TEST_AUTH_UPPER,
@@ -434,8 +570,28 @@ const cfg = {
   scratch: { ftpDir: '/Temp/contract-test' },
 };
 
+if (process.env.CONTRACT_TEST_CONFIG_PATH) {
+  const configPath = path.isAbsolute(process.env.CONTRACT_TEST_CONFIG_PATH)
+    ? process.env.CONTRACT_TEST_CONFIG_PATH
+    : path.join(process.cwd(), process.env.CONTRACT_TEST_CONFIG_PATH);
+  const fileData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  cfg = mergeObjects(cfg, fileData);
+}
+
+  cfg.baseUrl = process.env.CONTRACT_TEST_BASE_URL;
+  if (process.env.CONTRACT_TEST_MODE_UPPER) {
+    cfg.mode = process.env.CONTRACT_TEST_MODE_UPPER;
+  }
+  if (process.env.CONTRACT_TEST_AUTH_UPPER) {
+    cfg.auth = process.env.CONTRACT_TEST_AUTH_UPPER;
+  }
+
 if (cfg.auth === 'ON') {
-  cfg.password = process.env.CONTRACT_TEST_PASSWORD;
+  if (process.env.CONTRACT_TEST_PASSWORD) {
+    cfg.password = process.env.CONTRACT_TEST_PASSWORD;
+  }
+} else {
+ delete cfg.password;
 }
 
 if (process.env.CONTRACT_TEST_ALLOW_RESET === 'true') {
@@ -465,7 +621,45 @@ if (Object.keys(media).length) {
 }
 
 fs.writeFileSync(outPath, JSON.stringify(cfg, null, 2));
+
+function mergeObjects(base, override) {
+  if (!isPlainObject(base) || !isPlainObject(override)) {
+    return override;
+  }
+
+  const result = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (isPlainObject(value) && isPlainObject(result[key])) {
+      result[key] = mergeObjects(result[key], value);
+      continue;
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 NODE
+
+  printf '%s' "$base_url"
+}
+
+run_contract_test() {
+  local mode
+  local auth
+  local config_path
+  local base_url
+  mode="$(resolve_contract_mode)"
+  auth="$(resolve_contract_auth)"
+  config_path="$(mktemp -t c64u-contract-test.XXXXXX.json)"
+  trap 'rm -f "$config_path"' RETURN
+  base_url="$(write_contract_config "$config_path" "$mode" "$auth")"
+
+  if [[ "${C64U_TARGET,,}" == "real" ]]; then
+    perform_contract_power_cycle_gate "$C64U_HOST" "$base_url"
+  fi
 
   log "Running contract test harness (${mode}/${auth}) against ${base_url}"
   local harness_status=0
@@ -477,6 +671,39 @@ NODE
   set -e
   if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
     echo "Contract test harness failed (tsc=${tsc_status}, run=${run_status})" >&2
+    harness_status=1
+  fi
+
+  if [[ "$harness_status" -ne 0 ]]; then
+    exit 1
+  fi
+}
+
+run_contract_replay() {
+  local mode
+  local auth
+  local config_path
+  local base_url
+  mode="$(resolve_contract_mode)"
+  auth="$(resolve_contract_auth)"
+  config_path="$(mktemp -t c64u-contract-replay.XXXXXX.json)"
+  trap 'rm -f "$config_path"' RETURN
+  base_url="$(write_contract_config "$config_path" "$mode" "$auth")"
+
+  if [[ "${C64U_TARGET,,}" == "real" ]]; then
+    perform_contract_power_cycle_gate "$C64U_HOST" "$base_url"
+  fi
+
+  log "Running contract replay against ${base_url}"
+  local harness_status=0
+  set +e
+  (cd "$ROOT_DIR" && npx tsc -p tests/contract/tsconfig.json)
+  local tsc_status=$?
+  (cd "$ROOT_DIR" && node tests/contract/dist/replay.js --manifest "$CONTRACT_MANIFEST_PATH" --config "$config_path")
+  local run_status=$?
+  set -e
+  if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
+    echo "Contract replay failed (tsc=${tsc_status}, run=${run_status})" >&2
     harness_status=1
   fi
 
@@ -596,6 +823,10 @@ while [[ $# -gt 0 ]]; do
       set_primary_action "test-contract" "$1"
       shift
       ;;
+    --test-contract-replay)
+      set_primary_action "test-contract-replay" "$1"
+      shift
+      ;;
     --test-smoke)
       set_primary_action "test-smoke" "$1"
       shift
@@ -618,6 +849,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dump-c64u-config)
       set_primary_action "dump-c64u-config" "$1"
+      shift
+      ;;
+    --dump-c64-telnet-screens)
+      set_primary_action "dump-c64-telnet-screens" "$1"
       shift
       ;;
     --docker-build)
@@ -817,12 +1052,26 @@ while [[ $# -gt 0 ]]; do
       record_flag CONTRACT_FLAGS "$1"
       require_value "$1" "${2:-}"
       CONTRACT_MODE="$2"
+      CONTRACT_MODE_SET=true
+      shift 2
+      ;;
+    --contract-config)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_CONFIG_PATH="$2"
+      shift 2
+      ;;
+    --contract-manifest)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_MANIFEST_PATH="$2"
       shift 2
       ;;
     --contract-auth)
       record_flag CONTRACT_FLAGS "$1"
       require_value "$1" "${2:-}"
       CONTRACT_AUTH="$2"
+      CONTRACT_AUTH_SET=true
       shift 2
       ;;
     --contract-password)
@@ -914,7 +1163,7 @@ if [[ -z "$PRIMARY_ACTION" ]]; then
   PRIMARY_ACTION="build"
 fi
 
-if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" ]]; then
+if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" || "$PRIMARY_ACTION" == "dump-c64-telnet-screens" ]]; then
   if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 || ${#DOCKER_FLAGS[@]} -gt 0 ]]; then
     echo "Tooling actions must run in isolation" >&2
     exit 1
@@ -950,14 +1199,14 @@ if [[ "$PRIMARY_ACTION" != "test-fuzz" && ${#FUZZ_FLAGS[@]} -gt 0 ]]; then
   exit 1
 fi
 
-if [[ "$PRIMARY_ACTION" != "test-contract" && ${#CONTRACT_FLAGS[@]} -gt 0 ]]; then
-  echo "Contract test modifiers require --test-contract" >&2
+if [[ "$PRIMARY_ACTION" != "test-contract" && "$PRIMARY_ACTION" != "test-contract-replay" && ${#CONTRACT_FLAGS[@]} -gt 0 ]]; then
+  echo "Contract test modifiers require --test-contract or --test-contract-replay" >&2
   exit 1
 fi
 
 if [[ ${#TARGET_FLAGS[@]} -gt 0 ]]; then
   case "$PRIMARY_ACTION" in
-    test-contract|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
+    test-contract|test-contract-replay|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
       ;;
     *)
       echo "--c64u-target/--c64u-host are only valid with contract, Maestro, or smoke tests" >&2
@@ -984,6 +1233,16 @@ fi
 
 if [[ "$PRIMARY_ACTION" == "test-contract" && "$C64U_TARGET_SET" != "true" ]]; then
   echo "Contract tests require --c64u-target mock|real" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-contract-replay" && "$C64U_TARGET_SET" != "true" ]]; then
+  echo "Contract replay requires --c64u-target mock|real" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-contract-replay" && -z "$CONTRACT_MANIFEST_PATH" ]]; then
+  echo "Contract replay requires --contract-manifest <path>" >&2
   exit 1
 fi
 
@@ -1026,10 +1285,12 @@ RUN_TEST_MAESTRO_TAGS=false
 RUN_TEST_MAESTRO_DOCKER=false
 RUN_FUZZ=false
 RUN_CONTRACT_TEST=false
+RUN_CONTRACT_REPLAY=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_EMULATOR=false
 RUN_DUMP_C64U_CONFIG=false
+RUN_DUMP_C64_TELNET_SCREENS=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
 
@@ -1091,6 +1352,12 @@ case "$PRIMARY_ACTION" in
     RUN_APK=false
     RUN_CONTRACT_TEST=true
     ;;
+  test-contract-replay)
+    RUN_TEST=false
+    RUN_BUILD=false
+    RUN_APK=false
+    RUN_CONTRACT_REPLAY=true
+    ;;
   test-smoke)
     RUN_TEST=false
     RUN_SMOKE_ANDROID_EMULATOR=true
@@ -1132,6 +1399,9 @@ case "$PRIMARY_ACTION" in
     ;;
   dump-c64u-config)
     RUN_DUMP_C64U_CONFIG=true
+    ;;
+  dump-c64-telnet-screens)
+    RUN_DUMP_C64_TELNET_SCREENS=true
     ;;
   docker-build)
     RUN_INSTALL=false
@@ -1178,6 +1448,19 @@ if [[ "$RUN_DUMP_C64U_CONFIG" == "true" ]]; then
   (cd "$ROOT_DIR/scripts" && ./dump_c64u_config.py \
     --base-url "http://${CONFIG_HOST}" \
     --output "$ROOT_DIR/doc/c64/c64u-config.yaml")
+  exit 0
+fi
+
+if [[ "$RUN_DUMP_C64_TELNET_SCREENS" == "true" ]]; then
+  CONFIG_HOST="c64u"
+  if [[ "$C64U_HOST_SET" == "true" ]]; then
+    CONFIG_HOST="$C64U_HOST"
+  fi
+  log "Dumping C64U telnet screens"
+  (cd "$ROOT_DIR/scripts" && ./dump_c64_telnet_screens.py \
+    --base-url "http://${CONFIG_HOST}" \
+    --output "$ROOT_DIR/doc/c64u-telnet.yaml" \
+    --mirror-output "$ROOT_DIR/doc/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml")
   exit 0
 fi
 
@@ -1235,6 +1518,10 @@ fi
 
 if [[ "$RUN_CONTRACT_TEST" == "true" ]]; then
   run_contract_test
+fi
+
+if [[ "$RUN_CONTRACT_REPLAY" == "true" ]]; then
+  run_contract_replay
 fi
 
 if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then

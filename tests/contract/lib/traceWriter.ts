@@ -1,0 +1,543 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import type { WriteStream } from "node:fs";
+import type {
+  HealthProbeEntry,
+  HealthStateEntry,
+  ReplayManifest,
+  ReplayRequest,
+  RestRequestEntry,
+  RestResponseEntry,
+  TraceEntry,
+} from "./traceSchema.js";
+
+export function writeTraceLine(stream: WriteStream, entry: TraceEntry): void {
+  const serialized = JSON.stringify(entry, (_key, value) => {
+    if (typeof value === "bigint") {
+      return `${String(value)}n`;
+    }
+    return value;
+  });
+  stream.write(`${serialized}\n`);
+}
+
+export function writeTraceMd(outDir: string, entries: readonly TraceEntry[]): void {
+  const grouped = new Map<string, TraceEntry[]>();
+  for (const entry of [...entries].sort((left, right) => left.globalSeq - right.globalSeq)) {
+    const bucket = grouped.get(entry.correlationId) ?? [];
+    bucket.push(entry);
+    grouped.set(entry.correlationId, bucket);
+  }
+
+  const sections: string[] = [];
+  for (const group of grouped.values()) {
+    const first = group[0];
+    if (!first) {
+      continue;
+    }
+    const request = group.find(
+      (entry): entry is RestRequestEntry => entry.protocol === "REST" && entry.direction === "request",
+    );
+    const response = group.find(
+      (entry): entry is RestResponseEntry => entry.protocol === "REST" && entry.direction === "response",
+    );
+    if (request && response) {
+      sections.push(renderRestGroup(request, response));
+      continue;
+    }
+    if (first.protocol === "HEALTH") {
+      sections.push(renderHealthGroup(group as Array<HealthProbeEntry | HealthStateEntry>));
+      continue;
+    }
+    sections.push(renderFtpGroup(group));
+  }
+
+  fs.writeFileSync(path.join(outDir, "trace.md"), `${sections.join("\n\n")}\n`, "utf8");
+}
+
+export function writeReplayManifest(outDir: string, entries: readonly TraceEntry[], baseUrl: string): void {
+  const requests = buildReplayRequests(entries);
+  const expectations = buildReplayExpectations(entries, requests);
+  const manifest: ReplayManifest = {
+    runSessionId: entries[0]?.runSessionId ?? "unknown-run",
+    generatedAt: new Date().toISOString(),
+    baseUrl,
+    totalEntries: entries.length,
+    requests,
+  };
+
+  const replayDir = path.join(outDir, "replay");
+  fs.mkdirSync(replayDir, { recursive: true });
+  fs.writeFileSync(path.join(replayDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(replayDir, "device-replay.http"), `${renderRestClientReplay(requests)}\n`, "utf8");
+  fs.writeFileSync(path.join(replayDir, "device-replay.sh"), `${renderCurlReplay(requests, expectations)}\n`, "utf8");
+}
+
+type ReplayExpectation = {
+  anchorRequestSeq: number;
+  protocol: HealthProbeEntry["probeProtocol"];
+  displayLabel: string;
+  message: string;
+};
+
+function buildReplayRequests(entries: readonly TraceEntry[]): ReplayRequest[] {
+  const requests: ReplayRequest[] = [];
+  for (const entry of [...entries].sort((left, right) => left.globalSeq - right.globalSeq)) {
+    if (entry.protocol === "REST" && entry.direction === "request") {
+      requests.push({
+        globalSeq: entry.globalSeq,
+        protocol: "REST",
+        clientId: entry.clientId,
+        launchedAtMs: entry.launchedAtMs,
+        stageId: entry.stageId,
+        method: entry.method,
+        url: entry.url,
+        headers: entry.headers,
+        body: entry.body,
+      });
+      continue;
+    }
+    if (entry.protocol === "FTP" && entry.direction === "command") {
+      requests.push({
+        globalSeq: entry.globalSeq,
+        protocol: "FTP",
+        clientId: entry.clientId,
+        launchedAtMs: entry.launchedAtMs,
+        stageId: entry.stageId,
+        ftpSessionId: entry.ftpSessionId,
+        commandVerb: entry.commandVerb,
+        rawCommand: entry.rawCommand,
+      });
+      continue;
+    }
+    if (entry.protocol === "FTP" && entry.direction === "data") {
+      const ftpRequest = [...requests]
+        .reverse()
+        .find(
+          (request) =>
+            request.protocol === "FTP" &&
+            request.ftpSessionId === entry.ftpSessionId &&
+            request.byteCount === undefined &&
+            (entry.transferDirection === "upload" ? request.commandVerb === "STOR" : request.commandVerb !== "STOR"),
+        );
+      if (ftpRequest) {
+        ftpRequest.transferDirection = entry.transferDirection;
+        ftpRequest.byteCount = entry.byteCount;
+      }
+    }
+  }
+  return requests;
+}
+
+function renderRestGroup(request: RestRequestEntry, response: RestResponseEntry): string {
+  const requestPath = safePathname(request.url);
+  const requestHeaders = renderHeaders(request.headers);
+  const responseHeaders = renderHeaders(response.headers);
+  const bodyPreview = truncatePreview(JSON.stringify(response.body));
+  return [
+    `## [${request.globalSeq}] REST ${request.method} ${requestPath} - correlationId: ${request.correlationId}`,
+    "",
+    `**Stage**: ${request.stageId ?? "none"}  |  **Test type**: ${request.testType ?? "none"}`,
+    `**Launched**: ${request.timestamp}  |  **Latency**: ${response.latencyMs} ms  |  **Client**: ${request.clientId}`,
+    "",
+    "### Request",
+    `${request.method} ${request.url}`,
+    requestHeaders,
+    "",
+    "### Response",
+    `${response.status} ${response.status === 200 ? "OK" : ""}`.trim(),
+    responseHeaders,
+    `Body (preview): ${bodyPreview}`,
+    "",
+    "---",
+  ].join("\n");
+}
+
+function renderFtpGroup(group: TraceEntry[]): string {
+  const first = group[0];
+  const title =
+    first.direction === "command"
+      ? `${first.protocol} ${(first as { rawCommand?: string }).rawCommand ?? ""}`
+      : `${first.protocol} exchange`;
+  const lines = [
+    `## [${first.globalSeq}] ${title} - correlationId: ${first.correlationId}`,
+    "",
+    `**Stage**: ${first.stageId ?? "none"}  |  **Test type**: ${first.testType ?? "none"}`,
+    `**Launched**: ${first.timestamp}  |  **Client**: ${first.clientId}`,
+    "",
+  ];
+  for (const entry of group) {
+    if (entry.protocol === "FTP" && entry.direction === "command") {
+      lines.push(`### Command\n${entry.rawCommand}`);
+      continue;
+    }
+    if (entry.protocol === "FTP" && entry.direction === "response") {
+      lines.push(`### Response\n${entry.code}\n${truncatePreview(entry.rawResponse)}`);
+      continue;
+    }
+    if (entry.protocol === "FTP" && entry.direction === "data") {
+      lines.push(
+        `### Data\n${entry.transferDirection} ${entry.byteCount} bytes in ${entry.durationMs} ms\nHex: ${truncatePreview(entry.first256Hex)}\nASCII: ${truncatePreview(entry.first256Ascii)}`,
+      );
+    }
+  }
+  lines.push("", "---");
+  return lines.join("\n");
+}
+
+function renderHealthGroup(group: Array<HealthProbeEntry | HealthStateEntry>): string {
+  const first = group[0];
+  if (first.direction === "state") {
+    return [
+      `## [${first.globalSeq}] HEALTH STATE ${first.state}`,
+      "",
+      `**Stage**: ${first.stageId ?? "none"}  |  **Source**: ${first.source}`,
+      `**Time**: ${first.timestamp}`,
+      `Reason: ${first.reason}`,
+      "",
+      "---",
+    ].join("\n");
+  }
+
+  const lines = [
+    `## [${first.globalSeq}] HEALTH PROBE ${first.probeProtocol}`,
+    "",
+    `**Stage**: ${first.stageId ?? "none"}  |  **Source**: ${first.source}`,
+    `**Time**: ${first.timestamp}  |  **Attempt**: ${first.attempt}  |  **Phase**: ${first.phase}`,
+    "",
+  ];
+  for (const entry of group) {
+    if (entry.direction !== "probe") {
+      continue;
+    }
+    lines.push(
+      `${entry.probeProtocol}: ok=${entry.ok} state=${entry.state} status=${entry.status ?? "n/a"} latency=${entry.latencyMs ?? "n/a"}ms${entry.error ? ` error=${entry.error}` : ""}`,
+    );
+  }
+  lines.push("", "---");
+  return lines.join("\n");
+}
+
+function renderHeaders(headers: Record<string, string>): string {
+  const lines = Object.entries(headers).map(([key, value]) => `${key}: ${value}`);
+  return lines.length > 0 ? lines.join("\n") : "(no headers)";
+}
+
+function truncatePreview(value: string | undefined): string {
+  if (!value) {
+    return "";
+  }
+  return value.length > 512 ? `${value.slice(0, 512)}...` : value;
+}
+
+function safePathname(value: string): string {
+  try {
+    return new URL(value).pathname;
+  } catch {
+    return value;
+  }
+}
+
+function renderRestClientReplay(requests: readonly ReplayRequest[]): string {
+  const blocks = requests
+    .filter((request) => request.protocol === "REST")
+    .map((request) => {
+      const method = request.method ?? "GET";
+      const url = request.url ?? "";
+      const headers = Object.entries(request.headers ?? {})
+        .map(([key, value]) => `${key}: ${value}`)
+        .join("\n");
+      const authComment = "# X-Password: SET_PASSWORD_HERE\n";
+      const body = request.body === undefined ? "" : `\n${JSON.stringify(request.body, null, 2)}`;
+      return [
+        `### seq ${request.globalSeq} client ${request.clientId}`,
+        `${authComment}${method} ${url}`,
+        headers,
+        body,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    });
+  return blocks.join("\n\n");
+}
+
+function renderCurlReplay(requests: readonly ReplayRequest[], expectations: readonly ReplayExpectation[]): string {
+  const restRequests = requests.filter((request) => request.protocol === "REST");
+  const lines = [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    "",
+    'DEVICE_HOST="c64u"',
+    'DEVICE_PASSWORD="${DEVICE_PASSWORD:-}"',
+    'TMP_DIR="$(mktemp -d)"',
+    'cleanup() { rm -rf "$TMP_DIR"; }',
+    "trap cleanup EXIT",
+    "",
+    "STEP_COUNTER=0",
+    'log_info() { printf "[INFO] %s\\n" "$1"; }',
+    'log_step() { STEP_COUNTER=$((STEP_COUNTER + 1)); printf "\\n[STEP %03d] %s\\n" "$STEP_COUNTER" "$1"; }',
+    'log_expectation() { printf "[EXPECT] %s\\n" "$1"; }',
+    "",
+    "usage() {",
+    "  cat <<'EOF'",
+    "Usage: device-replay.sh [--host <hostname>] [--password <password>]",
+    "",
+    "Defaults:",
+    "  --host      c64u",
+    "  --password  uses DEVICE_PASSWORD if set, otherwise empty",
+    "EOF",
+    "}",
+    "",
+    "while [[ $# -gt 0 ]]; do",
+    '  case "$1" in',
+    "    --host|-H)",
+    '      DEVICE_HOST="$2"',
+    "      shift 2",
+    "      ;;",
+    "    --password)",
+    '      DEVICE_PASSWORD="$2"',
+    "      shift 2",
+    "      ;;",
+    "    --help)",
+    "      usage",
+    "      exit 0",
+    "      ;;",
+    "    *)",
+    '      echo "Unknown argument: $1" >&2',
+    "      usage >&2",
+    "      exit 1",
+    "      ;;",
+    "  esac",
+    "done",
+    "",
+    'command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }',
+    'command -v lftp >/dev/null 2>&1 || { echo "lftp is required" >&2; exit 1; }',
+    "",
+    'HTTP_BASE_URL="http://${DEVICE_HOST}"',
+    'FTP_BASE_URL="ftp://${DEVICE_HOST}"',
+    "PASSWORD_HEADERS=()",
+    'if [[ -n "$DEVICE_PASSWORD" ]]; then',
+    '  PASSWORD_HEADERS=(-H "X-Password: ${DEVICE_PASSWORD}")',
+    "fi",
+    "",
+    'log_info "Starting replay against host ${DEVICE_HOST}"',
+    'log_info "HTTP base URL: ${HTTP_BASE_URL}"',
+    'log_info "FTP base URL: ${FTP_BASE_URL}"',
+    "",
+    ...renderExpectationSummary(expectations),
+  ];
+  for (const [index, request] of requests.entries()) {
+    for (const expectation of expectations.filter((item) => item.anchorRequestSeq === request.globalSeq)) {
+      lines.push(`# EXPECTED ${expectation.displayLabel} DEGRADATION: ${expectation.message}`);
+      lines.push(`log_expectation ${shellQuote(expectation.message)}`);
+    }
+    if (request.protocol !== "REST") {
+      lines.push(...renderFtpReplayCommand(request));
+      continue;
+    }
+    lines.push(`# REST seq ${request.globalSeq} client ${request.clientId}`);
+    lines.push(
+      `log_step ${shellQuote(`REST seq ${request.globalSeq}: ${request.method ?? "GET"} ${safePathname(request.url ?? "")}`)}`,
+    );
+    const curlParts = [
+      "curl",
+      "--silent",
+      "--show-error",
+      "--fail-with-body",
+      "-X",
+      shellQuote(request.method ?? "GET"),
+    ];
+    const hasPasswordHeader = Object.keys(request.headers ?? {}).some((key) => key.toLowerCase() === "x-password");
+    if (!hasPasswordHeader) {
+      curlParts.push("${PASSWORD_HEADERS[@]}");
+    }
+    for (const [key, value] of Object.entries(request.headers ?? {})) {
+      curlParts.push("-H", shellQuote(`${key}: ${value}`));
+    }
+    if (request.body !== undefined) {
+      curlParts.push("--data-binary", shellQuote(JSON.stringify(request.body)));
+    }
+    curlParts.push(renderReplayUrl(request.url ?? ""));
+    lines.push(curlParts.join(" "));
+
+    const nextRest = restRequests.find((candidate) => candidate.globalSeq > request.globalSeq);
+    if (nextRest) {
+      const delayMs = Math.min(5000, Math.max(0, nextRest.launchedAtMs - request.launchedAtMs));
+      lines.push(`sleep ${(delayMs / 1000).toFixed(3)}`);
+    }
+    if (index < requests.length - 1) {
+      lines.push("");
+    }
+  }
+  return lines.join("\n");
+}
+
+function renderFtpReplayCommand(request: ReplayRequest): string[] {
+  const lftpPrefix = 'lftp -u anonymous,"${DEVICE_PASSWORD}" "${FTP_BASE_URL}" -e ';
+  const rawCommand = request.rawCommand ?? request.commandVerb ?? "";
+  const [verbRaw, ...rest] = rawCommand.split(" ");
+  const verb = verbRaw.toUpperCase();
+  const argument = rest.join(" ").trim();
+  const remotePath = argument || "/";
+
+  switch (verb) {
+    case "LIST":
+    case "NLST":
+    case "MLSD":
+    case "MLST":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`cls ${remotePath}; bye`)}`,
+      ];
+    case "PWD":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote("pwd; bye")}`,
+      ];
+    case "CWD":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`cd ${argument}; pwd; bye`)}`,
+      ];
+    case "CDUP":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote("cd ..; pwd; bye")}`,
+      ];
+    case "MKD":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`mkdir -p ${argument}; bye`)}`,
+      ];
+    case "RMD":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`rmdir ${argument}; bye`)}`,
+      ];
+    case "DELE":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`rm ${argument}; bye`)}`,
+      ];
+    case "RETR":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`get ${argument} -o $TMP_DIR/${safeFileName(argument)}; bye`)}`,
+      ];
+    case "STOR": {
+      const localPath = `$TMP_DIR/upload-${request.globalSeq}.bin`;
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `head -c ${request.byteCount ?? 0} /dev/zero | tr '\\000' 'B' > ${localPath}`,
+        `${lftpPrefix}${shellQuote(`put ${localPath} -o ${remotePath}; bye`)}`,
+      ];
+    }
+    case "NOOP":
+    case "SYST":
+    case "FEAT":
+    case "TYPE":
+    case "MODE":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`quote ${rawCommand}; bye`)}`,
+      ];
+    case "USER":
+    case "PASS":
+    case "PASV":
+    case "PORT":
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}: handled by lftp session defaults (${rawCommand})`,
+        `log_info ${shellQuote(`FTP seq ${request.globalSeq}: handled by lftp session defaults (${rawCommand})`)}`,
+      ];
+    default:
+      return [
+        `# FTP seq ${request.globalSeq} client ${request.clientId}`,
+        `log_step ${shellQuote(`FTP seq ${request.globalSeq}: ${rawCommand}`)}`,
+        `${lftpPrefix}${shellQuote(`quote ${rawCommand}; bye`)}`,
+      ];
+  }
+}
+
+function buildReplayExpectations(
+  entries: readonly TraceEntry[],
+  requests: readonly ReplayRequest[],
+): ReplayExpectation[] {
+  const expectations: ReplayExpectation[] = [];
+  const seenProtocols = new Set<string>();
+  const requestSeqs = requests.map((request) => request.globalSeq).sort((left, right) => left - right);
+  for (const entry of [...entries].sort((left, right) => left.globalSeq - right.globalSeq)) {
+    if (entry.protocol !== "HEALTH" || entry.direction !== "probe") {
+      continue;
+    }
+    if (entry.ok || seenProtocols.has(entry.probeProtocol)) {
+      continue;
+    }
+    seenProtocols.add(entry.probeProtocol);
+    const anchorRequestSeq =
+      requestSeqs.find((seq) => seq >= entry.globalSeq) ?? requestSeqs[requestSeqs.length - 1] ?? entry.globalSeq;
+    expectations.push({
+      anchorRequestSeq,
+      protocol: entry.probeProtocol,
+      displayLabel: displayExpectationProtocol(entry.probeProtocol),
+      message: `${displayExpectationProtocol(entry.probeProtocol)} is expected to become unavailable around original trace seq ${entry.globalSeq} (${entry.source}${entry.stageId ? `, stage ${entry.stageId}` : ""}).`,
+    });
+  }
+  return expectations;
+}
+
+function renderExpectationSummary(expectations: readonly ReplayExpectation[]): string[] {
+  if (expectations.length === 0) {
+    return ['log_info "No protocol-unavailability expectations were embedded in this replay."', ""];
+  }
+
+  return [
+    'log_info "Embedded protocol degradation expectations:"',
+    ...expectations.map(
+      (expectation) => `log_info ${shellQuote(`${expectation.displayLabel}: ${expectation.message}`)}`,
+    ),
+    "",
+  ];
+}
+
+function displayExpectationProtocol(protocol: HealthProbeEntry["probeProtocol"]): string {
+  if (protocol === "ICMP") {
+    return "PING";
+  }
+  return protocol;
+}
+
+function renderReplayUrl(originalUrl: string): string {
+  try {
+    const parsed = new URL(originalUrl);
+    return `"${"${HTTP_BASE_URL}"}${parsed.pathname}${parsed.search}"`;
+  } catch {
+    return shellQuote(originalUrl);
+  }
+}
+
+function safeFileName(value: string): string {
+  const baseName = value.split("/").filter(Boolean).pop() ?? "download.bin";
+  return baseName.replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}

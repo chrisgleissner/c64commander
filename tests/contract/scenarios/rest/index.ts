@@ -36,8 +36,8 @@ export type ConcurrencyObservation = {
   notes?: string;
 };
 
-const SAFE_CATEGORY_BLOCKLIST = ["network", "wifi", "modem", "http", "ftp", "telnet", "hostname", "password"];
-const SAFE_ITEM_BLOCKLIST = ["password", "hostname", "ip", "mac", "dns", "gateway", "ssid", "token"];
+export const SAFE_CATEGORY_BLOCKLIST = ["network", "wifi", "modem", "http", "ftp", "telnet", "hostname", "password"];
+export const SAFE_ITEM_BLOCKLIST = ["password", "hostname", "ip", "mac", "dns", "gateway", "ssid", "token"];
 const DISK_EXTENSIONS = [".d64", ".d71", ".d81", ".dnp", ".g64"];
 const SID_EXTENSIONS = [".sid"];
 const PRG_EXTENSIONS = [".prg"];
@@ -1230,7 +1230,7 @@ async function resolveOrScratch(
   return `/${scratchPath(config, fallbackFile)}`;
 }
 
-async function listCategories(request: SharedRestRequest): Promise<string[]> {
+export async function listCategories(request: SharedRestRequest): Promise<string[]> {
   const r = await request({ method: "GET", url: "/v1/configs" });
   if (r.status !== 200 || typeof r.data !== "object" || r.data === null) return [];
   return ((r.data as Record<string, unknown>).categories as string[]) || [];
@@ -1454,7 +1454,7 @@ async function runConcurrentRequests({
   );
 }
 
-function pickSafeItem(items: Record<string, unknown>): string | null {
+export function pickSafeItem(items: Record<string, unknown>): string | null {
   for (const key of Object.keys(items)) {
     if (isBlockedItem(key)) continue;
     const v = items[key];
@@ -1464,7 +1464,7 @@ function pickSafeItem(items: Record<string, unknown>): string | null {
   return null;
 }
 
-function pickNextValue(entry: Record<string, unknown>, current: unknown): string | number | undefined {
+export function pickNextValue(entry: Record<string, unknown>, current: unknown): string | number | undefined {
   if (typeof current === "number") {
     const min = entry.min as number | undefined;
     const max = entry.max as number | undefined;

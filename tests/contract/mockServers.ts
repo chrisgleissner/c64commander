@@ -29,7 +29,7 @@ export async function startContractMockServers(): Promise<ContractMockServers> {
     pasvMin: 40210,
     pasvMax: 40280,
   });
-  const restServer = await createMockRestServer();
+  const restServer = await createMockRestServer(readMockRestServerOptionsFromEnv());
 
   return {
     baseUrl: restServer.baseUrl,
@@ -37,6 +37,29 @@ export async function startContractMockServers(): Promise<ContractMockServers> {
     close: async () => {
       await restServer.close();
       await ftpServer.close();
+    },
+  };
+}
+
+function readMockRestServerOptionsFromEnv(): Parameters<typeof createMockRestServer>[0] {
+  const afterRequestsRaw = process.env.CONTRACT_MOCK_BREAKPOINT_AFTER_REQUESTS;
+  if (!afterRequestsRaw) {
+    return {};
+  }
+  const afterRequests = Number.parseInt(afterRequestsRaw, 10);
+  return {
+    breakpointFailure: {
+      afterRequests: Number.isFinite(afterRequests) ? afterRequests : 0,
+      mode: process.env.CONTRACT_MOCK_BREAKPOINT_MODE === "hang" ? "hang" : "status",
+      status: process.env.CONTRACT_MOCK_BREAKPOINT_STATUS
+        ? Number.parseInt(process.env.CONTRACT_MOCK_BREAKPOINT_STATUS, 10)
+        : 503,
+      methods: process.env.CONTRACT_MOCK_BREAKPOINT_METHODS
+        ? process.env.CONTRACT_MOCK_BREAKPOINT_METHODS.split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : undefined,
+      pathIncludes: process.env.CONTRACT_MOCK_BREAKPOINT_PATH_INCLUDES,
     },
   };
 }
