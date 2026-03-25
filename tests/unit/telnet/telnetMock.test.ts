@@ -327,4 +327,3 @@ describe('read returns empty when no pending output', () => {
         expect(data.length).toBe(0);
     });
 });
-});
