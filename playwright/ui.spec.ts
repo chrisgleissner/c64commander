@@ -75,6 +75,10 @@ const resolveExpectedVersions = () => {
   const candidates = new Set<string>();
   if (derivedFromGit) {
     candidates.add(derivedFromGit);
+    const derivedReleaseBaseVersion = resolveReleaseBaseVersion(derivedFromGit);
+    if (derivedReleaseBaseVersion) {
+      candidates.add(derivedReleaseBaseVersion);
+    }
   }
   if (fallbackVersion) {
     candidates.add(fallbackVersion);
