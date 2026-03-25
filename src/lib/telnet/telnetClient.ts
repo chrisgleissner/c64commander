@@ -36,8 +36,8 @@ export function createTelnetClient(): TelnetTransport {
       connected = false;
       try {
         await TelnetSocket.disconnect();
-      } catch {
-        // Best-effort disconnect; swallow only after flagging disconnected
+      } catch (error) {
+        console.warn("TelnetSocket.disconnect() failed", { error });
       }
     },
 

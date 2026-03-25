@@ -84,6 +84,7 @@ export function SaveRamDialog({
 }: SaveRamDialogProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customRanges, setCustomRanges] = useState<CustomSnapshotRangeDraft[]>(() => loadCustomSnapshotDrafts());
+  const showSaveReu = telnetAvailable && typeof onSaveReu === "function";
 
   useEffect(() => {
     saveCustomSnapshotDrafts(customRanges);
@@ -165,12 +166,12 @@ export function SaveRamDialog({
                   )}
                 </button>
               ))}
-              {telnetAvailable && (
+              {showSaveReu && (
                 <button
                   data-testid="save-ram-type-reu"
                   className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent hover:text-accent-foreground px-4 py-3 transition-colors disabled:opacity-50"
                   onClick={() => {
-                    onSaveReu?.();
+                    onSaveReu();
                     handleClose();
                   }}
                   disabled={isSaving || telnetBusy}

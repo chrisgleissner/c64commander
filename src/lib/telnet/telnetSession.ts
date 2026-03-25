@@ -169,9 +169,12 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
         }
         emptyReads = 0;
         chunks.push(data);
-      } catch {
-        // Read timeout — treat as frame boundary
-        break;
+      } catch (error) {
+        if (error instanceof TelnetError && error.code === "TIMEOUT") {
+          // Read timeout — treat as frame boundary
+          break;
+        }
+        throw error;
       }
     }
 

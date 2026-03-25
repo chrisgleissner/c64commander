@@ -66,13 +66,17 @@ describe("createTelnetClient", () => {
       expect(client.isConnected()).toBe(false);
     });
 
-    it("swallows errors during disconnect", async () => {
+    it("logs warnings for disconnect failures without rethrowing", async () => {
       mockDisconnect.mockRejectedValue(new Error("already closed"));
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const client = createTelnetClient();
       await client.connect("localhost", 23);
-      // Should not throw
       await client.disconnect();
       expect(client.isConnected()).toBe(false);
+      expect(warnSpy).toHaveBeenCalledWith("TelnetSocket.disconnect() failed", {
+        error: expect.any(Error),
+      });
+      warnSpy.mockRestore();
     });
   });
 

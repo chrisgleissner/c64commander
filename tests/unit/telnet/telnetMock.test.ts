@@ -80,6 +80,27 @@ describe("TelnetMock", () => {
       expect(mock.isConnected()).toBe(false);
     });
 
+    it("resets pending escape state on reconnect", async () => {
+      const mock = new TelnetMock();
+      await mock.connect("localhost", 23);
+      await mock.read(1000);
+      await mock.send(encode(TELNET_KEYS.F5));
+      await mock.read(1000);
+      await mock.send(encode(TELNET_KEYS.ESCAPE));
+      await mock.read(1000);
+
+      await mock.disconnect();
+      await mock.connect("localhost", 23);
+      await mock.read(1000);
+      await mock.send(encode(TELNET_KEYS.F5));
+      await mock.read(1000);
+      await mock.send(encode(TELNET_KEYS.DOWN));
+
+      const data = await mock.read(1000);
+      const screen = parseTelnetScreen(data);
+      expect(screen.menus[0].selectedIndex).toBe(1);
+    });
+
     it("throws on send when disconnected", async () => {
       const mock = new TelnetMock();
       await expect(mock.send(encode("test"))).rejects.toThrow(TelnetError);
@@ -302,6 +323,33 @@ describe("missingItems", () => {
       expect(submenuLabels).not.toContain("Reset C64");
       expect(submenuLabels).not.toContain("Power Cycle");
     }
+  });
+
+  it("keeps submenu selection index non-negative when every action is filtered out", async () => {
+    const mock = new TelnetMock({
+      missingItems: [
+        "Reset C64",
+        "Reboot C64",
+        "Reboot (Clr Mem)",
+        "Power OFF",
+        "Power Cycle",
+        "Save C64 Memory",
+        "Save REU Memory",
+      ],
+    });
+    await mock.connect("localhost", 23);
+    await mock.read(1000);
+    await mock.send(encode(TELNET_KEYS.F5));
+    await mock.read(1000);
+    await mock.send(encode(TELNET_KEYS.RIGHT));
+    await mock.read(1000);
+
+    await mock.send(encode(TELNET_KEYS.DOWN));
+    const data = await mock.read(1000);
+    const screen = parseTelnetScreen(data);
+
+    expect(screen.menus.length).toBeGreaterThanOrEqual(1);
+    expect((mock as { menu: { actionIndex: number } }).menu.actionIndex).toBe(0);
   });
 });
 

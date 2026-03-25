@@ -70,6 +70,7 @@ export function DriveManager({
   const api = getC64API();
   const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
+  const showTelnetDriveControls = telnetAvailable && typeof onTelnetAction === "function";
 
   const {
     refetchDrives,
@@ -303,7 +304,7 @@ export function DriveManager({
               isConnected={isConnected}
               testIdSuffix={testIdSuffix}
               footer={
-                isSoftIec && telnetAvailable && enabled ? (
+                isSoftIec && showTelnetDriveControls && enabled ? (
                   <div className="flex items-center gap-2 pt-1">
                     <Button
                       variant="outline"
@@ -311,7 +312,7 @@ export function DriveManager({
                       className="h-6 px-2 text-xs"
                       data-testid="home-softiec-reset"
                       disabled={!isConnected || machineTaskBusy || telnetBusy}
-                      onClick={() => void onTelnetAction?.("iecReset")}
+                      onClick={() => void onTelnetAction("iecReset")}
                     >
                       {telnetActiveActionId === "iecReset" ? "Resetting…" : "Reset"}
                     </Button>
@@ -321,7 +322,7 @@ export function DriveManager({
                       className="h-6 px-2 text-xs"
                       data-testid="home-softiec-setdir"
                       disabled={!isConnected || machineTaskBusy || telnetBusy}
-                      onClick={() => void onTelnetAction?.("iecSetDir")}
+                      onClick={() => void onTelnetAction("iecSetDir")}
                     >
                       {telnetActiveActionId === "iecSetDir" ? "Setting…" : "Set Dir"}
                     </Button>

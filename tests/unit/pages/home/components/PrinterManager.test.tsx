@@ -203,6 +203,12 @@ describe("PrinterManager – telnet controls", () => {
 
   it("shows telnet buttons when telnetAvailable and printer enabled", () => {
     render(<PrinterManager {...defaultProps} telnetAvailable={true} />);
+    expect(screen.queryByTestId("home-printer-flush")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("home-printer-telnet-reset")).not.toBeInTheDocument();
+  });
+
+  it("shows telnet buttons only when a telnet handler is provided", () => {
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
     expect(screen.getByTestId("home-printer-flush")).toBeInTheDocument();
     expect(screen.getByTestId("home-printer-telnet-reset")).toBeInTheDocument();
   });
@@ -233,19 +239,26 @@ describe("PrinterManager – telnet controls", () => {
   });
 
   it("disables telnet buttons when telnetBusy", () => {
-    render(<PrinterManager {...defaultProps} telnetAvailable={true} telnetBusy={true} />);
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} telnetBusy={true} onTelnetAction={vi.fn()} />);
     expect(screen.getByTestId("home-printer-flush")).toBeDisabled();
     expect(screen.getByTestId("home-printer-telnet-reset")).toBeDisabled();
   });
 
   it("disables telnet buttons when machineTaskBusy", () => {
-    render(<PrinterManager {...defaultProps} telnetAvailable={true} machineTaskBusy={true} />);
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} machineTaskBusy={true} onTelnetAction={vi.fn()} />);
     expect(screen.getByTestId("home-printer-flush")).toBeDisabled();
     expect(screen.getByTestId("home-printer-telnet-reset")).toBeDisabled();
   });
 
   it("shows loading text for active telnet action", () => {
-    render(<PrinterManager {...defaultProps} telnetAvailable={true} telnetActiveActionId="printerFlush" />);
+    render(
+      <PrinterManager
+        {...defaultProps}
+        telnetAvailable={true}
+        telnetActiveActionId="printerFlush"
+        onTelnetAction={vi.fn()}
+      />,
+    );
     expect(screen.getByTestId("home-printer-flush")).toHaveTextContent("Flushing…");
   });
 });

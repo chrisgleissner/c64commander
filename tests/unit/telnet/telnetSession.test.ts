@@ -236,5 +236,22 @@ describe("createTelnetSession", () => {
       const screen = await session.readScreen(100);
       expect(screen.width).toBe(60);
     });
+
+    it("rethrows non-timeout transport errors during readScreen", async () => {
+      const transport = {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn().mockResolvedValue(undefined),
+        send: vi.fn().mockResolvedValue(undefined),
+        read: vi
+          .fn()
+          .mockResolvedValueOnce(new Uint8Array(0))
+          .mockRejectedValueOnce(new TelnetError("socket closed", "DISCONNECTED")),
+        isConnected: vi.fn().mockReturnValue(true),
+      };
+      const session = createTelnetSession(transport);
+
+      await expect(session.connect("localhost", 23)).resolves.toBeUndefined();
+      await expect(session.readScreen(100)).rejects.toMatchObject({ code: "DISCONNECTED" });
+    });
   });
 });

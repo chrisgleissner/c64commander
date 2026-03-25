@@ -49,6 +49,7 @@ export class TelnetMock implements TelnetTransport {
     categoryIndex: 0,
     submenuOpen: false,
     actionIndex: 0,
+    escapePending: false,
   };
   private fixture: MenuFixture;
   private pendingOutput: Uint8Array[] = [];
@@ -181,7 +182,7 @@ export class TelnetMock implements TelnetTransport {
       // DOWN
       if (this.menu.submenuOpen) {
         const actions = this.getVisibleActions();
-        this.menu.actionIndex = Math.min(actions.length - 1, this.menu.actionIndex + 1);
+        this.menu.actionIndex = actions.length > 0 ? Math.min(actions.length - 1, this.menu.actionIndex + 1) : 0;
       } else if (this.menu.open) {
         this.menu.categoryIndex = Math.min(this.fixture.categories.length - 1, this.menu.categoryIndex + 1);
       }

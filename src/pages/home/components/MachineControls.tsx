@@ -8,7 +8,7 @@
 
 import { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw, Zap } from "lucide-react";
+import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
@@ -60,6 +60,7 @@ export function MachineControls({
   footer,
 }: MachineControlsProps) {
   const effectiveBusy = machineTaskBusy || telnetBusy;
+  const showPowerCycle = telnetAvailable && typeof onPowerCycle === "function";
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -107,14 +108,14 @@ export function MachineControls({
             disabled={!status.isConnected || effectiveBusy}
             loading={controls.reboot.isPending}
           />
-          {telnetAvailable && (
+          {showPowerCycle && (
             <QuickActionCard
               icon={RefreshCw}
               label="Power Cycle"
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
               dataTestId="home-power-cycle"
-              onClick={() => void onPowerCycle?.()}
+              onClick={() => void onPowerCycle()}
               disabled={!status.isConnected || effectiveBusy}
               loading={telnetActiveActionId === "powerCycle"}
             />

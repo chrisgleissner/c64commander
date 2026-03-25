@@ -137,6 +137,7 @@ vi.mock("@/pages/home/DriveCard", () => ({
       <button data-testid="drive-status-click" onClick={props.onStatusClick}>
         StatusClick
       </button>
+      {props.footer}
     </div>
   ),
 }));
@@ -215,6 +216,32 @@ describe("DriveManager", () => {
     expect(screen.getByTestId("drive-card-a")).toBeDefined();
     expect(screen.getByTestId("drive-card-b")).toBeDefined();
     expect(screen.getByTestId("drive-card-soft-iec")).toBeDefined();
+  });
+
+  describe("telnet controls", () => {
+    it("hides Soft IEC telnet controls when no telnet handler is provided", () => {
+      resolveConfigValueSpy.mockImplementation(
+        (_payload: unknown, category: string, itemName: string, fallback: string | number) => {
+          if (category === "SoftIEC Drive Settings" && itemName === "IEC Drive") return "Enabled";
+          return fallback;
+        },
+      );
+      render(<DriveManager {...defaultProps} telnetAvailable={true} />);
+      expect(screen.queryByTestId("home-softiec-reset")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("home-softiec-setdir")).not.toBeInTheDocument();
+    });
+
+    it("shows Soft IEC telnet controls when a telnet handler is provided", () => {
+      resolveConfigValueSpy.mockImplementation(
+        (_payload: unknown, category: string, itemName: string, fallback: string | number) => {
+          if (category === "SoftIEC Drive Settings" && itemName === "IEC Drive") return "Enabled";
+          return fallback;
+        },
+      );
+      render(<DriveManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
+      expect(screen.getByTestId("home-softiec-reset")).toBeInTheDocument();
+      expect(screen.getByTestId("home-softiec-setdir")).toBeInTheDocument();
+    });
   });
 
   describe("handleEnabledToggle", () => {
