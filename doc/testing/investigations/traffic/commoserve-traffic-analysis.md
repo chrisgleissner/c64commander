@@ -1,6 +1,6 @@
-# C64U Traffic Interception and HTTP Extraction (Audit Grade)
+# C64U Traffic Interception and HTTP Extraction
 
-## Scope and Ethics
+## Scope
 
 - Traffic captured on a privately owned LAN
 - Device owned and controlled by the author
