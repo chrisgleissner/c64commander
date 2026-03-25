@@ -118,18 +118,19 @@ function buildReplayRequests(entries: readonly TraceEntry[]): ReplayRequest[] {
       });
       continue;
     }
-    if (entry.protocol === "FTP" && entry.direction === "data" && entry.transferDirection === "upload") {
-      const uploadRequest = [...requests]
+    if (entry.protocol === "FTP" && entry.direction === "data") {
+      const ftpRequest = [...requests]
         .reverse()
         .find(
           (request) =>
             request.protocol === "FTP" &&
             request.ftpSessionId === entry.ftpSessionId &&
-            request.commandVerb === "STOR" &&
-            request.byteCount === undefined,
+            request.byteCount === undefined &&
+            (entry.transferDirection === "upload" ? request.commandVerb === "STOR" : request.commandVerb !== "STOR"),
         );
-      if (uploadRequest) {
-        uploadRequest.byteCount = entry.byteCount;
+      if (ftpRequest) {
+        ftpRequest.transferDirection = entry.transferDirection;
+        ftpRequest.byteCount = entry.byteCount;
       }
     }
   }
@@ -254,9 +255,7 @@ function renderRestClientReplay(requests: readonly ReplayRequest[]): string {
       const headers = Object.entries(request.headers ?? {})
         .map(([key, value]) => `${key}: ${value}`)
         .join("\n");
-      const authComment = Object.keys(request.headers ?? {}).some((key) => key.toLowerCase() === "authorization")
-        ? "# X-Password: SET_PASSWORD_HERE\n"
-        : "";
+      const authComment = "# X-Password: SET_PASSWORD_HERE\n";
       const body = request.body === undefined ? "" : `\n${JSON.stringify(request.body, null, 2)}`;
       return [
         `### seq ${request.globalSeq} client ${request.clientId}`,
@@ -282,7 +281,7 @@ function renderCurlReplay(requests: readonly ReplayRequest[], expectations: read
     'cleanup() { rm -rf "$TMP_DIR"; }',
     "trap cleanup EXIT",
     "",
-    'STEP_COUNTER=0',
+    "STEP_COUNTER=0",
     'log_info() { printf "[INFO] %s\\n" "$1"; }',
     'log_step() { STEP_COUNTER=$((STEP_COUNTER + 1)); printf "\\n[STEP %03d] %s\\n" "$STEP_COUNTER" "$1"; }',
     'log_expectation() { printf "[EXPECT] %s\\n" "$1"; }',
@@ -477,7 +476,10 @@ function renderFtpReplayCommand(request: ReplayRequest): string[] {
   }
 }
 
-function buildReplayExpectations(entries: readonly TraceEntry[], requests: readonly ReplayRequest[]): ReplayExpectation[] {
+function buildReplayExpectations(
+  entries: readonly TraceEntry[],
+  requests: readonly ReplayRequest[],
+): ReplayExpectation[] {
   const expectations: ReplayExpectation[] = [];
   const seenProtocols = new Set<string>();
   const requestSeqs = requests.map((request) => request.globalSeq).sort((left, right) => left - right);
@@ -508,7 +510,9 @@ function renderExpectationSummary(expectations: readonly ReplayExpectation[]): s
 
   return [
     'log_info "Embedded protocol degradation expectations:"',
-    ...expectations.map((expectation) => `log_info ${shellQuote(`${expectation.displayLabel}: ${expectation.message}`)}`),
+    ...expectations.map(
+      (expectation) => `log_info ${shellQuote(`${expectation.displayLabel}: ${expectation.message}`)}`,
+    ),
     "",
   ];
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBreakpointStagePlan,
   createBreakpointFailureSummary,
+  shouldSkipRecoveryAfterBreakpointFailure,
   shouldSkipRecovery,
   TraceTailBuffer,
 } from "./breakpoint.js";
@@ -65,6 +66,12 @@ describe("breakpoint stage planning", () => {
         outcome: "completed",
       }),
     ).toBe(false);
+    expect(
+      shouldSkipRecoveryAfterBreakpointFailure({
+        config: buildConfig(),
+        abortReason: "device-unresponsive",
+      }),
+    ).toBe(true);
   });
 
   it("keeps only the configured trace tail length", () => {

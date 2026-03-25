@@ -79,8 +79,8 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
           headers: sanitizeTraceHeaders(response.headers),
           body: serializeTraceValue(response.data),
           latencyMs: response.latencyMs,
-          bodyPreviewHex: preview.hex,
-          bodyPreviewAscii: preview.ascii,
+          bodyPreviewHex: preview.bodyPreviewHex,
+          bodyPreviewAscii: preview.bodyPreviewAscii,
         });
         const retryable = response.status >= 500 && attempt <= maxRetries;
         const retryDelayMs = retryable ? computeRetryDelay(shouldTrace, baseDelayMs, attempt) : undefined;

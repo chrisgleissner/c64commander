@@ -23,13 +23,15 @@ describe("traceWriter", () => {
     writeReplayManifest(dir, entries, "http://127.0.0.1:8080");
 
     const markdown = fs.readFileSync(path.join(dir, "trace.md"), "utf8");
+    const httpReplay = fs.readFileSync(path.join(dir, "replay", "device-replay.http"), "utf8");
     const shell = fs.readFileSync(path.join(dir, "replay", "device-replay.sh"), "utf8");
     const manifest = JSON.parse(fs.readFileSync(path.join(dir, "replay", "manifest.json"), "utf8")) as {
-      requests: Array<{ protocol: string }>;
+      requests: Array<{ protocol: string; commandVerb?: string; transferDirection?: string; byteCount?: number }>;
     };
 
     expect(markdown).toContain("## [1] REST GET /v1/version");
     expect(markdown).toContain("## [6] FTP LIST /");
+    expect(httpReplay).toContain("# X-Password: SET_PASSWORD_HERE");
     expect(shell).toContain('DEVICE_HOST="c64u"');
     expect(shell).toContain("--host <hostname>");
     expect(shell).toContain("lftp -u anonymous");
@@ -39,7 +41,16 @@ describe("traceWriter", () => {
     expect(shell).toContain("EXPECTED FTP DEGRADATION");
     expect(shell).toContain("EXPECTED PING DEGRADATION");
     expect(shell).toContain("EXPECTED TELNET DEGRADATION");
-    expect(manifest.requests).toHaveLength(2);
+    expect(shell).toContain("get /demo.prg -o $TMP_DIR/demo.prg; bye");
+    expect(manifest.requests).toHaveLength(3);
+    expect(manifest.requests).toContainEqual(
+      expect.objectContaining({
+        protocol: "FTP",
+        commandVerb: "RETR",
+        transferDirection: "download",
+        byteCount: 4,
+      }),
+    );
   });
 });
 
@@ -162,6 +173,41 @@ function buildTraceEntries(): TraceEntry[] {
       ftpSessionId: "ftp-1",
       rawCommand: "LIST /",
       commandVerb: "LIST",
+    },
+    {
+      globalSeq: 7,
+      runSessionId: "run-1",
+      correlationId: "corr-ftp-download",
+      clientId: "client-2",
+      stageId: "stage-1",
+      testType: "stress",
+      timestamp: "2026-03-24T12:00:00.021Z",
+      launchedAtMs: 1021,
+      hrTimeNs: 4n,
+      protocol: "FTP",
+      direction: "command",
+      ftpSessionId: "ftp-1",
+      rawCommand: "RETR /demo.prg",
+      commandVerb: "RETR",
+    },
+    {
+      globalSeq: 8,
+      runSessionId: "run-1",
+      correlationId: "corr-ftp-download",
+      clientId: "client-2",
+      stageId: "stage-1",
+      testType: "stress",
+      timestamp: "2026-03-24T12:00:00.022Z",
+      launchedAtMs: 1021,
+      hrTimeNs: 5n,
+      protocol: "FTP",
+      direction: "data",
+      ftpSessionId: "ftp-1",
+      transferDirection: "download",
+      byteCount: 4,
+      durationMs: 3,
+      first256Hex: "41424344",
+      first256Ascii: "ABCD",
     },
   ];
 }

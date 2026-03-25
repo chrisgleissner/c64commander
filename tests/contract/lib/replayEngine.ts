@@ -178,7 +178,9 @@ export async function runReplay(input: {
 async function assertReplayPreflight(input: {
   config: HarnessConfig;
   restRequest: ReturnType<typeof createRestRequest>;
-  ftpProbe: { check: (input: { source: string; stageId?: string }) => Promise<{ abort: boolean; state: string; reason: string }> };
+  ftpProbe: {
+    check: (input: { source: string; stageId?: string }) => Promise<{ abort: boolean; state: string; reason: string }>;
+  };
 }): Promise<void> {
   const restResult = await input.restRequest({ method: "GET", url: "/v1/version" });
   if (restResult.status !== 200) {
