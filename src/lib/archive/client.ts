@@ -45,6 +45,9 @@ const isNativeArchiveRuntime = () => {
 
 const normalizeHeaderMap = (headers?: HeadersInit): Record<string, string> => Object.fromEntries(new Headers(headers));
 
+const isUnsupportedSignalError = (error: unknown) =>
+  error instanceof Error && error.message.includes("Expected signal") && error.message.includes("AbortSignal");
+
 const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
@@ -211,12 +214,19 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       });
     }
 
-    const shouldAttachSignal = this.fetchImpl !== fetch;
     return runWithDeadline(
-      (combinedSignal) =>
-        this.fetchImpl(request.url, shouldAttachSignal ? { ...request, signal: combinedSignal } : request),
+      async (combinedSignal) => {
+        try {
+          return await this.fetchImpl(request.url, { ...request, signal: combinedSignal });
+        } catch (error) {
+          if (!combinedSignal.aborted && isUnsupportedSignalError(error)) {
+            return this.fetchImpl(request.url, request);
+          }
+          throw error;
+        }
+      },
       timeoutMs,
-      shouldAttachSignal ? signal : undefined,
+      signal,
     );
   }
 

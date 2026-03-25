@@ -17,8 +17,11 @@ describe("archive execution", () => {
 
   it("classifies entry actions from filenames", () => {
     expect(getArchiveEntryActionLabel("demo.prg")).toBe("Run");
+    expect(getArchiveEntryActionLabel("cartridge.crt")).toBe("Run");
     expect(getArchiveEntryActionLabel("disk.d64")).toBe("Mount & run");
     expect(getArchiveEntryActionLabel("tune.sid")).toBe("Play");
+    expect(getArchiveEntryActionLabel("module.mod")).toBe("Play");
+    expect(getArchiveEntryActionLabel("notes.txt")).toBe("Execute");
   });
 
   it("builds a play plan from downloaded binary metadata", () => {
@@ -30,6 +33,18 @@ describe("archive execution", () => {
     });
 
     expect(plan).toMatchObject({ source: "local", category: "prg", path: "demo.prg" });
+  });
+
+  it("keeps runtime file buffers trimmed to the archive byte range", async () => {
+    const bytes = new Uint8Array([0, 1, 8, 96, 0]).subarray(1, 4);
+    const plan = buildArchivePlayPlan({
+      fileName: 'demo.prg',
+      bytes,
+      contentType: 'application/octet-stream',
+      url: 'http://example.invalid/file',
+    });
+
+    await expect(plan.file.arrayBuffer()).resolves.toEqual(Uint8Array.from([1, 8, 96]).buffer);
   });
 
   it("adds an extension when binary detection succeeds for an extensionless archive file", () => {

@@ -127,6 +127,60 @@ describe("archive client", () => {
     vi.useRealTimers();
   });
 
+  it("aborts the underlying fetch when a request times out", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            reject(init.signal?.reason ?? new Error("aborted"));
+          },
+          { once: true },
+        );
+      });
+    });
+    const client = createArchiveClient({ backend: "commodore", hostOverride: "archive.local" }, fetchMock);
+
+    const expectation = expect(client.getPresets()).rejects.toThrow(
+      "commodore archive request failed for archive.local: Archive request timed out",
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expectation;
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        signal: expect.objectContaining({ aborted: true }),
+      }),
+    );
+    vi.useRealTimers();
+  });
+
+  it("falls back to a plain fetch when the runtime rejects AbortSignal instances", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce((_input: string | URL | Request, init?: RequestInit) => {
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        throw new Error('Expected signal ("AbortSignal {}") to be an instance of AbortSignal.');
+      })
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: '1', name: 'Latest uploads' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+    const client = createArchiveClient({ backend: 'commodore', hostOverride: 'archive.local' }, fetchMock);
+
+    await expect(client.getPresets()).resolves.toEqual([{ id: '1', name: 'Latest uploads' }]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.not.objectContaining({ signal: expect.anything() }),
+    );
+  });
+
   it("rejects aborted requests", async () => {
     const controller = new AbortController();
     const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
@@ -135,6 +189,16 @@ describe("archive client", () => {
     controller.abort(new Error("aborted by test"));
 
     await expect(promise).rejects.toThrow("aborted by test");
+  });
+
+  it("does not invoke fetch when the caller signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('aborted before start'));
+    const fetchMock = vi.fn<typeof fetch>();
+    const client = createArchiveClient({ backend: 'commodore' }, fetchMock);
+
+    await expect(client.getPresets({ signal: controller.signal })).rejects.toThrow('aborted before start');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not treat errorCode 0 as a protocol failure", async () => {
@@ -151,6 +215,63 @@ describe("archive client", () => {
     await expect(client.search({ name: "ok", category: "apps" })).resolves.toEqual([
       { id: "1", category: 40, name: "Okay", errorCode: 0 },
     ]);
+  });
+
+  it("returns an empty entry list when the archive response omits contentEntry", async () => {
+    const client = createArchiveClient(
+      { backend: 'commodore' },
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ totalRows: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    await expect(client.getEntries('100', 40)).resolves.toEqual([]);
+  });
+
+  it("wraps archive binary download failures with backend and host context", async () => {
+    const client = createArchiveClient(
+      { backend: 'commodore', hostOverride: 'archive.local' },
+      vi.fn().mockResolvedValue(new Response('nope', { status: 503, statusText: 'Unavailable' })),
+    );
+
+    await expect(client.downloadBinary('100', 40, 0, 'broken.prg')).rejects.toThrow(
+      'commodore archive download failed for archive.local: Archive binary download failed with 503 Unavailable',
+    );
+  });
+
+  it("applies request transforms before downloading binaries", async () => {
+    class TestBinaryClient extends BaseArchiveClient {
+      constructor() {
+        super(
+          { backend: 'commodore', hostOverride: 'archive.local' },
+          vi.fn().mockResolvedValue(
+            new Response(new Uint8Array([1, 8, 96]), {
+              status: 200,
+              headers: { 'Content-Type': 'application/octet-stream' },
+            }),
+          ),
+        );
+      }
+
+      protected override transformRequest(request: RequestInit & { url: string }) {
+        return {
+          ...request,
+          headers: {
+            ...(request.headers as Record<string, string>),
+            'X-Binary-Test': '1',
+          },
+        };
+      }
+    }
+
+    const client = new TestBinaryClient();
+
+    await expect(client.downloadBinary('100', 40, 0, 'joyride.prg')).resolves.toMatchObject({
+      fileName: 'joyride.prg',
+    });
   });
 
   it("uses CapacitorHttp on native platforms for JSON archive requests", async () => {
@@ -209,6 +330,20 @@ describe("archive client", () => {
         responseType: "arraybuffer",
       }),
     );
+  });
+
+  it("decodes base64 binary payloads returned by CapacitorHttp", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: 'AQhg',
+      headers: { 'content-type': 'application/octet-stream' },
+    } as never);
+
+    const client = createArchiveClient({ backend: 'commodore' });
+    const binary = await client.downloadBinary('100', 40, 0, 'joyride.prg');
+
+    expect(binary.bytes).toEqual(new Uint8Array([1, 8, 96]));
   });
 
   it("falls back to fetch when native platform detection throws", async () => {

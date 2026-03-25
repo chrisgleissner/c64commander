@@ -36,6 +36,7 @@ describe("archive config", () => {
 
   it("validates hostnames without protocol prefixes", () => {
     expect(validateArchiveHost("http://example.com")).toContain("hostname only");
+    expect(validateArchiveHost("example.com/library?q=1")).toContain("without paths or query strings");
     expect(validateArchiveHost("example.com")).toBeNull();
     expect(validateArchiveHost("127.0.0.1:3001")).toBeNull();
   });
