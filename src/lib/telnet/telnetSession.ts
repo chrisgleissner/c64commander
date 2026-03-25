@@ -98,12 +98,13 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
       }
 
       authenticated = true;
+      screenBuffer = authData;
     } else {
       // No password required
       authenticated = true;
+      screenBuffer = initData;
     }
 
-    screenBuffer = new Uint8Array(0);
     resetIdleTimer();
     addLog("info", "Telnet session connected", { host, port, authenticated });
   }

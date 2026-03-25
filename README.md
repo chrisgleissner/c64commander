@@ -70,7 +70,7 @@ In C64 Commander:
 2. Enter the C64 Ultimate IP address or hostname.
 3. A green status dot next to the C64U logo confirms the connection:
 
-![Connected](doc/img/app/details/page-headers/home/header.png)
+![Connected](doc/img/app/home/02-connection-status-popover.png)
 
 ## Pages
 

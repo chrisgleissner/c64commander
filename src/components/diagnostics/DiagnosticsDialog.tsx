@@ -1157,14 +1157,14 @@ export function DiagnosticsDialog({
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
-            <div className="relative min-h-8 pr-20">
-              <AppSheetTitle className="pr-4">Diagnostics</AppSheetTitle>
-              <div className={cn("absolute top-1 z-10", profile === "compact" ? "right-14" : "right-20")}>
+            <div className="flex min-h-8 items-center pr-20">
+              <div className="relative z-10 flex items-center gap-1">
+                <AppSheetTitle>Diagnostics</AppSheetTitle>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0"
+                  className="h-7 w-7 p-0 opacity-70"
                   onClick={() => setOverflowOpen((v) => !v)}
                   data-testid="diagnostics-overflow-menu"
                 >
@@ -1290,7 +1290,7 @@ export function DiagnosticsDialog({
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
-                          data-testid="footer-diagnostics-clear-all-trigger"
+                          data-testid="diagnostics-clear-all-trigger"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Clear all
@@ -1303,7 +1303,7 @@ export function DiagnosticsDialog({
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={onClearAll} data-testid="footer-diagnostics-clear-all-confirm">
+                          <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
                             Clear
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -1450,146 +1450,6 @@ export function DiagnosticsDialog({
               </div>
             </section>
           </div>
-          {/* Phase 6: Compact controls — pinned outside the scroll area so the
-            overflow popup is always anchored within the visible viewport. */}
-          <section className="shrink-0 border-t border-border px-4 pb-4 pt-2" data-testid="diagnostics-controls">
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setConfigDriftOpen(true)}
-                data-testid="footer-open-config-drift-screen"
-              >
-                Config drift
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setDecisionStateOpen(true)}
-                data-testid="footer-open-decision-state-screen"
-              >
-                Decision state
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setLatencyOpen(true)}
-                data-testid="footer-open-latency-screen"
-              >
-                Latency
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setHistoryOpen(true)}
-                data-testid="footer-open-timeline-screen"
-              >
-                Health history
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setHeatMapVariant("REST")}
-                data-testid="footer-open-rest-heatmap-screen"
-              >
-                REST heat map
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setHeatMapVariant("FTP")}
-                data-testid="footer-open-ftp-heatmap-screen"
-              >
-                FTP heat map
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setHeatMapVariant("CONFIG")}
-                data-testid="footer-open-config-heatmap-screen"
-              >
-                Config heat map
-              </Button>
-              <div className="relative">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={() => setOverflowOpen((v) => !v)}
-                  data-testid="footer-diagnostics-overflow-menu"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </Button>
-                {overflowOpen ? (
-                  <div className="absolute bottom-full left-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        void onShareAll();
-                      }}
-                      data-testid="footer-diagnostics-share-all"
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share all
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        handleShareFiltered();
-                      }}
-                      data-testid="footer-diagnostics-share-filtered"
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share filtered
-                    </button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
-                          data-testid="diagnostics-clear-all-trigger"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Clear all
-                        </button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent surface="confirmation">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
-                          <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
-                            Clear
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
         </AppSheetContent>
       </AppSheet>
 

@@ -10,17 +10,22 @@ import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 import { TelnetSocket } from "@/lib/native/telnetSocket";
 
+type CreateTelnetClientOptions = {
+  connectTimeoutMs?: number;
+};
+
 /**
  * Capacitor-backed Telnet transport using native TCP sockets.
  * Bridges TelnetTransport interface to the TelnetSocket Capacitor plugin.
  */
-export function createTelnetClient(): TelnetTransport {
+export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetTransport {
   let connected = false;
+  const connectTimeoutMs = options?.connectTimeoutMs ?? 5000;
 
   return {
     async connect(host: string, port: number): Promise<void> {
       try {
-        await TelnetSocket.connect({ host, port, timeoutMs: 5000 });
+        await TelnetSocket.connect({ host, port, timeoutMs: connectTimeoutMs });
         connected = true;
       } catch (error) {
         connected = false;
