@@ -250,11 +250,11 @@ describe("Golden Action Fixture Tests", () => {
       expect(cor4).toBeDefined();
       expect(cor4?.outcome).toBe("timeout");
 
-      // COR-0005: system (automatic), incomplete (no action-end)
+      // COR-0005: system (automatic), in_progress (no action-end)
       const cor5 = summaries.find((s) => s.correlationId === "COR-0005");
       expect(cor5).toBeDefined();
       expect(cor5?.origin).toBe("system");
-      expect(cor5?.outcome).toBe("incomplete");
+      expect(cor5?.outcome).toBe("in_progress");
       expect(cor5?.restCount).toBe(1);
     });
 

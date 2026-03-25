@@ -145,7 +145,7 @@ describe("buildActionSummaries", () => {
     expect(second.originalOrigin).toBe("automatic");
     expect(second.durationMs).toBeGreaterThanOrEqual(0);
     expect(second.durationMsMissing).toBeUndefined();
-    expect(second.outcome).toBe("incomplete");
+    expect(second.outcome).toBe("in_progress");
     expect(second.restCount).toBe(1);
     expect(second.ftpCount).toBeUndefined();
     expect(second.errorCount).toBeUndefined();
@@ -213,6 +213,41 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     expect(summary.outcome).toBe("timeout");
+  });
+
+  it("resolves failed outcome for unrecognized action-end status", () => {
+    const traces: TraceEvent[] = [
+      buildTrace({
+        id: "E1",
+        type: "action-start",
+        correlationId: "C1",
+        relativeMs: 0,
+        data: { name: "test" },
+      }),
+      buildTrace({
+        id: "E2",
+        type: "action-end",
+        correlationId: "C1",
+        relativeMs: 100,
+        data: { status: "bogus_status" },
+      }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.outcome).toBe("failed");
+  });
+
+  it("resolves in_progress outcome when action has no action-end", () => {
+    const traces: TraceEvent[] = [
+      buildTrace({
+        id: "E1",
+        type: "action-start",
+        correlationId: "C1",
+        relativeMs: 0,
+        data: { name: "test-pending" },
+      }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.outcome).toBe("in_progress");
   });
 
   it("uses fallback action name when actionStart has no name", () => {
@@ -984,7 +1019,7 @@ describe("buildActionSummaries", () => {
         type: "action-end",
         correlationId: "C1",
         relativeMs: 100,
-        data: { status: "incomplete" },
+        data: { status: "unrecognized" },
       }),
     ];
     const [summary] = buildActionSummaries(traces);
@@ -1286,6 +1321,6 @@ describe("buildActionSummaries", () => {
     const [summary] = buildActionSummaries(traces);
     expect(summary.origin).toBe("system");
     expect(summary.originalOrigin).toBe("automatic");
-    expect(summary.outcome).toBe("incomplete");
+    expect(summary.outcome).toBe("in_progress");
   });
 });

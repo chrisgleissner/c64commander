@@ -221,4 +221,29 @@ test.describe("Home diagnostics overlay", () => {
     await expect(dialog.getByTestId("run-health-check")).toHaveCount(1);
     await snap(page, testInfo, "clear-all");
   });
+
+  test("opens the decision-state surface and exposes repair controls", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const dialog = await openDiagnosticsOverlay(page);
+
+    await dialog.getByTestId("diagnostics-overflow-menu").click();
+    await dialog.getByTestId("open-decision-state-screen").click();
+
+    const decisionState = page.getByTestId("decision-state-surface");
+    await expect(decisionState).toBeVisible();
+    await expect(decisionState.getByTestId("decision-state-playback")).toBeVisible();
+    await expect(decisionState.getByTestId("decision-state-reconcilers")).toBeVisible();
+    await expect(decisionState.getByTestId("decision-state-health-check")).toBeVisible();
+    await expect(decisionState.getByTestId("decision-state-repair")).toBeEnabled();
+    await snap(page, testInfo, "decision-state-open");
+
+    await decisionState.getByTestId("decision-state-repair").click();
+    await expect(decisionState.getByTestId("decision-state-repair")).toBeEnabled();
+
+    await decisionState.getByTestId("decision-state-back").click();
+    await expect(decisionState).toBeHidden();
+    await expect(dialog).toBeVisible();
+  });
 });
