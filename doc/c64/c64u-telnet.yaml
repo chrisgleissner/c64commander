@@ -37,50 +37,50 @@ telnet:
           default_item: "Reset C64"
         Built-in Drive A:
           items:
-            - Built-in Dri┐Turn Off
+            - Turn Off
             - Reset
             - Switch to 1571
             - Switch to 1581
             - Insert Blank
-          default_item: "Built-in Dri┐Turn Off"
+          default_item: "Turn Off"
         Built-in Drive B:
           items:
-            - Built-in Dri┐Turn On
+            - Turn On
             - Switch to 1541
             - Switch to 1571
             - Switch to 1581
-          default_item: "Built-in Dri┐Turn On"
+          default_item: "Turn On"
         Software IEC:
           items:
-            - Software IEC ┐Turn On
+            - Turn On
             - Reset
-            - Set dir. here
-          default_item: "Software IEC ┐Turn On"
+            - Set directory here
+          default_item: "Turn On"
         Printer:
           items:
-            - Printer        ┐Flush/Eject
+            - Flush/Eject
             - Reset
             - Turn On
-          default_item: "Printer        ┐Flush/Eject"
+          default_item: "Flush/Eject"
         Configuration:
           items:
             - Save to Flash
             - Save to File
-            - Configur┐Reset from Flash
+            - Reset from Flash
             - Reset to Defaults
             - Clear Flash Config
           default_item: "Save to Flash"
         Streams:
           items:
-            - Streams     ┐  VIC Stream
+            - VIC Stream
             - Audio Stream
-          default_item: "Streams     ┐  VIC Stream"
+          default_item: "VIC Stream"
         Developer:
           items:
             - Clear Debug Log
             - Save Debug Log
-            - Save EDID to file
-            - Developer┐  Debug Stream
+            - Save EDID to File
+            - Debug Stream
           default_item: "Clear Debug Log"
   selected_directory_action_menus:
     screen_context: "filesystem browser with a directory selected and the action menu opened via function key"
@@ -117,7 +117,7 @@ telnet:
           default_item: "D64 Image"
         Power & Reset:
           items:
-            - Power & Re┐Reset C64
+            - Reset C64
             - Reboot C64
             - Reboot (Clr Mem)
             - Power OFF
@@ -126,65 +126,65 @@ telnet:
             - Save REU Memory
             - Save Cartridge
             - Save MP3 Drv D
-          default_item: "Power & Re┐Reset C64"
+          default_item: "Reset C64"
         Built-in Drive A:
           items:
-            - Built-in Dri┐Turn Off
+            - Turn Off
             - Reset
             - Switch to 1571
             - Switch to 1581
             - Insert Blank
-          default_item: "Built-in Dri┐Turn Off"
+          default_item: "Turn Off"
         Built-in Drive B:
           items:
-            - Built-in Dri┐Turn On
+            - Turn On
             - Switch to 1541
             - Switch to 1571
             - Switch to 1581
-          default_item: "Built-in Dri┐Turn On"
+          default_item: "Turn On"
         Software IEC:
           items:
-            - Software IEC ┐Turn On
+            - Turn On
             - Reset
-            - Set dir. here
-          default_item: "Software IEC ┐Turn On"
+            - Set directory here
+          default_item: "Turn On"
         UltiCopy:
           items:
-            - UltiCopy          ┐Drive 8
+            - Drive 8
             - Drive 9
             - Drive 10
             - Drive 11
-          default_item: "UltiCopy          ┐Drive 8"
+          default_item: "Drive 8"
         Tape:
           items:
-            - Tape   ┐Sample tape to TAP
+            - Sample tape to TAP
             - Capture save to TAP
-          default_item: "Tape   ┐Sample tape to TAP"
+          default_item: "Sample tape to TAP"
         Printer:
           items:
-            - Printer        ┐Flush/Eject
+            - Flush/Eject
             - Reset
             - Turn On
-          default_item: "Printer        ┐Flush/Eject"
+          default_item: "Flush/Eject"
         Configuration:
           items:
             - Save to Flash
             - Save to File
-            - Configur┐Reset from Flash
+            - Reset from Flash
             - Reset to Defaults
             - Clear Flash Config
           default_item: "Save to Flash"
         Streams:
           items:
-            - Streams     ┐  VIC Stream
+            - VIC Stream
             - Audio Stream
-          default_item: "Streams     ┐  VIC Stream"
+          default_item: "VIC Stream"
         Developer:
           items:
             - Clear Debug Log
             - Save Debug Log
-            - Save EDID to file
-            - Developer┐  Debug Stream
+            - Save EDID to File
+            - Debug Stream
           default_item: "Clear Debug Log"
   filesystem_context_menus:
     screen_context: "filesystem browser with a selected entry and its ENTER-opened context menu"
@@ -283,75 +283,3 @@ telnet:
           - Rename
           - Delete
         default_item: "Play Main Tune"
-  commoserve:
-    screen_context: "CommoServe file search dialog opened via F6"
-    search_form:
-      title: "CommoServe File Search"
-      fields:
-        Name:
-          kind: text
-          initial_value: ""
-        Group:
-          kind: text
-          initial_value: ""
-        Handle:
-          kind: text
-          initial_value: ""
-        Event:
-          kind: text
-          initial_value: ""
-        Category:
-          kind: dropdown
-          initial_value: ""
-          options:
-            - Apps
-            - Demos
-            - Games
-            - Graphics
-            - Music
-        Date:
-          kind: dropdown
-          initial_value: ""
-          options:
-            - "1980"
-            - "1981"
-            - "1982"
-            - "1983"
-            - "1984"
-            - "1985"
-            - "1986"
-            - "1987"
-            - "1988"
-            - "1989"
-            - "1990"
-            - "1991"
-            - "1992"
-            - "1993"
-            - "1994"
-            - "1995"
-            - "1996"
-        Type:
-          kind: dropdown
-          initial_value: ""
-          options:
-            - crt
-            - d64
-            - d71
-            - d81
-            - sid
-            - t64
-            - tap
-        Sort:
-          kind: dropdown
-          initial_value: ""
-          options:
-            - Name
-            - Year
-        Order:
-          kind: dropdown
-          initial_value: ""
-          options:
-            - Ascending
-            - Descending
-      actions:
-        - Submit
