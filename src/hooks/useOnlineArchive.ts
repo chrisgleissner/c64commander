@@ -24,34 +24,34 @@ export type OnlineArchiveState =
   | { phase: "searching" }
   | { phase: "results"; params: ArchiveSearchParams; results: ArchiveSearchResult[] }
   | {
-      phase: "loadingEntries";
-      params: ArchiveSearchParams;
-      result: ArchiveSearchResult;
-      results: ArchiveSearchResult[];
-    }
+    phase: "loadingEntries";
+    params: ArchiveSearchParams;
+    result: ArchiveSearchResult;
+    results: ArchiveSearchResult[];
+  }
   | {
-      phase: "entries";
-      params: ArchiveSearchParams;
-      result: ArchiveSearchResult;
-      results: ArchiveSearchResult[];
-      entries: ArchiveEntry[];
-    }
+    phase: "entries";
+    params: ArchiveSearchParams;
+    result: ArchiveSearchResult;
+    results: ArchiveSearchResult[];
+    entries: ArchiveEntry[];
+  }
   | {
-      phase: "downloading";
-      params: ArchiveSearchParams;
-      result: ArchiveSearchResult;
-      results: ArchiveSearchResult[];
-      entry: ArchiveEntry;
-      entries: ArchiveEntry[];
-    }
+    phase: "downloading";
+    params: ArchiveSearchParams;
+    result: ArchiveSearchResult;
+    results: ArchiveSearchResult[];
+    entry: ArchiveEntry;
+    entries: ArchiveEntry[];
+  }
   | {
-      phase: "executing";
-      params: ArchiveSearchParams;
-      result: ArchiveSearchResult;
-      results: ArchiveSearchResult[];
-      entry: ArchiveEntry;
-      entries: ArchiveEntry[];
-    }
+    phase: "executing";
+    params: ArchiveSearchParams;
+    result: ArchiveSearchResult;
+    results: ArchiveSearchResult[];
+    entry: ArchiveEntry;
+    entries: ArchiveEntry[];
+  }
   | { phase: "error"; message: string; recoverableState: Exclude<OnlineArchiveState, { phase: "error" }> | null };
 
 const toErrorMessage = (error: unknown, fallback: string) => {

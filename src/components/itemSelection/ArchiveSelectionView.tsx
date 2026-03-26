@@ -102,16 +102,16 @@ export const ArchiveSelectionView = ({
         }
     }, [form]);
 
-  const resultRows = "results" in state ? state.results : [];
+    const resultRows = "results" in state ? state.results : [];
 
-  const handleSearch = useCallback(async () => {
-    await search(form);
-  }, [form, search]);
+    const handleSearch = useCallback(async () => {
+        await search(form);
+    }, [form, search]);
 
-  const currentDefaults = resolveArchiveClientConfig(DEFAULT_ARCHIVE_SOURCE_CONFIG);
+    const currentDefaults = resolveArchiveClientConfig(DEFAULT_ARCHIVE_SOURCE_CONFIG);
 
-  return (
-    <div className="space-y-3" data-testid="archive-selection-view">
+    return (
+        <div className="space-y-3" data-testid="archive-selection-view">
             <div
                 className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground"
                 data-testid="archive-selection-config"
@@ -248,8 +248,8 @@ export const ArchiveSelectionView = ({
                     );
                 })}
             </div>
-    </div>
-  );
+        </div>
+    );
 };
 
 export { resultKey as archiveResultKey };

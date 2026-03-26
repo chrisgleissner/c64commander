@@ -88,8 +88,8 @@ Can Telnet be interacted with independently of FTP and REST, or must all protoco
 
 **Action menu key**: On Ultimate 64 devices, the action menu is opened with **F5**, not F1. F1 is Page Up. Confirmed from firmware source: `userinterface.cc:615` — `case KEY_F5: c = KEY_TASKS; break;`. On C64 Ultimate devices, F1 opens the action menu directly. The client must detect the device type and use the correct key.
 
-| Key | VT100 Sequence | Firmware Internal Code          | Purpose                          |
-| --- | -------------- | ------------------------------- | -------------------------------- |
+| Key | VT100 Sequence | Firmware Internal Code          | Purpose             |
+| --- | -------------- | ------------------------------- | ------------------- |
 | F6  | `\e[17~`       | `KEY_F6` → `KEY_SEARCH` (0x1FD) | **Open CommoServe** |
 
 F6 opens the CommoServe online content search. This key mapping is consistent across both C64U and U64 devices. See section 10b for the full CommoServe integration design.
@@ -1057,7 +1057,7 @@ The title line contains the firmware version: `*** C64 Ultimate (V1.49) 1.1.0 **
 | Concurrent Telnet + REST causes subsystem mutex timeout | Existing backoff/retry handles occasional NO_LOCK; Telnet actions are rare       |
 | Connection drops during navigation                      | Reconnect and retry full action from start                                       |
 | Web users cannot use Telnet features                    | Clear UI indication; REST covers most common actions                             |
-| Archive service unavailable or slow                    | Generous timeouts (15s query); clear error messaging; cached presets per session |
+| Archive service unavailable or slow                     | Generous timeouts (15s query); clear error messaging; cached presets per session |
 | CommoServe presets change server-side                   | Presets are fetched dynamically; UI adapts to available options                  |
 | Device has no internet for CommoServe                   | Detect via firmware popup; disable CommoServe entry point with clear message     |
 

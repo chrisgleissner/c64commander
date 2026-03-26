@@ -200,7 +200,7 @@ describe("archive client", () => {
         }),
       );
 
-  const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }), fetchMock);
+    const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }), fetchMock);
 
     await expect(client.getPresets()).resolves.toEqual([{ id: "1", name: "Latest uploads" }]);
     expect(fetchMock).toHaveBeenNthCalledWith(
