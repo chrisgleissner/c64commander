@@ -24,34 +24,34 @@ export type OnlineArchiveState =
   | { phase: "searching" }
   | { phase: "results"; params: ArchiveSearchParams; results: ArchiveSearchResult[] }
   | {
-    phase: "loadingEntries";
-    params: ArchiveSearchParams;
-    result: ArchiveSearchResult;
-    results: ArchiveSearchResult[];
-  }
+      phase: "loadingEntries";
+      params: ArchiveSearchParams;
+      result: ArchiveSearchResult;
+      results: ArchiveSearchResult[];
+    }
   | {
-    phase: "entries";
-    params: ArchiveSearchParams;
-    result: ArchiveSearchResult;
-    results: ArchiveSearchResult[];
-    entries: ArchiveEntry[];
-  }
+      phase: "entries";
+      params: ArchiveSearchParams;
+      result: ArchiveSearchResult;
+      results: ArchiveSearchResult[];
+      entries: ArchiveEntry[];
+    }
   | {
-    phase: "downloading";
-    params: ArchiveSearchParams;
-    result: ArchiveSearchResult;
-    results: ArchiveSearchResult[];
-    entry: ArchiveEntry;
-    entries: ArchiveEntry[];
-  }
+      phase: "downloading";
+      params: ArchiveSearchParams;
+      result: ArchiveSearchResult;
+      results: ArchiveSearchResult[];
+      entry: ArchiveEntry;
+      entries: ArchiveEntry[];
+    }
   | {
-    phase: "executing";
-    params: ArchiveSearchParams;
-    result: ArchiveSearchResult;
-    results: ArchiveSearchResult[];
-    entry: ArchiveEntry;
-    entries: ArchiveEntry[];
-  }
+      phase: "executing";
+      params: ArchiveSearchParams;
+      result: ArchiveSearchResult;
+      results: ArchiveSearchResult[];
+      entry: ArchiveEntry;
+      entries: ArchiveEntry[];
+    }
   | { phase: "error"; message: string; recoverableState: Exclude<OnlineArchiveState, { phase: "error" }> | null };
 
 const toErrorMessage = (error: unknown, fallback: string) => {
@@ -70,10 +70,7 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
     headers: config.headers ?? {},
     enabled: config.enabled ?? true,
   });
-  const resolvedConfig = useMemo<ArchiveClientResolvedConfig>(
-    () => resolveArchiveClientConfig(config),
-    [configKey],
-  );
+  const resolvedConfig = useMemo<ArchiveClientResolvedConfig>(() => resolveArchiveClientConfig(config), [configKey]);
   const client = useMemo(() => createArchiveClient(config), [configKey]);
   const [presets, setPresets] = useState<ArchivePreset[]>([]);
   const [presetsLoading, setPresetsLoading] = useState(false);

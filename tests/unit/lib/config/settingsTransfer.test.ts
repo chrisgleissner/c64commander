@@ -74,6 +74,7 @@ describe("settingsTransfer", () => {
     it("collects all settings", () => {
       vi.mocked(appSettings.loadDebugLoggingEnabled).mockReturnValue(true);
       vi.mocked(appSettings.loadVolumeSliderPreviewIntervalMs).mockReturnValue(250);
+      vi.mocked(appSettings.loadCommoserveEnabled).mockReturnValue(true);
       vi.mocked(appSettings.loadArchiveHostOverride).mockReturnValue("");
       vi.mocked(appSettings.loadArchiveClientIdOverride).mockReturnValue("");
       vi.mocked(appSettings.loadArchiveUserAgentOverride).mockReturnValue("");
@@ -86,6 +87,7 @@ describe("settingsTransfer", () => {
       expect(result.version).toBe(1);
       expect(result.appSettings.debugLoggingEnabled).toBe(true);
       expect(result.appSettings.volumeSliderPreviewIntervalMs).toBe(250);
+      expect(result.appSettings.commoserveEnabled).toBe(true);
       expect(result.deviceSafety.mode).toBe("RELAXED");
     });
   });
@@ -274,6 +276,39 @@ describe("settingsTransfer", () => {
       expect(importSettingsJson(JSON.stringify(42))).toEqual({
         ok: false,
         error: "Payload must be a JSON object.",
+      });
+    });
+
+    it("imports payload with commoserveEnabled", () => {
+      const payload = {
+        ...validPayload,
+        appSettings: {
+          ...validPayload.appSettings,
+          commoserveEnabled: true,
+        },
+      };
+      const result = importSettingsJson(JSON.stringify(payload));
+      expect(result).toEqual({ ok: true });
+      expect(appSettings.saveCommoserveEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it("uses defaults when optional archive keys are absent", () => {
+      const result = importSettingsJson(JSON.stringify(validPayload));
+      expect(result).toEqual({ ok: true });
+      expect(appSettings.saveCommoserveEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it("rejects non-boolean commoserveEnabled", () => {
+      const payload = {
+        ...validPayload,
+        appSettings: {
+          ...validPayload.appSettings,
+          commoserveEnabled: 1,
+        },
+      };
+      expect(importSettingsJson(JSON.stringify(payload))).toEqual({
+        ok: false,
+        error: "commoserveEnabled must be boolean.",
       });
     });
   });

@@ -153,6 +153,28 @@ describe("appSettings", () => {
     });
   });
 
+  describe("archive client settings", () => {
+    it("saves and loads archive override strings", () => {
+      appSettings.saveArchiveHostOverride("archive.local");
+      appSettings.saveArchiveClientIdOverride("Custom Client");
+      appSettings.saveArchiveUserAgentOverride("Custom Agent");
+
+      expect(appSettings.loadArchiveHostOverride()).toBe("archive.local");
+      expect(appSettings.loadArchiveClientIdOverride()).toBe("Custom Client");
+      expect(appSettings.loadArchiveUserAgentOverride()).toBe("Custom Agent");
+    });
+
+    it("saves and loads commoserve enablement", () => {
+      expect(appSettings.loadCommoserveEnabled()).toBe(appSettings.DEFAULT_COMMOSERVE_ENABLED);
+
+      appSettings.saveCommoserveEnabled(false);
+      expect(appSettings.loadCommoserveEnabled()).toBe(false);
+
+      appSettings.saveCommoserveEnabled(true);
+      expect(appSettings.loadCommoserveEnabled()).toBe(true);
+    });
+  });
+
   // Edge case: localStorage undefined
   describe("environment without localStorage", () => {
     let originalLocalStorage: any;
@@ -176,11 +198,19 @@ describe("appSettings", () => {
       expect(() => appSettings.saveDiscoveryProbeTimeoutMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiskAutostartMode("dma")).not.toThrow();
       expect(() => appSettings.saveVolumeSliderPreviewIntervalMs(250)).not.toThrow();
+      expect(() => appSettings.saveArchiveHostOverride("archive.local")).not.toThrow();
+      expect(() => appSettings.saveArchiveClientIdOverride("Custom Client")).not.toThrow();
+      expect(() => appSettings.saveArchiveUserAgentOverride("Custom Agent")).not.toThrow();
+      expect(() => appSettings.saveCommoserveEnabled(false)).not.toThrow();
       // Covers BRDA:137 — loadDiskAutostartMode early-returns DEFAULT when localStorage absent
       expect(appSettings.loadDiskAutostartMode()).toBe(appSettings.DEFAULT_DISK_AUTOSTART_MODE);
       expect(appSettings.loadVolumeSliderPreviewIntervalMs()).toBe(
         appSettings.DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS,
       );
+      expect(appSettings.loadArchiveHostOverride()).toBe("");
+      expect(appSettings.loadArchiveClientIdOverride()).toBe("");
+      expect(appSettings.loadArchiveUserAgentOverride()).toBe("");
+      expect(appSettings.loadCommoserveEnabled()).toBe(appSettings.DEFAULT_COMMOSERVE_ENABLED);
     });
 
     it("handles numeric reads without storage", () => {

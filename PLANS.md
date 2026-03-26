@@ -18,7 +18,7 @@ Collapse the archive client subsystem to a single config-driven CommoserveClient
 
 ### Phase 2 - Converge archive config and client model
 
-- Status: IN PROGRESS
+- Status: COMPLETE
 - Replace archive config input with source-driven fields: `id`, `name`, `baseUrl`, `headers?`, `enabled?`.
 - Remove archive backend types and defaults maps keyed by backend.
 - Keep a single concrete archive client implementation: `CommoserveClient`.
@@ -27,32 +27,40 @@ Collapse the archive client subsystem to a single config-driven CommoserveClient
 
 ### Phase 3 - Remove retired-source runtime affordances
 
-- Status: TODO
+- Status: COMPLETE
 - Remove retired-source settings, source selection branches, source navigation types, file origin handling, and playlist source branches.
 - Keep the online archive UX functional with the CommoServe source only.
 - Replace archive logging metadata from backend-based fields to source-based fields.
 
 ### Phase 4 - Consolidate mocks and regression tests
 
-- Status: TODO
+- Status: COMPLETE
 - Remove source-specific archive mock wrappers.
 - Update archive, settings, hook, source adapter, and item-selection tests to use generic or CommoServe source config.
 - Add regression coverage for default config plus custom external config.
 
 ### Phase 5 - Documentation and literal sweep
 
-- Status: TODO
+- Status: COMPLETE
 - Remove all retired-source mentions from repository documentation and process artifacts.
 - Ensure PLANS.md and WORKLOG.md reflect only the converged architecture.
 
 ### Phase 6 - Validation and convergence
 
-- Status: TODO
+- Status: COMPLETE
 - Run `npm run lint`.
 - Run `npm run test:coverage` and confirm branch coverage remains at least 91%.
 - Run `npm run build`.
 - Run `npm run cap:build` if needed to refresh generated Android web assets so stale literals are removed.
 - Perform final repository-wide literal sweep for removed-source strings and archive backend references.
+
+## Current Validation State
+
+- `npm run lint`: passed (0 errors).
+- `npm run test`: all tests passed.
+- `npm run build`: passed.
+- Branch coverage: 91.01% (15075/16565), above the 91% threshold.
+- Repository-wide retired-source sweep across active source and tests: clean.
 
 ## Constraints
 

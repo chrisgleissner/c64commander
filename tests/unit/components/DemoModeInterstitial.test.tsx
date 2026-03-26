@@ -113,4 +113,22 @@ describe("DemoModeInterstitial", () => {
     const { container } = render(<DemoModeInterstitial />);
     expect(container.firstChild).toBeNull();
   });
+
+  it("shows validation error when Save & Retry throws", () => {
+    updateC64APIConfig.mockImplementationOnce(() => {
+      throw new Error("connection refused");
+    });
+    render(<DemoModeInterstitial />);
+    fireEvent.click(screen.getByRole("button", { name: /Save & Retry/i }));
+    expect(screen.getByTestId("demo-interstitial-host-error")).toHaveTextContent("connection refused");
+  });
+
+  it("shows stringified error when Save & Retry throws a non-Error value", () => {
+    updateC64APIConfig.mockImplementationOnce(() => {
+      throw "network timeout";
+    });
+    render(<DemoModeInterstitial />);
+    fireEvent.click(screen.getByRole("button", { name: /Save & Retry/i }));
+    expect(screen.getByTestId("demo-interstitial-host-error")).toHaveTextContent("network timeout");
+  });
 });

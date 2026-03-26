@@ -46,6 +46,7 @@ export const LIGHTING_SOURCE_BUCKET_LABELS: Record<LightingSourceBucket, string>
   local: "Local look",
   c64u: "C64U look",
   hvsc: "HVSC look",
+  commoserve: "CommoServe look",
   disks: "Disk look",
   idle: "Idle look",
 };

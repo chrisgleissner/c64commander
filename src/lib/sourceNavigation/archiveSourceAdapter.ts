@@ -10,11 +10,11 @@ import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import type { SourceLocation } from "./types";
 
 export const createArchiveSourceLocation = (config: ArchiveClientConfigInput): SourceLocation => ({
-    id: config.id,
-    type: "commoserve",
-    name: config.name,
-    rootPath: "/",
-    isAvailable: config.enabled ?? true,
-    listEntries: async () => [],
-    listFilesRecursive: async () => [],
+  id: config.id,
+  type: "commoserve",
+  name: config.name,
+  rootPath: "/",
+  isAvailable: config.enabled ?? true,
+  listEntries: async () => [],
+  listFilesRecursive: async () => [],
 });

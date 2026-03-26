@@ -144,8 +144,8 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
                 User-Agent: <span className="font-medium text-foreground">{resolvedConfig.userAgent}</span>
               </div>
               {resolvedConfig.host !== currentDefaults.host ||
-                resolvedConfig.clientId !== currentDefaults.clientId ||
-                resolvedConfig.userAgent !== currentDefaults.userAgent ? (
+              resolvedConfig.clientId !== currentDefaults.clientId ||
+              resolvedConfig.userAgent !== currentDefaults.userAgent ? (
                 <p className="mt-2">
                   Overrides are active. Native platform security may block non-default cleartext hosts.
                 </p>

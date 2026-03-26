@@ -10,7 +10,7 @@ export type TraceOrigin = "user" | "automatic" | "system";
 
 export type TraceLifecycleState = "foreground" | "background" | "locked" | "unknown";
 
-export type TraceSourceKind = "local" | "ultimate" | "hvsc";
+export type TraceSourceKind = "local" | "ultimate" | "hvsc" | "commoserve";
 
 export type TraceLocalAccessMode = "entries" | "saf";
 

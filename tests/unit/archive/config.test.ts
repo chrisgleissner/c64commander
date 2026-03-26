@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildDefaultArchiveClientConfig,
-  resolveArchiveClientConfig,
-  validateArchiveHost,
-} from "@/lib/archive/config";
+import { buildDefaultArchiveClientConfig, resolveArchiveClientConfig, validateArchiveHost } from "@/lib/archive/config";
 
 describe("archive config", () => {
   it("uses the default source values when overrides are empty or invalid", () => {
-    expect(resolveArchiveClientConfig(buildDefaultArchiveClientConfig({ hostOverride: "http://bad.example" }))).toMatchObject({
+    expect(
+      resolveArchiveClientConfig(buildDefaultArchiveClientConfig({ hostOverride: "http://bad.example" })),
+    ).toMatchObject({
       id: "archive-commoserve",
       name: "CommoServe",
       host: "commoserve.files.commodore.net",
@@ -43,5 +41,17 @@ describe("archive config", () => {
     expect(validateArchiveHost("example.com/library?q=1")).toContain("without paths or query strings");
     expect(validateArchiveHost("example.com")).toBeNull();
     expect(validateArchiveHost("127.0.0.1:3001")).toBeNull();
+  });
+
+  it("resolves config with default headers when headers omitted", () => {
+    const resolved = resolveArchiveClientConfig({
+      id: "archive-minimal",
+      name: "Minimal",
+      baseUrl: "http://example.com",
+    });
+    expect(resolved.id).toBe("archive-minimal");
+    expect(resolved.enabled).toBe(true);
+    expect(resolved.clientId).toBe("Commodore");
+    expect(resolved.userAgent).toBe("Assembly Query");
   });
 });

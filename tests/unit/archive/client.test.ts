@@ -128,8 +128,8 @@ describe("archive client", () => {
     expect(server.requests.at(-1)?.headers["x-test"]).toBe("1");
   });
 
-  it("includes backend and host context when the archive server returns a protocol error payload", async () => {
-    const server = await createCommoserveMock();
+  it("includes source and host context when the archive server returns a protocol error payload", async () => {
+    const server = await createArchiveMock();
     closers.push(server.close);
     const client = createArchiveClient({
       id: "archive-commoserve",
@@ -260,14 +260,14 @@ describe("archive client", () => {
     await expect(client.getEntries("100", 40)).resolves.toEqual([]);
   });
 
-  it("wraps archive binary download failures with backend and host context", async () => {
+  it("wraps archive binary download failures with source and host context", async () => {
     const client = createArchiveClient(
       buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }),
       vi.fn().mockResolvedValue(new Response("nope", { status: 503, statusText: "Unavailable" })),
     );
 
     await expect(client.downloadBinary("100", 40, 0, "broken.prg")).rejects.toThrow(
-      "commodore archive download failed for archive.local: Archive binary download failed with 503 Unavailable",
+      "CommoServe archive download failed for archive.local: Archive binary download failed with 503 Unavailable",
     );
   });
 
@@ -275,7 +275,7 @@ describe("archive client", () => {
     class TestBinaryClient extends BaseArchiveClient {
       constructor() {
         super(
-          { backend: "commodore", hostOverride: "archive.local" },
+          buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }),
           vi.fn().mockResolvedValue(
             new Response(new Uint8Array([1, 8, 96]), {
               status: 200,
@@ -311,7 +311,7 @@ describe("archive client", () => {
       headers: { "content-type": "application/json" },
     } as never);
 
-    const client = createArchiveClient({ backend: "commodore" });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
     await expect(client.search({ name: "joyride", category: "apps" })).resolves.toEqual([
       { id: "100", category: 40, name: "Joyride" },
     ]);
@@ -336,7 +336,7 @@ describe("archive client", () => {
       headers: { "content-type": "application/json" },
     } as never);
 
-    const client = createArchiveClient({ backend: "commodore" });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
     await expect(client.search({ name: "joyride", category: "apps" })).resolves.toEqual([
       { id: "100", category: 40, name: "Joyride" },
     ]);
@@ -350,7 +350,7 @@ describe("archive client", () => {
       headers: { "content-type": "application/octet-stream" },
     } as never);
 
-    const client = createArchiveClient({ backend: "commodore" });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
     const binary = await client.downloadBinary("100", 40, 0, "joyride.prg");
 
     expect(binary.bytes).toEqual(new Uint8Array([1, 8, 96]));
@@ -369,7 +369,7 @@ describe("archive client", () => {
       headers: { "content-type": "application/octet-stream" },
     } as never);
 
-    const client = createArchiveClient({ backend: "commodore" });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
     const binary = await client.downloadBinary("100", 40, 0, "joyride.prg");
 
     expect(binary.bytes).toEqual(new Uint8Array([1, 8, 96]));
@@ -386,7 +386,7 @@ describe("archive client", () => {
       }),
     );
 
-    const client = createArchiveClient({ backend: "commodore" }, fetchMock);
+    const client = createArchiveClient(buildDefaultArchiveClientConfig(), fetchMock);
     await expect(client.search({ name: "joyride", category: "apps" })).resolves.toEqual([
       { id: "100", category: 40, name: "Joyride" },
     ]);
@@ -401,7 +401,7 @@ describe("archive client", () => {
       headers: { "content-type": "application/octet-stream" },
     } as never);
 
-    const client = createArchiveClient({ backend: "commodore" });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
     await expect(client.downloadBinary("100", 40, 0, "joyride.prg")).resolves.toMatchObject({
       bytes: new Uint8Array([1, 8, 96]),
     });
@@ -415,7 +415,7 @@ describe("archive client", () => {
       headers: { "content-type": "application/octet-stream" },
     } as never);
 
-    const client = createArchiveClient({ backend: "commodore" });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
     await expect(client.downloadBinary("100", 40, 0, "joyride.prg")).resolves.toMatchObject({
       bytes: new Uint8Array([1, 8, 96]),
     });
@@ -423,26 +423,26 @@ describe("archive client", () => {
 
   it("surfaces non-ok archive responses", async () => {
     const client = createArchiveClient(
-      { backend: "commodore", hostOverride: "archive.local" },
+      buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }),
       vi.fn().mockResolvedValue(new Response("boom", { status: 503, statusText: "Service Unavailable" })),
     );
 
     await expect(client.getPresets()).rejects.toThrow(
-      "commodore archive request failed for archive.local: Archive request failed with 503 Service Unavailable",
+      "CommoServe archive request failed for archive.local: Archive request failed with 503 Service Unavailable",
     );
   });
 
   it("rejects immediately when an external signal is already aborted", async () => {
     const controller = new AbortController();
     controller.abort(new Error("already aborted"));
-    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+    const client = createArchiveClient(buildDefaultArchiveClientConfig(), () => new Promise<Response>(() => undefined));
 
     await expect(client.getPresets({ signal: controller.signal })).rejects.toThrow("already aborted");
   });
 
   it("rejects when an external signal aborts after the request has started", async () => {
     const controller = new AbortController();
-    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+    const client = createArchiveClient(buildDefaultArchiveClientConfig(), () => new Promise<Response>(() => undefined));
     const expectation = expect(client.getPresets({ signal: controller.signal })).rejects.toThrow("aborted after start");
 
     controller.abort(new Error("aborted after start"));
@@ -458,7 +458,7 @@ describe("archive client", () => {
       headers: { "content-type": "application/octet-stream" },
     } as never);
 
-    const client = createArchiveClient({ backend: "commodore" });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
     await expect(client.downloadBinary("100", 40, 0, "joyride.prg")).rejects.toThrow(
       "Archive native HTTP returned an unsupported binary payload.",
     );

@@ -21,6 +21,32 @@ vi.mock("@/lib/sourceNavigation/useSourceNavigator", () => ({
   }),
 }));
 
+vi.mock("@/components/itemSelection/ArchiveSelectionView", () => ({
+  archiveResultKey: (result: { id: string; category: number }) => `${result.id}:${result.category}`,
+  ArchiveSelectionView: ({ selection, onToggleSelect, onSelectAll, onClearSelection }: any) => (
+    <div data-testid="archive-selection-view-mock">
+      <div data-testid="archive-selection-size">{selection.size}</div>
+      <button type="button" onClick={() => onToggleSelect({ id: "100", category: 40, name: "Demo" })}>
+        Toggle archive result
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onSelectAll([
+            { id: "100", category: 40, name: "Demo" },
+            { id: "101", category: 41, name: "Second Demo" },
+          ])
+        }
+      >
+        Select all archive results
+      </button>
+      <button type="button" onClick={() => onClearSelection()}>
+        Clear archive selection
+      </button>
+    </div>
+  ),
+}));
+
 const sourceGroups: SourceGroup[] = [
   {
     label: "C64U",
@@ -260,5 +286,73 @@ describe("ItemSelectionDialog archive source buttons", () => {
       </DisplayProfileProvider>,
     );
     expect(screen.queryByTestId("import-option-commoserve")).not.toBeInTheDocument();
+  });
+
+  it("confirms archive selections using archive result identifiers", async () => {
+    const onConfirm = vi.fn(async () => true);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={archiveSourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={onConfirm}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    fireEvent.click(screen.getByText("Toggle archive result"));
+    fireEvent.click(screen.getByTestId("add-items-confirm"));
+
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "archive-commoserve", type: "commoserve" }), [
+      { type: "file", name: "Demo", path: "100/40" },
+    ]);
+  });
+
+  it("updates archive selection count for select-all and clear actions", () => {
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={archiveSourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    expect(screen.getByTestId("archive-selection-size")).toHaveTextContent("0");
+
+    fireEvent.click(screen.getByText("Select all archive results"));
+    expect(screen.getByTestId("archive-selection-size")).toHaveTextContent("2");
+    expect(screen.getByTestId("add-items-selection-count")).toHaveTextContent("2 selected");
+
+    fireEvent.click(screen.getByText("Clear archive selection"));
+    expect(screen.getByTestId("archive-selection-size")).toHaveTextContent("0");
   });
 });

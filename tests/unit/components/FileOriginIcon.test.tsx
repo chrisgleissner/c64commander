@@ -31,4 +31,17 @@ describe("FileOriginIcon", () => {
     expect(icon.tagName).toBe("svg");
     expect(icon).toHaveAttribute("aria-label", "HVSC file");
   });
+
+  it("renders the commoserve icon as globe svg", () => {
+    render(<FileOriginIcon origin="commoserve" />);
+    const icon = screen.getByTestId("file-origin-icon");
+    expect(icon.tagName).toBe("svg");
+    expect(icon).toHaveAttribute("aria-label", "Online archive file");
+  });
+
+  it("accepts a custom label override", () => {
+    render(<FileOriginIcon origin="ultimate" label="Custom label" />);
+    const icon = screen.getByTestId("file-origin-icon");
+    expect(icon).toHaveAttribute("alt", "Custom label");
+  });
 });

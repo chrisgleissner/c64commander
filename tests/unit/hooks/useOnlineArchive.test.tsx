@@ -69,7 +69,9 @@ describe("useOnlineArchive", () => {
   });
 
   it("clears an error state back to idle after a failed preset load", async () => {
-    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig({ hostOverride: "127.0.0.1:1" })));
+    const { result } = renderHook(() =>
+      useOnlineArchive(buildDefaultArchiveClientConfig({ hostOverride: "127.0.0.1:1" })),
+    );
 
     await waitFor(() => expect(result.current.state.phase).toBe("error"));
 
@@ -81,7 +83,7 @@ describe("useOnlineArchive", () => {
   });
 
   it("clears a preset-load error automatically after the client is recreated successfully", async () => {
-    const server = await createCommoserveMock();
+    const server = await createArchiveMock();
     closers.push(server.close);
 
     const { result, rerender } = renderHook(
@@ -222,7 +224,13 @@ describe("useOnlineArchive", () => {
       getBinaryUrl: vi.fn(),
       downloadBinary,
       getResolvedConfig: vi.fn().mockReturnValue({
-        backend: "commodore",
+        id: "archive-commoserve",
+        name: "CommoServe",
+        headers: {
+          "Client-Id": "Commodore",
+          "User-Agent": "Assembly Query",
+        },
+        enabled: true,
         host: "archive.local",
         clientId: "Commodore",
         userAgent: "Assembly Query",
@@ -231,14 +239,7 @@ describe("useOnlineArchive", () => {
     };
     const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
 
-    const { result } = renderHook(() =>
-      useOnlineArchive({
-        backend: "commodore",
-        hostOverride: "",
-        clientIdOverride: "",
-        userAgentOverride: "",
-      }),
-    );
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
 
     await waitFor(() => expect(result.current.presetsLoading).toBe(false));
     act(() => {
@@ -281,7 +282,13 @@ describe("useOnlineArchive", () => {
         url: "http://archive.local/joyride.prg",
       }),
       getResolvedConfig: vi.fn().mockReturnValue({
-        backend: "commodore",
+        id: "archive-commoserve",
+        name: "CommoServe",
+        headers: {
+          "Client-Id": "Commodore",
+          "User-Agent": "Assembly Query",
+        },
+        enabled: true,
         host: "archive.local",
         clientId: "Commodore",
         userAgent: "Assembly Query",
@@ -290,14 +297,7 @@ describe("useOnlineArchive", () => {
     };
     const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
 
-    const { result } = renderHook(() =>
-      useOnlineArchive({
-        backend: "commodore",
-        hostOverride: "",
-        clientIdOverride: "",
-        userAgentOverride: "",
-      }),
-    );
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
 
     await waitFor(() => expect(result.current.presetsLoading).toBe(false));
     await act(async () => {
@@ -331,7 +331,13 @@ describe("useOnlineArchive", () => {
       getBinaryUrl: vi.fn(),
       downloadBinary: vi.fn(),
       getResolvedConfig: vi.fn().mockReturnValue({
-        backend: "commodore",
+        id: "archive-commoserve",
+        name: "CommoServe",
+        headers: {
+          "Client-Id": "Commodore",
+          "User-Agent": "Assembly Query",
+        },
+        enabled: true,
         host: "archive.local",
         clientId: "Commodore",
         userAgent: "Assembly Query",
@@ -340,14 +346,7 @@ describe("useOnlineArchive", () => {
     };
     const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
 
-    const { result } = renderHook(() =>
-      useOnlineArchive({
-        backend: "commodore",
-        hostOverride: "",
-        clientIdOverride: "",
-        userAgentOverride: "",
-      }),
-    );
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
 
     await waitFor(() => expect(result.current.presetsLoading).toBe(false));
     await act(async () => {
@@ -373,7 +372,13 @@ describe("useOnlineArchive", () => {
         url: "http://archive.local/joyride.prg",
       }),
       getResolvedConfig: vi.fn().mockReturnValue({
-        backend: "commodore",
+        id: "archive-commoserve",
+        name: "CommoServe",
+        headers: {
+          "Client-Id": "Commodore",
+          "User-Agent": "Assembly Query",
+        },
+        enabled: true,
         host: "archive.local",
         clientId: "Commodore",
         userAgent: "Assembly Query",
@@ -382,14 +387,7 @@ describe("useOnlineArchive", () => {
     };
     const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
 
-    const { result } = renderHook(() =>
-      useOnlineArchive({
-        backend: "commodore",
-        hostOverride: "",
-        clientIdOverride: "",
-        userAgentOverride: "",
-      }),
-    );
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
 
     await waitFor(() => expect(result.current.presetsLoading).toBe(false));
     await act(async () => {

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type SourceKind = "local" | "ultimate" | "hvsc";
+export type SourceKind = "local" | "ultimate" | "hvsc" | "commoserve";
 
 export type TrackRecord = {
   trackId: string;

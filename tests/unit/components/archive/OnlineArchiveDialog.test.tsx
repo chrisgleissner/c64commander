@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
+import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
 import { reportUserError } from "@/lib/uiErrors";
 
 vi.mock("@/hooks/useOnlineArchive", () => ({
@@ -25,6 +26,8 @@ vi.mock("@/components/ui/select", () => ({
 
 const { useOnlineArchive } = await import("@/hooks/useOnlineArchive");
 
+const defaultConfig = buildDefaultArchiveClientConfig();
+
 const baseReturn = {
   clientType: "CommoserveClient",
   presets: [
@@ -34,7 +37,13 @@ const baseReturn = {
   ],
   presetsLoading: false,
   resolvedConfig: {
-    backend: "commodore",
+    id: "archive-commoserve",
+    name: "CommoServe",
+    headers: {
+      "Client-Id": "Commodore",
+      "User-Agent": "Assembly Query",
+    },
+    enabled: true,
     host: "commoserve.files.commodore.net",
     clientId: "Commodore",
     userAgent: "Assembly Query",
@@ -64,13 +73,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.queryByText(/Overrides are active/i)).toBeNull();
     expect(screen.getByText("Joyride")).toBeInTheDocument();
@@ -94,13 +97,7 @@ describe("OnlineArchiveDialog", () => {
       state: { phase: "idle" },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     const selects = screen.getAllByRole("combobox");
     fireEvent.change(selects[0], { target: { value: "apps" } });
@@ -118,13 +115,7 @@ describe("OnlineArchiveDialog", () => {
       state: { phase: "idle" },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.getByRole("option", { name: "apps" })).toBeInTheDocument();
   });
@@ -133,7 +124,13 @@ describe("OnlineArchiveDialog", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
       resolvedConfig: {
-        backend: "commodore",
+        id: "archive-commoserve",
+        name: "CommoServe",
+        headers: {
+          "Client-Id": "Custom",
+          "User-Agent": "Custom UA",
+        },
+        enabled: true,
         host: "127.0.0.1:3001",
         clientId: "Custom",
         userAgent: "Custom UA",
@@ -153,12 +150,11 @@ describe("OnlineArchiveDialog", () => {
       <OnlineArchiveDialog
         open
         onOpenChange={() => undefined}
-        config={{
-          backend: "commodore",
+        config={buildDefaultArchiveClientConfig({
           hostOverride: "127.0.0.1:3001",
           clientIdOverride: "Custom",
           userAgentOverride: "Custom UA",
-        }}
+        })}
       />,
     );
 
@@ -177,13 +173,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -202,13 +192,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open={false}
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open={false} onOpenChange={() => undefined} config={defaultConfig} />);
 
     await waitFor(() => {
       expect(reportUserError).not.toHaveBeenCalled();
@@ -225,21 +209,9 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    const { rerender } = render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    const { rerender } = render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
-    rerender(
-      <OnlineArchiveDialog
-        open={false}
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    rerender(<OnlineArchiveDialog open={false} onOpenChange={() => undefined} config={defaultConfig} />);
 
     await waitFor(() => {
       expect(baseReturn.clearError).toHaveBeenCalled();
@@ -257,13 +229,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.getByText("Joyride")).toBeInTheDocument();
     expect(screen.getByText(/Loading entries…/i)).toBeInTheDocument();
@@ -281,13 +247,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "new search" } });
     fireEvent.click(screen.getByRole("button", { name: "Results" }));
@@ -301,13 +261,7 @@ describe("OnlineArchiveDialog", () => {
       state: { phase: "idle" },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.getByText(/Search results appear here/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Search archive/i })).toBeDisabled();
@@ -322,13 +276,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "fresh form" } });
     fireEvent.click(screen.getByRole("button", { name: /Joyride Unknown group/i }));
@@ -347,13 +295,7 @@ describe("OnlineArchiveDialog", () => {
       state: { phase: "searching" },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.getByRole("button", { name: /Search archive/i })).toBeDisabled();
     expect(document.querySelector(".animate-spin")).not.toBeNull();
@@ -371,13 +313,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.getByText(/No executable files found/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Results" }));
@@ -397,13 +333,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.getByRole("button", { name: /Downloading…/i })).toBeDisabled();
   });
@@ -420,13 +350,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "fresh form" } });
     const actionButton = screen.getByRole("button", { name: /^Run$/i });
@@ -453,13 +377,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "fresh form" } });
     fireEvent.click(screen.getByRole("button", { name: /^Run$/i }));
@@ -485,13 +403,7 @@ describe("OnlineArchiveDialog", () => {
       },
     } as never);
 
-    render(
-      <OnlineArchiveDialog
-        open
-        onOpenChange={() => undefined}
-        config={{ backend: "commodore", hostOverride: "", clientIdOverride: "", userAgentOverride: "" }}
-      />,
-    );
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.getByText("No metadata")).toBeInTheDocument();
   });
