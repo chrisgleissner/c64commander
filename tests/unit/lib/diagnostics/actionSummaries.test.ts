@@ -168,4 +168,39 @@ describe("actionSummaries", () => {
       ]),
     );
   });
+
+  it("includes TELNET effects and counts in action summaries", () => {
+    const events: TraceEvent[] = [
+      makeEvent("1", "action-start", "telnet", 10, { name: "Telnet reboot" }),
+      makeEvent("2", "telnet-operation", "telnet", 12, {
+        actionId: "rebootClearMemory",
+        actionLabel: "Reboot",
+        menuPath: ["Machine", "Reboot (Clear RAM)"],
+        target: "real-device",
+        result: "success",
+        durationMs: 321,
+      }),
+      makeEvent("3", "action-end", "telnet", 13, { status: "success" }),
+    ];
+
+    const [summary] = buildActionSummaries(events);
+    expect(summary).toMatchObject({
+      correlationId: "telnet",
+      actionName: "Telnet reboot",
+      outcome: "success",
+      telnetCount: 1,
+    });
+    expect(summary.effects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "TELNET",
+          actionId: "rebootClearMemory",
+          actionLabel: "Reboot",
+          menuPath: ["Machine", "Reboot (Clear RAM)"],
+          result: "success",
+          durationMs: 321,
+        }),
+      ]),
+    );
+  });
 });

@@ -5,8 +5,10 @@ import {
   deriveFtpContributorHealth,
   deriveLastFtpActivity,
   deriveLastRestActivity,
+  deriveLastTelnetActivity,
   derivePrimaryProblem,
   deriveRestContributorHealth,
+  deriveTelnetContributorHealth,
   getBadgeAriaLabel,
   getBadgeLabel,
   getContributorSupportingPhrase,
@@ -220,6 +222,7 @@ const allIdle = (): Record<ContributorKey, ContributorHealth> => ({
   App: idleContributor(),
   REST: idleContributor(),
   FTP: idleContributor(),
+  TELNET: idleContributor(),
 });
 
 describe("rollUpHealth", () => {
@@ -247,18 +250,43 @@ describe("rollUpHealth", () => {
   });
 
   it("returns Unhealthy when any contributor is Unhealthy", () => {
-    const contributors = { App: withState("Healthy"), REST: withState("Unhealthy"), FTP: idleContributor() };
+    const contributors = {
+      App: withState("Healthy"),
+      REST: withState("Unhealthy"),
+      FTP: idleContributor(),
+      TELNET: idleContributor(),
+    };
     expect(rollUpHealth(contributors, "Online")).toBe("Unhealthy");
   });
 
   it("Unhealthy beats Degraded in roll-up", () => {
-    const contributors = { App: withState("Degraded"), REST: withState("Unhealthy"), FTP: withState("Degraded") };
+    const contributors = {
+      App: withState("Degraded"),
+      REST: withState("Unhealthy"),
+      FTP: withState("Degraded"),
+      TELNET: idleContributor(),
+    };
     expect(rollUpHealth(contributors, "Online")).toBe("Unhealthy");
   });
 
   it("returns Unavailable when any contributor is Unavailable and connectivity is Online", () => {
-    const contributors = { App: withState("Unavailable"), REST: idleContributor(), FTP: idleContributor() };
+    const contributors = {
+      App: withState("Unavailable"),
+      REST: idleContributor(),
+      FTP: idleContributor(),
+      TELNET: idleContributor(),
+    };
     expect(rollUpHealth(contributors, "Online")).toBe("Unavailable");
+  });
+
+  it("includes TELNET contributor failures in the overall roll-up", () => {
+    const contributors = {
+      App: idleContributor(),
+      REST: idleContributor(),
+      FTP: idleContributor(),
+      TELNET: withState("Unhealthy"),
+    };
+    expect(rollUpHealth(contributors, "Online")).toBe("Unhealthy");
   });
 });
 
@@ -318,6 +346,39 @@ describe("deriveLastFtpActivity", () => {
   });
 });
 
+describe("deriveTelnetContributorHealth", () => {
+  it("returns Idle when no Telnet events exist", () => {
+    expect(deriveTelnetContributorHealth([])).toMatchObject({ state: "Idle", problemCount: 0 });
+  });
+
+  it("returns Healthy when all Telnet operations succeed", () => {
+    const events = [makeEvent("telnet-operation", 30_000, { result: "success" })];
+    expect(deriveTelnetContributorHealth(events)).toMatchObject({ state: "Healthy", problemCount: 0 });
+  });
+
+  it("returns Unhealthy when Telnet operations fail", () => {
+    const events = [makeEvent("telnet-operation", 10_000, { result: "failure", error: "prompt timeout" })];
+    expect(deriveTelnetContributorHealth(events)).toMatchObject({ state: "Unhealthy", problemCount: 1 });
+  });
+});
+
+describe("deriveLastTelnetActivity", () => {
+  it("returns null when no Telnet events exist", () => {
+    expect(deriveLastTelnetActivity([])).toBeNull();
+  });
+
+  it("returns the last Telnet operation", () => {
+    const events = [
+      makeEvent("telnet-operation", 30_000, { actionLabel: "Reset drive", result: "success" }),
+      makeEvent("telnet-operation", 5_000, { actionLabel: "Reboot", result: "failure" }),
+    ];
+    const result = deriveLastTelnetActivity(events);
+    expect(result).not.toBeNull();
+    expect(result?.operation).toBe("Reboot");
+    expect(result?.result).toBe("failure");
+  });
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 // derivePrimaryProblem
 // ──────────────────────────────────────────────────────────────────────────────
@@ -352,6 +413,7 @@ describe("derivePrimaryProblem", () => {
       App: withState("Unhealthy"),
       REST: withState("Degraded"),
       FTP: idleContributor(),
+      TELNET: idleContributor(),
     };
     const events = [
       makeEvent("rest-response", 20_000, { method: "GET", path: "/rest", status: 500 }),
@@ -379,7 +441,12 @@ describe("derivePrimaryProblem", () => {
   });
 
   it("FTP problem with error string sets causeHint", () => {
-    const contributors = { App: idleContributor(), REST: idleContributor(), FTP: withState("Unhealthy") };
+    const contributors = {
+      App: idleContributor(),
+      REST: idleContributor(),
+      FTP: withState("Unhealthy"),
+      TELNET: idleContributor(),
+    };
     const events = [
       makeEvent("ftp-operation", 5_000, {
         operation: "RETR",
@@ -404,7 +471,12 @@ describe("derivePrimaryProblem", () => {
   });
 
   it("REST problem sets impactLevel 2 when REST contributor is Unhealthy", () => {
-    const contributors = { App: idleContributor(), REST: withState("Unhealthy"), FTP: idleContributor() };
+    const contributors = {
+      App: idleContributor(),
+      REST: withState("Unhealthy"),
+      FTP: idleContributor(),
+      TELNET: idleContributor(),
+    };
     const events = [makeEvent("rest-response", 10_000, { method: "GET", path: "/v1/info", status: 503 })];
     const result = derivePrimaryProblem(events, contributors);
     expect(result?.impactLevel).toBe(2);
@@ -418,6 +490,27 @@ describe("derivePrimaryProblem", () => {
     expect(result?.contributor).toBe("REST");
     expect(result?.title).toContain("REST");
     expect(result?.causeHint).toBe("Network error");
+  });
+
+  it("returns Telnet failure as a problem with TELNET contributor", () => {
+    const contributors = {
+      App: idleContributor(),
+      REST: idleContributor(),
+      FTP: idleContributor(),
+      TELNET: withState("Unhealthy"),
+    };
+    const events = [
+      makeEvent("telnet-operation", 5_000, {
+        actionLabel: "Save debug log",
+        result: "failure",
+        error: "menu prompt timeout",
+      }),
+    ];
+    const result = derivePrimaryProblem(events, contributors);
+    expect(result?.contributor).toBe("TELNET");
+    expect(result?.title).toContain("Save debug log failed");
+    expect(result?.impactLevel).toBe(2);
+    expect(result?.causeHint).toBe("menu prompt timeout");
   });
 });
 

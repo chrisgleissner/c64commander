@@ -278,9 +278,10 @@ describe("DecisionStateView", () => {
         probes: {
           REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
           FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 100 },
-          CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 200 },
-          RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 300 },
-          JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 400 },
+          TELNET: { probe: "TELNET", outcome: "Success", durationMs: 100, reason: null, startMs: 200 },
+          CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 300 },
+          RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 400 },
+          JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 500 },
         },
         latency: { p50: 10, p90: 20, p99: 30 },
       },

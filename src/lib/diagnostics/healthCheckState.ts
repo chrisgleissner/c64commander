@@ -36,7 +36,7 @@ export type HealthCheckTransitionEvent = {
   reason: string | null;
 };
 
-const PROBE_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "CONFIG", "RASTER", "JIFFY"];
+const PROBE_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"];
 
 const buildDefaultProbeStates = (): Record<HealthCheckProbeType, HealthCheckProbeExecutionState> =>
   PROBE_ORDER.reduce<Record<HealthCheckProbeType, HealthCheckProbeExecutionState>>(

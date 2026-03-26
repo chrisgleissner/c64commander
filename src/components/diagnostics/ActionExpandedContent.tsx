@@ -6,7 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from "@/lib/diagnostics/actionSummaries";
+import type {
+  ActionSummary,
+  ErrorEffect,
+  FtpEffect,
+  RestEffect,
+  TelnetEffect,
+} from "@/lib/diagnostics/actionSummaries";
 import type { PayloadPreview, TraceHeaders } from "@/lib/tracing/types";
 import {
   formatActionEffectTarget,
@@ -54,6 +60,7 @@ export const ActionExpandedContent = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
   const restEffects = effects.filter((e): e is RestEffect => e.type === "REST");
   const ftpEffects = effects.filter((e): e is FtpEffect => e.type === "FTP");
+  const telnetEffects = effects.filter((e): e is TelnetEffect => e.type === "TELNET");
   const errorEffects = effects.filter((e): e is ErrorEffect => e.type === "ERROR");
   const inferredProduct = restEffects.find((effect) => effect.product)?.product ?? null;
 
@@ -127,6 +134,31 @@ export const ActionExpandedContent = ({ summary }: Props) => {
                 <JsonBlock label="Response payload" value={effect.responsePayload} />
                 <PayloadPreviewBlock label="Response preview" preview={effect.responsePayloadPreview} />
               </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {telnetEffects.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold">Telnet</p>
+          {telnetEffects.map((effect, index) => (
+            <div
+              key={`${summary.correlationId}-telnet-${index}`}
+              data-testid={`action-telnet-effect-${summary.correlationId}-${index}`}
+              className="rounded-md border border-border/70 p-2"
+            >
+              <p className="font-medium">{effect.actionLabel}</p>
+              <p className="text-muted-foreground">
+                target: {formatActionEffectTarget(effect.target, inferredProduct)} · result:{" "}
+                {effect.result ?? "unknown"}
+                {effect.durationMs !== null && effect.durationMs !== undefined ? ` · ${effect.durationMs}ms` : ""}
+              </p>
+              <p className="text-muted-foreground break-words">
+                action: {effect.actionId}
+                {effect.menuPath ? ` · menu: ${effect.menuPath[0]} → ${effect.menuPath[1]}` : ""}
+              </p>
+              {effect.error ? <p className="text-diagnostics-error">error: {effect.error}</p> : null}
             </div>
           ))}
         </div>

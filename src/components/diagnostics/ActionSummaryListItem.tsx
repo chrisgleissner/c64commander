@@ -6,7 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from "@/lib/diagnostics/actionSummaries";
+import type {
+  ActionSummary,
+  ErrorEffect,
+  FtpEffect,
+  RestEffect,
+  TelnetEffect,
+} from "@/lib/diagnostics/actionSummaries";
 import { formatActionDuration } from "@/lib/diagnostics/actionSummaryDisplay";
 import { resolveActionSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
 import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
@@ -21,8 +27,9 @@ export const ActionSummaryListItem = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
   const restCount = effects.filter((e): e is RestEffect => e.type === "REST").length;
   const ftpCount = effects.filter((e): e is FtpEffect => e.type === "FTP").length;
+  const telnetCount = effects.filter((e): e is TelnetEffect => e.type === "TELNET").length;
   const errorCount = effects.filter((e): e is ErrorEffect => e.type === "ERROR").length;
-  const hasEffects = Boolean(restCount || ftpCount || errorCount);
+  const hasEffects = Boolean(restCount || ftpCount || telnetCount || errorCount);
 
   let badges: ReactNode = null;
   if (hasEffects) {
@@ -42,6 +49,14 @@ export const ActionSummaryListItem = ({ summary }: Props) => {
             className="text-diagnostics-ftp text-xs font-medium"
           >
             FTP×{ftpCount}
+          </span>
+        ) : null}
+        {telnetCount ? (
+          <span
+            data-testid={`action-telnet-count-${summary.correlationId}`}
+            className="text-foreground text-xs font-medium"
+          >
+            TELNET×{telnetCount}
           </span>
         ) : null}
         {errorCount ? (

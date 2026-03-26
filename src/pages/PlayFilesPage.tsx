@@ -39,9 +39,11 @@ import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
+import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
+import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -72,6 +74,7 @@ import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavi
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
 import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
+import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
@@ -184,6 +187,7 @@ export default function PlayFilesPage() {
 
   const { flags, isLoaded } = useFeatureFlags();
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
+  const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -443,8 +447,22 @@ export default function PlayFilesPage() {
         sources: [createHvscSourceLocation(hvscRoot.path)],
       });
     }
+    if (commoserveEnabled) {
+      groups.push({
+        label: SOURCE_LABELS.commoserve,
+        sources: [createArchiveSourceLocation(archiveConfig)],
+      });
+    }
     return groups;
-  }, [hvscLibraryAvailable, hvscRoot.path, localSources]);
+  }, [archiveConfig, commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
+
+  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
+    const configs: Record<string, ArchiveClientConfigInput> = {};
+    if (commoserveEnabled) {
+      configs[archiveConfig.id] = archiveConfig;
+    }
+    return configs;
+  }, [archiveConfig, commoserveEnabled]);
 
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {
@@ -507,6 +525,7 @@ export default function PlayFilesPage() {
         mergeSonglengthsFiles,
         collectSonglengthsCandidates,
         buildHvscLocalPlayFile,
+        archiveConfigs,
       }),
     [
       addItemsSurface,
@@ -520,6 +539,7 @@ export default function PlayFilesPage() {
       recurseFolders,
       songlengthsFiles,
       buildHvscLocalPlayFile,
+      archiveConfigs,
     ],
   );
 
@@ -1000,7 +1020,9 @@ export default function PlayFilesPage() {
                           ? "ultimate"
                           : currentItem.request.source === "hvsc"
                             ? "hvsc"
-                            : "local"
+                            : currentItem.request.source === "commoserve"
+                              ? "commoserve"
+                              : "local"
                       }
                       className="h-3.5 w-3.5 shrink-0 opacity-70"
                     />
@@ -1181,6 +1203,7 @@ export default function PlayFilesPage() {
             title="Add items"
             confirmLabel="Add to playlist"
             sourceGroups={sourceGroups}
+            archiveConfigs={archiveConfigs}
             onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
             onConfirm={handleAddFileSelections}
             filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}

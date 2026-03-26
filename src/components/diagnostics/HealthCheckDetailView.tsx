@@ -24,7 +24,7 @@ type Props = {
   onBack: () => void;
 };
 
-const PRESENTATION_ORDER = ["REST", "FTP", "CONFIG", "RASTER", "JIFFY"] as const;
+const PRESENTATION_ORDER = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"] as const;
 
 const outcomeColorClass: Record<string, string> = {
   Success: "text-success",

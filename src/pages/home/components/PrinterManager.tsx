@@ -25,14 +25,36 @@ import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
+const buildPrinterTelnetActions = (enabled: boolean) => {
+  return enabled
+    ? [
+        { actionId: "printerFlush", label: "Flush/Eject", loadingLabel: "Flushing…", testId: "home-printer-flush" },
+        { actionId: "printerReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-printer-telnet-reset" },
+      ]
+    : [{ actionId: "printerTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-printer-turn-on" }];
+};
+
 interface PrinterManagerProps {
   isConnected: boolean;
   machineTaskBusy: boolean;
   machineTaskId: string | null;
   onResetPrinter: (callback: () => Promise<void>) => Promise<void>;
+  telnetAvailable?: boolean;
+  telnetBusy?: boolean;
+  telnetActiveActionId?: string | null;
+  onTelnetAction?: (actionId: string) => Promise<void>;
 }
 
-export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, onResetPrinter }: PrinterManagerProps) {
+export function PrinterManager({
+  isConnected,
+  machineTaskBusy,
+  machineTaskId,
+  onResetPrinter,
+  telnetAvailable = false,
+  telnetBusy = false,
+  telnetActiveActionId = null,
+  onTelnetAction,
+}: PrinterManagerProps) {
   const { profile } = useDisplayProfile();
   const trace = useActionTrace("PrinterManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
@@ -47,6 +69,9 @@ export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, on
     ),
   );
   const printerEnabled = printerEnabledValue.trim().toLowerCase() === "enabled";
+  const showTelnetControls = telnetAvailable && printerEnabled && typeof onTelnetAction === "function";
+  const printerTelnetActions =
+    telnetAvailable && typeof onTelnetAction === "function" ? buildPrinterTelnetActions(printerEnabled) : [];
 
   const printerBusValue = Number(
     resolveConfigValue(
@@ -212,6 +237,23 @@ export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, on
                 </div>
               ))}
           </div>
+          {printerTelnetActions.length > 0 && (
+            <div className="flex items-center gap-2 pt-1">
+              {printerTelnetActions.map((action) => (
+                <Button
+                  key={action.actionId}
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  data-testid={action.testId}
+                  disabled={!isConnected || machineTaskBusy || telnetBusy}
+                  onClick={() => void onTelnetAction?.(action.actionId)}
+                >
+                  {telnetActiveActionId === action.actionId ? action.loadingLabel : action.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

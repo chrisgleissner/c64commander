@@ -10,10 +10,12 @@ export const SOURCE_LABELS = {
   local: "Local",
   c64u: "C64U",
   hvsc: "HVSC",
+  commoserve: "CommoServe",
 } as const;
 
 export const SOURCE_EXPLANATIONS = {
   local: "Local Device",
   c64u: "Commodore 64 Ultimate",
   hvsc: "High Voltage SID Collection",
+  commoserve: "Online File Archive",
 } as const;

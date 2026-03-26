@@ -8,6 +8,9 @@
 
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "@/hooks/use-toast";
+import { createArchiveClient } from "@/lib/archive/client";
+import { buildArchivePlayPlan } from "@/lib/archive/execution";
+import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
@@ -63,6 +66,7 @@ export type AddFileSelectionsDeps = {
   mergeSonglengthsFiles: (entries: SonglengthsFileEntry[]) => void;
   collectSonglengthsCandidates: (paths: string[]) => string[];
   buildHvscLocalPlayFile: (path: string, name: string) => LocalPlayFile | undefined;
+  archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 };
 
 export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
@@ -86,7 +90,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     mergeSonglengthsFiles,
     collectSonglengthsCandidates,
     buildHvscLocalPlayFile,
+    archiveConfigs,
   } = deps;
+
+  const parseArchiveSelectionPath = (path: string) => {
+    const [resultId, rawCategory] = path.split("/");
+    const category = Number(rawCategory);
+    if (!resultId || Number.isNaN(category)) {
+      throw new Error(`Invalid archive selection: ${path}`);
+    }
+    return { resultId, category };
+  };
 
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
@@ -168,6 +182,73 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     };
 
     try {
+      if (source.type === "commoserve") {
+        if (!selections.length) {
+          reportUserError({
+            operation: "PLAYLIST_ADD",
+            title: "No items selected",
+            description: "Choose at least one archive result to add.",
+            context: { sourceId: source.id, sourceType: source.type },
+          });
+          setAddItemsProgress((prev) => ({
+            ...prev,
+            status: "error",
+            message: "No items selected.",
+          }));
+          return false;
+        }
+        const archiveConfig = archiveConfigs?.[source.id];
+        if (!archiveConfig) {
+          throw new Error(`Archive source configuration unavailable for ${source.name}.`);
+        }
+
+        const archiveClient = createArchiveClient(archiveConfig);
+        const playlistItems: PlaylistItem[] = [];
+
+        for (const selection of selections) {
+          const { resultId, category } = parseArchiveSelectionPath(selection.path);
+          const entries = await archiveClient.getEntries(resultId, category);
+          const playableEntry = entries.find((entry) => getPlayCategory(entry.path));
+          if (!playableEntry) {
+            throw new Error(`No playable archive file found for ${selection.name}.`);
+          }
+
+          const binary = await archiveClient.downloadBinary(resultId, category, playableEntry.id, playableEntry.path);
+          const playPlan = buildArchivePlayPlan(binary);
+          const item = buildPlaylistItem(
+            {
+              source: "commoserve",
+              name: selection.name,
+              path: playPlan.path,
+              file: playPlan.file,
+              sourceId: source.id,
+              sizeBytes: playableEntry.size ?? null,
+              modifiedAt: playableEntry.date ? new Date(playableEntry.date).toISOString() : null,
+            },
+            undefined,
+            new Date().toISOString(),
+          );
+          if (!item) {
+            throw new Error(`Unsupported archive file ${playableEntry.path}.`);
+          }
+          playlistItems.push(item);
+        }
+
+        setPlaylist((prev) => [...prev, ...playlistItems]);
+        toast({
+          title: "Items added",
+          description: `${playlistItems.length} archive result(s) added to playlist.`,
+        });
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          status: "done",
+          count: playlistItems.length,
+          message: "Added to playlist",
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return true;
+      }
+
       const selectedFiles: SourceEntry[] = [];
       const listingCache = new Map<string, SourceEntry[]>();
       const resolveSelectionEntry = async (filePath: string) => {

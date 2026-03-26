@@ -9,10 +9,12 @@
 type ActivitySnapshot = {
   restInFlight: number;
   ftpInFlight: number;
+  telnetInFlight: number;
 };
 
 let restInFlight = 0;
 let ftpInFlight = 0;
+let telnetInFlight = 0;
 
 const emitUpdate = () => {
   if (typeof window !== "undefined") {
@@ -25,6 +27,7 @@ const clamp = (value: number) => Math.max(0, value);
 export const getDiagnosticsActivitySnapshot = (): ActivitySnapshot => ({
   restInFlight,
   ftpInFlight,
+  telnetInFlight,
 });
 
 export const incrementRestInFlight = () => {
@@ -47,8 +50,19 @@ export const decrementFtpInFlight = () => {
   emitUpdate();
 };
 
+export const incrementTelnetInFlight = () => {
+  telnetInFlight += 1;
+  emitUpdate();
+};
+
+export const decrementTelnetInFlight = () => {
+  telnetInFlight = clamp(telnetInFlight - 1);
+  emitUpdate();
+};
+
 export const resetDiagnosticsActivity = () => {
   restInFlight = 0;
   ftpInFlight = 0;
+  telnetInFlight = 0;
   emitUpdate();
 };

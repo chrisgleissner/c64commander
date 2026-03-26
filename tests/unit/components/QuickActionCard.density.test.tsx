@@ -58,7 +58,9 @@ describe("QuickActionCard", () => {
       </DisplayProfileProvider>,
     );
 
+    expect(screen.getByText("Very long compact action label").className).toContain("text-[11px]");
     expect(screen.getByText("Very long compact action label").className).toContain("whitespace-normal");
+    expect(screen.getByText("Very long compact action label").className).toContain("break-normal");
     expect(screen.getByText("Readable secondary copy should wrap on compact displays").className).toContain(
       "break-words",
     );

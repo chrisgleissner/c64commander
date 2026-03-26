@@ -25,6 +25,7 @@ const makeEntry = (overrideTimestamp?: string): HealthHistoryEntry => ({
     raster: { outcome: "Success", durationMs: 10, reason: null },
     config: { outcome: "Success", durationMs: 25, reason: null },
     ftp: { outcome: "Success", durationMs: 15, reason: null },
+    telnet: { outcome: "Success", durationMs: 18, reason: null },
   },
   latency: { p50: 30, p90: 50, p99: 80 },
 });

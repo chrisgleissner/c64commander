@@ -53,7 +53,7 @@ NOTE: On C64 Ultimate devices, F1 opens the action menu directly. On Ultimate 64
 | ENTER   | Execute action / edit field              |
 | F1      | Open action menu (C64U) or Page Up (U64) |
 | F5      | Open action menu (U64)                   |
-| F6      | Open CommoServe / Assembly64 search      |
+| F6      | Open CommoServe search                   |
 | F7      | Help (U64) or Page Down                  |
 
 ---
@@ -126,15 +126,15 @@ Client MUST NOT:
 
 ---
 
-## 5b. CommoServe / Assembly64 Search
+## 5b. CommoServe Search
 
 ### 5b.1 Overview
 
-CommoServe (C64 Ultimate branding) / Assembly64 (Ultimate 64 branding) is an online content search and download feature. It opens a modal search form over the file browser, queries a remote server, and allows browsing/running results directly from Telnet.
+CommoServe is an online content search and download feature. It opens a modal search form over the file browser, queries a remote server, and allows browsing/running results directly from Telnet.
 
 - **Trigger**: `F6` from the file browser
 - **Requires**: Active network connection to the internet
-- **Backend**: Assembly64 server (`hackerswithstyle.se/leet`)
+- **Service**: CommoServe archive endpoint (`commoserve.files.commodore.net/leet`)
 - **UI model**: Distinct from the action menu — a separate multi-screen modal flow
 
 ### 5b.2 Screen Flow
@@ -173,7 +173,7 @@ File Actions (Run Disk, Mount Disk, etc.)
 | Sort     | Dropdown   | Name, Year                          |
 | Order    | Dropdown   | Ascending, Descending               |
 
-NOTE: Dropdown presets are fetched from the Assembly64 server at connection time and may change. The values above are observed from firmware V1.49 1.1.0.
+NOTE: Dropdown presets are fetched from the archive service at connection time and may change. The values above are observed from firmware V1.49 1.1.0.
 
 ### 5b.4 Search Form Interaction
 
@@ -216,7 +216,7 @@ joyride_license.txt         TXT    1K
 ```
 
 - Each entry shows filename, extension, and size
-- Status bar shows the Assembly64 path: `/a64/{id}/{category}/`
+- Status bar shows the archive path: `/a64/{id}/{category}/`
 - Files are downloaded on demand (cached to `/Temp/` on device)
 
 ### 5b.7 File Actions

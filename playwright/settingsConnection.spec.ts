@@ -254,6 +254,7 @@ test.describe("Settings connection management", () => {
       "Play and Disk",
       "Config",
       "HVSC",
+      "Online Archive",
       "Device Safety",
       "Notifications",
       "About",

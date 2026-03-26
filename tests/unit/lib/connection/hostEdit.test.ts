@@ -109,4 +109,15 @@ describe("hostEdit", () => {
     expect(host).toBe("my-c64.local");
     expect(updateC64APIConfig).toHaveBeenCalledWith("http://my-c64.local", "pw", "my-c64.local");
   });
+
+  it("returns default host when window is undefined", () => {
+    const original = globalThis.window;
+    // @ts-expect-error -- simulating SSR environment
+    delete globalThis.window;
+    try {
+      expect(getConfiguredHost()).toBe("c64u");
+    } finally {
+      globalThis.window = original;
+    }
+  });
 });

@@ -20,6 +20,11 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadDiscoveryProbeTimeoutMs: vi.fn(),
   loadDiskAutostartMode: vi.fn(),
   loadVolumeSliderPreviewIntervalMs: vi.fn(),
+  loadArchiveHostOverride: vi.fn(),
+  loadArchiveClientIdOverride: vi.fn(),
+  loadArchiveUserAgentOverride: vi.fn(),
+  loadCommoserveEnabled: vi.fn(),
+  DEFAULT_COMMOSERVE_ENABLED: true,
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
@@ -29,6 +34,10 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
   saveVolumeSliderPreviewIntervalMs: vi.fn(),
+  saveArchiveHostOverride: vi.fn(),
+  saveArchiveClientIdOverride: vi.fn(),
+  saveArchiveUserAgentOverride: vi.fn(),
+  saveCommoserveEnabled: vi.fn(),
 
   clampConfigWriteIntervalMs: (v: number) => v,
   clampStartupDiscoveryWindowMs: (v: number) => v,
@@ -65,6 +74,10 @@ describe("settingsTransfer", () => {
     it("collects all settings", () => {
       vi.mocked(appSettings.loadDebugLoggingEnabled).mockReturnValue(true);
       vi.mocked(appSettings.loadVolumeSliderPreviewIntervalMs).mockReturnValue(250);
+      vi.mocked(appSettings.loadCommoserveEnabled).mockReturnValue(true);
+      vi.mocked(appSettings.loadArchiveHostOverride).mockReturnValue("");
+      vi.mocked(appSettings.loadArchiveClientIdOverride).mockReturnValue("");
+      vi.mocked(appSettings.loadArchiveUserAgentOverride).mockReturnValue("");
       vi.mocked(deviceSafetySettings.loadDeviceSafetyConfig).mockReturnValue({
         mode: "RELAXED",
         // other props... spread mock return
@@ -74,6 +87,7 @@ describe("settingsTransfer", () => {
       expect(result.version).toBe(1);
       expect(result.appSettings.debugLoggingEnabled).toBe(true);
       expect(result.appSettings.volumeSliderPreviewIntervalMs).toBe(250);
+      expect(result.appSettings.commoserveEnabled).toBe(true);
       expect(result.deviceSafety.mode).toBe("RELAXED");
     });
   });
@@ -90,6 +104,9 @@ describe("settingsTransfer", () => {
         discoveryProbeTimeoutMs: 2000,
         diskAutostartMode: "dma",
         volumeSliderPreviewIntervalMs: 200,
+        archiveHostOverride: "",
+        archiveClientIdOverride: "",
+        archiveUserAgentOverride: "",
       },
       deviceSafety: {
         mode: "BALANCED",
@@ -196,6 +213,9 @@ describe("settingsTransfer", () => {
         ["discoveryProbeTimeoutMs", "notanumber", "discoveryProbeTimeoutMs must be a number."],
         ["diskAutostartMode", "usb", "diskAutostartMode must be kernal or dma."],
         ["volumeSliderPreviewIntervalMs", "slow", "volumeSliderPreviewIntervalMs must be a number."],
+        ["archiveHostOverride", 1, "archiveHostOverride must be a string."],
+        ["archiveClientIdOverride", 1, "archiveClientIdOverride must be a string."],
+        ["archiveUserAgentOverride", 1, "archiveUserAgentOverride must be a string."],
       ];
       for (const [field, value, expectedError] of fields) {
         const invalid = {
@@ -256,6 +276,39 @@ describe("settingsTransfer", () => {
       expect(importSettingsJson(JSON.stringify(42))).toEqual({
         ok: false,
         error: "Payload must be a JSON object.",
+      });
+    });
+
+    it("imports payload with commoserveEnabled", () => {
+      const payload = {
+        ...validPayload,
+        appSettings: {
+          ...validPayload.appSettings,
+          commoserveEnabled: true,
+        },
+      };
+      const result = importSettingsJson(JSON.stringify(payload));
+      expect(result).toEqual({ ok: true });
+      expect(appSettings.saveCommoserveEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it("uses defaults when optional archive keys are absent", () => {
+      const result = importSettingsJson(JSON.stringify(validPayload));
+      expect(result).toEqual({ ok: true });
+      expect(appSettings.saveCommoserveEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it("rejects non-boolean commoserveEnabled", () => {
+      const payload = {
+        ...validPayload,
+        appSettings: {
+          ...validPayload.appSettings,
+          commoserveEnabled: 1,
+        },
+      };
+      expect(importSettingsJson(JSON.stringify(payload))).toEqual({
+        ok: false,
+        error: "commoserveEnabled must be boolean.",
       });
     });
   });

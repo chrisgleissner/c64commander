@@ -280,6 +280,7 @@ describe("GlobalDiagnosticsOverlay", () => {
       probes: {
         REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
         FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        TELNET: { probe: "TELNET", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
         CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
         RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
         JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },

@@ -39,6 +39,7 @@ const makeResult = (overrides?: Partial<HealthCheckRunResult>): HealthCheckRunRe
   probes: {
     REST: makeProbe("REST", "Success"),
     FTP: makeProbe("FTP", "Success"),
+    TELNET: makeProbe("TELNET", "Success"),
     CONFIG: makeProbe("CONFIG", "Success"),
     RASTER: makeProbe("RASTER", "Success"),
     JIFFY: makeProbe("JIFFY", "Success"),
@@ -80,6 +81,7 @@ describe("HealthCheckDetailView", () => {
       render(<HealthCheckDetailView result={makeResult()} onBack={vi.fn()} />);
       expect(screen.getByTestId("health-check-probe-rest")).toHaveTextContent("Success");
       expect(screen.getByTestId("health-check-probe-ftp")).toHaveTextContent("Success");
+      expect(screen.getByTestId("health-check-probe-telnet")).toHaveTextContent("Success");
     });
 
     it("shows duration in ms when durationMs is non-null", () => {
@@ -186,16 +188,17 @@ describe("HealthCheckDetailView", () => {
       expect(screen.queryByText(/p50/)).not.toBeInTheDocument();
     });
 
-    it("all 5 probes show done when liveProbes has all entries", () => {
+    it("all 6 probes show done when liveProbes has all entries", () => {
       const allProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> = {
         REST: makeProbe("REST", "Success"),
         FTP: makeProbe("FTP", "Success"),
+        TELNET: makeProbe("TELNET", "Success"),
         CONFIG: makeProbe("CONFIG", "Success"),
         RASTER: makeProbe("RASTER", "Success"),
         JIFFY: makeProbe("JIFFY", "Success"),
       };
       render(<HealthCheckDetailView result={null} liveProbes={allProbes} isRunning={true} onBack={vi.fn()} />);
-      for (const name of ["rest", "ftp", "config", "raster", "jiffy"]) {
+      for (const name of ["rest", "ftp", "telnet", "config", "raster", "jiffy"]) {
         expect(screen.getByTestId(`health-check-probe-${name}`).getAttribute("data-live-status")).toBe("done");
       }
     });
@@ -216,7 +219,7 @@ describe("HealthCheckDetailView", () => {
       expect(screen.getByTestId("health-check-probe-rest").getAttribute("data-live-status")).toBe("done");
       expect(screen.getByTestId("health-check-probe-ftp").getAttribute("data-live-status")).toBe("running");
       expect(screen.getByTestId("health-check-probe-config").getAttribute("data-live-status")).toBe("done");
-      expect(screen.getByTestId("health-check-probe-raster").getAttribute("data-live-status")).toBe("pending");
+      expect(screen.getByTestId("health-check-probe-telnet").getAttribute("data-live-status")).toBe("pending");
     });
 
     it("surfaces timeout execution state details even without a completed probe payload", () => {
@@ -232,6 +235,14 @@ describe("HealthCheckDetailView", () => {
             reason: timeoutReason,
           },
           FTP: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          TELNET: {
             state: "PENDING",
             outcome: null,
             startedAt: null,
@@ -287,6 +298,14 @@ describe("HealthCheckDetailView", () => {
             reason: "User aborted the probe",
           },
           FTP: {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          TELNET: {
             state: "PENDING",
             outcome: null,
             startedAt: null,

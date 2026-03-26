@@ -43,9 +43,11 @@ const healthyHealthState: OverallHealthState = {
     App: { state: "Healthy", problemCount: 0, totalOperations: 3, failedOperations: 0 },
     REST: { state: "Healthy", problemCount: 0, totalOperations: 4, failedOperations: 0 },
     FTP: { state: "Healthy", problemCount: 0, totalOperations: 2, failedOperations: 0 },
+    TELNET: { state: "Healthy", problemCount: 0, totalOperations: 1, failedOperations: 0 },
   },
   lastRestActivity: { operation: "GET /v1/info", result: "200", timestampMs: Date.now() - 5_000 },
   lastFtpActivity: { operation: "LIST /Usb0", result: "success", timestampMs: Date.now() - 8_000 },
+  lastTelnetActivity: { operation: "Reboot", result: "success", timestampMs: Date.now() - 3_000 },
   primaryProblem: null,
 };
 
@@ -152,9 +154,10 @@ const defaultProps: DiagnosticsDialogProps = {
     probes: {
       REST: { probe: "REST" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 0 },
       FTP: { probe: "FTP" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 100 },
-      CONFIG: { probe: "CONFIG" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 200 },
-      RASTER: { probe: "RASTER" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 300 },
-      JIFFY: { probe: "JIFFY" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 400 },
+      TELNET: { probe: "TELNET" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 200 },
+      CONFIG: { probe: "CONFIG" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 300 },
+      RASTER: { probe: "RASTER" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 400 },
+      JIFFY: { probe: "JIFFY" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 500 },
     },
     latency: { p50: 10, p90: 20, p99: 30 },
     deviceInfo: null,
@@ -182,10 +185,71 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-header")).toBeVisible();
     expect(screen.getByTestId("evidence-panel")).toBeVisible();
     expect(screen.getByTestId("evidence-heading")).toHaveTextContent("Activity");
-    expect(screen.getByTestId("activity-kinds-line")).toHaveTextContent("Problems, actions, logs, and traces");
+    expect(screen.getByTestId("activity-kinds-line")).toHaveTextContent(
+      "Problems, actions, logs, and traces across App, REST, FTP, and Telnet",
+    );
     expect(screen.getByTestId("filters-collapsed-bar")).toBeVisible();
     expect(screen.queryByText(/in view/i)).toBeNull();
     expect(screen.queryByTestId("filters-editor-surface")).toBeNull();
+  });
+
+  it("shows Telnet filters and Telnet action badges in the evidence list", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      traceEvents: [
+        {
+          id: "trace-telnet-1",
+          timestamp: new Date(Date.now() - 3_000).toISOString(),
+          relativeMs: 0,
+          type: "telnet-operation",
+          origin: "user",
+          correlationId: "telnet-action-1",
+          data: {
+            lifecycleState: "foreground",
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            actionId: "saveDebugLog",
+            actionLabel: "Save Debug Log",
+            menuPath: ["Developer", "Save Debug Log"],
+            result: "success",
+            durationMs: 120,
+          },
+        },
+      ],
+      actionSummaries: [
+        {
+          correlationId: "telnet-action-1",
+          actionName: "Save Debug Log",
+          origin: "user",
+          originalOrigin: "user",
+          startTimestamp: new Date(Date.now() - 3_500).toISOString(),
+          endTimestamp: new Date(Date.now() - 3_200).toISOString(),
+          durationMs: 300,
+          outcome: "success",
+          startRelativeMs: 0,
+          effects: [
+            {
+              type: "TELNET",
+              label: "Save Debug Log",
+              actionId: "saveDebugLog",
+              actionLabel: "Save Debug Log",
+              menuPath: ["Developer", "Save Debug Log"],
+              target: null,
+              result: "success",
+              durationMs: 120,
+            },
+          ],
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    expect(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "TELNET" })).toBeVisible();
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("Save Debug Log");
+    expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/ago/i);
   });
 
   it("opens connection view on tap and connection edit on long press", async () => {

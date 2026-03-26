@@ -24,6 +24,24 @@ const renderDialog = (isSaving = false) => {
   return { ...view, onSave, onOpenChange };
 };
 
+const renderDialogWithTelnet = (opts: { telnetAvailable?: boolean; telnetBusy?: boolean } = {}) => {
+  const onSave = vi.fn();
+  const onSaveReu = vi.fn().mockResolvedValue(undefined);
+  const onOpenChange = vi.fn();
+  const view = render(
+    <SaveRamDialog
+      open={true}
+      onOpenChange={onOpenChange}
+      onSave={onSave}
+      isSaving={false}
+      onSaveReu={onSaveReu}
+      telnetAvailable={opts.telnetAvailable ?? true}
+      telnetBusy={opts.telnetBusy ?? false}
+    />,
+  );
+  return { ...view, onSave, onSaveReu, onOpenChange };
+};
+
 const goToCustomForm = () => {
   const handles = renderDialog();
   fireEvent.click(screen.getByTestId("save-ram-type-custom"));
@@ -193,5 +211,37 @@ describe("SaveRamDialog – custom form", () => {
     fireEvent.click(screen.getByTestId("save-ram-type-custom"));
 
     expect((screen.getByTestId("save-ram-custom-start") as HTMLInputElement).value).toBe("0400");
+  });
+});
+
+describe("SaveRamDialog – Save REU", () => {
+  it("shows Save REU button when telnetAvailable", () => {
+    renderDialogWithTelnet({ telnetAvailable: true });
+    expect(screen.getByTestId("save-ram-type-reu")).toBeInTheDocument();
+  });
+
+  it("hides Save REU button when no handler is provided", () => {
+    const onSave = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <SaveRamDialog open={true} onOpenChange={onOpenChange} onSave={onSave} isSaving={false} telnetAvailable={true} />,
+    );
+    expect(screen.queryByTestId("save-ram-type-reu")).not.toBeInTheDocument();
+  });
+
+  it("hides Save REU button when telnetAvailable is false", () => {
+    renderDialogWithTelnet({ telnetAvailable: false });
+    expect(screen.queryByTestId("save-ram-type-reu")).not.toBeInTheDocument();
+  });
+
+  it("calls onSaveReu when Save REU is clicked", () => {
+    const { onSaveReu } = renderDialogWithTelnet();
+    fireEvent.click(screen.getByTestId("save-ram-type-reu"));
+    expect(onSaveReu).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables Save REU when telnetBusy", () => {
+    renderDialogWithTelnet({ telnetBusy: true });
+    expect(screen.getByTestId("save-ram-type-reu")).toBeDisabled();
   });
 });

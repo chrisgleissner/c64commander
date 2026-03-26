@@ -18,6 +18,9 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import {
+  saveArchiveClientIdOverride,
+  saveArchiveHostOverride,
+  saveArchiveUserAgentOverride,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDebugLoggingEnabled,
@@ -272,7 +275,15 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => "kernal"),
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
+  loadArchiveClientIdOverride: vi.fn(() => ""),
+  loadArchiveHostOverride: vi.fn(() => ""),
+  loadArchiveUserAgentOverride: vi.fn(() => ""),
   saveAutomaticDemoModeEnabled: vi.fn(),
+  saveArchiveHostOverride: vi.fn(),
+  saveArchiveClientIdOverride: vi.fn(),
+  saveArchiveUserAgentOverride: vi.fn(),
+  loadCommoserveEnabled: vi.fn(() => true),
+  saveCommoserveEnabled: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveStartupDiscoveryWindowMs: vi.fn(),
@@ -298,6 +309,15 @@ vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
   getHvscBaseUrl: vi.fn(() => "https://hvsc.example.com"),
   getHvscBaseUrlOverride: vi.fn(() => null),
   setHvscBaseUrlOverride: vi.fn(),
+}));
+
+vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
+  OnlineArchiveDialog: ({ open, config }: { open: boolean; config: { id: string; baseUrl: string } }) =>
+    open ? (
+      <div data-testid="online-archive-dialog-mock">
+        {config.id}:{config.baseUrl}
+      </div>
+    ) : null,
 }));
 
 afterEach(() => {
@@ -757,12 +777,47 @@ describe("SettingsPage", () => {
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");
   });
 
+  it("validates archive host overrides and falls back to the default host", () => {
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByLabelText("Host override"), {
+      target: { value: "http://bad-host" },
+    });
+
+    expect(saveArchiveHostOverride).toHaveBeenCalledWith("http://bad-host");
+    expect(screen.getByRole("alert")).toHaveTextContent(/hostname only/i);
+    expect(screen.getByText(/Resolved host:/i)).toHaveTextContent("commoserve.files.commodore.net");
+  });
+
+  it("persists archive overrides and mounts the archive dialog only when opened", () => {
+    renderSettingsPage();
+
+    expect(screen.queryByTestId("online-archive-dialog-mock")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Client-Id override"), {
+      target: { value: "Custom Client" },
+    });
+    fireEvent.change(screen.getByLabelText("User-Agent override"), {
+      target: { value: "Custom Agent" },
+    });
+
+    expect(saveArchiveClientIdOverride).toHaveBeenCalledWith("Custom Client");
+    expect(saveArchiveUserAgentOverride).toHaveBeenCalledWith("Custom Agent");
+
+    fireEvent.click(screen.getByRole("button", { name: /Open archive browser/i }));
+    expect(screen.getByTestId("online-archive-dialog-mock")).toHaveTextContent(
+      "archive-commoserve:http://commoserve.files.commodore.net",
+    );
+  });
+
   it("requires confirmation when switching into relaxed safety mode", async () => {
     const saveSpy = vi.spyOn(deviceSafetySettings, "saveDeviceSafetyMode");
 
     renderSettingsPage();
 
-    const trigger = screen.getAllByRole("combobox")[1];
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    expect(deviceSafetySection).toBeTruthy();
+    const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "RELAXED" } });
 
     const warningDialog = await screen.findByRole("dialog", {
@@ -854,7 +909,9 @@ describe("SettingsPage", () => {
   it("enables debug logging when switching to troubleshooting mode", () => {
     renderSettingsPage();
 
-    const trigger = screen.getAllByRole("combobox")[1];
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    expect(deviceSafetySection).toBeTruthy();
+    const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "TROUBLESHOOTING" } });
 
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
