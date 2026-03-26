@@ -35,6 +35,8 @@ import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourc
 import type { AddItemsProgressState } from "./AddItemsProgressOverlay";
 import { useSourceNavigator } from "@/lib/sourceNavigation/useSourceNavigator";
 import { ItemSelectionView } from "./ItemSelectionView";
+import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
+import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 const isLocalAutoConfirmDisabled = () =>
@@ -63,6 +65,7 @@ export type ItemSelectionDialogProps = {
   autoConfirmCloseBefore?: boolean;
   onAutoConfirmStart?: (source: SourceLocation) => void;
   onCancelScan?: () => void;
+  archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 };
 
 export const ItemSelectionDialog = ({
@@ -82,10 +85,12 @@ export const ItemSelectionDialog = ({
   autoConfirmCloseBefore = false,
   onAutoConfirmStart,
   onCancelScan,
+  archiveConfigs,
 }: ItemSelectionDialogProps) => {
   const { profile } = useDisplayProfile();
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
+  const [archiveSelection, setArchiveSelection] = useState<Map<string, ArchiveSearchResult>>(new Map());
   const [filterText, setFilterText] = useState("");
   const [pendingLocalSource, setPendingLocalSource] = useState(false);
   const [pendingLocalSourceCount, setPendingLocalSourceCount] = useState(0);
@@ -116,7 +121,20 @@ export const ItemSelectionDialog = ({
     [sourceGroups],
   );
 
-  const browser = useSourceNavigator(source);
+  const commoserveSource = useMemo(
+    () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === "commoserve") ?? null,
+    [sourceGroups],
+  );
+
+  const assembly64Source = useMemo(
+    () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === "assembly64") ?? null,
+    [sourceGroups],
+  );
+
+  const isArchiveSource = source?.type === "commoserve" || source?.type === "assembly64";
+  const archiveConfig = source ? (archiveConfigs?.[source.id] ?? null) : null;
+
+  const browser = useSourceNavigator(isArchiveSource ? null : source);
 
   useEffect(() => {
     if (!browser.error || !open) return;
@@ -132,6 +150,7 @@ export const ItemSelectionDialog = ({
     if (!open) return;
     setSelectedSourceId(null);
     setSelection(new Map());
+    setArchiveSelection(new Map());
     setFilterText("");
     setPendingLocalSource(false);
     setPendingLocalSourceCount(0);
@@ -231,10 +250,12 @@ export const ItemSelectionDialog = ({
     });
   };
 
+  const activeSelectionCount = isArchiveSource ? archiveSelection.size : selection.size;
+
   const handleConfirm = async () => {
     if (!source) return;
     if (isConfirming || autoConfirming) return;
-    if (!selection.size) {
+    if (!activeSelectionCount) {
       reportUserError({
         operation: "ITEM_SELECTION",
         title: "Select items",
@@ -242,11 +263,17 @@ export const ItemSelectionDialog = ({
       });
       return;
     }
-    const selections: SelectedItem[] = Array.from(selection.values()).map((entry) => ({
-      type: entry.type,
-      name: entry.name,
-      path: entry.path,
-    }));
+    const selections: SelectedItem[] = isArchiveSource
+      ? Array.from(archiveSelection.values()).map((result) => ({
+          type: "file" as const,
+          name: result.name,
+          path: `${result.id}/${result.category}`,
+        }))
+      : Array.from(selection.values()).map((entry) => ({
+          type: entry.type,
+          name: entry.name,
+          path: entry.path,
+        }));
     try {
       const success = await onConfirm(source, selections);
       if (success) {
@@ -405,6 +432,56 @@ export const ItemSelectionDialog = ({
                     </span>
                   </Button>
                 ) : null}
+                {commoserveSource ? (
+                  <Button
+                    variant="outline"
+                    className={interstitialButtonClassName}
+                    onClick={() => {
+                      setPendingLocalSource(false);
+                      setSelectedSourceId(commoserveSource.id);
+                    }}
+                    id="import-option-commoserve"
+                    data-testid="import-option-commoserve"
+                    aria-label={`Search ${SOURCE_LABELS.commoserve}`}
+                  >
+                    <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
+                      <FileOriginIcon origin="commoserve" className="h-4 w-4 mr-1" />
+                      <span className={interstitialLabelClassName}>
+                        <span className={cn("truncate font-medium", interstitialTextClassName)}>
+                          {SOURCE_LABELS.commoserve}
+                        </span>
+                        <span className={cn("text-[11px] text-muted-foreground", interstitialTextClassName)}>
+                          {SOURCE_EXPLANATIONS.commoserve}
+                        </span>
+                      </span>
+                    </span>
+                  </Button>
+                ) : null}
+                {assembly64Source ? (
+                  <Button
+                    variant="outline"
+                    className={interstitialButtonClassName}
+                    onClick={() => {
+                      setPendingLocalSource(false);
+                      setSelectedSourceId(assembly64Source.id);
+                    }}
+                    id="import-option-assembly64"
+                    data-testid="import-option-assembly64"
+                    aria-label={`Search ${SOURCE_LABELS.assembly64}`}
+                  >
+                    <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
+                      <FileOriginIcon origin="assembly64" className="h-4 w-4 mr-1" />
+                      <span className={interstitialLabelClassName}>
+                        <span className={cn("truncate font-medium", interstitialTextClassName)}>
+                          {SOURCE_LABELS.assembly64}
+                        </span>
+                        <span className={cn("text-[11px] text-muted-foreground", interstitialTextClassName)}>
+                          {SOURCE_EXPLANATIONS.assembly64}
+                        </span>
+                      </span>
+                    </span>
+                  </Button>
+                ) : null}
               </div>
             </div>
           </AppDialogBody>
@@ -449,7 +526,7 @@ export const ItemSelectionDialog = ({
               <div>
                 <p className="text-base font-semibold">Select items</p>
                 <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
-                  {selection.size} selected
+                  {activeSelectionCount} selected
                 </p>
               </div>
               {profile === "compact" ? (
@@ -457,7 +534,7 @@ export const ItemSelectionDialog = ({
                   variant="default"
                   size="sm"
                   onClick={handleConfirm}
-                  disabled={isConfirming || autoConfirming || selection.size === 0}
+                  disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
                   data-testid="add-items-confirm"
                   className="shrink-0"
                 >
@@ -466,12 +543,14 @@ export const ItemSelectionDialog = ({
               ) : null}
             </div>
 
-            <Input
-              placeholder="Filter files…"
-              value={filterText}
-              onChange={(event) => setFilterText(event.target.value)}
-              data-testid="add-items-filter"
-            />
+            {!isArchiveSource ? (
+              <Input
+                placeholder="Filter files…"
+                value={filterText}
+                onChange={(event) => setFilterText(event.target.value)}
+                data-testid="add-items-filter"
+              />
+            ) : null}
           </div>
 
           <AppSheetBody className={bodyPaddingClassName} data-testid="add-items-scroll">
@@ -482,24 +561,58 @@ export const ItemSelectionDialog = ({
                   ? "c64u-file-picker"
                   : source.type === "local"
                     ? "local-file-picker"
-                    : "source-file-picker"
+                    : source.type === "commoserve"
+                      ? "commoserve-picker"
+                      : source.type === "assembly64"
+                        ? "assembly64-picker"
+                        : "source-file-picker"
               }
             >
-              <ItemSelectionView
-                path={browser.path}
-                rootPath={source.rootPath}
-                entries={visibleEntries}
-                isLoading={browser.isLoading}
-                showLoadingIndicator={browser.showLoadingIndicator}
-                selection={selection}
-                onToggleSelect={toggleSelection}
-                onOpen={browser.navigateTo}
-                onNavigateUp={browser.navigateUp}
-                onNavigateRoot={browser.navigateRoot}
-                onRefresh={browser.refresh}
-                showFolderSelect={allowFolderSelection}
-                emptyLabel="No matching items in this folder."
-              />
+              {isArchiveSource && archiveConfig ? (
+                <ArchiveSelectionView
+                  config={archiveConfig}
+                  backend={archiveConfig.backend}
+                  selection={archiveSelection}
+                  onToggleSelect={(result) => {
+                    setArchiveSelection((prev) => {
+                      const next = new Map(prev);
+                      const key = archiveResultKey(result);
+                      if (next.has(key)) {
+                        next.delete(key);
+                      } else {
+                        next.set(key, result);
+                      }
+                      return next;
+                    });
+                  }}
+                  onSelectAll={(results) => {
+                    setArchiveSelection((prev) => {
+                      const next = new Map(prev);
+                      for (const result of results) {
+                        next.set(archiveResultKey(result), result);
+                      }
+                      return next;
+                    });
+                  }}
+                  onClearSelection={() => setArchiveSelection(new Map())}
+                />
+              ) : (
+                <ItemSelectionView
+                  path={browser.path}
+                  rootPath={source.rootPath}
+                  entries={visibleEntries}
+                  isLoading={browser.isLoading}
+                  showLoadingIndicator={browser.showLoadingIndicator}
+                  selection={selection}
+                  onToggleSelect={toggleSelection}
+                  onOpen={browser.navigateTo}
+                  onNavigateUp={browser.navigateUp}
+                  onNavigateRoot={browser.navigateRoot}
+                  onRefresh={browser.refresh}
+                  showFolderSelect={allowFolderSelection}
+                  emptyLabel="No matching items in this folder."
+                />
+              )}
             </div>
           </AppSheetBody>
 
@@ -533,7 +646,7 @@ export const ItemSelectionDialog = ({
                   variant="default"
                   size={profile === "compact" ? "sm" : "default"}
                   onClick={handleConfirm}
-                  disabled={isConfirming || autoConfirming || selection.size === 0}
+                  disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
                   data-testid="add-items-confirm"
                 >
                   {confirmLabel}

@@ -191,3 +191,92 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(screen.getByText("High Voltage SID Collection").className).toContain("whitespace-normal");
   });
 });
+
+describe("ItemSelectionDialog archive source buttons", () => {
+  const archiveSourceGroups: SourceGroup[] = [
+    {
+      label: "C64U",
+      sources: [
+        {
+          id: "ultimate-1",
+          type: "ultimate",
+          name: "C64U",
+          rootPath: "/",
+          isAvailable: true,
+          listEntries: async () => [],
+          listFilesRecursive: async () => [],
+        },
+      ],
+    },
+    {
+      label: "CommoServe",
+      sources: [
+        {
+          id: "archive-commoserve",
+          type: "commoserve",
+          name: "CommoServe",
+          rootPath: "/",
+          isAvailable: true,
+          listEntries: async () => [],
+          listFilesRecursive: async () => [],
+        },
+      ],
+    },
+    {
+      label: "Assembly64",
+      sources: [
+        {
+          id: "archive-assembly64",
+          type: "assembly64",
+          name: "Assembly64",
+          rootPath: "/",
+          isAvailable: true,
+          listEntries: async () => [],
+          listFilesRecursive: async () => [],
+        },
+      ],
+    },
+  ];
+
+  it("renders CommoServe and Assembly64 buttons in the interstitial when sources are present", () => {
+    localStorage.clear();
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={archiveSourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+    expect(screen.getByTestId("import-option-commoserve")).toBeVisible();
+    expect(screen.getByTestId("import-option-assembly64")).toBeVisible();
+    expect(screen.getByText("CommoServe")).toBeVisible();
+    expect(screen.getByText("Assembly64")).toBeVisible();
+    expect(screen.getByText("Online File Archive")).toBeVisible();
+    expect(screen.getByText("Online Demo Archive")).toBeVisible();
+  });
+
+  it("omits archive buttons when sources are absent", () => {
+    localStorage.clear();
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+    expect(screen.queryByTestId("import-option-commoserve")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("import-option-assembly64")).not.toBeInTheDocument();
+  });
+});

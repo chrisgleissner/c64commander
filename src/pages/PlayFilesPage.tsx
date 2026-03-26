@@ -39,9 +39,17 @@ import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
+import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
+import {
+  loadCommoserveEnabled,
+  loadAssembly64Enabled,
+  loadArchiveBackend,
+  loadArchiveHostOverride,
+} from "@/lib/config/appSettings";
+import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -184,6 +192,18 @@ export default function PlayFilesPage() {
 
   const { flags, isLoaded } = useFeatureFlags();
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
+
+  const [commoserveEnabled, setCommoserveEnabled] = useState(() => loadCommoserveEnabled());
+  const [assembly64Enabled, setAssembly64Enabled] = useState(() => loadAssembly64Enabled());
+
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === "c64u_commoserve_enabled") setCommoserveEnabled(loadCommoserveEnabled());
+      if (e.key === "c64u_assembly64_enabled") setAssembly64Enabled(loadAssembly64Enabled());
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -443,8 +463,32 @@ export default function PlayFilesPage() {
         sources: [createHvscSourceLocation(hvscRoot.path)],
       });
     }
+    if (commoserveEnabled) {
+      groups.push({
+        label: SOURCE_LABELS.commoserve,
+        sources: [createArchiveSourceLocation("commoserve")],
+      });
+    }
+    if (assembly64Enabled) {
+      groups.push({
+        label: SOURCE_LABELS.assembly64,
+        sources: [createArchiveSourceLocation("assembly64")],
+      });
+    }
     return groups;
-  }, [hvscLibraryAvailable, hvscRoot.path, localSources]);
+  }, [assembly64Enabled, commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
+
+  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
+    const hostOverride = loadArchiveHostOverride();
+    const configs: Record<string, ArchiveClientConfigInput> = {};
+    if (commoserveEnabled) {
+      configs["archive-commoserve"] = { backend: "commodore", hostOverride };
+    }
+    if (assembly64Enabled) {
+      configs["archive-assembly64"] = { backend: "assembly64", hostOverride };
+    }
+    return configs;
+  }, [assembly64Enabled, commoserveEnabled]);
 
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {
@@ -1181,6 +1225,7 @@ export default function PlayFilesPage() {
             title="Add items"
             confirmLabel="Add to playlist"
             sourceGroups={sourceGroups}
+            archiveConfigs={archiveConfigs}
             onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
             onConfirm={handleAddFileSelections}
             filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}

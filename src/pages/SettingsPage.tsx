@@ -98,6 +98,10 @@ import {
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
   saveAutoRotationEnabled,
+  loadCommoserveEnabled,
+  saveCommoserveEnabled,
+  loadAssembly64Enabled,
+  saveAssembly64Enabled,
   type ArchiveBackend,
   type DiskAutostartMode,
   type NotificationVisibility,
@@ -216,6 +220,8 @@ export default function SettingsPage() {
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
   const [archiveBackend, setArchiveBackend] = useState<ArchiveBackend>(loadArchiveBackend());
+  const [commoserveEnabled, setCommoserveEnabled] = useState(loadCommoserveEnabled);
+  const [assembly64Enabled, setAssembly64Enabled] = useState(loadAssembly64Enabled);
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
   const [archiveClientIdOverride, setArchiveClientIdOverride] = useState(loadArchiveClientIdOverride());
   const [archiveUserAgentOverride, setArchiveUserAgentOverride] = useState(loadArchiveUserAgentOverride());
@@ -295,6 +301,12 @@ export default function SettingsPage() {
       }
       if (detail.key === "c64u_archive_backend") {
         setArchiveBackend(loadArchiveBackend());
+      }
+      if (detail.key === "c64u_commoserve_enabled") {
+        setCommoserveEnabled(loadCommoserveEnabled());
+      }
+      if (detail.key === "c64u_assembly64_enabled") {
+        setAssembly64Enabled(loadAssembly64Enabled());
       }
       if (detail.key === "c64u_archive_host_override") {
         const next = loadArchiveHostOverride();
@@ -545,6 +557,8 @@ export default function SettingsPage() {
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
       setArchiveBackend(loadArchiveBackend());
+      setCommoserveEnabled(loadCommoserveEnabled());
+      setAssembly64Enabled(loadAssembly64Enabled());
       const importedArchiveHostOverride = loadArchiveHostOverride();
       setArchiveHostOverride(importedArchiveHostOverride);
       setArchiveHostError(validateArchiveHost(importedArchiveHostOverride));
@@ -1130,6 +1144,43 @@ export default function SettingsPage() {
 
             <div className="space-y-3">
               <div className="space-y-2">
+                <p className="text-sm font-medium">Enabled sources</p>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="commoserve-enabled"
+                    data-testid="commoserve-enabled"
+                    checked={commoserveEnabled}
+                    onCheckedChange={(checked) => {
+                      const enabled = checked === true;
+                      setCommoserveEnabled(enabled);
+                      saveCommoserveEnabled(enabled);
+                    }}
+                  />
+                  <Label htmlFor="commoserve-enabled" className="text-sm">
+                    CommoServe
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="assembly64-enabled"
+                    data-testid="assembly64-enabled"
+                    checked={assembly64Enabled}
+                    onCheckedChange={(checked) => {
+                      const enabled = checked === true;
+                      setAssembly64Enabled(enabled);
+                      saveAssembly64Enabled(enabled);
+                    }}
+                  />
+                  <Label htmlFor="assembly64-enabled" className="text-sm">
+                    Assembly64
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enable one or both online archive sources. Enabled sources appear in the Add Items interstitial.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="archive-backend" className="text-sm font-medium">
                   Archive backend
                 </Label>
@@ -1150,8 +1201,7 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Switching backends recreates the archive client immediately. Current client host:{" "}
-                  <span className="font-sans">{resolvedArchiveConfig.host}</span>
+                  Selects the backend for the archive browser dialog below. Overrides apply to this backend.
                 </p>
               </div>
 

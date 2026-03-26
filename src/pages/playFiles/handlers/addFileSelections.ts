@@ -168,6 +168,52 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     };
 
     try {
+      if (source.type === "commoserve" || source.type === "assembly64") {
+        const playlistItems: PlaylistItem[] = selections.map((sel) => ({
+          id: `${source.type}:${source.id}:${sel.path}`,
+          request: {
+            source: source.type as "commoserve" | "assembly64",
+            path: sel.path,
+          },
+          category: "prg" as const,
+          label: sel.name,
+          path: sel.path,
+          sourceId: source.id,
+          sizeBytes: null,
+          modifiedAt: null,
+          addedAt: new Date().toISOString(),
+          status: "ready" as const,
+          unavailableReason: null,
+        }));
+        if (!playlistItems.length) {
+          reportUserError({
+            operation: "PLAYLIST_ADD",
+            title: "No items selected",
+            description: "Choose at least one archive result to add.",
+            context: { sourceId: source.id, sourceType: source.type },
+          });
+          setAddItemsProgress((prev) => ({
+            ...prev,
+            status: "error",
+            message: "No items selected.",
+          }));
+          return false;
+        }
+        setPlaylist((prev) => [...prev, ...playlistItems]);
+        toast({
+          title: "Items added",
+          description: `${playlistItems.length} archive result(s) added to playlist.`,
+        });
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          status: "done",
+          count: playlistItems.length,
+          message: "Added to playlist",
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return true;
+      }
+
       const selectedFiles: SourceEntry[] = [];
       const listingCache = new Map<string, SourceEntry[]>();
       const resolveSelectionEntry = async (filePath: string) => {

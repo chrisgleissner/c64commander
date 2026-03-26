@@ -24,6 +24,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadArchiveHostOverride: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(),
   loadArchiveUserAgentOverride: vi.fn(),
+  loadCommoserveEnabled: vi.fn(),
+  loadAssembly64Enabled: vi.fn(),
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
@@ -37,6 +39,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveArchiveHostOverride: vi.fn(),
   saveArchiveClientIdOverride: vi.fn(),
   saveArchiveUserAgentOverride: vi.fn(),
+  saveCommoserveEnabled: vi.fn(),
+  saveAssembly64Enabled: vi.fn(),
 
   clampConfigWriteIntervalMs: (v: number) => v,
   clampStartupDiscoveryWindowMs: (v: number) => v,

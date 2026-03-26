@@ -11,6 +11,10 @@ import {
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
+  loadCommoserveEnabled,
+  loadAssembly64Enabled,
+  DEFAULT_COMMOSERVE_ENABLED,
+  DEFAULT_ASSEMBLY64_ENABLED,
   clampBackgroundRediscoveryIntervalMs,
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -29,6 +33,8 @@ import {
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
+  saveCommoserveEnabled,
+  saveAssembly64Enabled,
   saveBackgroundRediscoveryIntervalMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
@@ -75,6 +81,8 @@ export type SettingsExportPayload = {
     archiveHostOverride: string;
     archiveClientIdOverride: string;
     archiveUserAgentOverride: string;
+    commoserveEnabled: boolean;
+    assembly64Enabled: boolean;
   };
   deviceSafety: {
     mode: DeviceSafetyMode;
@@ -94,7 +102,11 @@ export type SettingsExportPayload = {
   };
 };
 
-const APP_SETTINGS_KEYS = [
+// Keys added after the initial v1 release — may be absent in older exported payloads.
+const OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled", "assembly64Enabled"] as const;
+
+// Keys that must be present in all settings payloads.
+const REQUIRED_APP_SETTINGS_KEYS = [
   "debugLoggingEnabled",
   "configWriteIntervalMs",
   "automaticDemoModeEnabled",
@@ -128,9 +140,14 @@ const DEVICE_SAFETY_KEYS = [
 
 const LEGACY_DEVICE_SAFETY_OPTIONAL_KEYS = ["restMaxConcurrency"] as const;
 
-const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => {
+const hasRequiredKeysAllowOptional = (
+  value: Record<string, unknown>,
+  requiredKeys: readonly string[],
+  optionalKeys: readonly string[],
+) => {
+  const allAllowed = [...requiredKeys, ...optionalKeys];
   const valueKeys = Object.keys(value);
-  return valueKeys.every((key) => keys.includes(key)) && keys.every((key) => key in value);
+  return valueKeys.every((key) => allAllowed.includes(key)) && requiredKeys.every((key) => key in value);
 };
 
 const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => value === "kernal" || value === "dma";
@@ -156,6 +173,8 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
       archiveHostOverride: loadArchiveHostOverride(),
       archiveClientIdOverride: loadArchiveClientIdOverride(),
       archiveUserAgentOverride: loadArchiveUserAgentOverride(),
+      commoserveEnabled: loadCommoserveEnabled(),
+      assembly64Enabled: loadAssembly64Enabled(),
     },
     deviceSafety: {
       mode: safety.mode,
@@ -181,7 +200,8 @@ export const exportSettingsJson = () => JSON.stringify(exportSettingsSnapshot(),
 const validateAppSettings = (value: unknown) => {
   if (!value || typeof value !== "object") return "appSettings must be an object.";
   const record = value as Record<string, unknown>;
-  if (!hasOnlyKeys(record, APP_SETTINGS_KEYS)) return "appSettings contains unknown or missing keys.";
+  if (!hasRequiredKeysAllowOptional(record, REQUIRED_APP_SETTINGS_KEYS, OPTIONAL_APP_SETTINGS_KEYS))
+    return "appSettings contains unknown or missing keys.";
   if (typeof record.debugLoggingEnabled !== "boolean") return "debugLoggingEnabled must be boolean.";
   if (!Number.isFinite(record.configWriteIntervalMs)) return "configWriteIntervalMs must be a number.";
   if (typeof record.automaticDemoModeEnabled !== "boolean") return "automaticDemoModeEnabled must be boolean.";
@@ -195,6 +215,10 @@ const validateAppSettings = (value: unknown) => {
   if (typeof record.archiveHostOverride !== "string") return "archiveHostOverride must be a string.";
   if (typeof record.archiveClientIdOverride !== "string") return "archiveClientIdOverride must be a string.";
   if (typeof record.archiveUserAgentOverride !== "string") return "archiveUserAgentOverride must be a string.";
+  if ("commoserveEnabled" in record && typeof record.commoserveEnabled !== "boolean")
+    return "commoserveEnabled must be boolean.";
+  if ("assembly64Enabled" in record && typeof record.assembly64Enabled !== "boolean")
+    return "assembly64Enabled must be boolean.";
   return null;
 };
 
@@ -249,6 +273,12 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   saveArchiveHostOverride(safeApp.archiveHostOverride);
   saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);
   saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
+  saveCommoserveEnabled(
+    "commoserveEnabled" in safeApp ? Boolean(safeApp.commoserveEnabled) : DEFAULT_COMMOSERVE_ENABLED,
+  );
+  saveAssembly64Enabled(
+    "assembly64Enabled" in safeApp ? Boolean(safeApp.assembly64Enabled) : DEFAULT_ASSEMBLY64_ENABLED,
+  );
 
   saveDeviceSafetyMode(safeSafety.mode);
   saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);

@@ -26,3 +26,8 @@
 - Implement shared test mocks for both backends.
 - Add targeted unit/integration/UI tests, including runtime backend switchover.
 - Run targeted validation, coverage, build/platform checks, code review, and CodeQL.
+
+## 2026-03-25T15:00:00Z - Phase 17 started: Multi-Source Interstitial + Online Archive Import
+- Explored codebase for all relevant files: ItemSelectionDialog.tsx, sourceTerms.ts, types.ts, FileOriginIcon.tsx, SettingsPage.tsx, PlayFilesPage.tsx, DriveManager.tsx, useOnlineArchive.ts, OnlineArchiveDialog.tsx, appSettings.ts
+- Task 17.1: Extending SourceLocationType and sourceTerms
+- Classification: UI_CHANGE + CODE_CHANGE

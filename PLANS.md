@@ -1,101 +1,87 @@
-# Online Archive HTTP Integration Plan
+# Online Archive Multi-Source Integration Plan
 
 Status: IN PROGRESS
 Date: 2026-03-25
-Classification: DOC_PLUS_CODE
+Classification: UI_CHANGE + CODE_CHANGE
 
-## Phase 1 - Repo + Spec Alignment
-- Inputs: issue statement, current telnet/archive docs, existing settings/playback architecture
-- Outputs: confirmed scope, touched-file map, baseline validation results
-- Acceptance criteria: current archive/Telnet behavior, settings patterns, and playback execution seams are understood
-- Produced artifacts: PLANS.md, WORKLOG.md
+## Completed Prior Phases (1-16)
 
-## Phase 2 - Archive Abstraction Model
-- Inputs: direct HTTP archive requirements, existing logging/error patterns
-- Outputs: ArchiveClient interface, BaseArchiveClient, thin backend subclasses, factory
-- Acceptance criteria: shared request logic lives in base class; subclasses only differ by defaults/headers
-- Produced artifacts: src/lib/archive/types.ts, src/lib/archive/client.ts
+Phases 1-16 delivered: archive abstraction model, configuration system, generic client + subclasses,
+HTTP implementation, query builder, file execution pipeline, hook integration, settings UI,
+platform configuration, state machine + error handling, mock infrastructure, testing, diagnostics,
+screenshots, and final validation. See git history for details.
 
-## Phase 3 - Configuration System
-- Inputs: appSettings persistence, settings transfer/export/import
-- Outputs: backend + override persistence, validation, resolved config model
-- Acceptance criteria: runtime config resolves user overrides over backend defaults and falls back on invalid host input
-- Produced artifacts: src/lib/config/appSettings.ts, src/lib/config/settingsTransfer.ts, src/lib/archive/config.ts
+## Phase 17 - Multi-Source Interstitial + Online Archive Import
 
-## Phase 4 - Generic Client + Subclasses
-- Inputs: config resolver, archive types
-- Outputs: thin CommoserveClient / Assembly64Client implementations and createArchiveClient()
-- Acceptance criteria: no direct subclass instantiation outside the factory in app code
-- Produced artifacts: src/lib/archive/client.ts
+### Task 17.1 - Extend source types
+- Status: TODO
+- Add "commoserve" and "assembly64" to SourceLocationType
+- Add labels/explanations to sourceTerms.ts
+- Files: src/lib/sourceNavigation/types.ts, src/lib/sourceNavigation/sourceTerms.ts
 
-## Phase 5 - HTTP Implementation
-- Inputs: endpoint contract, timeout requirements
-- Outputs: deterministic fetch implementation with headers, timeouts, JSON parsing, binary download, diagnostics
-- Acceptance criteria: dynamic baseUrl only, required headers injected, errors include backend + host, binary preview logged
-- Produced artifacts: src/lib/archive/client.ts
+### Task 17.2 - Extend FileOriginIcon
+- Status: TODO
+- Support "commoserve" and "assembly64" origins with appropriate icons
+- File: src/components/FileOriginIcon.tsx
 
-## Phase 6 - Query Builder + Types
-- Inputs: AQL grammar, search field set
-- Outputs: pure backend-agnostic query builder and types
-- Acceptance criteria: quoted/unquoted rules enforced, empty query rejected, URL encoding deterministic
-- Produced artifacts: src/lib/archive/queryBuilder.ts, src/lib/archive/types.ts
+### Task 17.3 - Update settings for dual source enablement
+- Status: TODO
+- Replace mutually-exclusive archive backend dropdown with dual toggles
+- Use existing commoserveEnabled / assembly64Enabled flags from appSettings.ts
+- Files: src/pages/SettingsPage.tsx
 
-## Phase 7 - File Execution Pipeline
-- Inputs: archive binary download, existing playback router and validation utilities
-- Outputs: shared archive execution helper using REST upload/run path
-- Acceptance criteria: no Telnet usage in primary flow; no backend-specific execution branches
-- Produced artifacts: src/lib/archive/execution.ts
+### Task 17.4 - Create archive source adapter
+- Status: TODO
+- Create SourceLocation adapter for archive backends (CommoServe + Assembly64)
+- Must implement listEntries/listFilesRecursive matching SourceLocation contract
+- File: src/lib/sourceNavigation/archiveSourceAdapter.ts
 
-## Phase 8 - Hook Integration
-- Inputs: archive client factory, execution helper
-- Outputs: deterministic hook with idle/searching/results/entries/downloading/executing/error phases and cancellation
-- Acceptance criteria: race-safe requests and immediate client recreation on config changes
-- Produced artifacts: src/hooks/useOnlineArchive.ts
+### Task 17.5 - Update ItemSelectionDialog interstitial
+- Status: TODO
+- Add CommoServe and Assembly64 buttons below HVSC
+- Conditional on enabled state from app settings
+- File: src/components/itemSelection/ItemSelectionDialog.tsx
 
-## Phase 9 - Settings UI
-- Inputs: settings page patterns, hook API
-- Outputs: Online Archive settings section and archive dialog
-- Acceptance criteria: backend selection and overrides persist immediately; archive browser reachable from UI
-- Produced artifacts: src/pages/SettingsPage.tsx, src/components/archive/OnlineArchiveDialog.tsx
+### Task 17.6 - Wire archive sources into PlayFilesPage
+- Status: TODO
+- Build archive source locations from settings and add to sourceGroups
+- Files: src/pages/PlayFilesPage.tsx, src/pages/home/components/DriveManager.tsx
 
-## Phase 10 - Platform Configuration
-- Inputs: Android manifest/network policy, iOS Info.plist ATS settings
-- Outputs: allow-list for default archive hosts and documented override limitation
-- Acceptance criteria: default hosts are allowed on native platforms without weakening unrelated behavior
-- Produced artifacts: android/app/src/main/AndroidManifest.xml, android/app/src/main/res/xml/network_security_config.xml, ios/App/App/Info.plist
+### Task 17.7 - Adapt Online Archive as import source
+- Status: TODO
+- Ensure archive browser works within ItemSelectionDialog flow
+- Single shared component for both backends
+- Files: src/components/archive/OnlineArchiveDialog.tsx (or adapt ItemSelectionView)
 
-## Phase 11 - State Machine + Error Handling
-- Inputs: hook state requirements, diagnostics/logging patterns
-- Outputs: deterministic transitions and contextual error surfaces
-- Acceptance criteria: cancellation supported; errors remain diagnosable and include backend/host context
-- Produced artifacts: src/hooks/useOnlineArchive.ts, src/lib/archive/client.ts
+### Task 17.8 - Add/update tests
+- Status: TODO
+- Tests for dual source enablement, interstitial rendering, archive source adapter
+- Coverage ≥ 91%
+- Files: tests/unit/**
 
-## Phase 12 - Mock Infrastructure
-- Inputs: archive API contract, test server patterns
-- Outputs: shared archive mock core and thin backend wrappers
-- Acceptance criteria: one endpoint implementation shared by both backends; supports dual-server mode
-- Produced artifacts: tests/mocks/baseArchiveMock.ts, tests/mocks/commoserveMock.ts, tests/mocks/assembly64Mock.ts
+### Task 17.9 - Lint, build, coverage validation
+- Status: TODO
+- npm run lint && npm run test:coverage && npm run build
 
-## Phase 13 - Testing (Including Switchover)
-- Inputs: Vitest/Playwright infrastructure, archive mocks, mock C64 server
-- Outputs: focused unit/integration/UI tests for config, headers, query builder, switchover, and execution
-- Acceptance criteria: runtime backend switching verified without stale state or cache leakage
-- Produced artifacts: tests/unit/**, tests/integration/**, optional Playwright coverage if needed
+### Task 17.10 - Regenerate screenshots
+- Status: TODO
+- Only affected screenshots: interstitial with online sources visible
 
-## Phase 14 - Diagnostics + Logging
-- Inputs: archive client/execution helpers
-- Outputs: request/response timing, resolved config, client type, sanitized headers, payload preview logs
-- Acceptance criteria: each archive operation logs enough context for reproducible diagnosis
-- Produced artifacts: src/lib/archive/client.ts, src/lib/archive/execution.ts
+### Dependencies
+- 17.1 → 17.2, 17.4, 17.5
+- 17.3 → 17.6
+- 17.4 → 17.6, 17.7
+- 17.5 → 17.6
+- 17.6, 17.7 → 17.8
+- 17.8 → 17.9 → 17.10
 
-## Phase 15 - Screenshots + Documentation
-- Inputs: UI delta, platform limitation details
-- Outputs: only the docs/README updates and screenshots actually made necessary by the visible UI change
-- Acceptance criteria: docs remain accurate; screenshots updated only if existing documented visuals became stale
-- Produced artifacts: README/doc updates, screenshots if required
+### Risks
+- Archive search is async and network-dependent; source adapter must handle errors gracefully
+- ItemSelectionDialog expects directory-based browsing; archive search is query-based (different paradigm)
+- Screenshots require demo mode to show all sources
 
-## Phase 16 - Final Validation
-- Inputs: changed code and tests
-- Outputs: lint/test/coverage/build/platform validation results, code review, CodeQL scan
-- Acceptance criteria: targeted validation complete, branch coverage >= 91%, no unresolved localized security issues
+### Screenshot Impact
+- play/import/01-import-interstitial.png (new sources visible)
+- Potential new screenshots for archive search/results flow
+
 - Produced artifacts: WORKLOG.md final entries, validation evidence
