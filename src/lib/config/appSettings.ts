@@ -17,6 +17,10 @@ const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interv
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
 const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
 const AUTO_ROTATION_ENABLED_KEY = "c64u_auto_rotation_enabled";
+const ARCHIVE_HOST_OVERRIDE_KEY = "c64u_archive_host_override";
+const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
+const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
+const COMMOSERVE_ENABLED_KEY = "c64u_commoserve_enabled";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -205,6 +209,7 @@ export const saveNotificationDurationMs = (value: number) => {
 export const clampNotificationDurationMs = (value: number) => clampNotificationDurationMsInternal(value);
 
 export const DEFAULT_AUTO_ROTATION_ENABLED = false;
+export const DEFAULT_COMMOSERVE_ENABLED = true;
 
 export const loadAutoRotationEnabled = () => readBoolean(AUTO_ROTATION_ENABLED_KEY, DEFAULT_AUTO_ROTATION_ENABLED);
 
@@ -212,6 +217,37 @@ export const saveAutoRotationEnabled = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(AUTO_ROTATION_ENABLED_KEY, enabled ? "1" : "0");
   broadcast(AUTO_ROTATION_ENABLED_KEY, enabled);
+};
+
+const loadString = (key: string) => {
+  if (typeof localStorage === "undefined") return "";
+  return localStorage.getItem(key) ?? "";
+};
+
+const saveString = (key: string, value: string) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(key, value);
+  broadcast(key, value);
+};
+
+export const loadArchiveHostOverride = () => loadString(ARCHIVE_HOST_OVERRIDE_KEY);
+
+export const saveArchiveHostOverride = (value: string) => saveString(ARCHIVE_HOST_OVERRIDE_KEY, value);
+
+export const loadArchiveClientIdOverride = () => loadString(ARCHIVE_CLIENT_ID_OVERRIDE_KEY);
+
+export const saveArchiveClientIdOverride = (value: string) => saveString(ARCHIVE_CLIENT_ID_OVERRIDE_KEY, value);
+
+export const loadArchiveUserAgentOverride = () => loadString(ARCHIVE_USER_AGENT_OVERRIDE_KEY);
+
+export const saveArchiveUserAgentOverride = (value: string) => saveString(ARCHIVE_USER_AGENT_OVERRIDE_KEY, value);
+
+export const loadCommoserveEnabled = (): boolean => readBoolean(COMMOSERVE_ENABLED_KEY, DEFAULT_COMMOSERVE_ENABLED);
+
+export const saveCommoserveEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(COMMOSERVE_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(COMMOSERVE_ENABLED_KEY, enabled);
 };
 
 export const APP_SETTINGS_KEYS = {
@@ -226,4 +262,8 @@ export const APP_SETTINGS_KEYS = {
   NOTIFICATION_VISIBILITY_KEY,
   NOTIFICATION_DURATION_MS_KEY,
   AUTO_ROTATION_ENABLED_KEY,
+  ARCHIVE_HOST_OVERRIDE_KEY,
+  ARCHIVE_CLIENT_ID_OVERRIDE_KEY,
+  ARCHIVE_USER_AGENT_OVERRIDE_KEY,
+  COMMOSERVE_ENABLED_KEY,
 };

@@ -10,9 +10,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   clampListPreviewLimit,
   DEFAULT_LIST_PREVIEW_LIMIT,
+  getDisplayProfileOverride,
   getListPreviewLimit,
   MAX_LIST_PREVIEW_LIMIT,
   MIN_LIST_PREVIEW_LIMIT,
+  setDisplayProfileOverride,
   setListPreviewLimit,
 } from "@/lib/uiPreferences";
 
@@ -65,6 +67,39 @@ describe("uiPreferences", () => {
     });
 
     expect(() => setListPreviewLimit(100)).not.toThrow();
+
+    if (original) {
+      Object.defineProperty(globalThis, "localStorage", original);
+    }
+  });
+
+  it("getDisplayProfileOverride returns 'auto' for invalid stored value", () => {
+    localStorage.setItem("c64u_display_profile_override", "garbage");
+    expect(getDisplayProfileOverride()).toBe("auto");
+  });
+
+  it("getDisplayProfileOverride returns 'auto' when localStorage is unavailable", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      value: undefined,
+      configurable: true,
+    });
+
+    expect(getDisplayProfileOverride()).toBe("auto");
+
+    if (original) {
+      Object.defineProperty(globalThis, "localStorage", original);
+    }
+  });
+
+  it("setDisplayProfileOverride is a no-op when localStorage is unavailable", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      value: undefined,
+      configurable: true,
+    });
+
+    expect(() => setDisplayProfileOverride("compact")).not.toThrow();
 
     if (original) {
       Object.defineProperty(globalThis, "localStorage", original);

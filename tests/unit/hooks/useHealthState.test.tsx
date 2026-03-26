@@ -46,8 +46,10 @@ vi.mock("@/lib/diagnostics/healthModel", () => ({
   deriveFtpContributorHealth: () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 }),
   deriveLastFtpActivity: () => null,
   deriveLastRestActivity: () => null,
+  deriveLastTelnetActivity: () => null,
   derivePrimaryProblem: () => null,
   deriveRestContributorHealth: () => ({ state: "Unhealthy", problemCount: 1, totalOperations: 2, failedOperations: 1 }),
+  deriveTelnetContributorHealth: () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 }),
   rollUpHealth: (_contributors: unknown, _connectivity: unknown) => "Unhealthy",
 }));
 
@@ -74,6 +76,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -134,6 +137,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Fail", reason: "connection refused" },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -161,6 +165,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Fail", reason: "auth failed" },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -187,6 +192,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 
@@ -208,6 +214,7 @@ describe("useHealthState", () => {
         JIFFY: { probe: "JIFFY", outcome: "Skipped", reason: null },
         REST: { probe: "REST", outcome: "Success", reason: null },
         FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
       },
     };
 

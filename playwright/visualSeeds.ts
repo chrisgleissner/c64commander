@@ -807,6 +807,13 @@ const HEALTH_CHECK_RESULT_SEED: HealthCheckRunResult = {
       reason: null,
       startMs: FIXED_NOW_MS - 7 * 60_000 + 80,
     },
+    TELNET: {
+      probe: "TELNET",
+      outcome: "Success",
+      durationMs: 64,
+      reason: null,
+      startMs: FIXED_NOW_MS - 7 * 60_000 + 170,
+    },
     CONFIG: {
       probe: "CONFIG",
       outcome: "Success",
@@ -864,6 +871,7 @@ const HEALTH_HISTORY_SEED = Array.from({ length: 13 }, (_, index) => {
     durationMs,
     probes: {
       rest: { outcome: state === "Unhealthy" ? "Fail" : "Success", durationMs: 54 + index * 2, reason: null },
+      telnet: { outcome: state === "Unhealthy" ? "Fail" : "Success", durationMs: 63 + index * 2, reason: null },
       jiffy: { outcome: state === "Degraded" ? "Partial" : "Success", durationMs: 68 + index * 3, reason: null },
       raster: { outcome: "Skipped", durationMs: null, reason: "Unavailable in simulation" },
       config: { outcome: "Success", durationMs: 92 + index * 4, reason: null },

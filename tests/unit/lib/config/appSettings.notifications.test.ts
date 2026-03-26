@@ -8,13 +8,16 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  DEFAULT_AUTO_ROTATION_ENABLED,
   clampNotificationDurationMs,
   DEFAULT_NOTIFICATION_DURATION_MS,
   DEFAULT_NOTIFICATION_VISIBILITY,
+  loadAutoRotationEnabled,
   loadNotificationDurationMs,
   loadNotificationVisibility,
   NOTIFICATION_DURATION_MAX_MS,
   NOTIFICATION_DURATION_MIN_MS,
+  saveAutoRotationEnabled,
   saveNotificationDurationMs,
   saveNotificationVisibility,
 } from "@/lib/config/appSettings";
@@ -115,5 +118,41 @@ describe("saveNotificationDurationMs", () => {
     expect(events).toHaveLength(1);
     expect(events[0].detail.key).toBe("c64u_notification_duration_ms");
     expect(events[0].detail.value).toBe(5000);
+  });
+});
+
+describe("auto rotation", () => {
+  it("defaults to disabled and persists changes", () => {
+    expect(loadAutoRotationEnabled()).toBe(DEFAULT_AUTO_ROTATION_ENABLED);
+
+    saveAutoRotationEnabled(true);
+    expect(loadAutoRotationEnabled()).toBe(true);
+
+    saveAutoRotationEnabled(false);
+    expect(loadAutoRotationEnabled()).toBe(false);
+  });
+});
+
+describe("notification settings without localStorage", () => {
+  let originalLocalStorage: Storage;
+
+  beforeEach(() => {
+    originalLocalStorage = global.localStorage;
+    // @ts-expect-error intentionally removing storage for fallback coverage
+    delete global.localStorage;
+  });
+
+  afterEach(() => {
+    global.localStorage = originalLocalStorage;
+  });
+
+  it("falls back cleanly when storage is unavailable", () => {
+    expect(loadNotificationVisibility()).toBe(DEFAULT_NOTIFICATION_VISIBILITY);
+    expect(loadNotificationDurationMs()).toBe(DEFAULT_NOTIFICATION_DURATION_MS);
+    expect(loadAutoRotationEnabled()).toBe(DEFAULT_AUTO_ROTATION_ENABLED);
+
+    expect(() => saveNotificationVisibility("all")).not.toThrow();
+    expect(() => saveNotificationDurationMs(5000)).not.toThrow();
+    expect(() => saveAutoRotationEnabled(true)).not.toThrow();
   });
 });

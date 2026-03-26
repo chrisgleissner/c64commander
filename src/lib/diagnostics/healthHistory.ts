@@ -31,6 +31,7 @@ export type HealthHistoryEntry = {
     raster: HealthCheckProbeResult;
     config: HealthCheckProbeResult;
     ftp: HealthCheckProbeResult;
+    telnet: HealthCheckProbeResult;
   };
   latency: {
     p50: number;

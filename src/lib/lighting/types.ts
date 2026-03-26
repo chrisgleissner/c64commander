@@ -57,7 +57,7 @@ export type LightingConnectionSentinelState =
   | "demo"
   | "error";
 
-export type LightingSourceBucket = "local" | "c64u" | "hvsc" | "disks" | "idle";
+export type LightingSourceBucket = "local" | "c64u" | "hvsc" | "commoserve" | "disks" | "idle";
 
 export type LightingCircadianPeriod = "morning" | "day" | "evening" | "night";
 

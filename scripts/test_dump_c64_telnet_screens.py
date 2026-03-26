@@ -48,36 +48,6 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
         self.assertEqual(menu["selected_index"], 0)
         self.assertEqual(menu["selected_item"], "Enter")
 
-    def test_extract_search_form(self) -> None:
-        screen = MODULE.make_screen(
-            [
-                "                                                            ",
-                "          ┌──────────────────────────────────────┐          ",
-                "          │        CommoServe File Search        │          ",
-                "          │                                      │          ",
-                "          │Name:     __________________          │          ",
-                "          │Group:    __________________          │          ",
-                "          │Handle:   __________________          │          ",
-                "          │Event:    __________________          │          ",
-                "          │Category: __________________          │          ",
-                "          │Date:     __________________          │          ",
-                "          │Type:     __________________          │          ",
-                "          │Sort:     __________________          │          ",
-                "          │Order:    __________________          │          ",
-                "          │                                      │          ",
-                "          │            <<  Submit  >>            │          ",
-                "          └──────────────────────────────────────┘          ",
-            ]
-        )
-
-        box = MODULE.choose_modal_box(screen)
-        form = MODULE.extract_search_form(screen, box)
-
-        self.assertEqual(form["title"], "CommoServe File Search")
-        self.assertEqual(form["fields"]["Name"], {"kind": "text", "initial_value": ""})
-        self.assertEqual(form["fields"]["Category"], {"kind": "dropdown", "initial_value": ""})
-        self.assertEqual(form["actions"], ["Submit"])
-
     def test_extract_overlay_menu_items_from_merged_action_screen(self) -> None:
         screen = MODULE.make_screen(
             [
@@ -228,7 +198,6 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
                     "default_item": "Enter",
                 }
             },
-            search_form={"title": "CommoServe File Search", "fields": {}, "actions": ["Submit"]},
         )
 
         self.assertIn("initial_action_menus", document["telnet"])
@@ -236,9 +205,9 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
         self.assertEqual(document["telnet"]["initial_action_menus"]["opened_with"], "F1")
         self.assertEqual(document["telnet"]["selected_directory_action_menus"]["screen_context"], "filesystem browser with a directory selected and the action menu opened via function key")
         self.assertEqual(document["telnet"]["filesystem_context_menus"]["screen_context"], "filesystem browser with a selected entry and its ENTER-opened context menu")
-        self.assertEqual(document["telnet"]["commoserve"]["screen_context"], "CommoServe file search dialog opened via F6")
         self.assertEqual(document["telnet"]["filesystem_context_menus"]["menu_definitions"]["prg"]["representative_file"], "/USB1/test-data/prg/1k-mini-bdash-note.prg")
         self.assertIn("filesystem_context_menus", document["telnet"])
+        self.assertNotIn("commoserve", document["telnet"])
 
 
 if __name__ == "__main__":

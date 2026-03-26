@@ -20,6 +20,9 @@ import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { createTelnetClient } from "@/lib/telnet/telnetClient";
+import { createTelnetSession } from "@/lib/telnet/telnetSession";
+import { TELNET_DEFAULT_PORT } from "@/lib/telnet/telnetTypes";
 import { rollUpHealth, deriveConnectivityState } from "@/lib/diagnostics/healthModel";
 import type { HealthState } from "@/lib/diagnostics/healthModel";
 import {
@@ -38,6 +41,7 @@ const CONFIG_ROUNDTRIP_TARGETS = [
 const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
   REST: 3000,
   FTP: 1000,
+  TELNET: 2000,
   CONFIG: 4000,
   RASTER: 1500,
   JIFFY: 1500,
@@ -45,9 +49,9 @@ const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
 
 const GLOBAL_RUN_TIMEOUT_MS = 12_000;
 const STALE_RUN_GRACE_MS = 1500;
-const PRESENTATION_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "CONFIG", "RASTER", "JIFFY"];
+const PRESENTATION_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"];
 
-export type HealthCheckProbeType = "REST" | "JIFFY" | "RASTER" | "CONFIG" | "FTP";
+export type HealthCheckProbeType = "REST" | "JIFFY" | "RASTER" | "CONFIG" | "FTP" | "TELNET";
 
 export type HealthCheckProbeRecord = HealthCheckProbeResult & {
   probe: HealthCheckProbeType;
@@ -550,6 +554,53 @@ const probeFtp = async (): Promise<HealthCheckProbeRecord> => {
   }
 };
 
+const hasExpectedTelnetScreen = (titleLine: string): boolean => {
+  const normalized = titleLine.trim().toLowerCase();
+  return (
+    normalized.includes("ultimate-ii+") || normalized.includes("c64 ultimate") || normalized.includes("ultimate 64")
+  );
+};
+
+const probeTelnet = async (signal: AbortSignal): Promise<HealthCheckProbeRecord> => {
+  const startMs = Date.now();
+  const snap = getC64APIConfigSnapshot();
+  const host = normalizeFtpHost(snap.deviceHost);
+  const password = snap.password || undefined;
+  const session = createTelnetSession(createTelnetClient({ connectTimeoutMs: PROBE_TIMEOUT_MS.TELNET }));
+
+  try {
+    await session.connect(host, TELNET_DEFAULT_PORT, password);
+    if (signal.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const screen = await session.readScreen(PROBE_TIMEOUT_MS.TELNET);
+    const titleLine = screen.titleLine.trim();
+    if (!hasExpectedTelnetScreen(titleLine)) {
+      const reason =
+        titleLine.length > 0 ? `Unexpected Telnet screen: ${titleLine.slice(0, 80)}` : "Unexpected blank Telnet screen";
+      return makeRecord("TELNET", "Fail", Date.now() - startMs, reason, startMs);
+    }
+
+    return makeRecord("TELNET", "Success", Date.now() - startMs, null, startMs);
+  } catch (error) {
+    if (isAbortLike(error) || isTimeoutLike(error)) {
+      throw error;
+    }
+    const msg = (error as Error).message;
+    addLog("warn", "Health check TELNET probe failed", { error: msg });
+    return makeRecord("TELNET", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs);
+  } finally {
+    try {
+      await session.disconnect();
+    } catch (error) {
+      addLog("warn", "Health check TELNET disconnect failed", {
+        error: error instanceof Error ? error.message : String(error ?? "Unknown Telnet disconnect failure"),
+      });
+    }
+  }
+};
+
 const lifecycleFromRecord = (
   outcome: HealthCheckProbeOutcome,
 ): Extract<HealthCheckProbeLifecycle, "SUCCESS" | "FAILED" | "CANCELLED"> => {
@@ -662,6 +713,7 @@ const buildRunResult = (args: {
   totalDurationMs: number;
   rest: ProbeExecution;
   ftp: ProbeExecution;
+  telnet: ProbeExecution;
   config: ProbeExecution;
   raster: ProbeExecution;
   jiffy: ProbeExecution;
@@ -673,10 +725,14 @@ const buildRunResult = (args: {
       state:
         args.jiffy.lifecycle === "FAILED" ||
         args.config.lifecycle === "FAILED" ||
+        args.telnet.lifecycle === "FAILED" ||
         args.jiffy.lifecycle === "TIMEOUT" ||
-        args.config.lifecycle === "TIMEOUT"
+        args.config.lifecycle === "TIMEOUT" ||
+        args.telnet.lifecycle === "TIMEOUT"
           ? ("Degraded" as const)
-          : args.jiffy.lifecycle === "CANCELLED" && args.config.lifecycle === "CANCELLED"
+          : args.jiffy.lifecycle === "CANCELLED" &&
+              args.config.lifecycle === "CANCELLED" &&
+              args.telnet.lifecycle === "CANCELLED"
             ? ("Idle" as const)
             : ("Healthy" as const),
       problemCount: 0,
@@ -713,6 +769,7 @@ const buildRunResult = (args: {
   const probes = {
     REST: args.rest.record,
     FTP: args.ftp.record,
+    TELNET: args.telnet.record,
     CONFIG: args.config.record,
     RASTER: args.raster.record,
     JIFFY: args.jiffy.record,
@@ -760,6 +817,11 @@ const recordHealthHistory = (result: HealthCheckRunResult) => {
         outcome: result.probes.FTP.outcome,
         durationMs: result.probes.FTP.durationMs,
         reason: result.probes.FTP.reason,
+      },
+      telnet: {
+        outcome: result.probes.TELNET.outcome,
+        durationMs: result.probes.TELNET.durationMs,
+        reason: result.probes.TELNET.reason,
       },
     },
     latency: result.latency,
@@ -851,6 +913,19 @@ export const runHealthCheck = async (
         );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), FTP: ftp.record });
 
+    const telnet = restFailed
+      ? setSkippedProbe("TELNET", "Skipped: REST probe failed")
+      : await runProbe(
+          run,
+          "TELNET",
+          (signal) => probeTelnet(signal),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
+    publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), TELNET: telnet.record });
+
     const config = restFailed
       ? setSkippedProbe("CONFIG", "Skipped: REST probe failed")
       : await runProbe(
@@ -904,6 +979,7 @@ export const runHealthCheck = async (
       totalDurationMs,
       rest,
       ftp,
+      telnet,
       config,
       raster,
       jiffy,
@@ -913,11 +989,11 @@ export const runHealthCheck = async (
 
     recordHealthHistory(result);
 
-    const terminalRunState: HealthCheckRunLifecycle = [rest, ftp, config, raster, jiffy].some(
+    const terminalRunState: HealthCheckRunLifecycle = [rest, ftp, telnet, config, raster, jiffy].some(
       (probe) => probe.lifecycle === "TIMEOUT",
     )
       ? "TIMEOUT"
-      : [rest, ftp, config, raster, jiffy].some((probe) => probe.lifecycle === "FAILED")
+      : [rest, ftp, telnet, config, raster, jiffy].some((probe) => probe.lifecycle === "FAILED")
         ? "FAILED"
         : "COMPLETED";
 

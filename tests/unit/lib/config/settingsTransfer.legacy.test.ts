@@ -36,6 +36,9 @@ describe("settingsTransfer", () => {
           discoveryProbeTimeoutMs: 2500,
           diskAutostartMode: "kernal",
           volumeSliderPreviewIntervalMs: 320,
+          archiveHostOverride: "",
+          archiveClientIdOverride: "",
+          archiveUserAgentOverride: "",
         },
         deviceSafety: {
           mode: "CONSERVATIVE",

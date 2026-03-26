@@ -29,7 +29,7 @@ import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import { loadDiskAutostartMode, type DiskAutostartMode } from "@/lib/config/appSettings";
 import { loadFirstDiskPrgViaDma, type DiskImageType } from "./diskFirstPrg";
 
-export type PlaySource = "local" | "ultimate" | "hvsc";
+export type PlaySource = "local" | "ultimate" | "hvsc" | "commoserve";
 
 export type LocalPlayFile =
   | File

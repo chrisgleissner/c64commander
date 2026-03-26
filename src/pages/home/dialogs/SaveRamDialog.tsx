@@ -34,7 +34,10 @@ interface SaveRamDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (type: SnapshotType, customRanges?: MemoryRange[]) => void;
+  onSaveReu?: () => void;
   isSaving: boolean;
+  telnetAvailable?: boolean;
+  telnetBusy?: boolean;
 }
 
 const buildRangeTestId = (base: string, index: number) => (index === 0 ? base : `${base}-${index}`);
@@ -70,9 +73,18 @@ function HexAddressInput({
   );
 }
 
-export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamDialogProps) {
+export function SaveRamDialog({
+  open,
+  onOpenChange,
+  onSave,
+  onSaveReu,
+  isSaving,
+  telnetAvailable = false,
+  telnetBusy = false,
+}: SaveRamDialogProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customRanges, setCustomRanges] = useState<CustomSnapshotRangeDraft[]>(() => loadCustomSnapshotDrafts());
+  const showSaveReu = telnetAvailable && typeof onSaveReu === "function";
 
   useEffect(() => {
     saveCustomSnapshotDrafts(customRanges);
@@ -154,6 +166,20 @@ export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamD
                   )}
                 </button>
               ))}
+              {showSaveReu && (
+                <button
+                  data-testid="save-ram-type-reu"
+                  className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent hover:text-accent-foreground px-4 py-3 transition-colors disabled:opacity-50"
+                  onClick={() => {
+                    onSaveReu();
+                    handleClose();
+                  }}
+                  disabled={isSaving || telnetBusy}
+                >
+                  <div className="font-semibold text-sm">Save REU</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">REU expansion memory</div>
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-3" data-testid="save-ram-custom-form">

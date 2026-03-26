@@ -60,13 +60,25 @@ export type FtpEffect = {
   error?: string;
 };
 
+export type TelnetEffect = {
+  type: "TELNET";
+  label: string;
+  actionId: string;
+  actionLabel: string;
+  menuPath: [string, string] | null;
+  target: BackendTarget | null;
+  result: string | null;
+  durationMs?: number | null;
+  error?: string;
+};
+
 export type ErrorEffect = {
   type: "ERROR";
   label: string;
   message: string;
 };
 
-export type ActionSummaryEffect = RestEffect | FtpEffect | ErrorEffect;
+export type ActionSummaryEffect = RestEffect | FtpEffect | TelnetEffect | ErrorEffect;
 
 export type ActionSummary = {
   correlationId: string;
@@ -82,6 +94,7 @@ export type ActionSummary = {
   errorMessage?: string;
   restCount?: number;
   ftpCount?: number;
+  telnetCount?: number;
   errorCount?: number;
   effects?: ActionSummaryEffect[];
   startRelativeMs: number;
@@ -161,7 +174,9 @@ const resolveDurationMs = (
   const startMs = toTimestampMs(startTimestamp);
   const endMs = toTimestampMs(endTimestamp);
   const completionMs = orderedEvents.reduce<number | null>((latest, event) => {
-    if (event.type !== "rest-response" && event.type !== "ftp-operation") return latest;
+    if (event.type !== "rest-response" && event.type !== "ftp-operation" && event.type !== "telnet-operation") {
+      return latest;
+    }
     const candidate = toTimestampMs(event.timestamp);
     if (candidate === null) return latest;
     return latest === null || candidate > latest ? candidate : latest;
@@ -354,6 +369,30 @@ const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
     });
 };
 
+const resolveTelnetEffects = (events: TraceEvent[]): TelnetEffect[] => {
+  return events
+    .filter((event) => event.type === "telnet-operation")
+    .map((event) => {
+      const data = event.data as Record<string, unknown>;
+      const menuPathValue = data.menuPath;
+      const menuPath =
+        Array.isArray(menuPathValue) && menuPathValue.length === 2
+          ? ([readString(menuPathValue[0]) ?? "", readString(menuPathValue[1]) ?? ""] as [string, string])
+          : null;
+      return {
+        type: "TELNET",
+        label: readString(data.actionLabel) ?? readString(data.actionId) ?? "Telnet action",
+        actionId: readString(data.actionId) ?? "unknown",
+        actionLabel: readString(data.actionLabel) ?? "Telnet action",
+        menuPath,
+        target: (readString(data.target) as BackendTarget | null) ?? null,
+        result: readString(data.result),
+        durationMs: readNumber(data.durationMs),
+        ...(readString(data.error) ? { error: readString(data.error) ?? undefined } : {}),
+      };
+    });
+};
+
 export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[] => {
   const grouped = new Map<string, TraceEvent[]>();
   traceEvents.forEach((event) => {
@@ -386,11 +425,13 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
     const origin = resolveSummaryOrigin(originalOrigin);
     const restEffects = resolveRestEffects(scoped, actionEnd);
     const ftpEffects = resolveFtpEffects(scoped);
+    const telnetEffects = resolveTelnetEffects(scoped);
     const errorEffects = resolveErrorEffects(errorEvents, actionEnd);
-    const effects = [...restEffects, ...ftpEffects, ...errorEffects];
+    const effects = [...restEffects, ...ftpEffects, ...telnetEffects, ...errorEffects];
     const errorMessage = resolveActionError(actionEnd, errorEvents);
     const restCount = restEffects.length;
     const ftpCount = ftpEffects.length;
+    const telnetCount = telnetEffects.length;
     const errorCount = errorEffects.length;
 
     const startTimestamp = actionStart?.timestamp ?? ordered[0]?.timestamp ?? null;
@@ -420,6 +461,7 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
       ...(errorMessage ? { errorMessage } : {}),
       ...(restCount > 0 ? { restCount } : {}),
       ...(ftpCount > 0 ? { ftpCount } : {}),
+      ...(telnetCount > 0 ? { telnetCount } : {}),
       ...(errorCount > 0 ? { errorCount } : {}),
       ...(effects.length > 0 ? { effects } : {}),
       startRelativeMs,

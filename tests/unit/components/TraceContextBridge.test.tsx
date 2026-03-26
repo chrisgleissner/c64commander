@@ -14,16 +14,18 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlags: () => ({ flags: { hvsc_enabled: true } }),
 }));
 
+let mockConnectionStatus: Record<string, unknown> = {
+  deviceInfo: { unique_id: "DEV-1" },
+  state: "connected",
+};
+
 vi.mock("@/hooks/useC64Connection", () => ({
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",
   },
   useC64Connection: () => ({
-    status: {
-      deviceInfo: { unique_id: "DEV-1" },
-      state: "connected",
-    },
+    status: mockConnectionStatus,
   }),
 }));
 
@@ -47,6 +49,10 @@ describe("TraceContextBridge", () => {
     setTracePlaybackContext(null);
     setPlaybackTraceSnapshot(null);
     registerTraceBridge.mockClear();
+    mockConnectionStatus = {
+      deviceInfo: { unique_id: "DEV-1" },
+      state: "connected",
+    };
   });
 
   it("pushes playback trace snapshot into trace context", async () => {
@@ -75,6 +81,22 @@ describe("TraceContextBridge", () => {
       expect(snapshot.playback?.sourceKind).toBe("ultimate");
       expect(snapshot.playback?.trackInstanceId).toBe(7);
       expect(snapshot.playback?.playlistItemId).toBe("item-2");
+    });
+  });
+
+  it("handles missing device info and connection state", async () => {
+    mockConnectionStatus = { deviceInfo: undefined, state: undefined };
+
+    render(
+      <MemoryRouter initialEntries={["/home"]}>
+        <TraceContextBridge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      const snapshot = getTraceContextSnapshot();
+      expect(snapshot.device.deviceId).toBeNull();
+      expect(snapshot.device.connectionState).toBeNull();
     });
   });
 });

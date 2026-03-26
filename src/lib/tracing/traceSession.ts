@@ -503,6 +503,33 @@ export const recordFtpOperation = (
   }
 };
 
+export const recordTelnetOperation = (
+  action: TraceActionContext,
+  payload: {
+    actionId: string;
+    actionLabel: string;
+    menuPath: [string, string];
+    durationMs?: number | null;
+    result: "success" | "failure";
+    error: Error | null;
+  },
+) => {
+  const { target, reason } = resolveBackendTarget(null);
+  emitBackendDecision(action.origin, action.correlationId, target, reason);
+  appendEvent("telnet-operation", action.origin, action.correlationId, {
+    actionId: payload.actionId,
+    actionLabel: payload.actionLabel,
+    menuPath: payload.menuPath,
+    durationMs: payload.durationMs ?? null,
+    result: payload.result,
+    error: payload.error ? redactErrorMessage(payload.error.message) : null,
+    target,
+  });
+  if (Number.isFinite(payload.durationMs)) {
+    recordLatencySample("Telnet", payload.actionId, payload.durationMs ?? 0);
+  }
+};
+
 export const recordTraceError = (action: TraceActionContext, error: Error, classification?: FailureClassification) => {
   if (errorOnce.has(error)) return;
   const resolved = classification ?? classifyError(error);

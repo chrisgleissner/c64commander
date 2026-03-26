@@ -3,6 +3,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 import sharp from "sharp";
+import { shouldSkipFuzzyScreenshotPrune } from "./screenshotPrunePolicy.js";
 
 const execFile = promisify(execFileCb);
 
@@ -97,6 +98,11 @@ const run = async () => {
   let kept = 0;
 
   for (const filePath of modifiedFiles) {
+    if (shouldSkipFuzzyScreenshotPrune(filePath)) {
+      kept += 1;
+      continue;
+    }
+
     const fuzzyIdentical = await isFuzzyIdenticalToHead(filePath);
     if (!fuzzyIdentical) {
       kept += 1;

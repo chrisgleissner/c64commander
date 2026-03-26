@@ -12,11 +12,11 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 ## Features
 
 - **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
-- **Dashboard**: Machine controls, quick config, drive status, SID mixer, and streams on a single page.
+- **Dashboard**: Machine controls, Telnet-backed quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
 - **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
-- **Playlists**: Build playlists from local files, C64U storage, or the High Voltage SID Collection (HVSC). Autoplay, shuffle, and subsong selection.
+- **Playlists**: Build playlists from local files, C64U storage, CommoServe search results, or the High Voltage SID Collection (HVSC). Autoplay, shuffle, and subsong selection.
 - **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
-- **Diagnostics**: Inspect activity logs, traces, latency, and connection health.
+- **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
 
 ## Quick Start
 
@@ -68,15 +68,15 @@ In C64 Commander:
 
 1. Open **Settings > Device > Connection**.
 2. Enter the C64 Ultimate IP address or hostname.
-3. A green status dot next to the C64U logo confirms the connection:
+3. A compact C64U connectivity badge with a green health indicator confirms the connection:
 
-![Connected](doc/img/app/details/page-headers/home/header.png)
+![Connected C64U badge](doc/img/app/home/02-connection-status-popover.png)
 
 ## Pages
 
 ### Home
 
-Operational dashboard: machine controls, quick config, drives, printer, SID mixer, streams, and configuration snapshots.
+Operational dashboard: machine controls, Telnet-backed quick actions, light effects, drives, printer, SID mixer, streams, and configuration snapshots.
 
 <table>
   <tr>
@@ -90,7 +90,7 @@ Operational dashboard: machine controls, quick config, drives, printer, SID mixe
     <td><img src="doc/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/home/02-connection-status-popover.png" alt="Connection Status pop-up" width="360"/></td>
+    <td><img src="doc/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio dialog" width="360"/></td>
     <td><img src="doc/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
     <td><img src="doc/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
   </tr>
@@ -103,13 +103,30 @@ Operational dashboard: machine controls, quick config, drives, printer, SID mixe
 
 ### Play
 
-Build playlists from local files, C64U storage, or HVSC. Supports autoplay, shuffle, repeat, subsong selection, and duration overrides.
+Build playlists from local files, C64U storage, CommoServe search results, or HVSC. Supports autoplay, shuffle, repeat, subsong selection, and duration overrides.
 
 <table>
   <tr>
     <td><img src="doc/img/app/play/01-overview.png" alt="Play overview" width="360"/></td>
-    <td><img src="doc/img/app/play/import/01-import-interstitial.png" alt="Play import" width="360"/></td>
     <td><img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="360"/></td>
+    <td><img src="doc/img/app/play/playlist/01-view-all.png" alt="Play playlist view all" width="360"/></td>
+  </tr>
+</table>
+
+### Browse & Import
+
+Choose an import source from the same playlist workflow: browse C64U storage, add local folders from your device, or search CommoServe and import the matching results.
+
+<table>
+  <tr>
+    <td><img src="doc/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
+    <td><img src="doc/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
+    <td><img src="doc/img/app/play/import/03-local-file-picker.png" alt="Local folder import" width="360"/></td>
+  </tr>
+  <tr>
+    <td><img src="doc/img/app/play/import/04-commoserve-search.png" alt="CommoServe search form" width="360"/></td>
+    <td><img src="doc/img/app/play/import/05-commoserve-results-selected.png" alt="CommoServe results with selection" width="360"/></td>
+    <td></td>
   </tr>
 </table>
 
@@ -168,7 +185,7 @@ Built-in guides for setup, workflows, and day-to-day usage.
 
 ### Diagnostics
 
-Accessible via the C64U connectivity badge in the top-right corner. Provides health checks, activity logs, trace inspection, filter editor, and latency analysis.
+Accessible via the C64U connectivity badge in the top-right corner. Provides health checks, activity logs, trace inspection, filter editor, and latency analysis across App, REST, FTP, and Telnet contributors.
 
 <table>
   <tr>

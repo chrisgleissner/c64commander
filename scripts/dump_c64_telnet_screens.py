@@ -73,10 +73,6 @@ MODAL_OPEN_SETTLE = 1.0
 ACTION_MENU_SETTLE = 0.6
 QUIET_WINDOW = 0.02
 
-TEXT_FIELDS = ["Name", "Group", "Handle", "Event"]
-DROPDOWN_FIELDS = ["Category", "Date", "Type", "Sort", "Order"]
-
-
 @dataclass(frozen=True)
 class Cell:
     char: str = " "
@@ -495,13 +491,6 @@ def wait_for_modal_box(session: TelnetSession, retry_delays: tuple[float, ...] =
     raise last_error
 
 
-def extract_box_rows(screen: TerminalScreen, box: Box) -> list[str]:
-    rows: list[str] = []
-    for row in range(box.top + 1, box.bottom):
-        rows.append("".join(cell.char for cell in screen.cells[row][box.left + 1 : box.right]).rstrip())
-    return rows
-
-
 def clean_menu_item(raw_text: str) -> str:
     text = raw_text.strip()
     if not text:
@@ -542,45 +531,6 @@ def extract_menu_items(screen: TerminalScreen, box: Box) -> dict[str, Any]:
         "selected_index": selected_index,
         "selected_item": selected_text,
     }
-
-
-def normalise_form_value(value: str) -> str:
-    stripped = value.strip()
-    if stripped == "" or set(stripped) == {"_"}:
-        return ""
-    return stripped
-
-
-def extract_search_form(screen: TerminalScreen, box: Box) -> dict[str, Any]:
-    rows = extract_box_rows(screen, box)
-    title = ""
-    fields: dict[str, dict[str, Any]] = {}
-    actions: list[str] = []
-    for raw in rows:
-        text = raw.strip()
-        if not text:
-            continue
-        if not title and "Search" in text:
-            title = text
-            continue
-        match = None
-        for label in TEXT_FIELDS + DROPDOWN_FIELDS:
-            pattern = rf"^{re_escape(label)}:\s*(.*)$"
-            match = re.match(pattern, text)
-            if match:
-                value = normalise_form_value(match.group(1))
-                fields[label] = {
-                    "kind": "text" if label in TEXT_FIELDS else "dropdown",
-                    "initial_value": value,
-                }
-                break
-        if match:
-            continue
-        if text.startswith("<<") and text.endswith(">>"):
-            actions.append(text.replace("<", "").replace(">", "").strip())
-    if not title:
-        raise RuntimeError("Unable to determine CommoServe form title")
-    return {"title": title, "fields": fields, "actions": actions}
 
 
 def re_escape(value: str) -> str:
@@ -914,6 +864,7 @@ def capture_selected_directory_action_menus(
                 session.send_key("DOWN", settle=FAST_SETTLE)
             session.send_key(action_key, settle=ACTION_MENU_SETTLE)
             try:
+                wait_for_menu_box(session, retry_delays=(0.0, 0.1, 0.3, 0.6, 1.0, 1.5))
                 action_menu = capture_menu_tree(session)
             except RuntimeError:
                 continue
@@ -926,64 +877,6 @@ def capture_selected_directory_action_menus(
                 "action_menu": action_menu,
             }
     raise RuntimeError(f"Unable to open selected-directory action menu with F1 or F5 for {path}")
-
-
-def capture_search_form(host: str, password: Optional[str], dropdown_fields: list[str], connect_timeout: float, read_timeout: float) -> dict[str, Any]:
-    log("Capturing CommoServe search form")
-    with TelnetSession(
-        host,
-        password,
-        connect_timeout,
-        read_timeout,
-        debug_screens=args_debug_screens,
-        debug_prefix="commoserve-form",
-    ) as session:
-        session.send_key("F6", settle=MODAL_OPEN_SETTLE)
-        form_box = wait_for_modal_box(session)
-        form = extract_search_form(session.screen, form_box)
-
-    for field_index, field_name in enumerate(DROPDOWN_FIELDS, start=len(TEXT_FIELDS)):
-        if field_name not in dropdown_fields:
-            continue
-        log(f"Capturing CommoServe dropdown options for {field_name}")
-        with TelnetSession(
-            host,
-            password,
-            connect_timeout,
-            read_timeout,
-            debug_screens=args_debug_screens,
-            debug_prefix=f"commoserve-{field_name.lower()}",
-        ) as session:
-            session.send_key("F6", settle=MODAL_OPEN_SETTLE)
-            for _ in range(field_index):
-                session.send_key("DOWN", settle=FAST_SETTLE)
-            session.send_key("ENTER", settle=MENU_OPEN_SETTLE)
-
-            if field_name == "Date":
-                def iter_windows() -> Iterable[list[str]]:
-                    previous_window: Optional[tuple[str, ...]] = None
-                    unchanged_windows = 0
-                    for _ in range(256):
-                        menu_box = wait_for_menu_box(session)
-                        menu = extract_menu_items(session.screen, menu_box)
-                        current_window = tuple(menu["items"])
-                        yield menu["items"]
-                        if previous_window == current_window:
-                            unchanged_windows += 1
-                        else:
-                            unchanged_windows = 0
-                        previous_window = current_window
-                        if unchanged_windows >= 1:
-                            session.send_key("F7", settle=MENU_OPEN_SETTLE)
-                        else:
-                            session.send_key("DOWN", settle=FAST_SETTLE)
-
-                options = collect_dropdown_options_from_windows(iter_windows())
-            else:
-                options = collect_static_dropdown_options(session)
-            log(f"Captured {len(options)} options for {field_name}")
-            form["fields"][field_name]["options"] = options
-    return form
 
 
 def resolve_output_paths(output: Path, mirror_output: Optional[str], firmware_version: str) -> list[Path]:
@@ -1001,6 +894,7 @@ def dump_yaml(document: dict[str, Any]) -> str:
         default_flow_style=False,
         allow_unicode=True,
         indent=2,
+        width=float("inf"),
     )
     return _quote_mapping_values_with_spaces(
         _convert_single_quoted_scalars(_indent_sequences(yaml_text))
@@ -1018,7 +912,6 @@ def build_telnet_document(
     selected_directory_action_menus: dict[str, Any],
     directory_menu_capture: dict[str, Any],
     menu_definitions: dict[str, dict[str, Any]],
-    search_form: dict[str, Any],
 ) -> dict[str, Any]:
     initial_action_menus = {
         "screen_context": "initial telnet screen with no selected filesystem entry",
@@ -1051,10 +944,6 @@ def build_telnet_document(
                     "default_item": directory_menu_capture["default_item"],
                 },
                 "menu_definitions": menu_definitions,
-            },
-            "commoserve": {
-                "screen_context": "CommoServe file search dialog opened via F6",
-                "search_form": search_form,
             },
         }
     }
@@ -1213,25 +1102,16 @@ def main() -> int:
             action_keys=action_keys,
         )
 
-    search_form = capture_search_form(
-        host,
-        args.password,
-        dropdown_fields=DROPDOWN_FIELDS,
-        connect_timeout=args.connect_timeout,
-        read_timeout=args.read_timeout,
-    )
-
     document = build_telnet_document(
         base_url=base_url,
         host=host,
         metadata=metadata,
-        requested_test_data_paths=[args.preferred_test_data_path, *args.fallback_test_data_path],
+        requested_test_data_paths=list(dict.fromkeys([args.preferred_test_data_path, *args.fallback_test_data_path])),
         resolved_test_data_path=resolved_test_data_path,
         initial_action_menus=initial_action_menus,
         selected_directory_action_menus=selected_directory_action_menus,
         directory_menu_capture=directory_menu_capture,
         menu_definitions=menu_definitions,
-        search_form=search_form,
     )
 
     yaml_text = dump_yaml(document)

@@ -18,6 +18,7 @@ interface SectionHeaderProps {
   isResetting?: boolean;
   className?: string;
   children?: React.ReactNode;
+  actions?: React.ReactNode;
   resetTestId?: string;
 }
 
@@ -29,6 +30,7 @@ export function SectionHeader({
   isResetting = false,
   className,
   children,
+  actions,
   resetTestId,
 }: SectionHeaderProps) {
   return (
@@ -38,11 +40,14 @@ export function SectionHeader({
         {title}
         {children}
       </h3>
-      {resetAction && (
-        <Button variant="outline" size="sm" onClick={resetAction} disabled={resetDisabled} data-testid={resetTestId}>
-          {isResetting ? "Resetting…" : resetLabel}
-        </Button>
-      )}
+      <div className="flex items-center gap-2">
+        {actions}
+        {resetAction && (
+          <Button variant="outline" size="sm" onClick={resetAction} disabled={resetDisabled} data-testid={resetTestId}>
+            {isResetting ? "Resetting…" : resetLabel}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

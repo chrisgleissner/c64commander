@@ -9,7 +9,7 @@
 import { cn } from "@/lib/utils";
 import { Library } from "lucide-react";
 
-type FileOrigin = "ultimate" | "local" | "hvsc";
+type FileOrigin = "ultimate" | "local" | "hvsc" | "commoserve";
 
 type FileOriginIconProps = {
   origin: FileOrigin;
@@ -24,10 +24,31 @@ const resolveIconSource = (origin: FileOrigin) => {
 };
 
 const resolveIconLabel = (origin: FileOrigin) =>
-  origin === "ultimate" ? "C64U file" : origin === "hvsc" ? "HVSC file" : "Local file";
+  origin === "ultimate"
+    ? "C64U file"
+    : origin === "hvsc"
+      ? "HVSC file"
+      : origin === "commoserve"
+        ? "Online archive file"
+        : "Local file";
 
 export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps) => {
   if (origin === "hvsc") {
+    return (
+      <span
+        aria-label={label ?? resolveIconLabel(origin)}
+        data-testid="file-origin-icon"
+        role="img"
+        className={cn(
+          "inline-flex items-center justify-center h-4 w-4 text-xs leading-none shrink-0 opacity-70 select-none",
+          className,
+        )}
+      >
+        ♫
+      </span>
+    );
+  }
+  if (origin === "commoserve") {
     return (
       <Library
         aria-label={label ?? resolveIconLabel(origin)}

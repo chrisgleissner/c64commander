@@ -14,21 +14,25 @@ import type { TraceEvent } from "@/lib/tracing/types";
 type DiagnosticsActivitySnapshot = {
   restCount: number;
   ftpCount: number;
+  telnetCount: number;
   errorCount: number;
   restInFlight: number;
   ftpInFlight: number;
+  telnetInFlight: number;
 };
 
 const countEffects = (events: TraceEvent[]) => {
   let restCount = 0;
   let ftpCount = 0;
+  let telnetCount = 0;
   let errorCount = 0;
   events.forEach((event) => {
     if (event.type === "rest-response") restCount += 1;
     if (event.type === "ftp-operation") ftpCount += 1;
+    if (event.type === "telnet-operation") telnetCount += 1;
     if (event.type === "error") errorCount += 1;
   });
-  return { restCount, ftpCount, errorCount };
+  return { restCount, ftpCount, telnetCount, errorCount };
 };
 
 export const useDiagnosticsActivity = (): DiagnosticsActivitySnapshot => {
@@ -49,13 +53,15 @@ export const useDiagnosticsActivity = (): DiagnosticsActivitySnapshot => {
   }, []);
 
   return useMemo(() => {
-    const { restCount, ftpCount, errorCount } = countEffects(traceEvents);
+    const { restCount, ftpCount, telnetCount, errorCount } = countEffects(traceEvents);
     return {
       restCount,
       ftpCount,
+      telnetCount,
       errorCount,
       restInFlight: activity.restInFlight,
       ftpInFlight: activity.ftpInFlight,
+      telnetInFlight: activity.telnetInFlight,
     };
   }, [traceEvents, activity]);
 };

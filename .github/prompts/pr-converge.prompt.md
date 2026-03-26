@@ -6,11 +6,18 @@ description: Converge a pull request to merge-ready state
 
 Bring the current pull request to a **merge-ready state**.
 
+This is an execution prompt, not an analysis prompt.
+Do not stop after identifying fixes, validation steps, or next actions.
+Carry the work through to completion unless genuinely blocked by missing permissions or an external outage.
+
 This requires:
 
 1. Addressing all PR review comments.
 2. Ensuring all CI checks for the branch are green.
 3. Iterating until the pull request stabilizes.
+4. Pushing any required commits.
+5. Replying on and resolving every applicable review thread.
+6. Meeting repository coverage requirements.
 
 Use the **gh tool** to interact with GitHub.
 
@@ -28,6 +35,15 @@ A PR is considered converged when:
 - the repository builds successfully
 
 Continue iterating until this state is reached.
+
+Do not end your run with phrases like:
+
+- "Remaining gap"
+- "Natural next steps"
+- "I did not push"
+- "I did not resolve threads"
+
+If those items still remain, you are not done and must continue.
 
 ---
 
@@ -69,6 +85,7 @@ After implementing the fix:
 
 - respond to the review comment explaining the change
 - resolve the thread using the gh tool
+- if code changed, continue through validation, commit, push, and CI re-checks before stopping
 
 Example response:
 
@@ -92,6 +109,7 @@ Example:
 Then resolve the comment thread.
 
 Never resolve a comment without explanation.
+Never leave an investigated thread unresolved at the end of the run.
 
 ---
 
@@ -103,6 +121,9 @@ After addressing comments:
 2. Run the minimal validation required by the changes.
 
 Follow repository validation rules.
+
+If repository policy requires coverage thresholds, you must verify them before declaring completion.
+If the default coverage command is flaky, use the smallest honest fallback that still proves the threshold result and say which command produced the evidence.
 
 Examples:
 
@@ -124,6 +145,8 @@ If changes were made:
 2. Push them to the current branch.
 
 Use the gh tool where appropriate.
+
+Do not stop after local validation if the branch has unpushed commits.
 
 ---
 
@@ -160,6 +183,8 @@ If any job fails:
 
 Continue until **all CI checks pass**.
 
+If a check is pending, wait and re-check. Do not stop while required checks are still running.
+
 ---
 
 # Convergence Criteria
@@ -168,8 +193,14 @@ Stop only when all of the following are true:
 
 - no unresolved review comments remain
 - every comment thread has a response
+- every applicable thread is resolved
 - all CI checks for the branch are passing
 - the repository builds successfully
+- the relevant test suites pass
+- coverage is at or above the repository minimum threshold
+- all required commits are pushed to the PR branch
+
+If any item above is false, continue working.
 
 ---
 
@@ -181,3 +212,5 @@ Provide a concise summary including:
 - review comments resolved
 - CI failures addressed
 - confirmation that all checks are green
+- confirmation that commits were pushed
+- confirmation that coverage met the threshold

@@ -36,6 +36,7 @@ import {
 } from "./displayProfileViewports";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
+import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
 import {
   installFixedClock,
   installListPreviewLimit,
@@ -57,6 +58,19 @@ const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewport
   `${pageId}/profiles/${profileId}/${fileName}`;
 const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
   `profiles/${profileId}/${fileName}`;
+const SCREENSHOT_ARCHIVE_HOST = "archive.test";
+const SCREENSHOT_ARCHIVE_QUERY = '(name:"joyride") & (category:apps)';
+const SCREENSHOT_ARCHIVE_PRESETS = [
+  { type: "category", description: "Category", values: [{ aqlKey: "apps", name: "Apps" }] },
+  { type: "type", description: "Type", values: [{ aqlKey: "prg", name: "PRG" }] },
+  { type: "sort", description: "Sort", values: [{ aqlKey: "name", name: "Name" }] },
+  { type: "order", description: "Order", values: [{ aqlKey: "asc", name: "Ascending" }] },
+  { type: "date", description: "Date", values: [{ aqlKey: "2024", name: "2024" }] },
+];
+const SCREENSHOT_ARCHIVE_RESULTS = [
+  { id: "100", category: 40, name: "Joyride", group: "Padua", year: 2024, updated: "2024-03-14" },
+  { id: "101", category: 40, name: "Joyride Plus", group: "Onslaught", year: 2025, updated: "2025-01-11" },
+];
 
 const seedLiveDiagnosticsHealthProgress = async (page: Page) => {
   await page.waitForFunction(() => typeof window.__c64uDiagnosticsTestBridge?.seedOverlayState === "function");
@@ -314,6 +328,7 @@ const openImportDialog = async (page: Page) => {
     .getByRole("button", { name: /Add items|Add more items/i })
     .click();
   const dialog = page.getByRole("dialog");
+  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -322,10 +337,55 @@ const openImportDialog = async (page: Page) => {
 
 const waitForImportInterstitial = async (dialog: ReturnType<Page["getByRole"]>) => {
   const interstitial = dialog.getByTestId("import-selection-interstitial");
+  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
   if (await interstitial.isVisible().catch(() => false)) {
     return interstitial;
   }
   return null;
+};
+
+const seedArchiveSearchMock = async (page: Page) => {
+  await page.addInitScript((archiveHost: string) => {
+    localStorage.setItem("c64u_archive_host_override", archiveHost);
+  }, SCREENSHOT_ARCHIVE_HOST);
+
+  await page.route(`http://${SCREENSHOT_ARCHIVE_HOST}/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const headers = {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "*",
+    };
+
+    if (request.method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers, body: "" });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/leet/search/aql/presets") {
+      await route.fulfill({
+        status: 200,
+        headers,
+        contentType: "application/json",
+        body: JSON.stringify(SCREENSHOT_ARCHIVE_PRESETS),
+      });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/leet/search/aql") {
+      const query = url.searchParams.get("query") ?? "";
+      await route.fulfill({
+        status: 200,
+        headers,
+        contentType: "application/json",
+        body: JSON.stringify(query === SCREENSHOT_ARCHIVE_QUERY ? SCREENSHOT_ARCHIVE_RESULTS : []),
+      });
+      return;
+    }
+
+    await route.fulfill({ status: 404, headers, body: "not found" });
+  });
 };
 
 const waitForOverlaysToClear = async (page: Page) => {
@@ -350,6 +410,7 @@ const captureScreenshot = async (
     borderPx?: number;
     borderColor?: { r: number; g: number; b: number; alpha?: number };
     writeWhenTrackedDuplicate?: boolean;
+    skipFuzzyHeadRestore?: boolean;
   },
 ) => {
   const filePath = screenshotPath(relativePath);
@@ -381,6 +442,13 @@ const captureScreenshot = async (
   const repoPath = screenshotRepoPath(relativePath);
   const catalog = await loadHeadScreenshotCatalog();
   const headFingerprint = catalog.pathFingerprints.get(repoPath);
+  const skipFuzzyHeadRestore = (options?.skipFuzzyHeadRestore ?? false) || shouldSkipFuzzyScreenshotPrune(repoPath);
+  const forceWriteScreenshot = shouldSkipFuzzyScreenshotPrune(repoPath);
+
+  if (forceWriteScreenshot) {
+    await fs.writeFile(filePath, screenshotBuffer);
+    return;
+  }
 
   if (headFingerprint !== undefined) {
     // File exists in HEAD: compare new screenshot against HEAD pixels.
@@ -390,7 +458,7 @@ const captureScreenshot = async (
       await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]).catch((err) =>
         console.warn(`[screenshots] Failed to restore HEAD version of ${relativePath}.`, err),
       );
-    } else if (await isFuzzyIdenticalToHead(repoPath, screenshotBuffer)) {
+    } else if (!skipFuzzyHeadRestore && (await isFuzzyIdenticalToHead(repoPath, screenshotBuffer))) {
       // Only trivial rendering noise (e.g. subpixel / font-AA jitter) - restore HEAD.
       await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]).catch((err) =>
         console.warn(`[screenshots] Failed to restore HEAD version of ${relativePath}.`, err),
@@ -729,6 +797,10 @@ test.describe("App screenshots", () => {
     await page.emulateMedia({
       colorScheme: "light",
       reducedMotion: "reduce",
+    });
+    await expect(getActiveHealthBadge(page)).toContainText("C64U");
+    await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png", {
+      locator: getActiveHealthBadge(page),
     });
   });
 
@@ -1221,41 +1293,72 @@ test.describe("App screenshots", () => {
       await page.addInitScript(() => {
         (window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm = true;
       });
+      await seedArchiveSearchMock(page);
       await page.goto("/play");
+      await waitForConnected(page);
+      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
       const dialog = await openImportDialog(page);
-      if (!dialog) {
-        return;
-      }
+      expect(dialog, "Add items dialog should open before capturing import screenshots").not.toBeNull();
       const interstitial = await waitForImportInterstitial(dialog);
-      if (!interstitial) {
-        await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png");
-        return;
-      }
-      await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png");
+      expect(
+        interstitial,
+        "Import source interstitial should be visible before capturing import screenshots",
+      ).not.toBeNull();
+      await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png", { skipFuzzyHeadRestore: true });
 
       await interstitial.getByTestId("import-option-c64u").click();
       await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
-      await captureScreenshot(page, testInfo, "play/import/02-c64u-file-picker.png");
+      await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
+      await captureScreenshot(page, testInfo, "play/import/02-c64u-file-picker.png", { skipFuzzyHeadRestore: true });
 
       await dialog.getByRole("button", { name: "Cancel" }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
 
       const localDialog = await openImportDialog(page);
-      if (!localDialog) {
-        return;
-      }
+      expect(localDialog, "Add items dialog should reopen for the local import screenshot").not.toBeNull();
       const localInterstitial = await waitForImportInterstitial(localDialog);
-      if (!localInterstitial) {
-        await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png");
-        return;
-      }
+      expect(
+        localInterstitial,
+        "Import source interstitial should be visible before capturing local import",
+      ).not.toBeNull();
       await localInterstitial.getByTestId("import-option-local").click();
       const input = page.locator('input[type="file"][webkitdirectory]').first();
       await expect(input).toBeAttached();
       await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
       await expect(localDialog.getByTestId("local-file-picker")).toBeVisible();
-      await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png");
+      await expect(localDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from Local Device");
+      await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png", { skipFuzzyHeadRestore: true });
+
+      await localDialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      const archiveDialog = await openImportDialog(page);
+      expect(archiveDialog, "Add items dialog should reopen for the CommoServe screenshot").not.toBeNull();
+      const archiveInterstitial = await waitForImportInterstitial(archiveDialog);
+      expect(
+        archiveInterstitial,
+        "Import source interstitial should be visible before capturing CommoServe import",
+      ).not.toBeNull();
+
+      await archiveInterstitial.getByTestId("import-option-commoserve").click();
+      const archivePicker = archiveDialog.getByTestId("commoserve-picker");
+      await expect(archivePicker).toBeVisible();
+      await archivePicker.getByLabel("Name").fill("joyride");
+      await archivePicker.getByRole("combobox").nth(0).click();
+      await page.getByRole("option", { name: "Apps" }).click();
+      await expect(archivePicker.getByTestId("archive-query-preview")).toContainText(SCREENSHOT_ARCHIVE_QUERY);
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png", { skipFuzzyHeadRestore: true });
+
+      await archivePicker.getByTestId("archive-search-button").click();
+      await expect(archivePicker.getByTestId("archive-result-row")).toHaveCount(2);
+      await archivePicker.getByRole("checkbox", { name: /^Select Joyride$/ }).click();
+      await expect(archiveDialog.getByTestId("add-items-selection-count")).toHaveText(/1 selected/i);
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await captureScreenshot(page, testInfo, "play/import/05-commoserve-results-selected.png", {
+        skipFuzzyHeadRestore: true,
+      });
     },
   );
 
@@ -1270,32 +1373,28 @@ test.describe("App screenshots", () => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/play");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
+        await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
         const dialog = await openImportDialog(page);
-        if (!dialog) {
-          continue;
-        }
+        expect(dialog, `Add items dialog should open for ${profileId} import screenshots`).not.toBeNull();
         const interstitial = await waitForImportInterstitial(dialog);
-        if (!interstitial) {
-          await captureScreenshot(
-            page,
-            testInfo,
-            profileScreenshotPath("play/import", profileId, "01-import-interstitial.png"),
-          );
-          continue;
-        }
+        expect(interstitial, `Import source interstitial should be visible for ${profileId}`).not.toBeNull();
         await captureScreenshot(
           page,
           testInfo,
           profileScreenshotPath("play/import", profileId, "01-import-interstitial.png"),
+          { skipFuzzyHeadRestore: true },
         );
 
         await interstitial.getByTestId("import-option-c64u").click();
         await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
+        await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
         await captureScreenshot(
           page,
           testInfo,
           profileScreenshotPath("play/import", profileId, "02-c64u-file-picker.png"),
+          { skipFuzzyHeadRestore: true },
         );
         await dialog.getByRole("button", { name: "Cancel" }).click();
       }
@@ -1508,8 +1607,8 @@ test.describe("App screenshots", () => {
       await captureDiagnosticsScreenshot(page, testInfo, "header/02-health-check-detail.png");
 
       await seedLiveDiagnosticsHealthProgress(page);
-      await expect(dialog.getByTestId("health-check-probe-config")).toHaveAttribute("data-live-status", "running");
-      await expect(dialog.getByTestId("health-check-probe-raster")).toHaveAttribute("data-live-status", "pending");
+      await expect(dialog.getByTestId("health-check-probe-telnet")).toHaveAttribute("data-live-status", "running");
+      await expect(dialog.getByTestId("health-check-probe-config")).toHaveAttribute("data-live-status", "pending");
       await captureDiagnosticsScreenshot(page, testInfo, "header/03-health-check-live-progress.png");
       await clearLiveDiagnosticsHealthProgress(page);
       await seedDiagnosticsAnalytics(page);

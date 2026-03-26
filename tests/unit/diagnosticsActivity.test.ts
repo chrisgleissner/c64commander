@@ -10,9 +10,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   decrementFtpInFlight,
   decrementRestInFlight,
+  decrementTelnetInFlight,
   getDiagnosticsActivitySnapshot,
   incrementFtpInFlight,
   incrementRestInFlight,
+  incrementTelnetInFlight,
   resetDiagnosticsActivity,
 } from "@/lib/diagnostics/diagnosticsActivity";
 
@@ -27,26 +29,31 @@ describe("diagnosticsActivity", () => {
 
     incrementRestInFlight();
     incrementFtpInFlight();
+    incrementTelnetInFlight();
     expect(getDiagnosticsActivitySnapshot()).toEqual({
       restInFlight: 1,
       ftpInFlight: 1,
+      telnetInFlight: 1,
     });
-    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenCalledTimes(3);
 
     decrementRestInFlight();
     decrementFtpInFlight();
+    decrementTelnetInFlight();
     expect(getDiagnosticsActivitySnapshot()).toEqual({
       restInFlight: 0,
       ftpInFlight: 0,
+      telnetInFlight: 0,
     });
-    expect(handler).toHaveBeenCalledTimes(4);
+    expect(handler).toHaveBeenCalledTimes(6);
 
     resetDiagnosticsActivity();
     expect(getDiagnosticsActivitySnapshot()).toEqual({
       restInFlight: 0,
       ftpInFlight: 0,
+      telnetInFlight: 0,
     });
-    expect(handler).toHaveBeenCalledTimes(5);
+    expect(handler).toHaveBeenCalledTimes(7);
 
     window.removeEventListener("c64u-activity-updated", handler);
   });
@@ -57,11 +64,13 @@ describe("diagnosticsActivity", () => {
 
     decrementRestInFlight();
     decrementFtpInFlight();
+    decrementTelnetInFlight();
     expect(getDiagnosticsActivitySnapshot()).toEqual({
       restInFlight: 0,
       ftpInFlight: 0,
+      telnetInFlight: 0,
     });
-    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenCalledTimes(3);
 
     window.removeEventListener("c64u-activity-updated", handler);
   });

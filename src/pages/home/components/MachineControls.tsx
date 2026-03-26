@@ -8,10 +8,25 @@
 
 import { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download } from "lucide-react";
+import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
+
+type MachineOverflowAction = {
+  id: string;
+  label: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+};
 
 export interface MachineControlsProps {
   status: { isConnected: boolean; isConnecting: boolean };
@@ -29,9 +44,13 @@ export interface MachineControlsProps {
   onPauseResume: () => void;
   onSaveRam: () => void;
   onLoadRam: () => void;
-  onRebootClearMemory: () => void;
   onPowerOff: () => void;
+  onPowerCycle?: () => void;
+  overflowActions?: MachineOverflowAction[];
   onAction: (fn: () => Promise<void>, label: string) => void;
+  telnetAvailable?: boolean;
+  telnetBusy?: boolean;
+  telnetActiveActionId?: string | null;
   footer?: ReactNode;
 }
 
@@ -46,11 +65,18 @@ export function MachineControls({
   onPauseResume,
   onSaveRam,
   onLoadRam,
-  onRebootClearMemory,
   onPowerOff,
+  onPowerCycle,
+  overflowActions = [],
   onAction,
+  telnetAvailable = false,
+  telnetBusy = false,
+  telnetActiveActionId = null,
   footer,
 }: MachineControlsProps) {
+  const effectiveBusy = machineTaskBusy || telnetBusy;
+  const canRunPowerCycle = telnetAvailable && typeof onPowerCycle === "function";
+  const hasOverflowActions = overflowActions.length > 0;
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -59,12 +85,43 @@ export function MachineControls({
       className="space-y-2"
       data-section-label="Quick Actions"
     >
-      <SectionHeader title="Quick Actions">
-        {machineTaskBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
+      <SectionHeader
+        title="Quick Actions"
+        actions={
+          hasOverflowActions ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  data-testid="home-machine-overflow-trigger"
+                >
+                  ...
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" data-testid="home-machine-overflow-menu">
+                {overflowActions.map((action) => (
+                  <DropdownMenuItem
+                    key={action.id}
+                    disabled={action.disabled || action.loading}
+                    onSelect={() => action.onSelect()}
+                    data-testid={`home-machine-overflow-${action.id}`}
+                  >
+                    {action.loading ? `${action.label}…` : action.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null
+        }
+      >
+        {effectiveBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
       </SectionHeader>
       <div className="space-y-2">
         <ProfileActionGrid
-          compactColumns={2}
+          compactColumns={4}
           mediumColumns={4}
           expandedColumns={4}
           cardDensity="compact"
@@ -81,7 +138,7 @@ export function MachineControls({
                 setMachineExecutionState("running");
               }, "Machine reset")
             }
-            disabled={!status.isConnected || machineTaskBusy}
+            disabled={!status.isConnected || effectiveBusy}
             loading={controls.reset.isPending}
           />
           <QuickActionCard
@@ -93,9 +150,9 @@ export function MachineControls({
               onAction(async () => {
                 await controls.reboot.mutateAsync();
                 setMachineExecutionState("running");
-              }, "Machine rebooting...")
+              }, "Machine rebooting")
             }
-            disabled={!status.isConnected || machineTaskBusy}
+            disabled={!status.isConnected || effectiveBusy}
             loading={controls.reboot.isPending}
           />
           <QuickActionCard
@@ -103,14 +160,14 @@ export function MachineControls({
             label={machineExecutionState === "paused" ? "Resume" : "Pause"}
             className={machineExecutionState === "paused" ? "border-primary/60 bg-primary/10" : undefined}
             onClick={() => void onPauseResume()}
-            disabled={!status.isConnected || machineTaskBusy}
+            disabled={!status.isConnected || effectiveBusy}
             loading={pauseResumePending}
           />
           <QuickActionCard
             icon={Menu}
             label="Menu"
             onClick={() => onAction(() => controls.menuButton.mutateAsync() as Promise<void>, "Menu toggled")}
-            disabled={!status.isConnected || machineTaskBusy}
+            disabled={!status.isConnected || effectiveBusy}
             loading={controls.menuButton.isPending}
           />
           <QuickActionCard
@@ -118,7 +175,7 @@ export function MachineControls({
             label="Save RAM"
             dataTestId="home-save-ram"
             onClick={() => void onSaveRam()}
-            disabled={!status.isConnected || machineTaskBusy}
+            disabled={!status.isConnected || effectiveBusy}
             loading={machineTaskId === "save-ram"}
           />
           <QuickActionCard
@@ -126,15 +183,18 @@ export function MachineControls({
             label="Load RAM"
             dataTestId="home-load-ram"
             onClick={() => void onLoadRam()}
-            disabled={!status.isConnected || machineTaskBusy}
+            disabled={!status.isConnected || effectiveBusy}
             loading={machineTaskId === "load-ram"}
           />
           <QuickActionCard
-            icon={RotateCcw}
-            label="Reboot (Clear RAM)"
-            onClick={() => void onRebootClearMemory()}
-            disabled={!status.isConnected || machineTaskBusy}
-            loading={machineTaskId === "reboot-clear-memory"}
+            icon={RefreshCw}
+            label="Power Cycle"
+            variant="danger"
+            className="border-destructive/40 bg-destructive/[0.04]"
+            dataTestId="home-power-cycle"
+            onClick={() => void onPowerCycle?.()}
+            disabled={!status.isConnected || effectiveBusy || !canRunPowerCycle}
+            loading={telnetActiveActionId === "powerCycle"}
           />
           <QuickActionCard
             icon={PowerOff}
@@ -142,7 +202,7 @@ export function MachineControls({
             variant="danger"
             className="border-destructive/30 bg-destructive/[0.03] opacity-80"
             onClick={() => void onPowerOff()}
-            disabled={!status.isConnected || machineTaskBusy}
+            disabled={!status.isConnected || effectiveBusy}
             loading={controls.powerOff.isPending}
           />
         </ProfileActionGrid>
