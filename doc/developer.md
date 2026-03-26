@@ -313,7 +313,7 @@ Notes:
 - `--screenshots-only` skips unit tests, E2E tests, and Android builds.
 - `--test-e2e` runs Playwright without screenshots.
 - `--test-e2e-ci` mirrors CI (screenshots + E2E + evidence validation).
-- Screenshot output is organized under `doc/img/app/<page>/<section>.png` for easy browsing.
+- Screenshot output is organized under page folders in `doc/img/app/`, with section captures written as page-specific PNG files such as `doc/img/app/home/sections/01-system-info-to-cpu-ram.png`.
 
 ### Video walkthrough
 
