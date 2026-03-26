@@ -796,6 +796,7 @@ test.describe("App screenshots", () => {
     await waitForConnected(page);
     await expect(page.getByRole("button", { name: "Disks", exact: true })).toBeVisible();
     await captureScreenshot(page, testInfo, "home/00-overview-light.png");
+    await captureHomeSections(page, testInfo);
     await page.emulateMedia({
       colorScheme: "dark",
       reducedMotion: "reduce",
