@@ -52,3 +52,11 @@
 - `npm run lint`: passed (0 errors).
 - `npm run build`: passed.
 - Settings screenshots regenerated; output unchanged (text change not visible at doc image resolution).
+
+## 2026-03-26T15:00:00Z - Icon standardization complete
+
+- Changed HVSC icon from Lucide `Music2` SVG to `♫` Unicode character rendered as `<span role="img">` in `src/components/FileOriginIcon.tsx`.
+- Removed unused `Music2` import; CommoServe keeps Lucide `Library` (stacked-records) icon unchanged.
+- Consolidated `tests/unit/components/FileOriginIcon.test.tsx`: removed duplicate first describe block, updated HVSC test to expect SPAN/♫, renamed CommoServe test, added custom label override tests for hvsc and commoserve. 7 canonical tests, all pass.
+- Fixed `openImportDialog` and `openViewAllIfPresent` in `playwright/screenshots.spec.ts`: changed `getActiveSlot(page).getByRole("dialog")` → `page.getByRole("dialog")` to correctly locate Radix UI portal-rendered dialogs.
+- `npm run lint`: 0 errors. `npm run test`: 4649 passed, 0 failed. `npm run build`: passed. All 20 screenshot tests passed.

@@ -316,7 +316,7 @@ const openViewAllIfPresent = async (page: Page) => {
     return null;
   }
   await firstButton.click();
-  const dialog = getActiveSlot(page).getByRole("dialog");
+  const dialog = page.getByRole("dialog");
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -327,7 +327,8 @@ const openImportDialog = async (page: Page) => {
   await getActiveMain(page)
     .getByRole("button", { name: /Add items|Add more items/i })
     .click();
-  const dialog = getActiveSlot(page).getByRole("dialog");
+  const dialog = page.getByRole("dialog");
+  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -336,6 +337,7 @@ const openImportDialog = async (page: Page) => {
 
 const waitForImportInterstitial = async (dialog: ReturnType<Page["getByRole"]>) => {
   const interstitial = dialog.getByTestId("import-selection-interstitial");
+  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
   if (await interstitial.isVisible().catch(() => false)) {
     return interstitial;
   }
