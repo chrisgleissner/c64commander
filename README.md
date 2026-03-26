@@ -111,6 +111,11 @@ Build playlists from local files, C64U storage, or HVSC. Supports autoplay, shuf
     <td><img src="doc/img/app/play/import/01-import-interstitial.png" alt="Play import" width="360"/></td>
     <td><img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="360"/></td>
   </tr>
+  <tr>
+    <td><img src="doc/img/app/play/import/04-commoserve-search.png" alt="CommoServe search form" width="360"/></td>
+    <td><img src="doc/img/app/play/import/05-commoserve-results-selected.png" alt="CommoServe results with selection" width="360"/></td>
+    <td></td>
+  </tr>
 </table>
 
 ### Disks

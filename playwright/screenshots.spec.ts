@@ -57,6 +57,19 @@ const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewport
   `${pageId}/profiles/${profileId}/${fileName}`;
 const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
   `profiles/${profileId}/${fileName}`;
+const SCREENSHOT_ARCHIVE_HOST = "archive.test";
+const SCREENSHOT_ARCHIVE_QUERY = '(name:"joyride") & (category:apps)';
+const SCREENSHOT_ARCHIVE_PRESETS = [
+  { type: "category", description: "Category", values: [{ aqlKey: "apps", name: "Apps" }] },
+  { type: "type", description: "Type", values: [{ aqlKey: "prg", name: "PRG" }] },
+  { type: "sort", description: "Sort", values: [{ aqlKey: "name", name: "Name" }] },
+  { type: "order", description: "Order", values: [{ aqlKey: "asc", name: "Ascending" }] },
+  { type: "date", description: "Date", values: [{ aqlKey: "2024", name: "2024" }] },
+];
+const SCREENSHOT_ARCHIVE_RESULTS = [
+  { id: "100", category: 40, name: "Joyride", group: "Padua", year: 2024, updated: "2024-03-14" },
+  { id: "101", category: 40, name: "Joyride Plus", group: "Onslaught", year: 2025, updated: "2025-01-11" },
+];
 
 const seedLiveDiagnosticsHealthProgress = async (page: Page) => {
   await page.waitForFunction(() => typeof window.__c64uDiagnosticsTestBridge?.seedOverlayState === "function");
@@ -326,6 +339,50 @@ const waitForImportInterstitial = async (dialog: ReturnType<Page["getByRole"]>) 
     return interstitial;
   }
   return null;
+};
+
+const seedArchiveSearchMock = async (page: Page) => {
+  await page.addInitScript((archiveHost: string) => {
+    localStorage.setItem("c64u_archive_host_override", archiveHost);
+  }, SCREENSHOT_ARCHIVE_HOST);
+
+  await page.route(`http://${SCREENSHOT_ARCHIVE_HOST}/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const headers = {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "*",
+    };
+
+    if (request.method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers, body: "" });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/leet/search/aql/presets") {
+      await route.fulfill({
+        status: 200,
+        headers,
+        contentType: "application/json",
+        body: JSON.stringify(SCREENSHOT_ARCHIVE_PRESETS),
+      });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/leet/search/aql") {
+      const query = url.searchParams.get("query") ?? "";
+      await route.fulfill({
+        status: 200,
+        headers,
+        contentType: "application/json",
+        body: JSON.stringify(query === SCREENSHOT_ARCHIVE_QUERY ? SCREENSHOT_ARCHIVE_RESULTS : []),
+      });
+      return;
+    }
+
+    await route.fulfill({ status: 404, headers, body: "not found" });
+  });
 };
 
 const waitForOverlaysToClear = async (page: Page) => {
@@ -1221,6 +1278,7 @@ test.describe("App screenshots", () => {
       await page.addInitScript(() => {
         (window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm = true;
       });
+      await seedArchiveSearchMock(page);
       await page.goto("/play");
 
       const dialog = await openImportDialog(page);
@@ -1256,6 +1314,33 @@ test.describe("App screenshots", () => {
       await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
       await expect(localDialog.getByTestId("local-file-picker")).toBeVisible();
       await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png");
+
+      await localDialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      const archiveDialog = await openImportDialog(page);
+      if (!archiveDialog) {
+        return;
+      }
+      const archiveInterstitial = await waitForImportInterstitial(archiveDialog);
+      if (!archiveInterstitial) {
+        return;
+      }
+
+      await archiveInterstitial.getByTestId("import-option-commoserve").click();
+      const archivePicker = archiveDialog.getByTestId("commoserve-picker");
+      await expect(archivePicker).toBeVisible();
+      await archivePicker.getByLabel("Name").fill("joyride");
+      await archivePicker.getByRole("combobox").nth(0).click();
+      await page.getByRole("option", { name: "Apps" }).click();
+      await expect(archivePicker.getByTestId("archive-query-preview")).toContainText(SCREENSHOT_ARCHIVE_QUERY);
+      await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png");
+
+      await archivePicker.getByTestId("archive-search-button").click();
+      await expect(archivePicker.getByTestId("archive-result-row")).toHaveCount(2);
+      await archivePicker.getByRole("checkbox", { name: /^Select Joyride$/ }).click();
+      await expect(archiveDialog.getByTestId("add-items-selection-count")).toHaveText(/1 selected/i);
+      await captureScreenshot(page, testInfo, "play/import/05-commoserve-results-selected.png");
     },
   );
 
