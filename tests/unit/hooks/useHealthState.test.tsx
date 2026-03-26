@@ -46,8 +46,10 @@ vi.mock("@/lib/diagnostics/healthModel", () => ({
   deriveFtpContributorHealth: () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 }),
   deriveLastFtpActivity: () => null,
   deriveLastRestActivity: () => null,
+  deriveLastTelnetActivity: () => null,
   derivePrimaryProblem: () => null,
   deriveRestContributorHealth: () => ({ state: "Unhealthy", problemCount: 1, totalOperations: 2, failedOperations: 1 }),
+  deriveTelnetContributorHealth: () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 }),
   rollUpHealth: (_contributors: unknown, _connectivity: unknown) => "Unhealthy",
 }));
 

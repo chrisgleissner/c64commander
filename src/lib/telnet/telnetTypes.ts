@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
+
 /** 60×24 Telnet screen dimensions matching firmware Screen_VT100 */
 export const TELNET_SCREEN_WIDTH = 60;
 export const TELNET_SCREEN_HEIGHT = 24;
@@ -124,27 +126,63 @@ export interface TelnetSessionApi {
   isConnected(): boolean;
 }
 
+export type TelnetMenuKey = "F5" | "F1";
+export type TelnetSubsystem = "C64" | "Drive" | "IEC" | "Printer" | "Config" | "Developer";
+export type TelnetActionId =
+  | "powerCycle"
+  | "rebootClearMemory"
+  | "rebootKeepMemory"
+  | "saveC64Memory"
+  | "saveReuMemory"
+  | "driveAReset"
+  | "driveBTurnOn"
+  | "iecTurnOn"
+  | "iecReset"
+  | "iecSetDir"
+  | "printerFlush"
+  | "printerReset"
+  | "printerTurnOn"
+  | "saveConfigToFile"
+  | "clearFlashConfig"
+  | "clearDebugLog"
+  | "saveDebugLog"
+  | "saveEdidToFile";
+
 /** Telnet action definition */
 export interface TelnetAction {
-  id: string;
+  id: TelnetActionId;
   label: string;
+  shortLabel?: string;
   menuPath: MenuPath;
-  subsystem: string;
+  subsystem: TelnetSubsystem;
+  homePlacement?: "primary" | "overflow" | null;
+  deviceTargets?: Array<"printer" | "soft-iec" | "drive-a" | "drive-b">;
 }
 
 /** Telnet-only actions keyed by ID */
-export const TELNET_ACTIONS: Record<string, TelnetAction> = {
+export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
   powerCycle: {
     id: "powerCycle",
     label: "Power Cycle",
     menuPath: ["Power & Reset", "Power Cycle"],
     subsystem: "C64",
+    homePlacement: "primary",
   },
   rebootClearMemory: {
     id: "rebootClearMemory",
-    label: "Reboot (Clear RAM)",
+    label: "Reboot",
+    shortLabel: "Reboot (Clr Mem)",
     menuPath: ["Power & Reset", "Reboot (Clr Mem)"],
     subsystem: "C64",
+    homePlacement: "primary",
+  },
+  rebootKeepMemory: {
+    id: "rebootKeepMemory",
+    label: "Reboot (Keep RAM)",
+    shortLabel: "Reboot C64",
+    menuPath: ["Power & Reset", "Reboot C64"],
+    subsystem: "C64",
+    homePlacement: "overflow",
   },
   saveC64Memory: {
     id: "saveC64Memory",
@@ -154,45 +192,73 @@ export const TELNET_ACTIONS: Record<string, TelnetAction> = {
   },
   saveReuMemory: {
     id: "saveReuMemory",
-    label: "Save REU Memory",
+    label: "Save REU",
+    shortLabel: "Save REU Memory",
     menuPath: ["Power & Reset", "Save REU Memory"],
     subsystem: "C64",
+    homePlacement: "overflow",
+  },
+  driveAReset: {
+    id: "driveAReset",
+    label: "Drive A Reset",
+    shortLabel: "Reset",
+    menuPath: ["Built-in Drive A", "Reset"],
+    subsystem: "Drive",
+    deviceTargets: ["drive-a"],
+  },
+  driveBTurnOn: {
+    id: "driveBTurnOn",
+    label: "Drive B Turn On",
+    shortLabel: "Turn On",
+    menuPath: ["Built-in Drive B", "Turn On"],
+    subsystem: "Drive",
+    deviceTargets: ["drive-b"],
   },
   iecTurnOn: {
     id: "iecTurnOn",
     label: "IEC Turn On",
     menuPath: ["Software IEC", "Turn On"],
     subsystem: "IEC",
+    deviceTargets: ["soft-iec"],
   },
   iecReset: {
     id: "iecReset",
     label: "IEC Reset",
     menuPath: ["Software IEC", "Reset"],
     subsystem: "IEC",
+    shortLabel: "Reset",
+    deviceTargets: ["soft-iec"],
   },
   iecSetDir: {
     id: "iecSetDir",
-    label: "IEC Set Dir",
+    label: "IEC Set Directory",
+    shortLabel: "Set Dir",
     menuPath: ["Software IEC", "Set dir. here"],
     subsystem: "IEC",
+    deviceTargets: ["soft-iec"],
   },
   printerFlush: {
     id: "printerFlush",
-    label: "Printer Flush",
+    label: "Printer Flush/Eject",
+    shortLabel: "Flush/Eject",
     menuPath: ["Printer", "Flush/Eject"],
     subsystem: "Printer",
+    deviceTargets: ["printer"],
   },
   printerReset: {
     id: "printerReset",
     label: "Printer Reset",
+    shortLabel: "Reset",
     menuPath: ["Printer", "Reset"],
     subsystem: "Printer",
+    deviceTargets: ["printer"],
   },
   printerTurnOn: {
     id: "printerTurnOn",
     label: "Printer Turn On",
     menuPath: ["Printer", "Turn On"],
     subsystem: "Printer",
+    deviceTargets: ["printer"],
   },
   saveConfigToFile: {
     id: "saveConfigToFile",
@@ -206,6 +272,41 @@ export const TELNET_ACTIONS: Record<string, TelnetAction> = {
     menuPath: ["Configuration", "Clear Flash Config"],
     subsystem: "Config",
   },
+  clearDebugLog: {
+    id: "clearDebugLog",
+    label: "Clear Debug Log",
+    menuPath: ["Developer", "Clear Debug Log"],
+    subsystem: "Developer",
+  },
+  saveDebugLog: {
+    id: "saveDebugLog",
+    label: "Save Debug Log",
+    menuPath: ["Developer", "Save Debug Log"],
+    subsystem: "Developer",
+  },
+  saveEdidToFile: {
+    id: "saveEdidToFile",
+    label: "Save EDID to File",
+    menuPath: ["Developer", "Save EDID to file"],
+    subsystem: "Developer",
+  },
+};
+
+export const TELNET_ACTION_IDS = Object.keys(TELNET_ACTIONS) as TelnetActionId[];
+
+export const TELNET_HOME_PRIMARY_ACTION_IDS: TelnetActionId[] = ["rebootClearMemory", "powerCycle"];
+
+export const TELNET_HOME_OVERFLOW_ACTION_IDS: TelnetActionId[] = ["rebootKeepMemory", "saveReuMemory"];
+
+export const resolveTelnetMenuKey = (product?: string | null): TelnetMenuKey | null => {
+  const deviceCode = inferConnectedDeviceCode(product);
+  if (deviceCode === "c64u") return "F1";
+  if (deviceCode === "u64" || deviceCode === "u64e" || deviceCode === "u64e2") return "F5";
+  return null;
+};
+
+export const isTelnetCapableProduct = (product?: string | null): boolean => {
+  return resolveTelnetMenuKey(product) !== null;
 };
 
 /** Error types specific to Telnet operations */

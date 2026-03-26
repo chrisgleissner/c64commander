@@ -16,7 +16,7 @@ export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unava
 export type ConnectivityState = "Online" | "Demo" | "Offline" | "Not yet connected" | "Checking";
 
 // §6.3 — Health indicator contributors
-export type ContributorKey = "App" | "REST" | "FTP";
+export type ContributorKey = "App" | "REST" | "FTP" | "TELNET";
 
 // §8.3 — Health glyphs (shape, color-independent)
 export const HEALTH_GLYPHS: Record<HealthState, string> = {
@@ -87,6 +87,7 @@ export type OverallHealthState = {
   contributors: Record<ContributorKey, ContributorHealth>;
   lastRestActivity: LastActivity | null;
   lastFtpActivity: LastActivity | null;
+  lastTelnetActivity: LastActivity | null;
   primaryProblem: Problem | null;
 };
 
@@ -160,6 +161,24 @@ export const deriveFtpContributorHealth = (events: TraceEvent[]): ContributorHea
   };
 };
 
+// §6.3 — Telnet contributor health from trace events in 5-minute window
+export const deriveTelnetContributorHealth = (events: TraceEvent[]): ContributorHealth => {
+  const windowEvents = events.filter((e) => e.type === "telnet-operation" && isInCurrentWindow(e));
+  let failed = 0;
+  for (const event of windowEvents) {
+    const result = typeof event.data.result === "string" ? event.data.result : null;
+    const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
+    if (result === "failure" || hasError) failed += 1;
+  }
+  const total = windowEvents.length;
+  return {
+    state: healthFromRatio(failed, total),
+    problemCount: failed,
+    totalOperations: total,
+    failedOperations: failed,
+  };
+};
+
 // §6.3 — App contributor health from error trace events in 5-minute window
 export const deriveAppContributorHealth = (events: TraceEvent[]): ContributorHealth => {
   const windowEvents = events.filter((e) => e.type === "error" && isInCurrentWindow(e));
@@ -211,6 +230,20 @@ export const deriveLastFtpActivity = (events: TraceEvent[]): LastActivity | null
   return { operation, result, timestampMs: new Date(last.timestamp).getTime() };
 };
 
+// §10.5 — Last Telnet activity from trace events
+export const deriveLastTelnetActivity = (events: TraceEvent[]): LastActivity | null => {
+  const telnetEvents = events.filter((e) => e.type === "telnet-operation");
+  if (telnetEvents.length === 0) return null;
+  const last = telnetEvents[telnetEvents.length - 1];
+  const actionLabel = typeof last.data.actionLabel === "string" ? last.data.actionLabel : "Telnet action";
+  const result = typeof last.data.result === "string" ? last.data.result : "unknown";
+  return {
+    operation: actionLabel.slice(0, 40),
+    result,
+    timestampMs: new Date(last.timestamp).getTime(),
+  };
+};
+
 // §7.6 — Primary problem selection (highest impact → most recent)
 export const derivePrimaryProblem = (
   events: TraceEvent[],
@@ -248,6 +281,20 @@ export const derivePrimaryProblem = (
           contributor: "FTP",
           timestampMs: new Date(e.timestamp).getTime(),
           impactLevel: contributors.FTP.state === "Unhealthy" ? 2 : 1,
+          causeHint: hasError ? String(e.data.error).slice(0, 40) : null,
+        });
+      }
+    } else if (e.type === "telnet-operation") {
+      const result = typeof e.data.result === "string" ? e.data.result : null;
+      const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
+      if (result === "failure" || hasError) {
+        const actionLabel = typeof e.data.actionLabel === "string" ? e.data.actionLabel : "Telnet action";
+        problems.push({
+          id: e.id,
+          title: `${actionLabel} failed`.slice(0, 80),
+          contributor: "TELNET",
+          timestampMs: new Date(e.timestamp).getTime(),
+          impactLevel: contributors.TELNET.state === "Unhealthy" ? 2 : 1,
           causeHint: hasError ? String(e.data.error).slice(0, 40) : null,
         });
       }
@@ -349,6 +396,9 @@ export const getContributorSupportingPhrase = (contributor: ContributorKey, heal
   const { totalOperations: total, failedOperations: failed } = health;
   if (contributor === "REST") {
     return `${total} request${total !== 1 ? "s" : ""}, ${failed} failed`;
+  }
+  if (contributor === "TELNET") {
+    return `${total} action${total !== 1 ? "s" : ""}, ${failed} failed`;
   }
   return `${total} operation${total !== 1 ? "s" : ""}, ${failed} failed`;
 };

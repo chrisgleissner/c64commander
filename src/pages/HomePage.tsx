@@ -62,6 +62,7 @@ import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
+import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 
 export default function HomePage() {
   return (
@@ -122,7 +123,6 @@ function HomePageContent() {
     handleRestoreSnapshot,
     handleDeleteSnapshot,
     handleUpdateSnapshotLabel,
-    handleRebootClearMemory,
     handlePowerOff,
     confirmPowerOff,
     handleSelectRamDumpFolder,
@@ -174,21 +174,93 @@ function HomePageContent() {
 
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
 
-  const handlePowerCycle = async () => {
-    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+  const executeTelnetAction = async ({
+    actionId,
+    successTitle,
+    failureOperation,
+    failureTitle,
+    onSuccess,
+  }: {
+    actionId: TelnetActionId;
+    successTitle: string;
+    failureOperation: string;
+    failureTitle: string;
+    onSuccess?: () => void;
+  }) => {
     try {
-      await telnet.executeAction("powerCycle");
-      toast({ title: "Power cycled" });
-      setMachineExecutionState("running");
+      await telnet.executeAction(actionId);
+      toast({ title: successTitle });
+      onSuccess?.();
     } catch (error) {
       reportUserError({
-        operation: "HOME_POWER_CYCLE",
-        title: "Power cycle failed",
+        operation: failureOperation,
+        title: failureTitle,
         description: (error as Error).message,
         error,
+        context: { actionId },
       });
     }
   };
+
+  const handlePowerCycle = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    await executeTelnetAction({
+      actionId: "powerCycle",
+      successTitle: "Power cycled",
+      failureOperation: "HOME_POWER_CYCLE",
+      failureTitle: "Power cycle failed",
+      onSuccess: () => setMachineExecutionState("running"),
+    });
+  };
+
+  const handleTelnetRebootClearMemory = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    await executeTelnetAction({
+      actionId: "rebootClearMemory",
+      successTitle: "Machine rebooting",
+      failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
+      failureTitle: "Reboot failed",
+      onSuccess: () => setMachineExecutionState("running"),
+    });
+  };
+
+  const handleTelnetRebootKeepMemory = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    await executeTelnetAction({
+      actionId: "rebootKeepMemory",
+      successTitle: "Machine rebooting",
+      failureOperation: "HOME_REBOOT_KEEP_MEMORY",
+      failureTitle: "Reboot failed",
+      onSuccess: () => setMachineExecutionState("running"),
+    });
+  };
+
+  const handleSaveReu = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    await executeTelnetAction({
+      actionId: "saveReuMemory",
+      successTitle: "REU memory saved",
+      failureOperation: "HOME_SAVE_REU",
+      failureTitle: "Save REU failed",
+    });
+  };
+
+  const machineOverflowActions = [
+    {
+      id: "rebootKeepMemory",
+      label: TELNET_ACTIONS.rebootKeepMemory.label,
+      onSelect: () => void handleTelnetRebootKeepMemory(),
+      disabled: !isActive || machineTaskBusy || telnet.isBusy,
+      loading: telnet.activeActionId === "rebootKeepMemory",
+    },
+    {
+      id: "saveReuMemory",
+      label: TELNET_ACTIONS.saveReuMemory.label,
+      onSelect: () => void handleSaveReu(),
+      disabled: !isActive || machineTaskBusy || telnet.isBusy,
+      loading: telnet.activeActionId === "saveReuMemory",
+    },
+  ];
 
   const ramDumpFolderDisplayPath = ramDumpFolder
     ? (ramDumpFolder.displayPath ?? deriveRamDumpFolderDisplayPath(ramDumpFolder.treeUri, ramDumpFolder.rootName))
@@ -529,9 +601,10 @@ function HomePageContent() {
             onPauseResume={handlePauseResume}
             onSaveRam={() => setSaveRamDialogOpen(true)}
             onLoadRam={() => setSnapshotManagerOpen(true)}
-            onRebootClearMemory={handleRebootClearMemory}
+            onRebootClearMemory={() => void handleTelnetRebootClearMemory()}
             onPowerOff={handlePowerOff}
             onPowerCycle={() => void handlePowerCycle()}
+            overflowActions={machineOverflowActions}
             onAction={handleAction}
             telnetAvailable={telnet.isAvailable}
             telnetBusy={telnet.isBusy}
@@ -942,21 +1015,21 @@ function HomePageContent() {
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
               onTelnetAction={async (actionId) => {
-                try {
-                  await telnet.executeAction(actionId);
-                  const labels: Record<string, string> = {
-                    iecReset: "Soft IEC Drive reset",
-                    iecSetDir: "Soft IEC directory set",
-                  };
-                  toast({ title: labels[actionId] ?? "Drive action completed" });
-                } catch (error) {
-                  reportUserError({
-                    operation: "HOME_DRIVE_TELNET",
-                    title: "Drive action failed",
-                    description: (error as Error).message,
-                    error,
-                  });
-                }
+                const successTitles: Partial<Record<TelnetActionId, string>> = {
+                  driveAReset: "Drive A reset",
+                  driveBTurnOn: "Drive B turned on",
+                  iecTurnOn: "Soft IEC Drive turned on",
+                  iecReset: "Soft IEC Drive reset",
+                  iecSetDir: "Soft IEC directory set",
+                };
+                await executeTelnetAction({
+                  actionId: actionId as TelnetActionId,
+                  successTitle:
+                    successTitles[actionId as TelnetActionId] ??
+                    `${TELNET_ACTIONS[actionId as TelnetActionId]?.label ?? "Drive action"} completed`,
+                  failureOperation: "HOME_DRIVE_TELNET",
+                  failureTitle: "Drive action failed",
+                });
               }}
             />
           </motion.div>
@@ -977,17 +1050,19 @@ function HomePageContent() {
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
               onTelnetAction={async (actionId) => {
-                try {
-                  await telnet.executeAction(actionId);
-                  toast({ title: actionId === "printerFlush" ? "Printer flushed" : "Printer reset" });
-                } catch (error) {
-                  reportUserError({
-                    operation: "HOME_PRINTER_TELNET",
-                    title: `Printer ${actionId === "printerFlush" ? "flush" : "reset"} failed`,
-                    description: (error as Error).message,
-                    error,
-                  });
-                }
+                const successTitles: Partial<Record<TelnetActionId, string>> = {
+                  printerTurnOn: "Printer turned on",
+                  printerFlush: "Printer flushed",
+                  printerReset: "Printer reset",
+                };
+                await executeTelnetAction({
+                  actionId: actionId as TelnetActionId,
+                  successTitle:
+                    successTitles[actionId as TelnetActionId] ??
+                    `${TELNET_ACTIONS[actionId as TelnetActionId]?.label ?? "Printer action"} completed`,
+                  failureOperation: "HOME_PRINTER_TELNET",
+                  failureTitle: "Printer action failed",
+                });
               }}
             />
           </motion.div>
@@ -1177,19 +1252,7 @@ function HomePageContent() {
           setSaveRamDialogOpen(false);
           void handleSaveRam(type, customRanges);
         }}
-        onSaveReu={async () => {
-          try {
-            await telnet.executeAction("saveReuMemory");
-            toast({ title: "REU memory saved" });
-          } catch (error) {
-            reportUserError({
-              operation: "HOME_SAVE_REU",
-              title: "Save REU failed",
-              description: (error as Error).message,
-              error,
-            });
-          }
-        }}
+        onSaveReu={handleSaveReu}
         isSaving={machineTaskId === "save-ram"}
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}

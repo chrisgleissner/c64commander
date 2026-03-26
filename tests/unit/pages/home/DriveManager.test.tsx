@@ -229,6 +229,7 @@ describe("DriveManager", () => {
       render(<DriveManager {...defaultProps} telnetAvailable={true} />);
       expect(screen.queryByTestId("home-softiec-reset")).not.toBeInTheDocument();
       expect(screen.queryByTestId("home-softiec-setdir")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("home-softiec-turn-on")).not.toBeInTheDocument();
     });
 
     it("shows Soft IEC telnet controls when a telnet handler is provided", () => {
@@ -241,6 +242,52 @@ describe("DriveManager", () => {
       render(<DriveManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
       expect(screen.getByTestId("home-softiec-reset")).toBeInTheDocument();
       expect(screen.getByTestId("home-softiec-setdir")).toBeInTheDocument();
+    });
+
+    it("shows Soft IEC Turn On when the device is disabled", () => {
+      resolveConfigValueSpy.mockImplementation(
+        (_payload: unknown, category: string, itemName: string, fallback: string | number) => {
+          if (category === "SoftIEC Drive Settings" && itemName === "IEC Drive") return "Disabled";
+          return fallback;
+        },
+      );
+      render(<DriveManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
+      expect(screen.getByTestId("home-softiec-turn-on")).toBeInTheDocument();
+      expect(screen.queryByTestId("home-softiec-reset")).not.toBeInTheDocument();
+    });
+
+    it("shows Drive A reset and Drive B turn-on actions from the canonical Telnet model", () => {
+      resolveConfigValueSpy.mockImplementation(
+        (_payload: unknown, category: string, itemName: string, fallback: string | number) => {
+          if (category === "Drive A Settings" && itemName === "Drive") return "Enabled";
+          if (category === "Drive B Settings" && itemName === "Drive") return "Disabled";
+          return fallback;
+        },
+      );
+      render(<DriveManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
+      expect(screen.getByTestId("home-drive-a-reset")).toBeInTheDocument();
+      expect(screen.getByTestId("home-drive-b-turn-on")).toBeInTheDocument();
+    });
+
+    it("dispatches canonical Telnet action ids for drive footer controls", () => {
+      const onTelnetAction = vi.fn().mockResolvedValue(undefined);
+      resolveConfigValueSpy.mockImplementation(
+        (_payload: unknown, category: string, itemName: string, fallback: string | number) => {
+          if (category === "Drive A Settings" && itemName === "Drive") return "Enabled";
+          if (category === "Drive B Settings" && itemName === "Drive") return "Disabled";
+          if (category === "SoftIEC Drive Settings" && itemName === "IEC Drive") return "Disabled";
+          return fallback;
+        },
+      );
+
+      render(<DriveManager {...defaultProps} telnetAvailable={true} onTelnetAction={onTelnetAction} />);
+      fireEvent.click(screen.getByTestId("home-drive-a-reset"));
+      fireEvent.click(screen.getByTestId("home-drive-b-turn-on"));
+      fireEvent.click(screen.getByTestId("home-softiec-turn-on"));
+
+      expect(onTelnetAction).toHaveBeenNthCalledWith(1, "driveAReset");
+      expect(onTelnetAction).toHaveBeenNthCalledWith(2, "driveBTurnOn");
+      expect(onTelnetAction).toHaveBeenNthCalledWith(3, "iecTurnOn");
     });
   });
 

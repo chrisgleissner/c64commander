@@ -1081,7 +1081,12 @@ describe("HomePage SID status", () => {
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
-    expect(within(machineControls).getAllByRole("button")).toHaveLength(7);
+    expect(within(machineControls).getAllByRole("button")).toHaveLength(8);
+    expect(
+      within(machineControls)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Reset", "Reboot", "Pause", "Menu", "Save RAM", "Load RAM", "Power Cycle", "Power Off"]);
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
     expect(within(machineControls).queryByRole("button", { name: /^resume$/i })).toBeNull();
 

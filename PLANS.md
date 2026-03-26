@@ -1,79 +1,79 @@
-# Archive Client Simplification Plan
+# Telnet Convergence Implementation Plan
 
-Status: COMPLETE
+Status: IN PROGRESS
 Date: 2026-03-26
 Classification: DOC_PLUS_CODE
+Visible UI impact: YES
 
 ## Objective
 
-Collapse the archive client subsystem to a single config-driven CommoserveClient, remove the retired secondary source, and remove the archive backend abstraction while preserving runtime behavior.
+Implement the Review 13 Telnet convergence work across the canonical action registry, tracing, diagnostics, Home quick actions and overflow, device cards, health/capability modeling, tests, documentation, and the minimal screenshot set for the changed surfaces.
 
 ## Execution Phases
 
-### Phase 1 - Baseline and impact map
+### Phase 1 - Required reading and impact map
 
 - Status: COMPLETE
-- Inventory retired-source and archive-backend references across runtime code, tests, docs, and generated artifacts.
-- Confirm the active architecture still contains two archive client subclasses, backend-based config, and source/UI branches.
+- Re-read the review, plan/worklog, Telnet specs and addendum, stale docs surfaces, and the runtime/UI/diagnostics/tests that currently own Telnet behavior.
+- Classify the task as `DOC_PLUS_CODE` with visible UI changes.
+- Lock the implementation slices around the canonical Telnet capability model instead of continuing the old incremental button-by-button approach.
 
-### Phase 2 - Converge archive config and client model
+### Phase 2 - Canonical Telnet capability model
 
-- Status: COMPLETE
-- Replace archive config input with source-driven fields: `id`, `name`, `baseUrl`, `headers?`, `enabled?`.
-- Remove archive backend types and defaults maps keyed by backend.
-- Keep a single concrete archive client implementation: `CommoserveClient`.
-- Simplify `createArchiveClient()` to unconditional CommoserveClient construction.
-- Preserve request timeouts, query construction, transport behavior, binary downloads, and request/response transforms.
+- Status: IN PROGRESS
+- Extend the runtime action registry to match the Telnet-only firmware actions in scope, including the Developer submenu.
+- Add a canonical metadata model for UI surfacing, diagnostics classification, and menu-key/device-family handling so runtime, UI, and tests consume the same inventory.
+- Replace platform-only availability checks with a real capability decision derived from device state and supported platforms.
 
-### Phase 3 - Remove retired-source runtime affordances
+### Phase 3 - Tracing, diagnostics, and health convergence
 
-- Status: COMPLETE
-- Remove retired-source settings, source selection branches, source navigation types, file origin handling, and playlist source branches.
-- Keep the online archive UX functional with the CommoServe source only.
-- Replace archive logging metadata from backend-based fields to source-based fields.
+- Status: NOT STARTED
+- Emit `telnet-operation` trace entries for every Telnet action with action id, visible label, menu path, duration, result, and normalized failure data.
+- Extend diagnostics action summaries, contributors, filters, evidence rows, counters, and health rollups to treat Telnet as a first-class subsystem beside REST and FTP.
+- Preserve existing REST/FTP behavior while making Telnet visible in steady-state health and activity models.
 
-### Phase 4 - Consolidate mocks and regression tests
+### Phase 4 - Home quick actions and device-card integration
 
-- Status: COMPLETE
-- Remove source-specific archive mock wrappers.
-- Update archive, settings, hook, source adapter, and item-selection tests to use generic or CommoServe source config.
-- Add regression coverage for default config plus custom external config.
+- Status: NOT STARTED
+- Replace the current Home machine controls with the required eight primary actions in the required order.
+- Map visible `Reboot` to Telnet clear-memory semantics, move secondary actions into a `...` overflow, and preserve the compact 2x4 layout.
+- Converge drive and printer card Telnet actions into a consistent device-card action model.
 
-### Phase 5 - Documentation and literal sweep
+### Phase 5 - Regression coverage
 
-- Status: COMPLETE
-- Remove all retired-source mentions from repository documentation and process artifacts.
-- Ensure PLANS.md and WORKLOG.md reflect only the converged architecture.
+- Status: NOT STARTED
+- Add or update focused unit coverage for the registry, Telnet tracing, diagnostics Telnet effects/contributors, Home ordering and overflow rules, and device-card controls.
+- Add or update the minimal honest Playwright coverage for the changed Home and Diagnostics surfaces.
+- Add Maestro or equivalent native evidence only where it is required for real-device Telnet behavior.
 
-### Phase 6 - Validation and convergence
+### Phase 6 - Documentation and screenshots
 
-- Status: COMPLETE
+- Status: NOT STARTED
+- Update `README.md`, `src/pages/DocsPage.tsx`, `doc/features-by-page.md`, `doc/ux-interactions.md`, and the affected diagnostics docs so they describe the shipped Telnet behavior.
+- Refresh only the screenshot files needed for Home quick actions/overflow, device-card Telnet controls, and Diagnostics Telnet visibility.
+
+### Phase 7 - Validation and convergence
+
+- Status: NOT STARTED
+- Run `npm run test:coverage` and keep global branch coverage at or above 91%.
 - Run `npm run lint`.
-- Run `npm run test:coverage` and confirm branch coverage remains at least 91%.
 - Run `npm run build`.
-- Run `npm run cap:build` if needed to refresh generated Android web assets so stale literals are removed.
-- Perform final repository-wide literal sweep for removed-source strings and archive backend references.
-
-## Current Validation State
-
-- `npm run lint`: passed (0 errors).
-- `npm run test`: all tests passed.
-- `npm run build`: passed.
-- Branch coverage: 91.01% (15075/16565), above the 91% threshold.
-- Repository-wide retired-source sweep across active source and tests: clean.
+- Run the smallest targeted Playwright and screenshot generation flows needed for the impacted Telnet surfaces.
 
 ## Constraints
 
-- No new archive client implementations.
-- No archive backend discriminator in archive config or factory code.
-- No dead code or commented-out compatibility shims.
-- Preserve external behavior for search, presets, entries, binary download, and execution.
+- Do not narrow the review scope to avoid the hard parts of diagnostics or Home convergence.
+- Do not regress or special-case REST/FTP diagnostics while adding Telnet.
+- Do not bulk-refresh screenshots outside the Telnet-affected documentation surfaces.
+- Preserve Addendum 1 behavior: CommoServe search/browse remains direct HTTP plus device REST, not a new Telnet dependency.
 
 ## Acceptance Checklist
 
-- Exactly one archive client implementation remains.
-- No removed-source string remains anywhere in the repository.
-- Archive config and logging are source-based rather than backend-based.
-- Factory has no client-selection branching.
-- Tests pass and coverage remains at least 91%.
-- Build succeeds and generated assets no longer contain removed literals.
+- The Telnet registry covers the in-scope Telnet-only action inventory and is canonical across runtime and tests.
+- Home primary quick actions are exactly `Reset`, `Reboot`, `Pause/Resume`, `Menu`, `Save RAM`, `Load RAM`, `Power Cycle`, `Power Off`.
+- Home overflow exists to the right of Quick Actions, includes `Reboot (Keep RAM)` and `Save REU`, and does not duplicate primary actions.
+- Drive and printer cards expose the required Telnet controls intentionally rather than ad hoc.
+- Every Telnet action emits trace data and appears in Diagnostics action summaries and traces.
+- Diagnostics and health models expose Telnet as a first-class contributor/filter/effect.
+- Docs and screenshots reflect the implemented Telnet behavior without contradictions.
+- Validation passes, including coverage at `>= 91%` branch coverage.

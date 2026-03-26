@@ -21,6 +21,7 @@ import { DRIVE_CONTROL_SPECS, DriveControlSpec } from "../constants";
 import { formatDiskDosStatus, type DiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 
 import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";
 import { readItemOptions, buildConfigKey } from "../utils/HomeConfigUtils";
@@ -41,6 +42,31 @@ const toStatusSummary = (status: DiskDosStatus) => {
     return `DOS STATUS ${status.code}`;
   }
   return "Status reported";
+};
+
+const buildDriveTelnetActions = (
+  driveClass: DriveControlSpec["class"],
+  enabled: boolean,
+): Array<{ actionId: TelnetActionId; label: string; loadingLabel: string; testId: string }> => {
+  switch (driveClass) {
+    case "PHYSICAL_DRIVE_A":
+      return enabled
+        ? [{ actionId: "driveAReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-drive-a-reset" }]
+        : [];
+    case "PHYSICAL_DRIVE_B":
+      return enabled
+        ? []
+        : [{ actionId: "driveBTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-drive-b-turn-on" }];
+    case "SOFT_IEC_DRIVE":
+      return enabled
+        ? [
+            { actionId: "iecReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-softiec-reset" },
+            { actionId: "iecSetDir", label: "Set Dir", loadingLabel: "Setting…", testId: "home-softiec-setdir" },
+          ]
+        : [{ actionId: "iecTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-softiec-turn-on" }];
+    default:
+      return [];
+  }
 };
 
 interface DriveManagerProps {
@@ -208,6 +234,7 @@ export function DriveManager({
             : [typeValue];
 
           const isSoftIec = spec.class === "SOFT_IEC_DRIVE";
+          const telnetActions = showTelnetDriveControls ? buildDriveTelnetActions(spec.class, enabled) : [];
           const pendingEnabled = Boolean(configWritePending[buildConfigKey(spec.category, spec.enabledItem)]);
           const pendingBus = Boolean(configWritePending[buildConfigKey(spec.category, spec.busItem)]);
           const pendingType = spec.typeItem
@@ -304,28 +331,21 @@ export function DriveManager({
               isConnected={isConnected}
               testIdSuffix={testIdSuffix}
               footer={
-                isSoftIec && showTelnetDriveControls && enabled ? (
+                telnetActions.length > 0 ? (
                   <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 px-2 text-xs"
-                      data-testid="home-softiec-reset"
-                      disabled={!isConnected || machineTaskBusy || telnetBusy}
-                      onClick={() => void onTelnetAction("iecReset")}
-                    >
-                      {telnetActiveActionId === "iecReset" ? "Resetting…" : "Reset"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 px-2 text-xs"
-                      data-testid="home-softiec-setdir"
-                      disabled={!isConnected || machineTaskBusy || telnetBusy}
-                      onClick={() => void onTelnetAction("iecSetDir")}
-                    >
-                      {telnetActiveActionId === "iecSetDir" ? "Setting…" : "Set Dir"}
-                    </Button>
+                    {telnetActions.map((action) => (
+                      <Button
+                        key={action.actionId}
+                        variant="outline"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        data-testid={action.testId}
+                        disabled={!isConnected || machineTaskBusy || telnetBusy}
+                        onClick={() => void onTelnetAction?.(action.actionId)}
+                      >
+                        {telnetActiveActionId === action.actionId ? action.loadingLabel : action.label}
+                      </Button>
+                    ))}
                   </div>
                 ) : undefined
               }

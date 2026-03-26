@@ -199,6 +199,7 @@ describe("PrinterManager – telnet controls", () => {
     render(<PrinterManager {...defaultProps} telnetAvailable={false} />);
     expect(screen.queryByTestId("home-printer-flush")).not.toBeInTheDocument();
     expect(screen.queryByTestId("home-printer-telnet-reset")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("home-printer-turn-on")).not.toBeInTheDocument();
   });
 
   it("hides telnet buttons when telnetAvailable but no telnet handler is provided", () => {
@@ -213,15 +214,17 @@ describe("PrinterManager – telnet controls", () => {
     expect(screen.getByTestId("home-printer-telnet-reset")).toBeInTheDocument();
   });
 
-  it("hides telnet buttons when printer is disabled", () => {
+  it("shows Turn On when printer is disabled", () => {
     resolveConfigValueSpy.mockImplementation(
       (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
         if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";
         return _fallback;
       },
     );
-    render(<PrinterManager {...defaultProps} telnetAvailable={true} />);
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
     expect(screen.queryByTestId("home-printer-flush")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("home-printer-telnet-reset")).not.toBeInTheDocument();
+    expect(screen.getByTestId("home-printer-turn-on")).toBeInTheDocument();
   });
 
   it("calls onTelnetAction with printerFlush when Flush is clicked", () => {
@@ -236,6 +239,19 @@ describe("PrinterManager – telnet controls", () => {
     render(<PrinterManager {...defaultProps} telnetAvailable={true} onTelnetAction={onTelnetAction} />);
     fireEvent.click(screen.getByTestId("home-printer-telnet-reset"));
     expect(onTelnetAction).toHaveBeenCalledWith("printerReset");
+  });
+
+  it("calls onTelnetAction with printerTurnOn when Turn On is clicked", () => {
+    resolveConfigValueSpy.mockImplementation(
+      (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
+        if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";
+        return _fallback;
+      },
+    );
+    const onTelnetAction = vi.fn().mockResolvedValue(undefined);
+    render(<PrinterManager {...defaultProps} telnetAvailable={true} onTelnetAction={onTelnetAction} />);
+    fireEvent.click(screen.getByTestId("home-printer-turn-on"));
+    expect(onTelnetAction).toHaveBeenCalledWith("printerTurnOn");
   });
 
   it("disables telnet buttons when telnetBusy", () => {
@@ -260,5 +276,23 @@ describe("PrinterManager – telnet controls", () => {
       />,
     );
     expect(screen.getByTestId("home-printer-flush")).toHaveTextContent("Flushing…");
+  });
+
+  it("shows Turn On loading text for active disabled-printer telnet action", () => {
+    resolveConfigValueSpy.mockImplementation(
+      (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
+        if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";
+        return _fallback;
+      },
+    );
+    render(
+      <PrinterManager
+        {...defaultProps}
+        telnetAvailable={true}
+        telnetActiveActionId="printerTurnOn"
+        onTelnetAction={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("home-printer-turn-on")).toHaveTextContent("Turning on…");
   });
 });

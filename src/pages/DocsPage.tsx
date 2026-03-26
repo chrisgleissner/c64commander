@@ -56,16 +56,27 @@ const docSections: DocSection[] = [
     icon: Home,
     content: (
       <div className="space-y-3 text-sm">
-        <p>Home is the operational dashboard: system info, machine controls, and high-value configuration shortcuts.</p>
+        <p>
+          Home is the operational dashboard: system info, machine controls, Telnet-backed quick actions, and high-value
+          configuration shortcuts.
+        </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li>
-            <strong>Reset / Reboot</strong> control the {SOURCE_LABELS.c64u} CPU and system state.
+            <strong>Reset / Reboot / Power Cycle</strong> control the {SOURCE_LABELS.c64u} CPU and system state.
           </li>
           <li>
             <strong>Menu</strong> toggles the Ultimate menu (same as the hardware button).
           </li>
           <li>
             <strong>Pause / Resume</strong> stops or restarts the CPU via DMA.
+          </li>
+          <li>
+            <strong>Save RAM / Load RAM</strong> capture or restore memory snapshots, while the overflow menu exposes
+            additional Telnet actions such as rebooting without clearing RAM and saving REU memory.
+          </li>
+          <li>
+            Drive, Soft IEC, and printer cards surface context-aware Telnet shortcuts such as reset, turn on, set dir,
+            and flush/eject when those actions are available on the connected device.
           </li>
           <li>
             <strong>Power Off</strong> shuts down the machine.
@@ -223,7 +234,8 @@ const docSections: DocSection[] = [
           </li>
           <li>
             <strong>Health Check Detail</strong> shows probes in this order: REST, FTP, CONFIG, RASTER, JIFFY, followed
-            by latency percentiles and the overall result.
+            by latency percentiles and the overall result. Telnet activity is tracked in the live overlay and problem
+            roll-up even though the explicit probe sequence remains REST, FTP, CONFIG, RASTER, and JIFFY.
           </li>
           <li>
             <strong>Expanded activity rows</strong> reveal the full payload for Problems, Actions, Logs, and Traces
@@ -234,11 +246,11 @@ const docSections: DocSection[] = [
             place.
           </li>
           <li>
-            <strong>Actions</strong> summarizes user operations with REST and FTP targets, commands, outcomes, and
-            latency hints in the collapsed row.
+            <strong>Actions</strong> summarizes user operations with REST, FTP, and Telnet targets, commands, outcomes,
+            and latency hints in the collapsed row.
           </li>
           <li>
-            <strong>Traces</strong> lists individual REST/FTP requests with timing and status details.
+            <strong>Traces</strong> lists individual REST, FTP, and Telnet operations with timing and status details.
           </li>
           <li>
             <strong>Logs</strong> captures app logs and device communication events.
@@ -248,7 +260,8 @@ const docSections: DocSection[] = [
           </li>
           <li>
             <strong>Diagnostics tools</strong> in the overlay expose Config Drift, Latency, Health History, REST Heat
-            Map, FTP Heat Map, and Config Heat Map without hidden controls.
+            Map, FTP Heat Map, and Config Heat Map without hidden controls, while contributor filters now include Telnet
+            alongside App, REST, and FTP.
           </li>
         </ul>
         <p className="text-muted-foreground">

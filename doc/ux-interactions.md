@@ -124,13 +124,18 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ### 3.1 Quick Actions
 
-| CTA             | Label       | Purpose          | Importance | Test Coverage | Test File                     | Notes                         |
-| --------------- | ----------- | ---------------- | ---------- | ------------- | ----------------------------- | ----------------------------- |
-| QuickActionCard | "Reset"     | Hard reset C64   | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
-| QuickActionCard | "Menu"      | Toggle C64U menu | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
-| QuickActionCard | "Pause"     | Pause emulation  | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
-| QuickActionCard | "Resume"    | Resume emulation | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
-| QuickActionCard | "Power Off" | Power down C64   | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control - destructive |
+| CTA             | Label               | Purpose                                | Importance | Test Coverage | Test File                                                 | Notes                               |
+| --------------- | ------------------- | -------------------------------------- | ---------- | ------------- | --------------------------------------------------------- | ----------------------------------- |
+| QuickActionCard | "Reset"             | Hard reset C64                         | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
+| QuickActionCard | "Reboot"            | Reboot and clear RAM via Telnet        | **HIGH**   | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Device-aware Telnet action          |
+| QuickActionCard | "Pause" / "Resume"  | Pause or resume emulation              | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
+| QuickActionCard | "Menu"              | Toggle C64U menu                       | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
+| QuickActionCard | "Save RAM"          | Open RAM snapshot export flow          | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Folder-backed export                |
+| QuickActionCard | "Load RAM"          | Open RAM snapshot restore flow         | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Snapshot manager / confirmation     |
+| QuickActionCard | "Power Cycle"       | Telnet power cycle                     | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Disabled when Telnet is unavailable |
+| QuickActionCard | "Power Off"         | Power down C64                         | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control - destructive       |
+| Overflow action | "Reboot (Keep RAM)" | Reboot without clearing RAM via Telnet | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Quick Actions overflow menu         |
+| Overflow action | "Save REU"          | Save REU memory via Telnet             | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Quick Actions overflow menu         |
 
 ### 3.2 Configuration Management
 
@@ -182,13 +187,14 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ### 4.3 Diagnostics
 
-| CTA    | Label            | Purpose                       | Importance | Test Coverage | Test File                       | Notes            |
-| ------ | ---------------- | ----------------------------- | ---------- | ------------- | ------------------------------- | ---------------- |
-| Button | "Diagnostics"    | Open diagnostics overlay      | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:41  | Debug tool       |
-| Button | "Clear All"      | Clear all diagnostics data    | **MEDIUM** | ✅ FULL       | settingsDiagnostics.spec.ts:133 | Maintenance      |
-| Button | "Share All"      | Share all diagnostics as ZIP  | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts  | Support tool     |
-| Input  | "Filter entries" | Filter active diagnostics tab | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts  | Scoped filtering |
-| Button | "Share"          | Share active tab ZIP export   | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts  | Support tool     |
+| CTA    | Label                       | Purpose                                       | Importance | Test Coverage | Test File                                                    | Notes                         |
+| ------ | --------------------------- | --------------------------------------------- | ---------- | ------------- | ------------------------------------------------------------ | ----------------------------- |
+| Button | "Diagnostics"               | Open diagnostics overlay                      | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:41                               | Debug tool                    |
+| Button | "Clear All"                 | Clear all diagnostics data                    | **MEDIUM** | ✅ FULL       | settingsDiagnostics.spec.ts:133                              | Maintenance                   |
+| Button | "Share All"                 | Share all diagnostics as ZIP                  | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Support tool                  |
+| Input  | "Filter entries"            | Filter active diagnostics tab                 | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Scoped filtering              |
+| Button | Contributor filter "TELNET" | Focus diagnostics on Telnet-attributed issues | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx | Available beside App/REST/FTP |
+| Button | "Share"                     | Share active tab ZIP export                   | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Support tool                  |
 
 ### 4.4 Playback Settings
 

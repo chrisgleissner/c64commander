@@ -25,6 +25,15 @@ import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
+const buildPrinterTelnetActions = (enabled: boolean) => {
+  return enabled
+    ? [
+        { actionId: "printerFlush", label: "Flush/Eject", loadingLabel: "Flushing…", testId: "home-printer-flush" },
+        { actionId: "printerReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-printer-telnet-reset" },
+      ]
+    : [{ actionId: "printerTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-printer-turn-on" }];
+};
+
 interface PrinterManagerProps {
   isConnected: boolean;
   machineTaskBusy: boolean;
@@ -61,6 +70,8 @@ export function PrinterManager({
   );
   const printerEnabled = printerEnabledValue.trim().toLowerCase() === "enabled";
   const showTelnetControls = telnetAvailable && printerEnabled && typeof onTelnetAction === "function";
+  const printerTelnetActions =
+    telnetAvailable && typeof onTelnetAction === "function" ? buildPrinterTelnetActions(printerEnabled) : [];
 
   const printerBusValue = Number(
     resolveConfigValue(
@@ -226,28 +237,21 @@ export function PrinterManager({
                 </div>
               ))}
           </div>
-          {showTelnetControls && (
+          {printerTelnetActions.length > 0 && (
             <div className="flex items-center gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                data-testid="home-printer-flush"
-                disabled={!isConnected || machineTaskBusy || telnetBusy}
-                onClick={() => void onTelnetAction("printerFlush")}
-              >
-                {telnetActiveActionId === "printerFlush" ? "Flushing…" : "Flush"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                data-testid="home-printer-telnet-reset"
-                disabled={!isConnected || machineTaskBusy || telnetBusy}
-                onClick={() => void onTelnetAction("printerReset")}
-              >
-                {telnetActiveActionId === "printerReset" ? "Resetting…" : "Reset"}
-              </Button>
+              {printerTelnetActions.map((action) => (
+                <Button
+                  key={action.actionId}
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  data-testid={action.testId}
+                  disabled={!isConnected || machineTaskBusy || telnetBusy}
+                  onClick={() => void onTelnetAction?.(action.actionId)}
+                >
+                  {telnetActiveActionId === action.actionId ? action.loadingLabel : action.label}
+                </Button>
+              ))}
             </div>
           )}
         </div>

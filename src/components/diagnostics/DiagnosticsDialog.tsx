@@ -146,15 +146,17 @@ const matchesSeverity = (filter: SeverityFilter, severity: DiagnosticsSeverity) 
 const getTraceContributor = (entry: TraceEvent): ContributorKey | null => {
   if (entry.type === "rest-request" || entry.type === "rest-response") return "REST";
   if (entry.type === "ftp-operation") return "FTP";
+  if (entry.type === "telnet-operation") return "TELNET";
   if (entry.type === "error") return "App";
   return null;
 };
 
 const getActionContributor = (summary: ActionSummary): ContributorKey | null => {
   if (!Array.isArray(summary.effects) || summary.effects.length === 0) return null;
-  if (summary.effects.some((effect) => effect.type === "ERROR")) return "App";
+  if (summary.effects.some((effect) => effect.type === "TELNET")) return "TELNET";
   if (summary.effects.some((effect) => effect.type === "REST")) return "REST";
   if (summary.effects.some((effect) => effect.type === "FTP")) return "FTP";
+  if (summary.effects.some((effect) => effect.type === "ERROR")) return "App";
   return null;
 };
 
@@ -165,6 +167,11 @@ const isTraceProblem = (entry: TraceEvent) => {
     return (status !== null && status >= 400) || error.length > 0;
   }
   if (entry.type === "ftp-operation") {
+    const result = typeof entry.data.result === "string" ? entry.data.result : "";
+    const error = typeof entry.data.error === "string" ? entry.data.error.trim() : "";
+    return result === "failure" || error.length > 0;
+  }
+  if (entry.type === "telnet-operation") {
     const result = typeof entry.data.result === "string" ? entry.data.result : "";
     const error = typeof entry.data.error === "string" ? entry.data.error.trim() : "";
     return result === "failure" || error.length > 0;
@@ -183,16 +190,21 @@ const getProblemTitle = (entry: TraceEvent) => {
     const path = typeof entry.data.path === "string" ? entry.data.path : "/";
     return `${operation} ${path}`.trim();
   }
+  if (entry.type === "telnet-operation") {
+    return typeof entry.data.actionLabel === "string" ? entry.data.actionLabel : "Telnet action";
+  }
   return "Problem";
 };
 
 const summarizeAction = (summary: ActionSummary) => {
   const restCount = summary.effects?.filter((effect) => effect.type === "REST").length ?? 0;
   const ftpCount = summary.effects?.filter((effect) => effect.type === "FTP").length ?? 0;
+  const telnetCount = summary.effects?.filter((effect) => effect.type === "TELNET").length ?? 0;
   const errCount = summary.effects?.filter((effect) => effect.type === "ERROR").length ?? 0;
   const parts = [] as string[];
   if (restCount > 0) parts.push(`REST ${restCount}`);
   if (ftpCount > 0) parts.push(`FTP ${ftpCount}`);
+  if (telnetCount > 0) parts.push(`TELNET ${telnetCount}`);
   if (errCount > 0) parts.push(`ERR ${errCount}`);
   return parts.join(" · ") || summary.outcome;
 };
@@ -211,12 +223,20 @@ const formatNetworkHost = (hostname: string | null | undefined, port: number | n
 };
 
 const getActionPrimaryEffect = (summary: ActionSummary) => {
-  return summary.effects?.find((effect) => effect.type === "REST" || effect.type === "FTP") ?? null;
+  return (
+    summary.effects?.find((effect) => effect.type === "TELNET" || effect.type === "REST" || effect.type === "FTP") ??
+    null
+  );
 };
 
 const buildActionTitle = (summary: ActionSummary) => {
   const primary = getActionPrimaryEffect(summary);
   if (!primary) return summary.actionName;
+  if (primary.type === "TELNET") {
+    return primary.menuPath
+      ? `${primary.actionLabel} · ${primary.menuPath[0]} → ${primary.menuPath[1]}`
+      : primary.actionLabel;
+  }
   if (primary.type === "REST") {
     const host = formatNetworkHost(primary.hostname, primary.port);
     const path = primary.normalizedPath ?? `${primary.path}${primary.query ?? ""}`;
@@ -245,6 +265,11 @@ const buildActionDetail = (summary: ActionSummary) => {
     const duration = formatActionDuration(primary.durationMs);
     if (duration) parts.push(duration);
   } else if (primary?.type === "FTP") {
+    if (primary.result) parts.push(primary.result);
+    if (primary.error) parts.push(primary.error);
+    const duration = formatActionDuration(primary.durationMs);
+    if (duration) parts.push(duration);
+  } else if (primary?.type === "TELNET") {
     if (primary.result) parts.push(primary.result);
     if (primary.error) parts.push(primary.error);
     const duration = formatActionDuration(primary.durationMs);
@@ -306,6 +331,7 @@ const getLastCheckTimestamp = (
   }
   if (healthState.lastRestActivity) return healthState.lastRestActivity.timestampMs;
   if (healthState.lastFtpActivity) return healthState.lastFtpActivity.timestampMs;
+  if (healthState.lastTelnetActivity) return healthState.lastTelnetActivity.timestampMs;
   return null;
 };
 
@@ -608,7 +634,7 @@ const FilterEditorSurface = ({
               <section className="space-y-1.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {(["All", "App", "REST", "FTP"] as const).map((option) => (
+                  {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
                     <FilterToggleChip
                       key={option}
                       label={option}
@@ -1432,7 +1458,7 @@ export function DiagnosticsDialog({
                 Activity
               </p>
               <p className="mb-2 text-[10px] text-muted-foreground" data-testid="activity-kinds-line">
-                Problems, actions, logs, and traces
+                Problems, actions, logs, and traces across App, REST, FTP, and Telnet
               </p>
               <div className="max-h-72 space-y-1.5 overflow-y-auto" data-testid="evidence-list">
                 {displayEntries.map((entry) => (

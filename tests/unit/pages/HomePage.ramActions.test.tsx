@@ -15,6 +15,7 @@ const {
   toastSpy,
   reportUserErrorSpy,
   clearRamAndRebootSpy,
+  executeTelnetActionSpy,
   selectRamDumpFolderSpy,
   saveRamDumpFolderConfigSpy,
   createSnapshotSpy,
@@ -27,6 +28,7 @@ const {
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
   clearRamAndRebootSpy: vi.fn(),
+  executeTelnetActionSpy: vi.fn(),
   selectRamDumpFolderSpy: vi.fn(),
   saveRamDumpFolderConfigSpy: vi.fn(),
   createSnapshotSpy: vi.fn(),
@@ -223,7 +225,7 @@ vi.mock("@/hooks/useTelnetActions", () => ({
   useTelnetActions: () => ({
     isBusy: false,
     activeActionId: null,
-    executeAction: vi.fn(),
+    executeAction: executeTelnetActionSpy,
     isAvailable: true,
   }),
 }));
@@ -237,6 +239,7 @@ describe("HomePage RAM actions", () => {
     (globalThis as any).__GIT_SHA__ = "deadbeef";
     (globalThis as any).__BUILD_TIME__ = "";
     clearRamAndRebootSpy.mockResolvedValue(undefined);
+    executeTelnetActionSpy.mockResolvedValue(undefined);
     createSnapshotSpy.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
     getCurrentPlaybackSnapshotLabelSpy.mockReturnValue(undefined);
     loadMemoryRangesSpy.mockResolvedValue(undefined);
@@ -245,12 +248,11 @@ describe("HomePage RAM actions", () => {
   it("runs reboot clear memory action", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /reboot \(Clear RAM\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^reboot$/i }));
 
-    await waitFor(() => expect(clearRamAndRebootSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"));
     expect(toastSpy).toHaveBeenCalledWith({
       title: "Machine rebooting",
-      description: "RAM cleared (excluding I/O region).",
     });
   }, 15000);
 

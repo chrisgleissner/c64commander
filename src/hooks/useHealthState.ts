@@ -19,8 +19,10 @@ import {
   deriveFtpContributorHealth,
   deriveLastFtpActivity,
   deriveLastRestActivity,
+  deriveLastTelnetActivity,
   derivePrimaryProblem,
   deriveRestContributorHealth,
+  deriveTelnetContributorHealth,
   rollUpHealth,
   type OverallHealthState,
 } from "@/lib/diagnostics/healthModel";
@@ -61,12 +63,14 @@ export function useHealthState(): OverallHealthState {
       ).length;
       const restFailures = latestHealthCheck.probes.REST.outcome === "Fail" ? 1 : 0;
       const ftpFailures = latestHealthCheck.probes.FTP.outcome === "Fail" ? 1 : 0;
+      const telnetFailures = latestHealthCheck.probes.TELNET.outcome === "Fail" ? 1 : 0;
       const contributors = {
         App: contributorHealthFromProbe(appFailures > 0 ? "Fail" : latestHealthCheck.probes.JIFFY.outcome, appFailures),
         REST: contributorHealthFromProbe(latestHealthCheck.probes.REST.outcome, restFailures),
         FTP: contributorHealthFromProbe(latestHealthCheck.probes.FTP.outcome, ftpFailures),
+        TELNET: contributorHealthFromProbe(latestHealthCheck.probes.TELNET.outcome, telnetFailures),
       } as const;
-      const problemCount = appFailures + restFailures + ftpFailures;
+      const problemCount = appFailures + restFailures + ftpFailures + telnetFailures;
       const firstFailedProbe = Object.values(latestHealthCheck.probes).find((probe) => probe.outcome === "Fail");
 
       return {
@@ -78,12 +82,19 @@ export function useHealthState(): OverallHealthState {
         contributors,
         lastRestActivity: deriveLastRestActivity(traceEvents),
         lastFtpActivity: deriveLastFtpActivity(traceEvents),
+        lastTelnetActivity: deriveLastTelnetActivity(traceEvents),
         primaryProblem: firstFailedProbe
           ? {
               id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
               title: `${firstFailedProbe.probe} health check failed`,
               contributor:
-                firstFailedProbe.probe === "REST" ? "REST" : firstFailedProbe.probe === "FTP" ? "FTP" : "App",
+                firstFailedProbe.probe === "REST"
+                  ? "REST"
+                  : firstFailedProbe.probe === "FTP"
+                    ? "FTP"
+                    : firstFailedProbe.probe === "TELNET"
+                      ? "TELNET"
+                      : "App",
               timestampMs: Date.parse(latestHealthCheck.endTimestamp),
               impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
               causeHint: firstFailedProbe.reason,
@@ -103,6 +114,7 @@ export function useHealthState(): OverallHealthState {
       App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
       REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
       FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      TELNET: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
     } as const;
 
     if (!hasFirstRestSuccess) {
@@ -115,6 +127,7 @@ export function useHealthState(): OverallHealthState {
         contributors: idleContributors,
         lastRestActivity: deriveLastRestActivity(traceEvents),
         lastFtpActivity: deriveLastFtpActivity(traceEvents),
+        lastTelnetActivity: deriveLastTelnetActivity(traceEvents),
         primaryProblem: null,
       };
     }
@@ -123,11 +136,15 @@ export function useHealthState(): OverallHealthState {
       App: deriveAppContributorHealth(traceEvents),
       REST: deriveRestContributorHealth(traceEvents),
       FTP: deriveFtpContributorHealth(traceEvents),
+      TELNET: deriveTelnetContributorHealth(traceEvents),
     } as const;
 
     const state = rollUpHealth(contributors, connectivity);
     const totalProblems =
-      contributors.App.problemCount + contributors.REST.problemCount + contributors.FTP.problemCount;
+      contributors.App.problemCount +
+      contributors.REST.problemCount +
+      contributors.FTP.problemCount +
+      contributors.TELNET.problemCount;
 
     return {
       state,
@@ -138,6 +155,7 @@ export function useHealthState(): OverallHealthState {
       contributors,
       lastRestActivity: deriveLastRestActivity(traceEvents),
       lastFtpActivity: deriveLastFtpActivity(traceEvents),
+      lastTelnetActivity: deriveLastTelnetActivity(traceEvents),
       primaryProblem: derivePrimaryProblem(traceEvents, contributors),
     };
   }, [connectionSnapshot.state, deviceInfo?.product, healthCheckState.latestResult, traceEvents]);

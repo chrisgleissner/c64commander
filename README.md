@@ -12,11 +12,11 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 ## Features
 
 - **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
-- **Dashboard**: Machine controls, quick config, drive status, SID mixer, and streams on a single page.
+- **Dashboard**: Machine controls, Telnet-backed quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
 - **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
 - **Playlists**: Build playlists from local files, C64U storage, CommoServe search results, or the High Voltage SID Collection (HVSC). Autoplay, shuffle, and subsong selection.
 - **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
-- **Diagnostics**: Inspect activity logs, traces, latency, and connection health.
+- **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
 
 ## Quick Start
 
@@ -76,7 +76,7 @@ In C64 Commander:
 
 ### Home
 
-Operational dashboard: machine controls, quick config, light effects, drives, printer, SID mixer, streams, and configuration snapshots.
+Operational dashboard: machine controls, Telnet-backed quick actions, light effects, drives, printer, SID mixer, streams, and configuration snapshots.
 
 <table>
   <tr>
@@ -185,7 +185,7 @@ Built-in guides for setup, workflows, and day-to-day usage.
 
 ### Diagnostics
 
-Accessible via the C64U connectivity badge in the top-right corner. Provides health checks, activity logs, trace inspection, filter editor, and latency analysis.
+Accessible via the C64U connectivity badge in the top-right corner. Provides health checks, activity logs, trace inspection, filter editor, and latency analysis across App, REST, FTP, and Telnet contributors.
 
 <table>
   <tr>

@@ -11,7 +11,22 @@ import { motion } from "framer-motion";
 import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
+
+type MachineOverflowAction = {
+  id: string;
+  label: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+};
 
 export interface MachineControlsProps {
   status: { isConnected: boolean; isConnecting: boolean };
@@ -32,6 +47,7 @@ export interface MachineControlsProps {
   onRebootClearMemory: () => void;
   onPowerOff: () => void;
   onPowerCycle?: () => void;
+  overflowActions?: MachineOverflowAction[];
   onAction: (fn: () => Promise<void>, label: string) => void;
   telnetAvailable?: boolean;
   telnetBusy?: boolean;
@@ -53,6 +69,7 @@ export function MachineControls({
   onRebootClearMemory,
   onPowerOff,
   onPowerCycle,
+  overflowActions = [],
   onAction,
   telnetAvailable = false,
   telnetBusy = false,
@@ -60,7 +77,8 @@ export function MachineControls({
   footer,
 }: MachineControlsProps) {
   const effectiveBusy = machineTaskBusy || telnetBusy;
-  const showPowerCycle = telnetAvailable && typeof onPowerCycle === "function";
+  const canRunPowerCycle = telnetAvailable && typeof onPowerCycle === "function";
+  const hasOverflowActions = overflowActions.length > 0;
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -69,12 +87,43 @@ export function MachineControls({
       className="space-y-2"
       data-section-label="Quick Actions"
     >
-      <SectionHeader title="Quick Actions">
+      <SectionHeader
+        title="Quick Actions"
+        actions={
+          hasOverflowActions ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  data-testid="home-machine-overflow-trigger"
+                >
+                  ...
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" data-testid="home-machine-overflow-menu">
+                {overflowActions.map((action) => (
+                  <DropdownMenuItem
+                    key={action.id}
+                    disabled={action.disabled || action.loading}
+                    onSelect={() => action.onSelect()}
+                    data-testid={`home-machine-overflow-${action.id}`}
+                  >
+                    {action.loading ? `${action.label}…` : action.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null
+        }
+      >
         {effectiveBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
       </SectionHeader>
       <div className="space-y-2">
         <ProfileActionGrid
-          compactColumns={2}
+          compactColumns={4}
           mediumColumns={4}
           expandedColumns={4}
           cardDensity="compact"
@@ -99,27 +148,10 @@ export function MachineControls({
             label="Reboot"
             variant="danger"
             className="border-destructive/40 bg-destructive/[0.04]"
-            onClick={() =>
-              onAction(async () => {
-                await controls.reboot.mutateAsync();
-                setMachineExecutionState("running");
-              }, "Machine rebooting...")
-            }
-            disabled={!status.isConnected || effectiveBusy}
-            loading={controls.reboot.isPending}
+            onClick={() => void onRebootClearMemory()}
+            disabled={!status.isConnected || effectiveBusy || !telnetAvailable}
+            loading={telnetActiveActionId === "rebootClearMemory"}
           />
-          {showPowerCycle && (
-            <QuickActionCard
-              icon={RefreshCw}
-              label="Power Cycle"
-              variant="danger"
-              className="border-destructive/40 bg-destructive/[0.04]"
-              dataTestId="home-power-cycle"
-              onClick={() => void onPowerCycle()}
-              disabled={!status.isConnected || effectiveBusy}
-              loading={telnetActiveActionId === "powerCycle"}
-            />
-          )}
           <QuickActionCard
             icon={machineExecutionState === "paused" ? Play : Pause}
             label={machineExecutionState === "paused" ? "Resume" : "Pause"}
@@ -151,16 +183,16 @@ export function MachineControls({
             disabled={!status.isConnected || effectiveBusy}
             loading={machineTaskId === "load-ram"}
           />
-          {telnetAvailable && (
-            <QuickActionCard
-              icon={RotateCcw}
-              label="Reboot (Clear RAM)"
-              dataTestId="home-reboot-clear-ram"
-              onClick={() => void onRebootClearMemory()}
-              disabled={!status.isConnected || effectiveBusy}
-              loading={machineTaskId === "reboot-clear-memory"}
-            />
-          )}
+          <QuickActionCard
+            icon={RefreshCw}
+            label="Power Cycle"
+            variant="danger"
+            className="border-destructive/40 bg-destructive/[0.04]"
+            dataTestId="home-power-cycle"
+            onClick={() => void onPowerCycle?.()}
+            disabled={!status.isConnected || effectiveBusy || !canRunPowerCycle}
+            loading={telnetActiveActionId === "powerCycle"}
+          />
           <QuickActionCard
             icon={PowerOff}
             label="Power Off"

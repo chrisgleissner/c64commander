@@ -10,8 +10,26 @@ import { renderHook, act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isTelnetAvailable, useTelnetActions } from "@/hooks/useTelnetActions";
 
-const { isNativePlatformMock } = vi.hoisted(() => ({
+const {
+  isNativePlatformMock,
+  statusRef,
+  recordTelnetOperationSpy,
+  incrementTelnetInFlightSpy,
+  decrementTelnetInFlightSpy,
+  runWithActionTraceSpy,
+} = vi.hoisted(() => ({
   isNativePlatformMock: vi.fn(() => false),
+  statusRef: {
+    current: {
+      isConnected: true,
+      isDemo: false,
+      deviceInfo: { product: "Ultimate 64 Elite" },
+    },
+  },
+  recordTelnetOperationSpy: vi.fn(),
+  incrementTelnetInFlightSpy: vi.fn(),
+  decrementTelnetInFlightSpy: vi.fn(),
+  runWithActionTraceSpy: vi.fn(async (_action: unknown, handler: () => Promise<void>) => await handler()),
 }));
 
 vi.mock("@/lib/native/platform", () => ({
@@ -43,6 +61,12 @@ vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
   withTelnetInteraction: (_meta: unknown, handler: () => Promise<void>) => handler(),
 }));
 
+vi.mock("@/hooks/useC64Connection", () => ({
+  useC64Connection: () => ({
+    status: statusRef.current,
+  }),
+}));
+
 vi.mock("@/lib/c64api", () => ({
   resolveDeviceHostFromStorage: () => "c64u",
 }));
@@ -59,15 +83,37 @@ vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
+vi.mock("@/lib/tracing/actionTrace", () => ({
+  createActionContext: vi.fn((name: string) => ({ id: `action:${name}`, name })),
+  runWithActionTrace: runWithActionTraceSpy,
+}));
+
+vi.mock("@/lib/tracing/traceSession", () => ({
+  recordTelnetOperation: recordTelnetOperationSpy,
+}));
+
+vi.mock("@/lib/diagnostics/diagnosticsActivity", () => ({
+  incrementTelnetInFlight: incrementTelnetInFlightSpy,
+  decrementTelnetInFlight: decrementTelnetInFlightSpy,
+}));
+
 describe("isTelnetAvailable", () => {
   it("returns false when not on native platform", () => {
-    isNativePlatformMock.mockReturnValue(false);
-    expect(isTelnetAvailable()).toBe(false);
+    expect(isTelnetAvailable({ nativePlatform: false, isConnected: true, isDemo: false, product: "Ultimate 64" })).toBe(
+      false,
+    );
   });
 
-  it("returns true when on native platform", () => {
-    isNativePlatformMock.mockReturnValue(true);
-    expect(isTelnetAvailable()).toBe(true);
+  it("returns true for supported connected native devices", () => {
+    expect(isTelnetAvailable({ nativePlatform: true, isConnected: true, isDemo: false, product: "Ultimate 64" })).toBe(
+      true,
+    );
+  });
+
+  it("returns false for unsupported products even on native", () => {
+    expect(
+      isTelnetAvailable({ nativePlatform: true, isConnected: true, isDemo: false, product: "1541 Ultimate II+" }),
+    ).toBe(false);
   });
 });
 
@@ -75,6 +121,11 @@ describe("useTelnetActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isNativePlatformMock.mockReturnValue(true);
+    statusRef.current = {
+      isConnected: true,
+      isDemo: false,
+      deviceInfo: { product: "Ultimate 64 Elite" },
+    };
     mockExecute.mockResolvedValue(undefined);
     mockConnect.mockResolvedValue(undefined);
     mockDisconnect.mockResolvedValue(undefined);
@@ -93,6 +144,16 @@ describe("useTelnetActions", () => {
     expect(result.current.isAvailable).toBe(false);
   });
 
+  it("returns isAvailable=false when the connected product is not Telnet-capable", () => {
+    statusRef.current = {
+      isConnected: true,
+      isDemo: false,
+      deviceInfo: { product: "1541 Ultimate II+" },
+    };
+    const { result } = renderHook(() => useTelnetActions());
+    expect(result.current.isAvailable).toBe(false);
+  });
+
   it("executes a known telnet action successfully", async () => {
     const { result } = renderHook(() => useTelnetActions());
 
@@ -103,6 +164,17 @@ describe("useTelnetActions", () => {
     expect(mockConnect).toHaveBeenCalledWith("c64u", 23, undefined);
     expect(mockExecute).toHaveBeenCalledWith("powerCycle");
     expect(mockDisconnect).toHaveBeenCalled();
+    expect(recordTelnetOperationSpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        actionId: "powerCycle",
+        actionLabel: "Power Cycle",
+        menuPath: ["Power & Reset", "Power Cycle"],
+        result: "success",
+      }),
+    );
+    expect(incrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
+    expect(decrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
     expect(result.current.isBusy).toBe(false);
     expect(result.current.activeActionId).toBeNull();
   });
@@ -132,6 +204,14 @@ describe("useTelnetActions", () => {
 
     expect(caught?.message).toBe("action failed");
     expect(mockDisconnect).toHaveBeenCalled();
+    expect(recordTelnetOperationSpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        actionId: "powerCycle",
+        result: "failure",
+        error: expect.any(Error),
+      }),
+    );
     expect(result.current.isBusy).toBe(false);
   });
 

@@ -1,62 +1,26 @@
-# Archive Client Simplification Worklog
+# Telnet Convergence Worklog
 
-## 2026-03-26T00:00:00Z - Task classification and baseline scope
+## 2026-03-26T16:00:00Z - Task classification and implementation restart
 
-- Classified the work as DOC_PLUS_CODE because it changes executable archive code plus repository process artifacts and documentation.
-- Read the archive client, archive config, settings persistence, online archive hook, source navigation, item-selection UI, and related tests before editing.
-- Confirmed the current implementation still contains two archive client subclasses, backend-based config resolution, retired-source settings/UI, and source-specific tests/mocks.
+- Reclassified the work from the earlier audit state to `DOC_PLUS_CODE` with visible UI changes because this pass must modify runtime code, Home UI, Diagnostics, tests, docs, and screenshots.
+- Replaced the completed audit framing in `PLANS.md` with an implementation plan that matches the required convergence slices and mandatory validation.
+- Locked the execution rule that REST/FTP diagnostics behavior stays intact while Telnet becomes a first-class subsystem.
 
-## 2026-03-26T00:08:00Z - Full impact inventory
+## 2026-03-26T16:15:00Z - Required reading and impact map refreshed
 
-- Searched the repository for retired-source literals, archive backend usage, and archive client config types.
-- Verified the removal scope includes runtime code, test mocks, Settings page state, Play Files source groups, item-selection interstitial buttons, telnet documentation, and stale process artifacts in PLANS.md and WORKLOG.md.
-- Decision: remove the retired source completely rather than leaving dormant feature flags or compatibility branches, because the acceptance criteria require zero remaining references.
+- Re-read `doc/research/review-13/review-13.md`, the Telnet base spec, the integration spec, the action walkthrough, Addendum 1, `src/pages/DocsPage.tsx`, and `docs/diagnostics/index.md`.
+- Re-read the runtime/UI files that currently own the gaps: `src/lib/telnet/telnetTypes.ts`, `src/lib/telnet/telnetActionExecutor.ts`, `src/hooks/useTelnetActions.ts`, `src/pages/home/components/MachineControls.tsx`, `src/pages/home/components/DriveManager.tsx`, `src/pages/home/components/PrinterManager.tsx`, and `src/pages/home/hooks/useHomeActions.ts`.
+- Re-read the diagnostics and health surfaces that must converge: `src/lib/tracing/traceSession.ts`, `src/lib/tracing/types.ts`, `src/lib/diagnostics/actionSummaries.ts`, `src/lib/diagnostics/healthModel.ts`, `src/lib/diagnostics/diagnosticsActivity.ts`, `src/hooks/useDiagnosticsActivity.ts`, `src/hooks/useHealthState.ts`, and `src/components/diagnostics/DiagnosticsDialog.tsx`.
 
-## 2026-03-26T00:16:00Z - Refactor plan locked
+## 2026-03-26T16:30:00Z - Confirmed root-cause implementation seams
 
-- Decided to keep one concrete client class, `CommoserveClient`, and move source identity into config fields (`id`, `name`, `baseUrl`, `headers`, `enabled`).
-- Decided to keep the current host/client-id/user-agent override UX, but translate those settings into the new config model before client construction so external behavior remains unchanged.
-- Decided to remove archive backend persistence entirely and simplify the UI to a single CommoServe enablement toggle plus override fields.
+- Confirmed the Telnet registry still omits the Developer submenu even though the mock fixture and spec already define those actions.
+- Confirmed `recordTelnetOperation()` exists but has no runtime call sites, leaving diagnostics summaries and health contributors unable to see Telnet work.
+- Confirmed Home still mixes REST reboot semantics with partial Telnet buttons, and there is no primary-versus-overflow action split to protect the 2x4 compact layout.
+- Confirmed the device-card model remains inconsistent: printer exposes two Telnet actions, Soft IEC exposes two, and physical drive cards expose none.
 
-## 2026-03-26T00:24:00Z - Implementation in progress
+## 2026-03-26T16:40:00Z - Test and docs baseline locked
 
-- Replaced the archived multi-backend plan with the current convergence plan in PLANS.md.
-- Began editing core archive types/config/client code, then the settings/UI/source-selection code, followed by tests and documentation.
-- Verification pending after implementation: lint, coverage, build, generated-asset refresh, and final repository-wide literal sweep.
-
-## 2026-03-26T03:00:00Z - Runtime convergence finished
-
-- Removed the retired archive source from `src/lib/archive/config.ts`, `src/lib/config/appSettings.ts`, `src/lib/config/settingsTransfer.ts`, `src/pages/PlayFilesPage.tsx`, `src/pages/SettingsPage.tsx`, `src/components/itemSelection/ItemSelectionDialog.tsx`, and the related source/playback/type helpers.
-- Confirmed the active runtime tree no longer contains retired-source literals under `src/`.
-- Kept the CommoServe source, host override, Client-Id override, and User-Agent override flow intact.
-
-## 2026-03-26T03:10:00Z - Regression suite alignment
-
-- Removed retired-source test branches from archive config, archive source adapter, file origin, settings, settings transfer, item-selection, and add-items handler tests.
-- Added extra add-items handler regression coverage for non-recursive directory imports, HVSC imports, selection lookup failures, no-files-found handling, and `LocalSourceListingError` reporting.
-- Focused unit validation passed for the touched archive/settings/item-selection suites.
-
-## 2026-03-26T03:20:00Z - Validation evidence and blocker
-
-- `npm run lint`: passed.
-- `npm run build`: passed.
-- Focused touched-file test run: 121 passed, 0 failed.
-- Repository-wide retired-source sweep across active source and tests: clean.
-- Last completed repository-wide coverage threshold check reported `Line coverage: 92.13%` and `Branch coverage: 90.93%`, which was below the required branch threshold before the final add-items branch tests landed.
-- Multiple subsequent full coverage reruns were terminated by the environment with exit code 143 before they could emit a fresh final threshold result, so final coverage proof remains blocked on an environment-stable rerun.
-
-## 2026-03-26T04:00:00Z - Coverage threshold met
-
-- Added targeted branch-coverage tests across DemoModeInterstitial (non-Error throw path), uiPreferences (localStorage-unavailable get/set for display profile), hostEdit (window-undefined SSR guard), TraceContextBridge (missing device info), and ResponsivePathText (whitespace/empty fallback).
-- Branch coverage confirmed at 91.01% (15075/16565), above the 91% threshold.
-- `npm run lint`: passed (0 errors).
-- `npm run build`: passed.
-- Settings screenshots regenerated; output unchanged (text change not visible at doc image resolution).
-
-## 2026-03-26T15:00:00Z - Icon standardization complete
-
-- Changed HVSC icon from Lucide `Music2` SVG to `♫` Unicode character rendered as `<span role="img">` in `src/components/FileOriginIcon.tsx`.
-- Removed unused `Music2` import; CommoServe keeps Lucide `Library` (stacked-records) icon unchanged.
-- Consolidated `tests/unit/components/FileOriginIcon.test.tsx`: removed duplicate first describe block, updated HVSC test to expect SPAN/♫, renamed CommoServe test, added custom label override tests for hvsc and commoserve. 7 canonical tests, all pass.
-- Fixed `openImportDialog` and `openViewAllIfPresent` in `playwright/screenshots.spec.ts`: changed `getActiveSlot(page).getByRole("dialog")` → `page.getByRole("dialog")` to correctly locate Radix UI portal-rendered dialogs.
-- `npm run lint`: 0 errors. `npm run test`: 4649 passed, 0 failed. `npm run build`: passed. All 20 screenshot tests passed.
+- Confirmed current unit coverage protects low-level Telnet execution and selected Home buttons but not the required registry parity, Telnet traces, Diagnostics Telnet contributors, Home ordering/overflow rules, or device-card convergence.
+- Confirmed docs still describe a REST-first Home and Diagnostics story and the screenshot inventory does not yet cover the required Telnet quick-action, overflow, or Diagnostics filter states.
+- Next implementation slice: patch the canonical Telnet action metadata and capability model first so tracing, diagnostics, and UI can share one source of truth.
