@@ -13,14 +13,14 @@ Subdirectories under `doc/` (e.g., `doc/c64/`, `doc/testing/`, `doc/diagnostics/
 
 ### Broken links / image references
 
-| File | Issue | Fix |
-|------|-------|-----|
-| `README.md` | Image `doc/img/app/diagnostics/activity/02-problems-only.png` did not exist; file was renamed to `07-problems-only.png` | Updated reference to `doc/img/app/diagnostics/activity/07-problems-only.png` |
+| File        | Issue                                                                                   | Fix                                                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `README.md` | Diagnostics activity screenshot reference pointed at an outdated problems-only filename | Updated reference to the current canonical problems-only screenshot under `doc/img/app/diagnostics/activity/07-problems-only.png` |
 
 ### Incorrect content
 
-| File | Issue | Fix |
-|------|-------|-----|
+| File                     | Issue                                                                                                                    | Fix                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
 | `doc/ux-interactions.md` | Developer mode activation listed as "Secret Tap (5x)" but source code (`src/pages/SettingsPage.tsx:465`) requires 7 taps | Changed to "Secret Tap (7x)" |
 
 ### README.md rewrite
