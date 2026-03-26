@@ -36,6 +36,7 @@ import {
 } from "./displayProfileViewports";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
+import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
 import {
   installFixedClock,
   installListPreviewLimit,
@@ -315,7 +316,7 @@ const openViewAllIfPresent = async (page: Page) => {
     return null;
   }
   await firstButton.click();
-  const dialog = page.getByRole("dialog");
+  const dialog = getActiveSlot(page).getByRole("dialog");
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -326,7 +327,7 @@ const openImportDialog = async (page: Page) => {
   await getActiveMain(page)
     .getByRole("button", { name: /Add items|Add more items/i })
     .click();
-  const dialog = page.getByRole("dialog");
+  const dialog = getActiveSlot(page).getByRole("dialog");
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -407,6 +408,7 @@ const captureScreenshot = async (
     borderPx?: number;
     borderColor?: { r: number; g: number; b: number; alpha?: number };
     writeWhenTrackedDuplicate?: boolean;
+    skipFuzzyHeadRestore?: boolean;
   },
 ) => {
   const filePath = screenshotPath(relativePath);
@@ -438,6 +440,13 @@ const captureScreenshot = async (
   const repoPath = screenshotRepoPath(relativePath);
   const catalog = await loadHeadScreenshotCatalog();
   const headFingerprint = catalog.pathFingerprints.get(repoPath);
+  const skipFuzzyHeadRestore = (options?.skipFuzzyHeadRestore ?? false) || shouldSkipFuzzyScreenshotPrune(repoPath);
+  const forceWriteScreenshot = shouldSkipFuzzyScreenshotPrune(repoPath);
+
+  if (forceWriteScreenshot) {
+    await fs.writeFile(filePath, screenshotBuffer);
+    return;
+  }
 
   if (headFingerprint !== undefined) {
     // File exists in HEAD: compare new screenshot against HEAD pixels.
@@ -447,7 +456,7 @@ const captureScreenshot = async (
       await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]).catch((err) =>
         console.warn(`[screenshots] Failed to restore HEAD version of ${relativePath}.`, err),
       );
-    } else if (await isFuzzyIdenticalToHead(repoPath, screenshotBuffer)) {
+    } else if (!skipFuzzyHeadRestore && (await isFuzzyIdenticalToHead(repoPath, screenshotBuffer))) {
       // Only trivial rendering noise (e.g. subpixel / font-AA jitter) - restore HEAD.
       await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]).catch((err) =>
         console.warn(`[screenshots] Failed to restore HEAD version of ${relativePath}.`, err),
@@ -786,6 +795,10 @@ test.describe("App screenshots", () => {
     await page.emulateMedia({
       colorScheme: "light",
       reducedMotion: "reduce",
+    });
+    await expect(getActiveHealthBadge(page)).toContainText("C64U");
+    await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png", {
+      locator: getActiveHealthBadge(page),
     });
   });
 
@@ -1280,52 +1293,42 @@ test.describe("App screenshots", () => {
       });
       await seedArchiveSearchMock(page);
       await page.goto("/play");
+      await waitForConnected(page);
+      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
       const dialog = await openImportDialog(page);
-      if (!dialog) {
-        return;
-      }
+      expect(dialog, "Add items dialog should open before capturing import screenshots").not.toBeNull();
       const interstitial = await waitForImportInterstitial(dialog);
-      if (!interstitial) {
-        await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png");
-        return;
-      }
-      await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png");
+      expect(interstitial, "Import source interstitial should be visible before capturing import screenshots").not.toBeNull();
+      await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png", { skipFuzzyHeadRestore: true });
 
       await interstitial.getByTestId("import-option-c64u").click();
       await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
-      await captureScreenshot(page, testInfo, "play/import/02-c64u-file-picker.png");
+      await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
+      await captureScreenshot(page, testInfo, "play/import/02-c64u-file-picker.png", { skipFuzzyHeadRestore: true });
 
       await dialog.getByRole("button", { name: "Cancel" }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
 
       const localDialog = await openImportDialog(page);
-      if (!localDialog) {
-        return;
-      }
+      expect(localDialog, "Add items dialog should reopen for the local import screenshot").not.toBeNull();
       const localInterstitial = await waitForImportInterstitial(localDialog);
-      if (!localInterstitial) {
-        await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png");
-        return;
-      }
+      expect(localInterstitial, "Import source interstitial should be visible before capturing local import").not.toBeNull();
       await localInterstitial.getByTestId("import-option-local").click();
       const input = page.locator('input[type="file"][webkitdirectory]').first();
       await expect(input).toBeAttached();
       await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
       await expect(localDialog.getByTestId("local-file-picker")).toBeVisible();
-      await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png");
+      await expect(localDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from Local Device");
+      await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png", { skipFuzzyHeadRestore: true });
 
       await localDialog.getByRole("button", { name: "Cancel" }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
 
       const archiveDialog = await openImportDialog(page);
-      if (!archiveDialog) {
-        return;
-      }
+      expect(archiveDialog, "Add items dialog should reopen for the CommoServe screenshot").not.toBeNull();
       const archiveInterstitial = await waitForImportInterstitial(archiveDialog);
-      if (!archiveInterstitial) {
-        return;
-      }
+      expect(archiveInterstitial, "Import source interstitial should be visible before capturing CommoServe import").not.toBeNull();
 
       await archiveInterstitial.getByTestId("import-option-commoserve").click();
       const archivePicker = archiveDialog.getByTestId("commoserve-picker");
@@ -1334,13 +1337,17 @@ test.describe("App screenshots", () => {
       await archivePicker.getByRole("combobox").nth(0).click();
       await page.getByRole("option", { name: "Apps" }).click();
       await expect(archivePicker.getByTestId("archive-query-preview")).toContainText(SCREENSHOT_ARCHIVE_QUERY);
-      await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png");
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png", { skipFuzzyHeadRestore: true });
 
       await archivePicker.getByTestId("archive-search-button").click();
       await expect(archivePicker.getByTestId("archive-result-row")).toHaveCount(2);
       await archivePicker.getByRole("checkbox", { name: /^Select Joyride$/ }).click();
       await expect(archiveDialog.getByTestId("add-items-selection-count")).toHaveText(/1 selected/i);
-      await captureScreenshot(page, testInfo, "play/import/05-commoserve-results-selected.png");
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await captureScreenshot(page, testInfo, "play/import/05-commoserve-results-selected.png", {
+        skipFuzzyHeadRestore: true,
+      });
     },
   );
 
@@ -1355,32 +1362,28 @@ test.describe("App screenshots", () => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/play");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
+        await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
         const dialog = await openImportDialog(page);
-        if (!dialog) {
-          continue;
-        }
+        expect(dialog, `Add items dialog should open for ${profileId} import screenshots`).not.toBeNull();
         const interstitial = await waitForImportInterstitial(dialog);
-        if (!interstitial) {
-          await captureScreenshot(
-            page,
-            testInfo,
-            profileScreenshotPath("play/import", profileId, "01-import-interstitial.png"),
-          );
-          continue;
-        }
+        expect(interstitial, `Import source interstitial should be visible for ${profileId}`).not.toBeNull();
         await captureScreenshot(
           page,
           testInfo,
           profileScreenshotPath("play/import", profileId, "01-import-interstitial.png"),
+          { skipFuzzyHeadRestore: true },
         );
 
         await interstitial.getByTestId("import-option-c64u").click();
         await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
+        await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
         await captureScreenshot(
           page,
           testInfo,
           profileScreenshotPath("play/import", profileId, "02-c64u-file-picker.png"),
+          { skipFuzzyHeadRestore: true },
         );
         await dialog.getByRole("button", { name: "Cancel" }).click();
       }

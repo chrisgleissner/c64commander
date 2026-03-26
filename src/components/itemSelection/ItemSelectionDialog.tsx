@@ -329,6 +329,16 @@ export const ItemSelectionDialog = ({
   const headerPaddingClassName = profile === "compact" ? "px-3 pb-1 pt-2.5" : "px-6 pb-3 pt-6";
   const bodyPaddingClassName = profile === "compact" ? "px-3 py-1.5" : "px-6 py-4";
   const sourceContentClassName = profile === "compact" ? "space-y-2" : "space-y-3";
+  const sourceSelectionSubtitle = "Select items to add from a specific source.";
+  const selectedSourceLabel = source
+    ? source.type === "local"
+      ? SOURCE_EXPLANATIONS.local
+      : source.type === "ultimate"
+        ? source.name.trim() || SOURCE_LABELS.c64u
+        : source.type === "hvsc"
+          ? SOURCE_LABELS.hvsc
+          : SOURCE_LABELS.commoserve
+    : null;
 
   if (!source) {
     return (
@@ -341,7 +351,7 @@ export const ItemSelectionDialog = ({
                 <AppDialogDescription
                   className={cn("text-sm text-muted-foreground", profile === "compact" && "hidden")}
                 >
-                  Select items from the chosen source to add.
+                  {sourceSelectionSubtitle}
                 </AppDialogDescription>
               </div>
               <AppSurfaceClose asChild>
@@ -482,7 +492,7 @@ export const ItemSelectionDialog = ({
               <div>
                 <AppSheetTitle className="text-xl">{title}</AppSheetTitle>
                 <AppSheetDescription className={cn("text-sm text-muted-foreground", profile === "compact" && "hidden")}>
-                  Select items from the chosen source to add.
+                  {sourceSelectionSubtitle}
                 </AppSheetDescription>
               </div>
               <AppSurfaceClose asChild>
@@ -494,7 +504,9 @@ export const ItemSelectionDialog = ({
           <div className={cn("shrink-0 space-y-3 border-b border-border", bodyPaddingClassName)}>
             <div className={cn("flex items-center justify-between gap-2", profile === "compact" && "text-sm")}>
               <div>
-                <p className="text-base font-semibold">Select items</p>
+                <p className="text-base font-semibold" data-testid="add-items-selection-heading">
+                  {selectedSourceLabel ? `Select items from ${selectedSourceLabel}` : "Select items"}
+                </p>
                 <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
                   {activeSelectionCount} selected
                 </p>

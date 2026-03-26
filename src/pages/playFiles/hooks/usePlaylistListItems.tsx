@@ -92,7 +92,13 @@ export const usePlaylistListItems = ({
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <FileOriginIcon
               origin={
-                item.request.source === "ultimate" ? "ultimate" : item.request.source === "hvsc" ? "hvsc" : "local"
+                item.request.source === "ultimate"
+                  ? "ultimate"
+                  : item.request.source === "hvsc"
+                    ? "hvsc"
+                    : item.request.source === "commoserve"
+                      ? "commoserve"
+                      : "local"
               }
               className="h-3.5 w-3.5 shrink-0 opacity-60"
             />

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
@@ -193,6 +193,7 @@ describe("ItemSelectionDialog display profiles", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "dialog");
     expect(screen.getByTestId("import-selection-interstitial")).toBeVisible();
+    expect(screen.getByText("Select items to add from a specific source.")).toBeVisible();
   });
 
   it("stacks medium interstitial source buttons with equal full width", () => {
@@ -215,6 +216,82 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(screen.getByTestId("import-option-c64u").className).toContain("w-full");
     expect(screen.getByTestId("import-option-hvsc").className).toContain("w-full");
     expect(screen.getByText("High Voltage SID Collection").className).toContain("whitespace-normal");
+  });
+
+  it("shows the selected C64U identifier in the selection heading", async () => {
+    localStorage.clear();
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={[
+            {
+              label: "Sources",
+              sources: [
+                {
+                  id: "ultimate-custom",
+                  type: "ultimate",
+                  name: "U64E2",
+                  rootPath: "/music",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-c64u"));
+
+    expect(await screen.findByText("Select items from U64E2")).toBeVisible();
+  });
+
+  it("shows the local device label in the selection heading", async () => {
+    localStorage.clear();
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={[
+            {
+              label: "Sources",
+              sources: [
+                {
+                  id: "local-1",
+                  type: "local",
+                  name: "Music",
+                  rootPath: "/music",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => "local-1"}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-local"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Select items from Local Device")).toBeVisible();
+    });
   });
 });
 
@@ -354,5 +431,83 @@ describe("ItemSelectionDialog archive source buttons", () => {
 
     fireEvent.click(screen.getByText("Clear archive selection"));
     expect(screen.getByTestId("archive-selection-size")).toHaveTextContent("0");
+  });
+
+  it("shows the HVSC source label in the selection heading", async () => {
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={[
+            {
+              label: "Sources",
+              sources: [
+                {
+                  id: "hvsc-1",
+                  type: "hvsc",
+                  name: "HVSC library",
+                  rootPath: "/hvsc",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+                {
+                  id: "archive-commoserve",
+                  type: "commoserve",
+                  name: "CommoServe",
+                  rootPath: "/",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-hvsc"));
+    expect(await screen.findByText("Select items from HVSC")).toBeVisible();
+  });
+
+  it("shows the CommoServe source label in the selection heading", async () => {
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={archiveSourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    expect(await screen.findByText("Select items from CommoServe")).toBeVisible();
   });
 });

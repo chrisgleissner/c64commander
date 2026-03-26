@@ -1,4 +1,27 @@
-/*
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+
+import { FileOriginIcon } from '@/components/FileOriginIcon';
+
+describe('FileOriginIcon', () => {
+  it('renders music notes for HVSC', () => {
+    const { container } = render(<FileOriginIcon origin="hvsc" />);
+    const icon = container.querySelector('svg');
+
+    expect(screen.getByLabelText('HVSC file')).toBeVisible();
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('class')).toMatch(/music/i);
+  });
+
+  it('renders the stacked-records icon for CommoServe', () => {
+    const { container } = render(<FileOriginIcon origin="commoserve" />);
+    const icon = container.querySelector('svg');
+
+    expect(screen.getByLabelText('Online archive file')).toBeVisible();
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('class')).toMatch(/library/i);
+  });
+});/*
  * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
  * Copyright (C) 2026 Christian Gleissner
  *
