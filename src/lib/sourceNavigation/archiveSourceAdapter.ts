@@ -6,21 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { SourceLocation, SourceLocationType } from "./types";
+import type { ArchiveClientConfigInput } from "@/lib/archive/types";
+import type { SourceLocation } from "./types";
 
-const ARCHIVE_SOURCE_IDS: Record<string, string> = {
-    commoserve: "archive-commoserve",
-    assembly64: "archive-assembly64",
-};
-
-export const createArchiveSourceLocation = (
-    type: Extract<SourceLocationType, "commoserve" | "assembly64">,
-): SourceLocation => ({
-    id: ARCHIVE_SOURCE_IDS[type],
-    type,
-    name: type === "commoserve" ? "CommoServe" : "Assembly64",
-    rootPath: "/",
-    isAvailable: true,
-    listEntries: async () => [],
-    listFilesRecursive: async () => [],
+export const createArchiveSourceLocation = (config: ArchiveClientConfigInput): SourceLocation => ({
+  id: config.id,
+  type: "commoserve",
+  name: config.name,
+  rootPath: "/",
+  isAvailable: config.enabled ?? true,
+  listEntries: async () => [],
+  listFilesRecursive: async () => [],
 });

@@ -1,39 +1,25 @@
-# Online Archive HTTP Integration Worklog
+# Archive Client Simplification Worklog
 
-## 2026-03-25T12:30:00Z - Phase 1 started
+## 2026-03-26T00:00:00Z - Task classification and baseline scope
 
-- Ran semantic search for the existing CommoServe/Assembly64/Telnet implementation before any manual exploration.
-- Read README.md, AGENTS.md, .github/copilot-instructions.md, package.json, and the relevant telnet/archive docs.
-- Classified the task as DOC_PLUS_CODE because it requires executable changes plus directly related documentation/process artifacts.
+- Classified the work as DOC_PLUS_CODE because it changes executable archive code plus repository process artifacts and documentation.
+- Read the archive client, archive config, settings persistence, online archive hook, source navigation, item-selection UI, and related tests before editing.
+- Confirmed the current implementation still contains two archive client subclasses, backend-based config resolution, retired-source settings/UI, and source-specific tests/mocks.
 
-## 2026-03-25T12:34:00Z - Baseline validation and CI inspection
+## 2026-03-26T00:08:00Z - Full impact inventory
 
-- Inspected GitHub Actions workflow runs for the branch; only a skipped completed branch run was present, so there was no existing branch-specific failure log to diagnose.
-- Ran baseline lint: PASS.
-- Ran baseline test: PASS (406 files / 4755 tests).
-- Ran baseline build: PASS.
-- Reverted incidental package-lock churn introduced by npm install so the worktree stayed focused.
+- Searched the repository for retired-source literals, archive backend usage, and archive client config types.
+- Verified the removal scope includes runtime code, test mocks, Settings page state, Play Files source groups, item-selection interstitial buttons, telnet documentation, and stale process artifacts in PLANS.md and WORKLOG.md.
+- Decision: remove the retired source completely rather than leaving dormant feature flags or compatibility branches, because the acceptance criteria require zero remaining references.
 
-## 2026-03-25T12:42:00Z - Architecture and configuration implementation
+## 2026-03-26T00:16:00Z - Refactor plan locked
 
-- Added archive core modules for types, query building, config resolution, shared HTTP client behavior, thin subclasses, factory creation, and REST-based archive execution.
-- Added archive settings persistence/export-import fields for backend, host override, client-id override, and user-agent override.
-- Preserved the existing playback REST execution pipeline by routing archive execution through the existing upload/run helpers instead of creating a parallel device runner.
+- Decided to keep one concrete client class, `CommoserveClient`, and move source identity into config fields (`id`, `name`, `baseUrl`, `headers`, `enabled`).
+- Decided to keep the current host/client-id/user-agent override UX, but translate those settings into the new config model before client construction so external behavior remains unchanged.
+- Decided to remove archive backend persistence entirely and simplify the UI to a single CommoServe enablement toggle plus override fields.
 
-## 2026-03-25T12:49:00Z - Hook, settings UI, and platform configuration
+## 2026-03-26T00:24:00Z - Implementation in progress
 
-- Added a deterministic online archive hook with searchable state phases and cancellation.
-- Added an Online Archive section to Settings with immediate persistence and a dedicated archive browser dialog.
-- Added Android/iOS default-host allow-list configuration for cleartext HTTP and documented override limitations in the settings UI text.
-
-## 2026-03-25T12:50:00Z - Next steps
-
-- Implement shared test mocks for both backends.
-- Add targeted unit/integration/UI tests, including runtime backend switchover.
-- Run targeted validation, coverage, build/platform checks, code review, and CodeQL.
-
-## 2026-03-25T15:00:00Z - Phase 17 started: Multi-Source Interstitial + Online Archive Import
-
-- Explored codebase for all relevant files: ItemSelectionDialog.tsx, sourceTerms.ts, types.ts, FileOriginIcon.tsx, SettingsPage.tsx, PlayFilesPage.tsx, DriveManager.tsx, useOnlineArchive.ts, OnlineArchiveDialog.tsx, appSettings.ts
-- Task 17.1: Extending SourceLocationType and sourceTerms
-- Classification: UI_CHANGE + CODE_CHANGE
+- Replaced the archived multi-backend plan with the current convergence plan in PLANS.md.
+- Began editing core archive types/config/client code, then the settings/UI/source-selection code, followed by tests and documentation.
+- Verification pending after implementation: lint, coverage, build, generated-asset refresh, and final repository-wide literal sweep.

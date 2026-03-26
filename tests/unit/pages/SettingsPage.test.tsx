@@ -18,7 +18,6 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import {
-  saveArchiveBackend,
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
@@ -276,19 +275,15 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => "kernal"),
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
-  loadArchiveBackend: vi.fn(() => "commodore"),
   loadArchiveClientIdOverride: vi.fn(() => ""),
   loadArchiveHostOverride: vi.fn(() => ""),
   loadArchiveUserAgentOverride: vi.fn(() => ""),
   saveAutomaticDemoModeEnabled: vi.fn(),
-  saveArchiveBackend: vi.fn(),
   saveArchiveHostOverride: vi.fn(),
   saveArchiveClientIdOverride: vi.fn(),
   saveArchiveUserAgentOverride: vi.fn(),
   loadCommoserveEnabled: vi.fn(() => true),
   saveCommoserveEnabled: vi.fn(),
-  loadAssembly64Enabled: vi.fn(() => false),
-  saveAssembly64Enabled: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveStartupDiscoveryWindowMs: vi.fn(),
@@ -317,10 +312,10 @@ vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
 }));
 
 vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
-  OnlineArchiveDialog: ({ open, config }: { open: boolean; config: { backend: string; hostOverride?: string } }) =>
+  OnlineArchiveDialog: ({ open, config }: { open: boolean; config: { id: string; baseUrl: string } }) =>
     open ? (
       <div data-testid="online-archive-dialog-mock">
-        {config.backend}:{config.hostOverride ?? ""}
+        {config.id}:{config.baseUrl}
       </div>
     ) : null,
 }));
@@ -782,20 +777,7 @@ describe("SettingsPage", () => {
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");
   });
 
-  it("persists the selected online archive backend", () => {
-    renderSettingsPage();
-
-    const archiveSection = screen.getByRole("heading", { name: "Online Archive" }).closest(".rounded-xl");
-    expect(archiveSection).toBeTruthy();
-
-    fireEvent.change(within(archiveSection as HTMLElement).getByRole("combobox"), {
-      target: { value: "assembly64" },
-    });
-
-    expect(saveArchiveBackend).toHaveBeenCalledWith("assembly64");
-  });
-
-  it("validates archive host overrides and falls back to the backend default host", () => {
+  it("validates archive host overrides and falls back to the default host", () => {
     renderSettingsPage();
 
     fireEvent.change(screen.getByLabelText("Host override"), {
@@ -823,7 +805,9 @@ describe("SettingsPage", () => {
     expect(saveArchiveUserAgentOverride).toHaveBeenCalledWith("Custom Agent");
 
     fireEvent.click(screen.getByRole("button", { name: /Open archive browser/i }));
-    expect(screen.getByTestId("online-archive-dialog-mock")).toHaveTextContent("commodore:");
+    expect(screen.getByTestId("online-archive-dialog-mock")).toHaveTextContent(
+      "archive-commoserve:http://commoserve.files.commodore.net",
+    );
   });
 
   it("requires confirmation when switching into relaxed safety mode", async () => {

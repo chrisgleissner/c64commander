@@ -6,10 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ArchiveBackend } from "@/lib/config/appSettings";
-
-export type { ArchiveBackend };
-
 export type ArchivePresetType = "category" | "date" | "type" | "sort" | "order";
 
 export type ArchivePresetValue = {
@@ -68,18 +64,22 @@ export type ArchiveBinary = {
 };
 
 export type ArchiveClientConfigInput = {
-  backend: ArchiveBackend;
-  hostOverride?: string | null;
-  clientIdOverride?: string | null;
-  userAgentOverride?: string | null;
+  id: string;
+  name: string;
+  baseUrl: string;
+  headers?: Record<string, string>;
+  enabled?: boolean;
 };
 
 export type ArchiveClientResolvedConfig = {
-  backend: ArchiveBackend;
+  id: string;
+  name: string;
+  baseUrl: string;
+  headers: Record<string, string>;
+  enabled: boolean;
   host: string;
   clientId: string;
   userAgent: string;
-  baseUrl: string;
 };
 
 export type ArchiveRequestOptions = {

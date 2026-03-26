@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
+import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
 
 describe("createArchiveSourceLocation", () => {
-    it("creates a commoserve source location", () => {
-        const source = createArchiveSourceLocation("commoserve");
+    it("creates a source location from archive config", () => {
+        const source = createArchiveSourceLocation(buildDefaultArchiveClientConfig());
         expect(source.id).toBe("archive-commoserve");
         expect(source.type).toBe("commoserve");
         expect(source.name).toBe("CommoServe");
@@ -11,17 +12,8 @@ describe("createArchiveSourceLocation", () => {
         expect(source.isAvailable).toBe(true);
     });
 
-    it("creates an assembly64 source location", () => {
-        const source = createArchiveSourceLocation("assembly64");
-        expect(source.id).toBe("archive-assembly64");
-        expect(source.type).toBe("assembly64");
-        expect(source.name).toBe("Assembly64");
-        expect(source.rootPath).toBe("/");
-        expect(source.isAvailable).toBe(true);
-    });
-
     it("returns empty arrays for listEntries and listFilesRecursive", async () => {
-        const source = createArchiveSourceLocation("commoserve");
+        const source = createArchiveSourceLocation(buildDefaultArchiveClientConfig());
         expect(await source.listEntries("/")).toEqual([]);
         expect(await source.listFilesRecursive("/")).toEqual([]);
     });

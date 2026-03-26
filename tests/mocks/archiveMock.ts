@@ -1,4 +1,4 @@
-import { createBaseArchiveMock, type ArchiveMockFixtures } from "./baseArchiveMock";
+import { createBaseArchiveMock, type ArchiveMockConfig, type ArchiveMockFixtures } from "./baseArchiveMock";
 
 const DEFAULT_FIXTURES: ArchiveMockFixtures = {
   presets: [
@@ -28,9 +28,12 @@ const DEFAULT_FIXTURES: ArchiveMockFixtures = {
   },
 };
 
-export const createCommoserveMock = (fixtures: Partial<ArchiveMockFixtures> = {}) =>
+export const createArchiveMock = (
+  fixtures: Partial<ArchiveMockFixtures> = {},
+  overrides: Partial<Omit<ArchiveMockConfig, "fixtures">> = {},
+) =>
   createBaseArchiveMock({
     fixtures: { ...DEFAULT_FIXTURES, ...fixtures },
-    expectedClientId: "Commodore",
-    expectedUserAgent: "Assembly Query",
+    expectedClientId: overrides.expectedClientId ?? "Commodore",
+    expectedUserAgent: overrides.expectedUserAgent ?? "Assembly Query",
   });

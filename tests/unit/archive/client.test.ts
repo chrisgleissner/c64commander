@@ -1,9 +1,9 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
 import { buildArchiveQuery } from "@/lib/archive/queryBuilder";
 import { BaseArchiveClient, createArchiveClient } from "@/lib/archive/client";
-import { createAssembly64Mock } from "../../mocks/assembly64Mock";
-import { createCommoserveMock } from "../../mocks/commoserveMock";
+import { createArchiveMock } from "../../mocks/archiveMock";
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
@@ -27,9 +27,9 @@ describe("archive client", () => {
   });
 
   it("injects required headers and searches against the resolved backend host", async () => {
-    const server = await createCommoserveMock();
+    const server = await createArchiveMock();
     closers.push(server.close);
-    const client = createArchiveClient({ backend: "commodore", hostOverride: server.host });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: server.host }));
 
     const results = await client.search({ name: "joyride", category: "apps" });
 
@@ -41,26 +41,51 @@ describe("archive client", () => {
     expect(server.requests.at(-1)?.headers["user-agent"]).toBe("Assembly Query");
   });
 
-  it("uses the assembly64 subclass defaults and returns entries", async () => {
-    const server = await createAssembly64Mock();
+  it("uses explicit custom source config and returns entries", async () => {
+    const server = await createArchiveMock(
+      {
+        searchByQuery: {
+          '(name:"wizball") & (category:games)': [{ id: "200", category: 10, name: "Wizball" }],
+        },
+        entriesByResultKey: {
+          "200:10": [{ path: "wizball.d64", id: 0, size: 174848, date: 560822400000 }],
+        },
+        binariesByEntryKey: {
+          "200:10:0": new Uint8Array(174848),
+        },
+      },
+      {
+        expectedClientId: "Custom",
+        expectedUserAgent: "Custom Agent",
+      },
+    );
     closers.push(server.close);
-    const client = createArchiveClient({ backend: "assembly64", hostOverride: server.host });
+    const client = createArchiveClient({
+      id: "archive-custom",
+      name: "Custom Archive",
+      baseUrl: `http://${server.host}`,
+      headers: {
+        "Client-Id": "Custom",
+        "User-Agent": "Custom Agent",
+      },
+    });
 
     const entries = await client.getEntries("200", 10);
 
     expect(entries).toEqual([{ path: "wizball.d64", id: 0, size: 174848, date: 560822400000 }]);
     expect(client.getResolvedConfig()).toMatchObject({
-      backend: "assembly64",
-      clientId: "Ultimate",
+      id: "archive-custom",
+      name: "Custom Archive",
+      clientId: "Custom",
       host: server.host,
     });
-    expect(server.requests.at(-1)?.headers["client-id"]).toBe("Ultimate");
+    expect(server.requests.at(-1)?.headers["client-id"]).toBe("Custom");
   });
 
   it("downloads binary payloads and exposes the binary URL", async () => {
-    const server = await createCommoserveMock();
+    const server = await createArchiveMock();
     closers.push(server.close);
-    const client = createArchiveClient({ backend: "commodore", hostOverride: server.host });
+    const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: server.host }));
 
     const binary = await client.downloadBinary("100", 40, 0, "joyride.prg");
 
@@ -70,12 +95,12 @@ describe("archive client", () => {
   });
 
   it("applies optional request and response transform hooks", async () => {
-    const server = await createCommoserveMock();
+    const server = await createArchiveMock();
     closers.push(server.close);
 
     class TestClient extends BaseArchiveClient {
       constructor() {
-        super({ backend: "commodore", hostOverride: server.host });
+        super(buildDefaultArchiveClientConfig({ hostOverride: server.host }));
       }
 
       protected override transformRequest(request: RequestInit & { url: string }) {
@@ -107,21 +132,25 @@ describe("archive client", () => {
     const server = await createCommoserveMock();
     closers.push(server.close);
     const client = createArchiveClient({
-      backend: "commodore",
-      hostOverride: server.host,
-      clientIdOverride: "Wrong",
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: `http://${server.host}`,
+      headers: {
+        "Client-Id": "Wrong",
+        "User-Agent": "Assembly Query",
+      },
     });
 
     await expect(client.search({ name: "joyride", category: "apps" })).rejects.toThrow(
-      `commodore archive request failed for ${server.host}: Archive server returned error 464`,
+      `CommoServe archive request failed for ${server.host}: Archive server returned error 464`,
     );
   });
 
   it("rejects timed out requests", async () => {
     vi.useFakeTimers();
-    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+    const client = createArchiveClient(buildDefaultArchiveClientConfig(), () => new Promise<Response>(() => undefined));
 
-    const expectation = expect(client.getPresets()).rejects.toThrow("commodore archive request failed");
+    const expectation = expect(client.getPresets()).rejects.toThrow("CommoServe archive request failed");
     await vi.advanceTimersByTimeAsync(10_000);
     await expectation;
     vi.useRealTimers();
@@ -140,10 +169,10 @@ describe("archive client", () => {
         );
       });
     });
-    const client = createArchiveClient({ backend: "commodore", hostOverride: "archive.local" }, fetchMock);
+    const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }), fetchMock);
 
     const expectation = expect(client.getPresets()).rejects.toThrow(
-      "commodore archive request failed for archive.local: Archive request timed out",
+      "CommoServe archive request failed for archive.local: Archive request timed out",
     );
 
     await vi.advanceTimersByTimeAsync(10_000);
@@ -171,7 +200,7 @@ describe("archive client", () => {
         }),
       );
 
-    const client = createArchiveClient({ backend: "commodore", hostOverride: "archive.local" }, fetchMock);
+  const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }), fetchMock);
 
     await expect(client.getPresets()).resolves.toEqual([{ id: "1", name: "Latest uploads" }]);
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -183,7 +212,7 @@ describe("archive client", () => {
 
   it("rejects aborted requests", async () => {
     const controller = new AbortController();
-    const client = createArchiveClient({ backend: "commodore" }, () => new Promise<Response>(() => undefined));
+    const client = createArchiveClient(buildDefaultArchiveClientConfig(), () => new Promise<Response>(() => undefined));
 
     const promise = client.getPresets({ signal: controller.signal });
     controller.abort(new Error("aborted by test"));
@@ -195,7 +224,7 @@ describe("archive client", () => {
     const controller = new AbortController();
     controller.abort(new Error("aborted before start"));
     const fetchMock = vi.fn<typeof fetch>();
-    const client = createArchiveClient({ backend: "commodore" }, fetchMock);
+    const client = createArchiveClient(buildDefaultArchiveClientConfig(), fetchMock);
 
     await expect(client.getPresets({ signal: controller.signal })).rejects.toThrow("aborted before start");
     expect(fetchMock).not.toHaveBeenCalled();
@@ -203,7 +232,7 @@ describe("archive client", () => {
 
   it("does not treat errorCode 0 as a protocol failure", async () => {
     const client = createArchiveClient(
-      { backend: "commodore" },
+      buildDefaultArchiveClientConfig(),
       vi.fn().mockResolvedValue(
         new Response(JSON.stringify([{ id: "1", category: 40, name: "Okay", errorCode: 0 }]), {
           status: 200,
@@ -219,7 +248,7 @@ describe("archive client", () => {
 
   it("returns an empty entry list when the archive response omits contentEntry", async () => {
     const client = createArchiveClient(
-      { backend: "commodore" },
+      buildDefaultArchiveClientConfig(),
       vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ totalRows: 0 }), {
           status: 200,
@@ -233,7 +262,7 @@ describe("archive client", () => {
 
   it("wraps archive binary download failures with backend and host context", async () => {
     const client = createArchiveClient(
-      { backend: "commodore", hostOverride: "archive.local" },
+      buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }),
       vi.fn().mockResolvedValue(new Response("nope", { status: 503, statusText: "Unavailable" })),
     );
 

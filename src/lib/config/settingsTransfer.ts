@@ -7,14 +7,11 @@
  */
 
 import {
-  loadArchiveBackend,
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
   loadCommoserveEnabled,
-  loadAssembly64Enabled,
   DEFAULT_COMMOSERVE_ENABLED,
-  DEFAULT_ASSEMBLY64_ENABLED,
   clampBackgroundRediscoveryIntervalMs,
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -29,12 +26,10 @@ import {
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
-  saveArchiveBackend,
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
   saveCommoserveEnabled,
-  saveAssembly64Enabled,
   saveBackgroundRediscoveryIntervalMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
@@ -42,7 +37,6 @@ import {
   saveDiskAutostartMode,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
-  type ArchiveBackend,
   type DiskAutostartMode,
 } from "@/lib/config/appSettings";
 import {
@@ -77,12 +71,10 @@ export type SettingsExportPayload = {
     discoveryProbeTimeoutMs: number;
     diskAutostartMode: DiskAutostartMode;
     volumeSliderPreviewIntervalMs: number;
-    archiveBackend: ArchiveBackend;
     archiveHostOverride: string;
     archiveClientIdOverride: string;
     archiveUserAgentOverride: string;
     commoserveEnabled: boolean;
-    assembly64Enabled: boolean;
   };
   deviceSafety: {
     mode: DeviceSafetyMode;
@@ -103,7 +95,7 @@ export type SettingsExportPayload = {
 };
 
 // Keys added after the initial v1 release — may be absent in older exported payloads.
-const OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled", "assembly64Enabled"] as const;
+const OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled"] as const;
 
 // Keys that must be present in all settings payloads.
 const REQUIRED_APP_SETTINGS_KEYS = [
@@ -115,7 +107,6 @@ const REQUIRED_APP_SETTINGS_KEYS = [
   "discoveryProbeTimeoutMs",
   "diskAutostartMode",
   "volumeSliderPreviewIntervalMs",
-  "archiveBackend",
   "archiveHostOverride",
   "archiveClientIdOverride",
   "archiveUserAgentOverride",
@@ -151,7 +142,6 @@ const hasRequiredKeysAllowOptional = (
 };
 
 const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => value === "kernal" || value === "dma";
-const isArchiveBackend = (value: unknown): value is ArchiveBackend => value === "commodore" || value === "assembly64";
 
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
   value === "RELAXED" || value === "BALANCED" || value === "CONSERVATIVE" || value === "TROUBLESHOOTING";
@@ -169,12 +159,10 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
       discoveryProbeTimeoutMs: loadDiscoveryProbeTimeoutMs(),
       diskAutostartMode: loadDiskAutostartMode(),
       volumeSliderPreviewIntervalMs: loadVolumeSliderPreviewIntervalMs(),
-      archiveBackend: loadArchiveBackend(),
       archiveHostOverride: loadArchiveHostOverride(),
       archiveClientIdOverride: loadArchiveClientIdOverride(),
       archiveUserAgentOverride: loadArchiveUserAgentOverride(),
       commoserveEnabled: loadCommoserveEnabled(),
-      assembly64Enabled: loadAssembly64Enabled(),
     },
     deviceSafety: {
       mode: safety.mode,
@@ -211,14 +199,11 @@ const validateAppSettings = (value: unknown) => {
   if (!Number.isFinite(record.discoveryProbeTimeoutMs)) return "discoveryProbeTimeoutMs must be a number.";
   if (!isDiskAutostartMode(record.diskAutostartMode)) return "diskAutostartMode must be kernal or dma.";
   if (!Number.isFinite(record.volumeSliderPreviewIntervalMs)) return "volumeSliderPreviewIntervalMs must be a number.";
-  if (!isArchiveBackend(record.archiveBackend)) return "archiveBackend must be commodore or assembly64.";
   if (typeof record.archiveHostOverride !== "string") return "archiveHostOverride must be a string.";
   if (typeof record.archiveClientIdOverride !== "string") return "archiveClientIdOverride must be a string.";
   if (typeof record.archiveUserAgentOverride !== "string") return "archiveUserAgentOverride must be a string.";
   if ("commoserveEnabled" in record && typeof record.commoserveEnabled !== "boolean")
     return "commoserveEnabled must be boolean.";
-  if ("assembly64Enabled" in record && typeof record.assembly64Enabled !== "boolean")
-    return "assembly64Enabled must be boolean.";
   return null;
 };
 
@@ -269,15 +254,11 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   saveDiscoveryProbeTimeoutMs(clampDiscoveryProbeTimeoutMs(safeApp.discoveryProbeTimeoutMs));
   saveDiskAutostartMode(safeApp.diskAutostartMode);
   saveVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(safeApp.volumeSliderPreviewIntervalMs));
-  saveArchiveBackend(safeApp.archiveBackend);
   saveArchiveHostOverride(safeApp.archiveHostOverride);
   saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);
   saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
   saveCommoserveEnabled(
     "commoserveEnabled" in safeApp ? Boolean(safeApp.commoserveEnabled) : DEFAULT_COMMOSERVE_ENABLED,
-  );
-  saveAssembly64Enabled(
-    "assembly64Enabled" in safeApp ? Boolean(safeApp.assembly64Enabled) : DEFAULT_ASSEMBLY64_ENABLED,
   );
 
   saveDeviceSafetyMode(safeSafety.mode);

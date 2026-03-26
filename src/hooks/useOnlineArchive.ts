@@ -63,14 +63,18 @@ const resetIfPresetError = (current: OnlineArchiveState): OnlineArchiveState =>
   current.phase === "error" && current.recoverableState === null ? { phase: "idle" } : current;
 
 export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
+  const configKey = JSON.stringify({
+    id: config.id,
+    name: config.name,
+    baseUrl: config.baseUrl,
+    headers: config.headers ?? {},
+    enabled: config.enabled ?? true,
+  });
   const resolvedConfig = useMemo<ArchiveClientResolvedConfig>(
     () => resolveArchiveClientConfig(config),
-    [config.backend, config.clientIdOverride, config.hostOverride, config.userAgentOverride],
+    [configKey],
   );
-  const client = useMemo(
-    () => createArchiveClient(config),
-    [config.backend, config.clientIdOverride, config.hostOverride, config.userAgentOverride],
-  );
+  const client = useMemo(() => createArchiveClient(config), [configKey]);
   const [presets, setPresets] = useState<ArchivePreset[]>([]);
   const [presetsLoading, setPresetsLoading] = useState(false);
   const [state, setState] = useState<OnlineArchiveState>({ phase: "idle" });

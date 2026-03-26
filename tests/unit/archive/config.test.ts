@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { resolveArchiveClientConfig, validateArchiveHost } from "@/lib/archive/config";
+import {
+  buildDefaultArchiveClientConfig,
+  resolveArchiveClientConfig,
+  validateArchiveHost,
+} from "@/lib/archive/config";
 
 describe("archive config", () => {
-  it("uses backend defaults when overrides are empty or invalid", () => {
-    expect(
-      resolveArchiveClientConfig({
-        backend: "commodore",
-        hostOverride: "http://bad.example",
-        clientIdOverride: "",
-        userAgentOverride: "",
-      }),
-    ).toMatchObject({
+  it("uses the default source values when overrides are empty or invalid", () => {
+    expect(resolveArchiveClientConfig(buildDefaultArchiveClientConfig({ hostOverride: "http://bad.example" }))).toMatchObject({
+      id: "archive-commoserve",
+      name: "CommoServe",
       host: "commoserve.files.commodore.net",
       clientId: "Commodore",
       userAgent: "Assembly Query",
@@ -18,15 +17,20 @@ describe("archive config", () => {
     });
   });
 
-  it("prefers valid user overrides over backend defaults", () => {
+  it("prefers explicit source config values for custom sources", () => {
     expect(
       resolveArchiveClientConfig({
-        backend: "assembly64",
-        hostOverride: "archive.local:3002",
-        clientIdOverride: "Custom",
-        userAgentOverride: "Custom Agent",
+        id: "archive-custom",
+        name: "Custom Archive",
+        baseUrl: "http://archive.local:3002",
+        headers: {
+          "Client-Id": "Custom",
+          "User-Agent": "Custom Agent",
+        },
       }),
     ).toMatchObject({
+      id: "archive-custom",
+      name: "Custom Archive",
       host: "archive.local:3002",
       clientId: "Custom",
       userAgent: "Custom Agent",

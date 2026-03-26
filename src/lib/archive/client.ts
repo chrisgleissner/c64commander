@@ -172,8 +172,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
   protected getHeaders() {
     return {
       "Accept-Encoding": "identity",
-      "Client-Id": this.getClientId(),
-      "User-Agent": this.getUserAgent(),
+      ...this.resolvedConfig.headers,
     };
   }
 
@@ -245,7 +244,8 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         request = this.transformRequest(request);
       }
       addLog("debug", "Archive request started", {
-        backend: this.resolvedConfig.backend,
+        sourceId: this.resolvedConfig.id,
+        sourceName: this.resolvedConfig.name,
         clientType: this.constructor.name,
         resolvedConfig: this.resolvedConfig,
         requestUrl: url,
@@ -259,7 +259,8 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       const parsed = await parseJsonResponse<T>(response);
       const result = this.transformResponse ? this.transformResponse(parsed) : parsed;
       addLog("debug", "Archive request completed", {
-        backend: this.resolvedConfig.backend,
+        sourceId: this.resolvedConfig.id,
+        sourceName: this.resolvedConfig.name,
         clientType: this.constructor.name,
         operation: kind,
         requestUrl: url,
@@ -271,7 +272,8 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       addErrorLog(
         "Archive request failed",
         buildErrorLogDetails(err, {
-          backend: this.resolvedConfig.backend,
+          sourceId: this.resolvedConfig.id,
+          sourceName: this.resolvedConfig.name,
           host: this.getHost(),
           clientType: this.constructor.name,
           operation: kind,
@@ -280,7 +282,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
           timingMs: Math.round(performance.now() - startedAt),
         }),
       );
-      throw new Error(`${this.resolvedConfig.backend} archive request failed for ${this.getHost()}: ${err.message}`);
+      throw new Error(`${this.resolvedConfig.name} archive request failed for ${this.getHost()}: ${err.message}`);
     }
   }
 
@@ -330,7 +332,8 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         request = this.transformRequest(request);
       }
       addLog("debug", "Archive binary download started", {
-        backend: this.resolvedConfig.backend,
+        sourceId: this.resolvedConfig.id,
+        sourceName: this.resolvedConfig.name,
         clientType: this.constructor.name,
         resolvedConfig: this.resolvedConfig,
         requestUrl: url,
@@ -347,7 +350,8 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       }
       const buffer = new Uint8Array(await response.arrayBuffer());
       addLog("debug", "Archive binary download completed", {
-        backend: this.resolvedConfig.backend,
+        sourceId: this.resolvedConfig.id,
+        sourceName: this.resolvedConfig.name,
         clientType: this.constructor.name,
         requestUrl: url,
         timingMs: Math.round(performance.now() - startedAt),
@@ -364,7 +368,8 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       addErrorLog(
         "Archive binary download failed",
         buildErrorLogDetails(err, {
-          backend: this.resolvedConfig.backend,
+          sourceId: this.resolvedConfig.id,
+          sourceName: this.resolvedConfig.name,
           host: this.getHost(),
           clientType: this.constructor.name,
           requestUrl: url,
@@ -372,7 +377,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
           timingMs: Math.round(performance.now() - startedAt),
         }),
       );
-      throw new Error(`${this.resolvedConfig.backend} archive download failed for ${this.getHost()}: ${err.message}`);
+      throw new Error(`${this.resolvedConfig.name} archive download failed for ${this.getHost()}: ${err.message}`);
     }
   }
 
@@ -382,23 +387,11 @@ export abstract class BaseArchiveClient implements ArchiveClient {
 }
 
 export class CommoserveClient extends BaseArchiveClient {
-  constructor(config: Omit<ArchiveClientConfigInput, "backend"> & { backend?: "commodore" }, fetchImpl?: ArchiveFetch) {
-    super({ backend: "commodore", ...config }, fetchImpl);
-  }
-}
-
-export class Assembly64Client extends BaseArchiveClient {
-  constructor(
-    config: Omit<ArchiveClientConfigInput, "backend"> & { backend?: "assembly64" },
-    fetchImpl?: ArchiveFetch,
-  ) {
-    super({ backend: "assembly64", ...config }, fetchImpl);
+  constructor(config: ArchiveClientConfigInput, fetchImpl?: ArchiveFetch) {
+    super(config, fetchImpl);
   }
 }
 
 export const createArchiveClient = (config: ArchiveClientConfigInput, fetchImpl?: ArchiveFetch): ArchiveClient => {
-  if (config.backend === "assembly64") {
-    return new Assembly64Client(config, fetchImpl);
-  }
   return new CommoserveClient(config, fetchImpl);
 };

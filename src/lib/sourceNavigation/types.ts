@@ -16,7 +16,7 @@ export type SourceEntry = {
   modifiedAt?: string | null;
 };
 
-export type SourceLocationType = "ultimate" | "local" | "hvsc" | "commoserve" | "assembly64";
+export type SourceLocationType = "ultimate" | "local" | "hvsc" | "commoserve";
 
 export type SelectedItem = {
   type: SourceEntryType;

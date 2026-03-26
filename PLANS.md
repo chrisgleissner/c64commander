@@ -1,100 +1,71 @@
-# Online Archive Multi-Source Integration Plan
+# Archive Client Simplification Plan
 
 Status: IN PROGRESS
-Date: 2026-03-25
-Classification: UI_CHANGE + CODE_CHANGE
+Date: 2026-03-26
+Classification: DOC_PLUS_CODE
 
-## Completed Prior Phases (1-16)
+## Objective
 
-Phases 1-16 delivered: archive abstraction model, configuration system, generic client + subclasses,
-HTTP implementation, query builder, file execution pipeline, hook integration, settings UI,
-platform configuration, state machine + error handling, mock infrastructure, testing, diagnostics,
-screenshots, and final validation. See git history for details.
+Collapse the archive client subsystem to a single config-driven CommoserveClient, remove the retired secondary source, and remove the archive backend abstraction while preserving runtime behavior.
 
-## Phase 17 - Multi-Source Interstitial + Online Archive Import
+## Execution Phases
 
-### Task 17.1 - Extend source types
+### Phase 1 - Baseline and impact map
 
-- Status: TODO
-- Add "commoserve" and "assembly64" to SourceLocationType
-- Add labels/explanations to sourceTerms.ts
-- Files: src/lib/sourceNavigation/types.ts, src/lib/sourceNavigation/sourceTerms.ts
+- Status: COMPLETE
+- Inventory retired-source and archive-backend references across runtime code, tests, docs, and generated artifacts.
+- Confirm the active architecture still contains two archive client subclasses, backend-based config, and source/UI branches.
 
-### Task 17.2 - Extend FileOriginIcon
+### Phase 2 - Converge archive config and client model
 
-- Status: TODO
-- Support "commoserve" and "assembly64" origins with appropriate icons
-- File: src/components/FileOriginIcon.tsx
+- Status: IN PROGRESS
+- Replace archive config input with source-driven fields: `id`, `name`, `baseUrl`, `headers?`, `enabled?`.
+- Remove archive backend types and defaults maps keyed by backend.
+- Keep a single concrete archive client implementation: `CommoserveClient`.
+- Simplify `createArchiveClient()` to unconditional CommoserveClient construction.
+- Preserve request timeouts, query construction, transport behavior, binary downloads, and request/response transforms.
 
-### Task 17.3 - Update settings for dual source enablement
-
-- Status: TODO
-- Replace mutually-exclusive archive backend dropdown with dual toggles
-- Use existing commoserveEnabled / assembly64Enabled flags from appSettings.ts
-- Files: src/pages/SettingsPage.tsx
-
-### Task 17.4 - Create archive source adapter
+### Phase 3 - Remove retired-source runtime affordances
 
 - Status: TODO
-- Create SourceLocation adapter for archive backends (CommoServe + Assembly64)
-- Must implement listEntries/listFilesRecursive matching SourceLocation contract
-- File: src/lib/sourceNavigation/archiveSourceAdapter.ts
+- Remove retired-source settings, source selection branches, source navigation types, file origin handling, and playlist source branches.
+- Keep the online archive UX functional with the CommoServe source only.
+- Replace archive logging metadata from backend-based fields to source-based fields.
 
-### Task 17.5 - Update ItemSelectionDialog interstitial
-
-- Status: TODO
-- Add CommoServe and Assembly64 buttons below HVSC
-- Conditional on enabled state from app settings
-- File: src/components/itemSelection/ItemSelectionDialog.tsx
-
-### Task 17.6 - Wire archive sources into PlayFilesPage
+### Phase 4 - Consolidate mocks and regression tests
 
 - Status: TODO
-- Build archive source locations from settings and add to sourceGroups
-- Files: src/pages/PlayFilesPage.tsx, src/pages/home/components/DriveManager.tsx
+- Remove source-specific archive mock wrappers.
+- Update archive, settings, hook, source adapter, and item-selection tests to use generic or CommoServe source config.
+- Add regression coverage for default config plus custom external config.
 
-### Task 17.7 - Adapt Online Archive as import source
-
-- Status: TODO
-- Ensure archive browser works within ItemSelectionDialog flow
-- Single shared component for both backends
-- Files: src/components/archive/OnlineArchiveDialog.tsx (or adapt ItemSelectionView)
-
-### Task 17.8 - Add/update tests
+### Phase 5 - Documentation and literal sweep
 
 - Status: TODO
-- Tests for dual source enablement, interstitial rendering, archive source adapter
-- Coverage ≥ 91%
-- Files: tests/unit/\*\*
+- Remove all retired-source mentions from repository documentation and process artifacts.
+- Ensure PLANS.md and WORKLOG.md reflect only the converged architecture.
 
-### Task 17.9 - Lint, build, coverage validation
-
-- Status: TODO
-- npm run lint && npm run test:coverage && npm run build
-
-### Task 17.10 - Regenerate screenshots
+### Phase 6 - Validation and convergence
 
 - Status: TODO
-- Only affected screenshots: interstitial with online sources visible
+- Run `npm run lint`.
+- Run `npm run test:coverage` and confirm branch coverage remains at least 91%.
+- Run `npm run build`.
+- Run `npm run cap:build` if needed to refresh generated Android web assets so stale literals are removed.
+- Perform final repository-wide literal sweep for removed-source strings and archive backend references.
 
-### Dependencies
+## Constraints
 
-- 17.1 → 17.2, 17.4, 17.5
-- 17.3 → 17.6
-- 17.4 → 17.6, 17.7
-- 17.5 → 17.6
-- 17.6, 17.7 → 17.8
-- 17.8 → 17.9 → 17.10
+- No new archive client implementations.
+- No archive backend discriminator in archive config or factory code.
+- No dead code or commented-out compatibility shims.
+- Preserve external behavior for search, presets, entries, binary download, and execution.
 
-### Risks
+## Acceptance Checklist
 
-- Archive search is async and network-dependent; source adapter must handle errors gracefully
-- ItemSelectionDialog expects directory-based browsing; archive search is query-based (different paradigm)
-- Screenshots require demo mode to show all sources
-
-### Screenshot Impact
-
-- play/import/01-import-interstitial.png (new sources visible)
-- Potential new screenshots for archive search/results flow
-
-- Produced artifacts: WORKLOG.md final entries, validation evidence
+- Exactly one archive client implementation remains.
+- No removed-source string remains anywhere in the repository.
+- Archive config and logging are source-based rather than backend-based.
+- Factory has no client-selection branching.
+- Tests pass and coverage remains at least 91%.
+- Build succeeds and generated assets no longer contain removed literals.

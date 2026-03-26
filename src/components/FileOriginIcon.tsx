@@ -9,7 +9,7 @@
 import { cn } from "@/lib/utils";
 import { Globe, Library } from "lucide-react";
 
-type FileOrigin = "ultimate" | "local" | "hvsc" | "commoserve" | "assembly64";
+type FileOrigin = "ultimate" | "local" | "hvsc" | "commoserve";
 
 type FileOriginIconProps = {
   origin: FileOrigin;
@@ -29,10 +29,8 @@ const resolveIconLabel = (origin: FileOrigin) =>
     : origin === "hvsc"
       ? "HVSC file"
       : origin === "commoserve"
-        ? "CommoServe file"
-        : origin === "assembly64"
-          ? "Assembly64 file"
-          : "Local file";
+        ? "Online archive file"
+        : "Local file";
 
 export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps) => {
   if (origin === "hvsc") {
@@ -44,7 +42,7 @@ export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps
       />
     );
   }
-  if (origin === "commoserve" || origin === "assembly64") {
+  if (origin === "commoserve") {
     return (
       <Globe
         aria-label={label ?? resolveIconLabel(origin)}

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { reportUserError } from "@/lib/uiErrors";
 import { getArchiveEntryActionLabel } from "@/lib/archive/execution";
 import { buildArchiveQuery } from "@/lib/archive/queryBuilder";
-import { ARCHIVE_BACKEND_DEFAULTS } from "@/lib/archive/config";
+import { DEFAULT_ARCHIVE_SOURCE_CONFIG, resolveArchiveClientConfig } from "@/lib/archive/config";
 import type {
   ArchiveClientConfigInput,
   ArchivePreset,
@@ -100,7 +100,7 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
     }
   }, [form]);
 
-  const currentDefaults = ARCHIVE_BACKEND_DEFAULTS[resolvedConfig.backend];
+  const currentDefaults = resolveArchiveClientConfig(DEFAULT_ARCHIVE_SOURCE_CONFIG);
 
   const resultRows = "results" in state ? state.results : [];
   const entryRows = "entries" in state ? state.entries : [];
@@ -118,8 +118,7 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
         <DialogHeader>
           <DialogTitle>Online Archive</DialogTitle>
           <DialogDescription>
-            Search {resolvedConfig.backend === "commodore" ? "CommoServe" : "Assembly64"} via direct HTTP and execute
-            files via device REST.
+            Search {resolvedConfig.name} via direct HTTP and execute files via device REST.
           </DialogDescription>
         </DialogHeader>
 
@@ -130,7 +129,7 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
               data-testid="online-archive-config-summary"
             >
               <div>
-                Backend: <span className="font-medium text-foreground">{resolvedConfig.backend}</span>
+                Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
               </div>
               <div>
                 Client: <span className="font-medium text-foreground">{clientType}</span>

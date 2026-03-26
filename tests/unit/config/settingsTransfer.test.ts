@@ -8,7 +8,6 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  loadArchiveBackend,
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
@@ -34,7 +33,7 @@ describe("settingsTransfer", () => {
     expect(snapshot.version).toBe(SETTINGS_EXPORT_VERSION);
     expect(snapshot.appSettings).toHaveProperty("debugLoggingEnabled");
     expect(snapshot.appSettings).toHaveProperty("volumeSliderPreviewIntervalMs");
-    expect(snapshot.appSettings).toHaveProperty("archiveBackend");
+    expect(snapshot.appSettings).toHaveProperty("archiveHostOverride");
     expect(snapshot.deviceSafety).toHaveProperty("mode");
     expect(JSON.stringify(snapshot)).not.toMatch(/password/i);
   });
@@ -51,7 +50,6 @@ describe("settingsTransfer", () => {
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "kernal",
         volumeSliderPreviewIntervalMs: 200,
-        archiveBackend: "commodore",
         archiveHostOverride: "",
         archiveClientIdOverride: "",
         archiveUserAgentOverride: "",
@@ -92,7 +90,6 @@ describe("settingsTransfer", () => {
         discoveryProbeTimeoutMs: 3200,
         diskAutostartMode: "dma",
         volumeSliderPreviewIntervalMs: 300,
-        archiveBackend: "assembly64",
         archiveHostOverride: "archive.local:3002",
         archiveClientIdOverride: "Custom",
         archiveUserAgentOverride: "Custom Agent",
@@ -126,7 +123,6 @@ describe("settingsTransfer", () => {
     expect(loadDiscoveryProbeTimeoutMs()).toBe(3200);
     expect(loadDiskAutostartMode()).toBe("dma");
     expect(loadVolumeSliderPreviewIntervalMs()).toBe(300);
-    expect(loadArchiveBackend()).toBe("assembly64");
     expect(loadArchiveHostOverride()).toBe("archive.local:3002");
     expect(loadArchiveClientIdOverride()).toBe("Custom");
     expect(loadArchiveUserAgentOverride()).toBe("Custom Agent");
@@ -164,7 +160,6 @@ describe("settingsTransfer", () => {
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "never",
         volumeSliderPreviewIntervalMs: 200,
-        archiveBackend: "commodore",
         archiveHostOverride: "",
         archiveClientIdOverride: "",
         archiveUserAgentOverride: "",
@@ -204,7 +199,6 @@ describe("settingsTransfer", () => {
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "kernal",
         volumeSliderPreviewIntervalMs: 200,
-        archiveBackend: "commodore",
         archiveHostOverride: "",
         archiveClientIdOverride: "",
         archiveUserAgentOverride: "",

@@ -61,7 +61,6 @@ import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
 import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
-  loadArchiveBackend,
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
@@ -93,16 +92,12 @@ import {
   NOTIFICATION_DURATION_MIN_MS,
   NOTIFICATION_DURATION_MAX_MS,
   loadAutoRotationEnabled,
-  saveArchiveBackend,
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
   saveAutoRotationEnabled,
   loadCommoserveEnabled,
   saveCommoserveEnabled,
-  loadAssembly64Enabled,
-  saveAssembly64Enabled,
-  type ArchiveBackend,
   type DiskAutostartMode,
   type NotificationVisibility,
 } from "@/lib/config/appSettings";
@@ -136,7 +131,7 @@ import { useNavigate } from "react-router-dom";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
 import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
-import { validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
+import { buildDefaultArchiveClientConfig, validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
 import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
 
 type Theme = "light" | "dark" | "system";
@@ -219,9 +214,7 @@ export default function SettingsPage() {
     useState<NotificationVisibility>(loadNotificationVisibility);
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
-  const [archiveBackend, setArchiveBackend] = useState<ArchiveBackend>(loadArchiveBackend());
   const [commoserveEnabled, setCommoserveEnabled] = useState(loadCommoserveEnabled);
-  const [assembly64Enabled, setAssembly64Enabled] = useState(loadAssembly64Enabled);
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
   const [archiveClientIdOverride, setArchiveClientIdOverride] = useState(loadArchiveClientIdOverride());
   const [archiveUserAgentOverride, setArchiveUserAgentOverride] = useState(loadArchiveUserAgentOverride());
@@ -238,13 +231,15 @@ export default function SettingsPage() {
   const isAndroid = getPlatform() === "android";
   const resolvedArchiveConfig = useMemo(
     () =>
-      resolveArchiveClientConfig({
-        backend: archiveBackend,
-        hostOverride: archiveHostOverride,
-        clientIdOverride: archiveClientIdOverride,
-        userAgentOverride: archiveUserAgentOverride,
-      }),
-    [archiveBackend, archiveClientIdOverride, archiveHostOverride, archiveUserAgentOverride],
+      resolveArchiveClientConfig(
+        buildDefaultArchiveClientConfig({
+          enabled: commoserveEnabled,
+          hostOverride: archiveHostOverride,
+          clientIdOverride: archiveClientIdOverride,
+          userAgentOverride: archiveUserAgentOverride,
+        }),
+      ),
+    [archiveClientIdOverride, archiveHostOverride, archiveUserAgentOverride, commoserveEnabled],
   );
 
   const commitHvscBaseUrl = useCallback(() => {
@@ -299,14 +294,8 @@ export default function SettingsPage() {
       if (detail.key === "c64u_volume_slider_preview_interval_ms") {
         setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
       }
-      if (detail.key === "c64u_archive_backend") {
-        setArchiveBackend(loadArchiveBackend());
-      }
       if (detail.key === "c64u_commoserve_enabled") {
         setCommoserveEnabled(loadCommoserveEnabled());
-      }
-      if (detail.key === "c64u_assembly64_enabled") {
-        setAssembly64Enabled(loadAssembly64Enabled());
       }
       if (detail.key === "c64u_archive_host_override") {
         const next = loadArchiveHostOverride();
@@ -556,9 +545,7 @@ export default function SettingsPage() {
       setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
-      setArchiveBackend(loadArchiveBackend());
       setCommoserveEnabled(loadCommoserveEnabled());
-      setAssembly64Enabled(loadAssembly64Enabled());
       const importedArchiveHostOverride = loadArchiveHostOverride();
       setArchiveHostOverride(importedArchiveHostOverride);
       setArchiveHostError(validateArchiveHost(importedArchiveHostOverride));
@@ -1144,7 +1131,7 @@ export default function SettingsPage() {
 
             <div className="space-y-3">
               <div className="space-y-2">
-                <p className="text-sm font-medium">Enabled sources</p>
+                <p className="text-sm font-medium">Enabled source</p>
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="commoserve-enabled"
@@ -1160,48 +1147,8 @@ export default function SettingsPage() {
                     CommoServe
                   </Label>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="assembly64-enabled"
-                    data-testid="assembly64-enabled"
-                    checked={assembly64Enabled}
-                    onCheckedChange={(checked) => {
-                      const enabled = checked === true;
-                      setAssembly64Enabled(enabled);
-                      saveAssembly64Enabled(enabled);
-                    }}
-                  />
-                  <Label htmlFor="assembly64-enabled" className="text-sm">
-                    Assembly64
-                  </Label>
-                </div>
                 <p className="text-xs text-muted-foreground">
-                  Enable one or both online archive sources. Enabled sources appear in the Add Items interstitial.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="archive-backend" className="text-sm font-medium">
-                  Archive backend
-                </Label>
-                <Select
-                  value={archiveBackend}
-                  onValueChange={(value) => {
-                    const next = value as ArchiveBackend;
-                    setArchiveBackend(next);
-                    saveArchiveBackend(next);
-                  }}
-                >
-                  <SelectTrigger id="archive-backend" data-testid="archive-backend-select">
-                    <SelectValue placeholder="Select archive backend" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="commodore">CommoServe</SelectItem>
-                    <SelectItem value="assembly64">Assembly64</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Selects the backend for the archive browser dialog below. Overrides apply to this backend.
+                  Enable the online archive source. It appears in the Add Items interstitial when enabled.
                 </p>
               </div>
 
@@ -1861,12 +1808,12 @@ export default function SettingsPage() {
         <OnlineArchiveDialog
           open={archiveDialogOpen}
           onOpenChange={setArchiveDialogOpen}
-          config={{
-            backend: archiveBackend,
+          config={buildDefaultArchiveClientConfig({
+            enabled: commoserveEnabled,
             hostOverride: archiveHostOverride,
             clientIdOverride: archiveClientIdOverride,
             userAgentOverride: archiveUserAgentOverride,
-          }}
+          })}
         />
       ) : null}
 

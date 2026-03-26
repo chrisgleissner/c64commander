@@ -126,12 +126,7 @@ export const ItemSelectionDialog = ({
     [sourceGroups],
   );
 
-  const assembly64Source = useMemo(
-    () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === "assembly64") ?? null,
-    [sourceGroups],
-  );
-
-  const isArchiveSource = source?.type === "commoserve" || source?.type === "assembly64";
+  const isArchiveSource = source?.type === "commoserve";
   const archiveConfig = source ? (archiveConfigs?.[source.id] ?? null) : null;
 
   const browser = useSourceNavigator(isArchiveSource ? null : source);
@@ -457,31 +452,6 @@ export const ItemSelectionDialog = ({
                     </span>
                   </Button>
                 ) : null}
-                {assembly64Source ? (
-                  <Button
-                    variant="outline"
-                    className={interstitialButtonClassName}
-                    onClick={() => {
-                      setPendingLocalSource(false);
-                      setSelectedSourceId(assembly64Source.id);
-                    }}
-                    id="import-option-assembly64"
-                    data-testid="import-option-assembly64"
-                    aria-label={`Search ${SOURCE_LABELS.assembly64}`}
-                  >
-                    <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
-                      <FileOriginIcon origin="assembly64" className="h-4 w-4 mr-1" />
-                      <span className={interstitialLabelClassName}>
-                        <span className={cn("truncate font-medium", interstitialTextClassName)}>
-                          {SOURCE_LABELS.assembly64}
-                        </span>
-                        <span className={cn("text-[11px] text-muted-foreground", interstitialTextClassName)}>
-                          {SOURCE_EXPLANATIONS.assembly64}
-                        </span>
-                      </span>
-                    </span>
-                  </Button>
-                ) : null}
               </div>
             </div>
           </AppDialogBody>
@@ -563,15 +533,12 @@ export const ItemSelectionDialog = ({
                     ? "local-file-picker"
                     : source.type === "commoserve"
                       ? "commoserve-picker"
-                      : source.type === "assembly64"
-                        ? "assembly64-picker"
-                        : "source-file-picker"
+                      : "source-file-picker"
               }
             >
               {isArchiveSource && archiveConfig ? (
                 <ArchiveSelectionView
                   config={archiveConfig}
-                  backend={archiveConfig.backend}
                   selection={archiveSelection}
                   onToggleSelect={(result) => {
                     setArchiveSelection((prev) => {

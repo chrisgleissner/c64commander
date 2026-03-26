@@ -11,7 +11,6 @@ export const SOURCE_LABELS = {
   c64u: "C64U",
   hvsc: "HVSC",
   commoserve: "CommoServe",
-  assembly64: "Assembly64",
 } as const;
 
 export const SOURCE_EXPLANATIONS = {
@@ -19,5 +18,4 @@ export const SOURCE_EXPLANATIONS = {
   c64u: "Commodore 64 Ultimate",
   hvsc: "High Voltage SID Collection",
   commoserve: "Online File Archive",
-  assembly64: "Online Demo Archive",
 } as const;

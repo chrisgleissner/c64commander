@@ -68,7 +68,7 @@ export interface FormField {
   isEmpty: boolean;
 }
 
-/** A parsed CommoServe/Assembly64 form */
+/** A parsed CommoServe form */
 export interface ParsedForm {
   title: string;
   fields: FormField[];

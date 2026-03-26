@@ -14,9 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildArchiveQuery } from "@/lib/archive/queryBuilder";
-import { ARCHIVE_BACKEND_DEFAULTS } from "@/lib/archive/config";
+import { DEFAULT_ARCHIVE_SOURCE_CONFIG, resolveArchiveClientConfig } from "@/lib/archive/config";
 import type {
-    ArchiveBackend,
     ArchivePreset,
     ArchivePresetType,
     ArchiveSearchParams,
@@ -63,7 +62,6 @@ export type ArchiveSelectedItem = {
 
 export type ArchiveSelectionViewProps = {
     config: ArchiveClientConfigInput;
-    backend: ArchiveBackend;
     selection: Map<string, ArchiveSearchResult>;
     onToggleSelect: (result: ArchiveSearchResult) => void;
     onSelectAll: (results: ArchiveSearchResult[]) => void;
@@ -76,7 +74,6 @@ const resultKey = (result: ArchiveSearchResult) => `${result.id}:${result.catego
 
 export const ArchiveSelectionView = ({
     config,
-    backend,
     selection,
     onToggleSelect,
     onSelectAll,
@@ -105,23 +102,22 @@ export const ArchiveSelectionView = ({
         }
     }, [form]);
 
-    const resultRows = "results" in state ? state.results : [];
+  const resultRows = "results" in state ? state.results : [];
 
-    const handleSearch = useCallback(async () => {
-        await search(form);
-    }, [form, search]);
+  const handleSearch = useCallback(async () => {
+    await search(form);
+  }, [form, search]);
 
-    const currentDefaults = ARCHIVE_BACKEND_DEFAULTS[resolvedConfig.backend];
-    const backendLabel = backend === "commodore" ? "CommoServe" : "Assembly64";
+  const currentDefaults = resolveArchiveClientConfig(DEFAULT_ARCHIVE_SOURCE_CONFIG);
 
-    return (
-        <div className="space-y-3" data-testid="archive-selection-view">
+  return (
+    <div className="space-y-3" data-testid="archive-selection-view">
             <div
                 className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground"
                 data-testid="archive-selection-config"
             >
                 <div>
-                    Backend: <span className="font-medium text-foreground">{backendLabel}</span>
+                    Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
                 </div>
                 <div>
                     Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
@@ -252,8 +248,8 @@ export const ArchiveSelectionView = ({
                     );
                 })}
             </div>
-        </div>
-    );
+    </div>
+  );
 };
 
 export { resultKey as archiveResultKey };

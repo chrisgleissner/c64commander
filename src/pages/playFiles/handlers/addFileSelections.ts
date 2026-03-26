@@ -168,11 +168,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     };
 
     try {
-      if (source.type === "commoserve" || source.type === "assembly64") {
+      if (source.type === "commoserve") {
         const playlistItems: PlaylistItem[] = selections.map((sel) => ({
           id: `${source.type}:${source.id}:${sel.path}`,
           request: {
-            source: source.type as "commoserve" | "assembly64",
+            source: source.type,
             path: sel.path,
           },
           category: "prg" as const,

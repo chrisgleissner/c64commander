@@ -222,23 +222,9 @@ describe("ItemSelectionDialog archive source buttons", () => {
         },
       ],
     },
-    {
-      label: "Assembly64",
-      sources: [
-        {
-          id: "archive-assembly64",
-          type: "assembly64",
-          name: "Assembly64",
-          rootPath: "/",
-          isAvailable: true,
-          listEntries: async () => [],
-          listFilesRecursive: async () => [],
-        },
-      ],
-    },
   ];
 
-  it("renders CommoServe and Assembly64 buttons in the interstitial when sources are present", () => {
+  it("renders the CommoServe button in the interstitial when the source is present", () => {
     localStorage.clear();
     render(
       <DisplayProfileProvider>
@@ -254,11 +240,8 @@ describe("ItemSelectionDialog archive source buttons", () => {
       </DisplayProfileProvider>,
     );
     expect(screen.getByTestId("import-option-commoserve")).toBeVisible();
-    expect(screen.getByTestId("import-option-assembly64")).toBeVisible();
     expect(screen.getByText("CommoServe")).toBeVisible();
-    expect(screen.getByText("Assembly64")).toBeVisible();
     expect(screen.getByText("Online File Archive")).toBeVisible();
-    expect(screen.getByText("Online Demo Archive")).toBeVisible();
   });
 
   it("omits archive buttons when sources are absent", () => {
@@ -277,6 +260,5 @@ describe("ItemSelectionDialog archive source buttons", () => {
       </DisplayProfileProvider>,
     );
     expect(screen.queryByTestId("import-option-commoserve")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("import-option-assembly64")).not.toBeInTheDocument();
   });
 });

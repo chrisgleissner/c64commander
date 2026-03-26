@@ -121,22 +121,21 @@ describe("addFileSelections archive source handler", () => {
         expect(deps.setPlaylist).not.toHaveBeenCalled();
     });
 
-    it("works with assembly64 source type", async () => {
-        const a64Source: SourceLocation = {
+    it("preserves the selected archive source id in playlist items", async () => {
+        const customSource: SourceLocation = {
             ...archiveSource,
-            id: "archive-assembly64",
-            type: "assembly64",
-            name: "Assembly64",
+            id: "archive-custom",
+            name: "Custom Archive",
         };
         const deps = createMockDeps();
         const handler = createAddFileSelectionsHandler(deps as any);
 
         const selections = [{ type: "file" as const, name: "Demo", path: "789/1" }];
-        const result = await handler(a64Source, selections);
+        const result = await handler(customSource, selections);
 
         expect(result).toBe(true);
         const item = deps._playlistItems[0] as any;
-        expect(item.request.source).toBe("assembly64");
-        expect(item.id).toContain("assembly64");
+        expect(item.request.source).toBe("commoserve");
+        expect(item.id).toContain("archive-custom");
     });
 });

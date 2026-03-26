@@ -45,11 +45,12 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
 import {
   loadCommoserveEnabled,
-  loadAssembly64Enabled,
-  loadArchiveBackend,
   loadArchiveHostOverride,
+  loadArchiveClientIdOverride,
+  loadArchiveUserAgentOverride,
 } from "@/lib/config/appSettings";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
+import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -194,12 +195,10 @@ export default function PlayFilesPage() {
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
 
   const [commoserveEnabled, setCommoserveEnabled] = useState(() => loadCommoserveEnabled());
-  const [assembly64Enabled, setAssembly64Enabled] = useState(() => loadAssembly64Enabled());
 
   useEffect(() => {
     const handler = (e: StorageEvent) => {
       if (e.key === "c64u_commoserve_enabled") setCommoserveEnabled(loadCommoserveEnabled());
-      if (e.key === "c64u_assembly64_enabled") setAssembly64Enabled(loadAssembly64Enabled());
     };
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
@@ -466,29 +465,28 @@ export default function PlayFilesPage() {
     if (commoserveEnabled) {
       groups.push({
         label: SOURCE_LABELS.commoserve,
-        sources: [createArchiveSourceLocation("commoserve")],
-      });
-    }
-    if (assembly64Enabled) {
-      groups.push({
-        label: SOURCE_LABELS.assembly64,
-        sources: [createArchiveSourceLocation("assembly64")],
+        sources: [createArchiveSourceLocation(buildDefaultArchiveClientConfig({ enabled: commoserveEnabled }))],
       });
     }
     return groups;
-  }, [assembly64Enabled, commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
+  }, [commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
 
   const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
     const hostOverride = loadArchiveHostOverride();
+    const clientIdOverride = loadArchiveClientIdOverride();
+    const userAgentOverride = loadArchiveUserAgentOverride();
     const configs: Record<string, ArchiveClientConfigInput> = {};
     if (commoserveEnabled) {
-      configs["archive-commoserve"] = { backend: "commodore", hostOverride };
-    }
-    if (assembly64Enabled) {
-      configs["archive-assembly64"] = { backend: "assembly64", hostOverride };
+      const config = buildDefaultArchiveClientConfig({
+        enabled: true,
+        hostOverride,
+        clientIdOverride,
+        userAgentOverride,
+      });
+      configs[config.id] = config;
     }
     return configs;
-  }, [assembly64Enabled, commoserveEnabled]);
+  }, [commoserveEnabled]);
 
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {

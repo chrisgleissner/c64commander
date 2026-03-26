@@ -5,7 +5,7 @@
 This specification defines how C64 Commander introduces Telnet-based control for C64 Ultimate functionality not exposed via REST. This covers two distinct capabilities:
 
 1. **Action menu automation** — Telnet-only device actions (Power Cycle, Save Memory, IEC/Printer controls, etc.) via label-based menu navigation
-2. **CommoServe / Assembly64 search** — Online content search, browsing, and run/mount of C64 software via the firmware's built-in search form
+2. **CommoServe search** — Online content search, browsing, and run/mount of C64 software via the firmware's built-in search form
 
 The design adds a Telnet transport client, a VT100 screen parser (with both menu and form detection), a label-based menu navigator, a form-based CommoServe navigator, deterministic mocks, and native UI surfaces — all integrated with the existing device interaction scheduling infrastructure.
 
@@ -90,9 +90,9 @@ Can Telnet be interacted with independently of FTP and REST, or must all protoco
 
 | Key | VT100 Sequence | Firmware Internal Code          | Purpose                          |
 | --- | -------------- | ------------------------------- | -------------------------------- |
-| F6  | `\e[17~`       | `KEY_F6` → `KEY_SEARCH` (0x1FD) | **Open CommoServe / Assembly64** |
+| F6  | `\e[17~`       | `KEY_F6` → `KEY_SEARCH` (0x1FD) | **Open CommoServe** |
 
-F6 opens the CommoServe / Assembly64 online content search. This key mapping is consistent across both C64U and U64 devices. See section 10b for the full CommoServe integration design.
+F6 opens the CommoServe online content search. This key mapping is consistent across both C64U and U64 devices. See section 10b for the full CommoServe integration design.
 
 ### 3.4 Menu Rendering
 
@@ -239,7 +239,7 @@ interface TelnetSession {
 const TELNET_KEYS = {
   F1: "\x1b[11~", // Open action menu (C64U) or Page Up (U64)
   F5: "\x1b[15~", // Open action menu (U64)
-  F6: "\x1b[17~", // Open CommoServe / Assembly64 search
+  F6: "\x1b[17~", // Open CommoServe search
   UP: "\x1b[A",
   DOWN: "\x1b[B",
   RIGHT: "\x1b[C", // Enter submenu
@@ -422,7 +422,7 @@ Total timeout for a single Telnet action: **10 seconds**. This is generous for a
 
 ### 8.6 CommoServe Navigation
 
-CommoServe / Assembly64 uses a fundamentally different navigation model from the action menu. Instead of a hierarchical menu, it is a multi-screen form-based flow with text input. The navigator must support both models.
+CommoServe uses a fundamentally different navigation model from the action menu. Instead of a hierarchical menu, it is a multi-screen form-based flow with text input. The navigator must support both models.
 
 #### 8.6.1 CommoServe State Machine
 
@@ -532,7 +532,7 @@ interface CommoServeFileEntry {
 
 #### 8.6.7 CommoServe Timeout Budget
 
-CommoServe operations involve network requests to the Assembly64 server, so timeouts must be more generous than action menu navigation:
+CommoServe operations involve network requests to the archive service, so timeouts must be more generous than action menu navigation:
 
 - **Search form open**: 5 seconds (includes preset fetching from server)
 - **Query submission**: 15 seconds (server-side search can be slow)
@@ -741,11 +741,11 @@ When firmware REST API adds coverage for currently Telnet-only actions, the acti
 
 ---
 
-## 10b. CommoServe / Assembly64 Integration
+## 10b. CommoServe Integration
 
 ### 10b.1 Overview
 
-CommoServe (C64U) / Assembly64 (U64) is an online content search and download service accessible via `F6` from the Telnet file browser. It provides search, browsing, and direct run/mount of C64 software from a remote database.
+CommoServe is an online content search and download service accessible via `F6` from the Telnet file browser. It provides search, browsing, and direct run/mount of C64 software from a remote database.
 
 This is fundamentally different from the action menu (section 10): instead of navigating a fixed hierarchical menu to trigger a device command, CommoServe involves form-based search with text input, server-driven results, multi-level browsing, and file actions. The client must handle:
 
@@ -905,7 +905,7 @@ When Telnet is unavailable (web platform, connection failure), Telnet-only actio
 
 The existing `useC64Connection` hook should be extended to track Telnet connectivity separately. A small indicator in the Home page header or Quick Actions section shows Telnet status when relevant (connected / disconnected / unavailable).
 
-### 11.9 CommoServe / Assembly64 Search UI
+### 11.9 CommoServe Search UI
 
 CommoServe provides a content search and download experience that should be surfaced as a dedicated feature in C64 Commander, not as a Telnet action button.
 
@@ -1057,7 +1057,7 @@ The title line contains the firmware version: `*** C64 Ultimate (V1.49) 1.1.0 **
 | Concurrent Telnet + REST causes subsystem mutex timeout | Existing backoff/retry handles occasional NO_LOCK; Telnet actions are rare       |
 | Connection drops during navigation                      | Reconnect and retry full action from start                                       |
 | Web users cannot use Telnet features                    | Clear UI indication; REST covers most common actions                             |
-| Assembly64 server unavailable or slow                   | Generous timeouts (15s query); clear error messaging; cached presets per session |
+| Archive service unavailable or slow                    | Generous timeouts (15s query); clear error messaging; cached presets per session |
 | CommoServe presets change server-side                   | Presets are fetched dynamically; UI adapts to available options                  |
 | Device has no internet for CommoServe                   | Detect via firmware popup; disable CommoServe entry point with clear message     |
 
@@ -1228,11 +1228,11 @@ When firmware REST API gains coverage for a currently Telnet-only action:
 
 4. **CommoServe branding**: The C64 Ultimate shows "CommoServe File Search" while the Ultimate 64 shows "Assembly 64 Query Form". The parser must recognize both title strings to detect the search form screen. The UI uses either "CommoServe" (if using a C64U) or "Assembly 64" (all other devices).
 
-5. **CommoServe preset stability**: Dropdown presets (Category, Date, Type, Sort, Order) are fetched from the Assembly64 server at runtime. If the server changes presets, the UI must adapt. The native search UI should populate dropdown options from the fetched presets rather than hardcoding values.
+5. **CommoServe preset stability**: Dropdown presets (Category, Date, Type, Sort, Order) are fetched from the archive service at runtime. If the service changes presets, the UI must adapt. The native search UI should populate dropdown options from the fetched presets rather than hardcoding values.
 
 6. **CommoServe session exclusivity**: While a CommoServe search session is active on the Telnet connection, action menu operations cannot be performed simultaneously (the firmware routes keys to the `AssemblySearch` TreeBrowser, not the main browser). The Telnet scheduler must prevent action menu operations while a CommoServe session is open, or close CommoServe first.
 
-7. **File download latency**: When a user selects "Run Disk" on a CommoServe result, the firmware downloads the file from the Assembly64 server to `/Temp/` before executing. This introduces variable latency (seconds to tens of seconds depending on file size and network). The UI must show appropriate loading state and the timeout must account for this.
+7. **File download latency**: When a user selects "Run Disk" on a CommoServe result, the firmware downloads the file from the archive service to `/Temp/` before executing. This introduces variable latency (seconds to tens of seconds depending on file size and network). The UI must show appropriate loading state and the timeout must account for this.
 
 ---
 
@@ -1607,7 +1607,7 @@ When a file entry is tapped, a bottom action sheet presents available actions:
 - Available actions come from the firmware — they depend on the file extension (see `c64u-telnet.yaml` filesystem context menus for the full mapping).
 - Action labels use intent-driven language matching the firmware labels.
 - Tapping an action triggers the Telnet executor, shows a loading spinner on the tapped action, and disables other actions during execution.
-- The file download latency (firmware downloads from Assembly64 server to `/Temp/`) is communicated via a "Downloading..." intermediate state before the action executes.
+- The file download latency (firmware downloads from the archive service to `/Temp/`) is communicated via a "Downloading..." intermediate state before the action executes.
 
 #### 18.7.7 CommoServe Loading States
 
