@@ -44,7 +44,6 @@ export interface MachineControlsProps {
   onPauseResume: () => void;
   onSaveRam: () => void;
   onLoadRam: () => void;
-  onRebootClearMemory: () => void;
   onPowerOff: () => void;
   onPowerCycle?: () => void;
   overflowActions?: MachineOverflowAction[];
@@ -66,7 +65,6 @@ export function MachineControls({
   onPauseResume,
   onSaveRam,
   onLoadRam,
-  onRebootClearMemory,
   onPowerOff,
   onPowerCycle,
   overflowActions = [],
@@ -148,9 +146,14 @@ export function MachineControls({
             label="Reboot"
             variant="danger"
             className="border-destructive/40 bg-destructive/[0.04]"
-            onClick={() => void onRebootClearMemory()}
-            disabled={!status.isConnected || effectiveBusy || !telnetAvailable}
-            loading={telnetActiveActionId === "rebootClearMemory"}
+            onClick={() =>
+              onAction(async () => {
+                await controls.reboot.mutateAsync();
+                setMachineExecutionState("running");
+              }, "Machine rebooting")
+            }
+            disabled={!status.isConnected || effectiveBusy}
+            loading={controls.reboot.isPending}
           />
           <QuickActionCard
             icon={machineExecutionState === "paused" ? Play : Pause}

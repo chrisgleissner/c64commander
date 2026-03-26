@@ -61,7 +61,6 @@ const defaultProps = {
   onPauseResume: vi.fn(),
   onSaveRam: vi.fn(),
   onLoadRam: vi.fn(),
-  onRebootClearMemory: vi.fn(),
   onPowerOff: vi.fn(),
   onAction: vi.fn().mockImplementation((fn: () => Promise<void>) => fn()),
 };
@@ -82,6 +81,14 @@ describe("MachineControls", () => {
       "Power Off",
     ]);
     expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "4");
+  });
+
+  it("keeps the primary reboot action enabled without telnet and executes the REST reboot mutation", () => {
+    render(<MachineControls {...defaultProps} telnetAvailable={false} />);
+
+    fireEvent.click(screen.getByTestId("action-Reboot"));
+
+    expect(defaultProps.controls.reboot.mutateAsync).toHaveBeenCalledTimes(1);
   });
 
   it("disables Power Cycle when Telnet is unavailable or no handler is provided", () => {

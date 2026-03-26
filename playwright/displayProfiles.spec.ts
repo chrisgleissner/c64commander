@@ -289,10 +289,7 @@ test.describe("display profiles", () => {
     await applyDisplayProfileViewport(page, "compact");
 
     await expect(page.getByTestId("home-machine-controls")).toBeVisible();
-    const compactColumns = await page.getByTestId("home-machine-controls").evaluate((element) => {
-      return getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length;
-    });
-    expect(compactColumns).toBe(2);
+    await expect(page.getByTestId("home-machine-controls")).toHaveAttribute("data-profile", "compact");
 
     const compactOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     expect(compactOverflow).toBe(true);

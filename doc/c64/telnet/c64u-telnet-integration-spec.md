@@ -1275,11 +1275,11 @@ Following `doc/ux-guidelines.md`, all labels describe what the user wants to acc
 
 #### 18.1.4 Small Screen First
 
-All Telnet features must work on compact-profile devices (narrowest supported width). The existing `ProfileActionGrid` component handles responsive column layout (2 columns compact, 4 columns medium/expanded). New action buttons use `QuickActionCard` with the same density-adaptive sizing. Cards and inline controls use the existing `useDisplayProfile()` hook to adjust layout.
+All Telnet features must work on compact-profile devices (narrowest supported width). The existing `ProfileActionGrid` component handles the profile-aware quick-action density, and the Home quick-actions grid currently renders four columns across compact, medium, and expanded profiles. New action buttons use `QuickActionCard` with the same density-adaptive sizing. Cards and inline controls use the existing `useDisplayProfile()` hook to adjust layout.
 
 ### 18.2 Home Page — Quick Actions Grid
 
-The existing Quick Actions grid (`MachineControls.tsx`) uses a `ProfileActionGrid` with `QuickActionCard` components in a 2×4 / 4×2 responsive layout. It currently has 8 buttons: Reset, Reboot, Pause/Resume, Menu, Save RAM, Load RAM, Reboot (Clear RAM), Power Off.
+The existing Quick Actions grid (`MachineControls.tsx`) uses a `ProfileActionGrid` with `QuickActionCard` components. It currently has 8 buttons: Reset, Reboot, Pause/Resume, Menu, Save RAM, Load RAM, Power Cycle, Power Off.
 
 #### 18.2.1 Additions
 
@@ -1714,17 +1714,17 @@ Telnet-only buttons use `effectiveBusy` for their disabled state. REST-only butt
 
 The following table summarizes how each Telnet feature adapts across display profiles:
 
-| Feature                 | Compact (2 col)         | Medium (4 col)       | Expanded (4 col)     |
-| ----------------------- | ----------------------- | -------------------- | -------------------- |
-| Quick Actions grid      | 5 rows × 2              | 3 rows × 4 (partial) | 3 rows × 4 (partial) |
-| Power Cycle button      | Full-width in grid cell | Standard grid cell   | Standard grid cell   |
-| Save REU in dialog      | Full-width card         | Full-width card      | Full-width card      |
-| IEC inline buttons      | Stacked vertically      | Row of buttons       | Row of buttons       |
-| Printer inline buttons  | Stacked vertically      | Row of buttons       | Row of buttons       |
-| Config actions grid     | 2 col grid              | 4 col grid           | 4 col grid           |
-| CommoServe sheet        | Full-screen sheet       | Centered sheet (80%) | Centered dialog      |
-| CommoServe results      | Full-width list         | Full-width list      | Full-width list      |
-| CommoServe file actions | Bottom action sheet     | Bottom action sheet  | Dialog               |
+| Feature                 | Compact (2 col)         | Medium (4 col)       | Expanded (4 col)   |
+| ----------------------- | ----------------------- | -------------------- | ------------------ |
+| Quick Actions grid      | 2 rows × 4              | 2 rows × 4           | 2 rows × 4         |
+| Power Cycle button      | Full-width in grid cell | Standard grid cell   | Standard grid cell |
+| Save REU in dialog      | Full-width card         | Full-width card      | Full-width card    |
+| IEC inline buttons      | Stacked vertically      | Row of buttons       | Row of buttons     |
+| Printer inline buttons  | Stacked vertically      | Row of buttons       | Row of buttons     |
+| Config actions grid     | 2 col grid              | 4 col grid           | 4 col grid         |
+| CommoServe sheet        | Full-screen sheet       | Centered sheet (80%) | Centered dialog    |
+| CommoServe results      | Full-width list         | Full-width list      | Full-width list    |
+| CommoServe file actions | Bottom action sheet     | Bottom action sheet  | Dialog             |
 
 ### 18.12 Accessibility
 
