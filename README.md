@@ -108,8 +108,20 @@ Build playlists from local files, C64U storage, or HVSC. Supports autoplay, shuf
 <table>
   <tr>
     <td><img src="doc/img/app/play/01-overview.png" alt="Play overview" width="360"/></td>
-    <td><img src="doc/img/app/play/import/01-import-interstitial.png" alt="Play import" width="360"/></td>
     <td><img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="360"/></td>
+    <td><img src="doc/img/app/play/playlist/01-view-all.png" alt="Play playlist view all" width="360"/></td>
+  </tr>
+</table>
+
+### Browse & Import
+
+Browse files from C64U storage, add local folders from your device, and pull in remote results from CommoServe without leaving the playlist workflow.
+
+<table>
+  <tr>
+    <td><img src="doc/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
+    <td><img src="doc/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
+    <td><img src="doc/img/app/play/import/03-local-file-picker.png" alt="Local folder import" width="360"/></td>
   </tr>
   <tr>
     <td><img src="doc/img/app/play/import/04-commoserve-search.png" alt="CommoServe search form" width="360"/></td>
