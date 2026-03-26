@@ -14,7 +14,7 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 - **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
 - **Dashboard**: Machine controls, Telnet-backed quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
 - **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
-- **Playlists**: Build playlists from local files, C64U storage, CommoServe search results, or the High Voltage SID Collection (HVSC). Autoplay, shuffle, and subsong selection.
+- **Playlists**: Build playlists from local files, C64U storage, the High Voltage SID Collection (HVSC), or CommoServe search results. Autoplay, shuffle, and subsong selection.
 - **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
 - **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
 
