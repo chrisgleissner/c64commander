@@ -1,5 +1,60 @@
 # Telnet Convergence Implementation Plan
 
+## Screenshot Regeneration Integrity Plan
+
+Status: IN PROGRESS
+Date: 2026-03-26
+Classification: DOC_PLUS_CODE
+Visible UI impact: YES
+
+### Objective
+
+Enforce deterministic documentation screenshot freshness across `doc/img/app/**/*.png` using only git metadata, path/reference auditing, and reproducible pipeline regeneration with zero image inspection.
+
+### Execution Phases
+
+#### Phase 1 - Inventory and reference mapping
+
+- Enumerate every screenshot under `doc/img/app/**/*.png`.
+- Enumerate every reference from `README.md`, `doc/**`, and `docs/**`.
+- Build a path-only image-to-reference mapping for reporting and orphan detection.
+
+#### Phase 2 - Git-date classification
+
+- Resolve the last git modification date for every screenshot.
+- Classify screenshots as `VALID` only when the git date is `2026-03-26`.
+- Mark every other screenshot `OUTDATED` for deletion and regeneration.
+
+#### Phase 3 - Pipeline coverage verification
+
+- Confirm the screenshot pipeline can regenerate the entire expected `doc/img/app/` set.
+- Extend deterministic screenshot coverage only if the current pipeline leaves gaps.
+
+#### Phase 4 - Deletion and full regeneration
+
+- Delete all outdated screenshots from `doc/img/app/`.
+- Run the screenshot pipeline to regenerate the expected set.
+- Keep only the regenerated canonical files.
+
+#### Phase 5 - Documentation consistency and reproducibility
+
+- Fix README/doc/docs references so every referenced screenshot exists.
+- Remove orphan references and document any justified non-referenced files.
+- Treat every screenshot referenced by the top-level `README.md` as mandatory canonical output that must continue to exist after regeneration.
+- If any `README.md` screenshot cannot be recreated by the screenshot suite, extend the suite until it generates that path; do not leave outdated PNGs behind and do not leave dangling links.
+- Re-run the screenshot pipeline and confirm no further tracked changes appear.
+
+#### Phase 6 - Reporting
+
+- Write `doc/research/review-screenshots-regeneration.md` with inventory, git-date validation, actions taken, and final PASS/FAIL checks.
+
+#### Phase 7 - CI remediation and green build closure
+
+- Inspect the requested GitHub Actions job logs with `gh` after screenshot regeneration is complete.
+- Fix any failures that can be resolved locally without disabling tests.
+- Commit and push the full change set.
+- Monitor CI runs, fetch failing logs with `gh`, fix root causes, and push follow-up commits until all builds are green.
+
 Status: IN PROGRESS
 Date: 2026-03-26
 Classification: DOC_PLUS_CODE
