@@ -201,7 +201,7 @@ describe("PrinterManager – telnet controls", () => {
     expect(screen.queryByTestId("home-printer-telnet-reset")).not.toBeInTheDocument();
   });
 
-  it("shows telnet buttons when telnetAvailable and printer enabled", () => {
+  it("hides telnet buttons when telnetAvailable but no telnet handler is provided", () => {
     render(<PrinterManager {...defaultProps} telnetAvailable={true} />);
     expect(screen.queryByTestId("home-printer-flush")).not.toBeInTheDocument();
     expect(screen.queryByTestId("home-printer-telnet-reset")).not.toBeInTheDocument();

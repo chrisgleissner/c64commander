@@ -12,24 +12,24 @@ import { describe, expect, it, vi } from "vitest";
 const mockLabel = vi.fn(() => "some/label");
 
 vi.mock("@/lib/ui/pathDisplay", () => ({
-    useResponsivePathLabel: (source: string) => ({
-        elementRef: { current: null },
-        label: mockLabel(source),
-    }),
+  useResponsivePathLabel: (source: string) => ({
+    elementRef: { current: null },
+    label: mockLabel(source),
+  }),
 }));
 
 import { ResponsivePathText } from "@/components/ResponsivePathText";
 
 describe("ResponsivePathText", () => {
-    it("uses fallback when path is whitespace-only", () => {
-        mockLabel.mockReturnValueOnce("—");
-        render(<ResponsivePathText path="  " mode="full" />);
-        expect(screen.getByTitle("—")).toBeInTheDocument();
-    });
+  it("uses fallback when path is whitespace-only", () => {
+    mockLabel.mockReturnValueOnce("—");
+    render(<ResponsivePathText path="  " mode="full" />);
+    expect(screen.getByTitle("—")).toBeInTheDocument();
+  });
 
-    it("renders fallback when label is empty", () => {
-        mockLabel.mockReturnValueOnce("");
-        render(<ResponsivePathText path="/some/path" mode="full" fallback="n/a" />);
-        expect(screen.getByText("n/a")).toBeInTheDocument();
-    });
+  it("renders fallback when label is empty", () => {
+    mockLabel.mockReturnValueOnce("");
+    render(<ResponsivePathText path="/some/path" mode="full" fallback="n/a" />);
+    expect(screen.getByText("n/a")).toBeInTheDocument();
+  });
 });

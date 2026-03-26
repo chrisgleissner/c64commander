@@ -43,14 +43,7 @@ import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourc
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
-import {
-  loadCommoserveEnabled,
-  loadArchiveHostOverride,
-  loadArchiveClientIdOverride,
-  loadArchiveUserAgentOverride,
-} from "@/lib/config/appSettings";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
-import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -81,6 +74,7 @@ import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavi
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
 import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
+import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
@@ -193,16 +187,7 @@ export default function PlayFilesPage() {
 
   const { flags, isLoaded } = useFeatureFlags();
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
-
-  const [commoserveEnabled, setCommoserveEnabled] = useState(() => loadCommoserveEnabled());
-
-  useEffect(() => {
-    const handler = (e: StorageEvent) => {
-      if (e.key === "c64u_commoserve_enabled") setCommoserveEnabled(loadCommoserveEnabled());
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
+  const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -465,28 +450,19 @@ export default function PlayFilesPage() {
     if (commoserveEnabled) {
       groups.push({
         label: SOURCE_LABELS.commoserve,
-        sources: [createArchiveSourceLocation(buildDefaultArchiveClientConfig({ enabled: commoserveEnabled }))],
+        sources: [createArchiveSourceLocation(archiveConfig)],
       });
     }
     return groups;
-  }, [commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
+  }, [archiveConfig, commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
 
   const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
-    const hostOverride = loadArchiveHostOverride();
-    const clientIdOverride = loadArchiveClientIdOverride();
-    const userAgentOverride = loadArchiveUserAgentOverride();
     const configs: Record<string, ArchiveClientConfigInput> = {};
     if (commoserveEnabled) {
-      const config = buildDefaultArchiveClientConfig({
-        enabled: true,
-        hostOverride,
-        clientIdOverride,
-        userAgentOverride,
-      });
-      configs[config.id] = config;
+      configs[archiveConfig.id] = archiveConfig;
     }
     return configs;
-  }, [commoserveEnabled]);
+  }, [archiveConfig, commoserveEnabled]);
 
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {
@@ -549,6 +525,7 @@ export default function PlayFilesPage() {
         mergeSonglengthsFiles,
         collectSonglengthsCandidates,
         buildHvscLocalPlayFile,
+        archiveConfigs,
       }),
     [
       addItemsSurface,
@@ -562,6 +539,7 @@ export default function PlayFilesPage() {
       recurseFolders,
       songlengthsFiles,
       buildHvscLocalPlayFile,
+      archiveConfigs,
     ],
   );
 

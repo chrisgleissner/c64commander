@@ -3,6 +3,13 @@ import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFi
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 
+const mockArchiveClient = {
+  getEntries: vi.fn(),
+  downloadBinary: vi.fn(),
+};
+
+const mockBuildArchivePlayPlan = vi.fn();
+
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
@@ -14,6 +21,14 @@ vi.mock("@/lib/logging", () => ({
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
+}));
+
+vi.mock("@/lib/archive/client", () => ({
+  createArchiveClient: vi.fn(() => mockArchiveClient),
+}));
+
+vi.mock("@/lib/archive/execution", () => ({
+  buildArchivePlayPlan: vi.fn((binary: { fileName: string; bytes: Uint8Array }) => mockBuildArchivePlayPlan(binary)),
 }));
 
 vi.mock("@/lib/playback/localFileBrowser", () => ({
@@ -86,11 +101,31 @@ const createMockDeps = () => {
     setPlaylist: vi.fn((updater: (prev: unknown[]) => unknown[]) => {
       playlistItems.push(...updater([]));
     }),
-    buildPlaylistItem: vi.fn(() => null),
+    buildPlaylistItem: vi.fn((entry) => ({
+      id: `${entry.source}:${entry.sourceId ?? ""}:${entry.path}`,
+      request: { source: entry.source, path: entry.path, file: entry.file },
+      category: entry.path.endsWith(".d64") ? "disk" : entry.path.endsWith(".sid") ? "sid" : "prg",
+      label: entry.name,
+      path: entry.path,
+      sourceId: entry.sourceId,
+      sizeBytes: entry.sizeBytes,
+      modifiedAt: entry.modifiedAt,
+      addedAt: new Date().toISOString(),
+      status: "ready",
+      unavailableReason: null,
+    })),
     applySonglengthsToItems: vi.fn(async (items: unknown[]) => items),
     mergeSonglengthsFiles: vi.fn(),
     collectSonglengthsCandidates: vi.fn(() => []),
     buildHvscLocalPlayFile: vi.fn(),
+    archiveConfigs: {
+      "archive-commoserve": {
+        id: "archive-commoserve",
+        name: "CommoServe",
+        baseUrl: "http://commoserve.files.commodore.net",
+        enabled: true,
+      },
+    },
     _playlistItems: playlistItems,
   };
 };
@@ -98,9 +133,26 @@ const createMockDeps = () => {
 describe("addFileSelections archive source handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockArchiveClient.getEntries.mockResolvedValue([{ id: 0, path: "demo.d64", size: 174848, date: 1773676443000 }]);
+    mockArchiveClient.downloadBinary.mockImplementation(async (_resultId, _category, _entryId, fileName) => ({
+      fileName,
+      bytes: new Uint8Array([0x44, 0x36, 0x34]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve.files.commodore.net/download",
+    }));
+    mockBuildArchivePlayPlan.mockImplementation((binary: { fileName: string; bytes: Uint8Array }) => ({
+      category: binary.fileName.endsWith(".d64") ? "disk" : "prg",
+      source: "local",
+      path: binary.fileName,
+      file: {
+        name: binary.fileName,
+        lastModified: 0,
+        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
+      },
+    }));
   });
 
-  it("adds archive selections directly to the playlist as prg items", async () => {
+  it("downloads archive selections and enqueues playable runtime files", async () => {
     const deps = createMockDeps();
     const handler = createAddFileSelectionsHandler(deps as any);
 
@@ -114,11 +166,14 @@ describe("addFileSelections archive source handler", () => {
     expect(result).toBe(true);
     expect(deps.setPlaylist).toHaveBeenCalledOnce();
     expect(deps._playlistItems).toHaveLength(2);
+    expect(mockArchiveClient.getEntries).toHaveBeenNthCalledWith(1, "123", 42);
+    expect(mockArchiveClient.downloadBinary).toHaveBeenNthCalledWith(1, "123", 42, 0, "demo.d64");
     const item0 = deps._playlistItems[0] as any;
     expect(item0.label).toBe("Cool Demo");
     expect(item0.request.source).toBe("commoserve");
-    expect(item0.request.path).toBe("123/42");
-    expect(item0.category).toBe("prg");
+    expect(item0.request.path).toBe("demo.d64");
+    expect(item0.request.file).toBeDefined();
+    expect(item0.category).toBe("disk");
     expect(item0.sourceId).toBe("archive-commoserve");
     const item1 = deps._playlistItems[1] as any;
     expect(item1.label).toBe("Awesome Game");
@@ -149,6 +204,14 @@ describe("addFileSelections archive source handler", () => {
       name: "Custom Archive",
     };
     const deps = createMockDeps();
+    deps.archiveConfigs = {
+      "archive-custom": {
+        id: "archive-custom",
+        name: "Custom Archive",
+        baseUrl: "http://archive.custom",
+        enabled: true,
+      },
+    };
     const handler = createAddFileSelectionsHandler(deps as any);
 
     const selections = [{ type: "file" as const, name: "Demo", path: "789/1" }];
@@ -158,6 +221,50 @@ describe("addFileSelections archive source handler", () => {
     const item = deps._playlistItems[0] as any;
     expect(item.request.source).toBe("commoserve");
     expect(item.id).toContain("archive-custom");
+  });
+
+  it("downloads the first playable archive entry when non-playable attachments are present", async () => {
+    const deps = createMockDeps();
+    const handler = createAddFileSelectionsHandler(deps as any);
+    mockArchiveClient.getEntries.mockResolvedValueOnce([
+      { id: 0, path: "readme.txt", size: 1200, date: 1773676442000 },
+      { id: 1, path: "joyride.sid", size: 8192, date: 1773676443000 },
+    ]);
+    mockBuildArchivePlayPlan.mockImplementationOnce((binary: { fileName: string; bytes: Uint8Array }) => ({
+      category: "sid",
+      source: "local",
+      path: binary.fileName,
+      file: {
+        name: binary.fileName,
+        lastModified: 0,
+        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
+      },
+    }));
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Joyride", path: "100/40" }]);
+
+    expect(result).toBe(true);
+    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledWith("100", 40, 1, "joyride.sid");
+    expect((deps._playlistItems[0] as any).category).toBe("sid");
+    expect((deps._playlistItems[0] as any).request.path).toBe("joyride.sid");
+  });
+
+  it("reports an error when an archive result has no playable entries", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    const deps = createMockDeps();
+    const handler = createAddFileSelectionsHandler(deps as any);
+    mockArchiveClient.getEntries.mockResolvedValueOnce([{ id: 0, path: "readme.txt", size: 200, date: 1773676443000 }]);
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Readme Pack", path: "100/40" }]);
+
+    expect(result).toBe(false);
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Add items failed",
+        description: "No playable archive file found for Readme Pack.",
+      }),
+    );
+    expect(deps.setPlaylist).not.toHaveBeenCalled();
   });
 
   it("shows and clears the add-items overlay when archive results are added from the page surface", async () => {
