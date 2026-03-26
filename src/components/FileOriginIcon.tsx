@@ -7,7 +7,7 @@
  */
 
 import { cn } from "@/lib/utils";
-import { Library, Music2 } from "lucide-react";
+import { Library } from "lucide-react";
 
 type FileOrigin = "ultimate" | "local" | "hvsc" | "commoserve";
 
@@ -35,11 +35,17 @@ const resolveIconLabel = (origin: FileOrigin) =>
 export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps) => {
   if (origin === "hvsc") {
     return (
-      <Music2
+      <span
         aria-label={label ?? resolveIconLabel(origin)}
         data-testid="file-origin-icon"
-        className={cn("h-4 w-4 shrink-0 opacity-70", className)}
-      />
+        role="img"
+        className={cn(
+          "inline-flex items-center justify-center h-4 w-4 text-xs leading-none shrink-0 opacity-70 select-none",
+          className,
+        )}
+      >
+        ♫
+      </span>
     );
   }
   if (origin === "commoserve") {

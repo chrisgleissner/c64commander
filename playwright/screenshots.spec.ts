@@ -1299,7 +1299,10 @@ test.describe("App screenshots", () => {
       const dialog = await openImportDialog(page);
       expect(dialog, "Add items dialog should open before capturing import screenshots").not.toBeNull();
       const interstitial = await waitForImportInterstitial(dialog);
-      expect(interstitial, "Import source interstitial should be visible before capturing import screenshots").not.toBeNull();
+      expect(
+        interstitial,
+        "Import source interstitial should be visible before capturing import screenshots",
+      ).not.toBeNull();
       await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png", { skipFuzzyHeadRestore: true });
 
       await interstitial.getByTestId("import-option-c64u").click();
@@ -1313,7 +1316,10 @@ test.describe("App screenshots", () => {
       const localDialog = await openImportDialog(page);
       expect(localDialog, "Add items dialog should reopen for the local import screenshot").not.toBeNull();
       const localInterstitial = await waitForImportInterstitial(localDialog);
-      expect(localInterstitial, "Import source interstitial should be visible before capturing local import").not.toBeNull();
+      expect(
+        localInterstitial,
+        "Import source interstitial should be visible before capturing local import",
+      ).not.toBeNull();
       await localInterstitial.getByTestId("import-option-local").click();
       const input = page.locator('input[type="file"][webkitdirectory]').first();
       await expect(input).toBeAttached();
@@ -1328,7 +1334,10 @@ test.describe("App screenshots", () => {
       const archiveDialog = await openImportDialog(page);
       expect(archiveDialog, "Add items dialog should reopen for the CommoServe screenshot").not.toBeNull();
       const archiveInterstitial = await waitForImportInterstitial(archiveDialog);
-      expect(archiveInterstitial, "Import source interstitial should be visible before capturing CommoServe import").not.toBeNull();
+      expect(
+        archiveInterstitial,
+        "Import source interstitial should be visible before capturing CommoServe import",
+      ).not.toBeNull();
 
       await archiveInterstitial.getByTestId("import-option-commoserve").click();
       const archivePicker = archiveDialog.getByTestId("commoserve-picker");
