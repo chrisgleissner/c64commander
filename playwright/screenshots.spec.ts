@@ -35,7 +35,7 @@ import {
   type DisplayProfileViewportId,
 } from "./displayProfileViewports";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
-import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
+import { planHomeScreenshotSlices, selectCanonicalHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
 import {
   installFixedClock,
@@ -679,15 +679,18 @@ const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: st
 
 const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
   const layout = await page.evaluate(() => {
-    const activeMain = document.querySelector('[data-slot-active="true"] main');
+    const activeSlot = document.querySelector('[data-slot-active="true"]');
+    const activeMain = activeSlot?.querySelector('main');
+    const slotElement = activeSlot instanceof HTMLElement ? activeSlot : null;
+    const slotRect = slotElement?.getBoundingClientRect() ?? null;
     const sections = Array.from(activeMain?.querySelectorAll("[data-section-label]") ?? [])
       .map((node) => {
         const label = node.getAttribute("data-section-label")?.trim() ?? "";
         const rect = node.getBoundingClientRect();
         return {
           label,
-          top: rect.top + window.scrollY,
-          bottom: rect.bottom + window.scrollY,
+          top: slotRect ? rect.top - slotRect.top + slotElement!.scrollTop : rect.top + window.scrollY,
+          bottom: slotRect ? rect.bottom - slotRect.top + slotElement!.scrollTop : rect.bottom + window.scrollY,
         };
       })
       .filter((section) => section.label.length > 0 && section.bottom > section.top);
@@ -697,11 +700,12 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
     const mainStyle = main ? getComputedStyle(main) : null;
     const appBarHeight = Number.parseFloat(rootStyle.getPropertyValue("--app-bar-height")) || 0;
     const bottomInset = Number.parseFloat(mainStyle?.paddingBottom ?? "0") || 0;
-    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const viewportHeight = slotElement?.clientHeight ?? window.innerHeight;
+    const maxScroll = slotElement ? Math.max(0, slotElement.scrollHeight - slotElement.clientHeight) : 0;
 
     return {
       sections,
-      viewportHeight: window.innerHeight,
+      viewportHeight,
       topInset: appBarHeight,
       bottomInset,
       maxScroll,
@@ -720,10 +724,16 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
     maxScroll: layout.maxScroll,
   });
 
-  for (let index = 0; index < slices.length; index += 1) {
-    const slice = slices[index];
-    await page.evaluate((value) => window.scrollTo(0, value), slice.scrollTop);
-    await captureScreenshot(page, testInfo, `home/sections/${String(index + 1).padStart(2, "0")}-${slice.slug}.png`);
+  const canonicalSlices = selectCanonicalHomeScreenshotSlices(slices);
+
+  for (let index = 0; index < canonicalSlices.length; index += 1) {
+    const { fileName, slice } = canonicalSlices[index];
+    await getActiveSlot(page).evaluate((node, nextScrollTop) => {
+      if (node instanceof HTMLElement) {
+        node.scrollTop = nextScrollTop;
+      }
+    }, slice.scrollTop);
+    await captureScreenshot(page, testInfo, `home/sections/${fileName}`);
   }
 };
 
