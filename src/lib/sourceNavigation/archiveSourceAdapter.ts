@@ -9,18 +9,18 @@
 import type { SourceLocation, SourceLocationType } from "./types";
 
 const ARCHIVE_SOURCE_IDS: Record<string, string> = {
-  commoserve: "archive-commoserve",
-  assembly64: "archive-assembly64",
+    commoserve: "archive-commoserve",
+    assembly64: "archive-assembly64",
 };
 
 export const createArchiveSourceLocation = (
-  type: Extract<SourceLocationType, "commoserve" | "assembly64">,
+    type: Extract<SourceLocationType, "commoserve" | "assembly64">,
 ): SourceLocation => ({
-  id: ARCHIVE_SOURCE_IDS[type],
-  type,
-  name: type === "commoserve" ? "CommoServe" : "Assembly64",
-  rootPath: "/",
-  isAvailable: true,
-  listEntries: async () => [],
-  listFilesRecursive: async () => [],
+    id: ARCHIVE_SOURCE_IDS[type],
+    type,
+    name: type === "commoserve" ? "CommoServe" : "Assembly64",
+    rootPath: "/",
+    isAvailable: true,
+    listEntries: async () => [],
+    listFilesRecursive: async () => [],
 });

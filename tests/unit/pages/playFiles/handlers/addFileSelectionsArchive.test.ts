@@ -3,140 +3,140 @@ import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFi
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 
 vi.mock("@/hooks/use-toast", () => ({
-  toast: vi.fn(),
+    toast: vi.fn(),
 }));
 
 vi.mock("@/lib/logging", () => ({
-  addLog: vi.fn(),
-  addErrorLog: vi.fn(),
+    addLog: vi.fn(),
+    addErrorLog: vi.fn(),
 }));
 
 vi.mock("@/lib/uiErrors", () => ({
-  reportUserError: vi.fn(),
+    reportUserError: vi.fn(),
 }));
 
 vi.mock("@/lib/playback/localFileBrowser", () => ({
-  getParentPath: vi.fn(() => "/"),
+    getParentPath: vi.fn(() => "/"),
 }));
 
 vi.mock("@/lib/playback/fileLibraryUtils", () => ({
-  buildLocalPlayFileFromTree: vi.fn(),
-  buildLocalPlayFileFromUri: vi.fn(),
+    buildLocalPlayFileFromTree: vi.fn(),
+    buildLocalPlayFileFromUri: vi.fn(),
 }));
 
 vi.mock("@/lib/sourceNavigation/localSourceAdapter", () => ({
-  resolveLocalRuntimeFile: vi.fn(),
+    resolveLocalRuntimeFile: vi.fn(),
 }));
 
 vi.mock("@/lib/native/safUtils", () => ({
-  redactTreeUri: vi.fn(() => "[redacted]"),
+    redactTreeUri: vi.fn(() => "[redacted]"),
 }));
 
 vi.mock("@/lib/sid/songlengthsDiscovery", () => ({
-  isSonglengthsFileName: vi.fn(() => false),
+    isSonglengthsFileName: vi.fn(() => false),
 }));
 
 const archiveSource: SourceLocation = {
-  id: "archive-commoserve",
-  type: "commoserve",
-  name: "CommoServe",
-  rootPath: "/",
-  isAvailable: true,
-  listEntries: async () => [],
-  listFilesRecursive: async () => [],
+    id: "archive-commoserve",
+    type: "commoserve",
+    name: "CommoServe",
+    rootPath: "/",
+    isAvailable: true,
+    listEntries: async () => [],
+    listFilesRecursive: async () => [],
 };
 
 const createMockDeps = () => {
-  const playlistItems: unknown[] = [];
-  return {
-    addItemsStartedAtRef: { current: null },
-    addItemsOverlayActiveRef: { current: false },
-    addItemsOverlayStartedAtRef: { current: null },
-    addItemsSurface: "dialog" as const,
-    browserOpen: true,
-    recurseFolders: true,
-    songlengthsFiles: [],
-    localSourceTreeUris: new Map<string, string>(),
-    localEntriesBySourceId: new Map(),
-    setAddItemsSurface: vi.fn(),
-    setShowAddItemsOverlay: vi.fn(),
-    setIsAddingItems: vi.fn(),
-    setAddItemsProgress: vi.fn(),
-    setPlaylist: vi.fn((updater: (prev: unknown[]) => unknown[]) => {
-      playlistItems.push(...updater([]));
-    }),
-    buildPlaylistItem: vi.fn(() => null),
-    applySonglengthsToItems: vi.fn(async (items: unknown[]) => items),
-    mergeSonglengthsFiles: vi.fn(),
-    collectSonglengthsCandidates: vi.fn(() => []),
-    buildHvscLocalPlayFile: vi.fn(),
-    _playlistItems: playlistItems,
-  };
+    const playlistItems: unknown[] = [];
+    return {
+        addItemsStartedAtRef: { current: null },
+        addItemsOverlayActiveRef: { current: false },
+        addItemsOverlayStartedAtRef: { current: null },
+        addItemsSurface: "dialog" as const,
+        browserOpen: true,
+        recurseFolders: true,
+        songlengthsFiles: [],
+        localSourceTreeUris: new Map<string, string>(),
+        localEntriesBySourceId: new Map(),
+        setAddItemsSurface: vi.fn(),
+        setShowAddItemsOverlay: vi.fn(),
+        setIsAddingItems: vi.fn(),
+        setAddItemsProgress: vi.fn(),
+        setPlaylist: vi.fn((updater: (prev: unknown[]) => unknown[]) => {
+            playlistItems.push(...updater([]));
+        }),
+        buildPlaylistItem: vi.fn(() => null),
+        applySonglengthsToItems: vi.fn(async (items: unknown[]) => items),
+        mergeSonglengthsFiles: vi.fn(),
+        collectSonglengthsCandidates: vi.fn(() => []),
+        buildHvscLocalPlayFile: vi.fn(),
+        _playlistItems: playlistItems,
+    };
 };
 
 describe("addFileSelections archive source handler", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
 
-  it("adds archive selections directly to the playlist as prg items", async () => {
-    const deps = createMockDeps();
-    const handler = createAddFileSelectionsHandler(deps as any);
+    it("adds archive selections directly to the playlist as prg items", async () => {
+        const deps = createMockDeps();
+        const handler = createAddFileSelectionsHandler(deps as any);
 
-    const selections = [
-      { type: "file" as const, name: "Cool Demo", path: "123/42" },
-      { type: "file" as const, name: "Awesome Game", path: "456/7" },
-    ];
+        const selections = [
+            { type: "file" as const, name: "Cool Demo", path: "123/42" },
+            { type: "file" as const, name: "Awesome Game", path: "456/7" },
+        ];
 
-    const result = await handler(archiveSource, selections);
+        const result = await handler(archiveSource, selections);
 
-    expect(result).toBe(true);
-    expect(deps.setPlaylist).toHaveBeenCalledOnce();
-    expect(deps._playlistItems).toHaveLength(2);
-    const item0 = deps._playlistItems[0] as any;
-    expect(item0.label).toBe("Cool Demo");
-    expect(item0.request.source).toBe("commoserve");
-    expect(item0.request.path).toBe("123/42");
-    expect(item0.category).toBe("prg");
-    expect(item0.sourceId).toBe("archive-commoserve");
-    const item1 = deps._playlistItems[1] as any;
-    expect(item1.label).toBe("Awesome Game");
-    expect(item1.request.source).toBe("commoserve");
-  });
+        expect(result).toBe(true);
+        expect(deps.setPlaylist).toHaveBeenCalledOnce();
+        expect(deps._playlistItems).toHaveLength(2);
+        const item0 = deps._playlistItems[0] as any;
+        expect(item0.label).toBe("Cool Demo");
+        expect(item0.request.source).toBe("commoserve");
+        expect(item0.request.path).toBe("123/42");
+        expect(item0.category).toBe("prg");
+        expect(item0.sourceId).toBe("archive-commoserve");
+        const item1 = deps._playlistItems[1] as any;
+        expect(item1.label).toBe("Awesome Game");
+        expect(item1.request.source).toBe("commoserve");
+    });
 
-  it("reports error when archive selections are empty", async () => {
-    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
-    const deps = createMockDeps();
-    const handler = createAddFileSelectionsHandler(deps as any);
+    it("reports error when archive selections are empty", async () => {
+        const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+        const deps = createMockDeps();
+        const handler = createAddFileSelectionsHandler(deps as any);
 
-    const result = await handler(archiveSource, []);
+        const result = await handler(archiveSource, []);
 
-    expect(result).toBe(false);
-    expect(mockReportUserError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: "PLAYLIST_ADD",
-        title: "No items selected",
-      }),
-    );
-    expect(deps.setPlaylist).not.toHaveBeenCalled();
-  });
+        expect(result).toBe(false);
+        expect(mockReportUserError).toHaveBeenCalledWith(
+            expect.objectContaining({
+                operation: "PLAYLIST_ADD",
+                title: "No items selected",
+            }),
+        );
+        expect(deps.setPlaylist).not.toHaveBeenCalled();
+    });
 
-  it("works with assembly64 source type", async () => {
-    const a64Source: SourceLocation = {
-      ...archiveSource,
-      id: "archive-assembly64",
-      type: "assembly64",
-      name: "Assembly64",
-    };
-    const deps = createMockDeps();
-    const handler = createAddFileSelectionsHandler(deps as any);
+    it("works with assembly64 source type", async () => {
+        const a64Source: SourceLocation = {
+            ...archiveSource,
+            id: "archive-assembly64",
+            type: "assembly64",
+            name: "Assembly64",
+        };
+        const deps = createMockDeps();
+        const handler = createAddFileSelectionsHandler(deps as any);
 
-    const selections = [{ type: "file" as const, name: "Demo", path: "789/1" }];
-    const result = await handler(a64Source, selections);
+        const selections = [{ type: "file" as const, name: "Demo", path: "789/1" }];
+        const result = await handler(a64Source, selections);
 
-    expect(result).toBe(true);
-    const item = deps._playlistItems[0] as any;
-    expect(item.request.source).toBe("assembly64");
-    expect(item.id).toContain("assembly64");
-  });
+        expect(result).toBe(true);
+        const item = deps._playlistItems[0] as any;
+        expect(item.request.source).toBe("assembly64");
+        expect(item.id).toContain("assembly64");
+    });
 });

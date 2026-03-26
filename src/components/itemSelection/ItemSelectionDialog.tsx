@@ -265,15 +265,15 @@ export const ItemSelectionDialog = ({
     }
     const selections: SelectedItem[] = isArchiveSource
       ? Array.from(archiveSelection.values()).map((result) => ({
-          type: "file" as const,
-          name: result.name,
-          path: `${result.id}/${result.category}`,
-        }))
+        type: "file" as const,
+        name: result.name,
+        path: `${result.id}/${result.category}`,
+      }))
       : Array.from(selection.values()).map((entry) => ({
-          type: entry.type,
-          name: entry.name,
-          path: entry.path,
-        }));
+        type: entry.type,
+        name: entry.name,
+        path: entry.path,
+      }));
     try {
       const success = await onConfirm(source, selections);
       if (success) {

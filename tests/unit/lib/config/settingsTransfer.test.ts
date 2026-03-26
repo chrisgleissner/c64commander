@@ -26,6 +26,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadArchiveUserAgentOverride: vi.fn(),
   loadCommoserveEnabled: vi.fn(),
   loadAssembly64Enabled: vi.fn(),
+  DEFAULT_COMMOSERVE_ENABLED: true,
+  DEFAULT_ASSEMBLY64_ENABLED: false,
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
