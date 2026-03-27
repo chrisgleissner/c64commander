@@ -7,7 +7,12 @@
  */
 
 import { Button } from "@/components/ui/button";
-import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, getBadgeSafeZoneBottomPx } from "@/components/ui/interstitialStyles";
+import {
+  APP_INTERSTITIAL_BACKDROP_CLASSNAME,
+  INTERSTITIAL_Z_INDEX,
+  resolveCenteredOverlayLayout,
+} from "@/components/ui/interstitialStyles";
+import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 
@@ -27,6 +32,11 @@ type AddItemsProgressOverlayProps = {
   onCancel?: () => void;
 };
 
+const ProgressOverlayRegistration = ({ active }: { active: boolean }) => {
+  useRegisterInterstitial("progress", active);
+  return null;
+};
+
 const formatElapsed = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -41,25 +51,28 @@ export const AddItemsProgressOverlay = ({
   visible,
   onCancel,
 }: AddItemsProgressOverlayProps) => {
-  if (visible === false) return null;
-  if (visible !== true && progress.status !== "scanning") return null;
+  const isVisible = visible === true || (visible !== false && progress.status === "scanning");
 
-  const overlayTop = `calc(${getBadgeSafeZoneBottomPx()}px + 1rem)`;
+  if (!isVisible) return null;
+
+  const { top } = resolveCenteredOverlayLayout(176);
 
   const overlay = (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-start justify-center px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
+        "fixed inset-0 flex items-start justify-center px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
         APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       )}
-      style={{ paddingTop: overlayTop }}
+      style={{ paddingTop: `${top}px`, zIndex: INTERSTITIAL_Z_INDEX.backdrop }}
       data-testid={testId}
     >
+      <ProgressOverlayRegistration active={isVisible} />
       <div
         className={cn(
           "w-full max-w-sm rounded-[var(--interstitial-radius)] border border-border bg-background px-5 py-4 shadow-[var(--interstitial-shadow)]",
           "max-h-[calc(100dvh-3rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))]",
         )}
+        style={{ zIndex: INTERSTITIAL_Z_INDEX.surface }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold">{title}</p>

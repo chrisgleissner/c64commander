@@ -23,9 +23,7 @@ import {
   AppSheetFooter,
   AppSheetHeader,
   AppSheetTitle,
-  AppSurfaceClose,
 } from "@/components/ui/app-surface";
-import { ModalCloseButton } from "@/components/ui/modal-close-button";
 import { Input } from "@/components/ui/input";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { cn } from "@/lib/utils";
@@ -326,7 +324,6 @@ export const ItemSelectionDialog = ({
     profile === "compact"
       ? "px-3 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]"
       : "px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]";
-  const headerPaddingClassName = profile === "compact" ? "px-3 pb-1 pt-2.5" : "px-6 pb-3 pt-6";
   const bodyPaddingClassName = profile === "compact" ? "px-3 py-1.5" : "px-6 py-4";
   const sourceContentClassName = profile === "compact" ? "space-y-2" : "space-y-3";
   const selectedSourceLabel = source
@@ -342,17 +339,10 @@ export const ItemSelectionDialog = ({
   if (!source) {
     return (
       <AppDialog open={open} onOpenChange={onOpenChange}>
-        <AppDialogContent showClose={false} onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-md">
-          <AppDialogHeader className={cn(headerPaddingClassName, "pr-12")}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <AppDialogTitle className="text-xl">{title}</AppDialogTitle>
-                <AppDialogDescription>Choose a source.</AppDialogDescription>
-              </div>
-              <AppSurfaceClose asChild>
-                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
-              </AppSurfaceClose>
-            </div>
+        <AppDialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-md">
+          <AppDialogHeader>
+            <AppDialogTitle className="text-xl">{title}</AppDialogTitle>
+            <AppDialogDescription>Choose a source.</AppDialogDescription>
           </AppDialogHeader>
           <AppDialogBody className={bodyPaddingClassName}>
             <div className="space-y-5">
@@ -464,18 +454,11 @@ export const ItemSelectionDialog = ({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent showClose={false} onOpenAutoFocus={(e) => e.preventDefault()} className="overflow-hidden p-0">
+      <AppSheetContent onOpenAutoFocus={(e) => e.preventDefault()} className="overflow-hidden p-0">
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
-          <AppSheetHeader className={cn(headerPaddingClassName, "pr-12")}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <AppSheetTitle className="text-xl">{title}</AppSheetTitle>
-                <AppSheetDescription>Choose a source.</AppSheetDescription>
-              </div>
-              <AppSurfaceClose asChild>
-                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
-              </AppSurfaceClose>
-            </div>
+          <AppSheetHeader>
+            <AppSheetTitle className="text-xl">{title}</AppSheetTitle>
+            <AppSheetDescription>Choose a source.</AppSheetDescription>
           </AppSheetHeader>
 
           <div className={cn("shrink-0 space-y-3 border-b border-border", bodyPaddingClassName)}>

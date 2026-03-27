@@ -10,6 +10,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { isValidElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { AddItemsProgressOverlay } from "@/components/itemSelection/AddItemsProgressOverlay";
+import { resolveCenteredOverlayLayout } from "@/components/ui/interstitialStyles";
 
 const buildProgress = (overrides?: Partial<Parameters<typeof AddItemsProgressOverlay>[0]["progress"]>) => ({
   status: "scanning" as const,
@@ -77,7 +78,7 @@ describe("AddItemsProgressOverlay", () => {
     );
 
     const overlay = screen.getByTestId("progress");
-    expect(overlay).toHaveStyle({ paddingTop: "calc(96px + 1rem)" });
+    expect(overlay).toHaveStyle({ paddingTop: `${resolveCenteredOverlayLayout(176).top}px` });
     expect(screen.getByText(/Scanning files/)).toBeInTheDocument();
     expect(screen.getByText(/3 found/)).toBeInTheDocument();
     expect(screen.getByText("00:00")).toBeInTheDocument();

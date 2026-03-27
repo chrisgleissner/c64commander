@@ -1,3 +1,40 @@
+# Interstitial, Header, and Density Refactor Worklog
+
+## 2026-03-27T22:15:00Z
+
+### Close control standardization
+
+- App sheets, app dialogs, shared dialogs, and alert dialogs now render one shared plain-glyph `CloseControl` instead of the old wrapped icon button.
+- Close controls are injected from the shared header primitives so titles and dismiss controls share one row contract across Diagnostics, Lighting Studio, item selection, and the general dialog surfaces.
+- Lighting Studio now opens without a drag handle, collapse toggle, or top spacer, and Diagnostics now renders its overflow menu and close control on the same header row.
+
+### Registration and overlap fixes
+
+- Fixed a real regression where hidden Radix content registered as active interstitial state on page load, which incorrectly suppressed the tab bar and intercepted badge clicks.
+- Changed interstitial ownership registration to follow `data-state="open"` on mounted overlay content instead of registering on mount.
+- Tightened workflow sheet top clearance to the actual badge band so Diagnostics and Lighting Studio use the intended controlled overlap instead of clearing the full app-header height.
+
+### Validation in progress
+
+- Focused Vitest suites now pass for close-control rendering, tab-bar suppression, and shared interstitial geometry.
+- Targeted Playwright regressions now pass for Diagnostics/modal consistency and Lighting Studio after updating stale overlap/layout assertions to the new contract.
+
+## 2026-03-27T21:28:49Z
+
+### Audit and classification
+
+- Classified the task as `DOC_PLUS_CODE` and `UI_CHANGE` because it changes shared overlay primitives, header layout, navigation behavior, docs, tests, and screenshots.
+- Audited the current shared surface stack in `src/components/ui/app-surface.tsx`, `src/components/ui/dialog.tsx`, `src/components/ui/alert-dialog.tsx`, `src/components/ui/interstitialStyles.ts`, and `src/components/ui/useCenteredOverlayPosition.ts`.
+- Confirmed the current implementation already separates source chooser modal and source browser sheet, so that flow will be preserved rather than rewritten.
+- Identified the main contract gaps: backdrops and surfaces currently share the same z-level, the header renders above surfaces instead of below them, safe-area top handling is split between `pt-safe` and token padding, bottom-nav suppression is not globally owned, and progress overlays still use an older badge-floor rule.
+
+### Implementation scope locked
+
+- Locked the active workset to the shared overlay primitives, `AppBar`, `UnifiedHealthBadge`, `TabBar`, `SwipeNavigationLayer`, shared list density primitives, overlay regression tests, UX guidelines, and the impacted screenshot set including Lighting Studio.
+- Chose to introduce a global overlay ownership model so header interactivity, nav suppression, and backdrop/surface stacking are driven by one source of truth instead of per-surface conditionals.
+
+---
+
 # Overlay, Header, and Subtitle Standardization Worklog
 
 ## 2026-03-27

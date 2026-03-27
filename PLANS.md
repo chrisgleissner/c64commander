@@ -1,3 +1,216 @@
+# Interstitial, Header, and Density Refactor Plan
+
+Status: IN PROGRESS
+Date: 2026-03-27
+Classification: DOC_PLUS_CODE
+Visible UI impact: YES
+
+## Objective
+
+Refactor the app-wide interstitial model, header geometry, and vertical density so the UI obeys one deterministic surface system with no layout shift, no hybrid overlays, maximum usable height, and reproducible safe-area behavior across compact, medium, and expanded profiles.
+
+## Global Invariants
+
+- Exactly one active interactive surface at a time.
+- Decision flows use centered modals only.
+- Browsing and workflow flows use bottom sheets only.
+- Overlay activation must never reflow the page, resize the viewport, or shift scroll position.
+- Header and badge visibility rules are derived from shared primitives only.
+- Standard and expanded profiles must respect runtime top safe-area inset.
+- Compact profile must render flush to the top edge.
+- Bottom sheets must overlap the header by a controlled shared delta and leave badge text and title text readable.
+- No component may exceed the global z-index stack: content 10, backdrop 20, header 30, top surface 40.
+- All overlays must share the same 40% black backdrop with no blur overrides.
+
+## Ordered Task List
+
+### Task 1 - Planning and impact map
+
+Files to modify:
+
+- `PLANS.md`
+- `WORKLOG.md`
+
+Acceptance criteria:
+
+- The active plan is recorded in `PLANS.md` with ordered tasks, touched files, and acceptance criteria.
+- `WORKLOG.md` contains timestamped audit notes for this refactor.
+
+### Task 2 - Shared overlay contract
+
+Files to modify:
+
+- `src/components/ui/interstitialStyles.ts`
+- `src/components/ui/useCenteredOverlayPosition.ts`
+- `src/components/ui/app-surface.tsx`
+- `src/components/ui/dialog.tsx`
+- `src/components/ui/alert-dialog.tsx`
+- `src/lib/modalPresentation.ts`
+- `src/components/itemSelection/AddItemsProgressOverlay.tsx`
+
+Acceptance criteria:
+
+- The shared overlay system exposes explicit header-top, badge-safe, overlap, and z-index primitives.
+- All modal-style surfaces render at level 40 and all backdrops render at level 20.
+- All workflow sheets use one shared top position contract based on badge geometry and header overlap.
+- All decision modals are centered, compact, blocking, and non-scroll-dominant.
+- All workflow sheets remain scrollable and extend fully to the computed overlay top with no sliver gap.
+
+### Task 3 - Global overlay ownership and nav suppression
+
+Files to modify:
+
+- `src/App.tsx`
+- `src/components/TabBar.tsx`
+- `src/components/AppBar.tsx`
+- `src/components/SwipeNavigationLayer.tsx`
+- `src/components/layout/AppChromeContext.tsx`
+- `src/index.css`
+
+Acceptance criteria:
+
+- Overlay activity is tracked centrally.
+- The bottom navigation is visually removed with `transform: translateY(100%)` while keeping layout dimensions stable.
+- No overlay activation changes page-shell height, page bottom padding, or scroll position.
+- Header remains visible at level 30 but cannot be interacted with while another surface is active.
+
+### Task 4 - Safe-area and header normalization
+
+Files to modify:
+
+- `src/components/AppBar.tsx`
+- `src/components/UnifiedHealthBadge.tsx`
+- `src/hooks/useDisplayProfile.tsx`
+- `src/index.css`
+
+Acceptance criteria:
+
+- `HEADER_TOP` resolves to `env(safe-area-inset-top)` for medium and expanded profiles and `0` for compact.
+- No extra top padding beyond `HEADER_TOP` is applied.
+- Header minimum row height remains `52px`.
+- Header vertical padding is reduced by exactly 20% from the current token-driven values.
+- Header title and badge expose stable geometry markers for runtime assertions.
+
+### Task 5 - Sheet header and list density compaction
+
+Files to modify:
+
+- `src/components/ui/app-surface.tsx`
+- `src/components/lists/SelectableActionList.tsx`
+- `src/components/itemSelection/ItemSelectionView.tsx`
+- `src/index.css`
+
+Acceptance criteria:
+
+- Shared sheet headers are reduced by exactly 25% in vertical padding while preserving a `>= 40px` close target.
+- Shared list rows and settings rows use one 12% tighter vertical spacing rule while preserving `>= 40px` interactive targets.
+- No workflow sheet leaves unused vertical space above its body.
+
+### Task 6 - Regression assertions and tests
+
+Files to modify:
+
+- `tests/unit/components/AppBar.layout.test.tsx`
+- `tests/unit/components/ui/interstitialStyles.test.ts`
+- `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+- `playwright/modalConsistency.spec.ts`
+- `playwright/lightingStudio.spec.ts`
+- any additional targeted Playwright or unit tests required by the touched flows
+
+Acceptance criteria:
+
+- Runtime assertions fail in development when a sheet intersects the title text or badge text/glyph.
+- Tests cover safe-area profile behavior, z-index contract, nav suppression stability, and overlay top geometry.
+- Tests cover the shared 40% backdrop contract.
+
+### Task 7 - UX documentation and screenshots
+
+Files to modify:
+
+- `docs/ux-guidelines.md`
+- `docs/img/app/**` for only the screenshots affected by the refactor, including Lighting Studio
+
+Acceptance criteria:
+
+- UX guidelines document the strict two-surface model, safe-area rules, controlled header overlap, z-index hierarchy, dimming standard, nav suppression contract, full-height utilization, and single-surface ownership.
+- Screenshot updates are limited to the surfaces visibly changed by this refactor and explicitly include Lighting Studio.
+
+### Task 8 - Validation
+
+Files to modify:
+
+- none beyond the files touched above
+
+Acceptance criteria:
+
+- Relevant unit tests pass.
+- `npm run lint` passes.
+- `npm run test:coverage` passes with global branch coverage `>= 91%`.
+- `npm run build` passes.
+- Relevant screenshot flows pass with no unintended diffs outside the impacted areas.
+
+### Task 9 - Close control standardization
+
+Files to modify:
+
+- `src/components/ui/app-surface.tsx`
+- `src/components/ui/dialog.tsx`
+- `src/components/ui/alert-dialog.tsx`
+- `src/components/ui/modal-close-button.tsx`
+- all interstitial consumers with custom close controls or custom interstitial header rows
+
+Acceptance criteria:
+
+- A single shared `CloseControl` component is defined and used by every bottom sheet, modal, dialog, and interstitial surface.
+- The close control renders as a plain `×` glyph with no visible container, border, background, elevation, or hover fill.
+- No component uses `Button`, icon-button wrappers, or any bespoke close-button implementation for interstitial dismissal.
+- The shared close control preserves an invisible tap target of at least `40px` while keeping the visual footprint minimal.
+
+### Task 10 - Interstitial header row unification
+
+Files to modify:
+
+- `src/components/ui/app-surface.tsx`
+- `src/components/diagnostics/DiagnosticsDialog.tsx`
+- `src/components/lighting/LightingStudioDialog.tsx`
+- all interstitial consumers with per-sheet header spacing or action-row overrides
+
+Acceptance criteria:
+
+- Every interstitial renders a single top title row with title on the left and the shared close control on the right.
+- Title text and the `×` glyph share the same visual vertical center with no extra top padding, spacer row, or secondary row above them.
+- Header horizontal padding matches the app header content padding and header vertical padding remains minimal and shared.
+- Diagnostics renders a single clean header row with title, action menu, and close control aligned on the same line.
+- Lighting Studio removes the drag handle, collapse label, and top spacer so the title row is the first visible sheet content.
+
+### Task 11 - Header cleanup validation
+
+Files to modify:
+
+- `tests/unit/components/**`
+- `playwright/modalConsistency.spec.ts`
+- `playwright/lightingStudio.spec.ts`
+- any additional targeted Playwright or unit tests required by the touched interstitials
+
+Acceptance criteria:
+
+- Tests and runtime assertions verify that no interstitial renders a wrapped close button, drag handle, collapse control, or extra top spacer.
+- Browser validation confirms the close glyph stays aligned with titles and header action rows across changed surfaces.
+- Screenshot diffs are limited to the interstitials visibly changed by this close-control standardization.
+
+## Termination Criteria
+
+- The interstitial model is strictly modal-for-decision and sheet-for-workflow.
+- Safe-area behavior is correct for compact versus medium/expanded profiles.
+- Bottom sheets overlap the header by the shared delta without obscuring critical text.
+- Overlay activation causes zero layout shift.
+- Shared density and header rules are enforced through reusable primitives.
+- All interstitials use the shared plain-glyph close control and identical title-row alignment.
+- No drag handles, collapse labels, or extra top spacer rows remain on standardized interstitials.
+- Documentation, tests, and screenshots match the shipped behavior.
+
+---
+
 # Overlay, Header, and Subtitle Standardization Plan
 
 Status: COMPLETE

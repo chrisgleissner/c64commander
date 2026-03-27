@@ -1,6 +1,11 @@
 import * as React from "react";
 
-import { assertOverlayRespectsBadgeSafeZone, resolveCenteredOverlayLayout } from "@/components/ui/interstitialStyles";
+import {
+  assertOverlayRespectsBadgeSafeZone,
+  boundsFromElement,
+  resolveCenteredOverlayLayout,
+  resolveWorkflowSheetLayout,
+} from "@/components/ui/interstitialStyles";
 
 const assignRef = <T>(ref: React.ForwardedRef<T>, value: T | null) => {
   if (typeof ref === "function") {
@@ -15,6 +20,40 @@ const assignRef = <T>(ref: React.ForwardedRef<T>, value: T | null) => {
 export function useCenteredOverlayPosition<T extends HTMLElement>(
   forwardedRef: React.ForwardedRef<T>,
   overlayName: string,
+) {
+  return useOverlayPosition(forwardedRef, overlayName, (element) => {
+    const rect = element.getBoundingClientRect();
+    const contentHeight = Math.max(1, Math.round(rect.height || element.offsetHeight || 0));
+    const { top, maxHeight } = resolveCenteredOverlayLayout(contentHeight);
+
+    return {
+      style: {
+        top: `${top}px`,
+        maxHeight: `${maxHeight}px`,
+        transform: "translateX(-50%)",
+      },
+    };
+  });
+}
+
+export function useWorkflowSheetPosition<T extends HTMLElement>(
+  forwardedRef: React.ForwardedRef<T>,
+  overlayName: string,
+) {
+  return useOverlayPosition(forwardedRef, overlayName, () => {
+    const { top } = resolveWorkflowSheetLayout();
+    return {
+      style: {
+        top: `${top}px`,
+      },
+    };
+  });
+}
+
+function useOverlayPosition<T extends HTMLElement>(
+  forwardedRef: React.ForwardedRef<T>,
+  overlayName: string,
+  resolveStyle: (element: T) => { style: React.CSSProperties },
 ) {
   const localRef = React.useRef<T | null>(null);
   const attachedNodeRef = React.useRef<T | null>(null);
@@ -41,33 +80,27 @@ export function useCenteredOverlayPosition<T extends HTMLElement>(
       const element = localRef.current;
       if (!element) return;
 
-      const rect = element.getBoundingClientRect();
-      const contentHeight = Math.max(1, Math.round(rect.height || element.offsetHeight || 0));
-      const { top, maxHeight } = resolveCenteredOverlayLayout(contentHeight);
-
       setStyle((current) => {
-        const nextTop = `${top}px`;
-        const nextMaxHeight = `${maxHeight}px`;
-        if (current?.top === nextTop && current?.maxHeight === nextMaxHeight) {
+        const next = resolveStyle(element).style;
+        if (JSON.stringify(current) === JSON.stringify(next)) {
           return current;
         }
 
-        return {
-          top: nextTop,
-          maxHeight: nextMaxHeight,
-          transform: "translateX(-50%)",
-        };
+        return next;
       });
 
-      assertOverlayRespectsBadgeSafeZone(
-        {
-          top,
-          right: rect.right,
-          bottom: top + contentHeight,
-          left: rect.left,
-        },
-        overlayName,
-      );
+      window.requestAnimationFrame(() => {
+        const updatedElement = localRef.current;
+        if (!updatedElement) return;
+        const bounds = boundsFromElement(updatedElement);
+        if (bounds.left === 0 && bounds.right === 0 && bounds.top === 0 && bounds.bottom === 0) {
+          const fallbackTop = Number.parseFloat(updatedElement.style.top || "0");
+          assertOverlayRespectsBadgeSafeZone(fallbackTop, overlayName);
+          return;
+        }
+
+        assertOverlayRespectsBadgeSafeZone(bounds, overlayName);
+      });
     };
 
     updateLayout();
@@ -76,8 +109,9 @@ export function useCenteredOverlayPosition<T extends HTMLElement>(
     if (!element) return undefined;
 
     let observer: ResizeObserver | null = null;
-    if ("ResizeObserver" in window) {
-      observer = new ResizeObserver(() => updateLayout());
+    const ResizeObserverCtor = window.ResizeObserver;
+    if (typeof ResizeObserverCtor === "function") {
+      observer = new ResizeObserverCtor(() => updateLayout());
       observer.observe(element);
     }
 
@@ -88,5 +122,5 @@ export function useCenteredOverlayPosition<T extends HTMLElement>(
     };
   }, [nodeVersion, overlayName]);
 
-  return { composedRef, style };
+  return { composedRef, nodeRef: localRef, nodeVersion, style };
 }

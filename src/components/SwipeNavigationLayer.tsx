@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { useSwipeGesture, type SwipeDirection, type SwipeGestureMetadata } from "@/hooks/useSwipeGesture";
+import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { addLog } from "@/lib/logging";
 import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
@@ -152,6 +153,7 @@ export function SwipeNavigationLayer() {
 }
 
 function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps) {
+  const interstitialActive = useInterstitialActive();
   const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex));
   const runwayRef = useRef(runway);
   runwayRef.current = runway;
@@ -312,9 +314,11 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       ref={containerRef}
       className="relative w-screen overflow-hidden"
       style={{ height: "100dvh", touchAction: "pan-y pinch-zoom" }}
+      inert={interstitialActive ? "" : undefined}
       data-testid="swipe-navigation-container"
       data-swipe-motion-mode={runtimeMotionMode}
       data-swipe-effects={transitionConfig.reducedEffects ? "reduced" : "standard"}
+      data-interstitial-active={interstitialActive ? "true" : "false"}
     >
       <div
         className="flex h-full"

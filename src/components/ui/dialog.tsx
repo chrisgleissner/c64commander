@@ -12,9 +12,10 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresentation";
 import { cn } from "@/lib/utils";
-import { ModalCloseButton } from "@/components/ui/modal-close-button";
-import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
+import { CloseControl } from "@/components/ui/modal-close-button";
+import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 import { useCenteredOverlayPosition } from "@/components/ui/useCenteredOverlayPosition";
+import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -31,10 +32,11 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 [transition-duration:var(--modal-backdrop-duration)]",
+      "fixed inset-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 [transition-duration:var(--modal-backdrop-duration)]",
       APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       className,
     )}
+    style={{ zIndex: INTERSTITIAL_Z_INDEX.backdrop }}
     {...props}
   />
 ));
@@ -47,44 +49,152 @@ type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.
 };
 
 const DialogPresentationContext = React.createContext(resolveModalPresentation("medium", "default"));
+const DialogHeaderContext = React.createContext<{ closeTestId?: string; showClose: boolean }>({ showClose: true });
+
+function useDialogOpenState(nodeRef: React.RefObject<HTMLElement | null>, nodeVersion: number) {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  React.useLayoutEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const node = nodeRef.current;
+    if (!node) return undefined;
+
+    const update = () => {
+      setIsOpen(node.getAttribute("data-state") === "open");
+    };
+
+    update();
+
+    const observer = new MutationObserver(update);
+    observer.observe(node, { attributes: true, attributeFilter: ["data-state"] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [nodeRef, nodeVersion]);
+
+  return isOpen;
+}
 
 const resolveDialogFooterClassName = () => "flex-row flex-wrap justify-end gap-2";
+
+const DIALOG_HEADER_STYLE = {
+  paddingLeft: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left))",
+  paddingRight: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right))",
+  paddingTop: "0.625rem",
+  paddingBottom: "0.625rem",
+} satisfies React.CSSProperties;
+
+function collectDialogHeaderSlots(children: React.ReactNode) {
+  let title: React.ReactNode | null = null;
+  let description: React.ReactNode | null = null;
+  const extras: React.ReactNode[] = [];
+
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) {
+      if (child !== null && child !== undefined && child !== false) {
+        extras.push(child);
+      }
+      return;
+    }
+
+    if (child.type === DialogTitle && title === null) {
+      title = child;
+      return;
+    }
+
+    if (child.type === DialogDescription && description === null) {
+      description = child;
+      return;
+    }
+
+    extras.push(child);
+  });
+
+  return { description, extras, title };
+}
 
 const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, DialogContentProps>(
   ({ className, children, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
     const { profile } = useDisplayProfile();
     const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
-    const { composedRef, style } = useCenteredOverlayPosition(ref, `DialogContent[${surface}]`);
+    const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(ref, `DialogContent[${surface}]`);
+    const isOpen = useDialogOpenState(nodeRef, nodeVersion);
+    useRegisterInterstitial("modal", isOpen);
 
     return (
       <DialogPresentationContext.Provider value={presentation}>
-        <DialogPortal>
-          <DialogOverlay />
-          <DialogPrimitive.Content
-            ref={composedRef}
-            className={cn(presentation.contentClassName, className)}
-            data-modal-surface={surface}
-            data-modal-presentation={presentation.mode}
-            style={style}
-            {...props}
-          >
-            {children}
-            {showClose ? (
-              <DialogPrimitive.Close asChild>
-                <ModalCloseButton data-testid={closeTestId} />
-              </DialogPrimitive.Close>
-            ) : null}
-          </DialogPrimitive.Content>
-        </DialogPortal>
+        <DialogHeaderContext.Provider value={{ closeTestId, showClose }}>
+          <DialogPortal>
+            <DialogOverlay />
+            <DialogPrimitive.Content
+              ref={composedRef}
+              className={cn(presentation.contentClassName, className)}
+              data-modal-surface={surface}
+              data-modal-presentation={presentation.mode}
+              style={{ ...style, zIndex: INTERSTITIAL_Z_INDEX.surface }}
+              {...props}
+            >
+              {children}
+            </DialogPrimitive.Content>
+          </DialogPortal>
+        </DialogHeaderContext.Provider>
       </DialogPresentationContext.Provider>
     );
   },
 );
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 text-left", className)} {...props} />
-);
+type DialogHeaderProps = React.HTMLAttributes<HTMLDivElement> & {
+  actions?: React.ReactNode;
+  closeTestId?: string;
+  descriptionContent?: React.ReactNode;
+  hideClose?: boolean;
+  titleContent?: React.ReactNode;
+};
+
+const DialogHeader = ({
+  actions,
+  children,
+  className,
+  closeTestId,
+  descriptionContent,
+  hideClose = false,
+  style,
+  titleContent,
+  ...props
+}: DialogHeaderProps) => {
+  const { closeTestId: contextCloseTestId, showClose } = React.useContext(DialogHeaderContext);
+  const slots = collectDialogHeaderSlots(children);
+  const resolvedTitle = titleContent ?? slots.title;
+  const resolvedDescription = descriptionContent ?? slots.description;
+  const shouldShowClose = !hideClose && showClose;
+
+  return (
+    <div
+      className={cn("shrink-0 border-b border-border bg-background text-left", className)}
+      style={{ ...DIALOG_HEADER_STYLE, ...((style as React.CSSProperties | undefined) ?? {}) }}
+      {...props}
+    >
+      <div className="flex min-h-10 items-center gap-3">
+        <div className="min-w-0 flex-1">{resolvedTitle}</div>
+        {actions || shouldShowClose ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {actions}
+            {shouldShowClose ? (
+              <DialogClose asChild>
+                <CloseControl data-testid={closeTestId ?? contextCloseTestId} />
+              </DialogClose>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {resolvedDescription ? <div className="mt-0.5 min-w-0">{resolvedDescription}</div> : null}
+      {slots.extras.length > 0 ? <div className="mt-2 min-w-0 space-y-2">{slots.extras}</div> : null}
+    </div>
+  );
+};
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {

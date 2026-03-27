@@ -130,7 +130,7 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
     <AppSheet open={open} onOpenChange={onOpenChange}>
       <AppSheetContent className="overflow-hidden p-0" data-testid="online-archive-dialog">
         <div className="flex h-full min-h-0 flex-col">
-          <AppSheetHeader className="px-4 pb-3 pt-4 pr-14 sm:px-6 sm:pb-4 sm:pt-5">
+          <AppSheetHeader className="px-4 pb-[0.5625rem] pt-3 pr-14 sm:px-6 sm:pb-[0.75rem] sm:pt-[0.9375rem]">
             <AppSheetTitle>Online Archive</AppSheetTitle>
             <AppSheetDescription>
               Search {resolvedConfig.name} via direct HTTP and execute files via device REST.

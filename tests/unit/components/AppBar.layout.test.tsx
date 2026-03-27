@@ -39,8 +39,8 @@ describe("AppBar", () => {
     const header = container.querySelector("header");
     const shell = container.querySelector(".app-shell-container");
 
-    expect(header?.className).not.toContain("pt-safe");
-    expect(shell).toHaveStyle({ paddingTop: "0.5rem", paddingBottom: "0.5rem" });
+    expect(header?.style.paddingTop).toBe("0px");
+    expect(shell).toHaveStyle({ paddingTop: "calc(0.5rem * 0.8)", paddingBottom: "calc(0.5rem * 0.8)" });
     expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
     expect(screen.queryByText("Compact")).not.toBeInTheDocument();
   });
@@ -58,8 +58,8 @@ describe("AppBar", () => {
     const header = container.querySelector("header");
     const shell = container.querySelector(".app-shell-container");
 
-    expect(header?.className).toContain("pt-safe");
-    expect(shell).toHaveStyle({ paddingTop: "1.5rem", paddingBottom: "1.5rem" });
+    expect(header?.style.paddingTop).toBe("var(--app-header-top-inset, env(safe-area-inset-top))");
+    expect(shell).toHaveStyle({ paddingTop: "calc(1.5rem * 0.8)", paddingBottom: "calc(1.5rem * 0.8)" });
     expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
     expect(screen.queryByText("Expanded")).not.toBeInTheDocument();
   });
@@ -109,5 +109,6 @@ describe("AppBar", () => {
     );
 
     expect(screen.getByTestId("app-bar-row").className).toContain("min-h-[52px]");
+    expect(screen.getByTestId("app-bar-title-zone")).toBeVisible();
   });
 });

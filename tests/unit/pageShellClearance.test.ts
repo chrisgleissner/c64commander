@@ -32,7 +32,8 @@ describe("page-shell TabBar clearance", () => {
     }
     const block = css.slice(start, blockEnd);
 
+    expect(css).toMatch(/--app-tab-bar-reserved-height:\s*calc\(\s*5rem\s*\+\s*env\(safe-area-inset-bottom\)\s*\)/);
     expect(block).toContain("padding-bottom");
-    expect(block).toMatch(/padding-bottom:\s*calc\(\s*5rem\s*\+\s*env\(safe-area-inset-bottom\)\s*\)/);
+    expect(block).toMatch(/padding-bottom:\s*var\(--app-tab-bar-reserved-height\)/);
   });
 });

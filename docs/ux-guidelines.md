@@ -163,10 +163,13 @@ Every interstitial must be exactly one of these surface types:
 
 ### Modal (Decision Interstitial)
 
+- Centered
+- Compact
 - Blocking
 - Short-lived
-- Requires an explicit decision or acknowledgement
-- Must not be used for browsing, exploration, or multi-step workflows
+- Must remain decision-only
+- Must not be used for browsing, exploration, filtering, or multi-step workflows
+- Must not rely on outer-surface scrolling
 
 Examples:
 
@@ -182,9 +185,10 @@ Examples:
 
 - Scrollable, exploratory, or stateful
 - May stay open while the user browses, filters, or edits
-- Preserves background context
-- Must start below the unified connectivity badge area in the app bar
-- Must leave the badge visually readable at all times so connectivity degradation remains visible while the sheet is open
+- Persistent workflow surface
+- Must fully occupy the available height from the bottom edge to the shared overlay top
+- Must slightly overlap the header using the shared overlap delta
+- Must leave the badge text, badge glyph, and header title readable at all times
 
 Examples:
 
@@ -199,6 +203,7 @@ Examples:
 
 ### Interaction Invariant
 
+- Exactly one interactive surface may own the screen at a time.
 - Do not choose modal vs bottom sheet by screen size or height.
 - Choose the surface by interaction type only.
 - Hybrid flows are forbidden.
@@ -210,12 +215,72 @@ Required split examples:
 - Source chooser is a modal; source browser is a bottom sheet.
 - Config manager is a bottom sheet; rename and delete are separate modals.
 
-### Surface Clearance and Dimming
+### Safe Area Rules
 
-- Bottom sheets must reserve a shared top clearance derived from the app bar height; do not let a sheet start underneath or cover the unified connectivity badge.
-- Diagnostics defines the reference top band for workflow sheets. Lighting Studio and other bottom sheets must align to that same top-clearance system rather than using independent viewport-based offsets.
-- Backdrops must be intentionally light. They may separate focus, but they must not hide the app state to the point that connectivity changes become hard to notice.
-- This lighter-dimming rule applies to modal dialogs, workflow sheets, progress overlays, and full-screen overlays.
+- `compact` profile uses full-screen top alignment: `HEADER_TOP = 0`.
+- `medium` and `expanded` profiles respect the runtime top safe area: `HEADER_TOP = env(safe-area-inset-top)`.
+- Do not hardcode top offsets.
+- Do not add extra top padding beyond `HEADER_TOP`.
+- System UI, cutouts, and status indicators must never be obstructed.
+
+### Controlled Header Overlap
+
+- Workflow sheets use one shared top equation only:
+  `overlay.top = getBadgeSafeZoneBottomPx() - min(12px, 0.15 * headerHeight)`
+- No workflow sheet may introduce extra top gaps, custom viewport fractions, or custom top margins.
+- Overlap may intersect only the badge border area.
+- Overlap must never intersect header title text, badge text, or the status glyph.
+
+### Shared Header Row
+
+- Every interstitial header starts with one title row only.
+- The title sits on the left edge of the header content area.
+- The close control sits on the right edge of that same row and shares the title's visual vertical center.
+- Diagnostics header actions such as the overflow menu share that same row and align to the same right-side action rail as the close control.
+- There must be no spacer row, no secondary row above the title, and no per-screen header padding overrides.
+
+### Close Control
+
+- All interstitial dismissal uses one shared `CloseControl` component.
+- The close control renders as a plain `×` glyph with no visible button chrome, border, fill, shadow, or hover background.
+- The visual footprint stays minimal while the interactive hit target remains at least `40px`.
+- No interstitial may implement its own bespoke close button.
+
+### Header Cleanup Rules
+
+- Drag handles and pill bars are forbidden on workflow sheets.
+- `Collapse` and `Expand` controls are forbidden in interstitial headers.
+- Lighting Studio and Diagnostics follow the same header-row contract as every other sheet.
+- Any additional controls must render on the title row or move into the body immediately below the header.
+
+### Z-Index Hierarchy
+
+- Main content: level `10`
+- Backdrop: level `20`
+- Header surface: level `30`
+- Active modal or workflow sheet: level `40`
+- The header stays above the backdrop and below the active surface.
+- No interstitial component may exceed level `40`.
+
+### Dimming Standard
+
+- All overlays use the same backdrop: `bg-black/40`.
+- This applies to modals, workflow sheets, and progress overlays.
+- Do not use blur on overlay backdrops.
+- Do not introduce per-component dimming overrides.
+
+### Navigation Suppression
+
+- When any interstitial is active, bottom navigation is visually removed with `transform: translateY(100%)`.
+- Navigation space remains reserved through a persistent layout constraint.
+- Overlay activation must not reflow content, resize the viewport, or shift scroll position.
+- Background content and header controls must be non-interactive while another surface owns the screen.
+
+### Full Height Utilization
+
+- Bottom sheets must fill the full available height from the bottom edge to `overlay.top`.
+- No visual sliver gap is allowed between the header overlap line and the sheet.
+- Lighting Studio follows the same overlay top contract as Diagnostics and every other workflow sheet.
 
 ---
 
@@ -228,54 +293,31 @@ This contract is **mandatory with zero exceptions**.
 The health badge is the element in the top-right of the app bar labeled with the connectivity state
 (for example "C64U ● HEALTHY", "C64U ● DEGRADED", "C64U ● UNHEALTHY"). It must remain:
 
-- Unobscured at all times — no overlay may visually cover or intersect it.
+- Visually present at all times while an overlay is active.
 - Clearly readable at all times — text, status label, and health glyph must be distinguishable even when a backdrop is present.
 
 Rationale: the health badge is the primary connectivity signal. Masking it prevents the user from noticing that the device has become degraded or unreachable while a workflow sheet is open.
 
 #### Badge Safe Zone
 
-The badge safe zone is the bounding box of the badge plus an 8 px margin on all sides (`BADGE_SAFE_ZONE_MARGIN_PX = 8`).
+The shared badge reference is the measured badge surface bounds.
 
-- No overlay element may enter the badge safe zone.
-- The safe-zone bottom Y coordinate is computed by `getBadgeSafeZoneBottomPx()` (see `src/components/ui/interstitialStyles.ts`).
+- `getBadgeSafeZoneBottomPx()` returns the badge bottom edge used as the workflow-sheet top base.
+- The sheet may overlap only by the shared overlap delta.
+- Badge text and glyph are treated as critical bounds and may never be intersected.
 
-#### OVERLAY_MAX_TOP
+#### Header Critical Bounds
 
-All bottom sheets must satisfy:
+- Header title text is also a critical bound.
+- Runtime assertions must fail if an overlay intersects header title text or badge critical content.
 
-```
-overlay.top >= OVERLAY_MAX_TOP
-```
+#### Runtime Assertions
 
-where `OVERLAY_MAX_TOP = getBadgeSafeZoneBottomPx()` = `max(96px, appBarHeight + 8px)`.
-
-The CSS expression is `APP_SHEET_TOP_CLEARANCE` (from `interstitialStyles.ts`) and is already wired into `AppSheetContent`.
-
-Do **not** hard-code pixel offsets or viewport-fraction top values that could place a sheet above `OVERLAY_MAX_TOP`.
-
-#### App Bar Z-Index
-
-The app bar renders at `z-[51]`, intentionally above all overlay backdrops (`z-50`). This ensures the health badge is always visually on top of any dimming layer without requiring badge-specific z-index overrides.
-
-Do **not** lower the app bar z-index below 51.
-Do **not** raise overlay backdrops above `z-50` without also raising the app bar.
-
-#### Dimming Constraint
-
-Backdrop opacity is standardized at about **30%** via `APP_INTERSTITIAL_BACKDROP_CLASSNAME` (currently `bg-black/30`). This applies globally to:
-
-- Bottom sheets (`AppSheetContent`)
-- Dialogs and alert dialogs
-- Progress overlays
-- Any full-screen dimming layer
-
-Do **not** introduce backdrop blur on sheets, dialogs, or progress overlays.
-Do **not** introduce per-component backdrop overrides that materially deviate from the shared ~30% dim level.
-
-#### Runtime Assertions (Development Builds)
-
-`assertOverlayRespectsBadgeSafeZone(...)` (from `interstitialStyles.ts`) logs a `console.error` in non-production builds when an overlay top clears the badge band incorrectly or when computed overlay bounds intersect the badge safe zone. Call this whenever a sheet or centered dialog computes its layout dynamically.
+- `assertOverlayRespectsBadgeSafeZone(...)` logs a `console.error` in non-production builds when:
+- a workflow sheet rises above the allowed overlap line
+- header title text is intersected
+- badge text or glyph is intersected
+- badge border overlap exceeds the shared delta
 
 ---
 

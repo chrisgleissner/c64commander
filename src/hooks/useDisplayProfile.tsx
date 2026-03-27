@@ -61,6 +61,7 @@ const DISPLAY_PROFILE_ROOT_STYLE_PROPERTIES = [
   "--display-profile-modal-inset",
   "--display-profile-viewport-width",
   "--display-profile-viewport-height",
+  "--app-header-top-inset",
 ] as const;
 
 type RootSnapshot = {
@@ -100,6 +101,7 @@ const applyProfileTokens = (profile: DisplayProfile) => {
   root.style.setProperty("--display-profile-action-grid-min", tokens.actionGridMinWidth);
   root.style.setProperty("--display-profile-modal-max-width", tokens.modalMaxWidth);
   root.style.setProperty("--display-profile-modal-inset", tokens.modalInset);
+  root.style.setProperty("--app-header-top-inset", profile === "compact" ? "0px" : "env(safe-area-inset-top)");
 };
 
 const applyViewportTokens = () => {

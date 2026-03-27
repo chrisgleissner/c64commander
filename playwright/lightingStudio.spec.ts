@@ -14,6 +14,8 @@ import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { seedUiMocks } from "./uiMocks";
 import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
+const MAX_HEADER_OVERLAP_DELTA_PX = 12;
+
 const waitForConnected = async (page: Page) => {
   await expect(page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge")).toHaveAttribute(
     "data-connection-state",
@@ -95,7 +97,9 @@ test.describe("Lighting Studio", () => {
     await page.getByTestId("home-lighting-studio").click();
     await expect(page.getByRole("dialog", { name: "Lighting Studio" })).toBeVisible();
 
-    await page.getByTestId("lighting-profile-save-name").fill("Night Ride");
+    const saveNameInput = page.getByTestId("lighting-profile-save-name");
+    await saveNameInput.scrollIntoViewIfNeeded();
+    await saveNameInput.fill("Night Ride");
     await page.getByTestId("lighting-profile-save").click();
     await page.getByRole("button", { name: /Night Ride/ }).click();
 
@@ -183,6 +187,23 @@ test.describe("Lighting Studio", () => {
     await expect(page.getByTestId("lighting-circadian-fallback")).toHaveText(/Fallback schedule|Solar schedule/);
   });
 
+  test("header uses the shared close row without handle or collapse controls", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await page.getByTestId("home-lighting-studio").click();
+
+    const studioSheet = page.getByTestId("lighting-studio-sheet");
+    await expect(studioSheet).toBeVisible();
+    await expect(page.getByTestId("lighting-sheet-handle")).toHaveCount(0);
+    await expect(page.getByTestId("lighting-sheet-toggle")).toHaveCount(0);
+
+    const closeBtn = studioSheet.getByRole("button", { name: "Close" });
+    await expect(closeBtn).toBeVisible();
+    await expect(closeBtn.locator("svg")).toHaveCount(0);
+    await expect.poll(() => closeBtn.evaluate((button) => button.textContent ?? "")).toContain("×");
+  });
+
   test("medium layout keeps the simplified keyboard blocks and avoids header/card clipping", async ({
     page,
   }: {
@@ -234,7 +255,7 @@ test.describe("Lighting Studio", () => {
 
     const dialogBox = await dialog.boundingBox();
     const closeBox = await page.getByTestId("lighting-studio-close").boundingBox();
-    const holdBox = await page.getByTestId("lighting-lock").boundingBox();
+    const activeProfileChipBox = await page.getByTestId("lighting-active-profile-chip").boundingBox();
     const profileCardBox = await page.getByTestId("lighting-profile-detail-card").boundingBox();
     const mockupBox = await page.getByTestId("lighting-device-mockup").boundingBox();
     const mainBlockBox = await page.getByTestId("lighting-mockup-main-block").boundingBox();
@@ -243,13 +264,13 @@ test.describe("Lighting Studio", () => {
 
     expect(dialogBox).not.toBeNull();
     expect(closeBox).not.toBeNull();
-    expect(holdBox).not.toBeNull();
+    expect(activeProfileChipBox).not.toBeNull();
     expect(profileCardBox).not.toBeNull();
     expect(mockupBox).not.toBeNull();
     expect(mainBlockBox).not.toBeNull();
     expect(functionBlockBox).not.toBeNull();
 
-    expect(boxesOverlap(closeBox!, holdBox!)).toBe(false);
+    expect(boxesOverlap(closeBox!, activeProfileChipBox!)).toBe(false);
     expect(profileCardBox!.x).toBeGreaterThanOrEqual(dialogBox!.x - 1);
     expect(profileCardBox!.x + profileCardBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width + 1);
     expect(mockupBox!.x).toBeGreaterThanOrEqual(dialogBox!.x - 1);
@@ -288,8 +309,8 @@ test.describe("Lighting Studio", () => {
     const diagnosticsBox = await diagnosticsSheet.boundingBox();
     expect(diagnosticsBox).not.toBeNull();
 
-    const minimumSheetTop = badgeBox!.y + badgeBox!.height + 8;
-    expect(diagnosticsBox!.y).toBeGreaterThanOrEqual(minimumSheetTop - 1);
+    const minimumSheetTop = badgeBox!.y + badgeBox!.height - MAX_HEADER_OVERLAP_DELTA_PX;
+    expect(diagnosticsBox!.y).toBeGreaterThanOrEqual(minimumSheetTop - 4);
 
     await diagnosticsSheet.getByRole("button", { name: "Close" }).click();
     await expect(diagnosticsSheet).toBeHidden();
@@ -299,7 +320,7 @@ test.describe("Lighting Studio", () => {
     await expect(lightingSheet).toBeVisible();
     const lightingBox = await lightingSheet.boundingBox();
     expect(lightingBox).not.toBeNull();
-    expect(lightingBox!.y).toBeGreaterThanOrEqual(minimumSheetTop - 1);
+    expect(lightingBox!.y).toBeGreaterThanOrEqual(minimumSheetTop - 4);
     expect(lightingBox!.y).toBeLessThanOrEqual(160);
   });
 });

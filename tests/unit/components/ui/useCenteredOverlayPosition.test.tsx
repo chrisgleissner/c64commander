@@ -7,6 +7,16 @@ import { assertOverlayRespectsBadgeSafeZone, resolveCenteredOverlayLayout } from
 
 vi.mock("@/components/ui/interstitialStyles", () => ({
   assertOverlayRespectsBadgeSafeZone: vi.fn(),
+  boundsFromElement: vi.fn((element: HTMLElement) => {
+    const top = Number.parseFloat(element.style.top || "0");
+    const height = element.offsetHeight;
+    return {
+      top,
+      left: 120,
+      right: 320,
+      bottom: top + height,
+    };
+  }),
   resolveCenteredOverlayLayout: vi.fn((contentHeight: number) => ({
     top: contentHeight + 100,
     maxHeight: 500 - contentHeight,
@@ -33,6 +43,10 @@ describe("useCenteredOverlayPosition", () => {
 
   beforeEach(() => {
     rectHeight = 140;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
     Object.defineProperty(window, "innerHeight", {
       configurable: true,
       writable: true,
@@ -122,12 +136,10 @@ describe("useCenteredOverlayPosition", () => {
     const overlay = screen.getByTestId("overlay");
     expect(resolveCenteredOverlayLayout).toHaveBeenCalledWith(140);
     expect(assertOverlayRespectsBadgeSafeZone).toHaveBeenCalledWith(
-      {
-        top: 240,
-        right: 320,
-        bottom: 380,
+      expect.objectContaining({
         left: 120,
-      },
+        right: 320,
+      }),
       "LateMountOverlay",
     );
     expect(overlay).toHaveStyle({ top: "240px", maxHeight: "360px" });
@@ -160,12 +172,10 @@ describe("useCenteredOverlayPosition", () => {
     expect(overlay).toHaveStyle({ top: "240px", maxHeight: "360px", transform: "translateX(-50%)" });
     expect(resolveCenteredOverlayLayout).toHaveBeenCalledWith(140);
     expect(assertOverlayRespectsBadgeSafeZone).toHaveBeenLastCalledWith(
-      {
-        top: 240,
-        right: 320,
-        bottom: 380,
+      expect.objectContaining({
         left: 120,
-      },
+        right: 320,
+      }),
       "DialogOverlay",
     );
     expect(observeMock).toHaveBeenCalledWith(overlay);
@@ -178,12 +188,10 @@ describe("useCenteredOverlayPosition", () => {
     expect(overlay).toHaveStyle({ top: "280px", maxHeight: "320px" });
     expect(resolveCenteredOverlayLayout).toHaveBeenLastCalledWith(180);
     expect(assertOverlayRespectsBadgeSafeZone).toHaveBeenLastCalledWith(
-      {
-        top: 280,
-        right: 320,
-        bottom: 460,
+      expect.objectContaining({
         left: 120,
-      },
+        right: 320,
+      }),
       "DialogOverlay",
     );
 

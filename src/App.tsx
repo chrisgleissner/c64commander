@@ -26,6 +26,7 @@ import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { TestHeartbeat } from "@/components/TestHeartbeat";
+import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
 import { registerGlobalButtonInteractionModel } from "@/lib/ui/buttonInteraction";
@@ -109,26 +110,28 @@ const AppRoutes = () => {
   return (
     <BrowserRouter>
       <LightingStudioProvider>
-        <GlobalErrorListener />
-        <GlobalButtonInteractionModel />
-        <GlobalNavigationBlocker />
-        <RouteRefresher />
-        <DebugStartupLogger />
-        <DiagnosticsRuntimeBridge />
-        <TraceContextBridge />
-        <GlobalDiagnosticsOverlay />
-        <ConnectionController />
-        <DemoModeInterstitial />
-        <LightingStudioDialog />
-        {coverageProbeEnabled && <TestHeartbeat />}
-        <Suspense fallback={<RouteLoadingFallback />}>
-          <SwipeNavigationLayer />
-          <Routes>
-            {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
-            <Route path="*" element={<NotFoundForUnknownPaths />} />
-          </Routes>
-        </Suspense>
-        <TabBar />
+        <InterstitialStateProvider>
+          <GlobalErrorListener />
+          <GlobalButtonInteractionModel />
+          <GlobalNavigationBlocker />
+          <RouteRefresher />
+          <DebugStartupLogger />
+          <DiagnosticsRuntimeBridge />
+          <TraceContextBridge />
+          <GlobalDiagnosticsOverlay />
+          <ConnectionController />
+          <DemoModeInterstitial />
+          <LightingStudioDialog />
+          {coverageProbeEnabled && <TestHeartbeat />}
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <SwipeNavigationLayer />
+            <Routes>
+              {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
+              <Route path="*" element={<NotFoundForUnknownPaths />} />
+            </Routes>
+          </Suspense>
+          <TabBar />
+        </InterstitialStateProvider>
       </LightingStudioProvider>
     </BrowserRouter>
   );

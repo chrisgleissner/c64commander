@@ -13,8 +13,10 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresentation";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
-import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
+import { CloseControl } from "@/components/ui/modal-close-button";
+import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 import { useCenteredOverlayPosition } from "@/components/ui/useCenteredOverlayPosition";
+import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -23,8 +25,71 @@ const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
 const AlertDialogPresentationContext = React.createContext(resolveModalPresentation("medium", "confirmation"));
+const AlertDialogHeaderContext = React.createContext({ showClose: true });
+
+function useAlertDialogOpenState(nodeRef: React.RefObject<HTMLElement | null>, nodeVersion: number) {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  React.useLayoutEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const node = nodeRef.current;
+    if (!node) return undefined;
+
+    const update = () => {
+      setIsOpen(node.getAttribute("data-state") === "open");
+    };
+
+    update();
+
+    const observer = new MutationObserver(update);
+    observer.observe(node, { attributes: true, attributeFilter: ["data-state"] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [nodeRef, nodeVersion]);
+
+  return isOpen;
+}
 
 const resolveAlertDialogFooterClassName = () => "flex-row flex-wrap justify-end gap-2";
+
+const ALERT_DIALOG_HEADER_STYLE = {
+  paddingLeft: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left))",
+  paddingRight: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right))",
+  paddingTop: "0.625rem",
+  paddingBottom: "0.625rem",
+} satisfies React.CSSProperties;
+
+function collectAlertDialogHeaderSlots(children: React.ReactNode) {
+  let title: React.ReactNode | null = null;
+  let description: React.ReactNode | null = null;
+  const extras: React.ReactNode[] = [];
+
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) {
+      if (child !== null && child !== undefined && child !== false) {
+        extras.push(child);
+      }
+      return;
+    }
+
+    if (child.type === AlertDialogTitle && title === null) {
+      title = child;
+      return;
+    }
+
+    if (child.type === AlertDialogDescription && description === null) {
+      description = child;
+      return;
+    }
+
+    extras.push(child);
+  });
+
+  return { description, extras, title };
+}
 
 const AlertDialogOverlay = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Overlay>,
@@ -32,10 +97,11 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       className,
     )}
+    style={{ zIndex: INTERSTITIAL_Z_INDEX.backdrop }}
     {...props}
     ref={ref}
   />
@@ -48,29 +114,80 @@ const AlertDialogContent = React.forwardRef<
 >(({ className, surface = "confirmation", ...props }, ref) => {
   const { profile } = useDisplayProfile();
   const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
-  const { composedRef, style } = useCenteredOverlayPosition(ref, `AlertDialogContent[${surface}]`);
+  const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(
+    ref,
+    `AlertDialogContent[${surface}]`,
+  );
+  const isOpen = useAlertDialogOpenState(nodeRef, nodeVersion);
+  useRegisterInterstitial("modal", isOpen);
 
   return (
     <AlertDialogPresentationContext.Provider value={presentation}>
-      <AlertDialogPortal>
-        <AlertDialogOverlay />
-        <AlertDialogPrimitive.Content
-          ref={composedRef}
-          className={cn(presentation.contentClassName, className)}
-          data-modal-surface={surface}
-          data-modal-presentation={presentation.mode}
-          style={style}
-          {...props}
-        />
-      </AlertDialogPortal>
+      <AlertDialogHeaderContext.Provider value={{ showClose: true }}>
+        <AlertDialogPortal>
+          <AlertDialogOverlay />
+          <AlertDialogPrimitive.Content
+            ref={composedRef}
+            className={cn(presentation.contentClassName, className)}
+            data-modal-surface={surface}
+            data-modal-presentation={presentation.mode}
+            style={{ ...style, zIndex: INTERSTITIAL_Z_INDEX.surface }}
+            {...props}
+          />
+        </AlertDialogPortal>
+      </AlertDialogHeaderContext.Provider>
     </AlertDialogPresentationContext.Provider>
   );
 });
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
-const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-2 text-left", className)} {...props} />
-);
+type AlertDialogHeaderProps = React.HTMLAttributes<HTMLDivElement> & {
+  actions?: React.ReactNode;
+  descriptionContent?: React.ReactNode;
+  hideClose?: boolean;
+  titleContent?: React.ReactNode;
+};
+
+const AlertDialogHeader = ({
+  actions,
+  children,
+  className,
+  descriptionContent,
+  hideClose = false,
+  style,
+  titleContent,
+  ...props
+}: AlertDialogHeaderProps) => {
+  const { showClose } = React.useContext(AlertDialogHeaderContext);
+  const slots = collectAlertDialogHeaderSlots(children);
+  const resolvedTitle = titleContent ?? slots.title;
+  const resolvedDescription = descriptionContent ?? slots.description;
+  const shouldShowClose = !hideClose && showClose;
+
+  return (
+    <div
+      className={cn("shrink-0 border-b border-border bg-background text-left", className)}
+      style={{ ...ALERT_DIALOG_HEADER_STYLE, ...((style as React.CSSProperties | undefined) ?? {}) }}
+      {...props}
+    >
+      <div className="flex min-h-10 items-center gap-3">
+        <div className="min-w-0 flex-1">{resolvedTitle}</div>
+        {actions || shouldShowClose ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {actions}
+            {shouldShowClose ? (
+              <AlertDialogPrimitive.Cancel asChild>
+                <CloseControl />
+              </AlertDialogPrimitive.Cancel>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {resolvedDescription ? <div className="mt-0.5 min-w-0">{resolvedDescription}</div> : null}
+      {slots.extras.length > 0 ? <div className="mt-2 min-w-0 space-y-2">{slots.extras}</div> : null}
+    </div>
+  );
+};
 AlertDialogHeader.displayName = "AlertDialogHeader";
 
 const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {

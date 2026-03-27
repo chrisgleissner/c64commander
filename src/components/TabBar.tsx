@@ -9,8 +9,11 @@
 import { motion } from "framer-motion";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useInterstitialActive } from "@/components/ui/interstitial-state";
+import { INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { cn } from "@/lib/utils";
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "/": Home,
@@ -26,9 +29,17 @@ const tabs = TAB_ROUTES.map((t) => ({ ...t, icon: TAB_ICONS[t.path]! }));
 export function TabBar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const interstitialActive = useInterstitialActive();
 
   return (
-    <div className="fixed bottom-0 left-0 z-50 w-screen max-w-screen">
+    <div
+      className={cn(
+        "fixed bottom-0 left-0 w-screen max-w-screen transition-transform duration-200 ease-out",
+        interstitialActive && "translate-y-full pointer-events-none",
+      )}
+      style={{ zIndex: INTERSTITIAL_Z_INDEX.content }}
+      data-interstitial-active={interstitialActive ? "true" : "false"}
+    >
       <nav className="tab-bar">
         {tabs.map((tab) => {
           const isActive = tabIndexForPath(location.pathname) === tabIndexForPath(tab.path);

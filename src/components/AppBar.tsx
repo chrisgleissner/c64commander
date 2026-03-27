@@ -13,6 +13,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { cn } from "@/lib/utils";
 import { useAppChromeMode } from "@/components/layout/AppChromeContext";
+import { INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 
 type Props = {
   title: ReactNode;
@@ -60,23 +61,24 @@ export function AppBar({ title, subtitle: _subtitle, leading, children }: Props)
     <header
       ref={headerRef}
       className={cn(
-        // z-[51] keeps the app bar (and health badge) above overlay backdrops (z-50) so the badge
-        // remains visually readable at all times — even when a bottom sheet or dialog is open.
-        "top-0 z-[51] bg-background/80 border-b border-border backdrop-blur-lg",
+        "top-0 border-b border-border bg-background/88 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.55)]",
         appChromeMode === "sticky" ? "sticky w-full max-w-full" : "fixed left-0 w-screen max-w-screen",
-        !compact && "pt-safe",
       )}
+      style={{
+        zIndex: INTERSTITIAL_Z_INDEX.header,
+        paddingTop: compact ? "0px" : "var(--app-header-top-inset, env(safe-area-inset-top))",
+      }}
       data-app-chrome-mode={appChromeMode}
     >
       <div
         className={cn("app-shell-container", children ? "space-y-3" : "space-y-0")}
         style={{
-          paddingTop: compact ? tokens.pagePaddingX : tokens.pagePaddingY,
-          paddingBottom: compact ? tokens.pagePaddingX : tokens.pagePaddingY,
+          paddingTop: `calc(${compact ? tokens.pagePaddingX : tokens.pagePaddingY} * 0.8)`,
+          paddingBottom: `calc(${compact ? tokens.pagePaddingX : tokens.pagePaddingY} * 0.8)`,
         }}
       >
         <div className="flex min-h-[52px] items-center justify-between gap-4" data-testid="app-bar-row">
-          <div className="flex min-h-[52px] min-w-0 items-center">
+          <div className="flex min-h-[52px] min-w-0 items-center" data-testid="app-bar-title-zone">
             {leading ? leading : <h1 className="c64-header text-xl leading-none truncate">{title}</h1>}
           </div>
           {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}

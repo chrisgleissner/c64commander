@@ -601,7 +601,7 @@ const FilterEditorSurface = ({
         className="z-[60] overflow-hidden p-0 sm:w-[min(100vw-2rem,22rem)]"
         data-testid="filters-editor-surface"
       >
-        <AppSheetHeader className="px-4 py-3 pr-14">
+        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
           <AppSheetTitle className="text-base">Filters</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Filter diagnostics activity by type, contributor, and severity.
@@ -833,7 +833,7 @@ const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChang
         className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,34rem)]"
         data-testid="config-drift-surface"
       >
-        <AppSheetHeader className="px-4 py-3 pr-14">
+        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
           <AppSheetTitle className="text-base">Config Drift</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Review runtime configuration drift against persisted settings.
@@ -866,7 +866,7 @@ const DecisionStateSurface = ({
         className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]"
         data-testid="decision-state-surface"
       >
-        <AppSheetHeader className="px-4 py-3 pr-14">
+        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
           <AppSheetTitle className="text-base">Decision state</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Internal reconciliation, playback uncertainty, and recent diagnostics transitions.
@@ -1171,15 +1171,14 @@ export function DiagnosticsDialog({
     <>
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
-          <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
-            <div className="flex min-h-8 items-center pr-20">
-              <div className="relative z-10 flex items-center gap-1">
-                <AppSheetTitle>Diagnostics</AppSheetTitle>
+          <AppSheetHeader
+            actions={
+              <div className="relative z-10">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 opacity-70"
+                  className="h-8 w-8 p-0 opacity-70"
                   onClick={() => setOverflowOpen((v) => !v)}
                   data-testid="diagnostics-overflow-menu"
                 >
@@ -1327,7 +1326,9 @@ export function DiagnosticsDialog({
                   </div>
                 ) : null}
               </div>
-            </div>
+            }
+          >
+            <AppSheetTitle>Diagnostics</AppSheetTitle>
             <AppSheetDescription className="sr-only">Diagnostic activity and health status.</AppSheetDescription>
           </AppSheetHeader>
 

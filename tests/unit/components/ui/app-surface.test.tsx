@@ -17,13 +17,12 @@ import {
 } from "@/components/ui/app-surface";
 import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
-  APP_SHEET_TOP_CLEARANCE,
-  BADGE_SAFE_ZONE_MARGIN_PX,
-  getBadgeSafeZoneBottomPx,
-  getBadgeSafeZone,
   assertOverlayRespectsBadgeSafeZone,
+  getBadgeSafeZone,
+  getBadgeSafeZoneBottomPx,
   resolveCenteredOverlayLayout,
   resolveAppSheetTopClearancePx,
+  resolveHeaderOverlapDeltaPx,
 } from "@/components/ui/interstitialStyles";
 
 const setViewportWidth = (width: number) => {
@@ -62,13 +61,14 @@ describe("App surface primitives", () => {
     expect(dialog.getAttribute("style")).toContain(
       "--app-sheet-bottom-clearance: calc(5rem + env(safe-area-inset-bottom))",
     );
-    expect(dialog.getAttribute("style")).toContain(`--app-sheet-top-clearance: ${APP_SHEET_TOP_CLEARANCE}`);
-    expect(dialog.className).toContain("top-[var(--app-sheet-top-clearance)]");
+    expect(dialog.getAttribute("style")).toContain(`top: ${resolveAppSheetTopClearancePx()}px`);
+    expect(dialog.getAttribute("style")).toContain("z-index: 40");
 
     const overlay = Array.from(document.body.querySelectorAll<HTMLElement>('[data-state="open"]')).find((element) =>
       element.className.includes("fixed inset-0"),
     );
     expect(overlay?.className).toContain(APP_INTERSTITIAL_BACKDROP_CLASSNAME.split(" ")[0]);
+    expect(overlay?.style.zIndex).toBe("20");
   });
 
   it("keeps AppSheet as a bottom sheet on expanded widths", () => {
@@ -121,6 +121,7 @@ describe("App surface primitives", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "dialog");
     expect(dialog.className).toContain("w-[min(90vw,32rem)]");
+    expect(dialog.style.zIndex).toBe("40");
 
     const overlay = Array.from(document.body.querySelectorAll<HTMLElement>('[data-state="open"]')).find((element) =>
       element.className.includes("fixed inset-0"),
@@ -131,31 +132,29 @@ describe("App surface primitives", () => {
 
   it("derives sheet clearance from the app bar height so sheets stay below the badge lane", () => {
     document.documentElement.style.setProperty("--app-bar-height", "104px");
-    expect(resolveAppSheetTopClearancePx()).toBe(112);
+    expect(resolveAppSheetTopClearancePx()).toBe(92);
   });
 
-  it("backdrop uses an unblurred 30% darkening layer", () => {
-    // The first class in APP_INTERSTITIAL_BACKDROP_CLASSNAME encodes the base opacity.
-    // The overlay should darken the background by about 30% without any backdrop blur.
+  it("backdrop uses an unblurred 40% darkening layer", () => {
     const baseClass = APP_INTERSTITIAL_BACKDROP_CLASSNAME.split(" ")[0];
     const match = baseClass.match(/bg-black\/(\d+)/);
     expect(match).not.toBeNull();
     const opacity = Number(match![1]);
-    expect(opacity).toBe(30);
+    expect(opacity).toBe(40);
     expect(APP_INTERSTITIAL_BACKDROP_CLASSNAME).not.toContain("backdrop-blur");
     expect(APP_INTERSTITIAL_BACKDROP_CLASSNAME).not.toContain("supports-[backdrop-filter]");
   });
 
-  it("getBadgeSafeZoneBottomPx returns the same value as resolveAppSheetTopClearancePx", () => {
+  it("derives the sheet top from the badge bottom minus the shared overlap delta", () => {
     document.documentElement.style.setProperty("--app-bar-height", "88px");
-    expect(getBadgeSafeZoneBottomPx()).toBe(resolveAppSheetTopClearancePx());
+    expect(resolveAppSheetTopClearancePx()).toBe(getBadgeSafeZoneBottomPx() - resolveHeaderOverlapDeltaPx());
   });
 
   it("returns null badge bounds when the unified badge is absent", () => {
     expect(getBadgeSafeZone()).toBeNull();
   });
 
-  it("expands the badge bounds into a safe zone rectangle", () => {
+  it("returns the measured badge bounds without adding a synthetic margin", () => {
     const badge = document.createElement("button");
     badge.setAttribute("data-testid", "unified-health-badge");
     document.body.appendChild(badge);
@@ -173,15 +172,16 @@ describe("App surface primitives", () => {
     } as DOMRect);
 
     expect(getBadgeSafeZone()).toEqual({
-      top: 4,
-      left: 192,
-      right: 288,
-      bottom: 44,
+      top: 12,
+      left: 200,
+      right: 280,
+      bottom: 36,
     });
   });
 
-  it("BADGE_SAFE_ZONE_MARGIN_PX is 8", () => {
-    expect(BADGE_SAFE_ZONE_MARGIN_PX).toBe(8);
+  it("caps the shared overlap delta at 12px", () => {
+    document.documentElement.style.setProperty("--app-bar-height", "200px");
+    expect(resolveHeaderOverlapDeltaPx()).toBe(12);
   });
 
   it("resolves centered overlay layout below the badge safe zone", () => {
@@ -212,63 +212,79 @@ describe("assertOverlayRespectsBadgeSafeZone", () => {
     vi.restoreAllMocks();
   });
 
-  it("logs an error when overlay top is above the safe zone bottom", () => {
+  it("logs an error when overlay top rises above the allowed workflow sheet top", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     document.documentElement.style.setProperty("--app-bar-height", "80px");
-    // safeZoneBottom = max(96, round(80+8)) = 96
-    assertOverlayRespectsBadgeSafeZone(50, "TestOverlay");
+    assertOverlayRespectsBadgeSafeZone(resolveAppSheetTopClearancePx() - 1, "TestOverlay");
     expect(spy).toHaveBeenCalledOnce();
     expect(spy.mock.calls[0][0]).toContain("TestOverlay");
-    expect(spy.mock.calls[0][0]).toContain("Badge safe zone violation");
+    expect(spy.mock.calls[0][0]).toContain("Overlay top violation");
   });
 
-  it("does not log when overlay top is at or below the safe zone bottom", () => {
+  it("does not log when overlay top is at or below the allowed workflow sheet top", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     document.documentElement.style.setProperty("--app-bar-height", "80px");
-    // safeZoneBottom = 96; top=96 is exactly on the boundary → allowed
-    assertOverlayRespectsBadgeSafeZone(96, "TestOverlay");
+    assertOverlayRespectsBadgeSafeZone(resolveAppSheetTopClearancePx(), "TestOverlay");
     assertOverlayRespectsBadgeSafeZone(200, "TestOverlay2");
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("logs when overlay bounds intersect the badge safe zone", () => {
+  it("logs when overlay bounds intersect the header title zone", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    document.body.innerHTML =
-      '<button data-testid="unified-health-badge" style="position:fixed;top:10px;left:200px;width:80px;height:24px"></button>';
-
-    const safeZone = getBadgeSafeZone();
-    expect(safeZone).not.toBeNull();
+    const title = document.createElement("div");
+    title.setAttribute("data-testid", "app-bar-title-zone");
+    document.body.appendChild(title);
+    vi.spyOn(title, "getBoundingClientRect").mockReturnValue({
+      x: 16,
+      y: 20,
+      top: 20,
+      left: 16,
+      right: 160,
+      bottom: 48,
+      width: 144,
+      height: 28,
+      toJSON: () => ({}),
+    } as DOMRect);
 
     assertOverlayRespectsBadgeSafeZone(
       {
-        top: safeZone!.top,
-        right: safeZone!.right,
-        bottom: safeZone!.bottom,
-        left: safeZone!.left,
+        top: 18,
+        right: 170,
+        bottom: 60,
+        left: 12,
       },
       "IntersectingOverlay",
     );
 
     expect(spy).toHaveBeenCalled();
-    expect(spy.mock.calls.at(-1)?.[0]).toContain("intersection");
+    expect(spy.mock.calls.at(-1)?.[0]).toContain("Header title intersection");
   });
 
-  it("does not log an intersection when overlay bounds stay outside the badge safe zone", () => {
+  it("does not log an intersection when overlay bounds stay outside the header title zone", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    document.body.innerHTML =
-      '<button data-testid="unified-health-badge" style="position:fixed;top:10px;left:200px;width:80px;height:24px"></button>';
-
-    const safeZone = getBadgeSafeZone();
-    expect(safeZone).not.toBeNull();
+    const title = document.createElement("div");
+    title.setAttribute("data-testid", "app-bar-title-zone");
+    document.body.appendChild(title);
+    vi.spyOn(title, "getBoundingClientRect").mockReturnValue({
+      x: 16,
+      y: 20,
+      top: 20,
+      left: 16,
+      right: 160,
+      bottom: 48,
+      width: 144,
+      height: 28,
+      toJSON: () => ({}),
+    } as DOMRect);
 
     assertOverlayRespectsBadgeSafeZone(
       {
         top: 120,
-        right: safeZone!.right,
+        right: 170,
         bottom: 200,
-        left: safeZone!.left,
+        left: 12,
       },
       "NonIntersectingOverlay",
     );

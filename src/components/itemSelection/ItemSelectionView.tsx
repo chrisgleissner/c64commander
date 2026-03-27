@@ -92,7 +92,7 @@ export const ItemSelectionView = ({
           return (
             <div
               key={entry.path}
-              className="flex items-center gap-2 min-w-0 border-b border-border/50 py-2"
+              className="flex items-center gap-2 min-w-0 border-b border-border/50 py-[0.44rem]"
               data-testid="source-entry-row"
               data-entry-type={entry.type}
               role={isFolder ? "button" : undefined}

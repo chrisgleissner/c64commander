@@ -63,11 +63,11 @@ describe("AppBar", () => {
     expect(screen.queryByTestId("connectivity-indicator")).not.toBeInTheDocument();
   });
 
-  it("applies pt-safe class for Android status bar inset", () => {
+  it("applies top safe-area padding through the shared header inset variable", () => {
     const { container } = render(<AppBar title="Test" />);
 
     const header = container.querySelector("header");
-    expect(header).toHaveClass("pt-safe");
+    expect(header).toHaveStyle({ paddingTop: "var(--app-header-top-inset, env(safe-area-inset-top))" });
   });
 
   it("renders custom leading content and child content", () => {
@@ -134,11 +134,10 @@ describe("AppBar", () => {
     expect(removeEventListenerSpy).toHaveBeenCalledWith("resize", expect.any(Function));
   });
 
-  it("renders the header with z-[51] so it sits above overlay backdrops at z-50 (badge always readable)", () => {
+  it("renders the header at the shared interstitial header z-index", () => {
     const { container } = render(<AppBar title="Test" />);
     const header = container.querySelector("header");
-    expect(header).toHaveClass("z-[51]");
-    expect(header).not.toHaveClass("z-40");
+    expect(header).toHaveStyle({ zIndex: "30" });
   });
 
   it("skips publishing app-bar height while the screen is inactive", () => {

@@ -13,106 +13,165 @@ export type OverlayBounds = {
   left: number;
 };
 
-// Shared overlays use a flat dim layer instead of blur so the modal surface stands out
-// without making obscured content smear or visually vibrate behind it.
-export const STANDARD_DIM_OPACITY = 0.3;
-export const APP_INTERSTITIAL_BACKDROP_CLASSNAME = "bg-black/30";
+export const INTERSTITIAL_Z_INDEX = {
+  content: 10,
+  backdrop: 20,
+  header: 30,
+  surface: 40,
+} as const;
 
-export const APP_SHEET_TOP_CLEARANCE =
-  "max(calc(var(--app-bar-height, 3.5rem) + 0.5rem), calc(env(safe-area-inset-top) + 0.75rem))";
+export const STANDARD_DIM_OPACITY = 0.4;
+export const APP_INTERSTITIAL_BACKDROP_CLASSNAME = "bg-black/40";
 
-const APP_SHEET_TOP_CLEARANCE_FALLBACK_PX = 96;
-
-/**
- * §badge-safe-zone — the minimum margin between the badge boundary and any overlay top edge.
- */
-export const BADGE_SAFE_ZONE_MARGIN_PX = 8;
-
+const APP_BAR_HEIGHT_FALLBACK_PX = 88;
+const MIN_CENTERED_OVERLAY_HEIGHT_PX = 160;
+export const MAX_HEADER_OVERLAP_DELTA_PX = 12;
 export const OVERLAY_SAFE_ZONE_GAP_PX = 8;
 
-export const resolveAppSheetTopClearancePx = () => {
-  if (typeof window === "undefined") return APP_SHEET_TOP_CLEARANCE_FALLBACK_PX;
+const toBounds = (rect: { top: number; right: number; bottom: number; left: number }): OverlayBounds => ({
+  top: rect.top,
+  right: rect.right,
+  bottom: rect.bottom,
+  left: rect.left,
+});
 
-  const appBarHeight = Number.parseFloat(
-    window.getComputedStyle(document.documentElement).getPropertyValue("--app-bar-height"),
+const unionBounds = (bounds: OverlayBounds[]): OverlayBounds | null => {
+  if (bounds.length === 0) return null;
+
+  return bounds.reduce<OverlayBounds>(
+    (combined, entry) => ({
+      top: Math.min(combined.top, entry.top),
+      right: Math.max(combined.right, entry.right),
+      bottom: Math.max(combined.bottom, entry.bottom),
+      left: Math.min(combined.left, entry.left),
+    }),
+    bounds[0],
+  );
+};
+
+const intersects = (first: OverlayBounds, second: OverlayBounds) =>
+  !(
+    first.right <= second.left ||
+    first.left >= second.right ||
+    first.bottom <= second.top ||
+    first.top >= second.bottom
   );
 
-  const resolvedAppBarHeight = Number.isFinite(appBarHeight) ? appBarHeight : 88;
-  return Math.max(APP_SHEET_TOP_CLEARANCE_FALLBACK_PX, Math.round(resolvedAppBarHeight + BADGE_SAFE_ZONE_MARGIN_PX));
-};
-
-export const getBadgeSafeZone = (): OverlayBounds | null => {
+const readBounds = (selector: string): OverlayBounds | null => {
   if (typeof document === "undefined") return null;
 
-  const badge = document.querySelector<HTMLElement>("[data-testid='unified-health-badge']");
-  if (!badge) return null;
+  const element = document.querySelector<HTMLElement>(selector);
+  if (!element) return null;
 
-  const rect = badge.getBoundingClientRect();
-  return {
-    top: Math.max(0, rect.top - BADGE_SAFE_ZONE_MARGIN_PX),
-    right: rect.right + BADGE_SAFE_ZONE_MARGIN_PX,
-    bottom: rect.bottom + BADGE_SAFE_ZONE_MARGIN_PX,
-    left: Math.max(0, rect.left - BADGE_SAFE_ZONE_MARGIN_PX),
-  };
+  return toBounds(element.getBoundingClientRect());
 };
 
-/**
- * Returns the bottom Y pixel coordinate of the badge safe zone.
- * No overlay top edge may appear above this value.
- */
+const readGroupedBounds = (selector: string): OverlayBounds | null => {
+  if (typeof document === "undefined") return null;
+
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>(selector));
+  return unionBounds(nodes.map((node) => toBounds(node.getBoundingClientRect())));
+};
+
+const readCssNumber = (variableName: string, fallback: number) => {
+  if (typeof window === "undefined") return fallback;
+
+  const rawValue = window.getComputedStyle(document.documentElement).getPropertyValue(variableName);
+  const parsed = Number.parseFloat(rawValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+export const resolveAppBarHeightPx = () => readCssNumber("--app-bar-height", APP_BAR_HEIGHT_FALLBACK_PX);
+
+export const resolveHeaderOverlapDeltaPx = () =>
+  Math.min(MAX_HEADER_OVERLAP_DELTA_PX, Math.round(resolveAppBarHeightPx() * 0.15));
+
+export const getAppBarBounds = (): OverlayBounds | null => readBounds("[data-testid='app-bar-row']");
+
+export const getAppBarTitleBounds = (): OverlayBounds | null => readBounds("[data-testid='app-bar-title-zone']");
+
+export const getBadgeBounds = (): OverlayBounds | null => readBounds("[data-testid='unified-health-badge']");
+
+export const getBadgeCriticalBounds = (): OverlayBounds | null =>
+  readGroupedBounds("[data-testid='unified-health-badge'] [data-overlay-critical='badge']");
+
+export const getBadgeSafeZone = (): OverlayBounds | null => getBadgeBounds();
+
 export const getBadgeSafeZoneBottomPx = (): number => {
-  const safeZone = getBadgeSafeZone();
-  if (safeZone) {
-    return Math.max(APP_SHEET_TOP_CLEARANCE_FALLBACK_PX, Math.round(safeZone.bottom));
+  const badgeBounds = getBadgeBounds();
+  if (badgeBounds) {
+    return Math.round(badgeBounds.bottom);
   }
-  return resolveAppSheetTopClearancePx();
+
+  const headerBounds = getAppBarBounds();
+  if (headerBounds) {
+    return Math.round(headerBounds.bottom);
+  }
+
+  return resolveAppBarHeightPx();
 };
+
+export const resolveAppSheetTopClearancePx = () =>
+  Math.max(0, getBadgeSafeZoneBottomPx() - resolveHeaderOverlapDeltaPx());
+
+export const resolveWorkflowSheetLayout = () => ({
+  top: resolveAppSheetTopClearancePx(),
+});
 
 export const resolveCenteredOverlayLayout = (
   contentHeight: number,
   viewportHeight = typeof window === "undefined" ? 900 : window.innerHeight,
 ) => {
-  const minTop = getBadgeSafeZoneBottomPx() + OVERLAY_SAFE_ZONE_GAP_PX;
+  const appBarBounds = getAppBarBounds();
+  const minTop = Math.max(
+    getBadgeSafeZoneBottomPx() + OVERLAY_SAFE_ZONE_GAP_PX,
+    appBarBounds ? Math.round(appBarBounds.bottom) + OVERLAY_SAFE_ZONE_GAP_PX : 0,
+  );
   const centeredTop = Math.round((viewportHeight - contentHeight) / 2);
   const top = Math.max(minTop, centeredTop);
-  const maxHeight = Math.max(160, viewportHeight - top - 12);
+  const maxHeight = Math.max(MIN_CENTERED_OVERLAY_HEIGHT_PX, viewportHeight - top - 12);
 
   return { top, maxHeight };
 };
 
-/**
- * Development-mode assertion: logs an error when an overlay's top edge violates the badge safe zone.
- * Silent in production builds.
- */
+export const boundsFromElement = (element: HTMLElement): OverlayBounds => toBounds(element.getBoundingClientRect());
+
 export const assertOverlayRespectsBadgeSafeZone = (topPxOrBounds: number | OverlayBounds, name = "overlay"): void => {
   if (process.env.NODE_ENV === "production") return;
 
-  const safeZoneBottom = getBadgeSafeZoneBottomPx();
+  const minAllowedTop = resolveAppSheetTopClearancePx();
   const topPx = typeof topPxOrBounds === "number" ? topPxOrBounds : topPxOrBounds.top;
 
-  if (topPx < safeZoneBottom) {
+  if (topPx < minAllowedTop) {
     console.error(
-      `[c64] Badge safe zone violation: "${name}" top=${topPx}px is above safe zone bottom=${safeZoneBottom}px. ` +
-        `All overlays must satisfy top >= OVERLAY_MAX_TOP (${safeZoneBottom}px).`,
+      `[c64] Overlay top violation: "${name}" top=${topPx}px is above the allowed sheet top=${minAllowedTop}px. ` +
+        `Workflow overlays must satisfy top >= ${minAllowedTop}px.`,
     );
   }
 
   if (typeof topPxOrBounds === "number") return;
 
-  const safeZone = getBadgeSafeZone();
-  if (!safeZone) return;
-
-  const intersects = !(
-    topPxOrBounds.right <= safeZone.left ||
-    topPxOrBounds.left >= safeZone.right ||
-    topPxOrBounds.bottom <= safeZone.top ||
-    topPxOrBounds.top >= safeZone.bottom
-  );
-
-  if (intersects) {
+  const titleBounds = getAppBarTitleBounds();
+  if (titleBounds && intersects(topPxOrBounds, titleBounds)) {
     console.error(
-      `[c64] Badge safe zone intersection: "${name}" overlaps the badge safe zone. ` +
-        `Overlay bounds=${JSON.stringify(topPxOrBounds)} safeZone=${JSON.stringify(safeZone)}.`,
+      `[c64] Header title intersection: "${name}" overlaps the header title zone. ` +
+        `Overlay bounds=${JSON.stringify(topPxOrBounds)} title=${JSON.stringify(titleBounds)}.`,
+    );
+  }
+
+  const badgeCriticalBounds = getBadgeCriticalBounds();
+  if (badgeCriticalBounds && intersects(topPxOrBounds, badgeCriticalBounds)) {
+    console.error(
+      `[c64] Badge text intersection: "${name}" overlaps the badge critical content. ` +
+        `Overlay bounds=${JSON.stringify(topPxOrBounds)} badgeCritical=${JSON.stringify(badgeCriticalBounds)}.`,
+    );
+  }
+
+  const badgeBounds = getBadgeBounds();
+  const minimumBorderTop = badgeBounds ? Math.round(badgeBounds.bottom - resolveHeaderOverlapDeltaPx()) : null;
+  if (minimumBorderTop !== null && topPx < minimumBorderTop) {
+    console.error(
+      `[c64] Badge border overlap exceeded: "${name}" top=${topPx}px is above the allowed border overlap line=${minimumBorderTop}px.`,
     );
   }
 };

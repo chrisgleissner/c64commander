@@ -83,6 +83,7 @@ export function UnifiedHealthBadge({ className }: Props) {
     >
       <span
         className="text-xs font-semibold leading-none tracking-wide uppercase shrink-0 text-foreground"
+        data-overlay-critical="badge"
         aria-hidden="true"
       >
         {connectivity === "Not yet connected"
@@ -94,12 +95,20 @@ export function UnifiedHealthBadge({ className }: Props) {
           : leadingLabel}
       </span>
 
-      <span className={cn("font-mono text-base leading-none shrink-0", glyphColor)} aria-hidden="true">
+      <span
+        className={cn("font-mono text-base leading-none shrink-0", glyphColor)}
+        data-overlay-critical="badge"
+        aria-hidden="true"
+      >
         {glyph}
       </span>
 
       {showsCount && (
-        <span className={cn("text-xs font-semibold leading-none shrink-0", glyphColor)} aria-hidden="true">
+        <span
+          className={cn("text-xs font-semibold leading-none shrink-0", glyphColor)}
+          data-overlay-critical="badge"
+          aria-hidden="true"
+        >
           {Math.min(problemCount, 99)}
         </span>
       )}
@@ -143,6 +152,7 @@ function renderBadgeText(
   return (
     <span
       className="text-xs font-semibold leading-none tracking-wide uppercase shrink-0 text-foreground"
+      data-overlay-critical="badge"
       aria-hidden="true"
     >
       {`${healthLabel}${problemSuffix}`}

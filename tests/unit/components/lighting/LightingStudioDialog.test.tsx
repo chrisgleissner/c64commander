@@ -337,7 +337,7 @@ describe("LightingStudioDialog", () => {
 
     expect(screen.getByText("Shape looks and automate them.")).toBeInTheDocument();
     expect(screen.getByTestId("lighting-active-profile-chip")).toHaveTextContent("Device look");
-    expect(screen.getByTestId("lighting-unlock")).toHaveTextContent("Resume");
+    expect(screen.getByTestId("lighting-unlock")).toHaveTextContent("Unlock look");
     expect(screen.getByText("Which resolver layer currently owns each lighting surface.")).toBeInTheDocument();
     expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Unsupported").length).toBeGreaterThan(0);
@@ -445,18 +445,16 @@ describe("LightingStudioDialog — badge safe zone invariant", () => {
     vi.restoreAllMocks();
   });
 
-  it("badges safe zone bottom is at least the fallback clearance (96 px)", () => {
+  it("uses the measured header fallback when no badge geometry is present", () => {
     document.documentElement.style.setProperty("--app-bar-height", "80px");
-    // safeZoneBottom = max(96, round(80+8)) = 96
     const safeZoneBottom = getBadgeSafeZoneBottomPx();
-    expect(safeZoneBottom).toBe(96);
+    expect(safeZoneBottom).toBe(80);
   });
 
-  it("assertOverlayRespectsBadgeSafeZone does not log when top >= safeZoneBottom", () => {
+  it("assertOverlayRespectsBadgeSafeZone does not log when top stays within the allowed overlap band", () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     document.documentElement.style.setProperty("--app-bar-height", "80px");
-    // safeZoneBottom = 96; resolve with top exactly at boundary → no violation
-    assertOverlayRespectsBadgeSafeZone(96, "LightingStudio[expanded]");
+    assertOverlayRespectsBadgeSafeZone(68, "LightingStudio[expanded]");
     assertOverlayRespectsBadgeSafeZone(200, "LightingStudio[collapsed]");
     expect(consoleSpy).not.toHaveBeenCalled();
   });
