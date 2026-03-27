@@ -382,8 +382,6 @@ The [High Voltage SID Collection](https://hvsc.c64.org) is an archive of C64 SID
 
 Thanks to [Commodore](https://commodore.net) for creating the Commodore 64 and to the creators of the C64 Ultimate for extending the platform with modern hardware.
 
-Commodore and Commodore 64 are trademarks of their respective owners. C64 Commander is an independent project, not affiliated with or endorsed by Commodore or C64 Ultimate rights holders.
-
 ### Third-Party Libraries
 
 C64 Commander uses many open-source libraries. Notices are generated via `scripts/generate-third-party-notices.mjs` and published as [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
