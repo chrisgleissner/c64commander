@@ -137,6 +137,8 @@ describe("LightingStudioDialog", () => {
     expect(document.querySelector("#keyboard-area")).not.toBeNull();
     expect(document.querySelector("#main-keys")).not.toBeNull();
     expect(document.querySelector("#function-keys")).not.toBeNull();
+    expect(document.querySelector("#led-layer")).not.toBeNull();
+    expect(screen.getByTestId("lighting-mockup-led-strip")).toHaveAttribute("fill", "#F5F5F5");
   });
 
   it("saves a new profile from the draft and surfaces location-denied fallback state", () => {

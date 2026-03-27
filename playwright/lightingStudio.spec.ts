@@ -239,6 +239,7 @@ test.describe("Lighting Studio", () => {
     const mockupBox = await page.getByTestId("lighting-device-mockup").boundingBox();
     const mainBlockBox = await page.getByTestId("lighting-mockup-main-block").boundingBox();
     const functionBlockBox = await page.getByTestId("lighting-mockup-function-block").boundingBox();
+    const ledStrip = page.getByTestId("lighting-mockup-led-strip");
 
     expect(dialogBox).not.toBeNull();
     expect(closeBox).not.toBeNull();
@@ -253,8 +254,12 @@ test.describe("Lighting Studio", () => {
     expect(profileCardBox!.x + profileCardBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width + 1);
     expect(mockupBox!.x).toBeGreaterThanOrEqual(dialogBox!.x - 1);
     expect(mockupBox!.x + mockupBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width + 1);
-    expect(mainBlockBox!.width).toBeGreaterThan(functionBlockBox!.width * 6);
+    expect(mainBlockBox!.width).toBeGreaterThan(functionBlockBox!.width * 3.5);
     expect(mainBlockBox!.x).toBeLessThan(functionBlockBox!.x);
+    expect(functionBlockBox!.x).toBeGreaterThan(mainBlockBox!.x + mainBlockBox!.width * 0.55);
     expect(functionBlockBox!.height).toBeGreaterThan(mainBlockBox!.height * 0.6);
+    await expect(ledStrip).toBeVisible();
+    await expect(ledStrip).toHaveAttribute("fill", "#F5F5F5");
+    await expect(ledStrip).toHaveAttribute("fill-opacity", "0.94");
   });
 });

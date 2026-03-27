@@ -160,10 +160,69 @@ describe("LightingStudioDialog", () => {
     const keyboardLayout = screen.getByTestId("lighting-mockup-keyboard-layout");
     expect(within(keyboardLayout).getByTestId("lighting-mockup-main-block")).toBeInTheDocument();
     expect(within(keyboardLayout).getByTestId("lighting-mockup-function-block")).toBeInTheDocument();
+    expect(screen.getByTestId("lighting-mockup-led-region")).toBeInTheDocument();
+    expect(screen.getByTestId("lighting-mockup-led-strip")).toHaveAttribute("fill", "#F5F5F5");
     expect(screen.getByTestId("lighting-mockup-main-graphic")).toBeInTheDocument();
     expect(screen.getByTestId("lighting-mockup-function-graphic")).toBeInTheDocument();
     expect(screen.getByTestId("lighting-studio-close")).toBeInTheDocument();
     expect(within(screen.getByTestId("lighting-header-actions")).queryByTestId("lighting-studio-close")).toBeNull();
     expect(screen.getByTestId("lighting-profile-detail-card")).toBeVisible();
+  });
+
+  it("keeps the LED strip white while case and keyboard overlays change independently", () => {
+    mockUseDisplayProfile.mockReturnValue({ profile: "medium" });
+    mockUseLightingStudio.mockReturnValue(buildStudioMock());
+
+    const { rerender } = render(<LightingStudioDialog />);
+
+    const ledStrip = screen.getByTestId("lighting-mockup-led-strip");
+    const caseOverlayRect = screen.getByTestId("lighting-mockup-case-overlay").querySelector("rect");
+    const keyboardOverlayRect = screen.getByTestId("lighting-mockup-keyboard-overlay").querySelector("rect");
+
+    expect(caseOverlayRect).not.toBeNull();
+    expect(keyboardOverlayRect).not.toBeNull();
+
+    const initialLedFill = ledStrip.getAttribute("fill");
+    const initialLedOpacity = ledStrip.getAttribute("fill-opacity");
+    const initialCaseFill = caseOverlayRect?.getAttribute("fill");
+    const initialKeyboardFill = keyboardOverlayRect?.getAttribute("fill");
+
+    const updatedStudio = buildStudioMock();
+    updatedStudio.studioState.profiles[0].surfaces.case = {
+      ...updatedStudio.studioState.profiles[0].surfaces.case,
+      color: { kind: "named" as const, value: "Orange" },
+      intensity: 31,
+    };
+    updatedStudio.studioState.profiles[0].surfaces.keyboard = {
+      ...updatedStudio.studioState.profiles[0].surfaces.keyboard,
+      color: { kind: "named" as const, value: "Blue" },
+      intensity: 4,
+    };
+    updatedStudio.resolved.resolvedState.case = {
+      ...updatedStudio.resolved.resolvedState.case,
+      color: { kind: "named" as const, value: "Orange" },
+      intensity: 31,
+    };
+    updatedStudio.resolved.resolvedState.keyboard = {
+      ...updatedStudio.resolved.resolvedState.keyboard,
+      color: { kind: "named" as const, value: "Blue" },
+      intensity: 4,
+    };
+    mockUseLightingStudio.mockReturnValue(updatedStudio);
+
+    rerender(<LightingStudioDialog />);
+
+    const updatedLedStrip = screen.getByTestId("lighting-mockup-led-strip");
+    const updatedCaseOverlayRect = screen.getByTestId("lighting-mockup-case-overlay").querySelector("rect");
+    const updatedKeyboardOverlayRect = screen.getByTestId("lighting-mockup-keyboard-overlay").querySelector("rect");
+
+    expect(updatedCaseOverlayRect).not.toBeNull();
+    expect(updatedKeyboardOverlayRect).not.toBeNull();
+
+    expect(updatedLedStrip).toHaveAttribute("fill", initialLedFill ?? "#F5F5F5");
+    expect(updatedLedStrip).toHaveAttribute("fill-opacity", initialLedOpacity ?? "0.94");
+    expect(updatedLedStrip).toHaveAttribute("fill", "#F5F5F5");
+    expect(updatedCaseOverlayRect?.getAttribute("fill")).not.toEqual(initialCaseFill);
+    expect(updatedKeyboardOverlayRect?.getAttribute("fill")).not.toEqual(initialKeyboardFill);
   });
 });

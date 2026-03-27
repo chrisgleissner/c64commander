@@ -177,6 +177,11 @@ const waitForStableRender = async (page: Page) => {
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => (document as any).fonts?.ready ?? true);
   await page.waitForFunction(() => {
+    const runway = document.querySelector('[data-testid="swipe-navigation-runway"]');
+    if (!(runway instanceof HTMLElement)) return true;
+    return runway.dataset.runwayPhase !== "transitioning";
+  });
+  await page.waitForFunction(() => {
     const animations = document.getAnimations();
     return animations.every((animation) => {
       if (animation.playState !== "running") return true;
@@ -184,6 +189,56 @@ const waitForStableRender = async (page: Page) => {
       return timing?.iterations === Infinity;
     });
   });
+  await page.evaluate(async () => {
+    const readVisualState = () => {
+      const activeSlot = document.querySelector('[data-slot-active="true"]');
+      const slot = activeSlot instanceof HTMLElement ? activeSlot : null;
+      const scroller =
+        slot ??
+        (document.scrollingElement instanceof HTMLElement
+          ? document.scrollingElement
+          : document.documentElement instanceof HTMLElement
+            ? document.documentElement
+            : null);
+      const rect = slot?.getBoundingClientRect() ?? null;
+      return {
+        runwayPhase:
+          document.querySelector('[data-testid="swipe-navigation-runway"]') instanceof HTMLElement
+            ? ((document.querySelector('[data-testid="swipe-navigation-runway"]') as HTMLElement).dataset.runwayPhase ??
+              "idle")
+            : "idle",
+        scrollTop: scroller?.scrollTop ?? window.scrollY,
+        scrollLeft: scroller?.scrollLeft ?? window.scrollX,
+        rectTop: rect?.top ?? 0,
+        rectLeft: rect?.left ?? 0,
+        rectWidth: rect?.width ?? window.innerWidth,
+        rectHeight: rect?.height ?? window.innerHeight,
+      };
+    };
+
+    const isStable = (previous: ReturnType<typeof readVisualState>, next: ReturnType<typeof readVisualState>) =>
+      previous.runwayPhase === "idle" &&
+      next.runwayPhase === "idle" &&
+      previous.scrollTop === next.scrollTop &&
+      previous.scrollLeft === next.scrollLeft &&
+      previous.rectTop === next.rectTop &&
+      previous.rectLeft === next.rectLeft &&
+      previous.rectWidth === next.rectWidth &&
+      previous.rectHeight === next.rectHeight;
+
+    let stableFrames = 0;
+    let previous = readVisualState();
+
+    while (stableFrames < 4) {
+      await new Promise<void>(requestAnimationFrame);
+      const next = readVisualState();
+      stableFrames = isStable(previous, next) ? stableFrames + 1 : 0;
+      previous = next;
+    }
+  });
+  // Let the compositor finish any residual cross-fade/transform cleanup after the
+  // DOM, animation, and scroll state have already settled.
+  await page.waitForTimeout(200);
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.evaluate(() => new Promise(requestAnimationFrame));
 };
@@ -587,6 +642,7 @@ const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: st
 };
 
 const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
+  await waitForStableRender(page);
   const layout = await page.evaluate(() => {
     const activeSlot = document.querySelector('[data-slot-active="true"]');
     const activeMain = activeSlot?.querySelector("main");
@@ -642,6 +698,7 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
         node.scrollTop = nextScrollTop;
       }
     }, slice.scrollTop);
+    await waitForStableRender(page);
     await captureScreenshot(page, testInfo, `home/sections/${fileName}`);
   }
 };
@@ -715,7 +772,6 @@ test.describe("App screenshots", () => {
     await waitForConnected(page);
     await expect(page.getByRole("button", { name: "Disks", exact: true })).toBeVisible();
     await captureScreenshot(page, testInfo, "home/00-overview-light.png");
-    await captureHomeSections(page, testInfo);
     await page.emulateMedia({
       colorScheme: "dark",
       reducedMotion: "reduce",
@@ -730,6 +786,7 @@ test.describe("App screenshots", () => {
     await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png", {
       locator: getActiveHealthBadge(page),
     });
+    await captureHomeSections(page, testInfo);
   });
 
   test(

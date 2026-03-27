@@ -33,6 +33,7 @@ import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
 import { formatLightingColor, normalizeSurfaceStateForCapability } from "@/lib/lighting/capabilities";
 import { searchLightingCities } from "@/lib/lighting/cityDataset";
 import { LIGHTING_COMPOSE_PRESET_LABELS, LIGHTING_SOURCE_BUCKET_LABELS } from "@/lib/lighting/constants";
+import { C64_PREVIEW_LAYOUT, type C64PreviewBounds, type C64PreviewRect } from "@/lib/lighting/c64PreviewLayout";
 import type {
   LightingComposePreset,
   LightingConnectionSentinelState,
@@ -52,45 +53,6 @@ const CONNECTION_STATE_LABELS: Record<LightingConnectionSentinelState, string> =
 };
 
 const FALLBACK_SURFACE_RGB = { r: 99, g: 102, b: 120 };
-
-type MockKeySpec = {
-  x: number;
-  y: number;
-  units: number;
-};
-
-const MOCK_KEY_WIDTH = 34;
-const MOCK_KEY_HEIGHT = 24;
-const MOCK_KEY_GAP = 9;
-const MOCK_KEY_RADIUS = 4;
-
-const buildMockKeyRow = (y: number, units: number[], xOffset = 0): MockKeySpec[] => {
-  let cursor = xOffset;
-  return units.map((widthUnits) => {
-    const width = widthUnits * MOCK_KEY_WIDTH + Math.max(0, widthUnits - 1) * MOCK_KEY_GAP;
-    const key = { x: cursor, y, units: widthUnits };
-    cursor += width + MOCK_KEY_GAP;
-    return key;
-  });
-};
-
-const buildMockKeyColumn = (x: number, units: number[], yOffset = 0, rowGap = 36): MockKeySpec[] =>
-  units.map((widthUnits, index) => ({
-    x,
-    y: yOffset + index * rowGap,
-    units: widthUnits,
-  }));
-
-const MAIN_KEY_SPECS: MockKeySpec[] = [
-  ...buildMockKeyRow(0, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
-  ...buildMockKeyRow(34, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.75], 14),
-  ...buildMockKeyRow(68, [1.2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.8]),
-  ...buildMockKeyRow(102, [1.45, 1, 1, 1, 1, 3.4, 1, 1, 0.8]),
-];
-
-const FUNCTION_KEY_SPECS: MockKeySpec[] = buildMockKeyColumn(0, [1, 1, 1, 1]);
-
-const keyWidth = (units: number) => units * MOCK_KEY_WIDTH + Math.max(0, units - 1) * MOCK_KEY_GAP;
 
 const buildDraftFromCurrent = (
   surfaces: Partial<Record<LightingSurface, LightingSurfaceState>>,
@@ -173,6 +135,38 @@ const scaleGlowAlpha = (intensity: number | undefined, max = 0.9, min = 0.18) =>
 const toRgba = (rgb: { r: number; g: number; b: number }, alpha: number) =>
   `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 
+const LIGHTING_PREVIEW_CELL_WIDTH = 9.4;
+const LIGHTING_PREVIEW_CELL_HEIGHT = 18.2;
+const LIGHTING_PREVIEW_TRANSFORM = `translate(188 142) skewX(-16) scale(${LIGHTING_PREVIEW_CELL_WIDTH} ${LIGHTING_PREVIEW_CELL_HEIGHT})`;
+const LIGHTING_PREVIEW_CASE_BASE = "#BFBBAF";
+const LIGHTING_PREVIEW_KEYBOARD_BASE = "#111111";
+const LIGHTING_PREVIEW_LED_FILL = "#F5F5F5";
+const LIGHTING_PREVIEW_LED_FILL_OPACITY = 0.94;
+const LIGHTING_PREVIEW_LED_GLOW_OPACITY = 0.2;
+
+const scaleLightingAlpha = (intensity: number | undefined, min: number, max: number) =>
+  min + (max - min) * clamp01((intensity ?? 0) / 31);
+
+const boundsInset = (bounds: C64PreviewBounds, inset = 0.18): C64PreviewBounds => ({
+  x: bounds.x + inset,
+  y: bounds.y + inset,
+  width: Math.max(0.45, bounds.width - inset * 2),
+  height: Math.max(0.45, bounds.height - inset * 2),
+});
+
+const renderPreviewRects = (rects: C64PreviewRect[], props: React.SVGProps<SVGRectElement>, keyPrefix: string) =>
+  rects.map((rect, index) => (
+    <rect
+      key={`${keyPrefix}-${rect.x}-${rect.y}-${rect.width}-${rect.height}-${index}`}
+      x={rect.x}
+      y={rect.y}
+      width={rect.width}
+      height={rect.height}
+      shapeRendering="geometricPrecision"
+      {...props}
+    />
+  ));
+
 const isFiniteCoordinate = (value: string) => value.trim().length > 0 && Number.isFinite(Number(value));
 
 const validateLatitude = (value: string) => {
@@ -203,6 +197,7 @@ function SurfaceEditor({
   const { capabilities } = useLightingStudio();
   const capability = capabilities[surface];
   const normalized = normalizeSurfaceStateForCapability(capability, draft) ?? draft ?? {};
+  const rgbColor = normalized.color?.kind === "rgb" ? normalized.color : null;
 
   if (!capability.supported) return null;
 
@@ -284,7 +279,7 @@ function SurfaceEditor({
         </div>
       ) : null}
 
-      {capability.colorEncoding === "rgb" && normalized.color?.kind === "rgb" ? (
+      {capability.colorEncoding === "rgb" && rgbColor ? (
         <div className="grid grid-cols-3 gap-2">
           {(["r", "g", "b"] as const).map((channel) => (
             <div key={channel} className="space-y-1">
@@ -293,13 +288,12 @@ function SurfaceEditor({
                 type="number"
                 min={0}
                 max={255}
-                value={normalized.color[channel] ?? 0}
+                value={rgbColor[channel]}
                 onChange={(event) =>
                   onChange({
                     ...normalized,
                     color: {
-                      kind: "rgb",
-                      ...(normalized.color?.kind === "rgb" ? normalized.color : { r: 0, g: 0, b: 0 }),
+                      ...rgbColor,
                       [channel]: Math.max(0, Math.min(255, Number(event.target.value || 0))),
                     },
                   })
@@ -385,12 +379,21 @@ function LightingDeviceMockup({
   const caseRgb = resolveSurfaceRgb(draft.case);
   const keyboardRgb = resolveSurfaceRgb(draft.keyboard ?? draft.case);
   const caseGlowAlpha = scaleGlowAlpha(draft.case?.intensity, 0.78, 0.18);
-  const keyboardGlowAlpha = scaleGlowAlpha(draft.keyboard?.intensity ?? draft.case?.intensity, 0.8, 0.16);
+  const caseOverlayAlpha = scaleLightingAlpha(draft.case?.intensity, 0.14, 0.46);
+  const keyboardOverlayAlpha = scaleLightingAlpha(draft.keyboard?.intensity ?? draft.case?.intensity, 0.16, 0.62);
   const caseSelected = selectedSurface === "case";
   const keyboardSelected = keyboardSupported && selectedSurface === "keyboard";
   const caseStroke = caseSelected ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.18)";
   const keyboardStroke = keyboardSelected ? "rgba(255,255,255,0.84)" : "rgba(255,255,255,0.22)";
-  const keyStroke = keyboardSelected ? "rgba(255,255,255,0.65)" : "rgba(122,117,108,0.78)";
+  const mainKeyboardBounds = boundsInset(C64_PREVIEW_LAYOUT.keyboardMain.bounds);
+  const functionKeyboardBounds = C64_PREVIEW_LAYOUT.keyboardFunction
+    ? boundsInset(C64_PREVIEW_LAYOUT.keyboardFunction.bounds)
+    : null;
+  const caseInteractiveBounds = boundsInset(
+    { x: 0, y: 0, width: C64_PREVIEW_LAYOUT.width, height: C64_PREVIEW_LAYOUT.height },
+    0.1,
+  );
+  const keyboardGraphicFill = toRgba(keyboardRgb, Math.min(0.78, keyboardOverlayAlpha + 0.12));
 
   return (
     <div
@@ -433,88 +436,34 @@ function LightingDeviceMockup({
             className="h-auto w-full overflow-visible drop-shadow-[0_28px_48px_rgba(15,23,42,0.52)]"
             aria-label="Commodore 64 lighting preview"
           >
-            <defs>
-              <linearGradient
-                id="lighting-shell-top"
-                x1="500"
-                y1="118"
-                x2="500"
-                y2="404"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset="0" stopColor="#d8ceb8" />
-                <stop offset="1" stopColor="#b8ad97" />
-              </linearGradient>
-              <linearGradient
-                id="lighting-shell-front"
-                x1="500"
-                y1="404"
-                x2="500"
-                y2="523"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset="0" stopColor="#a89b83" />
-                <stop offset="1" stopColor="#8f836f" />
-              </linearGradient>
-              <linearGradient
-                id="lighting-keyboard-bed"
-                x1="504"
-                y1="220"
-                x2="504"
-                y2="390"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset="0" stopColor="#8f948e" />
-                <stop offset="1" stopColor="#717772" />
-              </linearGradient>
-              <linearGradient id="lighting-main-key" x1="0" y1="0" x2="0" y2="26" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stopColor="#f3f1eb" />
-                <stop offset="1" stopColor="#d8d4ca" />
-              </linearGradient>
-              <linearGradient id="lighting-fkey" x1="0" y1="0" x2="0" y2="30" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stopColor="#ece8de" />
-                <stop offset="1" stopColor="#cfc9bc" />
-              </linearGradient>
-            </defs>
-
             <ellipse cx="500" cy="545" rx="316" ry="26" fill={toRgba(caseRgb, caseGlowAlpha * 0.36)} />
             <ellipse cx="500" cy="560" rx="286" ry="18" fill="rgba(15,23,42,0.35)" />
 
-            <g id="c64-root">
+            <g id="c64-root" transform={LIGHTING_PREVIEW_TRANSFORM}>
               <g id="case-shell">
-                <path
-                  d="M190 118H809C825 118 838 127 844 141L905 437C909 454 902 469 889 478L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L111 478C98 469 91 454 95 437L156 141C162 127 175 118 190 118Z"
-                  fill="url(#lighting-shell-front)"
-                />
-                <path
-                  d="M190 118H809C825 118 838 127 844 141L870 404H130L156 141C162 127 175 118 190 118Z"
-                  fill="url(#lighting-shell-top)"
-                />
-                <path
-                  d="M190 118H809C825 118 838 127 844 141L870 404H130L156 141C162 127 175 118 190 118Z"
-                  fill={toRgba(caseRgb, caseGlowAlpha * 0.28)}
-                />
-                <path
-                  d="M130 404H870L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L130 404Z"
-                  fill="url(#lighting-shell-front)"
-                />
-                <path
-                  d="M130 404H870L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L130 404Z"
-                  fill={toRgba(caseRgb, caseGlowAlpha * 0.18)}
-                />
-                <path d="M222 155H778L796 189H204L222 155Z" fill="rgba(255,248,235,0.44)" />
-                <path d="M173 429H827L817 479H183L173 429Z" fill="rgba(80,69,54,0.28)" />
-                <path d="M184 442H336L331 466H189L184 442Z" fill="rgba(164,153,132,0.62)" />
-                <path d="M202 449H250L248 459H200L202 449Z" fill="rgba(51,56,61,0.92)" />
-                <path d="M256 449H304L302 459H254L256 449Z" fill="rgba(111,117,123,0.84)" />
-                <path d="M310 449H326L325 459H309L310 449Z" fill="rgba(190,195,199,0.82)" />
-                <path d="M130 404L190 118" stroke="rgba(255,246,230,0.34)" strokeWidth="3" />
-                <path d="M870 404L809 118" stroke="rgba(108,95,75,0.34)" strokeWidth="3" />
-                <path
-                  d="M190 118H809C825 118 838 127 844 141L905 437C909 454 902 469 889 478L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L111 478C98 469 91 454 95 437L156 141C162 127 175 118 190 118Z"
+                <g data-testid="lighting-mockup-case-base">
+                  {renderPreviewRects(
+                    C64_PREVIEW_LAYOUT.regions.case.rects,
+                    { fill: LIGHTING_PREVIEW_CASE_BASE },
+                    "case-base",
+                  )}
+                </g>
+                <g data-testid="lighting-mockup-case-overlay">
+                  {renderPreviewRects(
+                    C64_PREVIEW_LAYOUT.regions.case.rects,
+                    { fill: toRgba(caseRgb, caseOverlayAlpha) },
+                    "case-overlay",
+                  )}
+                </g>
+                <rect
+                  x={caseInteractiveBounds.x}
+                  y={caseInteractiveBounds.y}
+                  width={caseInteractiveBounds.width}
+                  height={caseInteractiveBounds.height}
+                  rx={1.2}
                   fill="transparent"
                   stroke={caseStroke}
-                  strokeWidth={caseSelected ? 7 : 3}
+                  strokeWidth={caseSelected ? 0.75 : 0.34}
                   vectorEffect="non-scaling-stroke"
                   data-testid="lighting-mockup-case-shell"
                   aria-label="Edit case lighting"
@@ -532,21 +481,23 @@ function LightingDeviceMockup({
               </g>
 
               <g id="keyboard-area" data-testid="lighting-mockup-keyboard-layout">
-                <path
-                  d="M248 220H748C760 220 770 227 774 239L792 363C795 378 786 390 772 390H236C222 390 213 378 216 363L234 239C238 227 248 220 260 220H248Z"
-                  fill="url(#lighting-keyboard-bed)"
-                  data-testid="lighting-mockup-keyboard-bed"
-                />
-                <path
-                  d="M248 220H748C760 220 770 227 774 239L792 363C795 378 786 390 772 390H236C222 390 213 378 216 363L234 239C238 227 248 220 260 220H248Z"
-                  fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.24)}
-                />
-                <path d="M260 237H736L748 267H248L260 237Z" fill="rgba(223,230,220,0.26)" />
-                <path d="M232 371H776" stroke="rgba(70,77,72,0.46)" strokeWidth="3" />
+                <g data-testid="lighting-mockup-keyboard-bed">
+                  {renderPreviewRects(
+                    C64_PREVIEW_LAYOUT.regions.keyboard.rects,
+                    { fill: LIGHTING_PREVIEW_KEYBOARD_BASE },
+                    "keyboard-base",
+                  )}
+                </g>
+                <g data-testid="lighting-mockup-keyboard-overlay">
+                  {renderPreviewRects(
+                    C64_PREVIEW_LAYOUT.regions.keyboard.rects,
+                    { fill: toRgba(keyboardRgb, keyboardOverlayAlpha) },
+                    "keyboard-overlay",
+                  )}
+                </g>
 
                 <g
                   id="main-keys"
-                  transform="translate(272 244) skewX(-16)"
                   aria-label="Edit main keyboard lighting"
                   role="button"
                   tabIndex={keyboardSupported ? 0 : -1}
@@ -561,100 +512,92 @@ function LightingDeviceMockup({
                   className={cn("cursor-pointer", !keyboardSupported && "cursor-default opacity-80")}
                 >
                   <rect
-                    x={-14}
-                    y={-12}
-                    width={530}
-                    height={152}
-                    rx={18}
-                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.14)}
+                    x={mainKeyboardBounds.x}
+                    y={mainKeyboardBounds.y}
+                    width={mainKeyboardBounds.width}
+                    height={mainKeyboardBounds.height}
+                    rx={0.9}
+                    fill="transparent"
                     stroke={keyboardStroke}
-                    strokeWidth={keyboardSelected ? 5 : 2}
+                    strokeWidth={keyboardSelected ? 0.62 : 0.32}
                     vectorEffect="non-scaling-stroke"
                     data-testid="lighting-mockup-main-block"
                   />
-                  {MAIN_KEY_SPECS.map((key, index) => (
-                    <rect
-                      key={`${key.x}-${key.y}-${index}`}
-                      x={key.x}
-                      y={key.y}
-                      width={keyWidth(key.units)}
-                      height={MOCK_KEY_HEIGHT}
-                      rx={MOCK_KEY_RADIUS}
-                      fill="url(#lighting-main-key)"
-                      stroke={keyStroke}
-                      strokeWidth="1.2"
-                    />
-                  ))}
                   <rect
-                    x={-2}
-                    y={136}
-                    width={486}
-                    height={6}
-                    rx={3}
-                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.45)}
+                    x={mainKeyboardBounds.x + 1.4}
+                    y={mainKeyboardBounds.y + mainKeyboardBounds.height - 0.7}
+                    width={Math.max(2, mainKeyboardBounds.width - 2.8)}
+                    height={0.28}
+                    rx={0.14}
+                    fill={keyboardGraphicFill}
                     data-testid="lighting-mockup-main-graphic"
                   />
                 </g>
 
-                <g
-                  id="function-keys"
-                  transform="translate(782 250)"
-                  aria-label="Edit function keyboard lighting"
-                  role="button"
-                  tabIndex={keyboardSupported ? 0 : -1}
-                  onClick={() => keyboardSupported && onSelectSurface("keyboard")}
-                  onKeyDown={(event) => {
-                    if (!keyboardSupported) return;
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onSelectSurface("keyboard");
-                    }
-                  }}
-                  className={cn("cursor-pointer", !keyboardSupported && "cursor-default opacity-80")}
-                >
-                  <rect
-                    x={-14}
-                    y={-14}
-                    width={68}
-                    height={166}
-                    rx={16}
-                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.16)}
-                    stroke={keyboardStroke}
-                    strokeWidth={keyboardSelected ? 5 : 2}
-                    vectorEffect="non-scaling-stroke"
-                    data-testid="lighting-mockup-function-block"
-                  />
-                  {FUNCTION_KEY_SPECS.map((key, index) => (
+                {functionKeyboardBounds ? (
+                  <g
+                    id="function-keys"
+                    aria-label="Edit function keyboard lighting"
+                    role="button"
+                    tabIndex={keyboardSupported ? 0 : -1}
+                    onClick={() => keyboardSupported && onSelectSurface("keyboard")}
+                    onKeyDown={(event) => {
+                      if (!keyboardSupported) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onSelectSurface("keyboard");
+                      }
+                    }}
+                    className={cn("cursor-pointer", !keyboardSupported && "cursor-default opacity-80")}
+                  >
                     <rect
-                      key={`${key.y}-${index}`}
-                      x={key.x}
-                      y={key.y}
-                      width={keyWidth(key.units)}
-                      height={28}
-                      rx={5}
-                      fill="url(#lighting-fkey)"
-                      stroke={keyStroke}
-                      strokeWidth="1.2"
+                      x={functionKeyboardBounds.x}
+                      y={functionKeyboardBounds.y}
+                      width={functionKeyboardBounds.width}
+                      height={functionKeyboardBounds.height}
+                      rx={0.9}
+                      fill="transparent"
+                      stroke={keyboardStroke}
+                      strokeWidth={keyboardSelected ? 0.62 : 0.32}
+                      vectorEffect="non-scaling-stroke"
+                      data-testid="lighting-mockup-function-block"
                     />
-                  ))}
-                  <rect
-                    x={-2}
-                    y={145}
-                    width={40}
-                    height={6}
-                    rx={3}
-                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.5)}
-                    data-testid="lighting-mockup-function-graphic"
-                  />
-                </g>
+                    <rect
+                      x={functionKeyboardBounds.x + 0.65}
+                      y={functionKeyboardBounds.y + functionKeyboardBounds.height - 0.65}
+                      width={Math.max(1.2, functionKeyboardBounds.width - 1.3)}
+                      height={0.28}
+                      rx={0.14}
+                      fill={keyboardGraphicFill}
+                      data-testid="lighting-mockup-function-graphic"
+                    />
+                  </g>
+                ) : null}
+              </g>
 
-                <path
-                  d="M248 220H748C760 220 770 227 774 239L792 363C795 378 786 390 772 390H236C222 390 213 378 216 363L234 239C238 227 248 220 260 220H248Z"
-                  fill="transparent"
-                  stroke={keyboardStroke}
-                  strokeWidth={keyboardSelected ? 6 : 2.5}
-                  vectorEffect="non-scaling-stroke"
-                />
+              <g id="led-layer" data-testid="lighting-mockup-led-region">
+                {renderPreviewRects(
+                  C64_PREVIEW_LAYOUT.ledStrip.rects.map((rect) => ({
+                    x: rect.x - 0.18,
+                    y: rect.y - 0.18,
+                    width: rect.width + 0.36,
+                    height: rect.height + 0.36,
+                  })),
+                  { fill: "#FFFFFF", fillOpacity: LIGHTING_PREVIEW_LED_GLOW_OPACITY },
+                  "led-glow",
+                )}
+                {C64_PREVIEW_LAYOUT.ledStrip.rects.map((rect, index) => (
+                  <rect
+                    key={`led-strip-${rect.x}-${rect.y}-${index}`}
+                    x={rect.x}
+                    y={rect.y}
+                    width={rect.width}
+                    height={rect.height}
+                    fill={LIGHTING_PREVIEW_LED_FILL}
+                    fillOpacity={LIGHTING_PREVIEW_LED_FILL_OPACITY}
+                    data-testid="lighting-mockup-led-strip"
+                  />
+                ))}
               </g>
             </g>
           </svg>

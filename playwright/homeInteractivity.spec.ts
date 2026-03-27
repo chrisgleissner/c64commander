@@ -35,6 +35,13 @@ const waitForStreamsReady = async (page: Page) => {
   await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern);
 };
 
+const getTelnetTraces = async (page: Page) => {
+  return page.evaluate(() => {
+    const tracing = (window as Window & { __c64uTracing?: { getTraces?: () => Array<any> } }).__c64uTracing;
+    return tracing?.getTraces?.().filter((event) => event.type === "telnet-operation") ?? [];
+  });
+};
+
 const applyCompactDisplayProfile = async (page: Page) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.evaluate(() => {
@@ -171,6 +178,91 @@ test.describe("Home interactions", () => {
         hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:poweroff")),
       )
       .toBe(true);
+  });
+
+  test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+    await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
+    await page.evaluate(() =>
+      (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
+    );
+
+    const powerCycle = page.getByTestId("home-power-cycle");
+    await expect(powerCycle).toBeEnabled();
+    await powerCycle.click();
+
+    await expect
+      .poll(async () => {
+        const traces = await getTelnetTraces(page);
+        return traces.some(
+          (event) =>
+            event.data?.actionId === "powerCycle" &&
+            event.data?.result === "success" &&
+            event.data?.target === "external-mock",
+        );
+      })
+      .toBe(true);
+  });
+
+  test("power cycle stays available and succeeds in demo mode", async ({ page }: { page: Page }) => {
+    allowWarnings(test.info(), "Expected probe failures during demo-mode discovery fallback.");
+    const demoServer = await createMockC64Server();
+
+    try {
+      await page.addInitScript(
+        ({ demoBaseUrl }: { demoBaseUrl: string }) => {
+          (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+          (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:65534";
+          (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [
+            "http://127.0.0.1:65534",
+            demoBaseUrl,
+          ];
+          localStorage.setItem("c64u_startup_discovery_window_ms", "600");
+          localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+          localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
+          localStorage.setItem("c64u_device_host", "127.0.0.1:65534");
+          localStorage.removeItem("c64u_password");
+          localStorage.removeItem("c64u_has_password");
+          sessionStorage.removeItem("c64u_demo_interstitial_shown");
+          delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+        },
+        { demoBaseUrl: demoServer.baseUrl },
+      );
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+
+      const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+      await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 10000 });
+
+      const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await expect(dialog).toBeHidden();
+
+      await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
+      await page.evaluate(() =>
+        (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
+      );
+
+      const powerCycle = page.getByTestId("home-power-cycle");
+      await expect(powerCycle).toBeEnabled();
+      await powerCycle.click();
+
+      await expect
+        .poll(async () => {
+          const traces = await getTelnetTraces(page);
+          return traces.some(
+            (event) =>
+              event.data?.actionId === "powerCycle" &&
+              event.data?.result === "success" &&
+              event.data?.target === "internal-mock",
+          );
+        })
+        .toBe(true);
+    } finally {
+      await demoServer.close();
+    }
   });
 
   test("input interactions validate and then update stream config", async ({ page }: { page: Page }) => {

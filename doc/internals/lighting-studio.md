@@ -55,6 +55,11 @@ This document defines the required `Lighting Studio` feature set for C64 Command
 
 - Purpose: treat case and keyboard lighting as coordinated but independent surfaces
 - Entry: `Lighting Studio` -> `Compose`
+- Device preview geometry source: `doc/image/lighting/C64-layout.txt`
+- Device preview legend:
+  - `x` = case region
+  - `-` = keyboard regions
+  - `_` = dedicated LED strip region
 - Required controls:
   - link mode: `Linked`, `Mirrored`, `Independent`
   - pair presets: `Mirror`, `Contrast`, `Keyboard Focus`, `Case Halo`
@@ -63,6 +68,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
   - if keyboard lighting is unsupported, the composer collapses to case-only editing
   - unsupported fields are hidden, not shown as dead controls
   - composed state can be saved into `Profile Library`
+  - the LED strip is preview-only, always rendered white, and is never tinted by case or keyboard controls
 
 ### 4.2 Profile Library
 

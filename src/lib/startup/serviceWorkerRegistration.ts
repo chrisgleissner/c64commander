@@ -28,7 +28,10 @@ const isTestProbeEnvironment = () => {
   } catch {
     // Ignore process access failures.
   }
-  return typeof window !== "undefined" && (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true;
+  return (
+    typeof window !== "undefined" &&
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true
+  );
 };
 
 export const getServiceWorkerScriptUrl = () => {
