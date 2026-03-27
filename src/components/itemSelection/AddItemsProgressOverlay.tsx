@@ -7,7 +7,7 @@
  */
 
 import { Button } from "@/components/ui/button";
-import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
+import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, getBadgeSafeZoneBottomPx } from "@/components/ui/interstitialStyles";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 
@@ -44,12 +44,15 @@ export const AddItemsProgressOverlay = ({
   if (visible === false) return null;
   if (visible !== true && progress.status !== "scanning") return null;
 
+  const overlayTop = `calc(${getBadgeSafeZoneBottomPx()}px + 1rem)`;
+
   const overlay = (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-center justify-center px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
+        "fixed inset-0 z-50 flex items-start justify-center px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
         APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       )}
+      style={{ paddingTop: overlayTop }}
       data-testid={testId}
     >
       <div

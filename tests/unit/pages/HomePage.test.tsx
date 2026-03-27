@@ -662,9 +662,10 @@ beforeEach(() => {
 describe("HomePage SID status", () => {
   vi.setConfig({ testTimeout: 30000 });
 
-  it("renders the Home subtitle as C64 Commander", () => {
+  it("does not render a visible Home subtitle", () => {
     renderHomePage();
-    expect(screen.getByTestId("home-header-subtitle").textContent).toBe("C64 Commander");
+    expect(screen.queryByTestId("home-header-subtitle")).not.toBeInTheDocument();
+    expect(screen.queryByText("C64 Commander")).not.toBeInTheDocument();
   });
 
   it("renders SID layout and updates on config changes", () => {

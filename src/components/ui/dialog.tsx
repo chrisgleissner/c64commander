@@ -14,6 +14,7 @@ import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresenta
 import { cn } from "@/lib/utils";
 import { ModalCloseButton } from "@/components/ui/modal-close-button";
 import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
+import { useCenteredOverlayPosition } from "@/components/ui/useCenteredOverlayPosition";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -53,16 +54,18 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
   ({ className, children, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
     const { profile } = useDisplayProfile();
     const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
+    const { composedRef, style } = useCenteredOverlayPosition(ref, `DialogContent[${surface}]`);
 
     return (
       <DialogPresentationContext.Provider value={presentation}>
         <DialogPortal>
           <DialogOverlay />
           <DialogPrimitive.Content
-            ref={ref}
+            ref={composedRef}
             className={cn(presentation.contentClassName, className)}
             data-modal-surface={surface}
             data-modal-presentation={presentation.mode}
+            style={style}
             {...props}
           >
             {children}
@@ -108,7 +111,11 @@ const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  <DialogPrimitive.Description
+    ref={ref}
+    className={cn("sr-only text-sm text-muted-foreground", className)}
+    {...props}
+  />
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 

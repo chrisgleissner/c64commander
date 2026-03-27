@@ -12,6 +12,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { ModalCloseButton } from "@/components/ui/modal-close-button";
 import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, APP_SHEET_TOP_CLEARANCE } from "@/components/ui/interstitialStyles";
+import { useCenteredOverlayPosition } from "@/components/ui/useCenteredOverlayPosition";
 
 const APP_SHEET_BOTTOM_CLEARANCE = "calc(5rem + env(safe-area-inset-bottom))";
 
@@ -126,7 +127,11 @@ const AppSheetDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  <DialogPrimitive.Description
+    ref={ref}
+    className={cn("sr-only text-sm text-muted-foreground", className)}
+    {...props}
+  />
 ));
 AppSheetDescription.displayName = DialogPrimitive.Description.displayName;
 
@@ -136,39 +141,36 @@ type AppDialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimiti
 };
 
 const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppDialogContentProps>(
-  ({ className, children, showClose = true, closeTestId, style, ...props }, ref) => (
-    <AppSurfacePortal>
-      <AppSurfaceOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          "fixed left-1/2 top-1/2 z-50 flex w-[min(90vw,32rem)] max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-1.5rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)]",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          className,
-        )}
-        data-app-surface="dialog"
-        // tailwindcss-animate's .animate-in class resets --tw-enter-translate-x/y
-        // to `initial` (→ 0), which overrides the -translate-x/y-1/2 centering
-        // mid-animation.  Inline style wins over class rules and restores the
-        // correct starting translate so the dialog stays centred while scaling.
-        style={
-          {
-            "--tw-enter-translate-x": "-50%",
-            "--tw-enter-translate-y": "-50%",
+  ({ className, children, showClose = true, closeTestId, style, ...props }, ref) => {
+    const { composedRef, style: centeredStyle } = useCenteredOverlayPosition(ref, "AppDialogContent");
+
+    return (
+      <AppSurfacePortal>
+        <AppSurfaceOverlay />
+        <DialogPrimitive.Content
+          ref={composedRef}
+          className={cn(
+            "fixed left-1/2 z-50 flex w-[min(90vw,32rem)] max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)]",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            className,
+          )}
+          data-app-surface="dialog"
+          style={{
+            ...centeredStyle,
             ...style,
-          } as React.CSSProperties
-        }
-        {...props}
-      >
-        {children}
-        {showClose ? (
-          <DialogPrimitive.Close asChild>
-            <ModalCloseButton data-testid={closeTestId} />
-          </DialogPrimitive.Close>
-        ) : null}
-      </DialogPrimitive.Content>
-    </AppSurfacePortal>
-  ),
+          }}
+          {...props}
+        >
+          {children}
+          {showClose ? (
+            <DialogPrimitive.Close asChild>
+              <ModalCloseButton data-testid={closeTestId} />
+            </DialogPrimitive.Close>
+          ) : null}
+        </DialogPrimitive.Content>
+      </AppSurfacePortal>
+    );
+  },
 );
 AppDialogContent.displayName = "AppDialogContent";
 
@@ -183,7 +185,7 @@ const AppDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 );
 
 const AppDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("min-h-0 px-4 py-4", className)} {...props} />
+  <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4", className)} {...props} />
 );
 
 const AppDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -212,7 +214,11 @@ const AppDialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  <DialogPrimitive.Description
+    ref={ref}
+    className={cn("sr-only text-sm text-muted-foreground", className)}
+    {...props}
+  />
 ));
 AppDialogDescription.displayName = DialogPrimitive.Description.displayName;
 

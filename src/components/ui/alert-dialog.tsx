@@ -14,6 +14,7 @@ import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresenta
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
+import { useCenteredOverlayPosition } from "@/components/ui/useCenteredOverlayPosition";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -47,16 +48,18 @@ const AlertDialogContent = React.forwardRef<
 >(({ className, surface = "confirmation", ...props }, ref) => {
   const { profile } = useDisplayProfile();
   const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
+  const { composedRef, style } = useCenteredOverlayPosition(ref, `AlertDialogContent[${surface}]`);
 
   return (
     <AlertDialogPresentationContext.Provider value={presentation}>
       <AlertDialogPortal>
         <AlertDialogOverlay />
         <AlertDialogPrimitive.Content
-          ref={ref}
+          ref={composedRef}
           className={cn(presentation.contentClassName, className)}
           data-modal-surface={surface}
           data-modal-presentation={presentation.mode}
+          style={style}
           {...props}
         />
       </AlertDialogPortal>
@@ -93,7 +96,11 @@ const AlertDialogDescription = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  <AlertDialogPrimitive.Description
+    ref={ref}
+    className={cn("sr-only text-sm text-muted-foreground", className)}
+    {...props}
+  />
 ));
 AlertDialogDescription.displayName = AlertDialogPrimitive.Description.displayName;
 

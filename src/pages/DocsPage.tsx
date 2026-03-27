@@ -337,7 +337,7 @@ export default function DocsPage() {
   const pageShellClassName = usePrimaryPageShellClassName("pb-24");
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Docs" subtitle="How to use this app" />
+      <AppBar title="Docs" />
 
       <main className="app-shell-container py-6 space-y-4">
         {docSections.map((section, index) => (

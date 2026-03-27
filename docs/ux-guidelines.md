@@ -263,18 +263,57 @@ Do **not** raise overlay backdrops above `z-50` without also raising the app bar
 
 #### Dimming Constraint
 
-Backdrop opacity is capped at **≤ 25%** via `APP_INTERSTITIAL_BACKDROP_CLASSNAME` (currently `bg-black/22`). This applies globally to:
+Backdrop opacity is standardized at about **30%** via `APP_INTERSTITIAL_BACKDROP_CLASSNAME` (currently `bg-black/30`). This applies globally to:
 
 - Bottom sheets (`AppSheetContent`)
 - Dialogs and alert dialogs
 - Progress overlays
 - Any full-screen dimming layer
 
-Do **not** introduce per-component backdrop overrides with higher opacity.
+Do **not** introduce backdrop blur on sheets, dialogs, or progress overlays.
+Do **not** introduce per-component backdrop overrides that materially deviate from the shared ~30% dim level.
 
 #### Runtime Assertions (Development Builds)
 
-`assertOverlayRespectsBadgeSafeZone(topPx, name)` (from `interstitialStyles.ts`) logs a `console.error` in non-production builds when an overlay's `topPx` is above `getBadgeSafeZoneBottomPx()`. Call this whenever a sheet top is computed dynamically (for example in drag-resize handlers).
+`assertOverlayRespectsBadgeSafeZone(...)` (from `interstitialStyles.ts`) logs a `console.error` in non-production builds when an overlay top clears the badge band incorrectly or when computed overlay bounds intersect the badge safe zone. Call this whenever a sheet or centered dialog computes its layout dynamically.
+
+---
+
+## Subtitle Usage Policy
+
+Visible subtitles are forbidden for top-of-page headers.
+
+- Do not render a second line directly below the primary page title in the shared top header.
+- Embedded explanatory copy inside page content is allowed when it is part of the page body rather than the page header.
+- Do not use a page-header subtitle as a fallback for weak page naming.
+- Accessibility descriptions may exist only when they are visually hidden (`sr-only`) and required for semantics.
+
+Allowed exceptions:
+
+- Embedded page explanations and helper text inside the main content area
+- Error text
+- Inline validation
+- Live status output
+- Intentional body content that is not acting as a subtitle
+
+---
+
+## Header Layout Standard
+
+All top-level page headers must use the same structure.
+
+- Left side: page title or branded leading content.
+- Right side: unified health badge.
+- Vertical alignment: exact center alignment on the same header row.
+- Minimum row height: 52 px.
+- Spacing must make the header feel taller through padding, not larger title text.
+- The Home page may use a larger logo for brand identity, but it still follows the same shared row alignment.
+
+Header prohibitions:
+
+- No visible subtitle line.
+- No extra status chips to the left of the health badge.
+- No per-page header spacing overrides that break row alignment across display profiles.
 
 ---
 
@@ -468,9 +507,7 @@ The following terms are consistently used across the UI:
 Terminology rule:
 
 - Use only `Local`, `C64U`, and `HVSC` when naming sources in code and user-facing text.
-- The long forms `Local Device`, `Commodore 64 Ultimate`, and `High Voltage SID Collection` are allowed only in:
-  - the source-selection interstitial (as subtitles/explanations), and
-  - the Docs page (as explanatory text).
+- The long forms `Local Device`, `Commodore 64 Ultimate`, and `High Voltage SID Collection` are allowed only in documentation or explanatory prose outside the interactive UI.
 - "Select all" / "Deselect all" - Bulk selection
 - "Remove selected" - Destructive bulk action
 - "View all" - List expansion

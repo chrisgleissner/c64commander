@@ -193,7 +193,7 @@ describe("ItemSelectionDialog display profiles", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "dialog");
     expect(screen.getByTestId("import-selection-interstitial")).toBeVisible();
-    expect(screen.getByText("Select items to add from a specific source.")).toBeVisible();
+    expect(screen.queryByText("Select items to add from a specific source.")).not.toBeInTheDocument();
   });
 
   it("stacks medium interstitial source buttons with equal full width", () => {
@@ -215,7 +215,7 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(screen.getByTestId("import-option-local").className).toContain("w-full");
     expect(screen.getByTestId("import-option-c64u").className).toContain("w-full");
     expect(screen.getByTestId("import-option-hvsc").className).toContain("w-full");
-    expect(screen.getByText("High Voltage SID Collection").className).toContain("whitespace-normal");
+    expect(screen.queryByText("High Voltage SID Collection")).not.toBeInTheDocument();
   });
 
   it("shows the selected C64U identifier in the selection heading", async () => {
@@ -252,10 +252,10 @@ describe("ItemSelectionDialog display profiles", () => {
 
     fireEvent.click(screen.getByTestId("import-option-c64u"));
 
-    expect(await screen.findByText("Select items from U64E2")).toBeVisible();
+    expect(await screen.findByText("From U64E2")).toBeVisible();
   });
 
-  it("shows the local device label in the selection heading", async () => {
+  it("shows the local source label in the selection heading", async () => {
     localStorage.clear();
 
     render(
@@ -290,7 +290,7 @@ describe("ItemSelectionDialog display profiles", () => {
     fireEvent.click(screen.getByTestId("import-option-local"));
 
     await waitFor(() => {
-      expect(screen.getByText("Select items from Local Device")).toBeVisible();
+      expect(screen.getByText("From Local")).toBeVisible();
     });
   });
 });
@@ -344,7 +344,7 @@ describe("ItemSelectionDialog archive source buttons", () => {
     );
     expect(screen.getByTestId("import-option-commoserve")).toBeVisible();
     expect(screen.getByText("CommoServe")).toBeVisible();
-    expect(screen.getByText("Online File Archive")).toBeVisible();
+    expect(screen.queryByText("Online File Archive")).not.toBeInTheDocument();
   });
 
   it("omits archive buttons when sources are absent", () => {
@@ -481,7 +481,7 @@ describe("ItemSelectionDialog archive source buttons", () => {
     );
 
     fireEvent.click(screen.getByTestId("import-option-hvsc"));
-    expect(await screen.findByText("Select items from HVSC")).toBeVisible();
+    expect(await screen.findByText("From HVSC")).toBeVisible();
   });
 
   it("shows the CommoServe source label in the selection heading", async () => {
@@ -508,6 +508,6 @@ describe("ItemSelectionDialog archive source buttons", () => {
     );
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
-    expect(await screen.findByText("Select items from CommoServe")).toBeVisible();
+    expect(await screen.findByText("From CommoServe")).toBeVisible();
   });
 });

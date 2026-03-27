@@ -1,3 +1,68 @@
+# Overlay, Header, and Subtitle Standardization Plan
+
+Status: COMPLETE
+Date: 2026-03-27
+Classification: DOC_PLUS_CODE
+Visible UI impact: YES
+
+## Problem Statement
+
+Overlays, centered dialogs, and page headers were not following a single badge-safe layout contract, while visible subtitle lines had accumulated across headers, dialogs, item pickers, and settings controls. The app needs one shared overlay positioning system, one shared header row standard, and a zero-visible-subtitles policy.
+
+## Required Outcomes
+
+- Keep the top-right health badge visible and readable at all times.
+- Enforce a shared badge-safe-zone contract for sheets, centered dialogs, and progress overlays.
+- Remove visible subtitle lines across the interactive UI.
+- Standardize top-level page headers around the shared AppBar row.
+- Preserve accessibility semantics by keeping only visually hidden descriptions where required.
+- Update docs, tests, and screenshots to match the new contract.
+
+## Implementation Plan
+
+### Phase 1 - Audit and map impact
+
+- Inventory AppBar usage, overlay primitives, bottom sheets, centered dialogs, and progress overlays.
+- Identify visible subtitle debt on page headers, dialogs, import flows, and settings controls.
+
+### Phase 2 - Shared layout primitives
+
+- Extend `interstitialStyles.ts` with explicit badge-safe-zone geometry and centered-overlay layout helpers.
+- Add one shared hook for centered overlay positioning below the badge band.
+- Move shared dialog wrappers onto that positioning system.
+
+### Phase 3 - UI simplification
+
+- Remove visible AppBar subtitles.
+- Simplify source-picker and path labels.
+- Remove remaining visible helper subtitles in interactive settings surfaces.
+- Increase Home logo presence without breaking shared header alignment.
+
+### Phase 4 - Regression coverage
+
+- Update unit tests for AppBar, item selection, and overlay safe-zone behavior.
+- Update Playwright expectations for simplified import-flow labels and path display.
+
+### Phase 5 - Documentation and validation
+
+- Update `docs/ux-guidelines.md` with the overlay contract, subtitle policy, and header layout standard.
+- Run lint, tests, coverage, build, and targeted screenshots required by the touched surfaces.
+
+## Acceptance Criteria
+
+- No overlay intersects the badge safe zone.
+- Shared dialogs and sheets use one badge-safe positioning model.
+- Interactive UI surfaces render no visible subtitle lines.
+- Page headers align consistently across display profiles.
+- Docs and regression tests reflect the new UI contract.
+
+## Validation Summary
+
+- `npm run lint`
+- `npm run test:coverage` (`91.04%` branch coverage)
+- `npm run build`
+- Targeted Playwright screenshots for home, play, play/import, disks, config, settings, and docs
+
 # Screenshot Deduplication Repair Plan
 
 Status: COMPLETE

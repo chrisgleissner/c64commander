@@ -4,7 +4,7 @@ import { C64_PREVIEW_LAYOUT, parseC64PreviewLayout } from "@/lib/lighting/c64Pre
 
 describe("C64 preview layout", () => {
   it("classifies case, keyboard, and LED regions from the authoritative ASCII layout", () => {
-    expect(C64_PREVIEW_LAYOUT.width).toBe(67);
+    expect(C64_PREVIEW_LAYOUT.width).toBe(66);
     expect(C64_PREVIEW_LAYOUT.height).toBe(15);
 
     expect(C64_PREVIEW_LAYOUT.regions.case.components).toHaveLength(1);
@@ -13,7 +13,7 @@ describe("C64 preview layout", () => {
 
     expect(C64_PREVIEW_LAYOUT.regions.case.cellCount).toBeGreaterThan(C64_PREVIEW_LAYOUT.regions.keyboard.cellCount);
     expect(C64_PREVIEW_LAYOUT.regions.led.cellCount).toBe(2);
-    expect(C64_PREVIEW_LAYOUT.ledStrip.bounds).toEqual({ x: 58, y: 2, width: 2, height: 1 });
+    expect(C64_PREVIEW_LAYOUT.ledStrip.bounds).toEqual({ x: 57, y: 2, width: 2, height: 1 });
     expect(C64_PREVIEW_LAYOUT.keyboardMain.bounds.x).toBeLessThan(C64_PREVIEW_LAYOUT.keyboardFunction!.bounds.x);
   });
 

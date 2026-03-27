@@ -62,6 +62,8 @@ describe("ItemSelectionView", () => {
     expect(onOpen).toHaveBeenNthCalledWith(1, entries[1].path);
     expect(onOpen).toHaveBeenNthCalledWith(2, entries[1].path);
     expect(screen.queryByRole("button", { name: /^open$/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("source-path-label")).toHaveTextContent("/music");
+    expect(screen.queryByText(/^Path:/i)).not.toBeInTheDocument();
   });
 
   it("disables selection and navigation at root when loading", () => {

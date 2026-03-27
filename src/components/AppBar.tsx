@@ -21,7 +21,7 @@ type Props = {
   children?: ReactNode;
 };
 
-export function AppBar({ title, subtitle, leading, children }: Props) {
+export function AppBar({ title, subtitle: _subtitle, leading, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const { profile, tokens } = useDisplayProfile();
   const screenActive = useScreenActivity();
@@ -47,12 +47,12 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       observer = new ResizeObserver(() => updateHeight());
       observer.observe(element);
     } else {
-      window.addEventListener("resize", updateHeight);
+      globalThis.addEventListener("resize", updateHeight);
     }
 
     return () => {
       observer?.disconnect();
-      window.removeEventListener("resize", updateHeight);
+      globalThis.removeEventListener("resize", updateHeight);
     };
   }, [screenActive]);
 
@@ -69,22 +69,18 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       data-app-chrome-mode={appChromeMode}
     >
       <div
-        className={cn("app-shell-container", compact ? "space-y-2" : "py-4 space-y-3")}
-        style={compact ? { paddingTop: tokens.pagePaddingX, paddingBottom: tokens.pagePaddingY } : undefined}
+        className={cn("app-shell-container", children ? "space-y-3" : "space-y-0")}
+        style={{
+          paddingTop: compact ? tokens.pagePaddingX : tokens.pagePaddingY,
+          paddingBottom: compact ? tokens.pagePaddingX : tokens.pagePaddingY,
+        }}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            {leading ? (
-              leading
-            ) : (
-              <>
-                <h1 className="c64-header text-xl truncate">{title}</h1>
-                {subtitle ? <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p> : null}
-              </>
-            )}
+        <div className="flex min-h-[52px] items-center justify-between gap-4" data-testid="app-bar-row">
+          <div className="flex min-h-[52px] min-w-0 items-center">
+            {leading ? leading : <h1 className="c64-header text-xl leading-none truncate">{title}</h1>}
           </div>
           {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
-          <UnifiedHealthBadge />
+          <UnifiedHealthBadge className="self-center" />
         </div>
         {children ? <div className="min-w-0">{children}</div> : null}
       </div>

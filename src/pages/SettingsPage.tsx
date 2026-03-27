@@ -565,7 +565,7 @@ export default function SettingsPage() {
 
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Settings" subtitle="Connection & appearance" />
+      <AppBar title="Settings" />
 
       <PageContainer size="reading">
         <PageStack>
@@ -1667,7 +1667,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm">Allow user override when circuit is open</Label>
+                  <Label className="text-sm">Allow circuit override</Label>
                   <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-2">
                     <span className="text-xs text-muted-foreground">
                       User-triggered actions can bypass circuit breaker.

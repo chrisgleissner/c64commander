@@ -42,6 +42,7 @@ describe("AppBar", () => {
     expect(header?.className).not.toContain("pt-safe");
     expect(shell).toHaveStyle({ paddingTop: "0.5rem", paddingBottom: "0.5rem" });
     expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
+    expect(screen.queryByText("Compact")).not.toBeInTheDocument();
   });
 
   it("preserves the safe-area top padding outside compact mode", () => {
@@ -58,8 +59,9 @@ describe("AppBar", () => {
     const shell = container.querySelector(".app-shell-container");
 
     expect(header?.className).toContain("pt-safe");
-    expect(shell?.className).toContain("py-4");
+    expect(shell).toHaveStyle({ paddingTop: "1.5rem", paddingBottom: "1.5rem" });
     expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
+    expect(screen.queryByText("Expanded")).not.toBeInTheDocument();
   });
 
   it("renders the unified health badge as the sole diagnostic/connectivity element", () => {
@@ -94,5 +96,18 @@ describe("AppBar", () => {
     expect(header?.className).toContain("sticky");
     expect(header?.className).not.toContain("fixed");
     expect(screen.getByRole("heading", { name: "Docs" })).toBeVisible();
+  });
+
+  it("uses a shared header row with balanced height", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <AppBar title="Config" />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("app-bar-row").className).toContain("min-h-[52px]");
   });
 });

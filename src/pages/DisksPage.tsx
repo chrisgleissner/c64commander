@@ -19,7 +19,7 @@ export default function DisksPage() {
   const { resolved, openStudio, openContextLens } = useLightingStudio();
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Disks" subtitle="Drive control & disk library" />
+      <AppBar title="Disks" />
 
       <PageContainer>
         <PageStack>

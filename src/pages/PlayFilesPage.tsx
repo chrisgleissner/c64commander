@@ -983,18 +983,7 @@ export default function PlayFilesPage() {
 
   return (
     <div className={pageShellClassName}>
-      <AppBar
-        title="Play Files"
-        subtitle={
-          status.isConnected
-            ? status.deviceType === "demo"
-              ? "Demo"
-              : "Connected"
-            : status.isConnecting
-              ? "Connecting…"
-              : "Offline"
-        }
-      />
+      <AppBar title="Play Files" />
       <PageContainer>
         <PageStack>
           {lightingResolved.sourceCue ? (

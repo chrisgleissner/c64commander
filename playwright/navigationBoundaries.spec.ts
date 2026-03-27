@@ -92,7 +92,7 @@ test.describe("Navigation boundaries and edge cases", () => {
     await openRemoteFolder(page, "Games");
     await snap(page, testInfo, "games-folder");
 
-    await expect(page.getByText(/Path:\s*\/Usb0\/Games\/?/i)).toBeVisible();
+    await expect(page.getByTestId("source-path-label")).toContainText("/Usb0/Games");
     await snap(page, testInfo, "deep-path-shown");
 
     const parentButton = page
@@ -109,7 +109,7 @@ test.describe("Navigation boundaries and edge cases", () => {
         .isVisible({ timeout: 5000 })
         .catch(() => false);
       if (parentVisible) {
-        await expect(page.getByText(/Path:\s*\/Usb0\/?$/i)).toBeVisible();
+        await expect(page.getByTestId("source-path-label")).toContainText("/Usb0");
         await snap(page, testInfo, "parent-folder-shown");
       } else {
         await snap(page, testInfo, "parent-navigation-not-working");
@@ -169,7 +169,7 @@ test.describe("Navigation boundaries and edge cases", () => {
         await usb0Link.click();
         await snap(page, testInfo, "breadcrumb-clicked");
 
-        await expect(page.getByText(/Path:.*\/Usb0$/i)).toBeVisible();
+        await expect(page.getByTestId("source-path-label")).toContainText("/Usb0");
         await expect(page.getByText("Games", { exact: true })).toBeVisible();
         await snap(page, testInfo, "jumped-to-ancestor");
       } else {

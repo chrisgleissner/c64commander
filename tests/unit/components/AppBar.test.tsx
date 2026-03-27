@@ -9,6 +9,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppBar } from "@/components/AppBar";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const navigateMock = vi.fn();
 
@@ -110,8 +111,8 @@ describe("AppBar", () => {
   });
 
   it("falls back to resize events when ResizeObserver is unavailable and ignores zero heights", () => {
-    const addEventListenerSpy = vi.spyOn(window, "addEventListener");
-    const removeEventListenerSpy = vi.spyOn(window, "removeEventListener");
+    const addEventListenerSpy = vi.spyOn(globalThis, "addEventListener");
+    const removeEventListenerSpy = vi.spyOn(globalThis, "removeEventListener");
     const setPropertySpy = vi.spyOn(document.documentElement.style, "setProperty");
 
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
@@ -126,7 +127,8 @@ describe("AppBar", () => {
 
     expect(setPropertySpy).not.toHaveBeenCalled();
     expect(addEventListenerSpy).toHaveBeenCalledWith("resize", expect.any(Function));
-    expect(screen.getByText("Subtitle")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Test" })).toBeInTheDocument();
+    expect(screen.queryByText("Subtitle")).not.toBeInTheDocument();
 
     unmount();
     expect(removeEventListenerSpy).toHaveBeenCalledWith("resize", expect.any(Function));
@@ -137,5 +139,19 @@ describe("AppBar", () => {
     const header = container.querySelector("header");
     expect(header).toHaveClass("z-[51]");
     expect(header).not.toHaveClass("z-40");
+  });
+
+  it("skips publishing app-bar height while the screen is inactive", () => {
+    const setPropertySpy = vi.spyOn(document.documentElement.style, "setProperty");
+    const addEventListenerSpy = vi.spyOn(globalThis, "addEventListener");
+
+    render(
+      <ScreenActivityProvider active={false}>
+        <AppBar title="Idle" />
+      </ScreenActivityProvider>,
+    );
+
+    expect(setPropertySpy).not.toHaveBeenCalled();
+    expect(addEventListenerSpy).not.toHaveBeenCalledWith("resize", expect.any(Function));
   });
 });

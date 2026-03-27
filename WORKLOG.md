@@ -1,3 +1,45 @@
+# Overlay, Header, and Subtitle Standardization Worklog
+
+## 2026-03-27
+
+### Audit and scope
+
+- Classified the task as `DOC_PLUS_CODE` and `UI_CHANGE` because it touches executable UI code, docs, tests, and screenshots.
+- Audited shared overlay primitives (`app-surface.tsx`, `dialog.tsx`, `alert-dialog.tsx`, `interstitialStyles.ts`), the shared AppBar, main pages, and the item-selection flow.
+- Confirmed some badge-safe-zone logic already existed, then mapped the missing centered-dialog and progress-overlay coverage.
+
+### Shared overlay implementation
+
+- Extended `src/components/ui/interstitialStyles.ts` with explicit badge-safe-zone bounds, centered-overlay layout math, and bounds-aware runtime assertions.
+- Added `src/components/ui/useCenteredOverlayPosition.ts` so centered dialogs use the same badge-safe layout contract as sheets.
+- Moved `app-surface.tsx`, `dialog.tsx`, `alert-dialog.tsx`, and modal presentation classes onto the shared centered positioning system.
+
+### Subtitle removal and header standardization
+
+- Removed visible AppBar subtitle rendering and standardized the header row around a shared left-title/right-badge layout.
+- Removed page subtitle usage from Home, Play Files, Disks, Config Browser, Settings, and Docs.
+- Simplified item-selection labels from `Select items from X` to `From X`, shortened `Local Device` to `Local`, and removed the visible `Path:` prefix.
+- Repositioned the add-items progress overlay below the badge band.
+- Increased the Home logo size substantially while preserving shared header alignment.
+- Removed remaining visible helper-subtitle lines from interactive Settings controls.
+
+### Regression updates
+
+- Updated unit tests covering AppBar layout, item selection, Home header behavior, ItemSelectionView path labeling, and overlay safe-zone assertions.
+- Updated Playwright expectations for source-button labels, import-flow headings, and source path rendering.
+
+### Documentation
+
+- Updated `docs/ux-guidelines.md` with the badge-safe overlay contract, the no-visible-subtitles rule, and the shared header layout standard.
+
+### Validation completed
+
+- Ran `npm run lint` successfully; only pre-existing warnings remain in generated Android coverage report files.
+- Ran `npm run test:coverage` after the final dialog-hook fix and confirmed `91.04%` global branch coverage.
+- Ran `npm run build` successfully.
+- Regenerated the targeted screenshot set for Home, Play, Play import flow, Disks, Config, Settings, and Docs, including their profile/section images produced by the corresponding screenshot specs.
+- Fixed a late-ref centered-dialog regression discovered during screenshot validation and added a dedicated regression test for the delayed ref-attachment path in `useCenteredOverlayPosition`.
+
 # Screenshot Deduplication Worklog
 
 ## Phase 1 - Audit and reproduction

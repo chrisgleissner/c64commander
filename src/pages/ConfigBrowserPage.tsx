@@ -612,7 +612,7 @@ export default function ConfigBrowserPage() {
 
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Config" subtitle={<span>{categoriesData?.categories.length || 0} categories</span>}>
+      <AppBar title="Config">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

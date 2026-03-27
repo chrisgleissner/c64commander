@@ -7,6 +7,7 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import { isValidElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { AddItemsProgressOverlay } from "@/components/itemSelection/AddItemsProgressOverlay";
 
@@ -59,5 +60,54 @@ describe("AddItemsProgressOverlay", () => {
     const { container } = render(<AddItemsProgressOverlay progress={buildProgress({ status: "done" })} />);
 
     expect(container.firstChild).toBeNull();
+  });
+
+  it("stays visible when explicitly forced on after scanning finishes", () => {
+    render(<AddItemsProgressOverlay progress={buildProgress({ status: "done" })} visible testId="progress" />);
+
+    expect(screen.getByTestId("progress")).toBeInTheDocument();
+  });
+
+  it("anchors below the badge lane and falls back to the default status text", () => {
+    render(
+      <AddItemsProgressOverlay
+        progress={buildProgress({ elapsedMs: 900, message: null, total: null })}
+        testId="progress"
+      />,
+    );
+
+    const overlay = screen.getByTestId("progress");
+    expect(overlay).toHaveStyle({ paddingTop: "calc(96px + 1rem)" });
+    expect(screen.getByText(/Scanning files/)).toBeInTheDocument();
+    expect(screen.getByText(/3 found/)).toBeInTheDocument();
+    expect(screen.getByText("00:00")).toBeInTheDocument();
+    expect(screen.queryByText(/\//)).not.toBeInTheDocument();
+  });
+
+  it("returns the overlay element directly when document is unavailable", () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+
+    try {
+      // @ts-expect-error exercise the non-DOM fallback branch directly
+      delete globalThis.document;
+      // @ts-expect-error exercise the non-DOM fallback branch directly
+      delete globalThis.window;
+
+      const result = AddItemsProgressOverlay({ progress: buildProgress(), testId: "progress" });
+      expect(isValidElement(result)).toBe(true);
+      expect(result?.props["data-testid"]).toBe("progress");
+    } finally {
+      Object.defineProperty(globalThis, "document", {
+        value: originalDocument,
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(globalThis, "window", {
+        value: originalWindow,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 });

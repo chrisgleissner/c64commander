@@ -77,6 +77,7 @@ describe("ItemSelectionDialog source picker", () => {
     expect(screen.getByTestId("import-selection-interstitial")).toBeInTheDocument();
     expect(screen.getByTestId("import-option-c64u")).toBeInTheDocument();
     expect(screen.getByTestId("import-option-local")).toBeInTheDocument();
+    expect(screen.queryByText("Local Device")).not.toBeInTheDocument();
   });
 
   it("filters entries and confirms selection", async () => {

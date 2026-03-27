@@ -1294,7 +1294,7 @@ test.describe("App screenshots", () => {
 
       await interstitial.getByTestId("import-option-c64u").click();
       await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
-      await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
+      await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("From C64U");
       await captureScreenshot(page, testInfo, "play/import/02-c64u-file-picker.png", { skipFuzzyHeadRestore: true });
 
       await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -1312,7 +1312,7 @@ test.describe("App screenshots", () => {
       await expect(input).toBeAttached();
       await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
       await expect(localDialog.getByTestId("local-file-picker")).toBeVisible();
-      await expect(localDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from Local Device");
+      await expect(localDialog.getByTestId("add-items-selection-heading")).toHaveText("From Local");
       await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png", { skipFuzzyHeadRestore: true });
 
       await localDialog.getByRole("button", { name: "Cancel" }).click();
@@ -1333,14 +1333,14 @@ test.describe("App screenshots", () => {
       await archivePicker.getByRole("combobox").nth(0).click();
       await page.getByRole("option", { name: "Apps" }).click();
       await expect(archivePicker.getByTestId("archive-query-preview")).toContainText(SCREENSHOT_ARCHIVE_QUERY);
-      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("From CommoServe");
       await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png", { skipFuzzyHeadRestore: true });
 
       await archivePicker.getByTestId("archive-search-button").click();
       await expect(archivePicker.getByTestId("archive-result-row")).toHaveCount(2);
       await archivePicker.getByRole("checkbox", { name: /^Select Joyride$/ }).click();
       await expect(archiveDialog.getByTestId("add-items-selection-count")).toHaveText(/1 selected/i);
-      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("From CommoServe");
       await captureScreenshot(page, testInfo, "play/import/05-commoserve-results-selected.png", {
         skipFuzzyHeadRestore: true,
       });
@@ -1374,7 +1374,7 @@ test.describe("App screenshots", () => {
 
         await interstitial.getByTestId("import-option-c64u").click();
         await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
-        await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
+        await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("From C64U");
         await captureScreenshot(
           page,
           testInfo,
