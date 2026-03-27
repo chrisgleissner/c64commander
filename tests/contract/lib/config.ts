@@ -243,7 +243,7 @@ function loadKnownConfigTargets(): Set<string> {
     return knownConfigTargetsCache;
   }
 
-  const configCatalogPath = path.join(process.cwd(), "doc/c64/c64u-config.yaml");
+  const configCatalogPath = path.join(process.cwd(), "docs/c64/c64u-config.yaml");
   const raw = fs.readFileSync(configCatalogPath, "utf8");
   const doc = yaml.load(raw) as {
     config?: {

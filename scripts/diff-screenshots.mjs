@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generates visual diff images for all modified screenshots in doc/img/app.
+ * Generates visual diff images for all modified screenshots in docs/img/app.
  * For each modified PNG, compares HEAD vs working-tree pixels and writes:
  *   .tmp/screenshot-diffs/<relative-path>  — diff image (red overlay on changed pixels)
  *
@@ -29,8 +29,8 @@ const toRgba = async (input) => {
 
 const listModifiedPngs = async () => {
   const [unstaged, staged] = await Promise.all([
-    execFile("git", ["diff", "--name-only", "--diff-filter=AM", "--", "doc/img/app"]),
-    execFile("git", ["diff", "--name-only", "--cached", "--diff-filter=AM", "--", "doc/img/app"]),
+    execFile("git", ["diff", "--name-only", "--diff-filter=AM", "--", "docs/img/app"]),
+    execFile("git", ["diff", "--name-only", "--cached", "--diff-filter=AM", "--", "docs/img/app"]),
   ]);
   return [
     ...new Set(

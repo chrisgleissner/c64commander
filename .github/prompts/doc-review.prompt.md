@@ -14,7 +14,7 @@ Do NOT edit documentation, screenshots, product code, tests, build scripts, or p
 
 Doc review reports are stored under:
 
-`doc/research/`
+`docs/research/`
 
 in folders named:
 
@@ -24,12 +24,12 @@ in folders named:
 
 Your first tasks are to:
 
-1. Enumerate folders matching `doc/research/doc-review-*`.
+1. Enumerate folders matching `docs/research/doc-review-*`.
 2. Determine the highest numeric doc review folder as the previous doc review, if one exists.
 3. Compute the next doc review number as `highest + 1`, or `1` if no prior doc review exists.
 4. Create:
 
-`doc/research/doc-review-<next>/`
+`docs/research/doc-review-<next>/`
 
 5. Treat the previous doc review folder as an input source for:
 
@@ -43,18 +43,18 @@ when those files exist.
 
 Create:
 
-- `doc/research/doc-review-<next>/doc-review-<next>.md`
-- `doc/research/doc-review-<next>/carry-forward.md`
+- `docs/research/doc-review-<next>/doc-review-<next>.md`
+- `docs/research/doc-review-<next>/carry-forward.md`
 
 ## Review Scope
 
 Review only documentation surfaces such as:
 
 - `README.md`
-- `doc/`
+- `docs/`
 - `docs/`
 - in-app doc or help copy when it materially affects documented behavior
-- screenshots under `doc/img/`
+- screenshots under `docs/img/`
 
 Check for:
 
@@ -72,7 +72,7 @@ Every finding must:
 
 ## Carry-Forward Requirements
 
-Create `doc/research/doc-review-<next>/carry-forward.md`.
+Create `docs/research/doc-review-<next>/carry-forward.md`.
 
 Include for each item:
 

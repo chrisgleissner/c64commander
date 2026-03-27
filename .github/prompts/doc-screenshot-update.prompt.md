@@ -8,7 +8,7 @@ Update documentation screenshots only when the visible UI changed in a way that 
 
 Documentation screenshots live under:
 
-doc/img/
+docs/img/
 
 They are part of the repository's user-visible documentation and must remain accurate.
 
@@ -77,7 +77,7 @@ Never regenerate the entire screenshot set.
 Before generating screenshots:
 
 1. Identify the exact page(s) affected.
-2. Identify the corresponding screenshot files under `doc/img/`.
+2. Identify the corresponding screenshot files under `docs/img/`.
 3. Replace only those files.
 
 Preserve:
@@ -111,8 +111,8 @@ Example summary:
 
 Updated screenshots for Home page layout change:
 
-- doc/img/app/home/00-overview-light.png
-- doc/img/app/home/01-overview-dark.png
+- docs/img/app/home/00-overview-light.png
+- docs/img/app/home/01-overview-dark.png
 
 Reason: button labels and section spacing changed, making previous documentation images inaccurate.
 

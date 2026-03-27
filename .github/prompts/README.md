@@ -8,7 +8,7 @@ Use the production prompts as a direct handoff pair:
 
 1. `review.prompt.md`
    - Performs the production review directly.
-   - Creates the next numbered review folder under `doc/research/review-<n>/`.
+   - Creates the next numbered review folder under `docs/research/review-<n>/`.
    - Writes the review report and seeds `carry-forward.md` with inherited and newly discovered open items.
    - Must not remediate findings.
 
@@ -22,8 +22,8 @@ Use the production prompts as a direct handoff pair:
 Use the documentation prompts as a separate direct handoff pair:
 
 1. `doc-review.prompt.md`
-   - Performs a doc-only audit across `README.md`, `doc/`, `docs/`, and documented UI screenshots.
-   - Creates the next numbered doc review folder under `doc/research/doc-review-<n>/`.
+   - Performs a doc-only audit across `README.md`, `docs/`, `docs/`, and documented UI screenshots.
+   - Creates the next numbered doc review folder under `docs/research/doc-review-<n>/`.
    - Writes the doc review report and seeds `carry-forward.md` with unresolved documentation issues.
    - Must not remediate findings.
 
@@ -34,15 +34,15 @@ Use the documentation prompts as a separate direct handoff pair:
 
 ## Required Review Artifacts
 
-- `doc/research/review-<n>/review-<n>.md`
-- `doc/research/review-<n>/remediation-log.md`
-- `doc/research/review-<n>/carry-forward.md`
+- `docs/research/review-<n>/review-<n>.md`
+- `docs/research/review-<n>/remediation-log.md`
+- `docs/research/review-<n>/carry-forward.md`
 
 ## Required Doc Review Artifacts
 
-- `doc/research/doc-review-<n>/doc-review-<n>.md`
-- `doc/research/doc-review-<n>/remediation-log.md`
-- `doc/research/doc-review-<n>/carry-forward.md`
+- `docs/research/doc-review-<n>/doc-review-<n>.md`
+- `docs/research/doc-review-<n>/remediation-log.md`
+- `docs/research/doc-review-<n>/carry-forward.md`
 
 ## Carry-Forward Contract
 

@@ -7,7 +7,7 @@
 
 Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deployment on your local network.
 
-<img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander" width="600"/>
+<img src="./docs/site/play-store/feature-graphic-1024x500.png" alt="C64 Commander" width="600"/>
 
 ## Features
 
@@ -56,7 +56,7 @@ If a network password is configured in **Settings > Device > Network password**,
 
 Ensure the C64 Ultimate is on your local network with required services enabled:
 
-![Network services & timezone menu](doc/img/setup/enable_services.png)
+![Network services & timezone menu](docs/img/setup/enable_services.png)
 
 On the C64 Ultimate:
 
@@ -70,7 +70,7 @@ In C64 Commander:
 2. Enter the C64 Ultimate IP address or hostname.
 3. A compact C64U connectivity badge with a green health indicator confirms the connection:
 
-![Connected C64U badge](doc/img/app/home/02-connection-status-popover.png)
+![Connected C64U badge](docs/img/app/home/02-connection-status-popover.png)
 
 ## Pages
 
@@ -80,24 +80,24 @@ Operational dashboard: machine controls, Telnet-backed quick actions, light effe
 
 <table>
   <tr>
-    <td><img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="360"/></td>
-    <td><img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/02-quick-config-to-keyboard-light.png" alt="Home sections from quick config through keyboard light" width="360"/></td>
+    <td><img src="docs/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="360"/></td>
+    <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/02-quick-config-to-keyboard-light.png" alt="Home sections from quick config through keyboard light" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/home/sections/03-quick-config-to-printers.png" alt="Home sections from quick config through printers" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/04-printers-to-sid.png" alt="Home sections from printers through SID" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/03-quick-config-to-printers.png" alt="Home sections from quick config through printers" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/04-printers-to-sid.png" alt="Home sections from printers through SID" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
-    <td><img src="doc/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
-    <td><img src="doc/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
+    <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/home/dialogs/02-save-ram-custom-range.png" alt="Save RAM custom ranges" width="360"/></td>
-    <td><img src="doc/img/app/home/dialogs/03-snapshot-manager.png" alt="Load RAM snapshot manager" width="360"/></td>
-    <td><img src="doc/img/app/home/dialogs/04-restore-confirmation.png" alt="Load RAM restore confirmation" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/02-save-ram-custom-range.png" alt="Save RAM custom ranges" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/03-snapshot-manager.png" alt="Load RAM snapshot manager" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/04-restore-confirmation.png" alt="Load RAM restore confirmation" width="360"/></td>
   </tr>
 </table>
 
@@ -107,9 +107,9 @@ Build playlists from local files, C64U storage, CommoServe search results, or HV
 
 <table>
   <tr>
-    <td><img src="doc/img/app/play/01-overview.png" alt="Play overview" width="360"/></td>
-    <td><img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="360"/></td>
-    <td><img src="doc/img/app/play/playlist/01-view-all.png" alt="Play playlist view all" width="360"/></td>
+    <td><img src="docs/img/app/play/01-overview.png" alt="Play overview" width="360"/></td>
+    <td><img src="docs/img/app/play/sections/02-playlist.png" alt="Play playlist" width="360"/></td>
+    <td><img src="docs/img/app/play/playlist/01-view-all.png" alt="Play playlist view all" width="360"/></td>
   </tr>
 </table>
 
@@ -119,13 +119,13 @@ Choose an import source from the same playlist workflow: browse C64U storage, ad
 
 <table>
   <tr>
-    <td><img src="doc/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
-    <td><img src="doc/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
-    <td><img src="doc/img/app/play/import/03-local-file-picker.png" alt="Local folder import" width="360"/></td>
+    <td><img src="docs/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
+    <td><img src="docs/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
+    <td><img src="docs/img/app/play/import/03-local-file-picker.png" alt="Local folder import" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/play/import/04-commoserve-search.png" alt="CommoServe search form" width="360"/></td>
-    <td><img src="doc/img/app/play/import/05-commoserve-results-selected.png" alt="CommoServe results with selection" width="360"/></td>
+    <td><img src="docs/img/app/play/import/04-commoserve-search.png" alt="CommoServe search form" width="360"/></td>
+    <td><img src="docs/img/app/play/import/05-commoserve-results-selected.png" alt="CommoServe results with selection" width="360"/></td>
     <td></td>
   </tr>
 </table>
@@ -136,9 +136,9 @@ View drive state, mount and eject images, and manage disk collections with multi
 
 <table>
   <tr>
-    <td><img src="doc/img/app/disks/01-overview.png" alt="Disks overview" width="360"/></td>
-    <td><img src="doc/img/app/disks/sections/02-disks.png" alt="Disks collection" width="360"/></td>
-    <td><img src="doc/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="360"/></td>
+    <td><img src="docs/img/app/disks/01-overview.png" alt="Disks overview" width="360"/></td>
+    <td><img src="docs/img/app/disks/sections/02-disks.png" alt="Disks collection" width="360"/></td>
+    <td><img src="docs/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="360"/></td>
   </tr>
 </table>
 
@@ -148,9 +148,9 @@ Browse and edit the full C64 Ultimate configuration: categories, items, sliders,
 
 <table>
   <tr>
-    <td><img src="doc/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
-    <td><img src="doc/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
-    <td><img src="doc/img/app/config/sections/06-c64-and-cartridge-settings.png" alt="Configuration C64 and cartridge settings" width="360"/></td>
+    <td><img src="docs/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
+    <td><img src="docs/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
+    <td><img src="docs/img/app/config/sections/06-c64-and-cartridge-settings.png" alt="Configuration C64 and cartridge settings" width="360"/></td>
   </tr>
 </table>
 
@@ -160,14 +160,14 @@ Connection, appearance, diagnostics, playback defaults, HVSC integration, and de
 
 <table>
   <tr>
-    <td><img src="doc/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="360"/></td>
-    <td><img src="doc/img/app/settings/sections/02-connection.png" alt="Settings connection" width="360"/></td>
-    <td><img src="doc/img/app/settings/sections/03-diagnostics.png" alt="Settings diagnostics" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/02-connection.png" alt="Settings connection" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/03-diagnostics.png" alt="Settings diagnostics" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
-    <td><img src="doc/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
-    <td><img src="doc/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="360"/></td>
   </tr>
 </table>
 
@@ -177,9 +177,9 @@ Built-in guides for setup, workflows, and day-to-day usage.
 
 <table>
   <tr>
-    <td><img src="doc/img/app/docs/01-overview.png" alt="Docs overview" width="360"/></td>
-    <td><img src="doc/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="360"/></td>
-    <td><img src="doc/img/app/docs/sections/05-swapping-disks.png" alt="Docs swapping disks" width="360"/></td>
+    <td><img src="docs/img/app/docs/01-overview.png" alt="Docs overview" width="360"/></td>
+    <td><img src="docs/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="360"/></td>
+    <td><img src="docs/img/app/docs/sections/05-swapping-disks.png" alt="Docs swapping disks" width="360"/></td>
   </tr>
 </table>
 
@@ -189,9 +189,9 @@ Accessible via the C64U connectivity badge in the top-right corner. Provides hea
 
 <table>
   <tr>
-    <td><img src="doc/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/activity/07-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/activity/07-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
   </tr>
 </table>
 
@@ -211,19 +211,19 @@ The layout adapts automatically based on viewport width: Small (phones), Standar
     <tr>
       <td valign="top">
         <img
-          src="doc/img/app/home/profiles/compact/01-overview.png"
+          src="docs/img/app/home/profiles/compact/01-overview.png"
           alt="Home page in the Small display profile"
         />
       </td>
       <td valign="top">
         <img
-          src="doc/img/app/home/profiles/medium/01-overview.png"
+          src="docs/img/app/home/profiles/medium/01-overview.png"
           alt="Home page in the Standard display profile"
         />
       </td>
       <td valign="top">
         <img
-          src="doc/img/app/home/profiles/expanded/01-overview.png"
+          src="docs/img/app/home/profiles/expanded/01-overview.png"
           alt="Home page in the Large display profile"
         />
       </td>

@@ -78,19 +78,19 @@ describe("parseGitLsTreeBlobCatalog", () => {
   it("maps tracked paths and blob ids from git ls-tree output", () => {
     const catalog = parseGitLsTreeBlobCatalog(
       [
-        "100644 blob aaa111\tdoc/img/app/home/00-overview-light.png",
-        "100644 blob bbb222\tdoc/img/app/home/01-overview-dark.png",
-        "100644 blob aaa111\tdoc/img/app/home/profiles/medium/01-overview.png",
+        "100644 blob aaa111\tdocs/img/app/home/00-overview-light.png",
+        "100644 blob bbb222\tdocs/img/app/home/01-overview-dark.png",
+        "100644 blob aaa111\tdocs/img/app/home/profiles/medium/01-overview.png",
       ].join("\n"),
     );
 
-    expect(catalog.pathBlobIds.get("doc/img/app/home/00-overview-light.png")).toBe("aaa111");
-    expect(catalog.pathBlobIds.get("doc/img/app/home/01-overview-dark.png")).toBe("bbb222");
+    expect(catalog.pathBlobIds.get("docs/img/app/home/00-overview-light.png")).toBe("aaa111");
+    expect(catalog.pathBlobIds.get("docs/img/app/home/01-overview-dark.png")).toBe("bbb222");
     expect(catalog.blobIdsToPaths.get("aaa111")).toEqual([
-      "doc/img/app/home/00-overview-light.png",
-      "doc/img/app/home/profiles/medium/01-overview.png",
+      "docs/img/app/home/00-overview-light.png",
+      "docs/img/app/home/profiles/medium/01-overview.png",
     ]);
-    expect(catalog.trackedPaths.has("doc/img/app/home/01-overview-dark.png")).toBe(true);
+    expect(catalog.trackedPaths.has("docs/img/app/home/01-overview-dark.png")).toBe(true);
   });
 });
 
@@ -252,10 +252,10 @@ describe("decideMetadataScreenshotAction", () => {
   it("restores the tracked file when bytes match HEAD at the same path", () => {
     expect(
       decideMetadataScreenshotAction({
-        repoPath: "doc/img/app/home/00-overview-light.png",
+        repoPath: "docs/img/app/home/00-overview-light.png",
         currentBlobId: "aaa111",
         headBlobId: "aaa111",
-        trackedPathsForBlobId: ["doc/img/app/home/00-overview-light.png"],
+        trackedPathsForBlobId: ["docs/img/app/home/00-overview-light.png"],
       }),
     ).toBe("restore-head");
   });
@@ -263,10 +263,10 @@ describe("decideMetadataScreenshotAction", () => {
   it("deletes new duplicate screenshots when another tracked path already has the same blob", () => {
     expect(
       decideMetadataScreenshotAction({
-        repoPath: "doc/img/app/home/profiles/medium/02-overview.png",
+        repoPath: "docs/img/app/home/profiles/medium/02-overview.png",
         currentBlobId: "aaa111",
         headBlobId: undefined,
-        trackedPathsForBlobId: ["doc/img/app/home/00-overview-light.png"],
+        trackedPathsForBlobId: ["docs/img/app/home/00-overview-light.png"],
         writeWhenTrackedDuplicate: false,
         skipTrackedDuplicatePrune: false,
       }),
@@ -276,10 +276,10 @@ describe("decideMetadataScreenshotAction", () => {
   it("keeps new duplicate screenshots when explicitly allowed", () => {
     expect(
       decideMetadataScreenshotAction({
-        repoPath: "doc/img/app/home/profiles/medium/02-overview.png",
+        repoPath: "docs/img/app/home/profiles/medium/02-overview.png",
         currentBlobId: "aaa111",
         headBlobId: undefined,
-        trackedPathsForBlobId: ["doc/img/app/home/00-overview-light.png"],
+        trackedPathsForBlobId: ["docs/img/app/home/00-overview-light.png"],
         writeWhenTrackedDuplicate: true,
         skipTrackedDuplicatePrune: false,
       }),
@@ -289,10 +289,10 @@ describe("decideMetadataScreenshotAction", () => {
   it("keeps duplicate screenshots when tracked-duplicate pruning is skipped", () => {
     expect(
       decideMetadataScreenshotAction({
-        repoPath: "doc/img/app/home/profiles/medium/02-overview.png",
+        repoPath: "docs/img/app/home/profiles/medium/02-overview.png",
         currentBlobId: "aaa111",
         headBlobId: undefined,
-        trackedPathsForBlobId: ["doc/img/app/home/00-overview-light.png"],
+        trackedPathsForBlobId: ["docs/img/app/home/00-overview-light.png"],
         writeWhenTrackedDuplicate: false,
         skipTrackedDuplicatePrune: true,
       }),
@@ -302,7 +302,7 @@ describe("decideMetadataScreenshotAction", () => {
   it("keeps changed tracked screenshots when blob differs from HEAD", () => {
     expect(
       decideMetadataScreenshotAction({
-        repoPath: "doc/img/app/home/00-overview-light.png",
+        repoPath: "docs/img/app/home/00-overview-light.png",
         currentBlobId: "ccc333",
         headBlobId: "aaa111",
         trackedPathsForBlobId: [],
@@ -314,14 +314,14 @@ describe("decideMetadataScreenshotAction", () => {
 describe("pruneRedundantScreenshots", () => {
   it("restores modified tracked screenshots whose pixels are unchanged", async () => {
     const workdir = await createTempRepo();
-    const repoPath = "doc/img/app/home/00-overview-light.png";
+    const repoPath = "docs/img/app/home/00-overview-light.png";
     const baseline = await createTextScreenshot("C64 COMMANDER");
     await commitRepoFile(workdir, repoPath, baseline);
 
     await writeFile(path.join(workdir, repoPath), await reencodePng(baseline, 1));
 
     const summary = await pruneRedundantScreenshots({ workdir });
-    const status = execFileSync("git", ["status", "--short", "--", "doc/img/app"], {
+    const status = execFileSync("git", ["status", "--short", "--", "docs/img/app"], {
       cwd: workdir,
       encoding: "utf8",
     });
@@ -332,25 +332,25 @@ describe("pruneRedundantScreenshots", () => {
 
   it("keeps tracked screenshots with a real text change", async () => {
     const workdir = await createTempRepo();
-    const repoPath = "doc/img/app/home/00-overview-light.png";
+    const repoPath = "docs/img/app/home/00-overview-light.png";
     await commitRepoFile(workdir, repoPath, await createTextScreenshot("LOAD RAM"));
 
     await writeFile(path.join(workdir, repoPath), await createTextScreenshot("LOAD ROM"));
 
     const summary = await pruneRedundantScreenshots({ workdir });
-    const status = execFileSync("git", ["status", "--short", "--", "doc/img/app"], {
+    const status = execFileSync("git", ["status", "--short", "--", "docs/img/app"], {
       cwd: workdir,
       encoding: "utf8",
     });
 
     expect(summary).toMatchObject({ scanned: 1, reverted: 0, deleted: 0, kept: 1 });
-    expect(status).toContain("M doc/img/app/home/00-overview-light.png");
+    expect(status).toContain("M docs/img/app/home/00-overview-light.png");
   });
 
   it("deletes untracked screenshots that duplicate an existing tracked blob", async () => {
     const workdir = await createTempRepo();
-    const trackedRepoPath = "doc/img/app/home/00-overview-light.png";
-    const duplicateRepoPath = "doc/img/app/home/duplicate.png";
+    const trackedRepoPath = "docs/img/app/home/00-overview-light.png";
+    const duplicateRepoPath = "docs/img/app/home/duplicate.png";
     const baseline = await createTextScreenshot("C64 COMMANDER");
     await commitRepoFile(workdir, trackedRepoPath, baseline);
 

@@ -40,11 +40,11 @@ export const resources: ResourceDefinition[] = [
       [
         "# Playbook References",
         "",
-        "- doc/testing/agentic-tests/agentic-action-model.md",
-        "- doc/testing/agentic-tests/agentic-oracle-catalog.md",
-        "- doc/testing/agentic-tests/agentic-safety-policy.md",
-        "- doc/testing/agentic-tests/agentic-android-runtime-contract.md",
-        "- doc/testing/agentic-tests/agentic-observability-model.md",
+        "- docs/testing/agentic-tests/agentic-action-model.md",
+        "- docs/testing/agentic-tests/agentic-oracle-catalog.md",
+        "- docs/testing/agentic-tests/agentic-safety-policy.md",
+        "- docs/testing/agentic-tests/agentic-android-runtime-contract.md",
+        "- docs/testing/agentic-tests/agentic-observability-model.md",
       ].join("\n"),
   },
   {

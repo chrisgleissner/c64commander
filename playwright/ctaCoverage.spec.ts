@@ -9,7 +9,7 @@
 /**
  * Critical & High Priority CTA Coverage Tests
  *
- * Tests for previously uncovered CTAs identified in doc/ux-interactions.md:
+ * Tests for previously uncovered CTAs identified in docs/ux-interactions.md:
  * - CRITICAL: Add disks to library flow
  * - HIGH: Shuffle mode, Home quick actions, Drive navigation
  * - HIGH: Disk browser source selection

@@ -119,7 +119,7 @@ Only regenerate screenshots for UI surfaces whose visible output actually change
 
 ## Screenshot and documentation image policy (MANDATORY)
 
-Documentation screenshots live under `doc/img/`.
+Documentation screenshots live under `docs/img/`.
 
 They are part of the repository's user-visible documentation and must stay accurate, but they must be updated with discipline.
 
@@ -164,7 +164,7 @@ Never bulk-regenerate all screenshots just because a screenshot tool is availabl
 Before regenerating screenshots:
 
 1. Identify exactly which page(s), state(s), and mode(s) changed.
-2. Identify the corresponding files under `doc/img/`.
+2. Identify the corresponding files under `docs/img/`.
 3. Replace only those files unless the task explicitly requires broader refresh.
 4. Preserve existing file names and folder structure unless documentation structure itself changed.
 
@@ -177,9 +177,9 @@ If screenshots were **not** updated for a UI-related task, explicitly state why 
 ## Quick discovery
 
 - **High-level context**: `README.md`
-- **REST API docs**: `doc/c64/c64u-openapi.yaml`, `doc/c64/c64u-rest-api.md`
-- **UX guidance**: `doc/ux-guidelines.md`
-- **Maestro guidance**: `doc/testing/maestro.md`
+- **REST API docs**: `docs/c64/c64u-openapi.yaml`, `docs/c64/c64u-rest-api.md`
+- **UX guidance**: `docs/ux-guidelines.md`
+- **Maestro guidance**: `docs/testing/maestro.md`
 - **UI pages**: `src/pages/`
 - **Navigation**: `src/components/TabBar.tsx`
 - **Core API client**: `src/lib/c64api.ts`
@@ -226,7 +226,7 @@ React + Vite + Capacitor app for managing a C64 Ultimate device. Supports config
 
 ### Documentation
 
-- Keep technical docs in `doc/`.
+- Keep technical docs in `docs/`.
 - Keep user-facing docs in `README.md`.
 - When docs embed screenshots, keep image paths and captions aligned with the actual updated files.
 
@@ -251,7 +251,7 @@ npm run build
 - **Android JVM**: `cd android && ./gradlew test` with tests in `android/app/src/test/java/com/c64/commander/hvsc/`
 - **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
 - **Python agents**: `npm run test:agents` (pytest) with specs in `agents/tests/`; requires ≥90% branch coverage
-- **Maestro**: read `doc/testing/maestro.md` before creating or updating flows under `.maestro/`
+- **Maestro**: read `docs/testing/maestro.md` before creating or updating flows under `.maestro/`
 
 ## Coverage expectations
 

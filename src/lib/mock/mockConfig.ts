@@ -106,8 +106,8 @@ export const clearMockConfigLoader = () => {
 };
 const resolveYamlUrl = () => {
   const base = typeof import.meta !== "undefined" ? import.meta.env.BASE_URL || "/" : "/";
-  if (typeof window === "undefined") return `${base}doc/c64/c64u-config.yaml`;
-  return new URL(`doc/c64/c64u-config.yaml`, `${window.location.origin}${base}`).toString();
+  if (typeof window === "undefined") return `${base}docs/c64/c64u-config.yaml`;
+  return new URL(`docs/c64/c64u-config.yaml`, `${window.location.origin}${base}`).toString();
 };
 
 const loadYamlFromAssets = async () => {
@@ -125,7 +125,7 @@ const loadBundledConfigYaml = async () => {
     return bundledConfigYaml;
   }
   try {
-    const module = await import("../../../doc/c64/c64u-config.yaml?raw");
+    const module = await import("../../../docs/c64/c64u-config.yaml?raw");
     bundledConfigYaml = typeof module.default === "string" ? module.default : "";
   } catch (error) {
     console.warn("Failed to load bundled mock config YAML", { error });

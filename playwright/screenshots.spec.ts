@@ -51,14 +51,14 @@ import {
   seedDiagnosticsTraces,
 } from "./visualSeeds";
 
-const SCREENSHOT_ROOT = path.resolve("doc/img/app");
+const SCREENSHOT_ROOT = path.resolve("docs/img/app");
 const FORCE_REGENERATE_SCREENSHOTS = process.env.SCREENSHOT_FORCE_REGEN === "1";
 const execFile = promisify(execFileCb);
 
 const screenshotPath = (relativePath: string) => path.resolve(SCREENSHOT_ROOT, relativePath);
 
 const screenshotLabel = (relativePath: string) => relativePath.replace(/\.[^.]+$/, "").replace(/[\\/]/g, "-");
-const screenshotRepoPath = (relativePath: string) => path.posix.join("doc/img/app", relativePath);
+const screenshotRepoPath = (relativePath: string) => path.posix.join("docs/img/app", relativePath);
 const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewportId, fileName: string) =>
   `${pageId}/profiles/${profileId}/${fileName}`;
 const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
@@ -129,7 +129,7 @@ const loadHeadScreenshotCatalog = async (): Promise<HeadScreenshotCatalog> => {
   if (!headScreenshotCatalogPromise) {
     headScreenshotCatalogPromise = (async () => {
       try {
-        const { stdout } = await execFile("git", ["ls-tree", "-r", "HEAD", "--", "doc/img/app"], {
+        const { stdout } = await execFile("git", ["ls-tree", "-r", "HEAD", "--", "docs/img/app"], {
           maxBuffer: 8 * 1024 * 1024,
         });
         return parseGitLsTreeBlobCatalog(stdout);

@@ -24,14 +24,14 @@ READ FIRST
 
 Before executing any actions, read the following specifications:
 
-1. `doc/testing/agentic-tests/agentic-action-model.md`
-2. `doc/testing/agentic-tests/agentic-controller-contract.md`
-3. `doc/testing/agentic-tests/agentic-oracle-catalog.md`
-4. `doc/testing/agentic-tests/agentic-safety-policy.md`
-5. `doc/testing/agentic-tests/agentic-android-runtime-contract.md`
-6. `doc/testing/agentic-tests/agentic-observability-model.md`
-7. `doc/testing/agentic-tests/agentic-infrastructure-reuse.md`
-8. `doc/testing/agentic-tests/c64scope-spec.md`
+1. `docs/testing/agentic-tests/agentic-action-model.md`
+2. `docs/testing/agentic-tests/agentic-controller-contract.md`
+3. `docs/testing/agentic-tests/agentic-oracle-catalog.md`
+4. `docs/testing/agentic-tests/agentic-safety-policy.md`
+5. `docs/testing/agentic-tests/agentic-android-runtime-contract.md`
+6. `docs/testing/agentic-tests/agentic-observability-model.md`
+7. `docs/testing/agentic-tests/agentic-infrastructure-reuse.md`
+8. `docs/testing/agentic-tests/c64scope-spec.md`
 
 TOOLS
 

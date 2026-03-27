@@ -1,6 +1,6 @@
 const IMPORT_SCREENSHOT_PATH_PREFIXES = [
   'play/import/',
-  'doc/img/app/play/import/',
+  'docs/img/app/play/import/',
 ];
 
 export const shouldSkipFuzzyScreenshotPrune = (filePath) => {

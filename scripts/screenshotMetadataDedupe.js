@@ -183,9 +183,9 @@ export const decideTrackedScreenshotAction = async ({
 
 const listCandidateScreenshotFiles = async (workdir) => {
   const [unstaged, staged, untracked] = await Promise.all([
-    execFile("git", ["diff", "--name-only", "--diff-filter=AM", "--", "doc/img/app"], { cwd: workdir }),
-    execFile("git", ["diff", "--name-only", "--cached", "--diff-filter=AM", "--", "doc/img/app"], { cwd: workdir }),
-    execFile("git", ["ls-files", "--others", "--exclude-standard", "--", "doc/img/app"], { cwd: workdir }),
+    execFile("git", ["diff", "--name-only", "--diff-filter=AM", "--", "docs/img/app"], { cwd: workdir }),
+    execFile("git", ["diff", "--name-only", "--cached", "--diff-filter=AM", "--", "docs/img/app"], { cwd: workdir }),
+    execFile("git", ["ls-files", "--others", "--exclude-standard", "--", "docs/img/app"], { cwd: workdir }),
   ]);
 
   return [
@@ -200,7 +200,7 @@ const listCandidateScreenshotFiles = async (workdir) => {
 
 export const loadHeadScreenshotCatalog = async (workdir = process.cwd()) => {
   try {
-    const { stdout } = await execFile("git", ["ls-tree", "-r", "HEAD", "--", "doc/img/app"], {
+    const { stdout } = await execFile("git", ["ls-tree", "-r", "HEAD", "--", "docs/img/app"], {
       cwd: workdir,
       maxBuffer: 8 * 1024 * 1024,
     });
