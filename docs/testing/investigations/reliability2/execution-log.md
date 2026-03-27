@@ -5,7 +5,7 @@
 ### Session start
 
 Branch: `reliability1-fixes`
-Target: implement `doc/testing/investigations/reliability2/plan.md`.
+Target: implement `docs/testing/investigations/reliability2/plan.md`.
 
 Execution order followed the plan where practical, with TypeScript/runtime fixes landed first, then Android FTP hardening, then repo-wide verification.
 
@@ -79,7 +79,7 @@ Test coverage added/extended:
 
 ### Release/process notes
 
-Updated `doc/developer.md` release guidance to keep the Android transport regression hotfix in place:
+Updated `docs/developer.md` release guidance to keep the Android transport regression hotfix in place:
 
 - keep `server.androidScheme = "http"`
 - keep `plugins.CapacitorHttp.enabled = true`
@@ -117,7 +117,7 @@ Notes:
 
 Applied:
 
-- `doc/testing/investigations/reliability2/analysis.md`
+- `docs/testing/investigations/reliability2/analysis.md`
   - added `R2-14` for Save RAM / Load RAM parity with the known-good shell scripts
 - `src/lib/machine/ramOperations.ts`
   - preserved script-matching dump behavior (`pause -> 16 x 4 KiB readmem -> resume`)

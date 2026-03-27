@@ -64,7 +64,7 @@
 ### 2026-03-27T08:35:00Z
 
 - Re-ran the screenshot subset for Home, Config, and Docs twice from a clean tree.
-- The second subset rerun changed only `doc/img/app/home/00-overview-light.png`; the previously changing Config and Docs samples stayed byte-stable.
+- The second subset rerun changed only `docs/img/app/home/00-overview-light.png`; the previously changing Config and Docs samples stayed byte-stable.
 - This confirms the service worker was one real nondeterminism source, but the full screenshot pipeline still has at least one remaining unstable capture surface.
 
 ### 2026-03-27T08:50:00Z
@@ -76,7 +76,7 @@
 ### 2026-03-27T08:55:00Z
 
 - Fixed the Home overview capture order so `home/01-overview-dark.png` is taken before any Home section scrolling, preserving the same initial viewport/state as `home/00-overview-light.png`.
-- Restored `doc/img/app` and reran only the Home-focused screenshot tests; the resulting screenshot diffs were confined to `doc/img/app/home/**`, which is consistent with the requested Home-only refresh plus concurrent Home button work on the branch.
+- Restored `docs/img/app` and reran only the Home-focused screenshot tests; the resulting screenshot diffs were confined to `docs/img/app/home/**`, which is consistent with the requested Home-only refresh plus concurrent Home button work on the branch.
 
 ### 2026-03-27T09:00:00Z
 
@@ -89,7 +89,7 @@
 
 - Reclassified the new task as `DOC_PLUS_CODE` and `UI_CHANGE` because it touches executable preview code, visible Lighting Studio output, screenshots, and planning records.
 - Confirmed the current Lighting Studio device preview is still hard-coded inside `src/components/lighting/LightingStudioDialog.tsx` rather than derived from the ASCII layout.
-- Verified the amended authoritative geometry already exists in the repository as `doc/img/lighting/c64-outline.txt`, and measured the new grid as `67 x 15` with the LED strip at row `2`, columns `58-59`.
+- Verified the amended authoritative geometry already exists in the repository at `src/assets/lighting/c64-layout.txt`, and measured the new grid as `67 x 15` with the LED strip at row `2`, columns `58-59`.
 
 ### 2026-03-27T10:10:00Z
 
@@ -99,7 +99,7 @@
 
 ### 2026-03-27T10:35:00Z
 
-- Added `doc/image/lighting/C64-layout.txt` as the authoritative ASCII source consumed by the app-side preview parser, while preserving the existing mirror file under `doc/img/lighting/c64-outline.txt`.
+- Added `src/assets/lighting/c64-layout.txt` as the authoritative ASCII source consumed by the app-side preview parser.
 - Introduced `src/lib/lighting/c64PreviewLayout.ts` to validate the ASCII layout, classify `case`, `keyboard`, and `led` cells, merge them into bounded SVG rect groups, and expose the main keyboard block, function-key block, and LED strip as deterministic geometry.
 - Replaced the Lighting Studio preview’s hand-drawn shell geometry in `src/components/lighting/LightingStudioDialog.tsx` with ASCII-derived case, keyboard, and LED layers.
 - Implemented the fixed LED isolation rule in the renderer: the LED layer stays topmost, uses a constant white fill and lightweight static glow, and does not depend on case or keyboard colors or intensities.
@@ -115,7 +115,7 @@
 - Focused unit coverage passed for the new parser and preview tests.
 - Targeted browser validation passed: `npx playwright test playwright/lightingStudio.spec.ts --reporter=line`.
 - Targeted screenshot regeneration passed: `npx playwright test playwright/screenshots.spec.ts -g "capture lighting studio screenshot" --reporter=line`.
-- The targeted screenshot refresh changed `doc/img/app/home/dialogs/06-lighting-studio-compose-medium.png` and re-captured `doc/img/app/home/dialogs/08-lighting-context-lens-medium.png`; the compose screenshot visibly shows the LED strip in white above the green keyboard lighting.
+- The targeted screenshot refresh changed `docs/img/app/home/dialogs/06-lighting-studio-compose-medium.png` and re-captured `docs/img/app/home/dialogs/08-lighting-context-lens-medium.png`; the compose screenshot visibly shows the LED strip in white above the green keyboard lighting.
 
 ### 2026-03-27T11:30:00Z
 

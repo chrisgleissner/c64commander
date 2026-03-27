@@ -25,9 +25,9 @@
 - `src/index.css`
 - `src/components/itemSelection/ItemSelectionDialog.tsx`
 - `playwright/displayProfiles.spec.ts`
-- `doc/plans/display-profiles/display-profiles-implementation-plan.md`
-- `doc/research/review-8/carry-forward.md`
-- `doc/research/review-8/remediation-log.md`
+- `docs/plans/display-profiles/display-profiles-implementation-plan.md`
+- `docs/research/review-8/carry-forward.md`
+- `docs/research/review-8/remediation-log.md`
 
 ### Tests added or updated
 
@@ -36,7 +36,7 @@
 
 ### Documentation changes
 
-- Corrected `doc/plans/display-profiles/display-profiles-implementation-plan.md` so increased text size is marked verified, while browser zoom and live keyboard-open viewport reduction remain explicitly open.
+- Corrected `docs/plans/display-profiles/display-profiles-implementation-plan.md` so increased text size is marked verified, while browser zoom and live keyboard-open viewport reduction remain explicitly open.
 
 ### Validation
 
@@ -72,9 +72,9 @@
 - `src/components/diagnostics/DiagnosticsDialog.tsx`
 - `playwright/displayProfiles.spec.ts`
 - `src/hooks/useDisplayProfile.test.tsx`
-- `doc/plans/display-profiles/display-profiles-implementation-plan.md`
-- `doc/research/review-8/carry-forward.md`
-- `doc/research/review-8/remediation-log.md`
+- `docs/plans/display-profiles/display-profiles-implementation-plan.md`
+- `docs/research/review-8/carry-forward.md`
+- `docs/research/review-8/remediation-log.md`
 
 ### Tests added or updated
 
@@ -84,8 +84,8 @@
 
 ### Documentation changes
 
-- Updated `doc/plans/display-profiles/display-profiles-implementation-plan.md` so browser-zoom verification is no longer listed as open.
-- Updated `doc/research/review-8/carry-forward.md` so `R8-02` reflects the remaining keyboard-open-only gap and `R7-04` explicitly notes the missing XCTest target.
+- Updated `docs/plans/display-profiles/display-profiles-implementation-plan.md` so browser-zoom verification is no longer listed as open.
+- Updated `docs/research/review-8/carry-forward.md` so `R8-02` reflects the remaining keyboard-open-only gap and `R7-04` explicitly notes the missing XCTest target.
 
 ### Validation
 

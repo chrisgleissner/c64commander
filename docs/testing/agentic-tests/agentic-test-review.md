@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-The current `doc/testing/agentic-tests/` set is not sufficient to drive a fully autonomous LLM test system across the actual C64 Commander feature surface. It is narrowly optimized around one mixed-format physical playback regression and a new `c64scope` server, while the repository exposes a much broader app: connection and demo-mode state machines, machine control, RAM dump/load, disk and printer management, stream control, app-config persistence, diagnostics export, settings import/export, HVSC lifecycle management, and multiple background or lock-screen behaviors.
+The current `docs/testing/agentic-tests/` set is not sufficient to drive a fully autonomous LLM test system across the actual C64 Commander feature surface. It is narrowly optimized around one mixed-format physical playback regression and a new `c64scope` server, while the repository exposes a much broader app: connection and demo-mode state machines, machine control, RAM dump/load, disk and printer management, stream control, app-config persistence, diagnostics export, settings import/export, HVSC lifecycle management, and multiple background or lock-screen behaviors.
 
 The biggest defects are:
 
@@ -34,8 +34,8 @@ The remediation docs that address these findings now live in:
 
 This review covered:
 
-- `doc/testing/agentic-tests/**`
-- relevant surrounding docs under `doc/testing/**`
+- `docs/testing/agentic-tests/**`
+- relevant surrounding docs under `docs/testing/**`
 - route and page structure in `src/App.tsx`, `src/components/TabBar.tsx`, and `src/pages/**`
 - hardware-facing and persistence-heavy modules in `src/lib/**` and `src/hooks/**`
 - existing Playwright, Maestro, and Android JVM test assets in `playwright/**`, `.maestro/**`, and `android/app/src/test/**`
@@ -173,16 +173,16 @@ High-risk traits:
 
 | File | Current role | Observed scope bias |
 | --- | --- | --- |
-| `doc/testing/agentic-tests/agentic-test-architecture.md` | Defines three-server model and app-first playback testing | Playback-centric; assumes Android + `droidmind`; weak full-surface coverage model |
-| `doc/testing/agentic-tests/c64scope-spec.md` | Defines `c64scope` tool groups, artifacts, and A/V assertions | Strong on capture semantics; weak on non-A/V feature validation |
-| `doc/testing/agentic-tests/agentic-test-implementation-plan.md` | Delivery phases for `c64scope` and one mixed-format regression | Oriented to one baseline case, not repository-wide exploratory coverage |
-| `doc/testing/agentic-tests/c64scope-delivery-prompt.md` | Prompt for an implementation LLM | Repeats playback-focused assumptions; does not protect against repo-wide drift |
+| `docs/testing/agentic-tests/agentic-test-architecture.md` | Defines three-server model and app-first playback testing | Playback-centric; assumes Android + `droidmind`; weak full-surface coverage model |
+| `docs/testing/agentic-tests/c64scope-spec.md` | Defines `c64scope` tool groups, artifacts, and A/V assertions | Strong on capture semantics; weak on non-A/V feature validation |
+| `docs/testing/agentic-tests/agentic-test-implementation-plan.md` | Delivery phases for `c64scope` and one mixed-format regression | Oriented to one baseline case, not repository-wide exploratory coverage |
+| `docs/testing/agentic-tests/c64scope-delivery-prompt.md` | Prompt for an implementation LLM | Repeats playback-focused assumptions; does not protect against repo-wide drift |
 
 Surrounding evidence that materially affects the review:
 
-- `doc/testing/maestro.md`
-- `doc/testing/physical-device-matrix.md`
-- `doc/testing/testing-infrastructure-review.md`
+- `docs/testing/maestro.md`
+- `docs/testing/physical-device-matrix.md`
+- `docs/testing/testing-infrastructure-review.md`
 
 These surrounding docs already acknowledge native/runtime coverage gaps, platform differences, and real-device validation needs that the agentic-test docs do not fully incorporate.
 
@@ -781,14 +781,14 @@ Several expected behaviors are not specified clearly enough to test autonomously
 
 ### Phase 0. Scope and Coverage Baseline
 
-- [ ] Update `doc/testing/agentic-tests/agentic-test-architecture.md` to separate `baseline playback proof` from `full feature-surface autonomous coverage`.
+- [ ] Update `docs/testing/agentic-tests/agentic-test-architecture.md` to separate `baseline playback proof` from `full feature-surface autonomous coverage`.
 - [ ] Add an explicit scope statement that either narrows the immediate effort to Android or defines the iOS control owner and execution model.
-- [ ] Create `doc/testing/agentic-tests/agentic-feature-surface.md` with a repository-derived inventory grouped by route, page area, and cross-cutting runtime behavior.
-- [ ] Create `doc/testing/agentic-tests/agentic-coverage-matrix.md` mapping every major feature area to documentation status, oracle type, automation path, and blocker state.
+- [ ] Create `docs/testing/agentic-tests/agentic-feature-surface.md` with a repository-derived inventory grouped by route, page area, and cross-cutting runtime behavior.
+- [ ] Create `docs/testing/agentic-tests/agentic-coverage-matrix.md` mapping every major feature area to documentation status, oracle type, automation path, and blocker state.
 
 ### Phase 1. Action Model
 
-- [ ] Create `doc/testing/agentic-tests/agentic-action-model.md` describing route discovery, page entry conditions, dialog handling, recovery paths, and feature-flag/conditional-surface discovery.
+- [ ] Create `docs/testing/agentic-tests/agentic-action-model.md` describing route discovery, page entry conditions, dialog handling, recovery paths, and feature-flag/conditional-surface discovery.
 - [ ] Define a page-specific action catalog for Home.
 - [ ] Define a page-specific action catalog for Play.
 - [ ] Define a page-specific action catalog for Disks.
@@ -798,19 +798,19 @@ Several expected behaviors are not specified clearly enough to test autonomously
 
 ### Phase 2. Oracle and Observability Model
 
-- [ ] Create `doc/testing/agentic-tests/agentic-oracle-catalog.md` listing, for each feature, the primary oracle, fallback oracle, and forbidden weak oracles.
+- [ ] Create `docs/testing/agentic-tests/agentic-oracle-catalog.md` listing, for each feature, the primary oracle, fallback oracle, and forbidden weak oracles.
 - [ ] Add explicit oracle definitions for connection/demo-mode transitions.
 - [ ] Add explicit oracle definitions for machine control and RAM workflows.
 - [ ] Add explicit oracle definitions for playback, queue progression, and lock/background behavior.
 - [ ] Add explicit oracle definitions for disk-library state, mount state, drive configuration, and Soft IEC changes.
 - [ ] Add explicit oracle definitions for settings persistence, settings import/export, diagnostics export, and app-config snapshot workflows.
 - [ ] Add explicit oracle definitions for HVSC download/install/ingest/cancel/resume flows.
-- [ ] Update `doc/testing/agentic-tests/c64scope-spec.md` to state which assertions belong to `c64scope` and which must be satisfied using existing app diagnostics, trace, REST, FTP, or filesystem evidence.
+- [ ] Update `docs/testing/agentic-tests/c64scope-spec.md` to state which assertions belong to `c64scope` and which must be satisfied using existing app diagnostics, trace, REST, FTP, or filesystem evidence.
 - [ ] Add an observability section that explicitly reuses existing app diagnostics logs, traces, diagnostics ZIP export, logcat, Playwright evidence, and Maestro artifacts.
 
 ### Phase 3. Safety and Bounded Autonomy
 
-- [ ] Create `doc/testing/agentic-tests/agentic-safety-policy.md` with action classes: read-only, guarded mutation, destructive mutation, and prohibited.
+- [ ] Create `docs/testing/agentic-tests/agentic-safety-policy.md` with action classes: read-only, guarded mutation, destructive mutation, and prohibited.
 - [ ] Define per-run limits for HVSC downloads/ingests, resets, reboots, power-off actions, flash config mutations, and delete operations.
 - [ ] Define cleanup contracts for disk mounts, stream toggles, config mutations, demo/mock state, and playback/background state.
 - [ ] Update `agentic-test-architecture.md` to add app-level safety constraints, not just `c64bridge` constraints.
@@ -825,7 +825,7 @@ Several expected behaviors are not specified clearly enough to test autonomously
 
 ### Phase 5. Infrastructure Reuse
 
-- [ ] Create `doc/testing/agentic-tests/agentic-infrastructure-reuse.md` mapping existing Playwright suites to reusable oracle/evidence patterns.
+- [ ] Create `docs/testing/agentic-tests/agentic-infrastructure-reuse.md` mapping existing Playwright suites to reusable oracle/evidence patterns.
 - [ ] Map existing Maestro Android flows to native affordance coverage and edge-case seeds.
 - [ ] Map existing Maestro iOS flows to current iOS coverage and gaps.
 - [ ] Map Android JVM plugin tests to native-side assumptions and failure modes relevant to the agentic system.
@@ -833,7 +833,7 @@ Several expected behaviors are not specified clearly enough to test autonomously
 
 ### Phase 6. Specification Closure
 
-- [ ] Create `doc/testing/agentic-tests/agentic-open-questions.md` with behavior questions that require human clarification before implementation.
+- [ ] Create `docs/testing/agentic-tests/agentic-open-questions.md` with behavior questions that require human clarification before implementation.
 - [ ] For each blocked feature area, record whether the blocker is missing expected behavior, missing instrumentation, missing platform support, or intentional out-of-scope.
 - [ ] Update `agentic-test-implementation-plan.md` so blocked items are separated from directly implementable items.
 - [ ] Add explicit acceptance criteria for the documentation remediation itself before any new server or automation implementation starts.

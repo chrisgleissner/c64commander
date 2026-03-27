@@ -4,7 +4,7 @@
 
 This document defines the required `Lighting Studio` feature set for C64 Commander.
 
-- Source of truth for product rationale: `doc/research/light-feature-extended-research.md`
+- Source of truth for product rationale: `docs/research/light-feature-extended-research.md`
 - This document is narrower and implementation-facing
 - `Lighting Studio` is a secondary light editor and automation surface
 - It must ship with these required features:

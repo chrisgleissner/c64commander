@@ -5,18 +5,18 @@
 ### 00:00 UTC - Audit initialization
 
 - Files inspected:
-  - `doc/display-profiles.md`
-  - `doc/ux-guidelines.md`
-  - `doc/ux-interactions.md`
-  - `doc/architecture.md`
+  - `docs/internals/display-profiles.md`
+  - `docs/ux-guidelines.md`
+  - `docs/ux-interactions.md`
+  - `docs/architecture.md`
   - `PLANS.md`
 - Findings:
   - The audit scope is documentation-only and must be evidence-backed.
   - The repository already contains prior display-profile planning and review artifacts that need to be distinguished from the current audit output.
   - The implementation surface includes centralized profile resolution, provider state, modal presentation rules, page shells, shared components, Playwright viewport specs, and screenshot assets.
 - Decisions:
-  - Use `doc/display-profiles.md` as the source of truth for profile invariants and validation expectations.
-  - Maintain a fresh review file at `doc/research/review-9/display-profiles-review.md` instead of reusing older review output.
+  - Use `docs/internals/display-profiles.md` as the source of truth for profile invariants and validation expectations.
+  - Maintain a fresh review file at `docs/research/review-9/display-profiles-review.md` instead of reusing older review output.
   - Replace the root plan with an audit-specific execution plan and update it throughout the investigation.
 - Follow-up checks:
   - Review prior display-profile planning artifacts.
@@ -26,9 +26,9 @@
 ### 00:20 UTC - Prior artifact and core infrastructure review
 
 - Files inspected:
-  - `doc/plans/display-profiles/display-profiles-gap-analysis.md`
-  - `doc/plans/display-profiles/display-profiles-implementation-plan.md`
-  - `doc/plans/display-profiles/work-log.md`
+  - `docs/plans/display-profiles/display-profiles-gap-analysis.md`
+  - `docs/plans/display-profiles/display-profiles-implementation-plan.md`
+  - `docs/plans/display-profiles/work-log.md`
   - `src/lib/displayProfiles.ts`
   - `src/hooks/useDisplayProfile.tsx`
   - `src/lib/uiPreferences.ts`
@@ -101,36 +101,36 @@
   - `playwright/displayProfiles.spec.ts`
   - `playwright/screenshots.spec.ts`
   - `README.md`
-  - `doc/display-profiles.md`
-  - `doc/img/app/disks/profiles/**`
-  - `doc/img/app/home/profiles/**`
-  - `doc/img/app/play/profiles/**`
-  - `doc/img/app/play/import/profiles/**`
-  - `doc/img/app/config/profiles/**`
-  - `doc/img/app/settings/profiles/**`
-  - `doc/img/app/diagnostics/01-entry/profiles/**`
+  - `docs/internals/display-profiles.md`
+  - `docs/img/app/disks/profiles/**`
+  - `docs/img/app/home/profiles/**`
+  - `docs/img/app/play/profiles/**`
+  - `docs/img/app/play/import/profiles/**`
+  - `docs/img/app/config/profiles/**`
+  - `docs/img/app/settings/profiles/**`
+  - `docs/img/app/diagnostics/profiles/**`
 - Findings:
   - Unit tests prove threshold boundaries, override persistence, root-token application, storage synchronization, and modal-presentation mode selection.
   - Component tests prove that `ItemSelectionDialog` preserves selection and filter state across profile override changes.
   - Playwright covers compact, medium, and expanded viewports; checks source chooser order, scoped selection invariants, modal presentation, overflow, text scaling, reduced viewport height, browser zoom, and keyboard-height approximations for diagnostics, import, and snapshot flows.
-  - Screenshot generation includes profile-specific captures and stores them in `doc/img/app/<page>/profiles/<profile>/...`.
+  - Screenshot generation includes profile-specific captures and stores them in `docs/img/app/<page>/profiles/<profile>/...`.
   - `README.md` documents where profile-specific screenshots live, but the grep pass has not yet shown broader user-facing documentation that actively presents these images as evidence of profile behavior.
 - Decisions:
   - Treat compact keyboard resilience as partially but not universally proved: it has direct coverage for diagnostics, item selection, and snapshot flows, not for every compact editor surface.
   - Treat screenshot infrastructure as verified, and documentation discoverability as a separate documentation-consistency question.
 - Follow-up checks:
-  - Finish documentation-consistency review across `README.md` and `doc/**/*.md`.
+  - Finish documentation-consistency review across `README.md` and `docs/**/*.md`.
   - Run two explicit convergence passes against the audited file inventory before finalizing the report.
 
 ### 01:35 UTC - Documentation consistency and convergence
 
 - Files inspected:
   - `README.md`
-  - `doc/display-profiles.md`
-  - `doc/architecture.md`
-  - `doc/ux-guidelines.md`
-  - `doc/ux-interactions.md`
-  - `doc/research/review-9/display-profiles-review.md`
+  - `docs/internals/display-profiles.md`
+  - `docs/architecture.md`
+  - `docs/ux-guidelines.md`
+  - `docs/ux-interactions.md`
+  - `docs/research/review-9/display-profiles-review.md`
 - Findings:
   - The current source-of-truth docs and README do describe the display-profile model, override behavior, and profile screenshot storage rules; the earlier assumption that README lacked this guidance was incorrect for the current repository state.
   - Historical planning and prior review artifacts still reflect earlier implementation states and must not be treated as current-source evidence.

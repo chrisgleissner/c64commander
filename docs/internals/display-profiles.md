@@ -262,23 +262,23 @@ Required checks:
 
 ## 16. Screenshot Asset Rules
 
-Documentation screenshots under `doc/img/app/` must follow the display-profile contract.
+Documentation screenshots under `docs/img/app/` must follow the display-profile contract.
 
 - Medium is the default documentation profile.
-- Baseline screenshots that represent the default UI stay in the existing page folders such as `doc/img/app/home/` and `doc/img/app/settings/`.
-- Profile-specific screenshots live under `doc/img/app/<page>/profiles/<profile>/`.
+- Baseline screenshots that represent the default UI stay in the existing page folders such as `docs/img/app/home/` and `docs/img/app/settings/`.
+- Profile-specific screenshots live under `docs/img/app/<page>/profiles/<profile>/`.
 - Allowed profile folder names are `compact`, `medium`, and `expanded`.
 - Compact and Expanded screenshots should only be generated for surfaces whose visible behavior differs from the Medium baseline.
-- Profile-specific modal or browser captures should stay under the same page area, for example `doc/img/app/play/import/profiles/compact/`.
+- Profile-specific modal or browser captures should stay under the same page area, for example `docs/img/app/play/import/profiles/compact/`.
 - `npm run screenshots` compares regenerated screenshots against `HEAD` after decoding PNG pixels, so metadata-only PNG byte drift is discarded automatically.
 - The prune step accepts only a tightly bounded tolerance: anti-aliased-only differences or at most 8 non-AA diff pixels globally. Anything larger is kept as a real change candidate.
 - If screenshot churn appears, debug determinism first: Chromium launch flags, fixed clock seeding, font readiness, and motion suppression are part of the contract. Do not widen the tolerance to hide the churn.
 
 Examples:
 
-- `doc/img/app/home/00-overview-light.png` for the default Medium baseline.
-- `doc/img/app/home/profiles/compact/01-overview.png` for a Compact-specific Home view.
-- `doc/img/app/play/import/profiles/expanded/02-c64u-file-picker.png` for an Expanded selection-browser surface.
+- `docs/img/app/home/00-overview-light.png` for the default Medium baseline.
+- `docs/img/app/home/profiles/compact/01-overview.png` for a Compact-specific Home view.
+- `docs/img/app/play/import/profiles/expanded/02-c64u-file-picker.png` for an Expanded selection-browser surface.
 - New shared components must declare how they behave in Compact, Medium, and Expanded before they are considered complete.
 
 ## 17. Summary

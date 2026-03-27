@@ -183,7 +183,7 @@ Before declaring work complete:
 - [ ] `npm run build` succeeds.
 - [ ] PLANS.md updated with outcome section noting the final fuzz run result and any
       classifier rules added.
-- [ ] `doc/testing/chaos-fuzz.md` updated if any classifier rule changed.
+- [ ] `docs/testing/chaos-fuzz.md` updated if any classifier rule changed.
 
 ---
 
@@ -198,5 +198,5 @@ Before declaring work complete:
 | `playwright/fuzz/fuzzBackend.ts`             | `isAlwaysExpectedFuzzBehavior`, referenced by classifier |
 | `tests/unit/scripts/fuzzClassifier.test.ts`  | Unit tests for classifier (keep green)                   |
 | `tests/unit/scripts/fuzzReportUtils.test.ts` | Unit tests for renderers (keep green)                    |
-| `doc/testing/chaos-fuzz.md`                  | Reference docs for the fuzz system                       |
+| `docs/testing/chaos-fuzz.md`                  | Reference docs for the fuzz system                       |
 | `PLANS.md`                                   | Execution plan (update when done)                        |

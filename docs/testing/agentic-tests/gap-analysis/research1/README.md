@@ -6,7 +6,7 @@ This package analyzes why the current agentic stack does not exercise C64 Comman
 
 Evidence sources:
 
-- `doc/testing/agentic-tests/**`
+- `docs/testing/agentic-tests/**`
 - `.github/prompts/agentic-test.prompt.md`
 - `c64scope/**`
 - `c64bridge/**`
@@ -43,12 +43,12 @@ Inference:
 
 Fact:
 
-- `doc/testing/agentic-tests/agentic-test-architecture.md` defines a three-peer model:
+- `docs/testing/agentic-tests/agentic-test-architecture.md` defines a three-peer model:
   - `droidmind`: app lifecycle, UI interaction, screenshots, log access, diagnostics access
   - `c64bridge`: narrow direct-C64 gap-fill, recovery, calibration
   - `c64scope`: capture, assertions, timeline, artifacts
-- `.github/prompts/agentic-test.prompt.md` and `doc/testing/agentic-tests/c64scope-spec.md` both restate the same app-first policy.
-- `doc/testing/agentic-tests/agentic-safety-policy.md` explicitly says to use the app path first and not use direct tools to bypass the behavior under test.
+- `.github/prompts/agentic-test.prompt.md` and `docs/testing/agentic-tests/c64scope-spec.md` both restate the same app-first policy.
+- `docs/testing/agentic-tests/agentic-safety-policy.md` explicitly says to use the app path first and not use direct tools to bypass the behavior under test.
 
 ### Actual Architecture In Code
 

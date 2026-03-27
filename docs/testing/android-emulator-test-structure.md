@@ -85,7 +85,7 @@ This avoids collisions and allows different capture formats while keeping a sing
 1. Add a new flow under `.maestro/` with a descriptive name.
 2. Use subflows for shared navigation or launch steps.
 3. Ensure each flow takes screenshots for evidence.
-4. Update [doc/developer.md](../developer.md) if the flow adds new prerequisites.
+4. Update [docs/developer.md](../developer.md) if the flow adds new prerequisites.
 
 ## New test flows (Android device-sourced songs)
 

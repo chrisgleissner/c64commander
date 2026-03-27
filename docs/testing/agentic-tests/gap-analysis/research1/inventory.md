@@ -22,11 +22,11 @@
 
 ### App-first policy sources
 
-- `doc/testing/agentic-tests/agentic-test-architecture.md`
-- `doc/testing/agentic-tests/c64scope-spec.md`
+- `docs/testing/agentic-tests/agentic-test-architecture.md`
+- `docs/testing/agentic-tests/c64scope-spec.md`
 - `.github/prompts/agentic-test.prompt.md`
-- `doc/testing/agentic-tests/agentic-safety-policy.md`
-- `doc/testing/agentic-tests/agentic-controller-contract.md`
+- `docs/testing/agentic-tests/agentic-safety-policy.md`
+- `docs/testing/agentic-tests/agentic-controller-contract.md`
 
 These documents consistently say:
 

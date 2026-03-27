@@ -16,7 +16,7 @@ COPY components.json ./
 COPY scripts ./scripts
 COPY src ./src
 COPY public ./public
-COPY doc/c64 ./doc/c64
+COPY docs/c64 ./docs/c64
 COPY web ./web
 ENV VITE_APP_VERSION=$VITE_APP_VERSION
 ENV VITE_GIT_SHA=$VITE_GIT_SHA

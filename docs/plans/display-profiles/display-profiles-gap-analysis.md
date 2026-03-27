@@ -8,7 +8,7 @@ This baseline analysis captures the repository state before the display-profile 
 - Responsive behavior is currently expressed through scattered Tailwind breakpoint classes such as `sm:`, `md:`, and `lg:` in page and component markup.
 - `src/components/ConfigItemRow.tsx` is the only shared component that performs runtime width measurement. It uses a `ResizeObserver` to choose horizontal or vertical layout per row, which is valuable for narrow widths but is still component-local and not profile-driven.
 - The shared dialog primitives in `src/components/ui/dialog.tsx` and `src/components/ui/alert-dialog.tsx` enforce viewport-safe centered modals, but they do not have profile-aware presentation modes such as Compact full-screen promotion.
-- Playwright already has dual-resolution infrastructure and horizontal-overflow checks through `playwright.config.ts`, `playwright/layoutOverflow.spec.ts`, `playwright/viewportValidation.ts`, and `doc/testing/dual-resolution.md`. That provides a starting point for verification, but it validates viewport behavior rather than an explicit display-profile contract.
+- Playwright already has dual-resolution infrastructure and horizontal-overflow checks through `playwright.config.ts`, `playwright/layoutOverflow.spec.ts`, `playwright/viewportValidation.ts`, and `docs/testing/dual-resolution.md`. That provides a starting point for verification, but it validates viewport behavior rather than an explicit display-profile contract.
 
 Baseline status:
 
@@ -364,13 +364,13 @@ Current risk summary:
 
 ### What exists today
 
-- Documentation screenshots live under `doc/img/app/` with page-oriented folders for Home, Play, Disks, Config, Settings, Docs, and Diagnostics.
+- Documentation screenshots live under `docs/img/app/` with page-oriented folders for Home, Play, Disks, Config, Settings, Docs, and Diagnostics.
 - `playwright/screenshots.spec.ts` and `playwright/screenshotCatalog.ts` provide deterministic screenshot capture and section ordering.
-- `doc/testing/dual-resolution.md` documents phone and tablet test evidence separation.
+- `docs/testing/dual-resolution.md` documents phone and tablet test evidence separation.
 
 ### Gaps against the display-profile spec
 
-- There is no display-profile naming or folder structure under `doc/img/app/`.
+- There is no display-profile naming or folder structure under `docs/img/app/`.
 - There are no explicit Compact screenshots.
 - There are no explicit Expanded screenshots demonstrating profile-specific differences.
 - The existing “expanded” diagnostics image names refer to expanded accordion/content state, not the Expanded display profile.
@@ -382,10 +382,10 @@ Recommended structure:
 
 - Keep the current page-first folder layout for baseline Medium screenshots.
 - Add profile-specific subfolders only where the visible UI meaningfully differs, for example:
-  - `doc/img/app/home/profiles/compact/`
-  - `doc/img/app/home/profiles/expanded/`
-  - `doc/img/app/play/profiles/compact/`
-  - `doc/img/app/settings/profiles/expanded/`
+  - `docs/img/app/home/profiles/compact/`
+  - `docs/img/app/home/profiles/expanded/`
+  - `docs/img/app/play/profiles/compact/`
+  - `docs/img/app/settings/profiles/expanded/`
 - Encode the profile in screenshot generation metadata and file naming so the same surface can be regenerated deterministically.
 
 ## 10 Test Coverage Gaps
@@ -394,7 +394,7 @@ Recommended structure:
 
 - `playwright/layoutOverflow.spec.ts` covers long-name overflow, dialog-in-viewport checks, and list overflow conditions at narrow widths.
 - `playwright.config.ts` already runs phone and tablet projects, with `@layout` tests on the tablet project by default.
-- `doc/ux-interactions.md` gives a CTA inventory that can anchor profile-specific reachability tests.
+- `docs/ux-interactions.md` gives a CTA inventory that can anchor profile-specific reachability tests.
 
 ### Gaps
 

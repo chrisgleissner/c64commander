@@ -390,7 +390,7 @@ The sustained REST polling rate means the trace store accumulates events rapidly
 
 ## 4. UX Observations from Screenshots
 
-Screenshots in `doc/img/app/play/sections/04-hvsc.png` show the HVSC section in its ready state (Download + Ingest buttons, progress bar). The actual device-observed failure state (red error text) is not reflected in any screenshot in the image corpus.
+Screenshots in `docs/img/app/play/sections/04-hvsc.png` show the HVSC section in its ready state (Download + Ingest buttons, progress bar). The actual device-observed failure state (red error text) is not reflected in any screenshot in the image corpus.
 
 Key UX gaps observed on device:
 

@@ -3,8 +3,8 @@ tracker_id: production-readiness-feat-ios-port
 branch: feat/iOS-PORT
 updated_utc: "2026-02-13T00:00:00Z"
 source_documents:
-  audit: doc/research/production-readiness-audit.md
-  plan: doc/research/production-readiness-plan.md
+  audit: docs/research/review-1/production-readiness-audit.md
+  plan: docs/research/review-1/production-readiness-plan.md
 policy:
   android_release_gate: true
   ios_informational_gate: true

@@ -158,7 +158,7 @@ Platform detection (`(window as any)?.Capacitor`) is an acceptable exception.
 
 Config extraction uses an open-ended fallback chain over `Record<string, any>`.
 
-In `src/hooks/useAppConfigState.ts`, `extractValue` chains 9 property names (`selected`, `value`, `current`, `current_value`, …). This reflects that the C64U API does not return a consistent config schema. The correct fix is to generate or maintain typed interfaces from `doc/c64/c64u-openapi.yaml` rather than probing at runtime.
+In `src/hooks/useAppConfigState.ts`, `extractValue` chains 9 property names (`selected`, `value`, `current`, `current_value`, …). This reflects that the C64U API does not return a consistent config schema. The correct fix is to generate or maintain typed interfaces from `docs/c64/c64u-openapi.yaml` rather than probing at runtime.
 
 Files: [src/hooks/useAppConfigState.ts](../../src/hooks/useAppConfigState.ts)
 
@@ -266,7 +266,7 @@ If lazy-loaded routes are used elsewhere, this component in a synchronously-impo
 
 `MusicPlayerPage.tsx` (1,068 lines) is unrouted dead code — not imported by `App.tsx`, not reachable by any user.
 
-`App.tsx` lazy-loads eight pages; `MusicPlayerPage` is not among them and has no route entry. `playwright/musicPlayer.spec.ts` is intentionally empty with the comment "MusicPlayerPage is not routed in the app shell." `doc/features-by-page.md` explicitly marks it "Legacy SID/HVSC player component; not mounted by `src/App.tsx`."
+`App.tsx` lazy-loads eight pages; `MusicPlayerPage` is not among them and has no route entry. `playwright/musicPlayer.spec.ts` is intentionally empty with the comment "MusicPlayerPage is not routed in the app shell." `docs/features-by-page.md` explicitly marks it "Legacy SID/HVSC player component; not mounted by `src/App.tsx`."
 
 The file is 1,068 lines of unreachable code that still incurs maintenance overhead (linting, coverage runs, IDE indexing). It should be deleted unless there is an active plan to re-route it, in which case that plan should be documented and tracked.
 
@@ -410,7 +410,7 @@ Each script was confirmed to have no entry in `package.json` scripts, no referen
 | `scripts/cleanup-old-evidence.sh` | One-off format migration | Removes old "flat format" evidence directories; the migration has long since completed |
 | `scripts/hvsc_filename_frequency.py` | One-off analysis | Frequency analysis of HVSC filenames; no automation path, no consuming workflow |
 
-Note: `scripts/run-maestro.sh` is documented in `doc/testing/maestro.md`. `scripts/report-coverage.mjs` is documented in `doc/code-coverage.md` as a useful manual tool. `scripts/diff-screenshots.mjs`, `scripts/measure-mock-timing-profile.mjs`, and `scripts/manual-play-sid.sh/.ts` are legitimate developer investigation tools even without CI automation. None of those are flagged here.
+Note: `scripts/run-maestro.sh` is documented in `docs/testing/maestro.md`. `scripts/report-coverage.mjs` is documented in `docs/code-coverage.md` as a useful manual tool. `scripts/diff-screenshots.mjs`, `scripts/measure-mock-timing-profile.mjs`, and `scripts/manual-play-sid.sh/.ts` are legitimate developer investigation tools even without CI automation. None of those are flagged here.
 
 ---
 

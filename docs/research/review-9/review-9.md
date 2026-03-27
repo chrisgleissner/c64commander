@@ -10,7 +10,7 @@ The repository has a real display-profile foundation: one centralized resolver w
 
 It is not fully compliant because a small amount of profile polish and validation still remains, but the largest structural gaps identified at the start of the audit have been remediated. The remaining gaps are:
 
-- Compact keyboard-open safety is only approximated through reduced viewport-height tests, not a live visual-viewport or soft-keyboard scenario, despite the requirement in [doc/display-profiles.md](../../../doc/display-profiles.md#L142-L150)
+- Compact keyboard-open safety is only approximated through reduced viewport-height tests, not a live visual-viewport or soft-keyboard scenario, despite the requirement in [docs/internals/display-profiles.md](../../../docs/internals/display-profiles.md#L142-L150)
 - Home profile screenshots still need full-page captures for the canonical Compact, Medium, and Expanded documentation set
 - Compact modal spacing still needs a small amount of final tuning so dialog chrome remains comfortably visible in the narrowest screenshots
 
@@ -18,7 +18,7 @@ It is not fully compliant because a small amount of profile polish and validatio
 
 Compliant foundations:
 
-- The architecture note explicitly states that display-profile resolution is centralized in [doc/architecture.md](../../../doc/architecture.md#L20-L31).
+- The architecture note explicitly states that display-profile resolution is centralized in [docs/architecture.md](../../../docs/architecture.md#L20-L31).
 - Thresholds, labels, and override types are defined once in [src/lib/displayProfiles.ts](../../../src/lib/displayProfiles.ts#L1-L24).
 - Runtime resolution and root token application happen in [src/hooks/useDisplayProfile.tsx](../../../src/hooks/useDisplayProfile.tsx#L61-L186).
 - Shared layout boundaries are exposed by [src/components/layout/PageContainer.tsx](../../../src/components/layout/PageContainer.tsx#L1-L89).
@@ -26,7 +26,7 @@ Compliant foundations:
 
 Architecture compliance gaps:
 
-- The specification requires components to consume the resolved profile instead of ad hoc breakpoint checks in [doc/display-profiles.md](../../../doc/display-profiles.md#L46-L55). The audited Home, Play, Settings, and shared list surfaces have been moved onto profile-aware layout logic, but follow-up verification still needs to keep new regressions out.
+- The specification requires components to consume the resolved profile instead of ad hoc breakpoint checks in [docs/internals/display-profiles.md](../../../docs/internals/display-profiles.md#L46-L55). The audited Home, Play, Settings, and shared list surfaces have been moved onto profile-aware layout logic, but follow-up verification still needs to keep new regressions out.
 - Compact keyboard-safe proof remains narrower than the architecture target because current automated coverage still relies on reduced-height validation rather than a real soft-keyboard/visualViewport scenario.
 
 ## 3 Profile Detection Implementation
@@ -64,7 +64,7 @@ Disks:
 
 - Strong: Disks uses the shared page shell in [src/pages/DisksPage.tsx](../../../src/pages/DisksPage.tsx#L1-L19).
 - Strong: the main surface, [src/components/disks/HomeDiskManager.tsx](../../../src/components/disks/HomeDiskManager.tsx#L113-L214) and [src/components/disks/HomeDiskManager.tsx](../../../src/components/disks/HomeDiskManager.tsx#L1343-L1619), has explicit `profile === "compact"` branches for dense rows, mounted path presentation, and control grouping.
-- Gap: the core Add disks flow remains under-tested according to [doc/ux-interactions.md](../../../doc/ux-interactions.md#L95-L95) and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L246-L246).
+- Gap: the core Add disks flow remains under-tested according to [docs/ux-interactions.md](../../../docs/ux-interactions.md#L95-L95) and [docs/ux-interactions.md](../../../docs/ux-interactions.md#L246-L246).
 
 Config Browser:
 
@@ -95,12 +95,12 @@ Confirmed strengths:
 Confirmed Compact gaps or residual risks:
 
 - Keyboard-safe proof is still approximation-heavy.
-  Evidence: [doc/display-profiles.md](../../../doc/display-profiles.md#L95-L106) and [playwright/displayProfiles.spec.ts](../../../playwright/displayProfiles.spec.ts#L319-L487).
+  Evidence: [docs/internals/display-profiles.md](../../../docs/internals/display-profiles.md#L95-L106) and [playwright/displayProfiles.spec.ts](../../../playwright/displayProfiles.spec.ts#L319-L487).
   Why it matters: reduced viewport height is not the same as a live keyboard reducing the visual viewport and obscuring focused inputs.
   Recommended remediation: add a follow-up test that asserts Compact dialog safety against a real keyboard-open or `visualViewport` change when possible.
 
 - Secondary control coverage is still incomplete.
-  Evidence: [doc/ux-interactions.md](../../../doc/ux-interactions.md#L58-L73), [doc/ux-interactions.md](../../../doc/ux-interactions.md#L99-L110), and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L326-L367).
+  Evidence: [docs/ux-interactions.md](../../../docs/ux-interactions.md#L58-L73), [docs/ux-interactions.md](../../../docs/ux-interactions.md#L99-L110), and [docs/ux-interactions.md](../../../docs/ux-interactions.md#L326-L367).
   Why it matters: primary CTA coverage is stronger now, but native picker and lower-priority controls can still regress unnoticed.
   Recommended remediation: prioritize native picker, file-type filter, and remaining menu/navigation interactions in the follow-up interaction backlog.
 
@@ -132,7 +132,7 @@ Assessment: Expanded is implemented beyond “stretched Medium”, but not unifo
 What is compliant:
 
 - The modal resolver distinguishes `confirmation`, `selection-browser`, `list-browser`, `secondary-editor`, `popover`, and `command-palette` in [src/lib/modalPresentation.ts](../../../src/lib/modalPresentation.ts#L1-L83).
-- Compact selection and list browsers go full-screen, while confirmation dialogs stay centered, matching the specification in [doc/display-profiles.md](../../../doc/display-profiles.md#L95-L106) and [src/lib/modalPresentation.ts](../../../src/lib/modalPresentation.ts#L39-L63).
+- Compact selection and list browsers go full-screen, while confirmation dialogs stay centered, matching the specification in [docs/internals/display-profiles.md](../../../docs/internals/display-profiles.md#L95-L106) and [src/lib/modalPresentation.ts](../../../src/lib/modalPresentation.ts#L39-L63).
 - Unit tests confirm Compact full-screen promotion and sticky footers in [src/components/ui/dialog.test.tsx](../../../src/components/ui/dialog.test.tsx#L22-L44) and [src/lib/modalPresentation.test.ts](../../../src/lib/modalPresentation.test.ts#L6-L37).
 - Playwright validates viewport-safe dialog geometry in [playwright/displayProfiles.spec.ts](../../../playwright/displayProfiles.spec.ts#L233-L290).
 
@@ -150,7 +150,7 @@ Verified reachability:
 
 Coverage gaps:
 
-- The UX inventory is now reconciled for Home quick actions, Add disks, Shuffle, Reshuffle, Recurse folders, Refresh connection, and System theme in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L42-L44) and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L95-L95).
+- The UX inventory is now reconciled for Home quick actions, Add disks, Shuffle, Reshuffle, Recurse folders, Refresh connection, and System theme in [docs/ux-interactions.md](../../../docs/ux-interactions.md#L42-L44) and [docs/ux-interactions.md](../../../docs/ux-interactions.md#L95-L95).
 - Remaining gaps are concentrated in secondary controls such as Android folder picking, some filter controls, and lower-priority Home navigation paths rather than the previously flagged primary display-profile flows.
 
 Assessment: CTA reachability is partially verified, not comprehensively verified. The highest-confidence proof is on diagnostics and broad overflow checks, not on the full CTA inventory.
@@ -161,7 +161,7 @@ Strengths:
 
 - The screenshot system explicitly supports profile-specific paths through `profileScreenshotPath` in [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L45-L49).
 - Automated profile captures exist for Home, Disks, Config, Play, Play import, Settings, and Diagnostics in [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L478-L483), [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L732-L740), [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L769-L773), [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L804-L812), [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L858-L876), [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L900-L904), and [playwright/screenshots.spec.ts](../../../playwright/screenshots.spec.ts#L980-L987).
-- The repository contains actual profile screenshot folders such as `doc/img/app/home/profiles/compact/`, `doc/img/app/play/profiles/expanded/`, `doc/img/app/config/profiles/medium/`, and similar directories for settings, disks, diagnostics, and play/import.
+- The repository contains actual profile screenshot folders such as `docs/img/app/home/profiles/compact/`, `docs/img/app/play/profiles/expanded/`, `docs/img/app/config/profiles/medium/`, and similar directories for settings, disks, diagnostics, and play/import.
 
 Gaps:
 
@@ -183,7 +183,7 @@ Coverage gaps remain in:
 
 - live keyboard-open compact dialogs; current evidence uses reduced viewport height instead of a focused input plus actual visual viewport changes
 - live keyboard-safe proof currently centers on the diagnostics dialog path in `playwright/displayProfiles.spec.ts`; equivalent end-to-end proof was not found for selection-browser, snapshot, or other secondary-editor surfaces
-- direct end-to-end proof remains incomplete for the secondary CTA paths still open in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L326-L367), especially drive navigation from Home, the disk browser source-selection path, file-type filtering, HVSC installation cancel, drive configuration, disk group management, auto-connect, and log expansion
+- direct end-to-end proof remains incomplete for the secondary CTA paths still open in [docs/ux-interactions.md](../../../docs/ux-interactions.md#L326-L367), especially drive navigation from Home, the disk browser source-selection path, file-type filtering, HVSC installation cancel, drive configuration, disk group management, auto-connect, and log expansion
 - explicit tests proving Compact alternatives for slider-heavy or drag-sensitive controls beyond the diagnostics CTA case
 
 ## 12 Technical Debt

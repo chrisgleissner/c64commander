@@ -110,7 +110,7 @@ Discovery happens in four layers:
 
 Bootstrap files:
 
-- `doc/testing/agentic-tests/c64scope-delivery-prompt.md`
+- `docs/testing/agentic-tests/c64scope-delivery-prompt.md`
 - `.github/prompts/agentic-test.prompt.md`
 - `.opencode/agents/c64-agentic-tester.md`
 

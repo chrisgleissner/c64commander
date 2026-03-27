@@ -369,9 +369,9 @@ export GITHUB_TOKEN=<your-token>
 
 ## For Developers
 
-- [Documentation index](doc/index.md)
-- [Developer guide](doc/developer.md)
-- [Chaos/fuzz testing](doc/testing/chaos-fuzz.md)
+- [Documentation index](docs/index.md)
+- [Developer guide](docs/developer.md)
+- [Chaos/fuzz testing](docs/testing/chaos-fuzz.md)
 
 Third-party notices: `npm run notices:generate` regenerates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). `npm run build` packages notices into distribution bundles automatically.
 

@@ -1,7 +1,7 @@
 # C64 Commander Research Report: Playback, HVSC, Lifecycle, and Observability
 
 Date: 2026-02-11  
-Scope: Static code/test archaeology only (no code execution changes, no test/doc/config modifications beyond this report file).
+Scope: Static code/test archaeology only (no code execution changes, no test, docs, or config modifications beyond this report file).
 
 ## 1. Executive Summary
 
@@ -88,7 +88,7 @@ Implication: playback execution and playback tracing are not guaranteed to be th
 1. Ultimate source is listed via FTP adapter (`src/lib/sourceNavigation/ftpSourceAdapter.ts:93`).
 2. For SID with known duration and source `ultimate`, router tries FTP readback of SID bytes (`src/lib/playback/playbackRouter.ts:171`) then uploads SID + SSL (`src/lib/playback/playbackRouter.ts:174`).
 3. Multipart field `file` carries SID first and optional SSL second (`src/lib/c64api.ts:1130` to `src/lib/c64api.ts:1132`).
-4. If FTP fetch is unavailable/fails, playback falls back to `PUT /v1/runners:sidplay?file=...` (`src/lib/playback/playbackRouter.ts:178`, OpenAPI `doc/c64/c64u-openapi.yaml:207`).
+4. If FTP fetch is unavailable/fails, playback falls back to `PUT /v1/runners:sidplay?file=...` (`src/lib/playback/playbackRouter.ts:178`, OpenAPI `docs/c64/c64u-openapi.yaml:207`).
 
 ### 2.6 Sequence: HVSC playback
 
@@ -201,7 +201,7 @@ Legend: **F** Fully covered, **P** Partially covered, **N** Not covered.
 
 #### Current path
 
-- OpenAPI supports SID upload with optional second SSL multipart file (`doc/c64/c64u-openapi.yaml:228` to `:259`).
+- OpenAPI supports SID upload with optional second SSL multipart file (`docs/c64/c64u-openapi.yaml:228` to `:259`).
 - Router branch for ultimate SID with duration:
   - `tryFetchUltimateSidBlob` -> `api.playSidUpload(ftpBlob, songNr, sslBlob)` (`src/lib/playback/playbackRouter.ts:171` to `:175`).
   - fallback `api.playSid(path, songNr)` (`src/lib/playback/playbackRouter.ts:178`).
@@ -435,7 +435,7 @@ Missing or weak context dimensions for many failure paths:
   - `src/lib/playback/playbackRouter.ts:168`, `:171`, `:174`, `:178`
   - `src/lib/c64api.ts:1118`, `:1129`, `:1132`
   - `src/lib/sid/sidUtils.ts:15`
-  - `doc/c64/c64u-openapi.yaml:228`
+  - `docs/c64/c64u-openapi.yaml:228`
 - Retry semantics:
   - `src/lib/c64api.ts:36`, `:513`, `:514`
 - HVSC ingestion core:

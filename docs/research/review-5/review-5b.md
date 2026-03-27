@@ -40,7 +40,7 @@ Full production readiness assessment covering Android, iOS, and Web platforms fo
 
 1. Static analysis of all source files, configurations, and CI workflows
 2. Command execution for builds, tests, linting, and dependency auditing
-3. Documentation review of all files under `doc/`, `docs/`, and `.github/`
+3. Documentation review of all files under `docs/`, `docs/`, and `.github/`
 4. Dependency audit via `npm audit`
 5. Cross-referencing findings against platform-specific best practices
 
@@ -573,7 +573,7 @@ Current baseline shows excellent numbers (p95 request count = 1).
 
 ## Known Performance Issue — Info Polling Storm
 
-The forensic trace analysis (`doc/diagnostics/trace-forensic-analysis.md`) identified `/v1/info` as 54% of all REST traffic (3,290 of 6,083 requests across 294 test traces). ≥5 requests within 500 ms appeared in 272/294 traces. The document rates the overall risk as "unsafe" for device stability.
+The forensic trace analysis (`docs/diagnostics/trace-forensic-analysis.md`) identified `/v1/info` as 54% of all REST traffic (3,290 of 6,083 requests across 294 test traces). ≥5 requests within 500 ms appeared in 272/294 traces. The document rates the overall risk as "unsafe" for device stability.
 
 No additional performance issues identified. The application already includes device safety controls (circuit breaker, backoff, concurrency limits) to mitigate the polling concern.
 
@@ -612,7 +612,7 @@ ZIP export of logs, traces, and actions with PII redaction. Uses `navigator.shar
 
 - **ID:** PRA-013
 - **Area:** Observability
-- **Evidence:** No references to Sentry, Bugsnag, Crashlytics, or any crash reporting SDK in `package.json` or native code. Confirmed in `doc/architecture.md` L140-141: crash reporting relies on Google Play Console Android Vitals only.
+- **Evidence:** No references to Sentry, Bugsnag, Crashlytics, or any crash reporting SDK in `package.json` or native code. Confirmed in `docs/architecture.md` L140-141: crash reporting relies on Google Play Console Android Vitals only.
 - **Problem:** Errors only persist locally (localStorage logs + trace buffer). If the app crashes hard, in-memory traces are lost. There is no aggregated error visibility for the developer.
 - **Risk:** Field crashes go undetected unless users manually export and share diagnostics.
 - **Severity:** Minor
@@ -659,7 +659,7 @@ Tailwind rem-based font sizes used throughout. Some hardcoded pixel sizes (`text
 
 ## UX Documentation
 
-Excellent internal documentation: `doc/ux-guidelines.md` (386 lines) and `doc/ux-interactions.md` (416 lines) with full CTA inventory, importance ratings, and coverage mapping.
+Excellent internal documentation: `docs/ux-guidelines.md` (386 lines) and `docs/ux-interactions.md` (416 lines) with full CTA inventory, importance ratings, and coverage mapping.
 
 ## ISSUE — No automated accessibility testing
 
@@ -864,7 +864,7 @@ Minimal permission set.
 - **User impact:** High — playback stops when switching apps
 - **Operational impact:** Low
 - **Effort:** M
-- **Fix outline:** Add `UIBackgroundModes: audio` to Info.plist. Implement `AVAudioSession` configuration in the iOS BackgroundExecution plugin. This is documented in `doc/internals/ios-parity-matrix.md`.
+- **Fix outline:** Add `UIBackgroundModes: audio` to Info.plist. Implement `AVAudioSession` configuration in the iOS BackgroundExecution plugin. This is documented in `docs/internals/ios-parity-matrix.md`.
 - **Verification:** Start SID playback, background the app, verify audio continues for >30 seconds.
 - **Dependencies:** None
 
@@ -1028,7 +1028,7 @@ No CSS orientation media queries. No `screen.orientation` API usage. No manifest
 
 ## Coverage Blind Spots
 
-Per `doc/ux-interactions.md` Section 9.4:
+Per `docs/ux-interactions.md` Section 9.4:
 
 - **CRITICAL gap:** Add disks to library E2E flow
 - **HIGH gaps:** Shuffle mode, Home quick actions (Reset/Menu/Pause/Resume/Power Off), drive status navigation, Android folder picker, disk browser source selection
@@ -1085,7 +1085,7 @@ Per `doc/ux-interactions.md` Section 9.4:
 
 - **ID:** PRA-032
 - **Area:** iOS, Testing
-- **Evidence:** `doc/internals/ios-parity-matrix.md`: "0 XCTest classes vs 82 JVM tests." No test files found under `ios/App/`.
+- **Evidence:** `docs/internals/ios-parity-matrix.md`: "0 XCTest classes vs 82 JVM tests." No test files found under `ios/App/`.
 - **Problem:** 7 Swift native plugins with ~3,139 lines of code have no unit tests. Android has 113 JVM tests for equivalent functionality.
 - **Risk:** Regressions in iOS native code (FTP client, secure storage, background execution) go undetected until Maestro smoke tests or manual testing.
 - **Severity:** Major
@@ -1101,7 +1101,7 @@ Per `doc/ux-interactions.md` Section 9.4:
 
 - **ID:** PRA-033
 - **Area:** Testing
-- **Evidence:** `doc/testing/testing-infrastructure-review.md` L3-8: "Playwright E2E currently exercises the web build via Vite preview, not a Capacitor WebView or native Android runtime."
+- **Evidence:** `docs/testing/testing-infrastructure-review.md` L3-8: "Playwright E2E currently exercises the web build via Vite preview, not a Capacitor WebView or native Android runtime."
 - **Problem:** E2E tests do not exercise the actual native runtime. Real-device bugs (CapacitorHttp differences, WebView quirks, native bridge timing) are not caught.
 - **Risk:** Test suite provides false confidence for native platform behavior.
 - **Severity:** Minor

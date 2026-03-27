@@ -451,7 +451,7 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **Risk of Change:** Hardening changes can introduce compatibility or release regressions without staged validation.
 - **Dependencies:** None
 - **Evidence:** `ios/App/App/Info.plist` — no `UIBackgroundModes` key. `NativePlugins.swift` L920-977: `BackgroundExecutionPlugin` uses `UIApplication.beginBackgroundTask` (30-second limit).
-- **Recommended Resolution:** Add `UIBackgroundModes: audio` to Info.plist. Implement `AVAudioSession` configuration in the iOS BackgroundExecution plugin. This is documented in `doc/internals/ios-parity-matrix.md`.
+- **Recommended Resolution:** Add `UIBackgroundModes: audio` to Info.plist. Implement `AVAudioSession` configuration in the iOS BackgroundExecution plugin. This is documented in `docs/internals/ios-parity-matrix.md`.
 - **Verification:** Start SID playback, background the app, verify audio continues for >30 seconds.
 - **Notes on Reconciliation:** No conflicts
 
@@ -568,7 +568,7 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **Priority Score:** 2.25
 - **Risk of Change:** Hardening changes can introduce compatibility or release regressions without staged validation.
 - **Dependencies:** None
-- **Evidence:** `src/lib/playlistRepository/indexedDbRepository.ts:97-109`; `src/lib/playlistRepository/localStorageRepository.ts:74-88`; `doc/db.md:11-15`; `src/lib/hvsc/hvscBrowseIndexStore.ts` L19: `SCHEMA_VERSION = 1`, `src/lib/playlistRepository/indexedDbRepository.ts` L26: `DB_VERSION = 1` — both discard data on version mismatch.
+- **Evidence:** `src/lib/playlistRepository/indexedDbRepository.ts:97-109`; `src/lib/playlistRepository/localStorageRepository.ts:74-88`; `docs/db.md:11-15`; `src/lib/hvsc/hvscBrowseIndexStore.ts` L19: `SCHEMA_VERSION = 1`, `src/lib/playlistRepository/indexedDbRepository.ts` L26: `DB_VERSION = 1` — both discard data on version mismatch.
 - **Recommended Resolution:** - Introduce explicit schema migration path for current adapters.; Implement incremental migration functions indexed by version number. On version mismatch, run the chain of migrations from current → target. Add a playlist export feature as a safety net.
 - **Verification:** migration tests across version bumps and corrupted-state fixtures preserve recoverable data.; Bump test schema version, verify data survives migration. Test rollback by loading old-version data.
 - **Notes on Reconciliation:** Effort conflict resolved using higher effort.
@@ -610,7 +610,7 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **Priority Score:** 1.33
 - **Risk of Change:** Hardening changes can introduce compatibility or release regressions without staged validation.
 - **Dependencies:** None
-- **Evidence:** No references to Sentry, Bugsnag, Crashlytics, or any crash reporting SDK in `package.json` or native code. Confirmed in `doc/architecture.md` L140-141: crash reporting relies on Google Play Console Android Vitals only.
+- **Evidence:** No references to Sentry, Bugsnag, Crashlytics, or any crash reporting SDK in `package.json` or native code. Confirmed in `docs/architecture.md` L140-141: crash reporting relies on Google Play Console Android Vitals only.
 - **Recommended Resolution:** Integrate a lightweight crash reporting service (Sentry, Bugsnag) with source maps for web and native crash capture. Gate behind a privacy consent toggle if needed.
 - **Verification:** Trigger a test crash, verify it appears in the crash reporting dashboard.
 - **Notes on Reconciliation:** No conflicts
@@ -766,7 +766,7 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **Priority Score:** 1.50
 - **Risk of Change:** Hardening changes can introduce compatibility or release regressions without staged validation.
 - **Dependencies:** None
-- **Evidence:** `doc/internals/ios-parity-matrix.md`: "0 XCTest classes vs 82 JVM tests." No test files found under `ios/App/`.
+- **Evidence:** `docs/internals/ios-parity-matrix.md`: "0 XCTest classes vs 82 JVM tests." No test files found under `ios/App/`.
 - **Recommended Resolution:** Add XCTest targets for each Swift plugin. Start with SecureStorage, FtpClient, and BackgroundExecution (highest-risk plugins).
 - **Verification:** `xcodebuild test` passes with >50% coverage on plugin code.
 - **Notes on Reconciliation:** No conflicts
@@ -785,7 +785,7 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **Priority Score:** 1.00
 - **Risk of Change:** Hardening changes can introduce compatibility or release regressions without staged validation.
 - **Dependencies:** None
-- **Evidence:** `doc/testing/testing-infrastructure-review.md` L3-8: "Playwright E2E currently exercises the web build via Vite preview, not a Capacitor WebView or native Android runtime."
+- **Evidence:** `docs/testing/testing-infrastructure-review.md` L3-8: "Playwright E2E currently exercises the web build via Vite preview, not a Capacitor WebView or native Android runtime."
 - **Recommended Resolution:** Documented in the testing infrastructure review. Phase 2 proposes a targeted emulator suite for critical paths. Maestro already covers some native paths.
 - **Verification:** Run a subset of E2E tests against the Android emulator; compare results.
 - **Notes on Reconciliation:** No conflicts
@@ -928,7 +928,7 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 
 A. Repository and architecture: Covered.
 
-- Evidence: `README.md`, `doc/architecture.md`, `doc/diagnostics/*.md`, module inspections.
+- Evidence: `README.md`, `docs/architecture.md`, `docs/diagnostics/*.md`, module inspections.
 
 B. CI/CD and release readiness: Covered.
 
@@ -940,7 +940,7 @@ C. Security and privacy: Covered.
 
 D. Data integrity and lifecycle: Covered.
 
-- Evidence: config and playlist repository adapters + `doc/db.md` target state.
+- Evidence: config and playlist repository adapters + `docs/db.md` target state.
 
 E. Stability and error handling: Covered.
 

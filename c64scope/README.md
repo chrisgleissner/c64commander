@@ -71,10 +71,10 @@ Three-peer-server model orchestrated by a single LLM:
 
 ## Design documents
 
-- `doc/testing/agentic-tests/c64scope-spec.md`
-- `doc/testing/agentic-tests/agentic-test-architecture.md`
-- `doc/testing/agentic-tests/agentic-test-implementation-plan.md`
-- `doc/testing/agentic-tests/agentic-oracle-catalog.md`
+- `docs/testing/agentic-tests/c64scope-spec.md`
+- `docs/testing/agentic-tests/agentic-test-architecture.md`
+- `docs/testing/agentic-tests/agentic-test-implementation-plan.md`
+- `docs/testing/agentic-tests/agentic-oracle-catalog.md`
 
 ## Implementation rules
 

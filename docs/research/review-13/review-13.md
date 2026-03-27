@@ -48,7 +48,7 @@ Evidence:
 
 - `TELNET_ACTIONS` in [`src/lib/telnet/telnetTypes.ts:136`](src/lib/telnet/telnetTypes.ts:136) includes power/reset, IEC, printer, and config actions, but stops before developer actions.
 - The mock fixture in [`src/lib/telnet/telnetTypes.ts:281`](src/lib/telnet/telnetTypes.ts:281) includes `Developer -> Clear Debug Log`, `Save Debug Log`, and `Save EDID to file`.
-- The base spec lists those actions as Telnet-only in `doc/c64/telnet/c64u-telnet-integration-spec.md:681-699`.
+- The base spec lists those actions as Telnet-only in `docs/c64/telnet/c64u-telnet-integration-spec.md:681-699`.
 
 Impact:
 
@@ -145,7 +145,7 @@ Evidence:
 - `useTelnetActions()` executes the action and logs failures, but it never calls `recordTelnetOperation()`; see [`src/hooks/useTelnetActions.ts:51-98`](src/hooks/useTelnetActions.ts:51).
 - `TelnetActionExecutor` logs via `addLog()` only; see [`src/lib/telnet/telnetActionExecutor.ts:53-74`](src/lib/telnet/telnetActionExecutor.ts:53).
 - Repository search found no call sites for `recordTelnetOperation(` under `src/`, `tests/`, or `playwright/`.
-- The base spec explicitly expects Telnet actions to record trace events in `doc/c64/telnet/c64u-telnet-integration-spec.md:720-726`.
+- The base spec explicitly expects Telnet actions to record trace events in `docs/c64/telnet/c64u-telnet-integration-spec.md:720-726`.
 
 Impact:
 
@@ -236,9 +236,9 @@ Evidence:
 - In-app Home docs only mention `Reset / Reboot`, `Menu`, `Pause / Resume`, and `Power Off` in [`src/pages/DocsPage.tsx:58-77`](src/pages/DocsPage.tsx:58).
 - In-app diagnostics docs still describe action summaries as REST/FTP and traces as REST/FTP requests in [`src/pages/DocsPage.tsx:237-251`](src/pages/DocsPage.tsx:237).
 - In-app health-check docs omit Telnet from the order list in [`src/pages/DocsPage.tsx:225-226`](src/pages/DocsPage.tsx:225), while the actual probe order includes Telnet in `src/lib/diagnostics/healthCheckState.ts:39`.
-- `doc/features-by-page.md` still documents Home machine actions as `Reset, Reboot, Pause/Resume, Menu, Power Off` and RAM actions including `Reboot (Clear RAM)` via REST in [`doc/features-by-page.md:43-46`](doc/features-by-page.md:43).
-- `doc/ux-interactions.md` quick actions table omits the Telnet additions and still lists only `Reset`, `Menu`, `Pause`, `Resume`, `Power Off` in [`doc/ux-interactions.md:125-134`](doc/ux-interactions.md:125).
-- `doc/ux-interactions.md` diagnostics controls still describe the older `Clear All`, `Share All`, `Filter entries`, and per-tab share model in [`doc/ux-interactions.md:183-191`](doc/ux-interactions.md:183).
+- `docs/features-by-page.md` still documents Home machine actions as `Reset, Reboot, Pause/Resume, Menu, Power Off` and RAM actions including `Reboot (Clear RAM)` via REST in [`docs/features-by-page.md:43-46`](docs/features-by-page.md:43).
+- `docs/ux-interactions.md` quick actions table omits the Telnet additions and still lists only `Reset`, `Menu`, `Pause`, `Resume`, `Power Off` in [`docs/ux-interactions.md:125-134`](docs/ux-interactions.md:125).
+- `docs/ux-interactions.md` diagnostics controls still describe the older `Clear All`, `Share All`, `Filter entries`, and per-tab share model in [`docs/ux-interactions.md:183-191`](docs/ux-interactions.md:183).
 - `docs/diagnostics/index.md` documents screenshots around REST/FTP/app activity only in [`docs/diagnostics/index.md:17-35`](docs/diagnostics/index.md:17).
 
 Impact:
@@ -257,7 +257,7 @@ The screenshot corpus and automated test suite do not cover the requested Telnet
 
 Evidence:
 
-- Home screenshot inventory under `doc/img/app/home/` includes overview, sections, dialogs, and profiles, but no quick-actions overflow or Telnet-specific quick-action captures:
+- Home screenshot inventory under `docs/img/app/home/` includes overview, sections, dialogs, and profiles, but no quick-actions overflow or Telnet-specific quick-action captures:
   - inventory includes files such as `00-overview-light.png`, `dialogs/01-save-ram-dialog.png`, `sections/03-quick-config-to-drives.png`, and profile overviews
   - inventory does not include overflow-open/closed or Telnet diagnostics shots
 - `docs/diagnostics/index.md` lists only REST/FTP/app-oriented diagnostics screenshots in [`docs/diagnostics/index.md:17-35`](docs/diagnostics/index.md:17).
@@ -333,9 +333,9 @@ This is the exhaustive remaining-work list needed to reach the requested target 
 
 1. Update `README.md` to describe Telnet-backed controls and Telnet-aware diagnostics accurately.
 2. Update the in-app Docs page to describe Telnet connectivity requirements, Home quick actions, overflow behavior, and Diagnostics support.
-3. Update `doc/features-by-page.md` so the Home feature inventory reflects the Telnet-backed action model and diagnostics inventory.
-4. Update `doc/ux-interactions.md` to reflect the actual Telnet CTAs and modern diagnostics controls.
-5. Update diagnostics documentation under `doc/diagnostics/` and `docs/diagnostics/` to include Telnet in contributor/filter/action terminology.
+3. Update `docs/features-by-page.md` so the Home feature inventory reflects the Telnet-backed action model and diagnostics inventory.
+4. Update `docs/ux-interactions.md` to reflect the actual Telnet CTAs and modern diagnostics controls.
+5. Update diagnostics documentation under `docs/diagnostics/` and `docs/diagnostics/` to include Telnet in contributor/filter/action terminology.
 6. Remove contradictions between health-check probe ordering in docs and code.
 
 ### H. Screenshot convergence
@@ -400,7 +400,7 @@ This is the exhaustive remaining-work list needed to reach the requested target 
 
 ### Priority 2 - Required to close repository consistency
 
-1. Update README, in-app Docs, `doc/features-by-page.md`, `doc/ux-interactions.md`, and diagnostics docs.
+1. Update README, in-app Docs, `docs/features-by-page.md`, `docs/ux-interactions.md`, and diagnostics docs.
 2. Refresh screenshot inventories and assets for the final Telnet UI.
 3. Add missing unit, Playwright, Maestro, and real-device regression coverage.
 

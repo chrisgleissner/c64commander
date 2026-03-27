@@ -2,7 +2,7 @@
 
 ROLE
 
-You are a staff-level implementation engineer and convergence owner. Your task is to fix every issue identified in `doc/research/review-13/review-13.md` and bring Telnet support to the required end state across runtime, UI, diagnostics, tracing, tests, docs, and screenshots.
+You are a staff-level implementation engineer and convergence owner. Your task is to fix every issue identified in `docs/research/review-13/review-13.md` and bring Telnet support to the required end state across runtime, UI, diagnostics, tracing, tests, docs, and screenshots.
 
 You MUST operate in a plan-driven, convergence-oriented manner using `PLANS.md` as the authoritative execution plan and `WORKLOG.md` for traceable progress.
 
@@ -16,7 +16,7 @@ OBJECTIVE
 
 Implement the full Telnet convergence work identified by:
 
-- `doc/research/review-13/review-13.md`
+- `docs/research/review-13/review-13.md`
 - `PLANS.md`
 - `WORKLOG.md`
 
@@ -39,16 +39,16 @@ AUTHORITATIVE INPUTS
 
 Use these as the source of truth for both scope and target behavior:
 
-- `doc/research/review-13/review-13.md`
+- `docs/research/review-13/review-13.md`
 - `PLANS.md`
 - `WORKLOG.md`
-- `doc/c64/telnet/c64u-telnet-integration-spec.md`
-- `doc/c64/telnet/c64u-telnet-spec.md`
-- `doc/c64/telnet/c64u-telnet-action-walkthrough.md`
-- `doc/c64/telnet/c64u-telnet-integration-spec-addendum-1.md`
-- `doc/features-by-page.md`
-- `doc/diagnostics/*`
-- `doc/ux/*`
+- `docs/c64/telnet/c64u-telnet-integration-spec.md`
+- `docs/c64/telnet/c64u-telnet-spec.md`
+- `docs/c64/telnet/c64u-telnet-action-walkthrough.md`
+- `docs/c64/telnet/c64u-telnet-integration-spec-addendum-1.md`
+- `docs/features-by-page.md`
+- `docs/diagnostics/*`
+- `docs/ux-guidelines.md` and `docs/ux-interactions.md`
 - `README.md`
 - `docs/*` where diagnostics or usage guidance is affected
 
@@ -226,9 +226,9 @@ Bring the documentation set into sync with the implemented Telnet behavior, incl
 
 - `README.md`
 - `src/pages/DocsPage.tsx`
-- `doc/features-by-page.md`
-- `doc/ux-interactions.md`
-- relevant `doc/diagnostics/*`
+- `docs/features-by-page.md`
+- `docs/ux-interactions.md`
+- relevant `docs/diagnostics/*`
 - relevant `docs/*`
 
 Remove contradictions. The docs must describe the implementation that ships after this task.
@@ -309,4 +309,4 @@ Stop only when all of the following are true:
 9. Required screenshots are refreshed and limited to the impacted surfaces.
 10. Required validation passes, including `npm run test:coverage` with global branch coverage `>= 91%`.
 
-The final result must be strong enough that `doc/research/review-13/review-13.md` would no longer identify meaningful remaining Telnet gaps.
+The final result must be strong enough that `docs/research/review-13/review-13.md` would no longer identify meaningful remaining Telnet gaps.
