@@ -50,7 +50,7 @@ export const AddItemsProgressOverlay = ({
     >
       <div
         className={cn(
-          "w-full max-w-sm rounded-2xl border border-border bg-background px-5 py-4 shadow-2xl",
+          "w-full max-w-sm rounded-[var(--interstitial-radius)] border border-border bg-background px-5 py-4 shadow-[var(--interstitial-shadow)]",
           "max-h-[calc(100dvh-3rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))]",
         )}
       >

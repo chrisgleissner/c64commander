@@ -681,7 +681,7 @@ function buildCooldowns(
 }
 
 async function buildMeta(cfg: typeof config, outcome: RunOutcome, replayOf?: string) {
-  const openapiPath = path.join(process.cwd(), "doc/c64/c64u-openapi.yaml");
+  const openapiPath = path.join(process.cwd(), "docs/c64/c64u-openapi.yaml");
   const openapiHash = fs.existsSync(openapiPath) ? hashFile(openapiPath) : "";
   const firmwareHash = getGitHash(path.join(process.cwd(), "1541ultimate"));
   const repoHash = getGitHash(process.cwd());
@@ -717,7 +717,7 @@ async function buildMeta(cfg: typeof config, outcome: RunOutcome, replayOf?: str
 }
 
 function loadOpenApiEndpoints(cfg: typeof config) {
-  const filePath = path.join(process.cwd(), "doc/c64/c64u-openapi.yaml");
+  const filePath = path.join(process.cwd(), "docs/c64/c64u-openapi.yaml");
   if (!fs.existsSync(filePath)) {
     return [] as Array<{
       id: string;

@@ -45,6 +45,7 @@ export interface MachineControlsProps {
   onSaveRam: () => void;
   onLoadRam: () => void;
   onPowerOff: () => void;
+  onReboot?: () => void;
   onPowerCycle?: () => void;
   overflowActions?: MachineOverflowAction[];
   onAction: (fn: () => Promise<void>, label: string) => void;
@@ -66,6 +67,7 @@ export function MachineControls({
   onSaveRam,
   onLoadRam,
   onPowerOff,
+  onReboot,
   onPowerCycle,
   overflowActions = [],
   onAction,
@@ -75,6 +77,7 @@ export function MachineControls({
   footer,
 }: MachineControlsProps) {
   const effectiveBusy = machineTaskBusy || telnetBusy;
+  const canRunTelnetReboot = telnetAvailable && typeof onReboot === "function";
   const canRunPowerCycle = telnetAvailable && typeof onPowerCycle === "function";
   const hasOverflowActions = overflowActions.length > 0;
   return (
@@ -146,14 +149,18 @@ export function MachineControls({
             label="Reboot"
             variant="danger"
             className="border-destructive/40 bg-destructive/[0.04]"
-            onClick={() =>
+            onClick={() => {
+              if (canRunTelnetReboot) {
+                void onReboot();
+                return;
+              }
               onAction(async () => {
                 await controls.reboot.mutateAsync();
                 setMachineExecutionState("running");
-              }, "Machine rebooting")
-            }
+              }, "Machine rebooting");
+            }}
             disabled={!status.isConnected || effectiveBusy}
-            loading={controls.reboot.isPending}
+            loading={canRunTelnetReboot ? telnetActiveActionId === "rebootClearMemory" : controls.reboot.isPending}
           />
           <QuickActionCard
             icon={machineExecutionState === "paused" ? Play : Pause}

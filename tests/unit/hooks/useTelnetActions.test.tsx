@@ -12,6 +12,7 @@ import { isTelnetAvailable, useTelnetActions } from "@/hooks/useTelnetActions";
 
 const {
   isNativePlatformMock,
+  shouldUseMockTelnetTransportMock,
   statusRef,
   recordTelnetOperationSpy,
   incrementTelnetInFlightSpy,
@@ -19,6 +20,7 @@ const {
   runWithActionTraceSpy,
 } = vi.hoisted(() => ({
   isNativePlatformMock: vi.fn(() => false),
+  shouldUseMockTelnetTransportMock: vi.fn(() => false),
   statusRef: {
     current: {
       isConnected: true,
@@ -42,6 +44,7 @@ const mockConnect = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/lib/telnet/telnetClient", () => ({
   createTelnetClient: () => ({}),
+  shouldUseMockTelnetTransport: () => shouldUseMockTelnetTransportMock(),
 }));
 
 vi.mock("@/lib/telnet/telnetSession", () => ({
@@ -115,12 +118,37 @@ describe("isTelnetAvailable", () => {
       isTelnetAvailable({ nativePlatform: true, isConnected: true, isDemo: false, product: "1541 Ultimate II+" }),
     ).toBe(false);
   });
+
+  it("returns true for demo mode when backed by a mock telnet target", () => {
+    expect(
+      isTelnetAvailable({
+        nativePlatform: false,
+        isConnected: true,
+        isDemo: true,
+        product: "Ultimate 64",
+        mockTarget: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true for external mock targets on web when telnet is mock-backed", () => {
+    expect(
+      isTelnetAvailable({
+        nativePlatform: false,
+        isConnected: true,
+        isDemo: false,
+        product: "Ultimate 64",
+        mockTarget: true,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("useTelnetActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isNativePlatformMock.mockReturnValue(true);
+    shouldUseMockTelnetTransportMock.mockReturnValue(false);
     statusRef.current = {
       isConnected: true,
       isDemo: false,
@@ -142,6 +170,20 @@ describe("useTelnetActions", () => {
     isNativePlatformMock.mockReturnValue(false);
     const { result } = renderHook(() => useTelnetActions());
     expect(result.current.isAvailable).toBe(false);
+  });
+
+  it("returns isAvailable=true for demo mode when the target is mock-backed", () => {
+    isNativePlatformMock.mockReturnValue(false);
+    shouldUseMockTelnetTransportMock.mockReturnValue(true);
+    statusRef.current = {
+      isConnected: true,
+      isDemo: true,
+      deviceInfo: { product: "Ultimate 64 Elite" },
+    };
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    expect(result.current.isAvailable).toBe(true);
   });
 
   it("returns isAvailable=false when the connected product is not Telnet-capable", () => {

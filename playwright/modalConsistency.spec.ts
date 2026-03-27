@@ -16,7 +16,7 @@ import { saveCoverageFromPage } from "./withCoverage";
 const MODAL_CLOSE_CLASSES = [
   "opacity-70",
   "hover:opacity-100",
-  "rounded-sm",
+  "rounded-full",
   "ring-offset-background",
   "focus:ring-2",
   "focus:ring-ring",

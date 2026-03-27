@@ -70,7 +70,7 @@ describe("full app coverage executor", () => {
 
   it("writes manifest and summary for mapped and blocked features", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-fac-main-"));
-    const docsRoot = path.join(tempRoot, "doc/testing/agentic-tests/full-app-coverage");
+    const docsRoot = path.join(tempRoot, "docs/testing/agentic-tests/full-app-coverage");
     const runsRoot = path.join(docsRoot, "runs");
     await mkdir(docsRoot, { recursive: true });
     await writeFile(
@@ -112,7 +112,7 @@ describe("full app coverage executor", () => {
 
   it("blocks mapped features when the registry entry is missing and fails on preflight errors", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-fac-preflight-"));
-    const docsRoot = path.join(tempRoot, "doc/testing/agentic-tests/full-app-coverage");
+    const docsRoot = path.join(tempRoot, "docs/testing/agentic-tests/full-app-coverage");
     const runsRoot = path.join(docsRoot, "runs");
     await mkdir(docsRoot, { recursive: true });
     await writeFile(

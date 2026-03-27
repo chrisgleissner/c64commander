@@ -64,31 +64,23 @@ const seedDiskLibrary = async (page: Page, disks: SeedDisk[]) => {
 
 const expectDialogPresentationMode = async (
   dialog: ReturnType<Page["getByRole"]>,
-  expectedMode: "fullscreen" | "centered" | "large" | "sheet" | "modal",
+  expectedMode: "centered" | "large" | "sheet",
 ) => {
   if (expectedMode === "sheet") {
     await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
     await expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    await expect(dialog).toHaveClass(/rounded-t-\[28px\]/);
+    await expect(dialog).toHaveClass(/rounded-t-\[var\(--interstitial-radius\)\]/);
     return;
   }
 
-  if (expectedMode === "modal") {
-    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
-    await expect(dialog).toHaveAttribute("data-sheet-presentation", "modal");
-    await expect(dialog).toHaveClass(/left-1\/2/);
+  if (expectedMode === "large") {
+    await expect(dialog).toHaveAttribute("data-modal-presentation", "large");
+    await expect(dialog).toHaveClass(/max-w-4xl/);
     return;
   }
 
-  if (expectedMode === "fullscreen") {
-    await expect(dialog).toHaveClass(/inset-\[var\(--display-profile-modal-inset\)\]/);
-    await expect(dialog).toHaveClass(/rounded-lg/);
-    await expect(dialog).toHaveClass(/border/);
-    return;
-  }
-
-  await expect(dialog).not.toHaveClass(/inset-0/);
-  await expect(dialog).toHaveClass(/left-\[50%\]/);
+  await expect(dialog).toHaveAttribute("data-modal-presentation", "centered");
+  await expect(dialog).toHaveClass(/left-\[50%\]|left-1\/2/);
 };
 
 const expectLocatorWithinViewport = async (
@@ -446,7 +438,7 @@ test.describe("display profiles", () => {
       await page.getByRole("button", { name: "View all" }).click();
       const listDialog = page.getByRole("dialog");
       await expect(listDialog.getByTestId("action-list-view-all")).toBeVisible();
-      await expectDialogPresentationMode(listDialog, profileId === "expanded" ? "modal" : "sheet");
+      await expectDialogPresentationMode(listDialog, "sheet");
       await expect(page.getByTestId("view-all-filter-input")).toBeVisible();
       await expect(page.getByTestId("disk-row").first()).toBeVisible();
       const diskOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
@@ -458,7 +450,7 @@ test.describe("display profiles", () => {
       await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
-      await expectDialogPresentationMode(diagnosticsDialog, profileId === "expanded" ? "modal" : "sheet");
+      await expectDialogPresentationMode(diagnosticsDialog, "sheet");
       await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
       await expect(diagnosticsDialog.getByTestId("diagnostics-share-all")).toBeVisible();
       await expect(diagnosticsDialog.getByTestId("diagnostics-overflow-menu")).toBeVisible();

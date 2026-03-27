@@ -15,9 +15,9 @@ If instructions conflict, follow `.github/copilot-instructions.md` unless the ta
 ## Quick orientation
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
-2. REST API details live in `doc/c64/c64u-openapi.yaml`.
-3. Read the UX design in `doc/ux-guidelines.md` before any UX work.
-4. Read `doc/testing/maestro.md` before authoring or editing any Maestro flows.
+2. REST API details live in `docs/c64/c64u-openapi.yaml`.
+3. Read the UX design in `docs/ux-guidelines.md` before any UX work.
+4. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
 5. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
 6. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
 7. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
@@ -33,8 +33,8 @@ Read the smallest relevant set first:
 
 1. `README.md`
 2. `.github/copilot-instructions.md`
-3. `doc/ux-guidelines.md` for UI work
-4. `doc/testing/maestro.md` for Maestro work
+3. `docs/ux-guidelines.md` for UI work
+4. `docs/testing/maestro.md` for Maestro work
 5. additional files directly relevant to the touched area
 
 Do not start making changes before you understand the touched subsystem and validation expectations.
@@ -62,7 +62,7 @@ Identify exactly which surfaces are affected:
 - source files
 - tests
 - docs
-- screenshot folders under `doc/img/`
+- screenshot folders under `docs/img/`
 - runtime platforms: web, Android, iOS CI-only
 
 Prefer a minimal, explicit impact map over broad speculative edits.
@@ -99,7 +99,7 @@ At completion, summarize:
 ## Source of truth
 
 - **Primary rules and conventions**: `.github/copilot-instructions.md`
-- **REST API docs**: `doc/c64/c64u-openapi.yaml`
+- **REST API docs**: `docs/c64/c64u-openapi.yaml`
 - **App entry**: `src/main.tsx`, `src/App.tsx`
 - **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
 - **App config state**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
@@ -153,7 +153,7 @@ Do not regenerate screenshots when the visible documented UI is unchanged, even 
 
 ### Minimal screenshot rule
 
-If a task changes only one page or one documented state, update only the corresponding screenshot files or folders under `doc/img/`.
+If a task changes only one page or one documented state, update only the corresponding screenshot files or folders under `docs/img/`.
 
 Never refresh the entire screenshot corpus unless explicitly required by the task.
 
@@ -165,7 +165,7 @@ Never refresh the entire screenshot corpus unless explicitly required by the tas
 - **Android JVM**: `cd android && ./gradlew test` with tests in `android/app/src/test/java/com/c64/commander/hvsc/`
 - **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
 - **Python agents**: `npm run test:agents` (pytest) with specs in `agents/tests/`; requires ≥90% branch coverage
-- **Maestro**: read `doc/testing/maestro.md` before creating or updating flows under `.maestro/`
+- **Maestro**: read `docs/testing/maestro.md` before creating or updating flows under `.maestro/`
 
 ## Release tag APKs
 

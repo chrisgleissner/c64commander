@@ -144,4 +144,87 @@ describe("planHomeScreenshotSlices", () => {
       },
     ]);
   });
+
+  it("falls back to monotonic continuation slices when a settled layout makes older pairings impossible", () => {
+    const selected = selectCanonicalHomeScreenshotSlices([
+      {
+        slug: "system-info-to-cpu-ram",
+        scrollTop: 8,
+        sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+      },
+      {
+        slug: "quick-config-to-user-interface",
+        scrollTop: 514,
+        sectionSlugs: ["quick-config", "cpu-ram", "ports", "video", "user-interface"],
+      },
+      {
+        slug: "quick-config-to-keyboard-light",
+        scrollTop: 1020,
+        sectionSlugs: ["quick-config", "case-light", "keyboard-light"],
+      },
+      {
+        slug: "quick-config-to-drives",
+        scrollTop: 1526,
+        sectionSlugs: ["quick-config", "keyboard-light", "drives"],
+      },
+      {
+        slug: "drives-to-sid",
+        scrollTop: 2032,
+        sectionSlugs: ["drives", "printers", "sid"],
+      },
+      {
+        slug: "sid-to-streams",
+        scrollTop: 2538,
+        sectionSlugs: ["sid", "streams"],
+      },
+      {
+        slug: "streams-to-config",
+        scrollTop: 3032,
+        sectionSlugs: ["streams", "config"],
+      },
+    ]);
+
+    expect(selected).toEqual([
+      {
+        fileName: "01-system-info-to-cpu-ram.png",
+        slice: {
+          slug: "system-info-to-cpu-ram",
+          scrollTop: 8,
+          sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+        },
+      },
+      {
+        fileName: "02-quick-config-to-keyboard-light.png",
+        slice: {
+          slug: "quick-config-to-keyboard-light",
+          scrollTop: 1020,
+          sectionSlugs: ["quick-config", "case-light", "keyboard-light"],
+        },
+      },
+      {
+        fileName: "03-quick-config-to-printers.png",
+        slice: {
+          slug: "quick-config-to-drives",
+          scrollTop: 1526,
+          sectionSlugs: ["quick-config", "keyboard-light", "drives"],
+        },
+      },
+      {
+        fileName: "04-printers-to-sid.png",
+        slice: {
+          slug: "drives-to-sid",
+          scrollTop: 2032,
+          sectionSlugs: ["drives", "printers", "sid"],
+        },
+      },
+      {
+        fileName: "05-sid-to-config.png",
+        slice: {
+          slug: "streams-to-config",
+          scrollTop: 3032,
+          sectionSlugs: ["streams", "config"],
+        },
+      },
+    ]);
+  });
 });

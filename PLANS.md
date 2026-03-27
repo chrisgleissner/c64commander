@@ -1,134 +1,190 @@
-# Telnet Convergence Implementation Plan
+# Screenshot Deduplication Repair Plan
 
-## Screenshot Regeneration Integrity Plan
+Status: COMPLETE
+Date: 2026-03-27
+Classification: DOC_PLUS_CODE
+Visible UI impact: NO
+
+## Problem Statement
+
+The screenshot generation pipeline for `doc/img/app/` is no longer trustworthy. An unchanged rerun is leaving broad screenshot churn, while the current dedupe design is too weak to distinguish encoder or rendering noise from real UI deltas. The pipeline must return to a strict, deterministic state where unchanged reruns leave zero retained screenshot diffs and small real visual changes remain detectable.
+
+## Assumptions
+
+- The authoritative screenshot entry point is the Playwright `@screenshots` suite invoked via `npm run screenshots`.
+- `doc/img/app/` tracked at `HEAD` is the baseline that reruns must compare against.
+- PNG byte equality is not sufficient because encoder output can differ even when pixels are effectively unchanged.
+- Existing repo changes outside this task may be present and must be preserved.
+
+## Invariants
+
+- No-op rerun: two identical reruns from the same commit and environment leave zero retained diffs under `doc/img/app/`.
+- High sensitivity: small real UI changes, including short text edits, must remain preserved.
+- Explicit bounded tolerance: any tolerated noise must be narrowly defined, justified, and encoded in code and tests.
+- Determinism: capture should control obvious sources of nondeterminism before comparison applies any tolerance.
+- Net-result: redundant regenerated screenshots must be removed automatically before completion.
+- Proof: automated tests must prove unchanged screenshots are eliminated and small real changes survive.
+
+## Current Pipeline Map
+
+- Entry point: `npm run screenshots` -> [`scripts/run-screenshots-with-prune.mjs`](/home/chris/dev/c64/c64commander/scripts/run-screenshots-with-prune.mjs)
+- Capture suite: [`playwright/screenshots.spec.ts`](/home/chris/dev/c64/c64commander/playwright/screenshots.spec.ts)
+- Post-run cleanup: [`scripts/revert-identical-pngs.mjs`](/home/chris/dev/c64/c64commander/scripts/revert-identical-pngs.mjs)
+- Metadata-only dedupe helper: [`scripts/screenshotMetadataDedupe.js`](/home/chris/dev/c64/c64commander/scripts/screenshotMetadataDedupe.js)
+- Path exceptions: [`scripts/screenshotPrunePolicy.js`](/home/chris/dev/c64/c64commander/scripts/screenshotPrunePolicy.js)
+- Diff aid only: [`scripts/diff-screenshots.mjs`](/home/chris/dev/c64/c64commander/scripts/diff-screenshots.mjs)
+- Output root: `doc/img/app/<page>/<state>.png`
+
+## Workset Validation
+
+- `c64-screenshots-proof.oFgWB2` is a local detached git worktree rooted at `/tmp/c64-screenshots-proof.oFgWB2`, not a branch or external repository.
+- Its `HEAD` is `36879e9d`, while the active branch `fix/screenshot-deduplication` is now at `626699d5`.
+- File-level diff checks for:
+  - [`playwright/screenshots.spec.ts`](/home/chris/dev/c64/c64commander/playwright/screenshots.spec.ts)
+  - [`scripts/revert-identical-pngs.mjs`](/home/chris/dev/c64/c64commander/scripts/revert-identical-pngs.mjs)
+  - [`scripts/diff-screenshots.mjs`](/home/chris/dev/c64/c64commander/scripts/diff-screenshots.mjs)
+  - [`scripts/screenshotMetadataDedupe.js`](/home/chris/dev/c64/c64commander/scripts/screenshotMetadataDedupe.js)
+    showed no content differences from the active branch copies.
+- Decision: `DELETE` / ignore as disposable proof scaffolding. It contains no unique logic that must be merged.
+
+## Root Cause Hypotheses
+
+- The active dedupe path only compares git blob ids, so encoder-level PNG byte drift bypasses cleanup even when the visible image is unchanged.
+- `PLANS.md` previously encoded a git-date deletion/regeneration strategy that would force churn by design and is incompatible with the no-op invariant.
+- Existing fuzzy logic appears disconnected from the actual prune path, leaving no tested pixel-based decision in the pipeline that currently runs.
+- Rendering noise likely remains, but the current failure mode is broader: unchanged-but-not-byte-identical files are retained instead of reverted.
+- A preview-build service worker was still registering during screenshot runs, introducing hidden cached state across consecutive runs.
+- The remaining churn after service-worker gating appears to be capture-side instability or a stale baseline mismatch, not PNG metadata alone.
+
+## Phased Task List
+
+### Phase 1 - Audit and reproduce
+
+- Map the exact screenshot generation, write, compare, and cleanup flow.
+- Measure representative churn against `HEAD` to separate byte-only drift, bounded rendering noise, and real pixel deltas.
+- Record the confirmed root causes in `WORKLOG.md`.
+
+### Phase 2 - Deterministic capture hardening
+
+- Audit current capture stabilization in Playwright.
+- Add only the missing deterministic controls required for screenshots that still drift for non-semantic reasons.
+- Keep capture ordering and encoder behavior explicit and explainable.
+- Explicitly disable service-worker registration when test probes are enabled.
+- Ensure Home light/dark overview captures are both taken before any section scrolling so they share the same initial viewport state.
+
+### Phase 3 - Comparison and cleanup repair
+
+- Replace or extend the metadata-only dedupe with strict image comparison against the correct baseline path.
+- Normalize irrelevant PNG-level differences before comparison.
+- Use a narrow threshold model that tolerates bounded rendering noise without hiding small text or layout changes.
+- Ensure unchanged tracked screenshots are restored and redundant new screenshots are deleted automatically.
+
+### Phase 4 - Automated coverage
+
+- Add focused unit tests for the comparison/elimination core.
+- Cover identical pixels with different PNG bytes, tolerated bounded noise, and preserved small real changes.
+- Add a higher-level pipeline test for rerun/no-op behavior where practical.
+
+### Phase 5 - Proof and validation
+
+- Run targeted tests for the changed scripts and screenshot helpers.
+- Run `npm run test:coverage` and keep global branch coverage at `>= 91%`.
+- Run the screenshot pipeline twice from a stabilized point and prove the second run leaves zero retained screenshot diffs under `doc/img/app/`.
+- If a first clean run still creates screenshots relative to `HEAD`, determine whether those files are stale-but-real baseline mismatches or remaining nondeterministic churn, using file hashes across consecutive reruns.
+- When rerunning only a screenshot subset, verify that unrelated screenshot folders stay untouched and record any still-unstable files separately from the intentional refresh set.
+
+### Phase 6 - Documentation
+
+- Update the relevant docs with the comparison model, thresholds, and debugging guidance.
+- Keep the explanation concise and factual.
+
+## Acceptance Criteria
+
+- Root cause is identified and fixed at the actual pipeline layer.
+- Unchanged reruns leave zero retained screenshot diffs.
+- Small meaningful image changes remain preserved.
+- Tolerance is explicit, narrow, justified, and test-covered.
+- `PLANS.md` and `WORKLOG.md` reflect the real execution record.
+- Relevant docs are updated.
+- All touched tests pass.
+
+## Evidence Checklist
+
+- `git status --short` before and after the no-op rerun proof
+- Targeted unit test output for screenshot dedupe logic
+- `npm run test:coverage` result with branch coverage `>= 91%`
+- Screenshot pipeline run 1 summary
+- Screenshot pipeline run 2 summary with zero retained `doc/img/app/` diffs
+- File references for the final implementation and docs changes
+
+---
+
+# Lighting Studio ASCII LED Refinement Plan
 
 Status: IN PROGRESS
-Date: 2026-03-26
+Date: 2026-03-27
 Classification: DOC_PLUS_CODE
 Visible UI impact: YES
 
-### Objective
+## Problem Statement
 
-Enforce deterministic documentation screenshot freshness across `doc/img/app/**/*.png` using only git metadata, path/reference auditing, and reproducible pipeline regeneration with zero image inspection.
+The Lighting Studio device preview still uses hand-authored SVG geometry that does not re-derive its regions from the authoritative ASCII layout. The amended layout introduces a dedicated LED strip semantic region (`_`) that must render as a separate always-white layer and remain completely isolated from case and keyboard lighting controls.
 
-### Execution Phases
+## Authoritative Geometry Source
 
-#### Phase 1 - Inventory and reference mapping
+- Primary source for this task: `doc/image/lighting/C64-layout.txt`
+- Current repository mirror of the same layout: `doc/img/lighting/c64-outline.txt`
+- Legend:
+  - `x` => case region
+  - `-` => keyboard regions
+  - `_` => LED strip region
 
-- Enumerate every screenshot under `doc/img/app/**/*.png`.
-- Enumerate every reference from `README.md`, `doc/**`, and `docs/**`.
-- Build a path-only image-to-reference mapping for reporting and orphan detection.
+## Required Outcomes
 
-#### Phase 2 - Git-date classification
+- Recompute preview geometry directly from the ASCII layout rather than reusing the previous hard-coded shell and keyboard blocks.
+- Extract three semantic region types:
+  - case
+  - keyboard
+  - LED strip
+- Keep the LED strip on its own topmost render layer with a fixed white appearance.
+- Preserve the current bottom-sheet/dialog behavior and the prior layout consistency work.
 
-- Resolve the last git modification date for every screenshot.
-- Classify screenshots as `VALID` only when the git date is `2026-03-26`.
-- Mark every other screenshot `OUTDATED` for deletion and regeneration.
+## Implementation Plan
 
-#### Phase 3 - Pipeline coverage verification
+### Phase 1 - Geometry extraction
 
-- Confirm the screenshot pipeline can regenerate the entire expected `doc/img/app/` set.
-- Extend deterministic screenshot coverage only if the current pipeline leaves gaps.
+- Add a deterministic ASCII parser that validates row widths and rejects unknown glyphs.
+- Classify cells into case, keyboard, and LED regions.
+- Merge adjacent cells into stable grouped SVG rects to keep DOM size bounded.
+- Derive connected keyboard components so the main block and right-side function-key block remain individually addressable.
 
-#### Phase 4 - Deletion and full regeneration
+### Phase 2 - SVG renderer update
 
-- Delete all outdated screenshots from `doc/img/app/`.
-- Run the screenshot pipeline to regenerate the expected set.
-- Keep only the regenerated canonical files.
+- Replace the hard-coded preview geometry in `LightingStudioDialog` with the parsed layout output.
+- Render base colors with the required defaults:
+  - case base `#BFBBAF`
+  - keyboard base `#111111`
+  - LED baseline off-white/white
+- Apply lighting overlays only to the case and keyboard layers.
+- Keep the LED strip fixed white with optional lightweight static glow only.
 
-#### Phase 5 - Documentation consistency and reproducibility
+### Phase 3 - Regression coverage
 
-- Fix README/doc/docs references so every referenced screenshot exists.
-- Remove orphan references and document any justified non-referenced files.
-- Treat every screenshot referenced by the top-level `README.md` as mandatory canonical output that must continue to exist after regeneration.
-- If any `README.md` screenshot cannot be recreated by the screenshot suite, extend the suite until it generates that path; do not leave outdated PNGs behind and do not leave dangling links.
-- Re-run the screenshot pipeline and confirm no further tracked changes appear.
+- Add focused tests for ASCII region classification.
+- Add tests that prove the LED region exists and stays separate from case and keyboard regions.
+- Add preview rendering assertions that prove LED fill remains white and unchanged under different case/keyboard colors and intensities.
 
-#### Phase 6 - Reporting
+### Phase 4 - Validation
 
-- Write `doc/research/review-screenshots-regeneration.md` with inventory, git-date validation, actions taken, and final PASS/FAIL checks.
+- Run targeted unit tests for the new parser and Lighting Studio preview.
+- Run `npm run test:coverage` and keep global branch coverage at `>= 91%`.
+- Run the relevant lint and build validation for the touched React/Vite code.
+- Regenerate the Lighting Studio screenshots and verify the LED strip remains white in the captured output.
 
-#### Phase 7 - CI remediation and green build closure
+## Acceptance Criteria
 
-- Inspect the requested GitHub Actions job logs with `gh` after screenshot regeneration is complete.
-- Fix any failures that can be resolved locally without disabling tests.
-- Commit and push the full change set.
-- Monitor CI runs, fetch failing logs with `gh`, fix root causes, and push follow-up commits until all builds are green.
-
-Status: IN PROGRESS
-Date: 2026-03-26
-Classification: DOC_PLUS_CODE
-Visible UI impact: YES
-
-## Objective
-
-Implement the Review 13 Telnet convergence work across the canonical action registry, tracing, diagnostics, Home quick actions and overflow, device cards, health/capability modeling, tests, documentation, and the minimal screenshot set for the changed surfaces.
-
-## Execution Phases
-
-### Phase 1 - Required reading and impact map
-
-- Status: COMPLETE
-- Re-read the review, plan/worklog, Telnet specs and addendum, stale docs surfaces, and the runtime/UI/diagnostics/tests that currently own Telnet behavior.
-- Classify the task as `DOC_PLUS_CODE` with visible UI changes.
-- Lock the implementation slices around the canonical Telnet capability model instead of continuing the old incremental button-by-button approach.
-
-### Phase 2 - Canonical Telnet capability model
-
-- Status: IN PROGRESS
-- Extend the runtime action registry to match the Telnet-only firmware actions in scope, including the Developer submenu.
-- Add a canonical metadata model for UI surfacing, diagnostics classification, and menu-key/device-family handling so runtime, UI, and tests consume the same inventory.
-- Replace platform-only availability checks with a real capability decision derived from device state and supported platforms.
-
-### Phase 3 - Tracing, diagnostics, and health convergence
-
-- Status: NOT STARTED
-- Emit `telnet-operation` trace entries for every Telnet action with action id, visible label, menu path, duration, result, and normalized failure data.
-- Extend diagnostics action summaries, contributors, filters, evidence rows, counters, and health rollups to treat Telnet as a first-class subsystem beside REST and FTP.
-- Preserve existing REST/FTP behavior while making Telnet visible in steady-state health and activity models.
-
-### Phase 4 - Home quick actions and device-card integration
-
-- Status: NOT STARTED
-- Replace the current Home machine controls with the required eight primary actions in the required order.
-- Map visible `Reboot` to Telnet clear-memory semantics, move secondary actions into a `...` overflow, and preserve the compact 2x4 layout.
-- Converge drive and printer card Telnet actions into a consistent device-card action model.
-
-### Phase 5 - Regression coverage
-
-- Status: NOT STARTED
-- Add or update focused unit coverage for the registry, Telnet tracing, diagnostics Telnet effects/contributors, Home ordering and overflow rules, and device-card controls.
-- Add or update the minimal honest Playwright coverage for the changed Home and Diagnostics surfaces.
-- Add Maestro or equivalent native evidence only where it is required for real-device Telnet behavior.
-
-### Phase 6 - Documentation and screenshots
-
-- Status: NOT STARTED
-- Update `README.md`, `src/pages/DocsPage.tsx`, `doc/features-by-page.md`, `doc/ux-interactions.md`, and the affected diagnostics docs so they describe the shipped Telnet behavior.
-- Refresh only the screenshot files needed for Home quick actions/overflow, device-card Telnet controls, and Diagnostics Telnet visibility.
-
-### Phase 7 - Validation and convergence
-
-- Status: NOT STARTED
-- Run `npm run test:coverage` and keep global branch coverage at or above 91%.
-- Run `npm run lint`.
-- Run `npm run build`.
-- Run the smallest targeted Playwright and screenshot generation flows needed for the impacted Telnet surfaces.
-
-## Constraints
-
-- Do not narrow the review scope to avoid the hard parts of diagnostics or Home convergence.
-- Do not regress or special-case REST/FTP diagnostics while adding Telnet.
-- Do not bulk-refresh screenshots outside the Telnet-affected documentation surfaces.
-- Preserve Addendum 1 behavior: CommoServe search/browse remains direct HTTP plus device REST, not a new Telnet dependency.
-
-## Acceptance Checklist
-
-- The Telnet registry covers the in-scope Telnet-only action inventory and is canonical across runtime and tests.
-- Home primary quick actions are exactly `Reset`, `Reboot`, `Pause/Resume`, `Menu`, `Save RAM`, `Load RAM`, `Power Cycle`, `Power Off`.
-- Home overflow exists to the right of Quick Actions, includes `Reboot (Keep RAM)` and `Save REU`, and does not duplicate primary actions.
-- Drive and printer cards expose the required Telnet controls intentionally rather than ad hoc.
-- Every Telnet action emits trace data and appears in Diagnostics action summaries and traces.
-- Diagnostics and health models expose Telnet as a first-class contributor/filter/effect.
-- Docs and screenshots reflect the implemented Telnet behavior without contradictions.
-- Validation passes, including coverage at `>= 91%` branch coverage.
+- The preview geometry is derived from the authoritative ASCII layout including the `_` region.
+- The LED strip renders in the correct top-right position and remains white regardless of case/keyboard colors.
+- Case and keyboard overlays remain independent and continue to respond to their own controls.
+- The Lighting Studio remains a dialog/bottom-sheet workflow with no popup regression.
+- Tests, coverage, lint, build, and targeted screenshots all pass for the final change set.

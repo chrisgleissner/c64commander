@@ -169,19 +169,20 @@ Expanded is not a different product surface. It is the same UX with better use o
 
 ## 10. Modal And Overlay Rules
 
-Modal presentation is profile-sensitive.
+Modal presentation is not profile-sensitive.
 
-| Surface type        | Compact                                                                                        | Medium                                                         | Expanded                                                       |
-| ------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
-| Confirmation dialog | Full-screen when content or action rows would be cramped; otherwise centered and viewport-safe | Centered and viewport-safe                                     | Centered and viewport-safe                                     |
-| Selection browser   | Full-screen                                                                                    | Full-screen or large dialog, but source scope remains explicit | Full-screen or large dialog, but source scope remains explicit |
-| Secondary editor    | Full-screen                                                                                    | Centered dialog or inline editor                               | Centered dialog, inline editor, or side panel                  |
+| Surface type        | Compact                          | Medium                           | Expanded                         |
+| ------------------- | -------------------------------- | -------------------------------- | -------------------------------- |
+| Confirmation dialog | Centered and viewport-safe modal | Centered and viewport-safe modal | Centered and viewport-safe modal |
+| Workflow surface    | Bottom sheet                     | Bottom sheet                     | Bottom sheet                     |
+| Secondary editor    | Centered modal or embedded editor | Centered modal or embedded editor | Centered modal or embedded editor |
 
 Rules:
 
 - Every modal must remain fully visible inside the viewport.
 - Keyboard appearance must not hide the title, primary field, or primary confirm action.
-- Compact may promote a surface to full-screen to preserve usability; that does not change the workflow type.
+- Do not choose modal vs bottom sheet by screen size.
+- Workflow surfaces must use bottom sheets even on expanded layouts.
 
 ## 11. Component Obligations
 
@@ -269,6 +270,9 @@ Documentation screenshots under `doc/img/app/` must follow the display-profile c
 - Allowed profile folder names are `compact`, `medium`, and `expanded`.
 - Compact and Expanded screenshots should only be generated for surfaces whose visible behavior differs from the Medium baseline.
 - Profile-specific modal or browser captures should stay under the same page area, for example `doc/img/app/play/import/profiles/compact/`.
+- `npm run screenshots` compares regenerated screenshots against `HEAD` after decoding PNG pixels, so metadata-only PNG byte drift is discarded automatically.
+- The prune step accepts only a tightly bounded tolerance: anti-aliased-only differences or at most 8 non-AA diff pixels globally. Anything larger is kept as a real change candidate.
+- If screenshot churn appears, debug determinism first: Chromium launch flags, fixed clock seeding, font readiness, and motion suppression are part of the contract. Do not widen the tolerance to hide the churn.
 
 Examples:
 

@@ -22,7 +22,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  AppDialog,
+  AppDialogBody,
+  AppDialogContent,
+  AppDialogDescription,
+  AppDialogFooter,
+  AppDialogHeader,
+  AppDialogTitle,
   AppSheet,
+  AppSheetBody,
   AppSheetContent,
   AppSheetDescription,
   AppSheetHeader,
@@ -299,7 +307,12 @@ const parseConnectionSnapshot = () => {
       httpPort: derivedPort,
       ftpPort,
     };
-  } catch {
+  } catch (error) {
+    console.warn("Failed to parse diagnostics connection snapshot base URL", {
+      baseUrl: snapshot.baseUrl,
+      deviceHost: snapshot.deviceHost,
+      error,
+    });
     return {
       host: deviceHost || "c64u",
       httpPort: 80,
@@ -334,15 +347,6 @@ const getLastCheckTimestamp = (
   if (healthState.lastTelnetActivity) return healthState.lastTelnetActivity.timestampMs;
   return null;
 };
-
-const SurfaceHeader = ({ title, onClose }: { title: string; onClose: () => void }) => (
-  <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
-    <h2 className="text-sm font-semibold">{title}</h2>
-    <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-      Close
-    </Button>
-  </div>
-);
 
 const FilterChip = ({ label }: { label: string }) => (
   <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-4">
@@ -560,7 +564,6 @@ const EvidenceRow = ({
 const FilterEditorSurface = ({
   open,
   onOpenChange,
-  profile,
   selectedTypes,
   onSelectedTypesChange,
   contributor,
@@ -572,7 +575,6 @@ const FilterEditorSurface = ({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  profile: "compact" | "medium" | "expanded";
   selectedTypes: Set<EvidenceType>;
   onSelectedTypesChange: (value: Set<EvidenceType>) => void;
   contributor: ContributorFilter;
@@ -582,8 +584,6 @@ const FilterEditorSurface = ({
   totalCount: number;
   visibleCount: number;
 }) => {
-  const isSidePanel = profile === "expanded";
-
   const toggleType = (type: EvidenceType, checked: boolean) => {
     const next = new Set(selectedTypes);
     if (checked) {
@@ -595,128 +595,123 @@ const FilterEditorSurface = ({
     onSelectedTypesChange(next);
   };
 
-  const contentClassName = isSidePanel
-    ? "fixed bottom-4 right-4 top-4 z-[60] flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border bg-background shadow-2xl"
-    : "fixed inset-x-0 bottom-0 z-[60] flex max-h-[70dvh] flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl";
-
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[59] bg-black/70" />
-        <DialogPrimitive.Content className={contentClassName} data-testid="filters-editor-surface">
-          <DialogPrimitive.Title className="sr-only">Diagnostics filters</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent
+        className="z-[60] overflow-hidden p-0 sm:w-[min(100vw-2rem,22rem)]"
+        data-testid="filters-editor-surface"
+      >
+        <AppSheetHeader className="px-4 py-3 pr-14">
+          <AppSheetTitle className="text-base">Filters</AppSheetTitle>
+          <AppSheetDescription className="sr-only">
             Filter diagnostics activity by type, contributor, and severity.
-          </DialogPrimitive.Description>
-          <SurfaceHeader title="Filters" onClose={() => onOpenChange(false)} />
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            <p className="mb-3 text-xs text-muted-foreground" data-testid="filters-result-count">
-              {visibleCount} of {totalCount}
-            </p>
+          </AppSheetDescription>
+        </AppSheetHeader>
+        <AppSheetBody className="px-4 py-3">
+          <p className="mb-3 text-xs text-muted-foreground" data-testid="filters-result-count">
+            {visibleCount} of {totalCount}
+          </p>
 
-            <div className="space-y-3">
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Activity types
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {EVIDENCE_ORDER.map((type) => (
-                    <FilterToggleChip
-                      key={type}
-                      label={type}
-                      checked={selectedTypes.has(type)}
-                      onChange={(checked) => toggleType(type, checked)}
-                    />
-                  ))}
-                </div>
-              </section>
+          <div className="space-y-3">
+            <section className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
+              <div className="flex flex-wrap gap-1.5">
+                {EVIDENCE_ORDER.map((type) => (
+                  <FilterToggleChip
+                    key={type}
+                    label={type}
+                    checked={selectedTypes.has(type)}
+                    onChange={(checked) => toggleType(type, checked)}
+                  />
+                ))}
+              </div>
+            </section>
 
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
-                    <FilterToggleChip
-                      key={option}
-                      label={option}
-                      checked={contributor === option}
-                      onChange={(checked) => {
-                        if (!checked) return;
-                        onContributorChange(option);
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
-                    <FilterToggleChip
-                      key={option}
-                      label={option}
-                      checked={severity === option}
-                      onChange={(checked) => {
-                        if (!checked) return;
-                        onSeverityChange(option);
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              <section className="space-y-1.5 border-t border-border/70 pt-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      onSeverityChange("Errors");
-                      onSelectedTypesChange(new Set(EVIDENCE_ORDER));
-                      onContributorChange("All");
+            <section className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
+                  <FilterToggleChip
+                    key={option}
+                    label={option}
+                    checked={contributor === option}
+                    onChange={(checked) => {
+                      if (!checked) return;
+                      onContributorChange(option);
                     }}
-                    data-testid="quick-filter-errors"
-                  >
-                    Errors only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      onSeverityChange("All");
-                      onSelectedTypesChange(new Set<EvidenceType>(["Problems"]));
-                      onContributorChange("All");
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
+                  <FilterToggleChip
+                    key={option}
+                    label={option}
+                    checked={severity === option}
+                    onChange={(checked) => {
+                      if (!checked) return;
+                      onSeverityChange(option);
                     }}
-                    data-testid="quick-filter-problems"
-                  >
-                    Problems only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      onSeverityChange("All");
-                      onSelectedTypesChange(new Set(DEFAULT_TYPES));
-                      onContributorChange("All");
-                    }}
-                    data-testid="quick-filter-reset"
-                  >
-                    Reset
-                  </Button>
-                </div>
-              </section>
-            </div>
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-1.5 border-t border-border/70 pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("Errors");
+                    onSelectedTypesChange(new Set(EVIDENCE_ORDER));
+                    onContributorChange("All");
+                  }}
+                  data-testid="quick-filter-errors"
+                >
+                  Errors only
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("All");
+                    onSelectedTypesChange(new Set<EvidenceType>(["Problems"]));
+                    onContributorChange("All");
+                  }}
+                  data-testid="quick-filter-problems"
+                >
+                  Problems only
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("All");
+                    onSelectedTypesChange(new Set(DEFAULT_TYPES));
+                    onContributorChange("All");
+                  }}
+                  data-testid="quick-filter-reset"
+                >
+                  Reset
+                </Button>
+              </div>
+            </section>
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 };
 
@@ -740,24 +735,19 @@ const ConnectionSurface = ({
   error: string | null;
 }) => {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
-        <DialogPrimitive.Content
-          className="fixed inset-x-0 bottom-0 top-[16dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl sm:left-1/2 sm:right-auto sm:top-1/2 sm:h-auto sm:max-h-[80dvh] sm:w-[28rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:border"
-          data-testid={mode === "view" ? "connection-view-surface" : "connection-edit-surface"}
-        >
-          <DialogPrimitive.Title className="sr-only">
-            {mode === "view" ? "Connection details" : "Edit connection"}
-          </DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
+    <AppDialog open={open} onOpenChange={onOpenChange}>
+      <AppDialogContent data-testid={mode === "view" ? "connection-view-surface" : "connection-edit-surface"}>
+        <AppDialogHeader>
+          <AppDialogTitle>{mode === "view" ? "Connection details" : "Edit connection"}</AppDialogTitle>
+          <AppDialogDescription>
             {mode === "view"
               ? "Review the current host and ports used for the connected device."
               : "Update the host and ports used for the connected device."}
-          </DialogPrimitive.Description>
-          <SurfaceHeader title="Connection" onClose={() => onOpenChange(false)} />
+          </AppDialogDescription>
+        </AppDialogHeader>
+        <AppDialogBody>
           {mode === "view" ? (
-            <div className="space-y-3 px-4 py-3 text-sm">
+            <div className="space-y-3 text-sm">
               <div className="grid grid-cols-[4rem_1fr] gap-y-2">
                 <span className="text-muted-foreground">Host</span>
                 <span className="font-medium text-foreground">{draft.host}</span>
@@ -771,7 +761,7 @@ const ConnectionSurface = ({
               </Button>
             </div>
           ) : (
-            <div className="space-y-3 px-4 py-3 text-sm">
+            <div className="space-y-3 text-sm">
               <label className="block space-y-1">
                 <span className="text-muted-foreground">Host</span>
                 <Input
@@ -813,47 +803,47 @@ const ConnectionSurface = ({
                   {error}
                 </p>
               ) : null}
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  data-testid="connection-edit-cancel"
-                >
-                  Cancel
-                </Button>
-                <Button type="button" onClick={onSave} data-testid="connection-edit-save">
-                  Save
-                </Button>
-              </div>
             </div>
           )}
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        </AppDialogBody>
+        {mode === "edit" ? (
+          <AppDialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              data-testid="connection-edit-cancel"
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={onSave} data-testid="connection-edit-save">
+              Save
+            </Button>
+          </AppDialogFooter>
+        ) : null}
+      </AppDialogContent>
+    </AppDialog>
   );
 };
 
 const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
-        <DialogPrimitive.Content
-          className="fixed inset-x-0 bottom-0 top-[12dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl sm:left-1/2 sm:right-auto sm:top-1/2 sm:h-auto sm:max-h-[80dvh] sm:w-[34rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:border"
-          data-testid="config-drift-surface"
-        >
-          <DialogPrimitive.Title className="sr-only">Config drift</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent
+        className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,34rem)]"
+        data-testid="config-drift-surface"
+      >
+        <AppSheetHeader className="px-4 py-3 pr-14">
+          <AppSheetTitle className="text-base">Config Drift</AppSheetTitle>
+          <AppSheetDescription className="sr-only">
             Review runtime configuration drift against persisted settings.
-          </DialogPrimitive.Description>
-          <SurfaceHeader title="Config Drift" onClose={() => onOpenChange(false)} />
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            <ConfigDriftView onBack={() => onOpenChange(false)} />
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+          </AppSheetDescription>
+        </AppSheetHeader>
+        <AppSheetBody className="px-4 py-3">
+          <ConfigDriftView onBack={() => onOpenChange(false)} />
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 };
 
@@ -871,28 +861,27 @@ const DecisionStateSurface = ({
   actionSummaries: ActionSummary[];
 }) => {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
-        <DialogPrimitive.Content
-          className="fixed inset-x-0 bottom-0 top-[10dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl sm:left-1/2 sm:right-auto sm:top-1/2 sm:h-[min(80dvh,46rem)] sm:w-[min(42rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:border"
-          data-testid="decision-state-surface"
-        >
-          <DialogPrimitive.Title className="sr-only">Decision state</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent
+        className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]"
+        data-testid="decision-state-surface"
+      >
+        <AppSheetHeader className="px-4 py-3 pr-14">
+          <AppSheetTitle className="text-base">Decision state</AppSheetTitle>
+          <AppSheetDescription className="sr-only">
             Internal reconciliation, playback uncertainty, and recent diagnostics transitions.
-          </DialogPrimitive.Description>
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            <DecisionStateView
-              onBack={() => onOpenChange(false)}
-              onRepair={() => onRepair?.()}
-              repairRunning={repairRunning}
-              actionSummaries={actionSummaries}
-            />
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+          </AppSheetDescription>
+        </AppSheetHeader>
+        <AppSheetBody className="px-4 py-3">
+          <DecisionStateView
+            onBack={() => onOpenChange(false)}
+            onRepair={() => onRepair?.()}
+            repairRunning={repairRunning}
+            actionSummaries={actionSummaries}
+          />
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 };
 
@@ -1482,7 +1471,6 @@ export function DiagnosticsDialog({
       <FilterEditorSurface
         open={open && filtersOpen}
         onOpenChange={setFiltersOpen}
-        profile={profile}
         selectedTypes={selectedTypes}
         onSelectedTypesChange={setSelectedTypes}
         contributor={contributor}

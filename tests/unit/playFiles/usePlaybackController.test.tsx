@@ -5,6 +5,8 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
+import { addErrorLog } from "@/lib/logging";
+import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
@@ -18,6 +20,11 @@ vi.mock("@/lib/playback/playbackRouter", () => ({
 
 vi.mock("@/lib/hvsc", () => ({
   getHvscDurationByMd5Seconds: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/sid/sidUtils", () => ({
+  getSidSongCount: vi.fn(() => 3),
+  computeSidMd5: vi.fn(async () => "mock-md5"),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -93,6 +100,8 @@ const renderPlaybackController = (
     applySonglengthsToItems?: ReturnType<typeof vi.fn>;
     cancelAutoAdvance?: ReturnType<typeof vi.fn>;
     enqueuePlayTransition?: ReturnType<typeof vi.fn>;
+    resolveSonglengthDurationMsForPath?: ReturnType<typeof vi.fn>;
+    snapshotToUpdates?: ReturnType<typeof vi.fn>;
   },
 ) =>
   renderHook(() =>
@@ -117,14 +126,15 @@ const renderPlaybackController = (
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
       ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
-      resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
+      resolveSonglengthDurationMsForPath:
+        options?.resolveSonglengthDurationMsForPath ?? vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: options?.applySonglengthsToItems ?? vi.fn().mockImplementation(async (items) => items),
       restoreVolumeOverrides: options?.restoreVolumeOverrides ?? vi.fn().mockResolvedValue(undefined),
       applyAudioMixerUpdates: options?.applyAudioMixerUpdates ?? vi.fn().mockResolvedValue(undefined),
       buildEnabledSidMuteUpdates: options?.buildEnabledSidMuteUpdates ?? vi.fn().mockReturnValue({}),
       captureSidMuteSnapshot:
         options?.captureSidMuteSnapshot ?? vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
-      snapshotToUpdates: vi.fn().mockReturnValue({}),
+      snapshotToUpdates: options?.snapshotToUpdates ?? vi.fn().mockReturnValue({}),
       resolveEnabledSidVolumeItems: options?.resolveEnabledSidVolumeItems ?? vi.fn().mockResolvedValue([]),
       dispatchVolume: options?.dispatchVolume ?? vi.fn(),
       sidEnablement: {} as any,
@@ -600,5 +610,193 @@ describe("usePlaybackController", () => {
     expect(trackStartedAtRef.current).toBeNull();
     expect(autoAdvanceGuardRef.current).toBeNull();
     expect(setAutoAdvanceDueAtMs).toHaveBeenCalledWith(null);
+  });
+
+  it("falls back when local SID metadata cannot read the file", async () => {
+    const { result } = renderPlaybackController([createPlaylistItem()]);
+    const brokenFile = {
+      name: "broken.sid",
+      arrayBuffer: vi.fn().mockRejectedValue(new Error("read failed")),
+    } as unknown as File;
+
+    await expect(result.current.resolveSidMetadata(brokenFile as any, 1)).resolves.toEqual({
+      durationMs: 45_000,
+      subsongCount: undefined,
+      readable: false,
+    });
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      "Failed to read local SID file",
+      expect.objectContaining({ error: "read failed" }),
+    );
+  });
+
+  it("resolves local SID metadata from songlength lookup before MD5 lookup", async () => {
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const { result } = renderPlaybackController([createPlaylistItem()], {
+      resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(12_345) as any,
+    } as any);
+
+    await expect(result.current.resolveSidMetadata(file as any, 2)).resolves.toEqual({
+      durationMs: 12_345,
+      subsongCount: 3,
+      readable: true,
+    });
+    expect(vi.mocked(getHvscDurationByMd5Seconds)).not.toHaveBeenCalled();
+  });
+
+  it("falls back to HVSC MD5 duration lookup for local SID metadata", async () => {
+    vi.mocked(getHvscDurationByMd5Seconds).mockResolvedValueOnce(99);
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const { result } = renderPlaybackController([createPlaylistItem()]);
+
+    await expect(result.current.resolveSidMetadata(file as any, null)).resolves.toEqual({
+      durationMs: 99_000,
+      subsongCount: 3,
+      readable: true,
+    });
+  });
+
+  it("throws when a local playlist item cannot be resolved to a file", async () => {
+    const localItem = createPlaylistItem({
+      category: "sid",
+      sourceId: "local-1",
+      path: "/MUSIC/demo.sid",
+      request: { source: "local", path: "/MUSIC/demo.sid", file: undefined },
+    });
+    const { result } = renderPlaybackController([localItem]);
+
+    await expect(result.current.playItem(localItem, { playlistIndex: 0 })).rejects.toThrow(
+      "Local file unavailable. Re-add it to the playlist.",
+    );
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("reports connection failures before playback starts", async () => {
+    const item = createPlaylistItem();
+    const ensurePlaybackConnection = vi.fn().mockRejectedValue(new Error("connect failed"));
+    const { result } = renderPlaybackController([item], { ensurePlaybackConnection });
+
+    await expect(result.current.playItem(item, { playlistIndex: 0 })).rejects.toThrow("connect failed");
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "PLAYBACK_CONNECT", title: "Connection failed" }),
+    );
+  });
+
+  it("starts the playlist from scratch when the current index is unset", async () => {
+    const playlist = [createPlaylistItem()];
+    const setIsPlaylistLoading = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: -1,
+      setIsPlaylistLoading,
+    });
+
+    await result.current.handlePlay();
+
+    expect(setIsPlaylistLoading).toHaveBeenCalledWith(true);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when stop is requested while playback is already inactive", async () => {
+    const machineReset = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+    const { result } = renderPlaybackController([createPlaylistItem()], { isPlaying: false, isPaused: false });
+
+    await result.current.handleStop();
+
+    expect(machineReset).not.toHaveBeenCalled();
+  });
+
+  it("reports reset failures when stopping non-disk playback", async () => {
+    const machineReset = vi.fn().mockRejectedValue(new Error("reset failed"));
+    const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+    const { result } = renderPlaybackController([createPlaylistItem()], {
+      isPlaying: true,
+      restoreVolumeOverrides,
+    });
+
+    await result.current.handleStop();
+
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "PLAYBACK_STOP", title: "Stop failed" }),
+    );
+    expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
+  });
+
+  it("retries resume and logs mixer restore failures when resuming paused playback", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const machineResume = vi.fn().mockRejectedValueOnce(new Error("resume once")).mockResolvedValueOnce(undefined);
+    const applyAudioMixerUpdates = vi.fn().mockRejectedValue(new Error("mixer failed"));
+    const pauseMuteSnapshotRef = {
+      current: {
+        volumes: { "SID 1": "5 dB" },
+        enablement: {},
+      },
+    };
+    const autoAdvanceGuardRef = {
+      current: {
+        trackInstanceId: 1,
+        dueAtMs: 0,
+        autoFired: false,
+        userCancelled: false,
+      },
+    };
+    const setAutoAdvanceDueAtMs = vi.fn();
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 0 as any,
+      durationMs: 30_000,
+      applyAudioMixerUpdates,
+      resolveEnabledSidVolumeItems: vi
+        .fn()
+        .mockResolvedValue([{ name: "SID 1", value: "0 dB", options: ["OFF", "-42 dB", "5 dB"] }]),
+      snapshotToUpdates: vi.fn().mockReturnValue({ "SID 1": "5 dB" }) as any,
+      pauseMuteSnapshotRef,
+      autoAdvanceGuardRef,
+      setAutoAdvanceDueAtMs,
+    } as any);
+
+    await result.current.handlePauseResume();
+
+    expect(machineResume).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      "Machine resume first attempt failed",
+      expect.objectContaining({ error: "resume once" }),
+    );
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      "Failed to reapply audio mixer settings after resume",
+      expect.objectContaining({ error: "mixer failed", itemCount: 1 }),
+    );
+    expect(setAutoAdvanceDueAtMs).toHaveBeenCalled();
+  });
+
+  it("wraps to the first playlist item when repeat is enabled", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+    ];
+    const setCurrentIndex = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 1,
+      isPlaying: true,
+      repeatEnabled: true,
+      setCurrentIndex,
+    });
+
+    await result.current.handleNext("user");
+
+    expect(setCurrentIndex).toHaveBeenCalledWith(0);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
   });
 });

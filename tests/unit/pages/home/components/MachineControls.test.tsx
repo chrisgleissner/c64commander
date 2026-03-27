@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MachineControls } from "@/pages/home/components/MachineControls";
 
 vi.mock("framer-motion", () => ({
@@ -66,6 +66,10 @@ const defaultProps = {
 };
 
 describe("MachineControls", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders the canonical eight primary quick actions in order", () => {
     render(<MachineControls {...defaultProps} telnetAvailable={true} />);
 
@@ -89,6 +93,17 @@ describe("MachineControls", () => {
     fireEvent.click(screen.getByTestId("action-Reboot"));
 
     expect(defaultProps.controls.reboot.mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes the primary reboot action through telnet when a telnet reboot handler is provided", () => {
+    const onReboot = vi.fn();
+
+    render(<MachineControls {...defaultProps} telnetAvailable={true} onReboot={onReboot} />);
+
+    fireEvent.click(screen.getByTestId("action-Reboot"));
+
+    expect(onReboot).toHaveBeenCalledTimes(1);
+    expect(defaultProps.controls.reboot.mutateAsync).not.toHaveBeenCalled();
   });
 
   it("disables Power Cycle when Telnet is unavailable or no handler is provided", () => {
@@ -123,5 +138,17 @@ describe("MachineControls", () => {
 
     expect(rebootKeepMemory).toHaveBeenCalledTimes(1);
     expect(saveReu).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders loading overflow actions with an ellipsis label", () => {
+    render(
+      <MachineControls
+        {...defaultProps}
+        telnetAvailable={true}
+        overflowActions={[{ id: "rebootKeepMemory", label: "Reboot (Keep RAM)", onSelect: vi.fn(), loading: true }]}
+      />,
+    );
+
+    expect(screen.getByTestId("home-machine-overflow-rebootKeepMemory")).toHaveTextContent("Reboot (Keep RAM)…");
   });
 });

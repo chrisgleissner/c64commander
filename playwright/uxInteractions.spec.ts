@@ -9,7 +9,7 @@
 /**
  * UX Interaction Pattern Tests
  *
- * Validates interaction patterns from doc/ux-guidelines.md:
+ * Validates interaction patterns from docs/ux-guidelines.md:
  * - Sources define where items come from
  * - Selection is navigation within a source (bounded)
  * - Collections are playlists (playback) or disk collections (mounting)
