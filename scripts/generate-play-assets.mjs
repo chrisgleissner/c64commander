@@ -3,9 +3,19 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 const rootDir = process.cwd();
-const logoPath = path.join(rootDir, 'doc', 'img', 'c64commander.png');
-const outDir = path.join(rootDir, 'docs', 'play-store');
+const logoPath = path.join(rootDir, 'docs', 'img', 'c64commander.png');
+const outDir = path.join(rootDir, 'docs', 'site', 'play-store');
 const screenshotsDir = path.join(outDir, 'screenshots');
+
+const playStoreScreenshotSources = [
+  ['docs/img/app/home/00-overview-light.png', 'app-home.png'],
+  ['docs/img/app/play/01-overview.png', 'app-play.png'],
+  ['docs/img/app/disks/01-overview.png', 'app-disks.png'],
+  ['docs/img/app/config/01-categories.png', 'app-configuration.png'],
+  ['docs/img/app/config/profiles/expanded/01-overview.png', 'app-configuration-expanded.png'],
+  ['docs/img/app/settings/01-overview.png', 'app-settings.png'],
+  ['docs/img/app/docs/01-overview.png', 'app-documentation.png'],
+];
 
 const ensureDir = (dir) => {
   fs.mkdirSync(dir, { recursive: true });
@@ -67,25 +77,15 @@ const main = async () => {
     .png()
     .toFile(path.join(outDir, 'feature-graphic-1024x500.png'));
 
-  const screenshots = [
-    'app-home.png',
-    'app-play.png',
-    'app-disks.png',
-    'app-configuration.png',
-    'app-configuration-expanded.png',
-    'app-settings.png',
-    'app-documentation.png',
-  ];
-
-  screenshots.forEach((file) => {
-    const source = path.join(rootDir, 'doc', 'img', file);
-    const target = path.join(screenshotsDir, file);
+  playStoreScreenshotSources.forEach(([sourceRelativePath, targetFileName]) => {
+    const source = path.join(rootDir, sourceRelativePath);
+    const target = path.join(screenshotsDir, targetFileName);
     if (fs.existsSync(source)) {
       fs.copyFileSync(source, target);
     }
   });
 
-  console.log('Play Store assets generated in docs/play-store.');
+  console.log('Play Store assets generated in docs/site/play-store.');
 };
 
 main().catch((error) => {

@@ -11,7 +11,7 @@ After incorporating repository evidence and operator clarifications supplied on 
 
 This audit reviewed the repository structure, production code, tests, native layers, CI/CD workflows, build tooling, release configuration, security posture, and project documentation. Evidence came from source files, configuration files, test suites, workflow definitions, repository metadata, and local command output captured during the audit.
 
-All documents in `doc`, `docs/c64`, `docs/diagnostics`, and `docs/testing` were read before the main audit began, as required. Additional documentation reviewed during the audit included `README.md`, `docs/**`, `ci/telemetry/README.md`, `agents/README.md`, `c64scope/README.md`, `tests/**/README.md`, and prior `docs/research/review-*` materials.
+All documents in `docs/`, including `docs/c64`, `docs/diagnostics`, and `docs/testing`, were read before the main audit began, as required. Additional documentation reviewed during the audit included `README.md`, `docs/**`, `ci/telemetry/README.md`, `agents/README.md`, `c64scope/README.md`, `tests/**/README.md`, and prior `docs/research/review-*` materials.
 
 The audit also incorporates operator scope clarifications provided on March 13, 2026:
 

@@ -1131,7 +1131,7 @@ GPL v3 (full standard text in `LICENSE`). Badge mismatch documented in PRA-029.
 
 ## Store Listing
 
-Play Store assets exist in `docs/play-store/` (feature graphics and icons). No text metadata files. Store listing presumably managed in Play Console.
+Play Store assets exist in `docs/site/play-store/` (feature graphics and icons). No text metadata files. Store listing presumably managed in Play Console.
 
 ## Known Gaps
 

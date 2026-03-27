@@ -157,7 +157,7 @@ const run = async () => {
   const results = await Promise.all(
     files.map(async (filePath) => {
       const headBlob = await loadHeadBlob(filePath);
-      const relOut = filePath.replace(/^doc\/img\/app\//, "");
+      const relOut = filePath.replace(/^docs\/img\/app\//, "");
       const outPath = path.join(OUT_ROOT, relOut);
 
       if (!headBlob) {
