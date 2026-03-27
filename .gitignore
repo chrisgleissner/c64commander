@@ -77,21 +77,21 @@ docker-history*.txt
 docker-inspect*.json
 filecount*.txt
 
-# Review 3 generated research evidence
-doc/research/**/artifacts/
-doc/research/**/logs/
-doc/research/**/*logcat*
-doc/research/**/*meminfo*/
-doc/research/**/metrics/
-doc/research/**/post-fix/logs/
-doc/research/**/post-fix/screenshots/
-doc/research/**/rollout-artifacts/
-doc/research/**/rollout-artifacts/**
-doc/research/**/screenshots/
+# Review generated research evidence (machine-generated, ephemeral)
+docs/research/**/artifacts/
+docs/research/**/logs/
+docs/research/**/*logcat*
+docs/research/**/*meminfo*/
+docs/research/**/metrics/
+docs/research/**/post-fix/logs/
+docs/research/**/post-fix/screenshots/
+docs/research/**/rollout-artifacts/
+docs/research/**/rollout-artifacts/**
+docs/research/**/screenshots/
 
 # Full app coverage generated run artifacts
-doc/testing/agentic-tests/full-app-coverage/runs/*
-!doc/testing/agentic-tests/full-app-coverage/runs/README.md
+docs/testing/agentic-tests/full-app-coverage/runs/*
+!docs/testing/agentic-tests/full-app-coverage/runs/README.md
 
 # Agent runtime artifacts
 agents/.coverage
@@ -162,10 +162,10 @@ c64scope/**/node_modules/
 src/version.ts
 
 # Generated OCR and swipe-transition screenshots (no longer produced)
-doc/img/app/details/page-headers/**/ocr.txt
-doc/img/app/details/page-headers/**/header.ocr.png
-doc/img/app/details/page-headers/**/screen.png
-doc/img/app/details/swipe-transitions/
+docs/img/app/details/page-headers/**/ocr.txt
+docs/img/app/details/page-headers/**/header.ocr.png
+docs/img/app/details/page-headers/**/screen.png
+docs/img/app/details/swipe-transitions/
 
 # Symlinked projects
 1541ultimate
