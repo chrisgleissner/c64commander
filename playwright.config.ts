@@ -23,16 +23,33 @@ const buildAndPreviewCommand = `${coverageEnv}${probeEnv}npm run build && ${prev
 const webServerCommand = skipBuild
   ? `[ -f dist/index.html ] && ${previewCommand} || (${buildAndPreviewCommand})`
   : buildAndPreviewCommand;
+const deterministicChromiumArgs = [
+  "--disable-font-subpixel-positioning",
+  "--disable-lcd-text",
+  "--disable-skia-runtime-opts",
+  "--font-render-hinting=none",
+  "--force-color-profile=srgb",
+];
 
 // Device selection logic
 const devicesEnv = process.env.PLAYWRIGHT_DEVICES?.toLowerCase().trim();
 const phoneProject = {
   name: "android-phone",
-  use: playwrightDevices["Pixel 5"],
+  use: {
+    ...playwrightDevices["Pixel 5"],
+    launchOptions: {
+      args: deterministicChromiumArgs,
+    },
+  },
 };
 const webProject = {
   name: "web",
-  use: playwrightDevices["Desktop Chrome"],
+  use: {
+    ...playwrightDevices["Desktop Chrome"],
+    launchOptions: {
+      args: deterministicChromiumArgs,
+    },
+  },
 };
 const tabletProject = {
   name: "android-tablet",
@@ -40,6 +57,9 @@ const tabletProject = {
     viewport: { width: 800, height: 1280 },
     deviceScaleFactor: 2,
     isMobile: true,
+    launchOptions: {
+      args: deterministicChromiumArgs,
+    },
   },
   // Tablet only runs layout-annotated tests by default
   grep: devicesEnv ? undefined : /@layout/,

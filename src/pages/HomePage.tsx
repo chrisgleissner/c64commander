@@ -213,6 +213,17 @@ function HomePageContent() {
     });
   };
 
+  const handleTelnetRebootClearMemory = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    await executeTelnetAction({
+      actionId: "rebootClearMemory",
+      successTitle: "Machine rebooting",
+      failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
+      failureTitle: "Reboot failed",
+      onSuccess: () => setMachineExecutionState("running"),
+    });
+  };
+
   const handleTelnetRebootKeepMemory = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
     await executeTelnetAction({
@@ -591,6 +602,7 @@ function HomePageContent() {
             onSaveRam={() => setSaveRamDialogOpen(true)}
             onLoadRam={() => setSnapshotManagerOpen(true)}
             onPowerOff={handlePowerOff}
+            onReboot={() => void handleTelnetRebootClearMemory()}
             onPowerCycle={() => void handlePowerCycle()}
             overflowActions={machineOverflowActions}
             onAction={handleAction}

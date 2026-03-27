@@ -1,134 +1,100 @@
-# Telnet Convergence Implementation Plan
-
-## Screenshot Regeneration Integrity Plan
+# Screenshot Deduplication Repair Plan
 
 Status: IN PROGRESS
 Date: 2026-03-26
 Classification: DOC_PLUS_CODE
-Visible UI impact: YES
+Visible UI impact: NO
 
-### Objective
+## Problem Statement
 
-Enforce deterministic documentation screenshot freshness across `doc/img/app/**/*.png` using only git metadata, path/reference auditing, and reproducible pipeline regeneration with zero image inspection.
+The screenshot generation pipeline for `doc/img/app/` is no longer trustworthy. An unchanged rerun is leaving broad screenshot churn, while the current dedupe design is too weak to distinguish encoder or rendering noise from real UI deltas. The pipeline must return to a strict, deterministic state where unchanged reruns leave zero retained screenshot diffs and small real visual changes remain detectable.
 
-### Execution Phases
+## Assumptions
 
-#### Phase 1 - Inventory and reference mapping
+- The authoritative screenshot entry point is the Playwright `@screenshots` suite invoked via `npm run screenshots`.
+- `doc/img/app/` tracked at `HEAD` is the baseline that reruns must compare against.
+- PNG byte equality is not sufficient because encoder output can differ even when pixels are effectively unchanged.
+- Existing repo changes outside this task may be present and must be preserved.
 
-- Enumerate every screenshot under `doc/img/app/**/*.png`.
-- Enumerate every reference from `README.md`, `doc/**`, and `docs/**`.
-- Build a path-only image-to-reference mapping for reporting and orphan detection.
+## Invariants
 
-#### Phase 2 - Git-date classification
+- No-op rerun: two identical reruns from the same commit and environment leave zero retained diffs under `doc/img/app/`.
+- High sensitivity: small real UI changes, including short text edits, must remain preserved.
+- Explicit bounded tolerance: any tolerated noise must be narrowly defined, justified, and encoded in code and tests.
+- Determinism: capture should control obvious sources of nondeterminism before comparison applies any tolerance.
+- Net-result: redundant regenerated screenshots must be removed automatically before completion.
+- Proof: automated tests must prove unchanged screenshots are eliminated and small real changes survive.
 
-- Resolve the last git modification date for every screenshot.
-- Classify screenshots as `VALID` only when the git date is `2026-03-26`.
-- Mark every other screenshot `OUTDATED` for deletion and regeneration.
+## Current Pipeline Map
 
-#### Phase 3 - Pipeline coverage verification
+- Entry point: `npm run screenshots` -> [`scripts/run-screenshots-with-prune.mjs`](/home/chris/dev/c64/c64commander/scripts/run-screenshots-with-prune.mjs)
+- Capture suite: [`playwright/screenshots.spec.ts`](/home/chris/dev/c64/c64commander/playwright/screenshots.spec.ts)
+- Post-run cleanup: [`scripts/revert-identical-pngs.mjs`](/home/chris/dev/c64/c64commander/scripts/revert-identical-pngs.mjs)
+- Metadata-only dedupe helper: [`scripts/screenshotMetadataDedupe.js`](/home/chris/dev/c64/c64commander/scripts/screenshotMetadataDedupe.js)
+- Path exceptions: [`scripts/screenshotPrunePolicy.js`](/home/chris/dev/c64/c64commander/scripts/screenshotPrunePolicy.js)
+- Diff aid only: [`scripts/diff-screenshots.mjs`](/home/chris/dev/c64/c64commander/scripts/diff-screenshots.mjs)
+- Output root: `doc/img/app/<page>/<state>.png`
 
-- Confirm the screenshot pipeline can regenerate the entire expected `doc/img/app/` set.
-- Extend deterministic screenshot coverage only if the current pipeline leaves gaps.
+## Root Cause Hypotheses
 
-#### Phase 4 - Deletion and full regeneration
+- The active dedupe path only compares git blob ids, so encoder-level PNG byte drift bypasses cleanup even when the visible image is unchanged.
+- `PLANS.md` previously encoded a git-date deletion/regeneration strategy that would force churn by design and is incompatible with the no-op invariant.
+- Existing fuzzy logic appears disconnected from the actual prune path, leaving no tested pixel-based decision in the pipeline that currently runs.
+- Rendering noise likely remains, but the current failure mode is broader: unchanged-but-not-byte-identical files are retained instead of reverted.
 
-- Delete all outdated screenshots from `doc/img/app/`.
-- Run the screenshot pipeline to regenerate the expected set.
-- Keep only the regenerated canonical files.
+## Phased Task List
 
-#### Phase 5 - Documentation consistency and reproducibility
+### Phase 1 - Audit and reproduce
 
-- Fix README/doc/docs references so every referenced screenshot exists.
-- Remove orphan references and document any justified non-referenced files.
-- Treat every screenshot referenced by the top-level `README.md` as mandatory canonical output that must continue to exist after regeneration.
-- If any `README.md` screenshot cannot be recreated by the screenshot suite, extend the suite until it generates that path; do not leave outdated PNGs behind and do not leave dangling links.
-- Re-run the screenshot pipeline and confirm no further tracked changes appear.
+- Map the exact screenshot generation, write, compare, and cleanup flow.
+- Measure representative churn against `HEAD` to separate byte-only drift, bounded rendering noise, and real pixel deltas.
+- Record the confirmed root causes in `WORKLOG.md`.
 
-#### Phase 6 - Reporting
+### Phase 2 - Deterministic capture hardening
 
-- Write `doc/research/review-screenshots-regeneration.md` with inventory, git-date validation, actions taken, and final PASS/FAIL checks.
+- Audit current capture stabilization in Playwright.
+- Add only the missing deterministic controls required for screenshots that still drift for non-semantic reasons.
+- Keep capture ordering and encoder behavior explicit and explainable.
 
-#### Phase 7 - CI remediation and green build closure
+### Phase 3 - Comparison and cleanup repair
 
-- Inspect the requested GitHub Actions job logs with `gh` after screenshot regeneration is complete.
-- Fix any failures that can be resolved locally without disabling tests.
-- Commit and push the full change set.
-- Monitor CI runs, fetch failing logs with `gh`, fix root causes, and push follow-up commits until all builds are green.
+- Replace or extend the metadata-only dedupe with strict image comparison against the correct baseline path.
+- Normalize irrelevant PNG-level differences before comparison.
+- Use a narrow threshold model that tolerates bounded rendering noise without hiding small text or layout changes.
+- Ensure unchanged tracked screenshots are restored and redundant new screenshots are deleted automatically.
 
-Status: IN PROGRESS
-Date: 2026-03-26
-Classification: DOC_PLUS_CODE
-Visible UI impact: YES
+### Phase 4 - Automated coverage
 
-## Objective
+- Add focused unit tests for the comparison/elimination core.
+- Cover identical pixels with different PNG bytes, tolerated bounded noise, and preserved small real changes.
+- Add a higher-level pipeline test for rerun/no-op behavior where practical.
 
-Implement the Review 13 Telnet convergence work across the canonical action registry, tracing, diagnostics, Home quick actions and overflow, device cards, health/capability modeling, tests, documentation, and the minimal screenshot set for the changed surfaces.
+### Phase 5 - Proof and validation
 
-## Execution Phases
+- Run targeted tests for the changed scripts and screenshot helpers.
+- Run `npm run test:coverage` and keep global branch coverage at `>= 91%`.
+- Run the screenshot pipeline twice from a stabilized point and prove the second run leaves zero retained screenshot diffs under `doc/img/app/`.
 
-### Phase 1 - Required reading and impact map
+### Phase 6 - Documentation
 
-- Status: COMPLETE
-- Re-read the review, plan/worklog, Telnet specs and addendum, stale docs surfaces, and the runtime/UI/diagnostics/tests that currently own Telnet behavior.
-- Classify the task as `DOC_PLUS_CODE` with visible UI changes.
-- Lock the implementation slices around the canonical Telnet capability model instead of continuing the old incremental button-by-button approach.
+- Update the relevant docs with the comparison model, thresholds, and debugging guidance.
+- Keep the explanation concise and factual.
 
-### Phase 2 - Canonical Telnet capability model
+## Acceptance Criteria
 
-- Status: IN PROGRESS
-- Extend the runtime action registry to match the Telnet-only firmware actions in scope, including the Developer submenu.
-- Add a canonical metadata model for UI surfacing, diagnostics classification, and menu-key/device-family handling so runtime, UI, and tests consume the same inventory.
-- Replace platform-only availability checks with a real capability decision derived from device state and supported platforms.
+- Root cause is identified and fixed at the actual pipeline layer.
+- Unchanged reruns leave zero retained screenshot diffs.
+- Small meaningful image changes remain preserved.
+- Tolerance is explicit, narrow, justified, and test-covered.
+- `PLANS.md` and `WORKLOG.md` reflect the real execution record.
+- Relevant docs are updated.
+- All touched tests pass.
 
-### Phase 3 - Tracing, diagnostics, and health convergence
+## Evidence Checklist
 
-- Status: NOT STARTED
-- Emit `telnet-operation` trace entries for every Telnet action with action id, visible label, menu path, duration, result, and normalized failure data.
-- Extend diagnostics action summaries, contributors, filters, evidence rows, counters, and health rollups to treat Telnet as a first-class subsystem beside REST and FTP.
-- Preserve existing REST/FTP behavior while making Telnet visible in steady-state health and activity models.
-
-### Phase 4 - Home quick actions and device-card integration
-
-- Status: NOT STARTED
-- Replace the current Home machine controls with the required eight primary actions in the required order.
-- Map visible `Reboot` to Telnet clear-memory semantics, move secondary actions into a `...` overflow, and preserve the compact 2x4 layout.
-- Converge drive and printer card Telnet actions into a consistent device-card action model.
-
-### Phase 5 - Regression coverage
-
-- Status: NOT STARTED
-- Add or update focused unit coverage for the registry, Telnet tracing, diagnostics Telnet effects/contributors, Home ordering and overflow rules, and device-card controls.
-- Add or update the minimal honest Playwright coverage for the changed Home and Diagnostics surfaces.
-- Add Maestro or equivalent native evidence only where it is required for real-device Telnet behavior.
-
-### Phase 6 - Documentation and screenshots
-
-- Status: NOT STARTED
-- Update `README.md`, `src/pages/DocsPage.tsx`, `doc/features-by-page.md`, `doc/ux-interactions.md`, and the affected diagnostics docs so they describe the shipped Telnet behavior.
-- Refresh only the screenshot files needed for Home quick actions/overflow, device-card Telnet controls, and Diagnostics Telnet visibility.
-
-### Phase 7 - Validation and convergence
-
-- Status: NOT STARTED
-- Run `npm run test:coverage` and keep global branch coverage at or above 91%.
-- Run `npm run lint`.
-- Run `npm run build`.
-- Run the smallest targeted Playwright and screenshot generation flows needed for the impacted Telnet surfaces.
-
-## Constraints
-
-- Do not narrow the review scope to avoid the hard parts of diagnostics or Home convergence.
-- Do not regress or special-case REST/FTP diagnostics while adding Telnet.
-- Do not bulk-refresh screenshots outside the Telnet-affected documentation surfaces.
-- Preserve Addendum 1 behavior: CommoServe search/browse remains direct HTTP plus device REST, not a new Telnet dependency.
-
-## Acceptance Checklist
-
-- The Telnet registry covers the in-scope Telnet-only action inventory and is canonical across runtime and tests.
-- Home primary quick actions are exactly `Reset`, `Reboot`, `Pause/Resume`, `Menu`, `Save RAM`, `Load RAM`, `Power Cycle`, `Power Off`.
-- Home overflow exists to the right of Quick Actions, includes `Reboot (Keep RAM)` and `Save REU`, and does not duplicate primary actions.
-- Drive and printer cards expose the required Telnet controls intentionally rather than ad hoc.
-- Every Telnet action emits trace data and appears in Diagnostics action summaries and traces.
-- Diagnostics and health models expose Telnet as a first-class contributor/filter/effect.
-- Docs and screenshots reflect the implemented Telnet behavior without contradictions.
-- Validation passes, including coverage at `>= 91%` branch coverage.
+- `git status --short` before and after the no-op rerun proof
+- Targeted unit test output for screenshot dedupe logic
+- `npm run test:coverage` result with branch coverage `>= 91%`
+- Screenshot pipeline run 1 summary
+- Screenshot pipeline run 2 summary with zero retained `doc/img/app/` diffs
+- File references for the final implementation and docs changes

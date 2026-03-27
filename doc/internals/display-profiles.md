@@ -269,6 +269,9 @@ Documentation screenshots under `doc/img/app/` must follow the display-profile c
 - Allowed profile folder names are `compact`, `medium`, and `expanded`.
 - Compact and Expanded screenshots should only be generated for surfaces whose visible behavior differs from the Medium baseline.
 - Profile-specific modal or browser captures should stay under the same page area, for example `doc/img/app/play/import/profiles/compact/`.
+- `npm run screenshots` compares regenerated screenshots against `HEAD` after decoding PNG pixels, so metadata-only PNG byte drift is discarded automatically.
+- The prune step accepts only a tightly bounded tolerance: anti-aliased-only differences or at most 8 non-AA diff pixels globally. Anything larger is kept as a real change candidate.
+- If screenshot churn appears, debug determinism first: Chromium launch flags, fixed clock seeding, font readiness, and motion suppression are part of the contract. Do not widen the tolerance to hide the churn.
 
 Examples:
 
