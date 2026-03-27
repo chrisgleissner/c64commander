@@ -61,7 +61,10 @@ Ensure the C64 Ultimate is on your local network with required services enabled:
 On the C64 Ultimate:
 
 1. Press **CBM+Restore** and open **Network services & timezone**.
-2. Enable **REST**. Enable **FTP** if you want file browsing and disk/playlist collection support.
+2. Enable:
+   - **Web Remote Control Service** - REST API used for most control and status operations
+   - **FTP File Service** - required for browsing and transferring files for playlists and disk collections
+   - **Telnet Remote Menu Service** - used for a small set of advanced operations not available via REST, such as power cycle
 3. Note the IP address from **Wired Network Setup** or **WI-FI Network Setup**.
 
 In C64 Commander:
