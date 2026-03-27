@@ -55,7 +55,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
 
 - Purpose: treat case and keyboard lighting as coordinated but independent surfaces
 - Entry: `Lighting Studio` -> `Compose`
-- Device preview geometry source: `doc/image/lighting/C64-layout.txt`
+- Device preview geometry source: `src/assets/lighting/c64-layout.txt`
 - Device preview legend:
   - `x` = case region
   - `-` = keyboard regions

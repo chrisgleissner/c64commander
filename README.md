@@ -90,7 +90,7 @@ Operational dashboard: machine controls, Telnet-backed quick actions, light effe
     <td><img src="doc/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio dialog" width="360"/></td>
+    <td><img src="doc/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="doc/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
     <td><img src="doc/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
   </tr>

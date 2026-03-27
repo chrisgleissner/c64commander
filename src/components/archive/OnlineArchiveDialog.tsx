@@ -100,9 +100,16 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
   }, [open, state]);
 
   const queryPreview = useMemo(() => {
+    if (!Object.values(form).some((value) => value.trim().length > 0)) {
+      return "";
+    }
     try {
       return buildArchiveQuery(form);
-    } catch {
+    } catch (error) {
+      console.warn("Failed to build online archive query preview", {
+        form,
+        error,
+      });
       return "";
     }
   }, [form]);
@@ -133,201 +140,203 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
           <AppSheetBody className="px-4 py-4 sm:px-6">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
               <div className="space-y-4 overflow-y-auto pr-1">
-            <div
-              className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground"
-              data-testid="online-archive-config-summary"
-            >
-              <div>
-                Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
-              </div>
-              <div>
-                Client: <span className="font-medium text-foreground">{clientType}</span>
-              </div>
-              <div>
-                Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
-              </div>
-              <div>
-                Client-Id: <span className="font-medium text-foreground">{resolvedConfig.clientId}</span>
-              </div>
-              <div>
-                User-Agent: <span className="font-medium text-foreground">{resolvedConfig.userAgent}</span>
-              </div>
-              {resolvedConfig.host !== currentDefaults.host ||
-              resolvedConfig.clientId !== currentDefaults.clientId ||
-              resolvedConfig.userAgent !== currentDefaults.userAgent ? (
-                <p className="mt-2">
-                  Overrides are active. Native platform security may block non-default cleartext hosts.
-                </p>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3">
-              {TEXT_FIELDS.map((field) => (
-                <div key={field.key} className="space-y-2">
-                  <Label htmlFor={`archive-${field.key}`}>{field.label}</Label>
-                  <Input
-                    id={`archive-${field.key}`}
-                    value={form[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
-                  />
-                </div>
-              ))}
-
-              {SELECT_FIELDS.map((field) => {
-                const preset = presetMap.get(field.key);
-                return (
-                  <div key={field.key} className="space-y-2">
-                    <Label>{field.label}</Label>
-                    <Select
-                      value={form[field.key] || "__any__"}
-                      onValueChange={(value) =>
-                        setForm((current) => ({ ...current, [field.key]: value === "__any__" ? "" : value }))
-                      }
-                      disabled={presetsLoading || !preset}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={presetsLoading ? "Loading…" : "Any"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__any__">Any</SelectItem>
-                        {(preset?.values ?? []).map((value) => (
-                          <SelectItem key={value.aqlKey} value={value.aqlKey}>
-                            {value.name ?? value.aqlKey}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div
+                  className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground"
+                  data-testid="online-archive-config-summary"
+                >
+                  <div>
+                    Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
                   </div>
-                );
-              })}
-            </div>
+                  <div>
+                    Client: <span className="font-medium text-foreground">{clientType}</span>
+                  </div>
+                  <div>
+                    Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
+                  </div>
+                  <div>
+                    Client-Id: <span className="font-medium text-foreground">{resolvedConfig.clientId}</span>
+                  </div>
+                  <div>
+                    User-Agent: <span className="font-medium text-foreground">{resolvedConfig.userAgent}</span>
+                  </div>
+                  {resolvedConfig.host !== currentDefaults.host ||
+                  resolvedConfig.clientId !== currentDefaults.clientId ||
+                  resolvedConfig.userAgent !== currentDefaults.userAgent ? (
+                    <p className="mt-2">
+                      Overrides are active. Native platform security may block non-default cleartext hosts.
+                    </p>
+                  ) : null}
+                </div>
 
-            <div className="space-y-3 rounded-lg border border-border/70 p-3">
-              <div className="text-xs text-muted-foreground">
-                {queryPreview ? (
-                  <span data-testid="online-archive-query-preview">{queryPreview}</span>
-                ) : (
-                  "Enter at least one search term."
-                )}
+                <div className="grid gap-3">
+                  {TEXT_FIELDS.map((field) => (
+                    <div key={field.key} className="space-y-2">
+                      <Label htmlFor={`archive-${field.key}`}>{field.label}</Label>
+                      <Input
+                        id={`archive-${field.key}`}
+                        value={form[field.key] ?? ""}
+                        placeholder={field.placeholder}
+                        onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
+                      />
+                    </div>
+                  ))}
+
+                  {SELECT_FIELDS.map((field) => {
+                    const preset = presetMap.get(field.key);
+                    return (
+                      <div key={field.key} className="space-y-2">
+                        <Label>{field.label}</Label>
+                        <Select
+                          value={form[field.key] || "__any__"}
+                          onValueChange={(value) =>
+                            setForm((current) => ({ ...current, [field.key]: value === "__any__" ? "" : value }))
+                          }
+                          disabled={presetsLoading || !preset}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={presetsLoading ? "Loading…" : "Any"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__any__">Any</SelectItem>
+                            {(preset?.values ?? []).map((value) => (
+                              <SelectItem key={value.aqlKey} value={value.aqlKey}>
+                                {value.name ?? value.aqlKey}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-border/70 p-3">
+                  <div className="text-xs text-muted-foreground">
+                    {queryPreview ? (
+                      <span data-testid="online-archive-query-preview">{queryPreview}</span>
+                    ) : (
+                      "Enter at least one search term."
+                    )}
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={() => void handleSearch()}
+                    disabled={!queryPreview || presetsLoading || state.phase === "searching"}
+                  >
+                    {state.phase === "searching" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="mr-2 h-4 w-4" />
+                    )}
+                    Search archive
+                  </Button>
+                </div>
               </div>
-              <Button
-                className="w-full"
-                onClick={() => void handleSearch()}
-                disabled={!queryPreview || presetsLoading || state.phase === "searching"}
-              >
-                {state.phase === "searching" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="mr-2 h-4 w-4" />
-                )}
-                Search archive
-              </Button>
-            </div>
-          </div>
 
               <div className="space-y-3 overflow-y-auto pr-1">
-            {selectedResult ? (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 p-3">
-                <div className="min-w-0">
-                  <p className="font-medium break-words">{selectedResult.name}</p>
-                  <p className="text-xs text-muted-foreground break-words">
-                    {selectedResult.group ?? "Unknown group"} • {selectedResult.updated ?? "No date"}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    void search(
-                      state.phase === "entries" || state.phase === "downloading" || state.phase === "executing"
-                        ? state.params
-                        : form,
-                    )
-                  }
-                >
-                  <ArrowLeft className="mr-1 h-4 w-4" />
-                  Results
-                </Button>
-              </div>
-            ) : null}
-
-            {!selectedResult ? (
-              <div className="space-y-2" data-testid="online-archive-results">
-                {!resultRows.length ? (
-                  <p className="rounded-lg border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
-                    Search results appear here.
-                  </p>
-                ) : null}
-                {resultRows.map((result) => (
-                  <button
-                    key={`${result.id}:${result.category}`}
-                    type="button"
-                    className="w-full rounded-lg border border-border p-3 text-left hover:border-primary/50"
-                    onClick={() =>
-                      void openEntries(state.phase === "results" ? state.params : form, result, resultRows)
-                    }
-                  >
-                    <p className="font-medium break-words">{result.name}</p>
-                    <p className="text-xs text-muted-foreground break-words">
-                      {result.group ?? "Unknown group"} • {result.year || "Unknown year"} •{" "}
-                      {result.updated ?? "No update date"}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-2" data-testid="online-archive-entries">
-                {entriesLoading ? (
-                  <div className="rounded-lg border border-border/70 p-3 text-sm text-muted-foreground">
-                    <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                    Loading entries…
+                {selectedResult ? (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 p-3">
+                    <div className="min-w-0">
+                      <p className="font-medium break-words">{selectedResult.name}</p>
+                      <p className="text-xs text-muted-foreground break-words">
+                        {selectedResult.group ?? "Unknown group"} • {selectedResult.updated ?? "No date"}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        void search(
+                          state.phase === "entries" || state.phase === "downloading" || state.phase === "executing"
+                            ? state.params
+                            : form,
+                        )
+                      }
+                    >
+                      <ArrowLeft className="mr-1 h-4 w-4" />
+                      Results
+                    </Button>
                   </div>
                 ) : null}
-                {!entriesLoading && !entryRows.length ? (
-                  <p className="rounded-lg border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
-                    No executable files found for this result.
-                  </p>
-                ) : null}
-                {entryRows.map((entry) => {
-                  const busy = activeEntryId === entry.id;
-                  return (
-                    <div key={entry.id} className="rounded-lg border border-border p-3">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="font-medium break-words">{entry.path}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatEntryMeta(entry.size, entry.date) || "No metadata"}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            void execute(
-                              state.phase === "entries" || state.phase === "downloading" || state.phase === "executing"
-                                ? state.params
-                                : form,
-                              selectedResult,
-                              resultRows,
-                              entry,
-                              entryRows,
-                            )
-                          }
-                          disabled={state.phase === "downloading" || state.phase === "executing"}
-                        >
-                          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                          {busy && state.phase === "downloading"
-                            ? "Downloading…"
-                            : busy && state.phase === "executing"
-                              ? "Executing…"
-                              : getArchiveEntryActionLabel(entry.path)}
-                        </Button>
+
+                {!selectedResult ? (
+                  <div className="space-y-2" data-testid="online-archive-results">
+                    {!resultRows.length ? (
+                      <p className="rounded-lg border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
+                        Search results appear here.
+                      </p>
+                    ) : null}
+                    {resultRows.map((result) => (
+                      <button
+                        key={`${result.id}:${result.category}`}
+                        type="button"
+                        className="w-full rounded-lg border border-border p-3 text-left hover:border-primary/50"
+                        onClick={() =>
+                          void openEntries(state.phase === "results" ? state.params : form, result, resultRows)
+                        }
+                      >
+                        <p className="font-medium break-words">{result.name}</p>
+                        <p className="text-xs text-muted-foreground break-words">
+                          {result.group ?? "Unknown group"} • {result.year || "Unknown year"} •{" "}
+                          {result.updated ?? "No update date"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2" data-testid="online-archive-entries">
+                    {entriesLoading ? (
+                      <div className="rounded-lg border border-border/70 p-3 text-sm text-muted-foreground">
+                        <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                        Loading entries…
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    ) : null}
+                    {!entriesLoading && !entryRows.length ? (
+                      <p className="rounded-lg border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
+                        No executable files found for this result.
+                      </p>
+                    ) : null}
+                    {entryRows.map((entry) => {
+                      const busy = activeEntryId === entry.id;
+                      return (
+                        <div key={entry.id} className="rounded-lg border border-border p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="font-medium break-words">{entry.path}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatEntryMeta(entry.size, entry.date) || "No metadata"}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                void execute(
+                                  state.phase === "entries" ||
+                                    state.phase === "downloading" ||
+                                    state.phase === "executing"
+                                    ? state.params
+                                    : form,
+                                  selectedResult,
+                                  resultRows,
+                                  entry,
+                                  entryRows,
+                                )
+                              }
+                              disabled={state.phase === "downloading" || state.phase === "executing"}
+                            >
+                              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              {busy && state.phase === "downloading"
+                                ? "Downloading…"
+                                : busy && state.phase === "executing"
+                                  ? "Executing…"
+                                  : getArchiveEntryActionLabel(entry.path)}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </AppSheetBody>

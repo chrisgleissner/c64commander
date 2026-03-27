@@ -20,7 +20,7 @@ const setViewportWidth = (width: number) => {
 };
 
 describe("profile-aware dialog surfaces", () => {
-  it("promotes selection browser dialogs to compact full-screen mode and keeps the footer sticky", () => {
+  it("uses the shared large modal presentation for selection browsers and keeps the footer sticky", () => {
     localStorage.clear();
     setViewportWidth(360);
 
@@ -40,8 +40,9 @@ describe("profile-aware dialog surfaces", () => {
     );
 
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAttribute("data-modal-presentation", "fullscreen");
-    expect(dialog.className).toContain("inset-2");
+    expect(dialog).toHaveAttribute("data-modal-presentation", "large");
+    expect(dialog.className).toContain("max-w-4xl");
+    expect(dialog.className).toContain("rounded-[var(--interstitial-radius)]");
     expect(screen.getByText("Confirm").parentElement).toHaveClass("sticky");
   });
 

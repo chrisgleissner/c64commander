@@ -115,6 +115,22 @@ const buildStudioMock = () => ({
     activeAutomationChip: "Connected",
     contextLens: [],
   },
+  rawDeviceState: {
+    case: {
+      mode: "Fixed Color",
+      pattern: "SingleColor",
+      color: { kind: "named" as const, value: "Blue" },
+      intensity: 22,
+      tint: "Pure",
+    },
+    keyboard: {
+      mode: "Fixed Color",
+      pattern: "SingleColor",
+      color: { kind: "named" as const, value: "Green" },
+      intensity: 18,
+      tint: "Warm",
+    },
+  },
   previewState: null,
   setPreviewState: vi.fn(),
   clearPreviewState: vi.fn(),
@@ -205,6 +221,16 @@ describe("LightingStudioDialog", () => {
     };
     updatedStudio.resolved.resolvedState.keyboard = {
       ...updatedStudio.resolved.resolvedState.keyboard,
+      color: { kind: "named" as const, value: "Blue" },
+      intensity: 4,
+    };
+    updatedStudio.rawDeviceState.case = {
+      ...updatedStudio.rawDeviceState.case,
+      color: { kind: "named" as const, value: "Orange" },
+      intensity: 31,
+    };
+    updatedStudio.rawDeviceState.keyboard = {
+      ...updatedStudio.rawDeviceState.keyboard,
       color: { kind: "named" as const, value: "Blue" },
       intensity: 4,
     };

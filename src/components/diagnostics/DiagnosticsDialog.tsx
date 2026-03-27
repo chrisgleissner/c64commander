@@ -307,7 +307,12 @@ const parseConnectionSnapshot = () => {
       httpPort: derivedPort,
       ftpPort,
     };
-  } catch {
+  } catch (error) {
+    console.warn("Failed to parse diagnostics connection snapshot base URL", {
+      baseUrl: snapshot.baseUrl,
+      deviceHost: snapshot.deviceHost,
+      error,
+    });
     return {
       host: deviceHost || "c64u",
       httpPort: 80,
@@ -342,15 +347,6 @@ const getLastCheckTimestamp = (
   if (healthState.lastTelnetActivity) return healthState.lastTelnetActivity.timestampMs;
   return null;
 };
-
-const SurfaceHeader = ({ title, onClose }: { title: string; onClose: () => void }) => (
-  <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
-    <h2 className="text-sm font-semibold">{title}</h2>
-    <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-      Close
-    </Button>
-  </div>
-);
 
 const FilterChip = ({ label }: { label: string }) => (
   <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-4">
@@ -568,7 +564,6 @@ const EvidenceRow = ({
 const FilterEditorSurface = ({
   open,
   onOpenChange,
-  profile,
   selectedTypes,
   onSelectedTypesChange,
   contributor,
@@ -602,7 +597,10 @@ const FilterEditorSurface = ({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent className="z-[60] overflow-hidden p-0 sm:w-[min(100vw-2rem,22rem)]" data-testid="filters-editor-surface">
+      <AppSheetContent
+        className="z-[60] overflow-hidden p-0 sm:w-[min(100vw-2rem,22rem)]"
+        data-testid="filters-editor-surface"
+      >
         <AppSheetHeader className="px-4 py-3 pr-14">
           <AppSheetTitle className="text-base">Filters</AppSheetTitle>
           <AppSheetDescription className="sr-only">
@@ -610,109 +608,107 @@ const FilterEditorSurface = ({
           </AppSheetDescription>
         </AppSheetHeader>
         <AppSheetBody className="px-4 py-3">
-            <p className="mb-3 text-xs text-muted-foreground" data-testid="filters-result-count">
-              {visibleCount} of {totalCount}
-            </p>
+          <p className="mb-3 text-xs text-muted-foreground" data-testid="filters-result-count">
+            {visibleCount} of {totalCount}
+          </p>
 
-            <div className="space-y-3">
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Activity types
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {EVIDENCE_ORDER.map((type) => (
-                    <FilterToggleChip
-                      key={type}
-                      label={type}
-                      checked={selectedTypes.has(type)}
-                      onChange={(checked) => toggleType(type, checked)}
-                    />
-                  ))}
-                </div>
-              </section>
+          <div className="space-y-3">
+            <section className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
+              <div className="flex flex-wrap gap-1.5">
+                {EVIDENCE_ORDER.map((type) => (
+                  <FilterToggleChip
+                    key={type}
+                    label={type}
+                    checked={selectedTypes.has(type)}
+                    onChange={(checked) => toggleType(type, checked)}
+                  />
+                ))}
+              </div>
+            </section>
 
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
-                    <FilterToggleChip
-                      key={option}
-                      label={option}
-                      checked={contributor === option}
-                      onChange={(checked) => {
-                        if (!checked) return;
-                        onContributorChange(option);
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
-                    <FilterToggleChip
-                      key={option}
-                      label={option}
-                      checked={severity === option}
-                      onChange={(checked) => {
-                        if (!checked) return;
-                        onSeverityChange(option);
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              <section className="space-y-1.5 border-t border-border/70 pt-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      onSeverityChange("Errors");
-                      onSelectedTypesChange(new Set(EVIDENCE_ORDER));
-                      onContributorChange("All");
+            <section className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
+                  <FilterToggleChip
+                    key={option}
+                    label={option}
+                    checked={contributor === option}
+                    onChange={(checked) => {
+                      if (!checked) return;
+                      onContributorChange(option);
                     }}
-                    data-testid="quick-filter-errors"
-                  >
-                    Errors only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      onSeverityChange("All");
-                      onSelectedTypesChange(new Set<EvidenceType>(["Problems"]));
-                      onContributorChange("All");
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
+                  <FilterToggleChip
+                    key={option}
+                    label={option}
+                    checked={severity === option}
+                    onChange={(checked) => {
+                      if (!checked) return;
+                      onSeverityChange(option);
                     }}
-                    data-testid="quick-filter-problems"
-                  >
-                    Problems only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      onSeverityChange("All");
-                      onSelectedTypesChange(new Set(DEFAULT_TYPES));
-                      onContributorChange("All");
-                    }}
-                    data-testid="quick-filter-reset"
-                  >
-                    Reset
-                  </Button>
-                </div>
-              </section>
-            </div>
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-1.5 border-t border-border/70 pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("Errors");
+                    onSelectedTypesChange(new Set(EVIDENCE_ORDER));
+                    onContributorChange("All");
+                  }}
+                  data-testid="quick-filter-errors"
+                >
+                  Errors only
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("All");
+                    onSelectedTypesChange(new Set<EvidenceType>(["Problems"]));
+                    onContributorChange("All");
+                  }}
+                  data-testid="quick-filter-problems"
+                >
+                  Problems only
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("All");
+                    onSelectedTypesChange(new Set(DEFAULT_TYPES));
+                    onContributorChange("All");
+                  }}
+                  data-testid="quick-filter-reset"
+                >
+                  Reset
+                </Button>
+              </div>
+            </section>
+          </div>
         </AppSheetBody>
       </AppSheetContent>
     </AppSheet>
@@ -812,7 +808,12 @@ const ConnectionSurface = ({
         </AppDialogBody>
         {mode === "edit" ? (
           <AppDialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="connection-edit-cancel">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              data-testid="connection-edit-cancel"
+            >
               Cancel
             </Button>
             <Button type="button" onClick={onSave} data-testid="connection-edit-save">
@@ -828,7 +829,10 @@ const ConnectionSurface = ({
 const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => {
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,34rem)]" data-testid="config-drift-surface">
+      <AppSheetContent
+        className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,34rem)]"
+        data-testid="config-drift-surface"
+      >
         <AppSheetHeader className="px-4 py-3 pr-14">
           <AppSheetTitle className="text-base">Config Drift</AppSheetTitle>
           <AppSheetDescription className="sr-only">
@@ -836,7 +840,7 @@ const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChang
           </AppSheetDescription>
         </AppSheetHeader>
         <AppSheetBody className="px-4 py-3">
-            <ConfigDriftView onBack={() => onOpenChange(false)} />
+          <ConfigDriftView onBack={() => onOpenChange(false)} />
         </AppSheetBody>
       </AppSheetContent>
     </AppSheet>
@@ -858,7 +862,10 @@ const DecisionStateSurface = ({
 }) => {
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]" data-testid="decision-state-surface">
+      <AppSheetContent
+        className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]"
+        data-testid="decision-state-surface"
+      >
         <AppSheetHeader className="px-4 py-3 pr-14">
           <AppSheetTitle className="text-base">Decision state</AppSheetTitle>
           <AppSheetDescription className="sr-only">
@@ -866,12 +873,12 @@ const DecisionStateSurface = ({
           </AppSheetDescription>
         </AppSheetHeader>
         <AppSheetBody className="px-4 py-3">
-            <DecisionStateView
-              onBack={() => onOpenChange(false)}
-              onRepair={() => onRepair?.()}
-              repairRunning={repairRunning}
-              actionSummaries={actionSummaries}
-            />
+          <DecisionStateView
+            onBack={() => onOpenChange(false)}
+            onRepair={() => onRepair?.()}
+            repairRunning={repairRunning}
+            actionSummaries={actionSummaries}
+          />
         </AppSheetBody>
       </AppSheetContent>
     </AppSheet>

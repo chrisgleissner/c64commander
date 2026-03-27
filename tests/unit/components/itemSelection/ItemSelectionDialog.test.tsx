@@ -142,7 +142,7 @@ describe("ItemSelectionDialog display profiles", () => {
     vi.useRealTimers();
   });
 
-  it("promotes the browser to a sheet on compact and preserves selection/filter state when the profile changes", () => {
+  it("keeps the browser as a sheet across profile changes while preserving selection and filter state", () => {
     localStorage.clear();
     setViewportWidth(360);
 
@@ -169,7 +169,7 @@ describe("ItemSelectionDialog display profiles", () => {
 
     expect(screen.getByPlaceholderText("Filter files…")).toHaveValue("Alpha");
     expect(screen.getByLabelText("Select Alpha.sid")).toHaveAttribute("data-state", "checked");
-    expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "modal");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "sheet");
   });
 
   it("keeps the source selector as a compact decision dialog before a source is chosen", () => {

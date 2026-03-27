@@ -85,10 +85,7 @@ DialogHeader.displayName = "DialogHeader";
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
   const presentation = React.useContext(DialogPresentationContext);
   return (
-    <div
-      className={cn("flex", resolveDialogFooterClassName(), presentation.footerClassName, className)}
-      {...props}
-    />
+    <div className={cn("flex", resolveDialogFooterClassName(), presentation.footerClassName, className)} {...props} />
   );
 };
 DialogFooter.displayName = "DialogFooter";

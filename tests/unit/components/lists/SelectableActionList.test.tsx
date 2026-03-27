@@ -63,7 +63,7 @@ describe("SelectableActionList", () => {
     expect(card).toHaveClass("p-3");
   });
 
-  it("keeps section headers while filtering and uses the shared expanded view-all modal", () => {
+  it("keeps section headers while filtering and uses the shared view-all sheet", () => {
     localStorage.clear();
     setViewportWidth(1280);
 
@@ -117,8 +117,8 @@ describe("SelectableActionList", () => {
 
     expect(screen.getByText("All files")).toBeVisible();
     expect(screen.getByRole("dialog")).toHaveAttribute("data-app-surface", "sheet");
-    expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "modal");
-    expect(screen.getByRole("dialog")).toHaveClass("rounded-[28px]");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "sheet");
+    expect(screen.getByRole("dialog")).toHaveClass("rounded-t-[var(--interstitial-radius)]");
 
     fireEvent.change(screen.getByTestId("view-all-filter-input"), { target: { value: "archive" } });
 
@@ -171,7 +171,7 @@ describe("SelectableActionList", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    expect(dialog).toHaveClass("rounded-t-[28px]");
+    expect(dialog).toHaveClass("rounded-t-[var(--interstitial-radius)]");
 
     fireEvent.change(screen.getByTestId("view-all-filter-input"), { target: { value: "bet" } });
     fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));

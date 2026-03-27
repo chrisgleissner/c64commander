@@ -143,9 +143,12 @@ const buildStudioFallbackSurface = (capability: LightingDeviceCapability): Light
   const fallback: LightingSurfaceState = {
     mode: capability.supportedModes.includes("Fixed Color") ? "Fixed Color" : capability.supportedModes[0],
     pattern: capability.supportedPatterns[0],
-    intensity: Math.min(capability.intensityRange.max, Math.max(capability.intensityRange.min, DEFAULT_STUDIO_INTENSITY)),
+    intensity: Math.min(
+      capability.intensityRange.max,
+      Math.max(capability.intensityRange.min, DEFAULT_STUDIO_INTENSITY),
+    ),
     tint: capability.supportsTint
-      ? capability.supportedTints.find((option) => option.toLowerCase() === "warm") ?? capability.supportedTints[0]
+      ? (capability.supportedTints.find((option) => option.toLowerCase() === "warm") ?? capability.supportedTints[0])
       : undefined,
     sidSelect: capability.supportsSidSelect ? capability.supportedSidSelects[0] : undefined,
   };
@@ -166,12 +169,16 @@ const buildStudioFallbackSurface = (capability: LightingDeviceCapability): Light
 };
 
 const buildStudioDraftBase = (
-  surfaces: Partial<Record<LightingSurface, LightingSurfaceState>>,
+  surfaces: Partial<Record<LightingSurface, LightingSurfaceState>> | null | undefined,
   capabilities: Record<LightingSurface, LightingDeviceCapability>,
 ) =>
   (["case", "keyboard"] as const).reduce<Partial<Record<LightingSurface, LightingSurfaceState>>>((result, surface) => {
-    const normalized = normalizeSurfaceStateForCapability(capabilities[surface], surfaces[surface]) ?? undefined;
-    const fallback = buildStudioFallbackSurface(capabilities[surface]);
+    const capability = capabilities[surface];
+    if (!capability) {
+      return result;
+    }
+    const normalized = normalizeSurfaceStateForCapability(capability, surfaces?.[surface]) ?? undefined;
+    const fallback = buildStudioFallbackSurface(capability);
     if (normalized ?? fallback) {
       result[surface] = normalized ?? fallback;
     }
@@ -727,7 +734,10 @@ function LightingContextLensDialog() {
 
   return (
     <AppSheet open={contextLensOpen} onOpenChange={(open) => (open ? undefined : closeContextLens())}>
-      <AppSheetContent className="overflow-hidden p-0 sm:w-[min(100vw-2rem,36rem)]" data-testid="lighting-context-lens-sheet">
+      <AppSheetContent
+        className="overflow-hidden p-0 sm:w-[min(100vw-2rem,36rem)]"
+        data-testid="lighting-context-lens-sheet"
+      >
         <AppSheetHeader className="px-4 pb-3 pt-4 pr-14 sm:px-5">
           <AppSheetTitle>Context Lens</AppSheetTitle>
           <AppSheetDescription>Which resolver layer currently owns each lighting surface.</AppSheetDescription>
@@ -1089,386 +1099,326 @@ export function LightingStudioDialog() {
 
           <AppSheetBody className="min-h-0 px-0 py-0">
             <ScrollArea className="flex-1 min-h-0">
-            <div className={cn("space-y-6", compact ? "p-4" : "p-6")}>
-              <section className="space-y-3" data-testid="lighting-profiles-section">
-                <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center")}>
-                  <div className="min-w-0 flex-1">
-                    <h3 className={cn("min-w-0 font-semibold", compact ? "text-sm" : "text-base")}>Profiles</h3>
-                    {!compact ? <p className="text-sm text-muted-foreground">Save and reuse looks.</p> : null}
-                  </div>
-                  <div className={cn("flex shrink-0 gap-1.5", narrow ? "w-full" : "items-center")}>
-                    <Input
-                      value={saveName}
-                      onChange={(event) => setSaveName(event.target.value)}
-                      placeholder="Save current"
-                      data-testid="lighting-profile-save-name"
-                      className={cn("min-w-0", narrow ? "flex-1" : null, compact ? "h-8 text-xs" : "w-40")}
-                    />
-                    <Button
-                      size="sm"
-                      onClick={handleSaveDraft}
-                      data-testid="lighting-profile-save"
-                      className={compact ? "h-8 px-2.5" : undefined}
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                      <span className={cn("ml-1.5", compact && "sr-only")}>Save</span>
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-                  <div className="grid gap-2">
-                    {sortedProfiles.map((profileEntry) => {
-                      const compatibility =
-                        (["case", "keyboard"] as const).filter(
-                          (surface) => profileEntry.surfaces[surface] && capabilities[surface].supported,
-                        ).length || 0;
-
-                      return (
-                        <button
-                          key={profileEntry.id}
-                          type="button"
-                          className={cn(
-                            "rounded-xl border p-3 text-left transition-colors",
-                            selectedProfileId === profileEntry.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border/60 bg-card/60",
-                          )}
-                          onClick={() => {
-                            setSelectedProfileId(profileEntry.id);
-                            setRenameValue(profileEntry.name);
-                          }}
-                          data-testid={`lighting-profile-${profileEntry.id}`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">{profileEntry.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {profileEntry.bundled ? "Bundled" : "Saved"} ·{" "}
-                                {compatibility === 0
-                                  ? "Unsupported here"
-                                  : compatibility === 2
-                                    ? "Full compatibility"
-                                    : "Partial compatibility"}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {compatibility === 1 ? <Badge variant="outline">Partial</Badge> : null}
-                              {compatibility === 0 ? <Badge variant="destructive">Unsupported</Badge> : null}
-                              {profileEntry.pinned ? <Pin className="h-4 w-4 text-primary" /> : null}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+              <div className={cn("space-y-6", compact ? "p-4" : "p-6")}>
+                <section className="space-y-3" data-testid="lighting-profiles-section">
+                  <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center")}>
+                    <div className="min-w-0 flex-1">
+                      <h3 className={cn("min-w-0 font-semibold", compact ? "text-sm" : "text-base")}>Profiles</h3>
+                      {!compact ? <p className="text-sm text-muted-foreground">Save and reuse looks.</p> : null}
+                    </div>
+                    <div className={cn("flex shrink-0 gap-1.5", narrow ? "w-full" : "items-center")}>
+                      <Input
+                        value={saveName}
+                        onChange={(event) => setSaveName(event.target.value)}
+                        placeholder="Save current"
+                        data-testid="lighting-profile-save-name"
+                        className={cn("min-w-0", narrow ? "flex-1" : null, compact ? "h-8 text-xs" : "w-40")}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSaveDraft}
+                        data-testid="lighting-profile-save"
+                        className={compact ? "h-8 px-2.5" : undefined}
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        <span className={cn("ml-1.5", compact && "sr-only")}>Save</span>
+                      </Button>
+                    </div>
                   </div>
 
-                  <div
-                    className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-3"
-                    data-testid="lighting-profile-detail-card"
-                  >
-                    <h4 className="font-medium">{selectedProfile?.name ?? "Select a profile"}</h4>
-                    {selectedProfile ? (
-                      <div className="mt-3 space-y-3">
-                        <Input
-                          value={renameValue}
-                          onChange={(event) => setRenameValue(event.target.value)}
-                          placeholder="Rename profile"
-                          disabled={Boolean(selectedProfile.bundled)}
-                          data-testid="lighting-profile-rename-input"
-                        />
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setActiveProfileId(selectedProfile.id);
-                              clearPreviewState();
-                            }}
-                            data-testid="lighting-profile-apply"
-                          >
-                            Apply
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => duplicateProfile(selectedProfile.id)}
-                            data-testid="lighting-profile-duplicate"
-                          >
-                            <Copy className="mr-2 h-4 w-4" />
-                            Duplicate
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => togglePinProfile(selectedProfile.id)}
-                            data-testid="lighting-profile-pin"
-                          >
-                            {selectedProfile.pinned ? (
-                              <PinOff className="mr-2 h-4 w-4" />
-                            ) : (
-                              <Pin className="mr-2 h-4 w-4" />
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+                    <div className="grid gap-2">
+                      {sortedProfiles.map((profileEntry) => {
+                        const compatibility =
+                          (["case", "keyboard"] as const).filter(
+                            (surface) => profileEntry.surfaces[surface] && capabilities[surface].supported,
+                          ).length || 0;
+
+                        return (
+                          <button
+                            key={profileEntry.id}
+                            type="button"
+                            className={cn(
+                              "rounded-xl border p-3 text-left transition-colors",
+                              selectedProfileId === profileEntry.id
+                                ? "border-primary bg-primary/5"
+                                : "border-border/60 bg-card/60",
                             )}
-                            {selectedProfile.pinned ? "Unpin" : "Pin"}
-                          </Button>
+                            onClick={() => {
+                              setSelectedProfileId(profileEntry.id);
+                              setRenameValue(profileEntry.name);
+                            }}
+                            data-testid={`lighting-profile-${profileEntry.id}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{profileEntry.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {profileEntry.bundled ? "Bundled" : "Saved"} ·{" "}
+                                  {compatibility === 0
+                                    ? "Unsupported here"
+                                    : compatibility === 2
+                                      ? "Full compatibility"
+                                      : "Partial compatibility"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {compatibility === 1 ? <Badge variant="outline">Partial</Badge> : null}
+                                {compatibility === 0 ? <Badge variant="destructive">Unsupported</Badge> : null}
+                                {profileEntry.pinned ? <Pin className="h-4 w-4 text-primary" /> : null}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div
+                      className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-3"
+                      data-testid="lighting-profile-detail-card"
+                    >
+                      <h4 className="font-medium">{selectedProfile?.name ?? "Select a profile"}</h4>
+                      {selectedProfile ? (
+                        <div className="mt-3 space-y-3">
+                          <Input
+                            value={renameValue}
+                            onChange={(event) => setRenameValue(event.target.value)}
+                            placeholder="Rename profile"
+                            disabled={Boolean(selectedProfile.bundled)}
+                            data-testid="lighting-profile-rename-input"
+                          />
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setActiveProfileId(selectedProfile.id);
+                                clearPreviewState();
+                              }}
+                              data-testid="lighting-profile-apply"
+                            >
+                              Apply
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => duplicateProfile(selectedProfile.id)}
+                              data-testid="lighting-profile-duplicate"
+                            >
+                              <Copy className="mr-2 h-4 w-4" />
+                              Duplicate
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => togglePinProfile(selectedProfile.id)}
+                              data-testid="lighting-profile-pin"
+                            >
+                              {selectedProfile.pinned ? (
+                                <PinOff className="mr-2 h-4 w-4" />
+                              ) : (
+                                <Pin className="mr-2 h-4 w-4" />
+                              )}
+                              {selectedProfile.pinned ? "Unpin" : "Pin"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => renameProfile(selectedProfile.id, renameValue)}
+                              disabled={Boolean(selectedProfile.bundled) || !renameValue.trim()}
+                              data-testid="lighting-profile-rename"
+                            >
+                              Rename
+                            </Button>
+                          </div>
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => renameProfile(selectedProfile.id, renameValue)}
-                            disabled={Boolean(selectedProfile.bundled) || !renameValue.trim()}
-                            data-testid="lighting-profile-rename"
+                            variant="destructive"
+                            onClick={() => deleteProfile(selectedProfile.id)}
+                            disabled={Boolean(selectedProfile.bundled)}
+                            data-testid="lighting-profile-delete"
                           >
-                            Rename
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
                           </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => deleteProfile(selectedProfile.id)}
-                          disabled={Boolean(selectedProfile.bundled)}
-                          data-testid="lighting-profile-delete"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-sm text-muted-foreground">Pick a look to manage it.</p>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              <Separator />
-
-              <section className="space-y-3" data-testid="lighting-compose-section">
-                <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center justify-between")}>
-                  <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Compose</h3>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Label htmlFor="lighting-link-mode" className="text-xs text-muted-foreground">
-                      Link
-                    </Label>
-                    <Select value={linkMode} onValueChange={(value: LightingLinkMode) => setLinkMode(value)}>
-                      <SelectTrigger
-                        id="lighting-link-mode"
-                        className={cn(compact ? "h-8 w-28 text-xs" : "w-40")}
-                        data-testid="lighting-link-mode"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="linked">Linked</SelectItem>
-                        <SelectItem value="mirrored">Mirrored</SelectItem>
-                        <SelectItem value="independent">Independent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {(Object.keys(LIGHTING_COMPOSE_PRESET_LABELS) as LightingComposePreset[]).map((preset) => (
-                    <Button
-                      key={preset}
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setDraft((current) => applyPreset(preset, current))}
-                      data-testid={`lighting-preset-${preset}`}
-                    >
-                      {LIGHTING_COMPOSE_PRESET_LABELS[preset]}
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)]">
-                  <LightingDeviceMockup
-                    draft={draft}
-                    selectedSurface={selectedSurface}
-                    keyboardSupported={capabilities.keyboard.supported}
-                    onSelectSurface={setSelectedSurface}
-                  />
-
-                  <div className="space-y-3">
-                    <SurfaceEditor
-                      surface="case"
-                      draft={draft.case}
-                      onChange={(next) => setSurfaceDraft("case", next)}
-                      compact={compact}
-                    />
-                    {capabilities.keyboard.supported ? (
-                      <SurfaceEditor
-                        surface="keyboard"
-                        draft={draft.keyboard}
-                        onChange={(next) => setSurfaceDraft("keyboard", next)}
-                        compact={compact}
-                      />
-                    ) : (
-                      <div
-                        className="rounded-xl border border-dashed border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground"
-                        data-testid="lighting-keyboard-unsupported"
-                      >
-                        Keyboard lighting is unavailable on this device.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              <Separator />
-
-              <section className="space-y-4" data-testid="lighting-automation-section">
-                <div>
-                  <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Automation</h3>
-                  {!compact ? (
-                    <p className="text-sm text-muted-foreground">Status, startup, source, and daylight rules.</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                    <div>
-                      <p className="font-medium">Connection Sentinel</p>
-                      <p className="text-sm text-muted-foreground">Map link state to looks.</p>
+                      ) : (
+                        <p className="mt-2 text-sm text-muted-foreground">Pick a look to manage it.</p>
+                      )}
                     </div>
-                    <Switch
-                      checked={studioState.automation.connectionSentinel.enabled}
-                      onCheckedChange={(checked) =>
-                        updateAutomation((state) => ({
-                          ...state,
-                          connectionSentinel: { ...state.connectionSentinel, enabled: checked === true },
-                        }))
-                      }
-                      data-testid="lighting-connection-sentinel-toggle"
-                    />
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {(Object.keys(CONNECTION_STATE_LABELS) as LightingConnectionSentinelState[]).map((stateKey) => (
-                      <div key={stateKey} className="space-y-1.5">
-                        <Label>{CONNECTION_STATE_LABELS[stateKey]}</Label>
-                        <Select
-                          value={studioState.automation.connectionSentinel.mappings[stateKey] ?? "__none__"}
-                          onValueChange={(value) =>
-                            updateAutomation((state) => ({
-                              ...state,
-                              connectionSentinel: {
-                                ...state.connectionSentinel,
-                                mappings: {
-                                  ...state.connectionSentinel.mappings,
-                                  [stateKey]: value === "__none__" ? null : value,
-                                },
-                              },
-                            }))
-                          }
-                        >
-                          <SelectTrigger data-testid={`lighting-connection-${stateKey}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Base profile</SelectItem>
-                            {sortedProfiles.map((profileEntry) => (
-                              <SelectItem key={profileEntry.id} value={profileEntry.id}>
-                                {profileEntry.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                </section>
 
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                    <div>
-                      <p className="font-medium">Quiet Launch</p>
-                      <p className="text-sm text-muted-foreground">Use a calm look at startup, then hand off.</p>
-                    </div>
-                    <Switch
-                      checked={studioState.automation.quietLaunch.enabled}
-                      onCheckedChange={(checked) =>
-                        updateAutomation((state) => ({
-                          ...state,
-                          quietLaunch: { ...state.quietLaunch, enabled: checked === true },
-                        }))
-                      }
-                      data-testid="lighting-quiet-launch-toggle"
-                    />
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>Launch profile</Label>
-                      <Select
-                        value={studioState.automation.quietLaunch.profileId ?? "__none__"}
-                        onValueChange={(value) =>
-                          updateAutomation((state) => ({
-                            ...state,
-                            quietLaunch: { ...state.quietLaunch, profileId: value === "__none__" ? null : value },
-                          }))
-                        }
-                      >
-                        <SelectTrigger data-testid="lighting-quiet-launch-profile">
+                <Separator />
+
+                <section className="space-y-3" data-testid="lighting-compose-section">
+                  <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center justify-between")}>
+                    <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Compose</h3>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Label htmlFor="lighting-link-mode" className="text-xs text-muted-foreground">
+                        Link
+                      </Label>
+                      <Select value={linkMode} onValueChange={(value: LightingLinkMode) => setLinkMode(value)}>
+                        <SelectTrigger
+                          id="lighting-link-mode"
+                          className={cn(compact ? "h-8 w-28 text-xs" : "w-40")}
+                          data-testid="lighting-link-mode"
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none__">None</SelectItem>
-                          {sortedProfiles.map((profileEntry) => (
-                            <SelectItem key={profileEntry.id} value={profileEntry.id}>
-                              {profileEntry.name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="linked">Linked</SelectItem>
+                          <SelectItem value="mirrored">Mirrored</SelectItem>
+                          <SelectItem value="independent">Independent</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm text-muted-foreground">
-                      Runs for {(studioState.automation.quietLaunch.windowMs / 1000).toFixed(0)}s, then exits on its own
-                      or after a manual change.
-                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                    <div>
-                      <p className="font-medium">Source Identity Map</p>
-                      <p className="text-sm text-muted-foreground">Reflect the active source on Play and Disks.</p>
-                    </div>
-                    <Switch
-                      checked={studioState.automation.sourceIdentityMap.enabled}
-                      onCheckedChange={(checked) =>
-                        updateAutomation((state) => ({
-                          ...state,
-                          sourceIdentityMap: { ...state.sourceIdentityMap, enabled: checked === true },
-                        }))
-                      }
-                      data-testid="lighting-source-identity-toggle"
-                    />
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.keys(LIGHTING_COMPOSE_PRESET_LABELS) as LightingComposePreset[]).map((preset) => (
+                      <Button
+                        key={preset}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDraft((current) => applyPreset(preset, current))}
+                        data-testid={`lighting-preset-${preset}`}
+                      >
+                        {LIGHTING_COMPOSE_PRESET_LABELS[preset]}
+                      </Button>
+                    ))}
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {(
-                      Object.keys(LIGHTING_SOURCE_BUCKET_LABELS) as Array<keyof typeof LIGHTING_SOURCE_BUCKET_LABELS>
-                    ).map((bucket) => (
-                      <div key={bucket} className="space-y-1.5">
-                        <Label>
-                          {bucket === "idle" ? "Idle" : LIGHTING_SOURCE_BUCKET_LABELS[bucket].replace(" look", "")}
-                        </Label>
+
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)]">
+                    <LightingDeviceMockup
+                      draft={draft}
+                      selectedSurface={selectedSurface}
+                      keyboardSupported={capabilities.keyboard.supported}
+                      onSelectSurface={setSelectedSurface}
+                    />
+
+                    <div className="space-y-3">
+                      <SurfaceEditor
+                        surface="case"
+                        draft={draft.case}
+                        onChange={(next) => setSurfaceDraft("case", next)}
+                        compact={compact}
+                      />
+                      {capabilities.keyboard.supported ? (
+                        <SurfaceEditor
+                          surface="keyboard"
+                          draft={draft.keyboard}
+                          onChange={(next) => setSurfaceDraft("keyboard", next)}
+                          compact={compact}
+                        />
+                      ) : (
+                        <div
+                          className="rounded-xl border border-dashed border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground"
+                          data-testid="lighting-keyboard-unsupported"
+                        >
+                          Keyboard lighting is unavailable on this device.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                <Separator />
+
+                <section className="space-y-4" data-testid="lighting-automation-section">
+                  <div>
+                    <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Automation</h3>
+                    {!compact ? (
+                      <p className="text-sm text-muted-foreground">Status, startup, source, and daylight rules.</p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
+                      <div>
+                        <p className="font-medium">Connection Sentinel</p>
+                        <p className="text-sm text-muted-foreground">Map link state to looks.</p>
+                      </div>
+                      <Switch
+                        checked={studioState.automation.connectionSentinel.enabled}
+                        onCheckedChange={(checked) =>
+                          updateAutomation((state) => ({
+                            ...state,
+                            connectionSentinel: { ...state.connectionSentinel, enabled: checked === true },
+                          }))
+                        }
+                        data-testid="lighting-connection-sentinel-toggle"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {(Object.keys(CONNECTION_STATE_LABELS) as LightingConnectionSentinelState[]).map((stateKey) => (
+                        <div key={stateKey} className="space-y-1.5">
+                          <Label>{CONNECTION_STATE_LABELS[stateKey]}</Label>
+                          <Select
+                            value={studioState.automation.connectionSentinel.mappings[stateKey] ?? "__none__"}
+                            onValueChange={(value) =>
+                              updateAutomation((state) => ({
+                                ...state,
+                                connectionSentinel: {
+                                  ...state.connectionSentinel,
+                                  mappings: {
+                                    ...state.connectionSentinel.mappings,
+                                    [stateKey]: value === "__none__" ? null : value,
+                                  },
+                                },
+                              }))
+                            }
+                          >
+                            <SelectTrigger data-testid={`lighting-connection-${stateKey}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Base profile</SelectItem>
+                              {sortedProfiles.map((profileEntry) => (
+                                <SelectItem key={profileEntry.id} value={profileEntry.id}>
+                                  {profileEntry.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
+                      <div>
+                        <p className="font-medium">Quiet Launch</p>
+                        <p className="text-sm text-muted-foreground">Use a calm look at startup, then hand off.</p>
+                      </div>
+                      <Switch
+                        checked={studioState.automation.quietLaunch.enabled}
+                        onCheckedChange={(checked) =>
+                          updateAutomation((state) => ({
+                            ...state,
+                            quietLaunch: { ...state.quietLaunch, enabled: checked === true },
+                          }))
+                        }
+                        data-testid="lighting-quiet-launch-toggle"
+                      />
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label>Launch profile</Label>
                         <Select
-                          value={studioState.automation.sourceIdentityMap.mappings[bucket] ?? "__none__"}
+                          value={studioState.automation.quietLaunch.profileId ?? "__none__"}
                           onValueChange={(value) =>
                             updateAutomation((state) => ({
                               ...state,
-                              sourceIdentityMap: {
-                                ...state.sourceIdentityMap,
-                                mappings: {
-                                  ...state.sourceIdentityMap.mappings,
-                                  [bucket]: value === "__none__" ? null : value,
-                                },
-                              },
+                              quietLaunch: { ...state.quietLaunch, profileId: value === "__none__" ? null : value },
                             }))
                           }
                         >
-                          <SelectTrigger data-testid={`lighting-source-${bucket}`}>
+                          <SelectTrigger data-testid="lighting-quiet-launch-profile">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="__none__">Base profile</SelectItem>
+                            <SelectItem value="__none__">None</SelectItem>
                             {sortedProfiles.map((profileEntry) => (
                               <SelectItem key={profileEntry.id} value={profileEntry.id}>
                                 {profileEntry.name}
@@ -1477,175 +1427,235 @@ export function LightingStudioDialog() {
                           </SelectContent>
                         </Select>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                    <div>
-                      <p className="font-medium">Circadian Palette</p>
-                      <p className="text-sm text-muted-foreground">
-                        Offline sun phases from device, manual, or city location.
-                      </p>
+                      <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm text-muted-foreground">
+                        Runs for {(studioState.automation.quietLaunch.windowMs / 1000).toFixed(0)}s, then exits on its
+                        own or after a manual change.
+                      </div>
                     </div>
-                    <Switch
-                      checked={studioState.automation.circadian.enabled}
-                      onCheckedChange={(checked) =>
-                        updateAutomation((state) => ({
-                          ...state,
-                          circadian: { ...state.circadian, enabled: checked === true },
-                        }))
-                      }
-                      data-testid="lighting-circadian-toggle"
-                    />
                   </div>
-                  <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-                    <div className="space-y-3">
-                      <div
-                        className={cn(
-                          "rounded-lg border border-border/60 bg-background/70 p-3",
-                          narrow ? "space-y-3" : "flex items-center justify-between gap-3",
-                        )}
-                      >
-                        <div>
-                          <p className="font-medium">Use device location</p>
-                          <p className="text-xs text-muted-foreground">Best when permission is granted.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={studioState.automation.circadian.locationPreference.useDeviceLocation}
-                            onCheckedChange={(checked) =>
-                              updateCircadianLocationPreference({ useDeviceLocation: checked === true })
-                            }
-                            data-testid="lighting-use-device-location"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={requestDeviceLocation}
-                            data-testid="lighting-request-device-location"
-                          >
-                            <MapPinned className="mr-2 h-4 w-4" />
-                            Refresh
-                          </Button>
-                        </div>
-                      </div>
 
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label>Latitude</Label>
-                          <Input
-                            type="number"
-                            step="0.0001"
-                            value={manualLatitude}
-                            onChange={(event) => setManualLatitude(event.target.value)}
-                            data-testid="lighting-manual-latitude"
-                          />
-                          {latitudeError ? (
-                            <p className="text-xs text-destructive" data-testid="lighting-manual-latitude-error">
-                              {latitudeError}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>Longitude</Label>
-                          <Input
-                            type="number"
-                            step="0.0001"
-                            value={manualLongitude}
-                            onChange={(event) => setManualLongitude(event.target.value)}
-                            data-testid="lighting-manual-longitude"
-                          />
-                          {longitudeError ? (
-                            <p className="text-xs text-destructive" data-testid="lighting-manual-longitude-error">
-                              {longitudeError}
-                            </p>
-                          ) : null}
-                        </div>
+                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
+                      <div>
+                        <p className="font-medium">Source Identity Map</p>
+                        <p className="text-sm text-muted-foreground">Reflect the active source on Play and Disks.</p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          updateCircadianLocationPreference({
-                            manualCoordinates: {
-                              lat: Number(manualLatitude),
-                              lon: Number(manualLongitude),
-                            },
-                          })
+                      <Switch
+                        checked={studioState.automation.sourceIdentityMap.enabled}
+                        onCheckedChange={(checked) =>
+                          updateAutomation((state) => ({
+                            ...state,
+                            sourceIdentityMap: { ...state.sourceIdentityMap, enabled: checked === true },
+                          }))
                         }
-                        disabled={!manualCoordinatesValid}
-                        data-testid="lighting-apply-manual-coordinates"
-                      >
-                        Use manual coordinates
-                      </Button>
+                        data-testid="lighting-source-identity-toggle"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {(
+                        Object.keys(LIGHTING_SOURCE_BUCKET_LABELS) as Array<keyof typeof LIGHTING_SOURCE_BUCKET_LABELS>
+                      ).map((bucket) => (
+                        <div key={bucket} className="space-y-1.5">
+                          <Label>
+                            {bucket === "idle" ? "Idle" : LIGHTING_SOURCE_BUCKET_LABELS[bucket].replace(" look", "")}
+                          </Label>
+                          <Select
+                            value={studioState.automation.sourceIdentityMap.mappings[bucket] ?? "__none__"}
+                            onValueChange={(value) =>
+                              updateAutomation((state) => ({
+                                ...state,
+                                sourceIdentityMap: {
+                                  ...state.sourceIdentityMap,
+                                  mappings: {
+                                    ...state.sourceIdentityMap.mappings,
+                                    [bucket]: value === "__none__" ? null : value,
+                                  },
+                                },
+                              }))
+                            }
+                          >
+                            <SelectTrigger data-testid={`lighting-source-${bucket}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Base profile</SelectItem>
+                              {sortedProfiles.map((profileEntry) => (
+                                <SelectItem key={profileEntry.id} value={profileEntry.id}>
+                                  {profileEntry.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-                      <div className="space-y-1.5">
-                        <Label>City</Label>
-                        <Input
-                          value={cityQuery}
-                          onChange={(event) => setCityQuery(event.target.value)}
-                          placeholder="Search cities"
-                          data-testid="lighting-city-search"
-                        />
-                        <div className="flex flex-wrap gap-2" data-testid="lighting-city-results">
-                          {cityResults.map((city) => (
+                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
+                      <div>
+                        <p className="font-medium">Circadian Palette</p>
+                        <p className="text-sm text-muted-foreground">
+                          Offline sun phases from device, manual, or city location.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={studioState.automation.circadian.enabled}
+                        onCheckedChange={(checked) =>
+                          updateAutomation((state) => ({
+                            ...state,
+                            circadian: { ...state.circadian, enabled: checked === true },
+                          }))
+                        }
+                        data-testid="lighting-circadian-toggle"
+                      />
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                      <div className="space-y-3">
+                        <div
+                          className={cn(
+                            "rounded-lg border border-border/60 bg-background/70 p-3",
+                            narrow ? "space-y-3" : "flex items-center justify-between gap-3",
+                          )}
+                        >
+                          <div>
+                            <p className="font-medium">Use device location</p>
+                            <p className="text-xs text-muted-foreground">Best when permission is granted.</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={studioState.automation.circadian.locationPreference.useDeviceLocation}
+                              onCheckedChange={(checked) =>
+                                updateCircadianLocationPreference({ useDeviceLocation: checked === true })
+                              }
+                              data-testid="lighting-use-device-location"
+                            />
                             <Button
-                              key={city.name}
-                              type="button"
+                              variant="outline"
                               size="sm"
-                              variant={selectedCity === city.name ? "default" : "outline"}
-                              onClick={() => {
-                                setCityQuery(city.name);
-                                setSelectedCity(city.name);
-                              }}
-                              data-testid={`lighting-city-option-${city.name.replace(/\s+/g, "-").toLowerCase()}`}
+                              onClick={requestDeviceLocation}
+                              data-testid="lighting-request-device-location"
                             >
-                              {city.name}
+                              <MapPinned className="mr-2 h-4 w-4" />
+                              Refresh
                             </Button>
-                          ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label>Latitude</Label>
+                            <Input
+                              type="number"
+                              step="0.0001"
+                              value={manualLatitude}
+                              onChange={(event) => setManualLatitude(event.target.value)}
+                              data-testid="lighting-manual-latitude"
+                            />
+                            {latitudeError ? (
+                              <p className="text-xs text-destructive" data-testid="lighting-manual-latitude-error">
+                                {latitudeError}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Longitude</Label>
+                            <Input
+                              type="number"
+                              step="0.0001"
+                              value={manualLongitude}
+                              onChange={(event) => setManualLongitude(event.target.value)}
+                              data-testid="lighting-manual-longitude"
+                            />
+                            {longitudeError ? (
+                              <p className="text-xs text-destructive" data-testid="lighting-manual-longitude-error">
+                                {longitudeError}
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => updateCircadianLocationPreference({ city: selectedCity || null })}
-                          disabled={!selectedCity}
-                          data-testid="lighting-apply-city"
+                          onClick={() =>
+                            updateCircadianLocationPreference({
+                              manualCoordinates: {
+                                lat: Number(manualLatitude),
+                                lon: Number(manualLongitude),
+                              },
+                            })
+                          }
+                          disabled={!manualCoordinatesValid}
+                          data-testid="lighting-apply-manual-coordinates"
                         >
-                          Use city
+                          Use manual coordinates
                         </Button>
-                      </div>
-                    </div>
 
-                    <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Info className="h-4 w-4 text-primary" />
-                        <p className="font-medium">Current schedule</p>
+                        <div className="space-y-1.5">
+                          <Label>City</Label>
+                          <Input
+                            value={cityQuery}
+                            onChange={(event) => setCityQuery(event.target.value)}
+                            placeholder="Search cities"
+                            data-testid="lighting-city-search"
+                          />
+                          <div className="flex flex-wrap gap-2" data-testid="lighting-city-results">
+                            {cityResults.map((city) => (
+                              <Button
+                                key={city.name}
+                                type="button"
+                                size="sm"
+                                variant={selectedCity === city.name ? "default" : "outline"}
+                                onClick={() => {
+                                  setCityQuery(city.name);
+                                  setSelectedCity(city.name);
+                                }}
+                                data-testid={`lighting-city-option-${city.name.replace(/\s+/g, "-").toLowerCase()}`}
+                              >
+                                {city.name}
+                              </Button>
+                            ))}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateCircadianLocationPreference({ city: selectedCity || null })}
+                            disabled={!selectedCity}
+                            data-testid="lighting-apply-city"
+                          >
+                            Use city
+                          </Button>
+                        </div>
                       </div>
-                      <div className="mt-3 space-y-2 text-muted-foreground">
-                        <p data-testid="lighting-circadian-period">
-                          Period: {circadianState ? circadianState.period : "Unavailable"}
-                        </p>
-                        <p data-testid="lighting-circadian-location">
-                          Location: {circadianState ? circadianState.resolvedLocation.label : "Not resolved"}
-                        </p>
-                        <p data-testid="lighting-circadian-next-boundary">
-                          Next: {circadianState ? circadianState.nextBoundaryLabel : "Unavailable"}
-                        </p>
-                        <p data-testid="lighting-circadian-fallback">
-                          {circadianState?.fallbackActive ? "Fallback schedule" : "Solar schedule"}
-                        </p>
-                        <p data-testid="lighting-device-location-status">
-                          Device: {deviceLocationStatus}
-                          {deviceLocationError ? ` (${deviceLocationError})` : ""}
-                        </p>
+
+                      <div className="rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Info className="h-4 w-4 text-primary" />
+                          <p className="font-medium">Current schedule</p>
+                        </div>
+                        <div className="mt-3 space-y-2 text-muted-foreground">
+                          <p data-testid="lighting-circadian-period">
+                            Period: {circadianState ? circadianState.period : "Unavailable"}
+                          </p>
+                          <p data-testid="lighting-circadian-location">
+                            Location: {circadianState ? circadianState.resolvedLocation.label : "Not resolved"}
+                          </p>
+                          <p data-testid="lighting-circadian-next-boundary">
+                            Next: {circadianState ? circadianState.nextBoundaryLabel : "Unavailable"}
+                          </p>
+                          <p data-testid="lighting-circadian-fallback">
+                            {circadianState?.fallbackActive ? "Fallback schedule" : "Solar schedule"}
+                          </p>
+                          <p data-testid="lighting-device-location-status">
+                            Device: {deviceLocationStatus}
+                            {deviceLocationError ? ` (${deviceLocationError})` : ""}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </section>
-            </div>
+                </section>
+              </div>
             </ScrollArea>
           </AppSheetBody>
 

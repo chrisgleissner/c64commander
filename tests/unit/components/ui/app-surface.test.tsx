@@ -47,14 +47,14 @@ describe("App surface primitives", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    expect(dialog.className).toContain("rounded-t-[28px]");
+    expect(dialog.className).toContain("rounded-t-[var(--interstitial-radius)]");
     expect(dialog.className).toContain("pb-[var(--app-sheet-bottom-clearance)]");
     expect(dialog.getAttribute("style")).toContain(
       "--app-sheet-bottom-clearance: calc(5rem + env(safe-area-inset-bottom))",
     );
   });
 
-  it("renders AppSheet as a centered modal on expanded widths", () => {
+  it("keeps AppSheet as a bottom sheet on expanded widths", () => {
     localStorage.clear();
     setViewportWidth(900);
 
@@ -74,8 +74,9 @@ describe("App surface primitives", () => {
     );
 
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAttribute("data-sheet-presentation", "modal");
-    expect(dialog.className).toContain("w-[min(70vw,56rem)]");
+    expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
+    expect(dialog.className).toContain("bottom-0");
+    expect(dialog.className).toContain("sm:w-[min(100vw-2rem,56rem)]");
   });
 
   it("renders AppDialog as a centered decision dialog", () => {

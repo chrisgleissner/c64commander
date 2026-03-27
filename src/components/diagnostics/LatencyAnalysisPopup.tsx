@@ -111,15 +111,6 @@ const FilterChip = ({ label }: { label: string }) => (
   </span>
 );
 
-const SurfaceHeader = ({ title, onClose }: { title: string; onClose: () => void }) => (
-  <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-    <h2 className="text-base font-semibold">{title}</h2>
-    <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-      Close
-    </Button>
-  </div>
-);
-
 const endpointTransport = (endpoint: EndpointClass): TransportFamily =>
   endpoint === "FTP list" || endpoint === "FTP read" ? "FTP" : "REST";
 
@@ -170,7 +161,10 @@ const FilterEditorSurface = ({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,24rem)]" data-testid="latency-filters-editor">
+      <AppSheetContent
+        className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,24rem)]"
+        data-testid="latency-filters-editor"
+      >
         <AppSheetHeader className="px-4 py-3 pr-14">
           <AppSheetTitle className="text-base">Latency filters</AppSheetTitle>
           <AppSheetDescription className="sr-only">
@@ -178,52 +172,52 @@ const FilterEditorSurface = ({
           </AppSheetDescription>
         </AppSheetHeader>
         <AppSheetBody className="px-4 py-4">
-            <div className="space-y-5">
-              <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope</p>
+          <div className="space-y-5">
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope</p>
+              <FilterToggle
+                label="All call types"
+                checked={filters.allCallTypes}
+                onChange={(checked) => {
+                  if (checked) {
+                    onFiltersChange(defaultFilters());
+                    return;
+                  }
+                  onFiltersChange({ ...filters, allCallTypes: false });
+                }}
+              />
+            </section>
+
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transport</p>
+              {TRANSPORT_FAMILIES.map((transport) => (
                 <FilterToggle
-                  label="All call types"
-                  checked={filters.allCallTypes}
-                  onChange={(checked) => {
-                    if (checked) {
-                      onFiltersChange(defaultFilters());
-                      return;
-                    }
-                    onFiltersChange({ ...filters, allCallTypes: false });
-                  }}
+                  key={transport}
+                  label={transport}
+                  checked={filters.allCallTypes || filters.transports.has(transport)}
+                  onChange={(checked) => updateTransports(transport, checked)}
                 />
-              </section>
+              ))}
+            </section>
 
-              <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transport</p>
-                {TRANSPORT_FAMILIES.map((transport) => (
-                  <FilterToggle
-                    key={transport}
-                    label={transport}
-                    checked={filters.allCallTypes || filters.transports.has(transport)}
-                    onChange={(checked) => updateTransports(transport, checked)}
-                  />
-                ))}
-              </section>
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endpoint</p>
+              {ENDPOINT_CLASSES.map((endpoint) => (
+                <FilterToggle
+                  key={endpoint}
+                  label={endpoint}
+                  checked={filters.allCallTypes || filters.endpoints.has(endpoint)}
+                  onChange={(checked) => updateEndpoints(endpoint, checked)}
+                />
+              ))}
+            </section>
 
-              <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endpoint</p>
-                {ENDPOINT_CLASSES.map((endpoint) => (
-                  <FilterToggle
-                    key={endpoint}
-                    label={endpoint}
-                    checked={filters.allCallTypes || filters.endpoints.has(endpoint)}
-                    onChange={(checked) => updateEndpoints(endpoint, checked)}
-                  />
-                ))}
-              </section>
-
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => onFiltersChange(defaultFilters())}>
-                  Reset
-                </Button>
-              </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => onFiltersChange(defaultFilters())}>
+                Reset
+              </Button>
             </div>
+          </div>
         </AppSheetBody>
       </AppSheetContent>
     </AppSheet>

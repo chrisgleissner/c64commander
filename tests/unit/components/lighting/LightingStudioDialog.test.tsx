@@ -53,6 +53,10 @@ const buildHookValue = (overrides: Record<string, unknown> = {}) => ({
     },
     contextLens: [{ surface: "case", owner: "profile", label: "Arcade", detail: "Active base profile" }],
   },
+  rawDeviceState: {
+    case: { mode: "Fixed Color", color: { kind: "named", value: "Green" }, intensity: 10, tint: "Pure" },
+    keyboard: { color: { kind: "named", value: "Blue" }, intensity: 8, tint: "Warm", mode: "Fixed Color" },
+  },
   previewState: null,
   setPreviewState: vi.fn(),
   clearPreviewState: vi.fn(),
@@ -333,7 +337,7 @@ describe("LightingStudioDialog", () => {
     expect(screen.getByText("Shape looks and automate them.")).toBeInTheDocument();
     expect(screen.getByTestId("lighting-active-profile-chip")).toHaveTextContent("Device look");
     expect(screen.getByTestId("lighting-unlock")).toHaveTextContent("Resume");
-    expect(screen.getByText("Who owns each surface right now.")).toBeInTheDocument();
+    expect(screen.getByText("Which resolver layer currently owns each lighting surface.")).toBeInTheDocument();
     expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Unsupported").length).toBeGreaterThan(0);
     expect(screen.getByTestId("lighting-circadian-location")).toHaveTextContent("Not resolved");

@@ -157,18 +157,70 @@ Selection views:
 
 ---
 
+## Interstitial Model
+
+Every interstitial must be exactly one of these surface types:
+
+### Modal (Decision Interstitial)
+
+- Blocking
+- Short-lived
+- Requires an explicit decision or acknowledgement
+- Must not be used for browsing, exploration, or multi-step workflows
+
+Examples:
+
+- Demo Mode prompt
+- Source selection chooser
+- Save to App
+- Power Off
+- Clear Flash
+- Restore Snapshot confirmation
+- Rename and delete confirmations
+
+### Bottom Sheet (Workflow Surface)
+
+- Scrollable, exploratory, or stateful
+- May stay open while the user browses, filters, or edits
+- Preserves background context
+
+Examples:
+
+- Source browser after a source is chosen
+- Playlist and disk “View all”
+- Lighting Studio
+- Diagnostics and diagnostics tool views
+- Snapshot browser
+- Manage App Configs
+- Load from App
+- Online Archive
+
+### Interaction Invariant
+
+- Do not choose modal vs bottom sheet by screen size or height.
+- Choose the surface by interaction type only.
+- Hybrid flows are forbidden.
+- A surface must never combine exploration and confirmation.
+
+Required split examples:
+
+- Snapshot browser is a bottom sheet; restore confirmation is a separate modal.
+- Source chooser is a modal; source browser is a bottom sheet.
+- Config manager is a bottom sheet; rename and delete are separate modals.
+
+---
+
 ## Layout
 
-- Use centered dialogs for modal actions:
-  - Mount
-  - Rename
-  - Remove from collection
-  - Playlist actions
+- Use centered dialogs for decision interstitials only:
+  - confirmations
+  - destructive actions
+  - short naming prompts
 - Avoid layout shifts when selections or controls appear.
 - Reserve space for selection and bulk-action controls.
 - Group related controls and keep labels concise and intention-driven.
 - Long paths must wrap and never force horizontal scrolling.
-- Lists show a configurable preview limit and open a scrollable, query-backed “View all” panel for large result sets.
+- Lists show a configurable preview limit and open a scrollable, query-backed “View all” bottom sheet for large result sets.
 
 ---
 

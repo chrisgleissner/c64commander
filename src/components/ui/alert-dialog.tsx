@@ -72,12 +72,7 @@ const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDiv
   const presentation = React.useContext(AlertDialogPresentationContext);
   return (
     <div
-      className={cn(
-        "flex",
-        resolveAlertDialogFooterClassName(),
-        presentation.footerClassName,
-        className,
-      )}
+      className={cn("flex", resolveAlertDialogFooterClassName(), presentation.footerClassName, className)}
       {...props}
     />
   );
