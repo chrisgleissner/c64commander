@@ -45,12 +45,7 @@ type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.
 
 const DialogPresentationContext = React.createContext(resolveModalPresentation("medium", "default"));
 
-const resolveDialogFooterClassName = (mode: "centered" | "fullscreen" | "large") => {
-  if (mode === "fullscreen") {
-    return "flex-col gap-2";
-  }
-  return "flex-row flex-wrap justify-end gap-2";
-};
+const resolveDialogFooterClassName = () => "flex-row flex-wrap justify-end gap-2";
 
 const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, DialogContentProps>(
   ({ className, children, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
@@ -91,7 +86,7 @@ const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   const presentation = React.useContext(DialogPresentationContext);
   return (
     <div
-      className={cn("flex", resolveDialogFooterClassName(presentation.mode), presentation.footerClassName, className)}
+      className={cn("flex", resolveDialogFooterClassName(), presentation.footerClassName, className)}
       {...props}
     />
   );

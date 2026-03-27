@@ -9,14 +9,14 @@
 import React from "react";
 import { Copy, Info, MapPinned, PauseCircle, Pin, PinOff, PlayCircle, Save, Sparkles, Trash2 } from "lucide-react";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetFooter,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,7 @@ import { C64_PREVIEW_LAYOUT, type C64PreviewBounds, type C64PreviewRect } from "
 import type {
   LightingComposePreset,
   LightingConnectionSentinelState,
+  LightingDeviceCapability,
   LightingLinkMode,
   LightingSurface,
   LightingSurfaceState,
@@ -53,6 +54,10 @@ const CONNECTION_STATE_LABELS: Record<LightingConnectionSentinelState, string> =
 };
 
 const FALLBACK_SURFACE_RGB = { r: 99, g: 102, b: 120 };
+const DEFAULT_STUDIO_INTENSITY = 18;
+const DEFAULT_STUDIO_COLOR_PREFERENCE = ["Amber", "Orange", "Yellow", "White"] as const;
+
+type LightingSheetMode = "collapsed" | "standard" | "expanded";
 
 const buildDraftFromCurrent = (
   surfaces: Partial<Record<LightingSurface, LightingSurfaceState>>,
@@ -126,6 +131,52 @@ const resolveSurfaceRgb = (surface: LightingSurfaceState | undefined) => {
   if (surface.color.kind === "rgb") return surface.color;
   return getLedColorRgb(surface.color.value) ?? FALLBACK_SURFACE_RGB;
 };
+
+const findPreferredColorName = (supportedNamedColors: string[]) =>
+  DEFAULT_STUDIO_COLOR_PREFERENCE.find((preferred) =>
+    supportedNamedColors.some((option) => option.toLowerCase() === preferred.toLowerCase()),
+  ) ?? supportedNamedColors[0];
+
+const buildStudioFallbackSurface = (capability: LightingDeviceCapability): LightingSurfaceState | undefined => {
+  if (!capability.supported) return undefined;
+
+  const fallback: LightingSurfaceState = {
+    mode: capability.supportedModes.includes("Fixed Color") ? "Fixed Color" : capability.supportedModes[0],
+    pattern: capability.supportedPatterns[0],
+    intensity: Math.min(capability.intensityRange.max, Math.max(capability.intensityRange.min, DEFAULT_STUDIO_INTENSITY)),
+    tint: capability.supportsTint
+      ? capability.supportedTints.find((option) => option.toLowerCase() === "warm") ?? capability.supportedTints[0]
+      : undefined,
+    sidSelect: capability.supportsSidSelect ? capability.supportedSidSelects[0] : undefined,
+  };
+
+  if (capability.colorEncoding === "named") {
+    const preferred = findPreferredColorName(capability.supportedNamedColors);
+    if (preferred) {
+      fallback.color = { kind: "named", value: preferred };
+    }
+  } else if (capability.colorEncoding === "rgb") {
+    const preferredRgb =
+      DEFAULT_STUDIO_COLOR_PREFERENCE.map((name) => getLedColorRgb(name)).find((value) => value !== null) ??
+      FALLBACK_SURFACE_RGB;
+    fallback.color = { kind: "rgb", r: preferredRgb.r, g: preferredRgb.g, b: preferredRgb.b };
+  }
+
+  return fallback;
+};
+
+const buildStudioDraftBase = (
+  surfaces: Partial<Record<LightingSurface, LightingSurfaceState>>,
+  capabilities: Record<LightingSurface, LightingDeviceCapability>,
+) =>
+  (["case", "keyboard"] as const).reduce<Partial<Record<LightingSurface, LightingSurfaceState>>>((result, surface) => {
+    const normalized = normalizeSurfaceStateForCapability(capabilities[surface], surfaces[surface]) ?? undefined;
+    const fallback = buildStudioFallbackSurface(capabilities[surface]);
+    if (normalized ?? fallback) {
+      result[surface] = normalized ?? fallback;
+    }
+    return result;
+  }, {});
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -672,22 +723,16 @@ export function LightingAutomationCue({
 }
 
 function LightingContextLensDialog() {
-  const { profile } = useDisplayProfile();
   const { contextLensOpen, closeContextLens, resolved } = useLightingStudio();
-  const compact = profile === "compact";
 
   return (
-    <Dialog open={contextLensOpen} onOpenChange={(open) => (open ? undefined : closeContextLens())}>
-      <DialogContent className={compact ? undefined : "max-w-lg"}>
-        <DialogHeader>
-          <DialogTitle>Context Lens</DialogTitle>
-          <DialogDescription>
-            {compact
-              ? "Who owns each surface right now."
-              : "Which resolver layer currently owns each lighting surface."}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2">
+    <AppSheet open={contextLensOpen} onOpenChange={(open) => (open ? undefined : closeContextLens())}>
+      <AppSheetContent className="overflow-hidden p-0 sm:w-[min(100vw-2rem,36rem)]" data-testid="lighting-context-lens-sheet">
+        <AppSheetHeader className="px-4 pb-3 pt-4 pr-14 sm:px-5">
+          <AppSheetTitle>Context Lens</AppSheetTitle>
+          <AppSheetDescription>Which resolver layer currently owns each lighting surface.</AppSheetDescription>
+        </AppSheetHeader>
+        <AppSheetBody className="space-y-2 px-4 py-4 sm:px-5">
           {resolved.contextLens.map((entry) => (
             <div
               key={`${entry.surface}-${entry.owner}`}
@@ -706,9 +751,9 @@ function LightingContextLensDialog() {
           {resolved.contextLens.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No resolver data available.</p>
           ) : null}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 }
 
@@ -719,6 +764,7 @@ export function LightingStudioDialog() {
     closeStudio,
     studioState,
     resolved,
+    rawDeviceState,
     previewState,
     setPreviewState,
     clearPreviewState,
@@ -761,9 +807,58 @@ export function LightingStudioDialog() {
     studioState.automation.circadian.locationPreference.manualCoordinates?.lon?.toString() ?? "",
   );
   const [draft, setDraft] = React.useState<Partial<Record<LightingSurface, LightingSurfaceState>>>(() =>
-    buildDraftFromCurrent(resolved.resolvedState),
+    buildStudioDraftBase(rawDeviceState, capabilities),
   );
   const [linkMode, setLinkMode] = React.useState<LightingLinkMode>("independent");
+  const [sheetMode, setSheetMode] = React.useState<LightingSheetMode>("standard");
+  const [dragTop, setDragTop] = React.useState<number | null>(null);
+  const [viewportHeight, setViewportHeight] = React.useState(() =>
+    typeof window === "undefined" ? 900 : window.innerHeight,
+  );
+  const dragStateRef = React.useRef<{ startY: number; startTop: number; currentTop: number } | null>(null);
+
+  const draftBaseState = React.useMemo(
+    () => buildStudioDraftBase(previewState ?? rawDeviceState, capabilities),
+    [capabilities, previewState, rawDeviceState],
+  );
+
+  const resolveSheetTop = React.useCallback(
+    (mode: LightingSheetMode) => {
+      const expandedTop = Math.max(12, Math.round(viewportHeight * 0.06));
+      const standardTop = Math.max(expandedTop + 48, Math.round(viewportHeight * 0.16));
+      const collapsedTop = Math.max(standardTop + 96, Math.round(viewportHeight * 0.58));
+
+      switch (mode) {
+        case "expanded":
+          return expandedTop;
+        case "collapsed":
+          return collapsedTop;
+        case "standard":
+        default:
+          return standardTop;
+      }
+    },
+    [viewportHeight],
+  );
+
+  const sheetTopByMode = React.useMemo(
+    () => ({
+      collapsed: resolveSheetTop("collapsed"),
+      standard: resolveSheetTop("standard"),
+      expanded: resolveSheetTop("expanded"),
+    }),
+    [resolveSheetTop],
+  );
+
+  const currentSheetTop = dragTop ?? sheetTopByMode[sheetMode];
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleResize = () => setViewportHeight(window.innerHeight);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   React.useEffect(() => {
     if (!studioOpen) return;
@@ -775,10 +870,11 @@ export function LightingStudioDialog() {
     setSelectedCity(studioState.automation.circadian.locationPreference.city ?? "");
     setManualLatitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lat?.toString() ?? "");
     setManualLongitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lon?.toString() ?? "");
-    setDraft(buildDraftFromCurrent(previewState ?? resolved.resolvedState));
+    setSheetMode("standard");
+    setDragTop(null);
+    setDraft(buildDraftFromCurrent(draftBaseState));
   }, [
-    previewState,
-    resolved.resolvedState,
+    draftBaseState,
     studioOpen,
     studioState.activeProfileId,
     studioState.automation.circadian.locationPreference.city,
@@ -835,6 +931,56 @@ export function LightingStudioDialog() {
     setSaveName("");
   };
 
+  const handleSheetHandlePointerDown = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      dragStateRef.current = {
+        startY: event.clientY,
+        startTop: currentSheetTop,
+        currentTop: currentSheetTop,
+      };
+      setDragTop(currentSheetTop);
+      event.preventDefault();
+    },
+    [currentSheetTop],
+  );
+
+  React.useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!dragStateRef.current) return;
+      const minTop = sheetTopByMode.expanded;
+      const maxTop = sheetTopByMode.collapsed;
+      const nextTop = dragStateRef.current.startTop + (event.clientY - dragStateRef.current.startY);
+      const boundedTop = Math.min(maxTop, Math.max(minTop, nextTop));
+      dragStateRef.current.currentTop = boundedTop;
+      setDragTop(boundedTop);
+    };
+
+    const handlePointerRelease = () => {
+      if (!dragStateRef.current) return;
+      const finalTop = dragStateRef.current.currentTop;
+      const nextMode = (Object.entries(sheetTopByMode) as Array<[LightingSheetMode, number]>).reduce(
+        (closestMode, candidate) =>
+          Math.abs(candidate[1] - finalTop) < Math.abs(sheetTopByMode[closestMode] - finalTop)
+            ? candidate[0]
+            : closestMode,
+        "standard" as LightingSheetMode,
+      );
+      dragStateRef.current = null;
+      setSheetMode(nextMode);
+      setDragTop(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerRelease);
+    window.addEventListener("pointercancel", handlePointerRelease);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerRelease);
+      window.removeEventListener("pointercancel", handlePointerRelease);
+    };
+  }, [sheetTopByMode]);
+
   const activeProfileChip = resolved.activeProfile ? (
     <Badge variant="secondary" className="text-xs" data-testid="lighting-active-profile-chip">
       {resolved.activeProfile.name}
@@ -848,21 +994,41 @@ export function LightingStudioDialog() {
 
   return (
     <>
-      <Dialog open={studioOpen} onOpenChange={(open) => (open ? undefined : closeStudio())}>
-        <DialogContent
-          surface="secondary-editor"
+      <AppSheet open={studioOpen} onOpenChange={(open) => (open ? undefined : closeStudio())}>
+        <AppSheetContent
           showClose={false}
-          className="flex min-w-0 flex-col overflow-hidden p-0"
+          className="flex min-w-0 flex-col overflow-hidden p-0 sm:w-[min(100vw-2rem,64rem)]"
+          style={{ top: `${currentSheetTop}px` }}
+          data-testid="lighting-studio-sheet"
         >
-          <DialogHeader
+          <AppSheetHeader
             className={cn("shrink-0 border-b border-border/60", compact ? "p-3" : "p-4 pb-4 sm:p-5 sm:pb-4")}
           >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div
+                className="flex flex-1 cursor-grab items-center justify-center touch-none active:cursor-grabbing"
+                onPointerDown={handleSheetHandlePointerDown}
+                data-testid="lighting-sheet-handle"
+                role="presentation"
+              >
+                <span className="h-1.5 w-12 rounded-full bg-border/80" />
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 shrink-0 px-2 text-xs"
+                onClick={() => setSheetMode((current) => (current === "expanded" ? "collapsed" : "expanded"))}
+                data-testid="lighting-sheet-toggle"
+              >
+                {sheetMode === "expanded" ? "Collapse" : "Expand"}
+              </Button>
+            </div>
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
-                <DialogTitle className={cn("min-w-0", compact && "text-base")}>Lighting Studio</DialogTitle>
-                <DialogDescription className={cn("mt-0.5 text-xs", compact && "sr-only")}>
+                <AppSheetTitle className={cn("min-w-0", compact && "text-base")}>Lighting Studio</AppSheetTitle>
+                <AppSheetDescription className={cn("mt-0.5 text-xs", compact && "sr-only")}>
                   {compact ? "Shape looks and automate them." : "Shape looks, save them, and tune the resolver."}
-                </DialogDescription>
+                </AppSheetDescription>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {activeProfileChip}
                   {resolved.activeAutomationChip ? (
@@ -875,13 +1041,12 @@ export function LightingStudioDialog() {
                   ) : null}
                 </div>
               </div>
-              <DialogClose asChild>
-                <ModalCloseButton
-                  className="static h-8 w-8 shrink-0 opacity-100"
-                  data-testid="lighting-studio-close"
-                  aria-label="Close"
-                />
-              </DialogClose>
+              <ModalCloseButton
+                className="static h-8 w-8 shrink-0 opacity-100"
+                data-testid="lighting-studio-close"
+                aria-label="Close"
+                onClick={closeStudio}
+              />
             </div>
             <div
               className={cn("mt-3 flex gap-2", narrow ? "flex-wrap" : "items-center justify-between")}
@@ -920,9 +1085,10 @@ export function LightingStudioDialog() {
                 </Button>
               )}
             </div>
-          </DialogHeader>
+          </AppSheetHeader>
 
-          <ScrollArea className="flex-1 min-h-0">
+          <AppSheetBody className="min-h-0 px-0 py-0">
+            <ScrollArea className="flex-1 min-h-0">
             <div className={cn("space-y-6", compact ? "p-4" : "p-6")}>
               <section className="space-y-3" data-testid="lighting-profiles-section">
                 <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center")}>
@@ -1480,9 +1646,10 @@ export function LightingStudioDialog() {
                 </div>
               </section>
             </div>
-          </ScrollArea>
+            </ScrollArea>
+          </AppSheetBody>
 
-          <DialogFooter
+          <AppSheetFooter
             className={cn("shrink-0 border-t border-border/60", compact ? "flex-row gap-1.5 p-3" : "p-5 pt-4")}
           >
             <Button
@@ -1511,9 +1678,9 @@ export function LightingStudioDialog() {
             >
               Apply
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </AppSheetFooter>
+        </AppSheetContent>
+      </AppSheet>
       <LightingContextLensDialog />
     </>
   );

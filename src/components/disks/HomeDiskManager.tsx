@@ -21,6 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   SelectableActionList,
@@ -1747,33 +1755,35 @@ export const HomeDiskManager = () => {
         )}
       />
 
-      <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ""}</DialogTitle>
-            <DialogDescription>Select a disk to mount in this drive.</DialogDescription>
-          </DialogHeader>
-          <SelectableActionList
-            title="Available disks"
-            items={buildDiskListItems(sortedDisks, {
-              showSelection: false,
-              showMenu: false,
-              disableActions: !status.isConnected,
-              onMount: (entry) => {
-                if (!activeDrive) return;
-                void handleMountDisk(activeDrive, entry).finally(() => setActiveDrive(null));
-              },
-            })}
-            emptyLabel="No disks in the collection yet."
-            selectedCount={0}
-            allSelected={false}
-            onToggleSelectAll={() => undefined}
-            maxVisible={listPreviewLimit}
-            viewAllTitle="All disks"
-            showSelectionControls={false}
-          />
-        </DialogContent>
-      </Dialog>
+      <AppSheet open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
+        <AppSheetContent className="overflow-hidden p-0" data-testid="mount-disk-sheet">
+          <AppSheetHeader className="px-4 pb-3 pt-4 pr-14 sm:px-6 sm:pb-4 sm:pt-5">
+            <AppSheetTitle>Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ""}</AppSheetTitle>
+            <AppSheetDescription>Select a disk to mount in this drive.</AppSheetDescription>
+          </AppSheetHeader>
+          <AppSheetBody className="px-4 py-4 sm:px-6">
+            <SelectableActionList
+              title="Available disks"
+              items={buildDiskListItems(sortedDisks, {
+                showSelection: false,
+                showMenu: false,
+                disableActions: !status.isConnected,
+                onMount: (entry) => {
+                  if (!activeDrive) return;
+                  void handleMountDisk(activeDrive, entry).finally(() => setActiveDrive(null));
+                },
+              })}
+              emptyLabel="No disks in the collection yet."
+              selectedCount={0}
+              allSelected={false}
+              onToggleSelectAll={() => undefined}
+              maxVisible={listPreviewLimit}
+              viewAllTitle="All disks"
+              showSelectionControls={false}
+            />
+          </AppSheetBody>
+        </AppSheetContent>
+      </AppSheet>
 
       <Dialog open={Boolean(activeDisk)} onOpenChange={(open) => !open && setActiveDisk(null)}>
         <DialogContent className="max-w-md">

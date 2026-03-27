@@ -9,11 +9,8 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
-import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { cn } from "@/lib/utils";
 import { ModalCloseButton } from "@/components/ui/modal-close-button";
-
-type AppSheetMode = "sheet" | "modal";
 
 const APP_SHEET_BOTTOM_CLEARANCE = "calc(5rem + env(safe-area-inset-bottom))";
 
@@ -38,27 +35,6 @@ const AppSurfaceOverlay = React.forwardRef<
 ));
 AppSurfaceOverlay.displayName = "AppSurfaceOverlay";
 
-const AppSheetModeContext = React.createContext<AppSheetMode>("sheet");
-
-const resolveAppSheetClassName = (mode: AppSheetMode) => {
-  if (mode === "modal") {
-    return [
-      "fixed left-1/2 top-1/2 z-50 flex w-[min(70vw,56rem)] max-w-[calc(100vw-2rem)]",
-      "h-[min(80dvh,56rem)] max-h-[calc(100dvh-2rem)] min-h-[20rem] -translate-x-1/2 -translate-y-1/2",
-      "flex-col overflow-hidden rounded-[28px] border bg-background p-0 shadow-2xl",
-      "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-    ].join(" ");
-  }
-
-  return [
-    "fixed inset-x-0 bottom-0 z-50 flex w-full flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background p-0 shadow-2xl",
-    "top-[max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))] min-h-0",
-    "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-    "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-  ].join(" ");
-};
-
 type AppSheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   showClose?: boolean;
   closeTestId?: string;
@@ -66,41 +42,39 @@ type AppSheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitiv
 
 const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppSheetContentProps>(
   ({ className, children, showClose = true, closeTestId, style, ...props }, ref) => {
-    const { profile } = useDisplayProfile();
-    const mode: AppSheetMode = profile === "expanded" ? "modal" : "sheet";
-    const contentStyle =
-      mode === "sheet"
-        ? ({
-            ...((style as React.CSSProperties | undefined) ?? {}),
-            "--app-sheet-bottom-clearance": APP_SHEET_BOTTOM_CLEARANCE,
-          } as React.CSSProperties)
-        : style;
+    const contentStyle = {
+      ...((style as React.CSSProperties | undefined) ?? {}),
+      "--app-sheet-bottom-clearance": APP_SHEET_BOTTOM_CLEARANCE,
+    } as React.CSSProperties;
 
     return (
-      <AppSheetModeContext.Provider value={mode}>
-        <AppSurfacePortal>
-          <AppSurfaceOverlay />
-          <DialogPrimitive.Content
-            ref={ref}
-            className={cn(
-              resolveAppSheetClassName(mode),
-              mode === "sheet" ? "pb-[var(--app-sheet-bottom-clearance)]" : null,
-              className,
-            )}
-            style={contentStyle}
-            data-app-surface="sheet"
-            data-sheet-presentation={mode}
-            {...props}
-          >
-            {children}
-            {showClose ? (
-              <DialogPrimitive.Close asChild>
-                <ModalCloseButton data-testid={closeTestId} />
-              </DialogPrimitive.Close>
-            ) : null}
-          </DialogPrimitive.Content>
-        </AppSurfacePortal>
-      </AppSheetModeContext.Provider>
+      <AppSurfacePortal>
+        <AppSurfaceOverlay />
+        <DialogPrimitive.Content
+          ref={ref}
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-50 flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
+            "rounded-t-[var(--interstitial-radius)] shadow-[var(--interstitial-shadow)]",
+            "top-[max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))]",
+            "sm:left-1/2 sm:right-auto sm:w-[min(100vw-2rem,56rem)] sm:-translate-x-1/2",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+            "pb-[var(--app-sheet-bottom-clearance)]",
+            className,
+          )}
+          style={contentStyle}
+          data-app-surface="sheet"
+          data-sheet-presentation="sheet"
+          {...props}
+        >
+          {children}
+          {showClose ? (
+            <DialogPrimitive.Close asChild>
+              <ModalCloseButton data-testid={closeTestId} />
+            </DialogPrimitive.Close>
+          ) : null}
+        </DialogPrimitive.Content>
+      </AppSurfacePortal>
     );
   },
 );
@@ -121,13 +95,11 @@ const AppSheetBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 );
 
 const AppSheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
-  const mode = React.useContext(AppSheetModeContext);
-
   return (
     <div
       className={cn(
         "shrink-0 border-t border-border bg-background/95 px-4 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85",
-        mode === "sheet" ? "pb-[max(1rem,env(safe-area-inset-bottom))]" : "pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        "pb-[max(1rem,env(safe-area-inset-bottom))]",
         className,
       )}
       {...props}
@@ -167,7 +139,7 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 flex w-[min(90vw,32rem)] max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-1.5rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[24px] border bg-background p-0 shadow-2xl",
+          "fixed left-1/2 top-1/2 z-50 flex w-[min(90vw,32rem)] max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-1.5rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)]",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className,
         )}
@@ -198,7 +170,13 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
 AppDialogContent.displayName = "AppDialogContent";
 
 const AppDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("shrink-0 border-b border-border px-4 pb-3 pt-4", className)} {...props} />
+  <div
+    className={cn(
+      "shrink-0 border-b border-border bg-background/95 px-4 pb-3 pt-4 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+      className,
+    )}
+    {...props}
+  />
 );
 
 const AppDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

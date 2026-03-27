@@ -7,13 +7,14 @@
  */
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetFooter,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
 
 interface ConfigItem {
@@ -34,43 +35,45 @@ export function LoadConfigDialog({ open, onOpenChange, configs, onLoad, applying
   const isApplying = applyingConfigId !== null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Load from App</DialogTitle>
-          <DialogDescription>Select a saved configuration to apply to the C64U.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-          {configs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
-          ) : (
-            configs.map((config) => (
-              <Button
-                key={config.id}
-                variant="outline"
-                className="w-full justify-between h-auto py-2"
-                onClick={() => onLoad(config.id)}
-                disabled={isApplying}
-              >
-                <div className="flex flex-col items-start gap-0.5">
-                  <span className="font-medium">{config.name}</span>
-                  <span className="text-xs text-muted-foreground font-normal">
-                    {new Date(config.savedAt).toLocaleString()}
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent className="overflow-hidden p-0" data-testid="load-config-sheet">
+        <AppSheetHeader className="px-4 pb-3 pt-4 pr-14 sm:px-6 sm:pb-4 sm:pt-5">
+          <AppSheetTitle>Load from App</AppSheetTitle>
+          <AppSheetDescription>Select a saved configuration to apply to the C64U.</AppSheetDescription>
+        </AppSheetHeader>
+        <AppSheetBody className="px-4 py-4 sm:px-6">
+          <div className="space-y-2">
+            {configs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
+            ) : (
+              configs.map((config) => (
+                <Button
+                  key={config.id}
+                  variant="outline"
+                  className="h-auto w-full justify-between py-3 text-left"
+                  onClick={() => onLoad(config.id)}
+                  disabled={isApplying}
+                >
+                  <div className="flex flex-col items-start gap-0.5">
+                    <span className="font-medium">{config.name}</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {new Date(config.savedAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {applyingConfigId === config.id ? "Applying…" : "Load"}
                   </span>
-                </div>
-                <span className="text-xs text-muted-foreground ml-2">
-                  {applyingConfigId === config.id ? "Applying…" : "Load"}
-                </span>
-              </Button>
-            ))
-          )}
-        </div>
-        <DialogFooter>
+                </Button>
+              ))
+            )}
+          </div>
+        </AppSheetBody>
+        <AppSheetFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AppSheetFooter>
+      </AppSheetContent>
+    </AppSheet>
   );
 }

@@ -9,7 +9,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -113,17 +120,19 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-4xl" data-testid="online-archive-dialog">
-        <DialogHeader>
-          <DialogTitle>Online Archive</DialogTitle>
-          <DialogDescription>
-            Search {resolvedConfig.name} via direct HTTP and execute files via device REST.
-          </DialogDescription>
-        </DialogHeader>
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent className="overflow-hidden p-0" data-testid="online-archive-dialog">
+        <div className="flex h-full min-h-0 flex-col">
+          <AppSheetHeader className="px-4 pb-3 pt-4 pr-14 sm:px-6 sm:pb-4 sm:pt-5">
+            <AppSheetTitle>Online Archive</AppSheetTitle>
+            <AppSheetDescription>
+              Search {resolvedConfig.name} via direct HTTP and execute files via device REST.
+            </AppSheetDescription>
+          </AppSheetHeader>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-          <div className="space-y-4 overflow-y-auto pr-1">
+          <AppSheetBody className="px-4 py-4 sm:px-6">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+              <div className="space-y-4 overflow-y-auto pr-1">
             <div
               className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground"
               data-testid="online-archive-config-summary"
@@ -217,7 +226,7 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
             </div>
           </div>
 
-          <div className="space-y-3 overflow-y-auto pr-1">
+              <div className="space-y-3 overflow-y-auto pr-1">
             {selectedResult ? (
               <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 p-3">
                 <div className="min-w-0">
@@ -319,9 +328,11 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
                 })}
               </div>
             )}
-          </div>
+              </div>
+            </div>
+          </AppSheetBody>
         </div>
-      </DialogContent>
-    </Dialog>
+      </AppSheetContent>
+    </AppSheet>
   );
 };

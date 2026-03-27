@@ -22,12 +22,7 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
 const AlertDialogPresentationContext = React.createContext(resolveModalPresentation("medium", "confirmation"));
 
-const resolveAlertDialogFooterClassName = (mode: "centered" | "fullscreen" | "large") => {
-  if (mode === "fullscreen") {
-    return "flex-col gap-2";
-  }
-  return "flex-row flex-wrap justify-end gap-2";
-};
+const resolveAlertDialogFooterClassName = () => "flex-row flex-wrap justify-end gap-2";
 
 const AlertDialogOverlay = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Overlay>,
@@ -79,7 +74,7 @@ const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDiv
     <div
       className={cn(
         "flex",
-        resolveAlertDialogFooterClassName(presentation.mode),
+        resolveAlertDialogFooterClassName(),
         presentation.footerClassName,
         className,
       )}
