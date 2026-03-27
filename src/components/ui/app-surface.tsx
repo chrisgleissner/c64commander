@@ -11,6 +11,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@/lib/utils";
 import { ModalCloseButton } from "@/components/ui/modal-close-button";
+import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, APP_SHEET_TOP_CLEARANCE } from "@/components/ui/interstitialStyles";
 
 const APP_SHEET_BOTTOM_CLEARANCE = "calc(5rem + env(safe-area-inset-bottom))";
 
@@ -27,7 +28,8 @@ const AppSurfaceOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 [transition-duration:var(--modal-backdrop-duration)]",
+      "fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 [transition-duration:var(--modal-backdrop-duration)]",
+      APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       className,
     )}
     {...props}
@@ -45,6 +47,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
     const contentStyle = {
       ...((style as React.CSSProperties | undefined) ?? {}),
       "--app-sheet-bottom-clearance": APP_SHEET_BOTTOM_CLEARANCE,
+      "--app-sheet-top-clearance": APP_SHEET_TOP_CLEARANCE,
     } as React.CSSProperties;
 
     return (
@@ -55,7 +58,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
             "rounded-t-[var(--interstitial-radius)] shadow-[var(--interstitial-shadow)]",
-            "top-[max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))]",
+            "top-[var(--app-sheet-top-clearance)]",
             "sm:left-1/2 sm:right-auto sm:w-[min(100vw-2rem,56rem)] sm:-translate-x-1/2",
             "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",

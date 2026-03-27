@@ -252,7 +252,7 @@ export default function OpenSourceLicensesPage() {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 bg-background/84 backdrop-blur-sm supports-[backdrop-filter]:bg-background/72">
       <div className="mx-auto flex h-full max-w-6xl flex-col px-4 py-4 sm:px-6">
         <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
           <div>

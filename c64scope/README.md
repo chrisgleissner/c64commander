@@ -61,20 +61,20 @@ Both `artifacts/` and `logs/` are gitignored.
 
 ## Architecture
 
-Three-peer-server model orchestrated by a single LLM:
+Three peer MCP servers are orchestrated by a single LLM:
 
-| Peer                          | Role                                                      |
-| ----------------------------- | --------------------------------------------------------- |
-| Mobile controller (droidmind) | App lifecycle, UI interaction, screenshots, logcat        |
-| C64 bridge (c64bridge)        | Stream start/stop, RAM reads, emergency recovery          |
-| C64 Scope (this server)       | Evidence capture, session timeline, assertions, artifacts |
+| Peer                                                      | Role                                                      |
+| --------------------------------------------------------- | --------------------------------------------------------- |
+| [Droidmind](https://github.com/hyperb1iss/droidmind)      | App lifecycle, UI interaction, screenshots, logcat        |
+| [C64 Bridge](https://github.com/chrisgleissner/c64bridge) | Stream start/stop, RAM reads, emergency recovery          |
+| C64 Scope (this server)                                   | Evidence capture, session timeline, assertions, artifacts |
 
 ## Design documents
 
-- `docs/testing/agentic-tests/c64scope-spec.md`
-- `docs/testing/agentic-tests/agentic-test-architecture.md`
-- `docs/testing/agentic-tests/agentic-test-implementation-plan.md`
-- `docs/testing/agentic-tests/agentic-oracle-catalog.md`
+- [C64 Scope Spec](../docs/testing/agentic-tests/c64scope-spec.md)
+- [Agentic Test Architecture](../docs/testing/agentic-tests/agentic-test-architecture.md)
+- [Agentic Test Implementation](../docs/testing/agentic-tests/agentic-test-implementation-plan.md)
+- [Agentic Oracle Catalog](../docs/testing/agentic-tests/agentic-oracle-catalog.md)
 
 ## Implementation rules
 

@@ -1,8 +1,9 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { getBadgeSafeZoneBottomPx, assertOverlayRespectsBadgeSafeZone } from "@/components/ui/interstitialStyles";
 
 const mocks = vi.hoisted(() => ({
   useLightingStudio: vi.fn(),
@@ -436,5 +437,27 @@ describe("LightingStudioDialog", () => {
     expect(screen.queryByTestId("lighting-case-color")).not.toBeInTheDocument();
     expect(screen.queryByTestId("lighting-case-tint")).not.toBeInTheDocument();
     expect(screen.queryByTestId("lighting-case-sid-select")).not.toBeInTheDocument();
+  });
+});
+
+describe("LightingStudioDialog — badge safe zone invariant", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("badges safe zone bottom is at least the fallback clearance (96 px)", () => {
+    document.documentElement.style.setProperty("--app-bar-height", "80px");
+    // safeZoneBottom = max(96, round(80+8)) = 96
+    const safeZoneBottom = getBadgeSafeZoneBottomPx();
+    expect(safeZoneBottom).toBe(96);
+  });
+
+  it("assertOverlayRespectsBadgeSafeZone does not log when top >= safeZoneBottom", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    document.documentElement.style.setProperty("--app-bar-height", "80px");
+    // safeZoneBottom = 96; resolve with top exactly at boundary → no violation
+    assertOverlayRespectsBadgeSafeZone(96, "LightingStudio[expanded]");
+    assertOverlayRespectsBadgeSafeZone(200, "LightingStudio[collapsed]");
+    expect(consoleSpy).not.toHaveBeenCalled();
   });
 });

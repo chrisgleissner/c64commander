@@ -262,4 +262,44 @@ test.describe("Lighting Studio", () => {
     await expect(ledStrip).toHaveAttribute("fill", "#F5F5F5");
     await expect(ledStrip).toHaveAttribute("fill-opacity", "0.94");
   });
+
+  test("diagnostics and lighting sheets stay below the badge and lighting opens in a high-overlap position", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await seedLightingStudioState(page, {
+      activeProfileId: null,
+      profiles: [],
+      automation: {},
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await waitForConnected(page);
+
+    const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    const badgeBox = await badge.boundingBox();
+    expect(badgeBox).not.toBeNull();
+
+    await badge.click();
+    const diagnosticsSheet = page.getByTestId("diagnostics-sheet");
+    await expect(diagnosticsSheet).toBeVisible();
+    const diagnosticsBox = await diagnosticsSheet.boundingBox();
+    expect(diagnosticsBox).not.toBeNull();
+
+    const minimumSheetTop = badgeBox!.y + badgeBox!.height + 8;
+    expect(diagnosticsBox!.y).toBeGreaterThanOrEqual(minimumSheetTop - 1);
+
+    await diagnosticsSheet.getByRole("button", { name: "Close" }).click();
+    await expect(diagnosticsSheet).toBeHidden();
+
+    await page.getByTestId("home-lighting-studio").click();
+    const lightingSheet = page.getByTestId("lighting-studio-sheet");
+    await expect(lightingSheet).toBeVisible();
+    const lightingBox = await lightingSheet.boundingBox();
+    expect(lightingBox).not.toBeNull();
+    expect(lightingBox!.y).toBeGreaterThanOrEqual(minimumSheetTop - 1);
+    expect(lightingBox!.y).toBeLessThanOrEqual(160);
+  });
 });

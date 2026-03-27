@@ -60,7 +60,9 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     <header
       ref={headerRef}
       className={cn(
-        "top-0 z-40 bg-background/80 border-b border-border backdrop-blur-lg",
+        // z-[51] keeps the app bar (and health badge) above overlay backdrops (z-50) so the badge
+        // remains visually readable at all times — even when a bottom sheet or dialog is open.
+        "top-0 z-[51] bg-background/80 border-b border-border backdrop-blur-lg",
         appChromeMode === "sticky" ? "sticky w-full max-w-full" : "fixed left-0 w-screen max-w-screen",
         !compact && "pt-safe",
       )}

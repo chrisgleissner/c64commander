@@ -131,4 +131,11 @@ describe("AppBar", () => {
     unmount();
     expect(removeEventListenerSpy).toHaveBeenCalledWith("resize", expect.any(Function));
   });
+
+  it("renders the header with z-[51] so it sits above overlay backdrops at z-50 (badge always readable)", () => {
+    const { container } = render(<AppBar title="Test" />);
+    const header = container.querySelector("header");
+    expect(header).toHaveClass("z-[51]");
+    expect(header).not.toHaveClass("z-40");
+  });
 });

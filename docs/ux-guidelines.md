@@ -183,6 +183,8 @@ Examples:
 - Scrollable, exploratory, or stateful
 - May stay open while the user browses, filters, or edits
 - Preserves background context
+- Must start below the unified connectivity badge area in the app bar
+- Must leave the badge visually readable at all times so connectivity degradation remains visible while the sheet is open
 
 Examples:
 
@@ -207,6 +209,72 @@ Required split examples:
 - Snapshot browser is a bottom sheet; restore confirmation is a separate modal.
 - Source chooser is a modal; source browser is a bottom sheet.
 - Config manager is a bottom sheet; rename and delete are separate modals.
+
+### Surface Clearance and Dimming
+
+- Bottom sheets must reserve a shared top clearance derived from the app bar height; do not let a sheet start underneath or cover the unified connectivity badge.
+- Diagnostics defines the reference top band for workflow sheets. Lighting Studio and other bottom sheets must align to that same top-clearance system rather than using independent viewport-based offsets.
+- Backdrops must be intentionally light. They may separate focus, but they must not hide the app state to the point that connectivity changes become hard to notice.
+- This lighter-dimming rule applies to modal dialogs, workflow sheets, progress overlays, and full-screen overlays.
+
+---
+
+### Overlay and Badge Visibility Contract
+
+This contract is **mandatory with zero exceptions**.
+
+#### Health Badge
+
+The health badge is the element in the top-right of the app bar labeled with the connectivity state
+(for example "C64U ● HEALTHY", "C64U ● DEGRADED", "C64U ● UNHEALTHY"). It must remain:
+
+- Unobscured at all times — no overlay may visually cover or intersect it.
+- Clearly readable at all times — text, status label, and health glyph must be distinguishable even when a backdrop is present.
+
+Rationale: the health badge is the primary connectivity signal. Masking it prevents the user from noticing that the device has become degraded or unreachable while a workflow sheet is open.
+
+#### Badge Safe Zone
+
+The badge safe zone is the bounding box of the badge plus an 8 px margin on all sides (`BADGE_SAFE_ZONE_MARGIN_PX = 8`).
+
+- No overlay element may enter the badge safe zone.
+- The safe-zone bottom Y coordinate is computed by `getBadgeSafeZoneBottomPx()` (see `src/components/ui/interstitialStyles.ts`).
+
+#### OVERLAY_MAX_TOP
+
+All bottom sheets must satisfy:
+
+```
+overlay.top >= OVERLAY_MAX_TOP
+```
+
+where `OVERLAY_MAX_TOP = getBadgeSafeZoneBottomPx()` = `max(96px, appBarHeight + 8px)`.
+
+The CSS expression is `APP_SHEET_TOP_CLEARANCE` (from `interstitialStyles.ts`) and is already wired into `AppSheetContent`.
+
+Do **not** hard-code pixel offsets or viewport-fraction top values that could place a sheet above `OVERLAY_MAX_TOP`.
+
+#### App Bar Z-Index
+
+The app bar renders at `z-[51]`, intentionally above all overlay backdrops (`z-50`). This ensures the health badge is always visually on top of any dimming layer without requiring badge-specific z-index overrides.
+
+Do **not** lower the app bar z-index below 51.
+Do **not** raise overlay backdrops above `z-50` without also raising the app bar.
+
+#### Dimming Constraint
+
+Backdrop opacity is capped at **≤ 25%** via `APP_INTERSTITIAL_BACKDROP_CLASSNAME` (currently `bg-black/22`). This applies globally to:
+
+- Bottom sheets (`AppSheetContent`)
+- Dialogs and alert dialogs
+- Progress overlays
+- Any full-screen dimming layer
+
+Do **not** introduce per-component backdrop overrides with higher opacity.
+
+#### Runtime Assertions (Development Builds)
+
+`assertOverlayRespectsBadgeSafeZone(topPx, name)` (from `interstitialStyles.ts`) logs a `console.error` in non-production builds when an overlay's `topPx` is above `getBadgeSafeZoneBottomPx()`. Call this whenever a sheet top is computed dynamically (for example in drag-resize handlers).
 
 ---
 

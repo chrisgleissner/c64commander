@@ -17,6 +17,7 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
+import { resolveAppSheetTopClearancePx, assertOverlayRespectsBadgeSafeZone } from "@/components/ui/interstitialStyles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -820,7 +821,7 @@ export function LightingStudioDialog() {
     buildStudioDraftBase(rawDeviceState, capabilities),
   );
   const [linkMode, setLinkMode] = React.useState<LightingLinkMode>("independent");
-  const [sheetMode, setSheetMode] = React.useState<LightingSheetMode>("standard");
+  const [sheetMode, setSheetMode] = React.useState<LightingSheetMode>("expanded");
   const [dragTop, setDragTop] = React.useState<number | null>(null);
   const [viewportHeight, setViewportHeight] = React.useState(() =>
     typeof window === "undefined" ? 900 : window.innerHeight,
@@ -834,19 +835,26 @@ export function LightingStudioDialog() {
 
   const resolveSheetTop = React.useCallback(
     (mode: LightingSheetMode) => {
-      const expandedTop = Math.max(12, Math.round(viewportHeight * 0.06));
-      const standardTop = Math.max(expandedTop + 48, Math.round(viewportHeight * 0.16));
+      const expandedTop = resolveAppSheetTopClearancePx();
+      // Standard mode starts closer to the badge safe zone (8 px gap instead of 28 px)
+      // so that more sheet content is visible by default, matching Diagnostics density.
+      const standardTop = Math.max(expandedTop + 8, Math.round(viewportHeight * 0.1));
       const collapsedTop = Math.max(standardTop + 96, Math.round(viewportHeight * 0.58));
 
+      let result: number;
       switch (mode) {
         case "expanded":
-          return expandedTop;
+          result = expandedTop;
+          break;
         case "collapsed":
-          return collapsedTop;
+          result = collapsedTop;
+          break;
         case "standard":
         default:
-          return standardTop;
+          result = standardTop;
       }
+      assertOverlayRespectsBadgeSafeZone(result, `LightingStudioDialog[${mode}]`);
+      return result;
     },
     [viewportHeight],
   );
@@ -880,7 +888,7 @@ export function LightingStudioDialog() {
     setSelectedCity(studioState.automation.circadian.locationPreference.city ?? "");
     setManualLatitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lat?.toString() ?? "");
     setManualLongitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lon?.toString() ?? "");
-    setSheetMode("standard");
+    setSheetMode("expanded");
     setDragTop(null);
     setDraft(buildDraftFromCurrent(draftBaseState));
   }, [
@@ -1008,7 +1016,10 @@ export function LightingStudioDialog() {
         <AppSheetContent
           showClose={false}
           className="flex min-w-0 flex-col overflow-hidden p-0 sm:w-[min(100vw-2rem,64rem)]"
-          style={{ top: `${currentSheetTop}px` }}
+          style={{
+            top: `${currentSheetTop}px`,
+            height: `calc(100dvh - ${currentSheetTop}px)`,
+          }}
           data-testid="lighting-studio-sheet"
         >
           <AppSheetHeader

@@ -7,6 +7,7 @@
  */
 
 import { Button } from "@/components/ui/button";
+import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 
@@ -45,7 +46,10 @@ export const AddItemsProgressOverlay = ({
 
   const overlay = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
+        APP_INTERSTITIAL_BACKDROP_CLASSNAME,
+      )}
       data-testid={testId}
     >
       <div

@@ -13,6 +13,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresentation";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -30,7 +31,8 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       className,
     )}
     {...props}
