@@ -292,7 +292,7 @@ Full configuration browser. Exposes all categories returned by the device and ap
 #### Known or Suspected Bugs
 
 - No confirmed active defect from code inspection.
-- Historical doc/test terminology about generic “reset category” is broader than the current implementation; current UI exposes category-level actions only for Audio Mixer and Clock Settings.
+- Historical docs/test terminology about generic “reset category” is broader than the current implementation; current UI exposes category-level actions only for Audio Mixer and Clock Settings.
 
 #### Testability Assessment
 

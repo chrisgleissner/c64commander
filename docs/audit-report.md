@@ -42,11 +42,11 @@ The README was rewritten for clarity, correctness, and conciseness:
 
 ## Validated (No Changes Needed)
 
-### doc/index.md
+### docs/index.md
 
 All 16 referenced files verified to exist. Structure is clean and accurate.
 
-### doc/developer.md
+### docs/developer.md
 
 - Prerequisites: Node.js 24 matches `.nvmrc`; JDK 17 is correct for Android builds
 - `.prettierrc.json` description (`printWidth: 120`, YAML `tabWidth: 2` override) matches actual config
@@ -59,7 +59,7 @@ All 16 referenced files verified to exist. Structure is clean and accurate.
 - Project structure listing matches actual `src/` layout
 - All Mermaid diagrams reference correct module paths
 
-### doc/architecture.md
+### docs/architecture.md
 
 - Runtime stack versions (React 18, Router 6, Vite 5, Capacitor 6) match `package.json`
 - Native path `android/app/src/main/java/uk/gleissner/c64commander/` confirmed
@@ -67,34 +67,34 @@ All 16 referenced files verified to exist. Structure is clean and accurate.
 - Display profile resolution description matches `src/lib/displayProfiles.ts`
 - Mermaid data flow and sequence diagrams are internally consistent
 
-### doc/features-by-page.md
+### docs/features-by-page.md
 
 - Page inventory (routes, components) matches `src/pages/*.tsx` and `src/lib/navigation/tabRoutes.ts`
 - Tab order (Home, Play, Disks, Config, Settings, Docs) matches code
 - Coverage Probe and Not Found routes confirmed in code
 - No broken links
 
-### doc/code-coverage.md
+### docs/code-coverage.md
 
 - Coverage tools (Vitest V8, JaCoCo, Playwright NYC) match CI workflow
 - 91% threshold matches `scripts/check-coverage-threshold.mjs`
 - Codecov flags (web, android, python, swift) match CI upload steps
 - File paths for coverage outputs are correct
 
-### doc/db.md
+### docs/db.md
 
 - Schema is explicitly documented as target state (not current runtime)
 - Reference to `../PLANS.md` verified: file exists
 - SID terminology (file/track/song) is consistent with `doc/architecture.md` and `doc/ux-guidelines.md`
 
-### doc/ux-guidelines.md
+### docs/ux-guidelines.md
 
 - Source model (Local, C64U, HVSC) matches code and UI
 - Component names (SelectableActionList, ItemSelectionDialog, QuickActionCard) match `src/components/`
 - Page structure descriptions match actual page implementations
 - Terminology is internally consistent
 
-### doc/ux-interactions.md
+### docs/ux-interactions.md
 
 - CTA inventory references correct Playwright spec files
 - Test coverage status classifications are plausible (not exhaustively re-verified)

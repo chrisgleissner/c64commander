@@ -7,18 +7,18 @@ Visible UI impact: NO
 
 ## Problem Statement
 
-The screenshot generation pipeline for `doc/img/app/` is no longer trustworthy. An unchanged rerun is leaving broad screenshot churn, while the current dedupe design is too weak to distinguish encoder or rendering noise from real UI deltas. The pipeline must return to a strict, deterministic state where unchanged reruns leave zero retained screenshot diffs and small real visual changes remain detectable.
+The screenshot generation pipeline for `docs/img/app/` is no longer trustworthy. An unchanged rerun is leaving broad screenshot churn, while the current dedupe design is too weak to distinguish encoder or rendering noise from real UI deltas. The pipeline must return to a strict, deterministic state where unchanged reruns leave zero retained screenshot diffs and small real visual changes remain detectable.
 
 ## Assumptions
 
 - The authoritative screenshot entry point is the Playwright `@screenshots` suite invoked via `npm run screenshots`.
-- `doc/img/app/` tracked at `HEAD` is the baseline that reruns must compare against.
+- `docs/img/app/` tracked at `HEAD` is the baseline that reruns must compare against.
 - PNG byte equality is not sufficient because encoder output can differ even when pixels are effectively unchanged.
 - Existing repo changes outside this task may be present and must be preserved.
 
 ## Invariants
 
-- No-op rerun: two identical reruns from the same commit and environment leave zero retained diffs under `doc/img/app/`.
+- No-op rerun: two identical reruns from the same commit and environment leave zero retained diffs under `docs/img/app/`.
 - High sensitivity: small real UI changes, including short text edits, must remain preserved.
 - Explicit bounded tolerance: any tolerated noise must be narrowly defined, justified, and encoded in code and tests.
 - Determinism: capture should control obvious sources of nondeterminism before comparison applies any tolerance.
@@ -33,7 +33,7 @@ The screenshot generation pipeline for `doc/img/app/` is no longer trustworthy. 
 - Metadata-only dedupe helper: [`scripts/screenshotMetadataDedupe.js`](/home/chris/dev/c64/c64commander/scripts/screenshotMetadataDedupe.js)
 - Path exceptions: [`scripts/screenshotPrunePolicy.js`](/home/chris/dev/c64/c64commander/scripts/screenshotPrunePolicy.js)
 - Diff aid only: [`scripts/diff-screenshots.mjs`](/home/chris/dev/c64/c64commander/scripts/diff-screenshots.mjs)
-- Output root: `doc/img/app/<page>/<state>.png`
+- Output root: `docs/img/app/<page>/<state>.png`
 
 ## Workset Validation
 
@@ -89,7 +89,7 @@ The screenshot generation pipeline for `doc/img/app/` is no longer trustworthy. 
 
 - Run targeted tests for the changed scripts and screenshot helpers.
 - Run `npm run test:coverage` and keep global branch coverage at `>= 91%`.
-- Run the screenshot pipeline twice from a stabilized point and prove the second run leaves zero retained screenshot diffs under `doc/img/app/`.
+- Run the screenshot pipeline twice from a stabilized point and prove the second run leaves zero retained screenshot diffs under `docs/img/app/`.
 - If a first clean run still creates screenshots relative to `HEAD`, determine whether those files are stale-but-real baseline mismatches or remaining nondeterministic churn, using file hashes across consecutive reruns.
 - When rerunning only a screenshot subset, verify that unrelated screenshot folders stay untouched and record any still-unstable files separately from the intentional refresh set.
 
@@ -114,7 +114,7 @@ The screenshot generation pipeline for `doc/img/app/` is no longer trustworthy. 
 - Targeted unit test output for screenshot dedupe logic
 - `npm run test:coverage` result with branch coverage `>= 91%`
 - Screenshot pipeline run 1 summary
-- Screenshot pipeline run 2 summary with zero retained `doc/img/app/` diffs
+- Screenshot pipeline run 2 summary with zero retained `docs/img/app/` diffs
 - File references for the final implementation and docs changes
 
 ---
@@ -132,8 +132,8 @@ The Lighting Studio device preview still uses hand-authored SVG geometry that do
 
 ## Authoritative Geometry Source
 
-- Primary source for this task: `doc/image/lighting/C64-layout.txt`
-- Current repository mirror of the same layout: `doc/img/lighting/c64-outline.txt`
+- Primary source for this task: `docs/image/lighting/C64-layout.txt`
+- Current repository mirror of the same layout: `docs/img/lighting/c64-outline.txt`
 - Legend:
   - `x` => case region
   - `-` => keyboard regions

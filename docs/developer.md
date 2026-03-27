@@ -303,7 +303,7 @@ test-results/maestro/
 ### Screenshots
 
 ```bash
-./build --screenshots    # Update app screenshots in doc/img
+./build --screenshots    # Update app screenshots in docs/img
 ./build --screenshots-only  # Capture screenshots only (no tests or APK)
 ```
 
