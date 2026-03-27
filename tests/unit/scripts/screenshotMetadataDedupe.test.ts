@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  SCREENSHOT_DIFF_CONFIG,
   compareScreenshotBuffers,
   decideMetadataScreenshotAction,
   decideTrackedScreenshotAction,
@@ -124,9 +125,101 @@ describe("compareScreenshotBuffers", () => {
     expect(comparison.status).toBe("different");
     expect(comparison.diffPixels).toBeGreaterThan(8);
   });
+
+  it("treats up to eight diff pixels as noise even when the diff ratio is higher on small screenshots", async () => {
+    const width = 20;
+    const height = 20;
+    const baseline = await sharp({
+      create: {
+        width,
+        height,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const { data, info } = await sharp(baseline).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const noisy = Buffer.from(data);
+
+    for (let pixelIndex = 0; pixelIndex < 8; pixelIndex += 1) {
+      noisy[pixelIndex * info.channels] = 0;
+    }
+
+    const candidate = await sharp(noisy, {
+      raw: {
+        width: info.width,
+        height: info.height,
+        channels: info.channels,
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const comparison = await compareScreenshotBuffers(baseline, candidate, SCREENSHOT_DIFF_CONFIG);
+
+    expect(comparison.diffPixels).toBe(8);
+    expect(comparison.diffRatio).toBeGreaterThan(SCREENSHOT_DIFF_CONFIG.maxDiffRatio);
+    expect(comparison.status).toBe("within-noise-budget");
+  });
+
+  it("reports different-size when screenshot dimensions change", async () => {
+    const baseline = await sharp({
+      create: {
+        width: 20,
+        height: 20,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const resized = await sharp({
+      create: {
+        width: 24,
+        height: 20,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const comparison = await compareScreenshotBuffers(baseline, resized);
+
+    expect(comparison.status).toBe("different-size");
+    expect(comparison.diffPixels).toBeNull();
+    expect(comparison.diffRatio).toBeNull();
+  });
 });
 
 describe("decideTrackedScreenshotAction", () => {
+  it("keeps the screenshot when no HEAD buffer is available", async () => {
+    const current = await createTextScreenshot("LOAD RAM");
+
+    const decision = await decideTrackedScreenshotAction({
+      currentPngBuffer: current,
+      headPngBuffer: null,
+    });
+
+    expect(decision).toEqual({
+      action: "keep",
+      comparison: null,
+    });
+  });
+
+  it("restores byte-identical tracked screenshots immediately", async () => {
+    const baseline = await createTextScreenshot("LOAD RAM");
+
+    const decision = await decideTrackedScreenshotAction({
+      currentPngBuffer: baseline,
+      headPngBuffer: baseline,
+    });
+
+    expect(decision.action).toBe("restore-head");
+    expect(decision.comparison?.status).toBe("identical");
+  });
+
   it("restores near-identical tracked screenshots when fuzzy restore is enabled", async () => {
     const baseline = await createTextScreenshot("LOAD RAM");
     const noisy = await addSinglePixelNoise(baseline);
@@ -189,6 +282,19 @@ describe("decideMetadataScreenshotAction", () => {
         trackedPathsForBlobId: ["doc/img/app/home/00-overview-light.png"],
         writeWhenTrackedDuplicate: true,
         skipTrackedDuplicatePrune: false,
+      }),
+    ).toBe("keep");
+  });
+
+  it("keeps duplicate screenshots when tracked-duplicate pruning is skipped", () => {
+    expect(
+      decideMetadataScreenshotAction({
+        repoPath: "doc/img/app/home/profiles/medium/02-overview.png",
+        currentBlobId: "aaa111",
+        headBlobId: undefined,
+        trackedPathsForBlobId: ["doc/img/app/home/00-overview-light.png"],
+        writeWhenTrackedDuplicate: false,
+        skipTrackedDuplicatePrune: true,
       }),
     ).toBe("keep");
   });

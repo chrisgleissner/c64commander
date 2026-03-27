@@ -134,9 +134,13 @@ test.describe("Home interactions", () => {
     await expect(sidEntry).toHaveCount(0);
   });
 
-  test("machine quick actions issue the expected home control requests", async ({ page }: { page: Page }) => {
+  test("machine quick actions use REST controls and telnet reboot where expected", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForConnected(page);
+    await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
+    await page.evaluate(() =>
+      (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
+    );
 
     const machineControls = page.getByTestId("home-machine-controls");
 
@@ -159,9 +163,19 @@ test.describe("Home interactions", () => {
       .toBe(true);
     await expect
       .poll(() =>
-        hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot")),
+        getTelnetTraces(page).then((traces) =>
+          traces.some(
+            (event) =>
+              event.data?.actionId === "rebootClearMemory" &&
+              event.data?.result === "success" &&
+              event.data?.target === "external-mock",
+          ),
+        ),
       )
       .toBe(true);
+    expect(hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot"))).toBe(
+      false,
+    );
     await expect
       .poll(() => hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:menu")))
       .toBe(true);

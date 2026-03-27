@@ -124,7 +124,7 @@ export const compareScreenshotBuffers = async (
     };
   }
 
-  if (diffPixels <= diffConfig.maxDiffPixels && diffRatio <= diffConfig.maxDiffRatio) {
+  if (diffPixels <= diffConfig.maxDiffPixels) {
     return {
       status: "within-noise-budget",
       diffPixels,
