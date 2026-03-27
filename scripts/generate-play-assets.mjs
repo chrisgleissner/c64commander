@@ -1,13 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 
 const rootDir = process.cwd();
-const logoPath = path.join(rootDir, 'docs', 'img', 'c64commander.png');
-const outDir = path.join(rootDir, 'docs', 'site', 'play-store');
-const screenshotsDir = path.join(outDir, 'screenshots');
-
-const playStoreScreenshotSources = [
+export const PLAY_STORE_LOGO_RELATIVE_PATH = path.join('docs', 'img', 'c64commander.png');
+export const PLAY_STORE_OUTPUT_RELATIVE_PATH = path.join('docs', 'site', 'play-store');
+export const PLAY_STORE_SCREENSHOT_SOURCES = [
   ['docs/img/app/home/00-overview-light.png', 'app-home.png'],
   ['docs/img/app/play/01-overview.png', 'app-play.png'],
   ['docs/img/app/disks/01-overview.png', 'app-disks.png'],
@@ -17,11 +16,22 @@ const playStoreScreenshotSources = [
   ['docs/img/app/docs/01-overview.png', 'app-documentation.png'],
 ];
 
+export const resolvePlayStoreAssetPaths = (workspaceRoot = process.cwd()) => {
+  const outDir = path.join(workspaceRoot, PLAY_STORE_OUTPUT_RELATIVE_PATH);
+  return {
+    logoPath: path.join(workspaceRoot, PLAY_STORE_LOGO_RELATIVE_PATH),
+    outDir,
+    screenshotsDir: path.join(outDir, 'screenshots'),
+  };
+};
+
 const ensureDir = (dir) => {
   fs.mkdirSync(dir, { recursive: true });
 };
 
-const main = async () => {
+export const main = async () => {
+  const { logoPath, outDir, screenshotsDir } = resolvePlayStoreAssetPaths(rootDir);
+
   if (!fs.existsSync(logoPath)) {
     throw new Error(`Logo not found: ${logoPath}`);
   }
@@ -77,7 +87,7 @@ const main = async () => {
     .png()
     .toFile(path.join(outDir, 'feature-graphic-1024x500.png'));
 
-  playStoreScreenshotSources.forEach(([sourceRelativePath, targetFileName]) => {
+  PLAY_STORE_SCREENSHOT_SOURCES.forEach(([sourceRelativePath, targetFileName]) => {
     const source = path.join(rootDir, sourceRelativePath);
     const target = path.join(screenshotsDir, targetFileName);
     if (fs.existsSync(source)) {
@@ -88,7 +98,9 @@ const main = async () => {
   console.log('Play Store assets generated in docs/site/play-store.');
 };
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
