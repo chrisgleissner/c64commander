@@ -8,7 +8,7 @@ Remediate issues identified in the most recent documentation review.
 
 Doc review reports are stored under:
 
-`doc/research/`
+`docs/research/`
 
 in folders named:
 
@@ -20,14 +20,14 @@ All remediation results must be recorded in a separate remediation log and refle
 
 ## Review Discovery
 
-1. Enumerate folders matching `doc/research/doc-review-*`.
+1. Enumerate folders matching `docs/research/doc-review-*`.
 2. Extract the numeric suffix from each folder name.
 3. Determine the highest numeric doc review number.
 4. Treat this folder as the source doc review folder.
 
 The doc review report is located at:
 
-`doc/research/doc-review-<highest>/doc-review-<highest>.md`
+`docs/research/doc-review-<highest>/doc-review-<highest>.md`
 
 ## Remediation Artifacts
 
@@ -35,8 +35,8 @@ Do NOT create a new doc review folder.
 
 Instead create or update:
 
-- `doc/research/doc-review-<highest>/remediation-log.md`
-- `doc/research/doc-review-<highest>/carry-forward.md`
+- `docs/research/doc-review-<highest>/remediation-log.md`
+- `docs/research/doc-review-<highest>/carry-forward.md`
 
 ## Preparation
 
@@ -81,7 +81,7 @@ If all items are resolved, leave `carry-forward.md` in place and state that no o
 
 Append a remediation entry to:
 
-`doc/research/doc-review-<highest>/remediation-log.md`
+`docs/research/doc-review-<highest>/remediation-log.md`
 
 Each entry must contain:
 
@@ -92,4 +92,4 @@ Each entry must contain:
 - Screenshot changes
 - Remaining unresolved issues
 
-Update `doc/research/doc-review-<highest>/carry-forward.md` in the same run.
+Update `docs/research/doc-review-<highest>/carry-forward.md` in the same run.

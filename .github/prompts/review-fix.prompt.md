@@ -8,7 +8,7 @@ Remediate issues identified in the **most recent production audit**.
 
 Audit reports are stored under:
 
-doc/research/
+docs/research/
 
 in folders named:
 
@@ -16,9 +16,9 @@ review-<number>
 
 Examples:
 
-doc/research/review-5/
-doc/research/review-6/
-doc/research/review-7/
+docs/research/review-5/
+docs/research/review-6/
+docs/research/review-7/
 
 The audit report itself must **never be modified**.
 
@@ -30,18 +30,18 @@ All remediation results must be recorded in a separate remediation log and refle
 
 First determine the latest review.
 
-1. Enumerate folders matching `doc/research/review-*`.
+1. Enumerate folders matching `docs/research/review-*`.
 2. Extract the numeric suffix from each folder name.
 3. Determine the **highest numeric review number**.
 4. Treat this folder as the **source review folder**.
 
 Example:
 
-doc/research/review-7/
+docs/research/review-7/
 
 The audit report is located at:
 
-doc/research/review-<highest>/review-<highest>.md
+docs/research/review-<highest>/review-<highest>.md
 
 ---
 
@@ -51,7 +51,7 @@ Do NOT create a new review folder.
 
 Instead create or update the remediation log:
 
-doc/research/review-<highest>/remediation-log.md
+docs/research/review-<highest>/remediation-log.md
 
 This file records **all fixes implemented after the audit**.
 
@@ -59,7 +59,7 @@ If the file already exists, append a new remediation entry.
 
 Also create or update:
 
-doc/research/review-<highest>/carry-forward.md
+docs/research/review-<highest>/carry-forward.md
 
 This file is the durable list of unresolved, blocked, deferred, and resolved items for the current review cycle.
 
@@ -167,7 +167,7 @@ If documentation drift is identified:
 Update:
 
 - README.md
-- relevant files under `doc/`
+- relevant files under `docs/`
 - in-app documentation pages where applicable
 
 Ensure documentation matches the current implementation.
@@ -194,7 +194,7 @@ Example areas:
 
 Append a remediation entry to:
 
-doc/research/review-<highest>/remediation-log.md
+docs/research/review-<highest>/remediation-log.md
 
 Each entry must contain:
 
@@ -206,7 +206,7 @@ Each entry must contain:
 - Documentation changes
 - Remaining unresolved issues
 
-Update `doc/research/review-<highest>/carry-forward.md` in the same run.
+Update `docs/research/review-<highest>/carry-forward.md` in the same run.
 
 Remaining unresolved issues must be clearly listed there so future remediation passes and the next review cycle can inherit them automatically.
 

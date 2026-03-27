@@ -17,7 +17,7 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const yamlPath = path.resolve(__dirname, "../../../doc/c64/c64u-config.yaml");
+const yamlPath = path.resolve(__dirname, "../../../docs/c64/c64u-config.yaml");
 
 export const loadConfigYaml = () => {
   const configYamlContent = fs.readFileSync(yamlPath, "utf-8");

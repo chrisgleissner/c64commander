@@ -17,6 +17,23 @@ const isVitestEnvironment = () => {
   }
 };
 
+const isTestProbeEnvironment = () => {
+  try {
+    if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  } catch {
+    // Ignore env access failures and fall through to process/window checks.
+  }
+  try {
+    if (typeof process !== "undefined" && process.env?.VITE_ENABLE_TEST_PROBES === "1") return true;
+  } catch {
+    // Ignore process access failures.
+  }
+  return (
+    typeof window !== "undefined" &&
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true
+  );
+};
+
 export const getServiceWorkerScriptUrl = () => {
   const buildId = typeof __SW_BUILD_ID__ !== "undefined" ? __SW_BUILD_ID__ : "";
   const fallbackBuildId =
@@ -34,6 +51,7 @@ export const shouldRegisterServiceWorkerForEnvironment = (isDev: boolean) => {
   if (typeof window === "undefined") return false;
   if (!("serviceWorker" in navigator)) return false;
   if (isDev) return false;
+  if (isTestProbeEnvironment()) return false;
   if (isNativePlatform()) return false;
   return true;
 };

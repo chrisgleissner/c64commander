@@ -4,7 +4,7 @@
 
 This document provides a comprehensive inventory of all user-facing interactions (CTAs - Call To Actions) and multi-step user flows in C64 Commander. Each interaction is classified by importance and mapped to test coverage.
 
-**Last Updated**: 2026-03-15
+**Last Updated**: 2026-03-27
 **Total CTAs Documented**: TBD
 **Test Coverage Target**: 100%
 
@@ -28,13 +28,66 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ---
 
+## Interstitial Model
+
+Every interstitial in the app must be exactly one of:
+
+### Modal
+
+- Decision-only
+- Blocking
+- Short-lived
+- Explicit confirmation or acknowledgement
+
+Examples:
+
+- Demo Mode prompt
+- Source selection chooser
+- Restore Snapshot confirmation
+- Delete confirmations
+- Rename prompts
+
+### Bottom Sheet
+
+- Workflow-only
+- Scrollable or exploratory
+- May stay open while the user browses, filters, or edits
+- Keeps background context visible
+
+Examples:
+
+- Source browser
+- Playlist and disk “View all”
+- Lighting Studio
+- Diagnostics
+- Snapshot browser
+- Manage App Configs
+- Load from App
+
+### Invariant
+
+- Never choose modal vs bottom sheet by screen size or height.
+- Never combine selection and confirmation in the same interstitial.
+- Split hybrid flows into a workflow sheet plus a separate decision modal.
+
+Concrete application rules:
+
+- Demo Mode stays a modal.
+- Source selection stays a modal.
+- Source browsing stays a bottom sheet.
+- Lighting Studio stays a bottom sheet.
+- Diagnostics stays a bottom sheet.
+- Snapshot browsing stays a bottom sheet and restore confirmation stays a modal.
+
+---
+
 ## 1. Play Page (PlayFilesPage)
 
 ### 1.1 Primary CTAs
 
 | CTA         | Label                           | Purpose                       | Importance   | Test Coverage | Test File                        | Notes                               |
 | ----------- | ------------------------------- | ----------------------------- | ------------ | ------------- | -------------------------------- | ----------------------------------- |
-| Button      | "Add items" / "Add more items"  | Open item selection dialog    | **CRITICAL** | ✅ FULL       | ui.spec.ts:174                   | Primary acquisition flow            |
+| Button      | "Add items" / "Add more items"  | Open source selection modal   | **CRITICAL** | ✅ FULL       | ui.spec.ts:174                   | Primary acquisition flow            |
 | Button      | "Play" / "Stop"                 | Start/stop playback           | **CRITICAL** | ✅ FULL       | playback.spec.ts:359             | Transport control                   |
 | Button      | "Pause" / "Resume"              | Pause/resume playback         | **CRITICAL** | ✅ FULL       | playback.spec.ts:359             | Transport control                   |
 | Button      | "Prev"                          | Previous track                | **HIGH**     | ✅ FULL       | playback.spec.ts:328             | Transport control                   |
@@ -45,13 +98,13 @@ This document provides a comprehensive inventory of all user-facing interactions
 | Button      | "Select all"                    | Select all playlist items     | **HIGH**     | ✅ FULL       | playback.spec.ts:407             | Bulk action                         |
 | Button      | "Deselect all"                  | Clear selection               | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:173       | Bulk action                         |
 | Button      | "Remove selected"               | Delete selected from playlist | **HIGH**     | ✅ FULL       | playback.spec.ts:407             | Destructive bulk action             |
-| Button      | "View all"                      | Show full playlist            | **MEDIUM**   | ✅ FULL       | uxInteractions.spec.ts:463       | List expansion                      |
+| Button      | "View all"                      | Show full playlist sheet      | **MEDIUM**   | ✅ FULL       | uxInteractions.spec.ts:463       | Workflow bottom sheet               |
 | Link/Button | Item title                      | Navigate to item details      | **MEDIUM**   | ⚠️ PARTIAL    | -                                | Interaction exists, limited testing |
 | Menu        | "..." (more actions)            | Item-specific actions         | **MEDIUM**   | ⚠️ PARTIAL    | -                                | Per-item dropdown                   |
 | Menu Item   | "Set duration"                  | Override song duration        | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:126,172 | Advanced feature                    |
 | Menu Item   | "Choose subsong"                | Select SID subsong            | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:229     | SID-specific                        |
 | Checkbox    | Item checkbox                   | Select/deselect item          | **HIGH**     | ✅ FULL       | playback.spec.ts:407             | Selection mechanism                 |
-| Button      | "Close" / "Cancel" (in dialogs) | Dismiss modal                 | **HIGH**     | ✅ FULL       | ui.spec.ts:174                   | Modal navigation                    |
+| Button      | "Close" / "Cancel" (in dialogs) | Dismiss current interstitial  | **HIGH**     | ✅ FULL       | ui.spec.ts:174                   | Modal or bottom-sheet dismissal     |
 
 ### 1.2 Item Selection Dialog (Source Selection)
 
@@ -67,6 +120,12 @@ This document provides a comprehensive inventory of all user-facing interactions
 | Checkbox | "Recurse folders"         | Include subfolders          | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:181 | Option toggle       |
 | Dropdown | File type filter          | Filter by PRG/SID/etc       | **MEDIUM**   | ❌ NONE       | -                            | Filter control      |
 | Checkbox | File/folder checkbox      | Select for addition         | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:173   | Selection mechanism |
+
+Interaction split:
+
+- Source chooser: modal
+- Source browser: bottom sheet
+- Add selected: footer action inside the bottom sheet workflow
 
 ### 1.3 HVSC-Specific Features
 
@@ -101,7 +160,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | Button    | "Select all"          | Select all disks           | **HIGH**   | ✅ FULL       | diskManagement.spec.ts:324                             | Bulk action             |
 | Button    | "Deselect all"        | Clear selection            | **HIGH**   | ⚠️ PARTIAL    | uxInteractions.spec.ts:173                             | Bulk action             |
 | Button    | "Remove selected"     | Delete from library        | **HIGH**   | ✅ FULL       | diskManagement.spec.ts:324                             | Destructive bulk action |
-| Button    | "View all"            | Show full disk list        | **MEDIUM** | ✅ FULL       | diskManagement.spec.ts:264, uxInteractions.spec.ts:463 | List expansion          |
+| Button    | "View all"            | Show full disk list sheet  | **MEDIUM** | ✅ FULL       | diskManagement.spec.ts:264, uxInteractions.spec.ts:463 | Workflow bottom sheet   |
 | Menu      | "..." (disk actions)  | Per-disk actions           | **MEDIUM** | ⚠️ PARTIAL    | diskManagement.spec.ts:307                             | Item menu               |
 | Menu Item | "Rename"              | Change disk label          | **MEDIUM** | ✅ FULL       | diskManagement.spec.ts:307                             | Metadata edit           |
 | Menu Item | "Set group"           | Assign to multi-disk group | **MEDIUM** | ❌ NONE       | -                                                      | Organization            |
@@ -131,7 +190,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | QuickActionCard | "Pause" / "Resume"  | Pause or resume emulation              | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
 | QuickActionCard | "Menu"              | Toggle C64U menu                       | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
 | QuickActionCard | "Save RAM"          | Open RAM snapshot export flow          | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Folder-backed export                |
-| QuickActionCard | "Load RAM"          | Open RAM snapshot restore flow         | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Snapshot manager / confirmation     |
+| QuickActionCard | "Load RAM"          | Open RAM snapshot restore flow         | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Snapshot sheet + confirmation modal |
 | QuickActionCard | "Power Cycle"       | Telnet power cycle                     | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Disabled when Telnet is unavailable |
 | QuickActionCard | "Power Off"         | Power down C64                         | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control - destructive       |
 | Overflow action | "Reboot (Keep RAM)" | Reboot without clearing RAM via Telnet | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Quick Actions overflow menu         |
@@ -145,16 +204,22 @@ This document provides a comprehensive inventory of all user-facing interactions
 | QuickActionCard | "Save" (to app)        | Save to local storage      | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:121     | Config persistence |
 | QuickActionCard | "Load" (from app)      | Load from local storage    | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:143     | Config restoration |
 | QuickActionCard | "Revert"               | Discard pending changes    | **MEDIUM** | ❌ NONE       | -                                    | Config rollback    |
-| QuickActionCard | "Manage" (app configs) | Open config manager dialog | **MEDIUM** | ⚠️ PARTIAL    | homeConfigManagement.spec.ts:180,220 | Config management  |
+| QuickActionCard | "Manage" (app configs) | Open config manager sheet  | **MEDIUM** | ⚠️ PARTIAL    | homeConfigManagement.spec.ts:180,220 | Workflow bottom sheet |
 
-### 3.3 Config Manager Dialog
+### 3.3 Config Manager
 
 | CTA    | Label                 | Purpose            | Importance | Test Coverage | Test File                        | Notes              |
 | ------ | --------------------- | ------------------ | ---------- | ------------- | -------------------------------- | ------------------ |
 | Button | "Load" (per config)   | Load this config   | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:143 | Config selection   |
 | Button | "Rename" (per config) | Change config name | **MEDIUM** | ✅ FULL       | homeConfigManagement.spec.ts:180 | Metadata edit      |
 | Button | "Delete" (per config) | Remove config      | **MEDIUM** | ✅ FULL       | homeConfigManagement.spec.ts:220 | Destructive action |
-| Button | "Close" (dialog)      | Dismiss manager    | **MEDIUM** | ✅ FULL       | homeConfigManagement.spec.ts:180 | Modal navigation   |
+| Button | "Close" (sheet)       | Dismiss manager    | **MEDIUM** | ✅ FULL       | homeConfigManagement.spec.ts:180 | Workflow dismissal |
+
+Interaction split:
+
+- Manager list: bottom sheet
+- Rename: modal
+- Delete: modal
 
 ### 3.4 Drive Status Cards
 
@@ -189,12 +254,18 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 | CTA    | Label                       | Purpose                                       | Importance | Test Coverage | Test File                                                    | Notes                         |
 | ------ | --------------------------- | --------------------------------------------- | ---------- | ------------- | ------------------------------------------------------------ | ----------------------------- |
-| Button | "Diagnostics"               | Open diagnostics overlay                      | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:41                               | Debug tool                    |
+| Button | "Diagnostics"               | Open diagnostics sheet                        | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:41                               | Workflow bottom sheet         |
 | Button | "Clear All"                 | Clear all diagnostics data                    | **MEDIUM** | ✅ FULL       | settingsDiagnostics.spec.ts:133                              | Maintenance                   |
 | Button | "Share All"                 | Share all diagnostics as ZIP                  | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Support tool                  |
 | Input  | "Filter entries"            | Filter active diagnostics tab                 | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Scoped filtering              |
 | Button | Contributor filter "TELNET" | Focus diagnostics on Telnet-attributed issues | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx | Available beside App/REST/FTP |
 | Button | "Share"                     | Share active tab ZIP export                   | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Support tool                  |
+
+Diagnostics tools follow the same model:
+
+- Diagnostics root: bottom sheet
+- Filters, latency analysis, config drift, decision state, and history: bottom sheets
+- Clear All confirmation: modal
 
 ### 4.4 Playback Settings
 
@@ -259,7 +330,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | **Navigate playlist**          | 1. Play a song<br>2. Click "Next"/"Prev"                                                | **HIGH**   | ✅ FULL       | playback.spec.ts:328             | Transport control   |
 | **Bulk remove disks**          | 1. Select multiple disks<br>2. Click "Remove selected"<br>3. Confirm                    | **HIGH**   | ✅ FULL       | diskManagement.spec.ts:324       | Library management  |
 | **Save config to app**         | 1. Modify config<br>2. Click "Save"<br>3. Enter name<br>4. Confirm                      | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:121 | Config persistence  |
-| **Load config from app**       | 1. Click "Load"<br>2. Select config<br>3. Confirm                                       | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:143 | Config restoration  |
+| **Load config from app**       | 1. Click "Load"<br>2. Select config in sheet                                            | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:143 | Non-destructive workflow |
 | **Download HVSC**              | 1. Navigate to Play<br>2. Click "Download HVSC"<br>3. Confirm<br>4. Wait for completion | **HIGH**   | ✅ FULL       | hvsc.spec.ts:79                  | HVSC setup          |
 
 ### 7.3 MEDIUM Priority Flows
@@ -279,7 +350,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | ------------------------------ | ------------------------------------------------------------------------------ | ---------- | ------------- | ------------------------------------ | ----------------- |
 | **Check HVSC updates**         | 1. Navigate to Play<br>2. Click "Check for updates"<br>3. Review status        | **LOW**    | ✅ FULL       | hvsc.spec.ts:133                     | Maintenance       |
 | **Share / Export diagnostics** | 1. Navigate to Settings<br>2. Click "Diagnostics"<br>3. Click "Share / Export" | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:117      | Support tool      |
-| **Manage app configs**         | 1. Click "Manage"<br>2. Browse saved configs<br>3. Rename/Delete as needed     | **LOW**    | ✅ FULL       | homeConfigManagement.spec.ts:180,220 | Config management |
+| **Manage app configs**         | 1. Click "Manage"<br>2. Browse saved configs in sheet<br>3. Rename/Delete in modal as needed | **LOW**    | ✅ FULL       | homeConfigManagement.spec.ts:180,220 | Split workflow |
 
 ---
 

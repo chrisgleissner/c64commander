@@ -481,11 +481,7 @@ export const ItemSelectionDialog = ({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent
-        showClose={false}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        className="p-0 overflow-hidden shadow-2xl"
-      >
+      <AppSheetContent showClose={false} onOpenAutoFocus={(e) => e.preventDefault()} className="overflow-hidden p-0">
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           <AppSheetHeader className={cn(headerPaddingClassName, "pr-12")}>
             <div className="flex items-start justify-between gap-4">

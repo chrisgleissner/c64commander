@@ -12,7 +12,7 @@ import { useC64Connection } from "@/hooks/useC64Connection";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { createTelnetSession } from "@/lib/telnet/telnetSession";
 import { createActionExecutor } from "@/lib/telnet/telnetActionExecutor";
-import { createTelnetClient } from "@/lib/telnet/telnetClient";
+import { createTelnetClient, shouldUseMockTelnetTransport } from "@/lib/telnet/telnetClient";
 import {
   isTelnetCapableProduct,
   resolveTelnetMenuKey,
@@ -38,14 +38,22 @@ const resolveTelnetCapability = ({
   isConnected = false,
   isDemo = false,
   product = null,
+  mockTarget = shouldUseMockTelnetTransport(),
 }: {
   nativePlatform?: boolean;
   isConnected?: boolean;
   isDemo?: boolean;
   product?: string | null;
+  mockTarget?: boolean;
 } = {}): TelnetCapabilityDecision => {
   const menuKey = resolveTelnetMenuKey(product);
-  if (!nativePlatform || !isConnected || isDemo || !isTelnetCapableProduct(product)) {
+  if ((!nativePlatform && !mockTarget) || !isConnected || !isTelnetCapableProduct(product)) {
+    return {
+      isAvailable: false,
+      menuKey,
+    };
+  }
+  if (isDemo && !mockTarget) {
     return {
       isAvailable: false,
       menuKey,
@@ -63,6 +71,7 @@ export function isTelnetAvailable(options?: {
   isConnected?: boolean;
   isDemo?: boolean;
   product?: string | null;
+  mockTarget?: boolean;
 }): boolean {
   return resolveTelnetCapability(options).isAvailable;
 }

@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load full YAML config for tests
-const yamlPath = path.resolve(__dirname, "../../doc/c64/c64u-config.yaml");
+const yamlPath = path.resolve(__dirname, "../../docs/c64/c64u-config.yaml");
 const yamlContent = fs.readFileSync(yamlPath, "utf8");
 
 // Set the custom loader for tests

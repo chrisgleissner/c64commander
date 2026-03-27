@@ -24,7 +24,7 @@ const COMPLETION_POLL_DELAY_MS = Number(process.env.C64U_TIMING_COMPLETION_POLL_
 const OPERATION_FILTER = process.env.C64U_TIMING_OPERATION_FILTER?.trim() || '';
 const OUTPUT_PATH =
     process.env.C64U_TIMING_OUTPUT_PATH?.trim() ||
-    path.resolve('doc/c64/measurements/mock-timing-calibration-2026-03-12.json');
+    path.resolve('docs/c64/measurements/mock-timing-calibration-2026-03-12.json');
 
 const SAFE_CATEGORY_BLOCKLIST = ['network', 'wifi', 'modem', 'http', 'ftp', 'telnet', 'hostname', 'password'];
 const SAFE_ITEM_BLOCKLIST = ['password', 'hostname', 'ip', 'mac', 'dns', 'gateway', 'ssid', 'token'];

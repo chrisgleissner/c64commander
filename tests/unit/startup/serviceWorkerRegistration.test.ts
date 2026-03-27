@@ -25,6 +25,7 @@ describe("serviceWorkerRegistration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isNativePlatformMock.mockReturnValue(false);
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = false;
     Object.defineProperty(window, "navigator", {
       configurable: true,
       value: {
@@ -37,6 +38,13 @@ describe("serviceWorkerRegistration", () => {
 
   it("skips registration on native platforms", () => {
     isNativePlatformMock.mockReturnValue(true);
+
+    expect(shouldRegisterServiceWorkerForEnvironment(false)).toBe(false);
+    expect(registerServiceWorkerForEnvironment(false)).toBe(false);
+  });
+
+  it("skips registration when test probes are enabled", () => {
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
 
     expect(shouldRegisterServiceWorkerForEnvironment(false)).toBe(false);
     expect(registerServiceWorkerForEnvironment(false)).toBe(false);

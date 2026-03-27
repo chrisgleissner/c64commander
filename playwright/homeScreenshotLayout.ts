@@ -15,6 +15,12 @@ export type CanonicalHomeScreenshotSlice = {
   slice: HomeScreenshotSlice;
 };
 
+type CanonicalHomeScreenshotRequirement = {
+  fileName: string;
+  requiredSectionSlugs: string[];
+  fallbackSectionSlugs?: string[];
+};
+
 type PlanHomeScreenshotSlicesOptions = {
   sections: HomeSectionBounds[];
   viewportHeight: number;
@@ -89,39 +95,46 @@ export const planHomeScreenshotSlices = ({
   return slices;
 };
 
-const CANONICAL_HOME_SCREENSHOT_REQUIREMENTS: Array<{
-  fileName: string;
-  requiredSectionSlugs: string[];
-}> = [
-    {
-      fileName: "01-system-info-to-cpu-ram.png",
-      requiredSectionSlugs: ["system-info", "cpu-ram"],
-    },
-    {
-      fileName: "02-quick-config-to-keyboard-light.png",
-      requiredSectionSlugs: ["quick-config", "keyboard-light"],
-    },
-    {
-      fileName: "03-quick-config-to-printers.png",
-      requiredSectionSlugs: ["quick-config", "printers"],
-    },
-    {
-      fileName: "04-printers-to-sid.png",
-      requiredSectionSlugs: ["printers", "sid"],
-    },
-    {
-      fileName: "05-sid-to-config.png",
-      requiredSectionSlugs: ["sid", "config"],
-    },
-  ];
+const CANONICAL_HOME_SCREENSHOT_REQUIREMENTS: CanonicalHomeScreenshotRequirement[] = [
+  {
+    fileName: "01-system-info-to-cpu-ram.png",
+    requiredSectionSlugs: ["system-info", "cpu-ram"],
+  },
+  {
+    fileName: "02-quick-config-to-keyboard-light.png",
+    requiredSectionSlugs: ["quick-config", "keyboard-light"],
+  },
+  {
+    fileName: "03-quick-config-to-printers.png",
+    requiredSectionSlugs: ["quick-config", "printers"],
+    fallbackSectionSlugs: ["quick-config", "drives"],
+  },
+  {
+    fileName: "04-printers-to-sid.png",
+    requiredSectionSlugs: ["printers", "sid"],
+  },
+  {
+    fileName: "05-sid-to-config.png",
+    requiredSectionSlugs: ["sid", "config"],
+    fallbackSectionSlugs: ["config"],
+  },
+];
 
-export const selectCanonicalHomeScreenshotSlices = (
-  slices: HomeScreenshotSlice[],
-): CanonicalHomeScreenshotSlice[] => {
+export const selectCanonicalHomeScreenshotSlices = (slices: HomeScreenshotSlice[]): CanonicalHomeScreenshotSlice[] => {
+  let minimumIndex = 0;
+
   return CANONICAL_HOME_SCREENSHOT_REQUIREMENTS.map((requirement) => {
-    const slice = slices.find((candidate) =>
+    const remainingSlices = slices.slice(minimumIndex);
+    const exactMatch = remainingSlices.find((candidate) =>
       requirement.requiredSectionSlugs.every((sectionSlug) => candidate.sectionSlugs.includes(sectionSlug)),
     );
+    const fallbackMatch =
+      exactMatch || !requirement.fallbackSectionSlugs
+        ? null
+        : remainingSlices.find((candidate) =>
+            requirement.fallbackSectionSlugs!.every((sectionSlug) => candidate.sectionSlugs.includes(sectionSlug)),
+          );
+    const slice = exactMatch ?? fallbackMatch;
     if (!slice) {
       throw new Error(
         `Missing canonical Home screenshot slice for ${requirement.fileName} (${requirement.requiredSectionSlugs.join(
@@ -129,6 +142,7 @@ export const selectCanonicalHomeScreenshotSlices = (
         )})`,
       );
     }
+    minimumIndex = slices.indexOf(slice) + 1;
     return {
       fileName: requirement.fileName,
       slice,

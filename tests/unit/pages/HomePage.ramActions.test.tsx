@@ -24,6 +24,7 @@ const {
   updateSnapshotLabelSpy,
   snapshotEntryToBytesSpy,
   getCurrentPlaybackSnapshotLabelSpy,
+  telnetState,
 } = vi.hoisted(() => ({
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
@@ -37,6 +38,11 @@ const {
   updateSnapshotLabelSpy: vi.fn(),
   snapshotEntryToBytesSpy: vi.fn(),
   getCurrentPlaybackSnapshotLabelSpy: vi.fn(),
+  telnetState: {
+    isBusy: false,
+    activeActionId: null as string | null,
+    isAvailable: true,
+  },
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
@@ -223,10 +229,10 @@ vi.mock("@/pages/home/DriveCard", () => ({
 
 vi.mock("@/hooks/useTelnetActions", () => ({
   useTelnetActions: () => ({
-    isBusy: false,
-    activeActionId: null,
+    isBusy: telnetState.isBusy,
+    activeActionId: telnetState.activeActionId,
     executeAction: executeTelnetActionSpy,
-    isAvailable: true,
+    isAvailable: telnetState.isAvailable,
   }),
 }));
 
@@ -243,6 +249,9 @@ describe("HomePage RAM actions", () => {
     createSnapshotSpy.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
     getCurrentPlaybackSnapshotLabelSpy.mockReturnValue(undefined);
     loadMemoryRangesSpy.mockResolvedValue(undefined);
+    telnetState.isBusy = false;
+    telnetState.activeActionId = null;
+    telnetState.isAvailable = true;
   });
 
   it("runs reboot clear memory action", async () => {
@@ -255,6 +264,18 @@ describe("HomePage RAM actions", () => {
       title: "Machine rebooting",
     });
   }, 15000);
+
+  it("disables reboot while a telnet action is already busy", () => {
+    telnetState.isBusy = true;
+    renderHomePage();
+
+    const rebootButton = screen.getByRole("button", { name: /^reboot$/i });
+    expect(rebootButton).toBeDisabled();
+
+    fireEvent.click(rebootButton);
+
+    expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+  });
 
   it("opens Save RAM dialog when Save RAM button is clicked", async () => {
     renderHomePage();

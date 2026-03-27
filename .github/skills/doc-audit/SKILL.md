@@ -1,6 +1,6 @@
 ---
 name: doc-audit
-description: Use when auditing README, doc/, docs/, or in-app documentation for stale guidance, contradictions, undocumented behavior, or screenshot drift in C64 Commander.
+description: Use when auditing README, docs/**, docs/, or in-app documentation for stale guidance, contradictions, undocumented behavior, or screenshot drift in C64 Commander.
 argument-hint: (optional) scope such as README, diagnostics, platform docs, or screenshots
 user-invocable: true
 disable-model-invocation: true
@@ -27,7 +27,7 @@ Compare implementation against documentation.
 Check:
 
 - README
-- doc/\*\*
+- docs/***\*
 - docs/\*\*
 - in-app docs
 

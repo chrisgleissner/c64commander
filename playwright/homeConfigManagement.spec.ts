@@ -51,6 +51,7 @@ const openManageDialog = async (page: Page) => {
   await button.scrollIntoViewIfNeeded();
   await button.click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByTestId("manage-configs-sheet")).toBeVisible();
 };
 
 test.describe("Home page app config management", () => {
@@ -262,8 +263,10 @@ test.describe("Home page app config management", () => {
     await openManageDialog(page);
     await snap(page, testInfo, "manage-dialog-open");
 
-    // In the manage dialog, there's an input with the current name
-    const renameInput = page.getByRole("dialog").getByRole("textbox");
+    const manageSheet = page.getByTestId("manage-configs-sheet");
+    await manageSheet.getByRole("button", { name: /^rename$/i }).click();
+    const renameDialog = page.getByTestId("manage-configs-rename-dialog");
+    const renameInput = renameDialog.getByRole("textbox");
     await expect(renameInput).toHaveValue("Old Name");
     await snap(page, testInfo, "input-visible");
 
@@ -271,11 +274,7 @@ test.describe("Home page app config management", () => {
     await renameInput.fill("New Name");
     await snap(page, testInfo, "new-name-entered");
 
-    // Click the "Rename" button in the config card
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /rename/i })
-      .click();
+    await renameDialog.getByRole("button", { name: /^save$/i }).click();
     await snap(page, testInfo, "rename-clicked");
 
     const stored = await page.evaluate(() => {
@@ -313,15 +312,13 @@ test.describe("Home page app config management", () => {
     await openManageDialog(page);
     await snap(page, testInfo, "manage-dialog-open");
 
-    // Click the "Delete" button directly (no confirmation dialog)
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /delete/i })
-      .click();
+    const manageSheet = page.getByTestId("manage-configs-sheet");
+    await manageSheet.getByRole("button", { name: /^delete$/i }).click();
+    const deleteDialog = page.getByTestId("manage-configs-delete-dialog");
+    await deleteDialog.getByRole("button", { name: /^delete$/i }).click();
     await snap(page, testInfo, "delete-clicked");
 
-    // Wait for the dialog to still be open but config list to be empty
-    await expect(page.getByRole("dialog").getByText(/No saved configurations/i)).toBeVisible();
+    await expect(manageSheet.getByText(/No saved configurations yet/i)).toBeVisible();
     await snap(page, testInfo, "config-deleted-ui");
 
     const stored = await page.evaluate(() => {

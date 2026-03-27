@@ -1156,19 +1156,36 @@ describe("HomePage SID status", () => {
     });
 
     fireEvent.click(screen.getByTestId("home-config-manage-app"));
-    const manageDialog = screen.getByRole("dialog");
-    fireEvent.change(within(manageDialog).getByDisplayValue("Config A"), {
+    const manageSheet = screen.getByTestId("manage-configs-sheet");
+    expect(within(manageSheet).getByText("Config A")).toBeTruthy();
+
+    fireEvent.click(
+      within(manageSheet).getAllByRole("button", {
+        name: /^rename$/i,
+      })[0],
+    );
+    const renameDialog = screen.getByTestId("manage-configs-rename-dialog");
+    fireEvent.change(within(renameDialog).getByDisplayValue("Config A"), {
       target: { value: "  New Name  " },
     });
-    const [renameButton] = within(manageDialog).getAllByRole("button", {
-      name: /rename/i,
-    });
-    fireEvent.click(renameButton);
+    fireEvent.click(
+      within(renameDialog).getByRole("button", {
+        name: /^save$/i,
+      }),
+    );
     expect(appConfigStatePayloadRef.current.renameAppConfig).toHaveBeenCalledWith("config-a", "New Name");
-    const [deleteButton] = within(manageDialog).getAllByRole("button", {
-      name: /delete/i,
-    });
-    fireEvent.click(deleteButton);
+
+    fireEvent.click(
+      within(manageSheet).getAllByRole("button", {
+        name: /^delete$/i,
+      })[0],
+    );
+    const deleteDialog = screen.getByTestId("manage-configs-delete-dialog");
+    fireEvent.click(
+      within(deleteDialog).getByRole("button", {
+        name: /^delete$/i,
+      }),
+    );
     expect(appConfigStatePayloadRef.current.deleteAppConfig).toHaveBeenCalledWith("config-a");
   }, 30000);
 

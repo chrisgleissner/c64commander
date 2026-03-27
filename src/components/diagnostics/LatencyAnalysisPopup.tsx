@@ -8,7 +8,14 @@
 
 import { AnalyticPopup } from "@/components/diagnostics/AnalyticPopup";
 import { Button } from "@/components/ui/button";
-import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import {
   computeLatencyPercentiles,
   getLatencySamples,
@@ -20,7 +27,6 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { useMemo, useState } from "react";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import { BarChart2, Filter } from "lucide-react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 const TRANSPORT_FAMILIES: TransportFamily[] = ["REST", "FTP"];
 const ENDPOINT_CLASSES: EndpointClass[] = [
@@ -105,35 +111,20 @@ const FilterChip = ({ label }: { label: string }) => (
   </span>
 );
 
-const SurfaceHeader = ({ title, onClose }: { title: string; onClose: () => void }) => (
-  <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-    <h2 className="text-base font-semibold">{title}</h2>
-    <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-      Close
-    </Button>
-  </div>
-);
-
 const endpointTransport = (endpoint: EndpointClass): TransportFamily =>
   endpoint === "FTP list" || endpoint === "FTP read" ? "FTP" : "REST";
 
 const FilterEditorSurface = ({
   open,
   onOpenChange,
-  compact,
   filters,
   onFiltersChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  compact: boolean;
   filters: FilterState;
   onFiltersChange: (filters: FilterState) => void;
 }) => {
-  const contentClassName = compact
-    ? "fixed inset-x-0 bottom-0 top-[12dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl"
-    : "fixed bottom-4 right-4 top-4 z-[62] flex w-[24rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border bg-background shadow-2xl";
-
   const updateTransports = (transport: TransportFamily, checked: boolean) => {
     const transports = new Set(filters.transports);
     if (checked) {
@@ -169,66 +160,67 @@ const FilterEditorSurface = ({
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
-        <DialogPrimitive.Content className={contentClassName} data-testid="latency-filters-editor">
-          <DialogPrimitive.Title className="sr-only">Latency filters</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent
+        className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,24rem)]"
+        data-testid="latency-filters-editor"
+      >
+        <AppSheetHeader className="px-4 py-3 pr-14">
+          <AppSheetTitle className="text-base">Latency filters</AppSheetTitle>
+          <AppSheetDescription className="sr-only">
             Filter latency samples by transport and endpoint class.
-          </DialogPrimitive.Description>
-          <SurfaceHeader title="Latency filters" onClose={() => onOpenChange(false)} />
-          <div className="flex-1 overflow-y-auto px-4 py-4">
-            <div className="space-y-5">
-              <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope</p>
+          </AppSheetDescription>
+        </AppSheetHeader>
+        <AppSheetBody className="px-4 py-4">
+          <div className="space-y-5">
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope</p>
+              <FilterToggle
+                label="All call types"
+                checked={filters.allCallTypes}
+                onChange={(checked) => {
+                  if (checked) {
+                    onFiltersChange(defaultFilters());
+                    return;
+                  }
+                  onFiltersChange({ ...filters, allCallTypes: false });
+                }}
+              />
+            </section>
+
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transport</p>
+              {TRANSPORT_FAMILIES.map((transport) => (
                 <FilterToggle
-                  label="All call types"
-                  checked={filters.allCallTypes}
-                  onChange={(checked) => {
-                    if (checked) {
-                      onFiltersChange(defaultFilters());
-                      return;
-                    }
-                    onFiltersChange({ ...filters, allCallTypes: false });
-                  }}
+                  key={transport}
+                  label={transport}
+                  checked={filters.allCallTypes || filters.transports.has(transport)}
+                  onChange={(checked) => updateTransports(transport, checked)}
                 />
-              </section>
+              ))}
+            </section>
 
-              <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transport</p>
-                {TRANSPORT_FAMILIES.map((transport) => (
-                  <FilterToggle
-                    key={transport}
-                    label={transport}
-                    checked={filters.allCallTypes || filters.transports.has(transport)}
-                    onChange={(checked) => updateTransports(transport, checked)}
-                  />
-                ))}
-              </section>
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endpoint</p>
+              {ENDPOINT_CLASSES.map((endpoint) => (
+                <FilterToggle
+                  key={endpoint}
+                  label={endpoint}
+                  checked={filters.allCallTypes || filters.endpoints.has(endpoint)}
+                  onChange={(checked) => updateEndpoints(endpoint, checked)}
+                />
+              ))}
+            </section>
 
-              <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endpoint</p>
-                {ENDPOINT_CLASSES.map((endpoint) => (
-                  <FilterToggle
-                    key={endpoint}
-                    label={endpoint}
-                    checked={filters.allCallTypes || filters.endpoints.has(endpoint)}
-                    onChange={(checked) => updateEndpoints(endpoint, checked)}
-                  />
-                ))}
-              </section>
-
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => onFiltersChange(defaultFilters())}>
-                  Reset
-                </Button>
-              </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => onFiltersChange(defaultFilters())}>
+                Reset
+              </Button>
             </div>
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 };
 
@@ -238,7 +230,6 @@ type Props = {
 };
 
 export function LatencyAnalysisPopup({ open, onClose }: Props) {
-  const { profile } = useDisplayProfile();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -433,7 +424,6 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
       <FilterEditorSurface
         open={open && filtersOpen}
         onOpenChange={setFiltersOpen}
-        compact={profile !== "expanded"}
         filters={filters}
         onFiltersChange={setFilters}
       />

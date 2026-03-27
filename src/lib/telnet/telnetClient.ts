@@ -9,9 +9,52 @@
 import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 import { TelnetSocket } from "@/lib/native/telnetSocket";
+import { TelnetMock } from "@/lib/telnet/telnetMock";
+import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 
 type CreateTelnetClientOptions = {
   connectTimeoutMs?: number;
+};
+
+const isTestProbeEnabled = () => {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (typeof window !== "undefined") {
+    return (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true;
+  }
+  if (typeof process !== "undefined" && process.env?.VITE_ENABLE_TEST_PROBES === "1") return true;
+  return false;
+};
+
+const extractHost = (value?: string | null) => {
+  if (!value) return null;
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    return new URL(value, base).host || null;
+  } catch {
+    return null;
+  }
+};
+
+export const shouldUseMockTelnetTransport = () => {
+  if (getConnectionSnapshot().state === "DEMO_ACTIVE") {
+    return true;
+  }
+  if (typeof window === "undefined" || !isTestProbeEnabled()) {
+    return false;
+  }
+
+  const win = window as Window & {
+    __c64uExpectedBaseUrl?: string;
+    __c64uMockServerBaseUrl?: string;
+  };
+  const storedHost = localStorage.getItem("c64u_device_host");
+  if (!storedHost) {
+    return false;
+  }
+
+  return [win.__c64uExpectedBaseUrl, win.__c64uMockServerBaseUrl]
+    .map((candidate) => extractHost(candidate))
+    .some((candidateHost) => candidateHost === storedHost);
 };
 
 /**
@@ -19,6 +62,10 @@ type CreateTelnetClientOptions = {
  * Bridges TelnetTransport interface to the TelnetSocket Capacitor plugin.
  */
 export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetTransport {
+  if (shouldUseMockTelnetTransport()) {
+    return new TelnetMock();
+  }
+
   let connected = false;
   const connectTimeoutMs = options?.connectTimeoutMs ?? 5000;
 

@@ -1,6 +1,10 @@
 android/**/build/**
 android/**/assets/**
 c64scope/artifacts/**
+docs/research/**/artifacts/**
+docs/research/**/rollout-artifacts/**
+docs/research/**/metrics/**
+docs/research/**/screenshots/**
 coverage/**
 dist/**
 ios/**/App/**

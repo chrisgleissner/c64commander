@@ -10,7 +10,6 @@ import { test, expect } from "@playwright/test";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { execFile as execFileCb } from "node:child_process";
-import { createHash } from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { promisify } from "node:util";
@@ -38,6 +37,11 @@ import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog
 import { planHomeScreenshotSlices, selectCanonicalHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
 import {
+  decideMetadataScreenshotAction,
+  decideTrackedScreenshotAction,
+  parseGitLsTreeBlobCatalog,
+} from "../scripts/screenshotMetadataDedupe.js";
+import {
   installFixedClock,
   installListPreviewLimit,
   installStableStorage,
@@ -47,14 +51,14 @@ import {
   seedDiagnosticsTraces,
 } from "./visualSeeds";
 
-const SCREENSHOT_ROOT = path.resolve("doc/img/app");
+const SCREENSHOT_ROOT = path.resolve("docs/img/app");
 const FORCE_REGENERATE_SCREENSHOTS = process.env.SCREENSHOT_FORCE_REGEN === "1";
 const execFile = promisify(execFileCb);
 
 const screenshotPath = (relativePath: string) => path.resolve(SCREENSHOT_ROOT, relativePath);
 
 const screenshotLabel = (relativePath: string) => relativePath.replace(/\.[^.]+$/, "").replace(/[\\/]/g, "-");
-const screenshotRepoPath = (relativePath: string) => path.posix.join("doc/img/app", relativePath);
+const screenshotRepoPath = (relativePath: string) => path.posix.join("docs/img/app", relativePath);
 const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewportId, fileName: string) =>
   `${pageId}/profiles/${profileId}/${fileName}`;
 const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
@@ -112,114 +116,28 @@ const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 };
 
-const decodePngToRgba = async (source: string | Buffer) => {
-  const { data, info } = await sharp(source, { limitInputPixels: false })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  return {
-    data,
-    width: info.width,
-    height: info.height,
-  };
-};
-
-// Fuzzy-comparison uses grayscale Mean Absolute Error (MAE).
-// Converting to grayscale cancels subpixel RGB antialiasing noise.
-// MAE weights by magnitude, so a few large-diff pixels (real change)
-// are easily distinguished from many tiny-diff pixels (font-AA jitter).
-//
-// Threshold calibrated from visual inspection of 110 modified screenshots:
-//   font-rendering noise peaks at MAE ≈ 4.78 (out of 255)
-//   real content changes start at MAE ≈ 5.11
-// Threshold set at 5.0 — sits cleanly in the gap with no overlap.
-// When in doubt, err on caution: errors fall through to false (keep the file).
-const GRAYSCALE_MAE_THRESHOLD = 5.0;
-
-const isFuzzyIdenticalToHead = async (repoPath: string, screenshotBuffer: Buffer) => {
-  try {
-    const { stdout: headBlob } = await execFile("git", ["show", `HEAD:${repoPath}`], {
-      encoding: "buffer",
-      maxBuffer: 64 * 1024 * 1024,
-    });
-    const toGrey = async (src: Buffer) => {
-      const { data, info } = await sharp(src, { limitInputPixels: false })
-        .grayscale()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-      return { data, total: info.width * info.height };
-    };
-    const [head, next] = await Promise.all([toGrey(headBlob), toGrey(screenshotBuffer)]);
-    if (head.total !== next.total) return false;
-    let sumDiff = 0;
-    for (let i = 0; i < head.total; i++) sumDiff += Math.abs(head.data[i] - next.data[i]);
-    return sumDiff / head.total < GRAYSCALE_MAE_THRESHOLD;
-  } catch {
-    return false; // err on caution
-  }
-};
-
-const pngFingerprint = ({ data, width, height }: Awaited<ReturnType<typeof decodePngToRgba>>) =>
-  `${width}x${height}:${createHash("sha256").update(data).digest("hex")}`;
-
 interface HeadScreenshotCatalog {
-  fingerprints: Map<string, string[]>;
-  pathFingerprints: Map<string, string>;
+  blobIdsToPaths: Map<string, string[]>;
+  pathBlobIds: Map<string, string>;
   trackedPaths: Set<string>;
 }
 
 let headScreenshotCatalogPromise: Promise<HeadScreenshotCatalog> | null = null;
+const headScreenshotBufferPromises = new Map<string, Promise<Buffer | null>>();
 
 const loadHeadScreenshotCatalog = async (): Promise<HeadScreenshotCatalog> => {
   if (!headScreenshotCatalogPromise) {
     headScreenshotCatalogPromise = (async () => {
       try {
-        const { stdout } = await execFile("git", ["ls-tree", "-r", "--name-only", "HEAD", "--", "doc/img/app"], {
+        const { stdout } = await execFile("git", ["ls-tree", "-r", "HEAD", "--", "docs/img/app"], {
           maxBuffer: 8 * 1024 * 1024,
         });
-        const trackedPaths = stdout
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.endsWith(".png"));
-        const fingerprints = new Map<string, string[]>();
-        const pathFingerprints = new Map<string, string>();
-        const decodedEntries = await Promise.all(
-          trackedPaths.map(async (trackedPath) => {
-            try {
-              const { stdout: headBlob } = await execFile("git", ["show", `HEAD:${trackedPath}`], {
-                encoding: "buffer",
-                maxBuffer: 64 * 1024 * 1024,
-              });
-              const decoded = await decodePngToRgba(headBlob);
-              return {
-                trackedPath,
-                fingerprint: pngFingerprint(decoded),
-              };
-            } catch (error) {
-              console.warn(`Failed to load tracked screenshot ${trackedPath} from HEAD.`, error);
-              return null;
-            }
-          }),
-        );
-
-        decodedEntries.forEach((entry) => {
-          if (!entry) return;
-          const matches = fingerprints.get(entry.fingerprint) ?? [];
-          matches.push(entry.trackedPath);
-          fingerprints.set(entry.fingerprint, matches);
-          pathFingerprints.set(entry.trackedPath, entry.fingerprint);
-        });
-
-        return {
-          fingerprints,
-          pathFingerprints,
-          trackedPaths: new Set(trackedPaths),
-        };
+        return parseGitLsTreeBlobCatalog(stdout);
       } catch (error) {
         console.warn("Failed to build tracked screenshot catalog from HEAD.", error);
         return {
-          fingerprints: new Map<string, string[]>(),
-          pathFingerprints: new Map<string, string>(),
+          blobIdsToPaths: new Map<string, string[]>(),
+          pathBlobIds: new Map<string, string>(),
           trackedPaths: new Set<string>(),
         };
       }
@@ -229,40 +147,28 @@ const loadHeadScreenshotCatalog = async (): Promise<HeadScreenshotCatalog> => {
   return headScreenshotCatalogPromise;
 };
 
-const hasPixelDiffAgainstExisting = async (filePath: string, screenshotBuffer: Buffer) => {
-  try {
-    await fs.access(filePath);
-  } catch {
-    return true;
-  }
-
-  try {
-    const [existing, next] = await Promise.all([decodePngToRgba(filePath), decodePngToRgba(screenshotBuffer)]);
-    if (existing.width !== next.width || existing.height !== next.height) {
-      return true;
-    }
-    return !existing.data.equals(next.data);
-  } catch (error) {
-    console.warn(`Failed to compare screenshot pixels for ${filePath}.`, error);
-    return true;
-  }
+const hashScreenshotFile = async (filePath: string) => {
+  const { stdout } = await execFile("git", ["hash-object", filePath], {
+    maxBuffer: 1024 * 1024,
+  });
+  return stdout.trim();
 };
 
-const matchesTrackedScreenshotAtAnotherPath = async (relativePath: string, screenshotBuffer: Buffer) => {
-  const catalog = await loadHeadScreenshotCatalog();
-  const targetRepoPath = screenshotRepoPath(relativePath);
-  if (catalog.trackedPaths.has(targetRepoPath)) {
-    return false;
+const loadHeadScreenshotBuffer = async (repoPath: string) => {
+  let pending = headScreenshotBufferPromises.get(repoPath);
+  if (!pending) {
+    pending = execFile("git", ["show", `HEAD:${repoPath}`], {
+      encoding: "buffer",
+      maxBuffer: 64 * 1024 * 1024,
+    })
+      .then(({ stdout }) => stdout)
+      .catch((error) => {
+        console.warn(`Failed to load tracked screenshot ${repoPath} from HEAD.`, error);
+        return null;
+      });
+    headScreenshotBufferPromises.set(repoPath, pending);
   }
-
-  try {
-    const fingerprint = pngFingerprint(await decodePngToRgba(screenshotBuffer));
-    const matches = catalog.fingerprints.get(fingerprint) ?? [];
-    return matches.some((trackedPath) => trackedPath !== targetRepoPath);
-  } catch (error) {
-    console.warn(`Failed to compare ${relativePath} against tracked screenshot fingerprints.`, error);
-    return false;
-  }
+  return pending;
 };
 
 const waitForStableRender = async (page: Page) => {
@@ -271,6 +177,11 @@ const waitForStableRender = async (page: Page) => {
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => (document as any).fonts?.ready ?? true);
   await page.waitForFunction(() => {
+    const runway = document.querySelector('[data-testid="swipe-navigation-runway"]');
+    if (!(runway instanceof HTMLElement)) return true;
+    return runway.dataset.runwayPhase !== "transitioning";
+  });
+  await page.waitForFunction(() => {
     const animations = document.getAnimations();
     return animations.every((animation) => {
       if (animation.playState !== "running") return true;
@@ -278,6 +189,56 @@ const waitForStableRender = async (page: Page) => {
       return timing?.iterations === Infinity;
     });
   });
+  await page.evaluate(async () => {
+    const readVisualState = () => {
+      const activeSlot = document.querySelector('[data-slot-active="true"]');
+      const slot = activeSlot instanceof HTMLElement ? activeSlot : null;
+      const scroller =
+        slot ??
+        (document.scrollingElement instanceof HTMLElement
+          ? document.scrollingElement
+          : document.documentElement instanceof HTMLElement
+            ? document.documentElement
+            : null);
+      const rect = slot?.getBoundingClientRect() ?? null;
+      return {
+        runwayPhase:
+          document.querySelector('[data-testid="swipe-navigation-runway"]') instanceof HTMLElement
+            ? ((document.querySelector('[data-testid="swipe-navigation-runway"]') as HTMLElement).dataset.runwayPhase ??
+              "idle")
+            : "idle",
+        scrollTop: scroller?.scrollTop ?? window.scrollY,
+        scrollLeft: scroller?.scrollLeft ?? window.scrollX,
+        rectTop: rect?.top ?? 0,
+        rectLeft: rect?.left ?? 0,
+        rectWidth: rect?.width ?? window.innerWidth,
+        rectHeight: rect?.height ?? window.innerHeight,
+      };
+    };
+
+    const isStable = (previous: ReturnType<typeof readVisualState>, next: ReturnType<typeof readVisualState>) =>
+      previous.runwayPhase === "idle" &&
+      next.runwayPhase === "idle" &&
+      previous.scrollTop === next.scrollTop &&
+      previous.scrollLeft === next.scrollLeft &&
+      previous.rectTop === next.rectTop &&
+      previous.rectLeft === next.rectLeft &&
+      previous.rectWidth === next.rectWidth &&
+      previous.rectHeight === next.rectHeight;
+
+    let stableFrames = 0;
+    let previous = readVisualState();
+
+    while (stableFrames < 4) {
+      await new Promise<void>(requestAnimationFrame);
+      const next = readVisualState();
+      stableFrames = isStable(previous, next) ? stableFrames + 1 : 0;
+      previous = next;
+    }
+  });
+  // Let the compositor finish any residual cross-fade/transform cleanup after the
+  // DOM, animation, and scroll state have already settled.
+  await page.waitForTimeout(200);
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.evaluate(() => new Promise(requestAnimationFrame));
 };
@@ -329,7 +290,7 @@ const openImportDialog = async (page: Page) => {
     .getByRole("button", { name: /Add items|Add more items/i })
     .click();
   const dialog = page.getByRole("dialog");
-  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => { });
+  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -338,7 +299,7 @@ const openImportDialog = async (page: Page) => {
 
 const waitForImportInterstitial = async (dialog: ReturnType<Page["getByRole"]>) => {
   const interstitial = dialog.getByTestId("import-selection-interstitial");
-  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => { });
+  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
   if (await interstitial.isVisible().catch(() => false)) {
     return interstitial;
   }
@@ -421,10 +382,10 @@ const captureScreenshot = async (
   let screenshotBuffer = options?.locator
     ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
     : await page.screenshot({
-      animations: "disabled",
-      caret: "hide",
-      fullPage: options?.fullPage ?? false,
-    });
+        animations: "disabled",
+        caret: "hide",
+        fullPage: options?.fullPage ?? false,
+      });
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -440,53 +401,56 @@ const captureScreenshot = async (
       .toBuffer();
   }
 
+  const repoPath = screenshotRepoPath(relativePath);
+  const catalog = await loadHeadScreenshotCatalog();
+  const skipTrackedDuplicatePrune = !FORCE_REGENERATE_SCREENSHOTS && shouldSkipFuzzyScreenshotPrune(repoPath);
+  const headBlobId = catalog.pathBlobIds.get(repoPath);
+
+  if (!FORCE_REGENERATE_SCREENSHOTS && headBlobId) {
+    try {
+      const headPngBuffer = await loadHeadScreenshotBuffer(repoPath);
+      const { action } = await decideTrackedScreenshotAction({
+        currentPngBuffer: screenshotBuffer,
+        headPngBuffer,
+        skipFuzzyHeadRestore: skipTrackedDuplicatePrune,
+      });
+
+      if (action === "restore-head") {
+        await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]);
+        await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
+        return;
+      }
+    } catch (error) {
+      console.warn(`[screenshots] Pixel dedupe failed for ${relativePath}.`, error);
+    }
+  }
+
+  await fs.writeFile(filePath, screenshotBuffer);
+
   if (FORCE_REGENERATE_SCREENSHOTS) {
-    await fs.writeFile(filePath, screenshotBuffer);
     await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
     return;
   }
 
-  const repoPath = screenshotRepoPath(relativePath);
-  const catalog = await loadHeadScreenshotCatalog();
-  const headFingerprint = catalog.pathFingerprints.get(repoPath);
-  const skipFuzzyHeadRestore = (options?.skipFuzzyHeadRestore ?? false) || shouldSkipFuzzyScreenshotPrune(repoPath);
-  const forceWriteScreenshot = shouldSkipFuzzyScreenshotPrune(repoPath);
+  try {
+    const currentBlobId = await hashScreenshotFile(filePath);
+    const action = decideMetadataScreenshotAction({
+      repoPath,
+      currentBlobId,
+      headBlobId,
+      trackedPathsForBlobId: catalog.blobIdsToPaths.get(currentBlobId) ?? [],
+      writeWhenTrackedDuplicate: options?.writeWhenTrackedDuplicate ?? false,
+      skipTrackedDuplicatePrune,
+    });
 
-  if (forceWriteScreenshot) {
-    await fs.writeFile(filePath, screenshotBuffer);
-    return;
-  }
-
-  if (headFingerprint !== undefined) {
-    // File exists in HEAD: compare new screenshot against HEAD pixels.
-    const newFingerprint = pngFingerprint(await decodePngToRgba(screenshotBuffer));
-    if (newFingerprint === headFingerprint) {
-      // Pixels unchanged from HEAD - restore HEAD version to eliminate any binary-only git diff.
-      await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]).catch((err) =>
-        console.warn(`[screenshots] Failed to restore HEAD version of ${relativePath}.`, err),
-      );
-    } else if (!skipFuzzyHeadRestore && (await isFuzzyIdenticalToHead(repoPath, screenshotBuffer))) {
-      // Only trivial rendering noise (e.g. subpixel / font-AA jitter) - restore HEAD.
-      await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]).catch((err) =>
-        console.warn(`[screenshots] Failed to restore HEAD version of ${relativePath}.`, err),
-      );
-    } else {
-      // Genuinely changed pixels - write new screenshot.
-      await fs.writeFile(filePath, screenshotBuffer);
+    if (action === "restore-head") {
+      await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]);
+    } else if (action === "delete-new") {
+      await fs.rm(filePath, { force: true });
+      console.info(`[screenshots] Removed ${relativePath}; bytes match an existing tracked screenshot.`);
     }
-  } else {
-    // New file (not yet in HEAD): compare against disk to avoid redundant writes.
-    if (await hasPixelDiffAgainstExisting(filePath, screenshotBuffer)) {
-      if (await matchesTrackedScreenshotAtAnotherPath(relativePath, screenshotBuffer)) {
-        if (options?.writeWhenTrackedDuplicate) {
-          await fs.writeFile(filePath, screenshotBuffer);
-        } else {
-          console.info(`[screenshots] Skipped ${relativePath}; pixels match an existing tracked screenshot.`);
-        }
-      } else {
-        await fs.writeFile(filePath, screenshotBuffer);
-      }
-    }
+  } catch (error) {
+    console.warn(`[screenshots] Metadata dedupe failed for ${relativePath}.`, error);
   }
 
   await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
@@ -678,9 +642,10 @@ const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: st
 };
 
 const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
+  await waitForStableRender(page);
   const layout = await page.evaluate(() => {
     const activeSlot = document.querySelector('[data-slot-active="true"]');
-    const activeMain = activeSlot?.querySelector('main');
+    const activeMain = activeSlot?.querySelector("main");
     const slotElement = activeSlot instanceof HTMLElement ? activeSlot : null;
     const slotRect = slotElement?.getBoundingClientRect() ?? null;
     const sections = Array.from(activeMain?.querySelectorAll("[data-section-label]") ?? [])
@@ -733,6 +698,7 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
         node.scrollTop = nextScrollTop;
       }
     }, slice.scrollTop);
+    await waitForStableRender(page);
     await captureScreenshot(page, testInfo, `home/sections/${fileName}`);
   }
 };
@@ -806,7 +772,6 @@ test.describe("App screenshots", () => {
     await waitForConnected(page);
     await expect(page.getByRole("button", { name: "Disks", exact: true })).toBeVisible();
     await captureScreenshot(page, testInfo, "home/00-overview-light.png");
-    await captureHomeSections(page, testInfo);
     await page.emulateMedia({
       colorScheme: "dark",
       reducedMotion: "reduce",
@@ -821,6 +786,7 @@ test.describe("App screenshots", () => {
     await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png", {
       locator: getActiveHealthBadge(page),
     });
+    await captureHomeSections(page, testInfo);
   });
 
   test(
@@ -941,95 +907,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                {
-                  id: "snap-1",
-                  filename: "c64-program-20260110-090000.c64snap",
-                  bytesBase64: buildSnap(0, 1736499600),
-                  createdAt: "2026-01-10T09:00:00.000Z",
-                  snapshotType: "program",
-                  metadata: {
-                    snapshot_type: "program",
-                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                    created_at: "2026-01-10 09:00:00",
-                    label: "JupiterLander.crt",
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
                   },
-                },
-                {
-                  id: "snap-2",
-                  filename: "c64-basic-20260110-080000.c64snap",
-                  bytesBase64: buildSnap(1, 1736496000),
-                  createdAt: "2026-01-10T08:00:00.000Z",
-                  snapshotType: "basic",
-                  metadata: {
-                    snapshot_type: "basic",
-                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                    created_at: "2026-01-10 08:00:00",
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-3",
-                  filename: "c64-screen-20260110-070000.c64snap",
-                  bytesBase64: buildSnap(2, 1736492400),
-                  createdAt: "2026-01-10T07:00:00.000Z",
-                  snapshotType: "screen",
-                  metadata: {
-                    snapshot_type: "screen",
-                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                    created_at: "2026-01-10 07:00:00",
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-4",
-                  filename: "c64-custom-20260110-060000.c64snap",
-                  bytesBase64: buildSnap(3, 1736488800),
-                  createdAt: "2026-01-10T06:00:00.000Z",
-                  snapshotType: "custom",
-                  metadata: {
-                    snapshot_type: "custom",
-                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                    created_at: "2026-01-10 06:00:00",
+                  {
+                    id: "snap-4",
+                    filename: "c64-custom-20260110-060000.c64snap",
+                    bytesBase64: buildSnap(3, 1736488800),
+                    createdAt: "2026-01-10T06:00:00.000Z",
+                    snapshotType: "custom",
+                    metadata: {
+                      snapshot_type: "custom",
+                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                      created_at: "2026-01-10 06:00:00",
+                    },
                   },
-                },
-              ]
+                ]
               : [
-                {
-                  id: "snap-1",
-                  filename: "c64-program-20260110-090000.c64snap",
-                  bytesBase64: buildSnap(0, 1736499600),
-                  createdAt: "2026-01-10T09:00:00.000Z",
-                  snapshotType: "program",
-                  metadata: {
-                    snapshot_type: "program",
-                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                    created_at: "2026-01-10 09:00:00",
-                    label: "JupiterLander.crt",
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
                   },
-                },
-                {
-                  id: "snap-2",
-                  filename: "c64-basic-20260110-080000.c64snap",
-                  bytesBase64: buildSnap(1, 1736496000),
-                  createdAt: "2026-01-10T08:00:00.000Z",
-                  snapshotType: "basic",
-                  metadata: {
-                    snapshot_type: "basic",
-                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                    created_at: "2026-01-10 08:00:00",
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-3",
-                  filename: "c64-screen-20260110-070000.c64snap",
-                  bytesBase64: buildSnap(2, 1736492400),
-                  createdAt: "2026-01-10T07:00:00.000Z",
-                  snapshotType: "screen",
-                  metadata: {
-                    snapshot_type: "screen",
-                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                    created_at: "2026-01-10 07:00:00",
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
                   },
-                },
-              ];
+                ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
