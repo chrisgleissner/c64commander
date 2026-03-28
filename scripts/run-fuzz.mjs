@@ -9,6 +9,12 @@ import {
   renderSummary,
 } from './fuzzReportUtils.mjs';
 import { classifyAllIssues, SELFTEST_TAG } from './fuzzClassifier.mjs';
+import {
+  assertNoShardLocalArtifactPaths,
+  remapMergedIssueExamples,
+  removeMergedShardDirectories,
+  resolveMergedSessionArtifactPath,
+} from './fuzzArtifactMergeUtils.mjs';
 
 const args = process.argv.slice(2);
 
@@ -396,18 +402,6 @@ const parseFrameNumber = (fileName) => {
   return Number.isFinite(value) ? value : null;
 };
 
-const resolveMergedArtifactPath = (relativePath, sessionJsonPath) => {
-  if (concurrency === 1) return relativePath;
-  const sessionFile = path.basename(sessionJsonPath);
-  const shardPrefixMatch = sessionFile.match(/^(shard-\d+-)/);
-  const shardPrefix = shardPrefixMatch?.[1];
-  if (!shardPrefix) return relativePath;
-  const directory = path.dirname(relativePath);
-  const file = path.basename(relativePath);
-  if (file.startsWith(shardPrefix)) return relativePath;
-  return path.join(directory, `${shardPrefix}${file}`);
-};
-
 const PLACEHOLDER_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBAAZf6z8AAAAASUVORK5CYII=';
 
@@ -492,6 +486,58 @@ const copyDirContents = async (sourceDir, destinationDir, prefix = '') => {
     const destinationPath = path.join(destinationDir, targetName);
     await fs.copyFile(sourcePath, destinationPath);
   }
+};
+
+const removeFileIfExists = async (filePath) => {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (isMissingFileError(error)) return;
+    throw new Error(`Failed to remove excluded fuzz artifact ${filePath}: ${error.message}`);
+  }
+};
+
+const writeMergedTopLevelReports = async ({
+  outputRoot,
+  merged,
+  reportMeta,
+  sortedGroups,
+  classificationMap,
+  runMetrics,
+  visualStagnationReport,
+}) => {
+  const issueReportContent = JSON.stringify(merged, null, 2);
+  const readmeContent = renderReadme(reportMeta, sortedGroups, classificationMap);
+  const summaryContent = renderSummary(reportMeta, sortedGroups, classificationMap);
+
+  assertNoShardLocalArtifactPaths(readmeContent, 'README.md');
+  assertNoShardLocalArtifactPaths(summaryContent, 'fuzz-issue-summary.md');
+  assertNoShardLocalArtifactPaths(
+    issueReportContent,
+    'fuzz-issue-report.json',
+  );
+
+  await fs.writeFile(path.join(outputRoot, 'README.md'), readmeContent, 'utf8');
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-issue-summary.md'),
+    summaryContent,
+    'utf8',
+  );
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-issue-report.json'),
+    issueReportContent,
+    'utf8',
+  );
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-run-metrics.json'),
+    JSON.stringify(runMetrics, null, 2),
+    'utf8',
+  );
+  await fs.writeFile(
+    path.join(outputRoot, 'visual-stagnation-report.json'),
+    JSON.stringify(visualStagnationReport, null, 2),
+    'utf8',
+  );
 };
 
 const mergeReports = async () => {
@@ -742,12 +788,6 @@ const mergeReports = async () => {
     }
   }
 
-  await fs.writeFile(
-    path.join(outputRoot, 'fuzz-issue-report.json'),
-    JSON.stringify(merged, null, 2),
-    'utf8',
-  );
-
   const reportMeta = {
     platform: platform || env.FUZZ_PLATFORM || 'android-phone',
     shardTotal: concurrency,
@@ -755,26 +795,6 @@ const mergeReports = async () => {
     timeBudgetMs: budgetMs || null,
     durationTotalMs: durationTotalMs || 0,
   };
-
-  // Write human-readable README with header, classification summary, and three sections.
-  const readmeContent = renderReadme(
-    reportMeta,
-    sortedGroups,
-    classificationMap,
-  );
-  await fs.writeFile(path.join(outputRoot, 'README.md'), readmeContent, 'utf8');
-
-  // Write compact fuzz-issue-summary.md for quick review and LLM consumption.
-  const summaryContent = renderSummary(
-    reportMeta,
-    sortedGroups,
-    classificationMap,
-  );
-  await fs.writeFile(
-    path.join(outputRoot, 'fuzz-issue-summary.md'),
-    summaryContent,
-    'utf8',
-  );
 
   const runMetrics = {
     meta: {
@@ -809,16 +829,15 @@ const mergeReports = async () => {
     sessions: stagnationSessions,
   };
 
-  await fs.writeFile(
-    path.join(outputRoot, 'fuzz-run-metrics.json'),
-    JSON.stringify(runMetrics, null, 2),
-    'utf8',
-  );
-  await fs.writeFile(
-    path.join(outputRoot, 'visual-stagnation-report.json'),
-    JSON.stringify(visualStagnationReport, null, 2),
-    'utf8',
-  );
+  await writeMergedTopLevelReports({
+    outputRoot,
+    merged,
+    reportMeta,
+    sortedGroups,
+    classificationMap,
+    runMetrics,
+    visualStagnationReport,
+  });
 
   const requiredTopLevel = [
     'sessions',
@@ -878,21 +897,24 @@ const mergeReports = async () => {
 
       if (concurrency > 1) {
         if (parsed?.interactionLog) {
-          parsed.interactionLog = resolveMergedArtifactPath(
+          parsed.interactionLog = resolveMergedSessionArtifactPath(
             parsed.interactionLog,
             sessionJsonPath,
+            concurrency,
           );
         }
         if (parsed?.finalScreenshot) {
-          parsed.finalScreenshot = resolveMergedArtifactPath(
+          parsed.finalScreenshot = resolveMergedSessionArtifactPath(
             parsed.finalScreenshot,
             sessionJsonPath,
+            concurrency,
           );
         }
         if (parsed?.video) {
-          parsed.video = resolveMergedArtifactPath(
+          parsed.video = resolveMergedSessionArtifactPath(
             parsed.video,
             sessionJsonPath,
+            concurrency,
           );
         }
         await fs.writeFile(
@@ -906,13 +928,25 @@ const mergeReports = async () => {
       const finalScreenshotPath = parsed?.finalScreenshot;
       const videoPathValue = parsed?.video;
       const mergedLogPath = interactionLogPath
-        ? resolveMergedArtifactPath(interactionLogPath, sessionJsonPath)
+        ? resolveMergedSessionArtifactPath(
+            interactionLogPath,
+            sessionJsonPath,
+            concurrency,
+          )
         : '';
       const mergedScreenshotPath = finalScreenshotPath
-        ? resolveMergedArtifactPath(finalScreenshotPath, sessionJsonPath)
+        ? resolveMergedSessionArtifactPath(
+            finalScreenshotPath,
+            sessionJsonPath,
+            concurrency,
+          )
         : '';
       const mergedVideoRelativePath = videoPathValue
-        ? resolveMergedArtifactPath(videoPathValue, sessionJsonPath)
+        ? resolveMergedSessionArtifactPath(
+            videoPathValue,
+            sessionJsonPath,
+            concurrency,
+          )
         : '';
       let activityCount = 0;
 
@@ -981,17 +1015,13 @@ const mergeReports = async () => {
           reason: 'insufficient-activities',
           details: `expected>=${minActivitiesPerSession} actual=${activityCount}`,
         });
-        await fs.unlink(sessionJsonPath).catch(() => {});
+        await removeFileIfExists(sessionJsonPath);
         if (mergedLogPath)
-          await fs.unlink(path.join(outputRoot, mergedLogPath)).catch(() => {});
+          await removeFileIfExists(path.join(outputRoot, mergedLogPath));
         if (mergedScreenshotPath)
-          await fs
-            .unlink(path.join(outputRoot, mergedScreenshotPath))
-            .catch(() => {});
+          await removeFileIfExists(path.join(outputRoot, mergedScreenshotPath));
         if (mergedVideoRelativePath)
-          await fs
-            .unlink(path.join(outputRoot, mergedVideoRelativePath))
-            .catch(() => {});
+          await removeFileIfExists(path.join(outputRoot, mergedVideoRelativePath));
         continue;
       }
 
@@ -1365,11 +1395,24 @@ const mergeReports = async () => {
 
   merged.meta.sessions = qualifiedSessions.length;
   merged.meta.totalSteps = qualifiedTotalSteps;
-  await fs.writeFile(
-    path.join(outputRoot, 'fuzz-issue-report.json'),
-    JSON.stringify(merged, null, 2),
-    'utf8',
-  );
+  const qualifiedReportMeta = {
+    platform: platform || env.FUZZ_PLATFORM || 'android-phone',
+    shardTotal: concurrency,
+    sessions: qualifiedSessions.length,
+    timeBudgetMs: budgetMs || null,
+    durationTotalMs: qualifiedDurationMs || 0,
+  };
+
+  await writeMergedTopLevelReports({
+    outputRoot,
+    merged,
+    reportMeta: qualifiedReportMeta,
+    sortedGroups,
+    classificationMap,
+    runMetrics: qualifiedRunMetrics,
+    visualStagnationReport: qualifiedVisualStagnationReport,
+  });
+  await removeMergedShardDirectories(outputRoot, concurrency);
 
   return { parseErrors };
 };
