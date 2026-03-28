@@ -11,6 +11,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@/lib/utils";
 import { CloseControl } from "@/components/ui/modal-close-button";
+import { composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
 import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
   INTERSTITIAL_Z_INDEX,
@@ -150,10 +151,10 @@ function renderAppSurfaceHeader(
       }}
       {...rest}
     >
-      <div className="flex min-h-10 items-center gap-3">
+      <div className="flex min-h-10 items-center gap-3" data-interstitial-header-row="true">
         <div className="min-w-0 flex-1">{resolvedTitle}</div>
         {actions || shouldShowClose ? (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2" data-interstitial-header-actions="true">
             {actions}
             {shouldShowClose ? (
               <AppSurfaceClose asChild>
@@ -193,7 +194,7 @@ type AppSheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitiv
 };
 
 const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppSheetContentProps>(
-  ({ className, children, showClose = true, closeTestId, style, ...props }, ref) => {
+  ({ className, children, onOpenAutoFocus, showClose = true, closeTestId, style, ...props }, ref) => {
     const {
       composedRef,
       nodeRef,
@@ -228,6 +229,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
             data-app-surface="sheet"
             data-interstitial-depth={layer?.depth ?? 1}
             data-sheet-presentation="sheet"
+            onOpenAutoFocus={composeInterstitialOpenAutoFocus(onOpenAutoFocus)}
             {...props}
           >
             {children}
@@ -291,7 +293,7 @@ type AppDialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimiti
 };
 
 const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppDialogContentProps>(
-  ({ className, children, showClose = true, closeTestId, style, ...props }, ref) => {
+  ({ className, children, onOpenAutoFocus, showClose = true, closeTestId, style, ...props }, ref) => {
     const {
       composedRef,
       nodeRef,
@@ -319,6 +321,7 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
               ...style,
               zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface,
             }}
+            onOpenAutoFocus={composeInterstitialOpenAutoFocus(onOpenAutoFocus)}
             {...props}
           >
             {children}

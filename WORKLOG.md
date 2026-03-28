@@ -240,6 +240,65 @@
 
 ### 2026-03-27T08:15:00Z
 
+# Consistent Close Control Worklog
+
+## 2026-03-28T11:56:48Z
+
+### Task start and classification
+
+- Classified this task as `UI_CHANGE` and `CODE_CHANGE` because it changes shared interstitial UI behavior, regression coverage, and targeted documentation screenshots.
+- Confirmed the worktree already contains unrelated in-progress edits, including existing `PLANS.md` and `WORKLOG.md` sections for other tasks; those sections are being preserved.
+- Added a dedicated close-control convergence section to `PLANS.md` instead of replacing prior plan history.
+
+### Files inspected
+
+- Repo guidance:
+  - `README.md`
+  - `.github/copilot-instructions.md`
+  - `AGENTS.md`
+  - `docs/ux-guidelines.md`
+- Shared primitives:
+  - `src/components/ui/modal-close-button.tsx`
+  - `src/components/ui/app-surface.tsx`
+  - `src/components/ui/dialog.tsx`
+  - `src/components/ui/alert-dialog.tsx`
+- Reference and affected UI surfaces:
+  - `src/components/itemSelection/ItemSelectionDialog.tsx`
+  - `src/components/lists/SelectableActionList.tsx`
+  - `src/components/disks/HomeDiskManager.tsx`
+  - `src/pages/home/dialogs/SnapshotManagerDialog.tsx`
+  - `src/pages/home/dialogs/LoadConfigDialog.tsx`
+  - `src/pages/home/dialogs/ManageConfigDialog.tsx`
+  - `src/components/archive/OnlineArchiveDialog.tsx`
+  - `src/components/lighting/LightingStudioDialog.tsx`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/components/diagnostics/LatencyAnalysisPopup.tsx`
+  - `src/components/diagnostics/AnalyticPopup.tsx`
+- Existing regression and screenshot coverage:
+  - `tests/unit/components/ui/closeControl.test.tsx`
+  - `tests/unit/components/ui/dialog.test.tsx`
+  - `tests/unit/components/ui/app-surface.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.layout.test.tsx`
+  - `playwright/modalConsistency.spec.ts`
+  - `playwright/itemSelection.spec.ts`
+  - `playwright/diskManagement.spec.ts`
+  - `playwright/screenshots.spec.ts`
+
+### Audit findings
+
+- The shared `CloseControl` already matches the required plain `×` glyph and still exposes a visible focus-ring class contract.
+- The main root cause is open-time autofocus behavior: many dialogs and sheets rely on default Radix autofocus, which allows the close button to become visibly focused immediately after open.
+- The secondary root cause is legacy sheet-header spacing overrides such as `pr-14`, `pr-12`, `pt-3`, and custom compact/expanded padding combinations that detach the close rail from the shared header row.
+- The `Add items` surfaces in `src/components/itemSelection/ItemSelectionDialog.tsx` remain the reference implementation because they already prevent open-time autofocus and do not use bespoke header padding hacks.
+
+### Next implementation slice
+
+- Patch the shared dialog/sheet primitives first so the open-focus policy is centralized.
+- Remove the affected per-screen header padding overrides next.
+- Add focused unit and Playwright regressions before refreshing the minimum screenshot set.
+
 - Validated `/tmp/c64-screenshots-proof.oFgWB2` as a detached local git worktree, not a separate repository or branch.
 - Compared the proof worktree copies of `playwright/screenshots.spec.ts`, `scripts/revert-identical-pngs.mjs`, `scripts/diff-screenshots.mjs`, and `scripts/screenshotMetadataDedupe.js` against the active branch and found no content differences.
 - Classified the proof worktree as disposable proof scaffolding with no unique logic to merge.
@@ -318,3 +377,103 @@
 - Investigated the unexpected non-overview Home PNGs by diffing working-tree images against `HEAD` with `node scripts/diff-screenshots.mjs` and spot-checking exported `HEAD` vs working-tree image pairs under `.tmp/head-vs-work/`.
 - Confirmed the non-overview Home files were not prune misses: they contained real visual deltas such as changed dialog contents, different section framing, and different scroll positions.
 - Restored all non-`overview` Home screenshot paths to `HEAD` so the remaining screenshot refresh set matches the current task scope: only `home/*overview*.png` variants remain modified.
+
+## Consistent Close Control
+
+### 2026-03-28T12:26:59Z
+
+- Created and maintained the repo-root `PLANS.md` and `WORKLOG.md` sections for the close-control convergence task.
+- Classified the task as `UI_CHANGE`.
+- Read the required guidance and touched-surface files before editing: `README.md`, `.github/copilot-instructions.md`, `AGENTS.md`, `docs/ux-guidelines.md`, the shared interstitial primitives, the audited dialog/sheet surfaces, the unit regressions, and the relevant Playwright specs.
+- Re-verified the root-cause split from the live code: shared close glyph already correct, Radix open-time autofocus causing visible rings, and legacy `AppSheetHeader` padding hacks detaching the close rail.
+
+### 2026-03-28T12:26:59Z
+
+- Added `src/components/ui/interstitialFocus.ts` with `composeInterstitialOpenAutoFocus()` to centralize the open-focus contract.
+- Updated `src/components/ui/app-surface.tsx`, `src/components/ui/dialog.tsx`, and `src/components/ui/alert-dialog.tsx` so dialogs and sheets focus the surface container on open instead of the close button while still composing caller-provided `onOpenAutoFocus` handlers.
+- Added shared header-row markers (`data-interstitial-header-row`, `data-interstitial-header-actions`) for layout assertions.
+- Removed now-redundant per-surface `onOpenAutoFocus={(e) => e.preventDefault()}` overrides from `src/components/itemSelection/ItemSelectionDialog.tsx`, `src/components/DemoModeInterstitial.tsx`, and the main `Lighting Studio` sheet path in `src/components/lighting/LightingStudioDialog.tsx`.
+
+### 2026-03-28T12:26:59Z
+
+- Removed legacy close-rail spacing overrides from:
+  - `src/components/archive/OnlineArchiveDialog.tsx`
+  - `src/pages/home/dialogs/LoadConfigDialog.tsx`
+  - `src/pages/home/dialogs/ManageConfigDialog.tsx`
+  - `src/components/disks/HomeDiskManager.tsx`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/components/diagnostics/LatencyAnalysisPopup.tsx`
+  - `src/pages/home/dialogs/SnapshotManagerDialog.tsx`
+  - `src/components/lighting/LightingStudioDialog.tsx`
+- Fixed `src/components/lists/SelectableActionList.tsx` to pass `AppSheetTitle` and `AppSheetDescription` as direct `AppSheetHeader` children so the shared header slot collector can keep title, actions, and close on one row.
+
+### 2026-03-28T12:26:59Z
+
+- Added and updated regression coverage in:
+  - `tests/unit/components/ui/closeControl.test.tsx`
+  - `tests/unit/components/ui/app-surface.test.tsx`
+  - `tests/unit/components/ui/dialog.test.tsx`
+  - `tests/unit/components/ui/interstitialFocus.test.ts`
+  - `tests/unit/components/lists/SelectableActionList.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.layout.test.tsx`
+- Updated browser regressions in:
+  - `playwright/modalConsistency.spec.ts`
+  - `playwright/itemSelection.spec.ts`
+  - `playwright/diskManagement.spec.ts`
+- Added assertions for:
+  - no open-time focus on the close control
+  - one shared header row for title/actions/close
+  - exactly one close button on representative surfaces
+  - diagnostics overflow menu staying left of the close control
+
+### 2026-03-28T12:26:59Z
+
+- Bootstrapped a repo-local Node 24 toolchain in `.tools/node24` because the shell default Node was `v18.19.1` while the repo requires `>=24 <25`; Vitest/jsdom failed under Node 18.
+- Commands run with `PATH="/home/chris/dev/c64/c64commander/.tools/node24/bin:$PATH"`:
+  - `./node_modules/.bin/vitest run tests/unit/components/ui/closeControl.test.tsx tests/unit/components/ui/dialog.test.tsx tests/unit/components/ui/app-surface.test.tsx tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx tests/unit/pages/home/dialogs/SnapshotManagerDialog.test.tsx tests/unit/pages/home/dialogs/SnapshotManagerDialog.layout.test.tsx`
+    - passed: `6` files, `60` tests
+  - `./node_modules/.bin/playwright test playwright/modalConsistency.spec.ts playwright/itemSelection.spec.ts playwright/diskManagement.spec.ts --grep "Diagnostics overflow menu stays left of the close button on small screens|C64U file picker is reachable from interstitial|disk list view all shows full list" --reporter=line`
+    - passed: `4` tests
+  - `./node_modules/.bin/playwright test playwright/screenshots.spec.ts --grep "capture home screenshots|capture lighting studio screenshot|capture disks screenshots|capture play screenshots|capture diagnostics screenshots" --reporter=line`
+    - passed: `5` tests
+  - `npm run lint`
+    - passed with pre-existing warnings only from generated `android/coverage/**` files
+  - `npm run test`
+    - passed: `430` files, `5011` tests
+  - `npm run test:coverage`
+    - passed: `429` files, `5005` tests
+    - global branch coverage: `91.02%`
+  - `npm run build`
+    - passed
+- Coverage initially landed at `90.96%` branches after the first convergence pass. Added the narrow helper/header-slot regressions above to raise the global branch figure honestly to `91.02%`.
+
+### 2026-03-28T12:26:59Z
+
+- Screenshot files written by the targeted harness reruns:
+  - `docs/img/app/diagnostics/01-overview.png`
+  - `docs/img/app/diagnostics/activity/01-visible-list.png`
+  - `docs/img/app/diagnostics/activity/02-expanded-problems.png`
+  - `docs/img/app/diagnostics/activity/05-expanded-traces.png`
+  - `docs/img/app/diagnostics/activity/06-collapsed-after-toggle.png`
+  - `docs/img/app/diagnostics/activity/07-problems-only.png`
+  - `docs/img/app/diagnostics/activity/08-actions-only.png`
+  - `docs/img/app/diagnostics/activity/09-logs-only.png`
+  - `docs/img/app/diagnostics/activity/10-traces-only.png`
+  - `docs/img/app/diagnostics/activity/11-errors-only.png`
+  - `docs/img/app/diagnostics/connection/01-view.png`
+  - `docs/img/app/diagnostics/connection/02-edit.png`
+  - `docs/img/app/diagnostics/filters/01-summary-bar.png`
+  - `docs/img/app/diagnostics/filters/02-editor.png`
+  - `docs/img/app/diagnostics/header/01-expanded.png`
+  - `docs/img/app/diagnostics/header/02-health-check-detail.png`
+  - `docs/img/app/diagnostics/header/03-health-check-live-progress.png`
+  - `docs/img/app/diagnostics/tools/01-menu.png`
+  - `docs/img/app/disks/collection/01-view-all.png`
+  - `docs/img/app/home/00-overview-light.png`
+  - `docs/img/app/home/01-overview-dark.png`
+  - `docs/img/app/home/dialogs/08-lighting-context-lens-medium.png`
+  - `docs/img/app/home/sections/01-system-info-to-cpu-ram.png`
+  - `docs/img/app/play/playlist/01-view-all.png`
+- These were the only `docs/img/app/**` outputs changed by the targeted screenshot suites; no full-corpus screenshot refresh was run.

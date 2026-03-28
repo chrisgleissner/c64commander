@@ -56,13 +56,17 @@ describe("SnapshotManagerDialog", () => {
     );
 
     const header = screen.getByText("Load RAM").closest("div[class*='border-b']");
+    const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
     const filters = screen.getByTestId("snapshot-type-filters").parentElement;
     const body = screen.getByTestId("snapshot-list");
     const description = screen.getByText("Select a snapshot to restore.");
 
-    expect(header?.className).toContain("px-4");
-    expect(header?.className).toContain("pt-3");
-    expect(header?.className).toContain("pb-[0.375rem]");
+    expect(header?.className).not.toContain("pr-12");
+    expect(header?.className).not.toContain("pr-14");
+    expect(headerRow).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" }).closest('[data-interstitial-header-row="true"]')).toBe(
+      headerRow,
+    );
     expect(filters?.className).toContain("space-y-2");
     expect(filters?.className).toContain("px-4");
     expect(filters?.className).toContain("py-3");
@@ -89,13 +93,17 @@ describe("SnapshotManagerDialog", () => {
     );
 
     const header = screen.getByText("Load RAM").closest("div[class*='border-b']");
+    const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
     const filters = screen.getByTestId("snapshot-type-filters").parentElement;
     const body = screen.getByTestId("snapshot-list");
     const description = screen.getByText("Select a snapshot to restore.");
 
-    expect(header?.className).toContain("px-6");
-    expect(header?.className).toContain("pt-[1.125rem]");
-    expect(header?.className).toContain("pb-[0.5625rem]");
+    expect(header?.className).not.toContain("pr-12");
+    expect(header?.className).not.toContain("pr-14");
+    expect(headerRow).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" }).closest('[data-interstitial-header-row="true"]')).toBe(
+      headerRow,
+    );
     expect(filters?.className).toContain("space-y-3");
     expect(filters?.className).toContain("px-6");
     expect(filters?.className).toContain("py-4");

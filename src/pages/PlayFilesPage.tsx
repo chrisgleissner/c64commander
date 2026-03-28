@@ -477,9 +477,7 @@ export default function PlayFilesPage() {
       const category = getPlayCategory(entry.path);
       if (!category) return null;
       const songNrValue =
-        songNrOverride ??
-        entry.songNr ??
-        (songNrInput.trim() === "" ? undefined : Math.max(1, Number(songNrInput)));
+        songNrOverride ?? entry.songNr ?? (songNrInput.trim() === "" ? undefined : Math.max(1, Number(songNrInput)));
       const request: PlayRequest = {
         source: entry.source,
         path: entry.path,

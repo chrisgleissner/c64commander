@@ -480,18 +480,9 @@ export const SelectableActionList = ({
             )}
           >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
-              <AppSheetHeader
-                className={cn(
-                  "border-b border-border",
-                  isCompact
-                    ? "space-y-2 px-3 pb-[0.375rem] pt-[0.75rem]"
-                    : "space-y-3 px-6 pb-[0.5625rem] pt-[1.125rem]",
-                )}
-              >
-                <div>
-                  <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
-                  <AppSheetDescription>Review all items in this list.</AppSheetDescription>
-                </div>
+              <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
+                <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
+                <AppSheetDescription>Review all items in this list.</AppSheetDescription>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <Input

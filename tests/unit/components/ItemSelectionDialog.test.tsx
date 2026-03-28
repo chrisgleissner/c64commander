@@ -599,17 +599,14 @@ describe("ItemSelectionDialog source picker", () => {
 
     expect(loadMore).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      expect(onConfirm).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "hvsc-1" }),
-        [
-          expect.objectContaining({
-            path: "/MUSICIANS/Test/demo.sid",
-            durationMs: 87_000,
-            songNr: 2,
-            subsongCount: 4,
-          }),
-        ],
-      );
+      expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "hvsc-1" }), [
+        expect.objectContaining({
+          path: "/MUSICIANS/Test/demo.sid",
+          durationMs: 87_000,
+          songNr: 2,
+          subsongCount: 4,
+        }),
+      ]);
     });
   });
 

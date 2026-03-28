@@ -345,7 +345,7 @@ export const ItemSelectionDialog = ({
   if (!source) {
     return (
       <AppDialog open={open} onOpenChange={onOpenChange}>
-        <AppDialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-md">
+        <AppDialogContent className="max-w-md">
           <AppDialogHeader>
             <AppDialogTitle className="text-xl">{title}</AppDialogTitle>
             <AppDialogDescription>Choose a source.</AppDialogDescription>
@@ -460,7 +460,7 @@ export const ItemSelectionDialog = ({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent onOpenAutoFocus={(e) => e.preventDefault()} className="overflow-hidden p-0">
+      <AppSheetContent className="overflow-hidden p-0">
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           <AppSheetHeader>
             <AppSheetTitle className="text-xl">{title}</AppSheetTitle>
@@ -494,7 +494,7 @@ export const ItemSelectionDialog = ({
             {!isArchiveSource ? (
               <Input
                 placeholder="Filter files…"
-                value={browser.isQueryBacked ? browser.query ?? "" : filterText}
+                value={browser.isQueryBacked ? (browser.query ?? "") : filterText}
                 onChange={(event) => {
                   const nextValue = event.target.value;
                   if (browser.isQueryBacked) {

@@ -278,7 +278,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         if (selection.type === "dir") {
           if (recurseFolders) {
             const nested =
-              source.type === "hvsc" ? await source.listFilesRecursive(selection.path) : await collectRecursive(selection.path);
+              source.type === "hvsc"
+                ? await source.listFilesRecursive(selection.path)
+                : await collectRecursive(selection.path);
             selectedFiles.push(...nested);
             if (source.type === "hvsc") {
               updateProgress(nested.length);

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
@@ -139,6 +139,80 @@ describe("App surface primitives", () => {
     );
     expect(overlay?.className).toContain(APP_INTERSTITIAL_BACKDROP_CLASSNAME.split(" ")[0]);
     expect(screen.getByText("Choose a mode").parentElement).toHaveClass("flex-1", "overflow-y-auto");
+  });
+
+  it("keeps sheet header actions and close control on the shared title row", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    renderWithProviders(
+      <AppSheet open>
+        <AppSheetContent>
+          <AppSheetHeader actions={<button type="button">More</button>}>
+            <AppSheetTitle>Diagnostics</AppSheetTitle>
+            <AppSheetDescription>Inspect diagnostics.</AppSheetDescription>
+          </AppSheetHeader>
+        </AppSheetContent>
+      </AppSheet>,
+    );
+
+    const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
+    const actionsRail = document.querySelector('[data-interstitial-header-actions="true"]');
+    const action = screen.getByRole("button", { name: "More" });
+    const close = screen.getByRole("button", { name: "Close" });
+
+    expect(headerRow).not.toBeNull();
+    expect(actionsRail).not.toBeNull();
+    expect(actionsRail).toContainElement(action);
+    expect(actionsRail).toContainElement(close);
+    expect(action.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps sheet header extras and action-only rails on the shared structure", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    renderWithProviders(
+      <AppSheet open>
+        <AppSheetContent>
+          <AppSheetHeader hideClose actions={<button type="button">Inspect</button>}>
+            <AppSheetTitle>Diagnostics</AppSheetTitle>
+            <AppSheetDescription>Inspect diagnostics.</AppSheetDescription>
+            Header extra copy
+          </AppSheetHeader>
+        </AppSheetContent>
+      </AppSheet>,
+    );
+
+    const actionsRail = document.querySelector('[data-interstitial-header-actions="true"]');
+
+    expect(actionsRail).not.toBeNull();
+    expect(actionsRail).toContainElement(screen.getByRole("button", { name: "Inspect" }));
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    expect(screen.getByText("Header extra copy")).toBeVisible();
+  });
+
+  it("focuses the opened app sheet instead of the close control", async () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    renderWithProviders(
+      <AppSheet open>
+        <AppSheetContent>
+          <AppSheetHeader>
+            <AppSheetTitle>Diagnostics</AppSheetTitle>
+          </AppSheetHeader>
+        </AppSheetContent>
+      </AppSheet>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(dialog);
+    });
+    expect(document.activeElement).not.toBe(close);
   });
 
   it("derives sheet clearance from the app bar height so sheets stay below the badge lane", () => {

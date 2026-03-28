@@ -601,7 +601,7 @@ const FilterEditorSurface = ({
         className="z-[60] overflow-hidden p-0 sm:w-[min(100vw-2rem,22rem)]"
         data-testid="filters-editor-surface"
       >
-        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
+        <AppSheetHeader>
           <AppSheetTitle className="text-base">Filters</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Filter diagnostics activity by type, contributor, and severity.
@@ -833,7 +833,7 @@ const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChang
         className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,34rem)]"
         data-testid="config-drift-surface"
       >
-        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
+        <AppSheetHeader>
           <AppSheetTitle className="text-base">Config Drift</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Review runtime configuration drift against persisted settings.
@@ -866,7 +866,7 @@ const DecisionStateSurface = ({
         className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]"
         data-testid="decision-state-surface"
       >
-        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
+        <AppSheetHeader>
           <AppSheetTitle className="text-base">Decision state</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Internal reconciliation, playback uncertainty, and recent diagnostics transitions.

@@ -7,7 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SnapshotManagerDialog } from "@/pages/home/dialogs/SnapshotManagerDialog";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 
@@ -178,5 +178,17 @@ describe("SnapshotManagerDialog – close", () => {
     const closeBtn = screen.getByRole("button", { name: "Close" });
     fireEvent.click(closeBtn);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("opens with focus on the sheet instead of the close control", async () => {
+    renderDialog();
+
+    const dialog = screen.getByRole("dialog");
+    const closeBtn = screen.getByRole("button", { name: "Close" });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(dialog);
+    });
+    expect(document.activeElement).not.toBe(closeBtn);
   });
 });

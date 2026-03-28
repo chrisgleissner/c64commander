@@ -150,3 +150,130 @@
    - `npm run build`
    - targeted Playwright flows
    - Maestro validation if executable in this environment
+
+# Consistent Close Control Plan
+
+## Classification
+
+- `UI_CHANGE`
+- `CODE_CHANGE`
+
+## Close-Control Impact Surface
+
+- Shared primitives:
+  - `src/components/ui/modal-close-button.tsx`
+  - `src/components/ui/app-surface.tsx`
+  - `src/components/ui/dialog.tsx`
+  - `src/components/ui/alert-dialog.tsx`
+- Reference-aligned surfaces to preserve:
+  - `src/components/itemSelection/ItemSelectionDialog.tsx`
+  - `src/components/lighting/LightingStudioDialog.tsx`
+  - `src/components/DemoModeInterstitial.tsx`
+- Legacy sheet/header spacing to converge:
+  - `src/components/lists/SelectableActionList.tsx`
+  - `src/components/disks/HomeDiskManager.tsx`
+  - `src/pages/home/dialogs/SnapshotManagerDialog.tsx`
+  - `src/pages/home/dialogs/LoadConfigDialog.tsx`
+  - `src/pages/home/dialogs/ManageConfigDialog.tsx`
+  - `src/components/archive/OnlineArchiveDialog.tsx`
+  - `src/components/lighting/LightingStudioDialog.tsx`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/components/diagnostics/LatencyAnalysisPopup.tsx`
+  - `src/components/diagnostics/AnalyticPopup.tsx`
+- Representative autofocus leakage surfaces to verify after the shared fix:
+  - `src/components/lists/SelectableActionList.tsx`
+  - `src/components/disks/HomeDiskManager.tsx`
+  - `src/pages/home/dialogs/SnapshotManagerDialog.tsx`
+  - `src/pages/home/dialogs/ManageConfigDialog.tsx`
+  - `src/pages/home/dialogs/SaveRamDialog.tsx`
+  - `src/pages/home/dialogs/RestoreSnapshotDialog.tsx`
+  - `src/pages/home/dialogs/PowerOffDialog.tsx`
+  - `src/pages/home/dialogs/SaveConfigDialog.tsx`
+  - `src/pages/home/dialogs/ClearFlashDialog.tsx`
+  - `src/pages/home/components/DriveManager.tsx`
+  - `src/pages/SettingsPage.tsx`
+  - `src/components/archive/OnlineArchiveDialog.tsx`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/components/diagnostics/LatencyAnalysisPopup.tsx`
+  - `src/components/diagnostics/AnalyticPopup.tsx`
+- Regression files:
+  - `tests/unit/components/ui/closeControl.test.tsx`
+  - `tests/unit/components/ui/dialog.test.tsx`
+  - `tests/unit/components/ui/app-surface.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.layout.test.tsx`
+  - `playwright/modalConsistency.spec.ts`
+  - `playwright/itemSelection.spec.ts`
+  - `playwright/diskManagement.spec.ts`
+  - `playwright/screenshots.spec.ts`
+- Screenshot targets under `docs/img/app/`:
+  - `disks/collection/01-view-all.png`
+  - `play/playlist/01-view-all.png`
+  - `home/dialogs/01-save-ram-dialog.png`
+  - `home/dialogs/03-snapshot-manager.png`
+  - `home/dialogs/04-restore-confirmation.png`
+  - `home/dialogs/08-lighting-context-lens-medium.png`
+  - `diagnostics/filters/02-editor.png`
+  - plus any additional close-control screenshots proven inaccurate after the audit
+
+## Implementation Order
+
+1. Centralize open-time focus handling in the shared dialog/sheet primitives so newly opened interstitials do not visibly autofocus the close control.
+2. Keep `CloseControl` as the single shared dismiss control and preserve its plain `×` glyph plus keyboard-visible focus ring.
+3. Converge shared header-row structure in the shared primitives so titles, actions, and close controls stay on one row.
+4. Remove legacy per-screen `AppSheetHeader` spacing overrides where the shared header contract now covers the layout.
+5. Re-verify custom action rails, especially Diagnostics overflow actions and AnalyticPopup back-link layouts.
+6. Add narrow regression coverage at primitive, surface, and browser levels.
+7. Refresh only the affected screenshots through the existing Playwright screenshot harness.
+8. Run the required validation matrix and record the evidence in `WORKLOG.md`.
+
+## Test Plan
+
+- Unit:
+  - verify the close control remains the shared plain `×` glyph and still exposes visible focus-ring classes
+  - verify shared headers keep title/actions/close on one row and action rails stay left of the close control
+  - verify shared header overrides still work
+  - verify the `Add items` reference surfaces retain their current structure
+  - verify Snapshot Manager still dismisses from the top-right close control and keeps stable header layout after spacing cleanup
+- Browser:
+  - verify representative dialogs and sheets do not open with the close control focused
+  - verify representative surfaces expose exactly one close button
+  - verify Diagnostics overflow remains left of the close control on the shared action rail
+  - verify title and close stay aligned on representative headers
+- Required validation:
+  - `npm run lint`
+  - `npm run test`
+  - `npm run test:coverage`
+  - `npm run build`
+  - targeted Playwright close-control regressions
+  - targeted Playwright screenshot generation for the affected assets
+
+## Screenshot Plan
+
+- Use `playwright/screenshots.spec.ts`; do not add a separate screenshot script.
+- Refresh only the close-control screenshots whose visible output changes.
+- Start with:
+  - `docs/img/app/disks/collection/01-view-all.png`
+  - `docs/img/app/play/playlist/01-view-all.png`
+  - `docs/img/app/home/dialogs/01-save-ram-dialog.png`
+  - `docs/img/app/home/dialogs/03-snapshot-manager.png`
+  - `docs/img/app/home/dialogs/04-restore-confirmation.png`
+  - `docs/img/app/home/dialogs/08-lighting-context-lens-medium.png`
+  - `docs/img/app/diagnostics/filters/02-editor.png`
+- Expand only if another existing screenshot still shows a close-focus ring, detached close rail, or row misalignment after the code fix.
+
+## Completion Checklist
+
+- [x] Shared primitives apply one deterministic open-focus policy that avoids close-button autofocus on open.
+- [x] `CloseControl` remains the shared plain `×` dismiss control with visible keyboard focus styling.
+- [x] Header title, actions, and close control share one stable row across dialogs and sheets.
+- [x] Legacy per-screen header padding hacks are removed or reduced to the smallest justified set.
+- [x] Diagnostics overflow and AnalyticPopup custom header actions still align correctly.
+- [x] Regression tests cover the fixed behavior at unit and browser levels.
+- [x] Only the necessary screenshots under `docs/img/app/` are refreshed.
+- [x] `npm run lint` passes.
+- [x] `npm run test` passes.
+- [x] `npm run test:coverage` passes with global branch coverage `>= 91%`.
+- [x] `npm run build` passes.
+- [x] `WORKLOG.md` records inspections, edits, commands, results, and screenshot outputs.

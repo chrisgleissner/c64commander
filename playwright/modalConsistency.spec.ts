@@ -33,6 +33,41 @@ const seedOfflineState = async (page: Page) => {
   });
 };
 
+const expectCloseControlNotFocusedOnOpen = async (surface: Page | ReturnType<Page["locator"]>) => {
+  const closeButton = surface.getByRole("button", { name: "Close" });
+  await expect(closeButton).toBeVisible();
+  await expect
+    .poll(() =>
+      closeButton.evaluate((button) => ({
+        activeTag: document.activeElement?.tagName ?? null,
+        isCloseFocused: document.activeElement === button,
+      })),
+    )
+    .toEqual({
+      activeTag: "DIV",
+      isCloseFocused: false,
+    });
+};
+
+const expectHeaderTitleAndCloseShareRow = async (
+  title: ReturnType<Page["locator"]>,
+  closeButton: ReturnType<Page["locator"]>,
+) => {
+  const [titleBox, closeBox] = await Promise.all([title.boundingBox(), closeButton.boundingBox()]);
+
+  expect(titleBox, "header title should expose bounds").not.toBeNull();
+  expect(closeBox, "close control should expose bounds").not.toBeNull();
+
+  if (!titleBox || !closeBox) {
+    throw new Error("Unable to measure header title or close control.");
+  }
+
+  const titleCenterY = titleBox.y + titleBox.height / 2;
+  const closeCenterY = closeBox.y + closeBox.height / 2;
+  expect(Math.abs(titleCenterY - closeCenterY), "title and close should share one header row").toBeLessThanOrEqual(8);
+  expect(titleBox.x, "title should remain to the left of the close control").toBeLessThan(closeBox.x);
+};
+
 test.describe("Modal close-control consistency", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -334,6 +369,8 @@ test.describe("Modal close-control consistency", () => {
 
     const overflowBtn = diagSheet.getByTestId("diagnostics-overflow-menu");
     const closeBtn = diagSheet.getByRole("button", { name: "Close" });
+    await expectCloseControlNotFocusedOnOpen(diagSheet);
+    await expectHeaderTitleAndCloseShareRow(diagSheet.getByText("Diagnostics", { exact: true }), closeBtn);
     await expect(overflowBtn).toBeVisible();
     await expect(closeBtn).toBeVisible();
 

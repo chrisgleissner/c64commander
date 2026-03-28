@@ -13,6 +13,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresentation";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
 import { CloseControl } from "@/components/ui/modal-close-button";
 import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
@@ -116,7 +117,7 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content> & { surface?: ModalSurface }
->(({ className, surface = "confirmation", ...props }, ref) => {
+>(({ className, onOpenAutoFocus, surface = "confirmation", ...props }, ref) => {
   const { profile } = useDisplayProfile();
   const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
   const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(
@@ -137,6 +138,7 @@ const AlertDialogContent = React.forwardRef<
             data-interstitial-depth={layer?.depth ?? 1}
             data-modal-surface={surface}
             data-modal-presentation={presentation.mode}
+            onOpenAutoFocus={composeInterstitialOpenAutoFocus(onOpenAutoFocus)}
             style={{ ...style, zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
             {...props}
           />
@@ -176,10 +178,10 @@ const AlertDialogHeader = ({
       style={{ ...ALERT_DIALOG_HEADER_STYLE, ...((style as React.CSSProperties | undefined) ?? {}) }}
       {...props}
     >
-      <div className="flex min-h-10 items-center gap-3">
+      <div className="flex min-h-10 items-center gap-3" data-interstitial-header-row="true">
         <div className="min-w-0 flex-1">{resolvedTitle}</div>
         {actions || shouldShowClose ? (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2" data-interstitial-header-actions="true">
             {actions}
             {shouldShowClose ? (
               <AlertDialogPrimitive.Cancel asChild>

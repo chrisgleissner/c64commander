@@ -560,6 +560,18 @@ test.describe("Disk management", () => {
     const dialog = page.getByRole("dialog", { name: "All disks" });
     await expect(dialog.getByText("Disk 1.d64", { exact: true })).toBeVisible();
     await expect(dialog.getByText("Disk 2.d64", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(1);
+    await expect
+      .poll(() =>
+        dialog.getByRole("button", { name: "Close" }).evaluate((button) => ({
+          activeTag: document.activeElement?.tagName ?? null,
+          isCloseFocused: document.activeElement === button,
+        })),
+      )
+      .toEqual({
+        activeTag: "DIV",
+        isCloseFocused: false,
+      });
     await snap(page, testInfo, "view-all");
     await snap(page, testInfo, "disk-view-all");
   });

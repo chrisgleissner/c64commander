@@ -58,7 +58,9 @@ describe("SelectableActionList", () => {
     const body = root.children[1];
     const card = body?.firstElementChild;
 
-    expect(header).toHaveClass("px-3");
+    expect(header).toHaveClass("space-y-2");
+    expect(header).not.toHaveClass("px-3");
+    expect(header?.querySelector('[data-interstitial-header-row="true"]')).not.toBeNull();
     expect(body).toHaveClass("px-3");
     expect(card).toHaveClass("p-3");
   });

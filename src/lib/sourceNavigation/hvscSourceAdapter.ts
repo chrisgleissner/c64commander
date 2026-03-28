@@ -34,8 +34,7 @@ const songToEntry = (song: {
   name: song.fileName,
   path: normalizeHvscPath(song.virtualPath),
   durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
-  songNr:
-    song.trackSubsongs?.find((entry) => entry.isDefault)?.songNr ?? song.sidMetadata?.startSong ?? undefined,
+  songNr: song.trackSubsongs?.find((entry) => entry.isDefault)?.songNr ?? song.sidMetadata?.startSong ?? undefined,
   subsongCount: song.trackSubsongs?.length ?? song.subsongCount ?? song.sidMetadata?.songs ?? undefined,
 });
 
