@@ -48,17 +48,17 @@
 
 ## Completion Checklist
 
-- [ ] Shared visible badge formatter caps visible counts at `999+`.
-- [ ] Compact, medium, and expanded badge outputs match the required grammar.
-- [ ] Offline and not-yet-connected badge text remains unchanged.
-- [ ] Badge remains single-line and shrink-safe within the header.
-- [ ] Regression tests cover formatter, DOM rendering, and browser overflow behavior.
-- [ ] Targeted header screenshots exist under `docs/img/app/settings/header/`.
-- [ ] `npm run lint` passes.
-- [ ] `npm run test` passes.
-- [ ] `npm run test:coverage` passes with global branch coverage `>= 91%`.
-- [ ] `npm run build` passes.
-- [ ] `WORKLOG.md` records inspections, edits, commands, results, and screenshot outputs.
+- [x] Shared visible badge formatter caps visible counts at `999+`.
+- [x] Compact, medium, and expanded badge outputs match the required grammar.
+- [x] Offline and not-yet-connected badge text remains unchanged.
+- [x] Badge remains single-line and shrink-safe within the header.
+- [x] Regression tests cover formatter, DOM rendering, and browser overflow behavior.
+- [x] Targeted header screenshots exist under `docs/img/app/settings/header/`.
+- [x] `npm run lint` passes.
+- [x] `npm run test` passes.
+- [x] `npm run test:coverage` passes with global branch coverage `>= 91%`.
+- [x] `npm run build` passes.
+- [x] `WORKLOG.md` records inspections, edits, commands, results, and screenshot outputs.
 
 # Overlay And Scroll Containment Plan
 

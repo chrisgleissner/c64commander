@@ -1,5 +1,48 @@
 # Health Badge Overflow Fix Worklog
 
+## 2026-03-28T11:14:41Z
+
+### Implementation completed
+
+- Inspected the required execution and UI files: `README.md`, `.github/copilot-instructions.md`, `AGENTS.md`, `docs/ux-guidelines.md`, `src/components/UnifiedHealthBadge.tsx`, `src/lib/diagnostics/healthModel.ts`, `src/components/AppBar.tsx`, `tests/unit/components/UnifiedHealthBadge.test.tsx`, `tests/unit/lib/diagnostics/healthModel.test.ts`, `playwright/connectionStatusLayout.spec.ts`, `playwright/layoutOverflow.spec.ts`, `playwright/screenshots.spec.ts`, `playwright/displayProfileViewports.ts`, `src/hooks/useHealthState.ts`, and `playwright/visualSeeds.ts`.
+- Refactored `src/lib/diagnostics/healthModel.ts` so one shared badge text contract drives visible leading text, capped counts, and trailing health/problem text; visible counts now cap at `999+` without changing the underlying `problemCount` value.
+- Updated `src/components/UnifiedHealthBadge.tsx` to render from the shared formatter contract and added badge-local overflow containment with `min-w-0`, `max-w-full`, `overflow-hidden`, and trailing-span truncation while preserving click behavior and badge markers.
+- Added deterministic unit regression coverage in `tests/unit/lib/diagnostics/healthModel.test.ts` and `tests/unit/components/UnifiedHealthBadge.test.tsx` for profile grammar, count capping, offline/not-yet-connected copy, no duplicated count rendering, and overflow safety classes.
+- Added shared badge trace seeding in `playwright/visualSeeds.ts`, a targeted `/settings` overflow regression in `playwright/layoutOverflow.spec.ts`, and a header-only screenshot matrix in `playwright/screenshots.spec.ts`.
+
+### Issues encountered and resolved
+
+- `npm run lint` initially failed because `playwright/layoutOverflow.spec.ts` needed Prettier formatting.
+- Resolved with `npx prettier --write playwright/layoutOverflow.spec.ts`, then reran lint successfully.
+
+### Commands and results
+
+- `npx vitest run tests/unit/lib/diagnostics/healthModel.test.ts tests/unit/components/UnifiedHealthBadge.test.tsx` — passed (`2` files, `89` tests).
+- `npx playwright test playwright/layoutOverflow.spec.ts -g "settings header badge avoids overflow" --reporter=line` — passed (`2` tests).
+- `npx playwright test playwright/screenshots.spec.ts -g "capture settings header badge screenshots" --reporter=line` — passed (`1` test).
+- `npm run lint` — passed; only pre-existing warnings remain in generated `android/coverage/**` files.
+- `npm run test` — passed (`429` files, `4995` tests).
+- `npm run test:coverage` — passed; computed global coverage from `coverage/coverage-final.json` after the run: statements `93.48%`, branches `91.02%`, functions `89.71%`, lines `93.48%`.
+- `npm run build` — passed.
+
+### Screenshot files written
+
+- `docs/img/app/settings/header/badge-compact-healthy.png`
+- `docs/img/app/settings/header/badge-compact-degraded-12.png`
+- `docs/img/app/settings/header/badge-compact-degraded-999plus.png`
+- `docs/img/app/settings/header/badge-compact-unhealthy-12.png`
+- `docs/img/app/settings/header/badge-compact-unhealthy-999plus.png`
+- `docs/img/app/settings/header/badge-medium-healthy.png`
+- `docs/img/app/settings/header/badge-medium-degraded-12.png`
+- `docs/img/app/settings/header/badge-medium-degraded-999plus.png`
+- `docs/img/app/settings/header/badge-medium-unhealthy-12.png`
+- `docs/img/app/settings/header/badge-medium-unhealthy-999plus.png`
+- `docs/img/app/settings/header/badge-expanded-healthy.png`
+- `docs/img/app/settings/header/badge-expanded-degraded-12.png`
+- `docs/img/app/settings/header/badge-expanded-degraded-999plus.png`
+- `docs/img/app/settings/header/badge-expanded-unhealthy-12.png`
+- `docs/img/app/settings/header/badge-expanded-unhealthy-999plus.png`
+
 ## 2026-03-28T10:51:32Z
 
 ### Task start and classification
