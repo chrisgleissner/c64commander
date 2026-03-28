@@ -39,6 +39,7 @@ const SOURCE_OPTION_TEXT_CANDIDATES: Record<string, readonly string[]> = {
   local: ["Add file / folder from Local", "Local"],
   hvsc: ["Add file / folder from HVSC", "HVSC"],
 };
+const SOURCE_OPTION_REVEAL_ATTEMPTS = 3;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -179,7 +180,7 @@ export async function chooseSource(client: DroidmindClient, serial: string, labe
         return;
       }
     }
-    const selectionAttempts = resourceId === "import-option-c64u" ? 3 : 1;
+    const selectionAttempts = resourceId === "import-option-c64u" ? 3 : SOURCE_OPTION_REVEAL_ATTEMPTS;
     for (let attempt = 1; attempt <= selectionAttempts; attempt += 1) {
       let selected = resourceId ? await tapByResourceId(client, serial, resourceId) : false;
       if (!selected) {
@@ -193,12 +194,18 @@ export async function chooseSource(client: DroidmindClient, serial: string, labe
         }
       }
       if (!selected) {
+        if (attempt < selectionAttempts) {
+          await swipePickerContents(client, serial);
+        }
         continue;
       }
       if (resourceId === "import-option-c64u") {
         const pickerReady = await waitForC64UPickerReady(serial, 20, 400);
         if (pickerReady) {
           return;
+        }
+        if (attempt < selectionAttempts) {
+          await swipePickerContents(client, serial);
         }
         continue;
       }

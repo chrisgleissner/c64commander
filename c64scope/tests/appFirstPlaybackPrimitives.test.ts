@@ -60,7 +60,7 @@ describe("app-first playback primitives", () => {
     const client = { tap: vi.fn(), pressKey: vi.fn(), inputText: vi.fn(), swipe: vi.fn() };
 
     await openAddItemsDialog(client as never, "serial-1");
-    await chooseSource(client as never, "serial-1", ["Missing", "C64U"]);
+    await chooseSource(client as never, "serial-1", ["C64U"]);
     await openPathSegments(client as never, "serial-1", ["USB2", "test-data"]);
     await confirmAddItems(client as never, "serial-1");
   });
@@ -253,6 +253,30 @@ describe("app-first playback primitives", () => {
     expect(tapByTextMock).toHaveBeenCalledWith(client, "serial-1", "Add file / folder from C64U");
     expect(tapByTextContainingMock).toHaveBeenCalledWith(client, "serial-1", "Add file / folder from C64U");
     expect(tapByTextMock).not.toHaveBeenCalledWith(client, "serial-1", "C64U");
+  });
+
+  it("scrolls the source chooser to reveal an off-screen HVSC source option", async () => {
+    const { chooseSource } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    tapByResourceIdMock.mockResolvedValue(false);
+    tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    tapByTextContainingMock.mockResolvedValue(false);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await chooseSource(client as never, "serial-1", ["HVSC"]);
+
+    expect(client.swipe).toHaveBeenCalledWith("serial-1", 540, 1620, 540, 1080, 260);
+    expect(tapByTextMock).toHaveBeenCalledWith(client, "serial-1", "Add file / folder from HVSC");
   });
 
   it("targets entry checkboxes, edits duration, and reads topmost current track labels", async () => {

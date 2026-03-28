@@ -294,9 +294,9 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
 
 export const TELNET_ACTION_IDS = Object.keys(TELNET_ACTIONS) as TelnetActionId[];
 
-export const TELNET_HOME_PRIMARY_ACTION_IDS: TelnetActionId[] = ["rebootClearMemory", "powerCycle"];
+export const TELNET_HOME_PRIMARY_ACTION_IDS: TelnetActionId[] = [];
 
-export const TELNET_HOME_OVERFLOW_ACTION_IDS: TelnetActionId[] = ["rebootKeepMemory", "saveReuMemory"];
+export const TELNET_HOME_OVERFLOW_ACTION_IDS: TelnetActionId[] = ["saveReuMemory"];
 
 export const resolveTelnetMenuKey = (product?: string | null): TelnetMenuKey | null => {
   const deviceCode = inferConnectedDeviceCode(product);

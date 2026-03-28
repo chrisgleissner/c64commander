@@ -183,28 +183,28 @@ Interaction split:
 
 ### 3.1 Quick Actions
 
-| CTA             | Label               | Purpose                                | Importance | Test Coverage | Test File                                                 | Notes                               |
-| --------------- | ------------------- | -------------------------------------- | ---------- | ------------- | --------------------------------------------------------- | ----------------------------------- |
-| QuickActionCard | "Reset"             | Hard reset C64                         | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
-| QuickActionCard | "Reboot"            | Reboot and clear RAM via Telnet        | **HIGH**   | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Device-aware Telnet action          |
-| QuickActionCard | "Pause" / "Resume"  | Pause or resume emulation              | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
-| QuickActionCard | "Menu"              | Toggle C64U menu                       | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
-| QuickActionCard | "Save RAM"          | Open RAM snapshot export flow          | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Folder-backed export                |
-| QuickActionCard | "Load RAM"          | Open RAM snapshot restore flow         | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Snapshot sheet + confirmation modal |
-| QuickActionCard | "Power Cycle"       | Telnet power cycle                     | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Disabled when Telnet is unavailable |
-| QuickActionCard | "Power Off"         | Power down C64                         | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control - destructive       |
-| Overflow action | "Reboot (Keep RAM)" | Reboot without clearing RAM via Telnet | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Quick Actions overflow menu         |
-| Overflow action | "Save REU"          | Save REU memory via Telnet             | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Quick Actions overflow menu         |
+| CTA             | Label               | Purpose                                     | Importance | Test Coverage | Test File                                                 | Notes                               |
+| --------------- | ------------------- | ------------------------------------------- | ---------- | ------------- | --------------------------------------------------------- | ----------------------------------- |
+| QuickActionCard | "Reset"             | Hard reset C64                              | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
+| QuickActionCard | "Reboot"            | Reboot and clear RAM via REST orchestration | **HIGH**   | ⚠️ PARTIAL    | tests/unit/lib/deviceControl/deviceControl.test.ts        | Uses `deviceControl.rebootFull()`   |
+| QuickActionCard | "Pause" / "Resume"  | Pause or resume emulation                   | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
+| QuickActionCard | "Menu"              | Toggle C64U menu                            | **HIGH**   | ⚠️ PARTIAL    | tests/unit/lib/deviceControl/deviceControl.test.ts        | Serialized REST toggle              |
+| QuickActionCard | "Save RAM"          | Open RAM snapshot export flow               | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Folder-backed export                |
+| QuickActionCard | "Load RAM"          | Open RAM snapshot restore flow              | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Snapshot sheet + confirmation modal |
+| QuickActionCard | "Power Cycle"       | Fallback full reboot via REST orchestration | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/HomePage.ramActions.test.tsx             | No Telnet routing                   |
+| QuickActionCard | "Power Off"         | Power down C64                              | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control - destructive       |
+| Overflow action | "Reboot (Keep RAM)" | Reboot without clearing RAM via REST        | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/HomePage.ramActions.test.tsx             | Quick Actions overflow menu         |
+| Overflow action | "Save REU"          | Save REU memory via Telnet                  | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Quick Actions overflow menu         |
 
 ### 3.2 Configuration Management
 
-| CTA             | Label                  | Purpose                    | Importance | Test Coverage | Test File                            | Notes              |
-| --------------- | ---------------------- | -------------------------- | ---------- | ------------- | ------------------------------------ | ------------------ |
-| QuickActionCard | "Apply"                | Send config to device      | **HIGH**   | ⚠️ PARTIAL    | homeConfigManagement.spec.ts:74      | Config sync        |
-| QuickActionCard | "Save" (to app)        | Save to local storage      | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:121     | Config persistence |
-| QuickActionCard | "Load" (from app)      | Load from local storage    | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:143     | Config restoration |
-| QuickActionCard | "Revert"               | Discard pending changes    | **MEDIUM** | ❌ NONE       | -                                    | Config rollback    |
-| QuickActionCard | "Manage" (app configs) | Open config manager sheet  | **MEDIUM** | ⚠️ PARTIAL    | homeConfigManagement.spec.ts:180,220 | Workflow bottom sheet |
+| CTA             | Label                  | Purpose                   | Importance | Test Coverage | Test File                            | Notes                 |
+| --------------- | ---------------------- | ------------------------- | ---------- | ------------- | ------------------------------------ | --------------------- |
+| QuickActionCard | "Apply"                | Send config to device     | **HIGH**   | ⚠️ PARTIAL    | homeConfigManagement.spec.ts:74      | Config sync           |
+| QuickActionCard | "Save" (to app)        | Save to local storage     | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:121     | Config persistence    |
+| QuickActionCard | "Load" (from app)      | Load from local storage   | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:143     | Config restoration    |
+| QuickActionCard | "Revert"               | Discard pending changes   | **MEDIUM** | ❌ NONE       | -                                    | Config rollback       |
+| QuickActionCard | "Manage" (app configs) | Open config manager sheet | **MEDIUM** | ⚠️ PARTIAL    | homeConfigManagement.spec.ts:180,220 | Workflow bottom sheet |
 
 ### 3.3 Config Manager
 
@@ -324,14 +324,14 @@ Diagnostics tools follow the same model:
 
 ### 7.2 HIGH Priority Flows
 
-| Flow                           | Steps                                                                                   | Importance | Test Coverage | Test File                        | Notes               |
-| ------------------------------ | --------------------------------------------------------------------------------------- | ---------- | ------------- | -------------------------------- | ------------------- |
-| **Remove items from playlist** | 1. Select items<br>2. Click "Remove selected"<br>3. Confirm                             | **HIGH**   | ✅ FULL       | playback.spec.ts:407             | Playlist management |
-| **Navigate playlist**          | 1. Play a song<br>2. Click "Next"/"Prev"                                                | **HIGH**   | ✅ FULL       | playback.spec.ts:328             | Transport control   |
-| **Bulk remove disks**          | 1. Select multiple disks<br>2. Click "Remove selected"<br>3. Confirm                    | **HIGH**   | ✅ FULL       | diskManagement.spec.ts:324       | Library management  |
-| **Save config to app**         | 1. Modify config<br>2. Click "Save"<br>3. Enter name<br>4. Confirm                      | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:121 | Config persistence  |
+| Flow                           | Steps                                                                                   | Importance | Test Coverage | Test File                        | Notes                    |
+| ------------------------------ | --------------------------------------------------------------------------------------- | ---------- | ------------- | -------------------------------- | ------------------------ |
+| **Remove items from playlist** | 1. Select items<br>2. Click "Remove selected"<br>3. Confirm                             | **HIGH**   | ✅ FULL       | playback.spec.ts:407             | Playlist management      |
+| **Navigate playlist**          | 1. Play a song<br>2. Click "Next"/"Prev"                                                | **HIGH**   | ✅ FULL       | playback.spec.ts:328             | Transport control        |
+| **Bulk remove disks**          | 1. Select multiple disks<br>2. Click "Remove selected"<br>3. Confirm                    | **HIGH**   | ✅ FULL       | diskManagement.spec.ts:324       | Library management       |
+| **Save config to app**         | 1. Modify config<br>2. Click "Save"<br>3. Enter name<br>4. Confirm                      | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:121 | Config persistence       |
 | **Load config from app**       | 1. Click "Load"<br>2. Select config in sheet                                            | **HIGH**   | ✅ FULL       | homeConfigManagement.spec.ts:143 | Non-destructive workflow |
-| **Download HVSC**              | 1. Navigate to Play<br>2. Click "Download HVSC"<br>3. Confirm<br>4. Wait for completion | **HIGH**   | ✅ FULL       | hvsc.spec.ts:79                  | HVSC setup          |
+| **Download HVSC**              | 1. Navigate to Play<br>2. Click "Download HVSC"<br>3. Confirm<br>4. Wait for completion | **HIGH**   | ✅ FULL       | hvsc.spec.ts:79                  | HVSC setup               |
 
 ### 7.3 MEDIUM Priority Flows
 
@@ -346,10 +346,10 @@ Diagnostics tools follow the same model:
 
 ### 7.4 LOW Priority Flows
 
-| Flow                           | Steps                                                                          | Importance | Test Coverage | Test File                            | Notes             |
-| ------------------------------ | ------------------------------------------------------------------------------ | ---------- | ------------- | ------------------------------------ | ----------------- |
-| **Check HVSC updates**         | 1. Navigate to Play<br>2. Click "Check for updates"<br>3. Review status        | **LOW**    | ✅ FULL       | hvsc.spec.ts:133                     | Maintenance       |
-| **Share / Export diagnostics** | 1. Navigate to Settings<br>2. Click "Diagnostics"<br>3. Click "Share / Export" | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:117      | Support tool      |
+| Flow                           | Steps                                                                                        | Importance | Test Coverage | Test File                            | Notes          |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | ---------- | ------------- | ------------------------------------ | -------------- |
+| **Check HVSC updates**         | 1. Navigate to Play<br>2. Click "Check for updates"<br>3. Review status                      | **LOW**    | ✅ FULL       | hvsc.spec.ts:133                     | Maintenance    |
+| **Share / Export diagnostics** | 1. Navigate to Settings<br>2. Click "Diagnostics"<br>3. Click "Share / Export"               | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:117      | Support tool   |
 | **Manage app configs**         | 1. Click "Manage"<br>2. Browse saved configs in sheet<br>3. Rename/Delete in modal as needed | **LOW**    | ✅ FULL       | homeConfigManagement.spec.ts:180,220 | Split workflow |
 
 ---

@@ -86,8 +86,8 @@ function useDialogOpenState(nodeRef: React.RefObject<HTMLElement | null>, nodeVe
 const resolveDialogFooterClassName = () => "flex-row flex-wrap justify-end gap-2";
 
 const DIALOG_HEADER_STYLE = {
-  paddingLeft: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left))",
-  paddingRight: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right))",
+  paddingLeft: "calc(var(--display-profile-page-padding-x) + var(--safe-area-inset-left))",
+  paddingRight: "calc(var(--display-profile-page-padding-x) + var(--safe-area-inset-right))",
   paddingTop: "0.625rem",
   paddingBottom: "0.625rem",
 } satisfies React.CSSProperties;

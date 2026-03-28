@@ -19,10 +19,9 @@ import {
 import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
-import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createTelnetClient } from "@/lib/telnet/telnetClient";
 import { createTelnetSession } from "@/lib/telnet/telnetSession";
-import { TELNET_DEFAULT_PORT } from "@/lib/telnet/telnetTypes";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { rollUpHealth, deriveConnectivityState } from "@/lib/diagnostics/healthModel";
 import type { HealthState } from "@/lib/diagnostics/healthModel";
 import {
@@ -32,10 +31,13 @@ import {
 } from "@/lib/diagnostics/healthHistory";
 import { computeLatencyPercentiles } from "@/lib/diagnostics/latencyTracker";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
   { category: "LED Strip Settings", item: "Strip Intensity", delta: 1, min: 0, max: 31 },
+  { category: "Keyboard Lighting", item: "Strip Intensity", delta: 1, min: 0, max: 31 },
   { category: "Audio Mixer", item: "Vol UltiSid 1", delta: 1, min: -64, max: 0 },
+  { category: "Audio Mixer", item: "Vol Drive 1", delta: 1, min: -64, max: 0 },
 ] as const;
 
 const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
@@ -272,6 +274,7 @@ const parseConfigNumericValue = (itemData: unknown): number | null => {
 
   const obj = itemData as Record<string, unknown>;
   const selected = obj.selected;
+  const current = obj.current;
 
   if (typeof selected === "string") {
     const options = Array.isArray(obj.options) ? obj.options : null;
@@ -288,6 +291,18 @@ const parseConfigNumericValue = (itemData: unknown): number | null => {
     if (Number.isFinite(parsed)) return parsed;
   }
 
+  if (typeof current === "string") {
+    const values = Array.isArray(obj.values) ? obj.values : null;
+    if (values) {
+      const idx = values.indexOf(current);
+      if (idx >= 0) return idx;
+    }
+    const parsed = parseFloat(current);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  if (typeof current === "number") return Number.isFinite(current) ? current : null;
+
   return null;
 };
 
@@ -301,13 +316,28 @@ const getConfigRoundtripBounds = (
 
   const obj = itemData as Record<string, unknown>;
   const selected = obj.selected;
+  const current = obj.current;
   const options = Array.isArray(obj.options) ? obj.options : null;
+  const values = Array.isArray(obj.values) ? obj.values : null;
+  const min = typeof obj.min === "number" && Number.isFinite(obj.min) ? obj.min : null;
+  const max = typeof obj.max === "number" && Number.isFinite(obj.max) ? obj.max : null;
 
   if (typeof selected === "string" && options) {
     const idx = options.indexOf(selected);
     if (idx >= 0) {
       return { min: 0, max: options.length - 1 };
     }
+  }
+
+  if (typeof current === "string" && values) {
+    const idx = values.indexOf(current);
+    if (idx >= 0) {
+      return { min: 0, max: values.length - 1 };
+    }
+  }
+
+  if (min !== null && max !== null && min <= max) {
+    return { min, max };
   }
 
   return fallback;
@@ -465,6 +495,14 @@ const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
           ? Math.min(currentValue + target.delta, bounds.max)
           : Math.max(currentValue - target.delta, bounds.min);
 
+      addLog("debug", "Health check CONFIG probe: selected roundtrip target", {
+        category: target.category,
+        item: target.item,
+        currentValue,
+        tempValue,
+        bounds,
+      });
+
       await api.setConfigValue(target.category, target.item, tempValue, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
@@ -490,6 +528,15 @@ const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
         __c64uBypassCache: true,
       });
       const verifyValue = parseConfigNumericValue(extractConfigItemData(verifyResp, target.category, target.item));
+
+      addLog("debug", "Health check CONFIG probe: completed roundtrip", {
+        category: target.category,
+        item: target.item,
+        currentValue,
+        tempValue,
+        readBackValue,
+        verifyValue,
+      });
 
       if (readBackValue !== tempValue) {
         return makeRecord(
@@ -532,7 +579,7 @@ const probeFtp = async (): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
     const snap = getC64APIConfigSnapshot();
-    const host = normalizeFtpHost(snap.deviceHost);
+    const host = stripPortFromDeviceHost(snap.deviceHost);
     const port = getStoredFtpPort();
     const { durationMs } = await timedProbe(() =>
       listFtpDirectory({
@@ -564,18 +611,27 @@ const hasExpectedTelnetScreen = (titleLine: string): boolean => {
 const probeTelnet = async (signal: AbortSignal): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   const snap = getC64APIConfigSnapshot();
-  const host = normalizeFtpHost(snap.deviceHost);
+  const host = stripPortFromDeviceHost(snap.deviceHost);
+  const port = getStoredTelnetPort();
   const password = snap.password || undefined;
   const session = createTelnetSession(createTelnetClient({ connectTimeoutMs: PROBE_TIMEOUT_MS.TELNET }));
+  const readTimeoutMs = Math.max(150, Math.floor(PROBE_TIMEOUT_MS.TELNET / 8));
 
   try {
-    await session.connect(host, TELNET_DEFAULT_PORT, password);
+    await session.connect(host, port, password);
     if (signal.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
 
-    const screen = await session.readScreen(PROBE_TIMEOUT_MS.TELNET);
+    const screen = await session.readScreen(readTimeoutMs);
     const titleLine = screen.titleLine.trim();
+    addLog("debug", "Health check TELNET probe banner", {
+      host,
+      port,
+      titleLine: titleLine.slice(0, 120),
+      screenType: screen.screenType,
+      readTimeoutMs,
+    });
     if (!hasExpectedTelnetScreen(titleLine)) {
       const reason =
         titleLine.length > 0 ? `Unexpected Telnet screen: ${titleLine.slice(0, 80)}` : "Unexpected blank Telnet screen";

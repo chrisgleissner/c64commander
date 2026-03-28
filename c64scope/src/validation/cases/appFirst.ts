@@ -12,6 +12,8 @@ import { parseUiNodes } from "../appFirstUi.js";
 import { DroidmindClient } from "../droidmindClient.js";
 import { ensureDeviceUnlocked, launchAppForeground, navigateToRoute, restartApp } from "../appFirstPrimitives.js";
 import {
+  appFirstHvscColdWorkflow,
+  appFirstHvscWarmWorkflow,
   appFirstPlaybackContinuity,
   appFirstPlaybackMuteLatency,
   appFirstPlaylistAutoAdvance,
@@ -598,4 +600,10 @@ export const appFirstSettingsSurface: ValidationCase = {
   },
 };
 
-export { appFirstPlaybackContinuity, appFirstPlaybackMuteLatency, appFirstPlaylistAutoAdvance };
+export {
+  appFirstHvscColdWorkflow,
+  appFirstHvscWarmWorkflow,
+  appFirstPlaybackContinuity,
+  appFirstPlaybackMuteLatency,
+  appFirstPlaylistAutoAdvance,
+};

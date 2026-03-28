@@ -34,13 +34,13 @@ export function TabBar() {
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-0 w-screen max-w-screen transition-transform duration-200 ease-out",
+        "tab-bar-frame fixed bottom-0 left-0 w-screen max-w-screen transition-transform duration-200 ease-out",
         interstitialActive && "translate-y-full pointer-events-none",
       )}
       style={{ zIndex: INTERSTITIAL_Z_INDEX.content }}
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
-      <nav className="tab-bar">
+      <nav className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background" data-app-chrome-family="primary">
         {tabs.map((tab) => {
           const isActive = tabIndexForPath(location.pathname) === tabIndexForPath(tab.path);
           const Icon = tab.icon;
@@ -58,7 +58,7 @@ export function TabBar() {
               className={`tab-item touch-none ${isActive ? "active" : ""}`}
             >
               <div className="relative">
-                <Icon className="h-6 w-6" />
+                <Icon className="h-[1.375rem] w-[1.375rem]" />
                 {isActive && (
                   <motion.div
                     layoutId="tab-indicator"
@@ -67,7 +67,7 @@ export function TabBar() {
                   />
                 )}
               </div>
-              <span className="text-[10px] font-medium">{tab.label}</span>
+              <span className="text-[9px] font-medium leading-none">{tab.label}</span>
             </button>
           );
         })}

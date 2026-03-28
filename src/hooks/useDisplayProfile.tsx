@@ -101,7 +101,7 @@ const applyProfileTokens = (profile: DisplayProfile) => {
   root.style.setProperty("--display-profile-action-grid-min", tokens.actionGridMinWidth);
   root.style.setProperty("--display-profile-modal-max-width", tokens.modalMaxWidth);
   root.style.setProperty("--display-profile-modal-inset", tokens.modalInset);
-  root.style.setProperty("--app-header-top-inset", profile === "compact" ? "0px" : "env(safe-area-inset-top)");
+  root.style.setProperty("--app-header-top-inset", "0px");
 };
 
 const applyViewportTokens = () => {

@@ -63,21 +63,33 @@ describe("AppBar", () => {
     expect(screen.queryByTestId("connectivity-indicator")).not.toBeInTheDocument();
   });
 
-  it("applies top safe-area padding through the shared header inset variable", () => {
+  it("applies the shared zero-inset header contract", () => {
     const { container } = render(<AppBar title="Test" />);
 
     const header = container.querySelector("header");
-    expect(header).toHaveStyle({ paddingTop: "var(--app-header-top-inset, env(safe-area-inset-top))" });
+    expect(header).toHaveStyle({ paddingTop: "var(--safe-area-inset-top)" });
+    expect(header?.className).toContain("app-chrome-rail");
+    expect(header?.className).toContain("app-chrome-rail-top");
+    expect(header).toHaveAttribute("data-app-chrome-family", "primary");
   });
 
   it("renders custom leading content and child content", () => {
     render(
-      <AppBar title="Ignored" subtitle="Subtitle" leading={<div data-testid="leading">Lead</div>}>
+      <AppBar
+        title="Ignored"
+        subtitle="Subtitle"
+        leading={
+          <div data-testid="leading" className="flex min-h-11 items-center">
+            Lead
+          </div>
+        }
+      >
         <div data-testid="child">Extra</div>
       </AppBar>,
     );
 
     expect(screen.getByTestId("leading")).toBeInTheDocument();
+    expect(screen.getByTestId("leading").className).toContain("min-h-11");
     expect(screen.getByTestId("child")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Ignored" })).not.toBeInTheDocument();
   });

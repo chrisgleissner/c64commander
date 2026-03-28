@@ -477,3 +477,53 @@
   - `docs/img/app/home/sections/01-system-info-to-cpu-ram.png`
   - `docs/img/app/play/playlist/01-view-all.png`
 - These were the only `docs/img/app/**` outputs changed by the targeted screenshot suites; no full-corpus screenshot refresh was run.
+
+# Home Device Control Routing Worklog
+
+## 2026-03-28T13:05:00Z
+
+### Task start and classification
+
+- Classified this task as `CODE_CHANGE` and `UI_CHANGE` because it changes executable Home-page device control behavior and its interaction contract.
+- Preserved the existing in-progress plan and worklog sections already present on this branch instead of rewriting them.
+- Added a dedicated execution section to `PLANS.md` for Home device control routing, reboot sequencing, power-cycle transport removal, and menu toggle determinism.
+
+### Initial audit findings
+
+- Confirmed the Home page still directly decides between REST and Telnet in `src/pages/HomePage.tsx` instead of delegating to one authoritative control layer.
+- Confirmed the page routes `powerCycle` and `rebootKeepMemory` through `useTelnetActions`, while `useHomeActions` already contains the correct REST-backed full-reboot primitive via `clearRamAndReboot(api)`.
+- Confirmed `MachineControls` currently treats the primary Reboot button as Telnet-capable when an `onReboot` handler is provided, which is the current root cause for the incorrect reboot transport.
+- Confirmed the REST contract and contract tests already model `/v1/machine:menu_button` as a toggle by issuing it twice in succession, so the menu regression belongs in app orchestration rather than in the API contract.
+- Confirmed tracing support already exists for action start/end, REST request/response, and Telnet operations, and Diagnostics error logging can carry structured details through `addErrorLog` and `reportUserError`.
+
+### Next execution slice
+
+- Introduce `src/lib/deviceControl/deviceControl.ts` as the single control orchestrator.
+- Cut the Home page over to that layer for Menu, Reboot, Reboot (Keep RAM), and Power Cycle.
+- Add regression tests that fail on any Telnet routing for those actions and prove the required sequencing and 10-step menu toggle alternation.
+
+## 2026-03-28T19:58:00Z
+
+### Implementation completed
+
+- Added `src/lib/deviceControl/deviceControl.ts` as the authoritative Home device-control layer with explicit `toggleMenu()`, `rebootKeepRam()`, `rebootFull()`, and `powerCycle()` operations.
+- Routed Home quick actions and overflow actions through that layer in `src/pages/HomePage.tsx` and removed transport selection from `src/pages/home/components/MachineControls.tsx`.
+- Removed invalid Home Telnet metadata for reboot and power cycle in `src/lib/telnet/telnetTypes.ts` so those paths cannot be reintroduced implicitly.
+- Kept Telnet only for remaining Telnet-only actions such as Save REU.
+- Updated `docs/features-by-page.md` and `docs/ux-interactions.md` so operator docs now match the current routing behavior.
+
+### Regression coverage added
+
+- Added `tests/unit/lib/deviceControl/deviceControl.test.ts` to lock in 10-step menu-toggle alternation, overlapping toggle serialization, REST-only keep-RAM reboot, full-reboot sequencing, power-cycle fallback sequencing, and structured error logging.
+- Updated `tests/unit/pages/HomePage.ramActions.test.tsx` to prove Reboot, Power Cycle, and Reboot (Keep RAM) route through the device-control layer and do not hit Telnet.
+- Updated `tests/unit/pages/HomePage.test.tsx` to verify device-control menu-toggle failures surface structured user-error context.
+- Updated `tests/unit/pages/home/components/MachineControls.test.tsx` so the component only asserts callback wiring and no longer encodes transport decisions.
+
+### Validation and evidence
+
+- Focused Vitest validation passed: `npx vitest run tests/unit/lib/deviceControl/deviceControl.test.ts tests/unit/pages/home/components/MachineControls.test.tsx tests/unit/pages/HomePage.ramActions.test.tsx tests/unit/pages/HomePage.test.tsx` -> `4` files passed, `50` tests passed.
+- `npm run lint` passed. Existing warnings remain only in generated coverage artifacts under `android/coverage/**` and `c64scope/coverage/**`.
+- `npm run build` passed.
+- `npm run test` failed due an unrelated pre-existing assertion in `tests/unit/lib/native/safeArea.test.ts`: floating-point equality mismatch on Android inset rounding (`27.53333333333333` vs `27.533333333333335`).
+- `npm run test:coverage` failed for the same unrelated `safeArea` assertion before the coverage artifact was finalized.
+- No screenshot regeneration was run because the visible Home UI contract did not change; this task changed routing and diagnostics behavior, not rendered layout or labels.

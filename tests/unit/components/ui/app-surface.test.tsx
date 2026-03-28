@@ -69,7 +69,7 @@ describe("App surface primitives", () => {
     expect(dialog.className).toContain("rounded-t-[var(--interstitial-radius)]");
     expect(dialog.className).toContain("pb-[var(--app-sheet-bottom-clearance)]");
     expect(dialog.getAttribute("style")).toContain(
-      "--app-sheet-bottom-clearance: calc(5rem + env(safe-area-inset-bottom))",
+      "--app-sheet-bottom-clearance: calc(5rem + var(--safe-area-inset-bottom))",
     );
     expect(dialog.getAttribute("style")).toContain(`top: ${resolveAppSheetTopClearancePx()}px`);
     expect(dialog.getAttribute("style")).toContain("z-index: 210");
@@ -190,6 +190,24 @@ describe("App surface primitives", () => {
     expect(actionsRail).toContainElement(screen.getByRole("button", { name: "Inspect" }));
     expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
     expect(screen.getByText("Header extra copy")).toBeVisible();
+  });
+
+  it("omits the header actions rail when both actions and close chrome are absent", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    renderWithProviders(
+      <AppSheet open>
+        <AppSheetContent showClose={false}>
+          <AppSheetHeader hideClose>
+            <AppSheetTitle>Diagnostics</AppSheetTitle>
+          </AppSheetHeader>
+        </AppSheetContent>
+      </AppSheet>,
+    );
+
+    expect(document.querySelector('[data-interstitial-header-actions="true"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
   });
 
   it("focuses the opened app sheet instead of the close control", async () => {

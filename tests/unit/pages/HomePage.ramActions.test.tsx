@@ -16,6 +16,10 @@ const {
   reportUserErrorSpy,
   clearRamAndRebootSpy,
   executeTelnetActionSpy,
+  rebootFullSpy,
+  rebootKeepRamSpy,
+  powerCycleSpy,
+  toggleMenuSpy,
   selectRamDumpFolderSpy,
   saveRamDumpFolderConfigSpy,
   createSnapshotSpy,
@@ -25,11 +29,16 @@ const {
   snapshotEntryToBytesSpy,
   getCurrentPlaybackSnapshotLabelSpy,
   telnetState,
+  deviceControlErrorState,
 } = vi.hoisted(() => ({
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
   clearRamAndRebootSpy: vi.fn(),
   executeTelnetActionSpy: vi.fn(),
+  rebootFullSpy: vi.fn(),
+  rebootKeepRamSpy: vi.fn(),
+  powerCycleSpy: vi.fn(),
+  toggleMenuSpy: vi.fn(),
   selectRamDumpFolderSpy: vi.fn(),
   saveRamDumpFolderConfigSpy: vi.fn(),
   createSnapshotSpy: vi.fn(),
@@ -42,6 +51,10 @@ const {
     isBusy: false,
     activeActionId: null as string | null,
     isAvailable: true,
+  },
+  deviceControlErrorState: {
+    isDeviceControlError: (error: unknown) =>
+      error instanceof Error && "operation" in error && "transport" in error && "endpoint" in error,
   },
 }));
 
@@ -236,6 +249,38 @@ vi.mock("@/hooks/useTelnetActions", () => ({
   }),
 }));
 
+vi.mock("@/lib/deviceControl/deviceControl", () => ({
+  useDeviceControl: () => ({
+    toggleMenu: toggleMenuSpy,
+    rebootKeepRam: rebootKeepRamSpy,
+    rebootFull: rebootFullSpy,
+    powerCycle: powerCycleSpy,
+    resetMenuState: vi.fn(),
+    getMenuState: vi.fn().mockReturnValue(false),
+    describePowerCycleFallback: vi
+      .fn()
+      .mockReturnValue("PUT /v1/machine:pause -> PUT /v1/machine:writemem -> PUT /v1/machine:reboot"),
+  }),
+  isDeviceControlError: deviceControlErrorState.isDeviceControlError,
+}));
+
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuContent: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+    <div {...props}>{children}</div>
+  ),
+  DropdownMenuItem: ({
+    children,
+    onSelect,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { onSelect?: () => void }) => (
+    <button type="button" onClick={onSelect} {...props}>
+      {children}
+    </button>
+  ),
+}));
+
 describe("HomePage RAM actions", () => {
   vi.setConfig({ testTimeout: 15000 });
 
@@ -246,6 +291,34 @@ describe("HomePage RAM actions", () => {
     (globalThis as any).__BUILD_TIME__ = "";
     clearRamAndRebootSpy.mockResolvedValue(undefined);
     executeTelnetActionSpy.mockResolvedValue(undefined);
+    rebootFullSpy.mockResolvedValue({
+      operation: "rebootFull",
+      transport: "REST",
+      endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
+      response: { errors: [] },
+      menuOpen: false,
+    });
+    rebootKeepRamSpy.mockResolvedValue({
+      operation: "rebootKeepRam",
+      transport: "REST",
+      endpoint: "PUT /v1/machine:reboot",
+      response: { errors: [] },
+      menuOpen: false,
+    });
+    powerCycleSpy.mockResolvedValue({
+      operation: "powerCycle",
+      transport: "REST_FALLBACK_FULL_REBOOT",
+      endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
+      response: { errors: [], fallback: true },
+      menuOpen: false,
+    });
+    toggleMenuSpy.mockResolvedValue({
+      operation: "toggleMenu",
+      transport: "REST",
+      endpoint: "PUT /v1/machine:menu_button",
+      response: { errors: [] },
+      menuOpen: true,
+    });
     createSnapshotSpy.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
     getCurrentPlaybackSnapshotLabelSpy.mockReturnValue(undefined);
     loadMemoryRangesSpy.mockResolvedValue(undefined);
@@ -259,10 +332,16 @@ describe("HomePage RAM actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^reboot$/i }));
 
-    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"));
-    expect(toastSpy).toHaveBeenCalledWith({
-      title: "Machine rebooting",
-    });
+    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("rebootClearMemory");
+    expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+    await waitFor(
+      () =>
+        expect(toastSpy).toHaveBeenCalledWith({
+          title: "Machine rebooting",
+        }),
+      { timeout: 5000 },
+    );
   }, 15000);
 
   it("disables reboot while a telnet action is already busy", () => {
@@ -275,6 +354,28 @@ describe("HomePage RAM actions", () => {
     fireEvent.click(rebootButton);
 
     expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+    expect(rebootFullSpy).not.toHaveBeenCalled();
+  });
+
+  it("runs power cycle through the device control layer without telnet", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole("button", { name: /^power cycle$/i }));
+
+    await waitFor(() => expect(powerCycleSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("powerCycle");
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Power cycled" }), { timeout: 5000 });
+  });
+
+  it("runs keep-ram reboot from the overflow menu without telnet", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootKeepMemory"));
+
+    await waitFor(() => expect(rebootKeepRamSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("rebootKeepMemory");
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Machine rebooting" }), { timeout: 5000 });
   });
 
   it("opens Save RAM dialog when Save RAM button is clicked", async () => {

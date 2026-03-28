@@ -17,7 +17,7 @@ import {
 } from "../../stream/index.js";
 import { discoverDeviceMirror } from "../../testDataDiscovery.js";
 import { DroidmindClient } from "../droidmindClient.js";
-import { parseBoundsCenter, parseUiNodes } from "../appFirstUi.js";
+import { findVisibleTextContaining, parseBoundsCenter, parseUiNodes } from "../appFirstUi.js";
 import {
   ensureDeviceUnlocked,
   launchAppForeground,
@@ -25,6 +25,7 @@ import {
   tapByResourceId,
   tapByResourceIdOrLabel,
   tapByText,
+  tapByTextContaining,
 } from "../appFirstPrimitives.js";
 import {
   chooseSource,
@@ -48,6 +49,20 @@ const CAPTURE_PRE_ROLL_MS = 1200;
 const MUTE_CAPTURE_DURATION_MS = 9000;
 const UNMUTE_CAPTURE_DURATION_MS = 8500;
 const C64U_SOURCE_LABELS = ["C64U", "C64 Ultimate", "Commodore 64 Ultimate"] as const;
+const HVSC_SOURCE_LABELS = ["HVSC"] as const;
+const DEFAULT_HVSC_TARGET_PATH = "/DEMOS/0-9/10_Orbyte.sid";
+const HVSC_ACTION_TIMEOUT_MS = 90_000;
+const HVSC_STAGE_POLL_DELAY_MS = 1_000;
+const HVSC_STAGE_STALL_LIMIT = 120;
+const LABEL_REVEAL_SWIPE_ATTEMPTS = 2;
+
+type HvscWorkflowMode = "cold" | "warm";
+
+type HvscSelectionTarget = {
+  targetPath: string;
+  folderSegments: string[];
+  trackLabel: string;
+};
 
 type PlaybackTargets = {
   sourceSegments: string[];
@@ -106,6 +121,355 @@ async function maybeClearPlaylist(client: DroidmindClient, serial: string): Prom
   const cleared = await tapByText(client, serial, "Clear playlist");
   if (cleared) {
     await new Promise((resolve) => setTimeout(resolve, 600));
+  }
+}
+
+function resolveHvscSelectionTarget(): HvscSelectionTarget {
+  const configuredPath = (process.env["HVSC_HIL_TARGET_PATH"] ?? DEFAULT_HVSC_TARGET_PATH).trim();
+  const normalized = configuredPath.startsWith("/") ? configuredPath : `/${configuredPath}`;
+  const segments = normalized.split("/").filter((segment) => segment.length > 0);
+  if (segments.length < 2) {
+    throw new Error(
+      `HVSC target path must include at least one folder and one track file. Received '${configuredPath}'.`,
+    );
+  }
+  return {
+    targetPath: normalized,
+    folderSegments: segments.slice(0, -1),
+    trackLabel: segments.at(-1)!,
+  };
+}
+
+async function waitForUiTextContaining(
+  serial: string,
+  expectedTexts: readonly string[],
+  retries: number,
+  delayMs: number,
+): Promise<string | null> {
+  const normalizedTexts = expectedTexts.map((text) => text.trim().toLowerCase());
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    const xml = await dumpUiHierarchy(serial);
+    const nodes = parseUiNodes(xml);
+    for (const expected of normalizedTexts) {
+      const match = findVisibleTextContaining(nodes, expected);
+      if (match) {
+        return match.text || match.contentDesc;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
+}
+
+export async function tapVisibleText(
+  client: DroidmindClient,
+  serial: string,
+  labels: readonly string[],
+): Promise<string> {
+  for (let attempt = 0; attempt <= LABEL_REVEAL_SWIPE_ATTEMPTS; attempt += 1) {
+    for (const label of labels) {
+      if ((await tapByText(client, serial, label)) || (await tapByTextContaining(client, serial, label))) {
+        return label;
+      }
+    }
+
+    if (attempt < LABEL_REVEAL_SWIPE_ATTEMPTS) {
+      await client.swipe(serial, 540, 1750, 540, 950, 260);
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+  }
+
+  throw new Error(`Could not tap any visible label from: ${labels.join(", ")}`);
+}
+
+async function runHvscLifecycle(
+  client: DroidmindClient,
+  serial: string,
+  mode: HvscWorkflowMode,
+): Promise<{
+  actionLabel: string;
+  sawDownloadPhase: boolean;
+  terminalLabel: string | null;
+}> {
+  const actionLabel =
+    mode === "cold"
+      ? await tapVisibleText(client, serial, ["Download HVSC"])
+      : await tapVisibleText(client, serial, ["Ingest HVSC"]);
+
+  const deadline = Date.now() + HVSC_ACTION_TIMEOUT_MS;
+  let sawDownloadPhase = false;
+  let stallCount = 0;
+  let lastObserved = "";
+
+  while (Date.now() < deadline) {
+    const observed =
+      (await waitForUiTextContaining(
+        serial,
+        [
+          "HVSC downloaded successfully",
+          "Ready",
+          "Downloading",
+          "Extracting",
+          "Indexing",
+          "Cancelled",
+          "HVSC download failed",
+        ],
+        1,
+        1,
+      )) ?? "";
+
+    if (/downloading/i.test(observed)) {
+      sawDownloadPhase = true;
+    }
+    if (observed && observed !== lastObserved) {
+      lastObserved = observed;
+      stallCount = 0;
+    } else {
+      stallCount += 1;
+    }
+
+    if (/ready|downloaded successfully/i.test(observed)) {
+      return { actionLabel, sawDownloadPhase, terminalLabel: observed };
+    }
+    if (/failed|cancelled/i.test(observed)) {
+      throw new Error(`HVSC ${mode} lifecycle ended in terminal state '${observed}'.`);
+    }
+    if (stallCount >= HVSC_STAGE_STALL_LIMIT) {
+      throw new Error(`HVSC ${mode} lifecycle stalled without visible progress for 120 seconds.`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, HVSC_STAGE_POLL_DELAY_MS));
+  }
+
+  throw new Error(`HVSC ${mode} lifecycle exceeded ${HVSC_ACTION_TIMEOUT_MS} ms.`);
+}
+
+async function runHvscPlaylistPlayback(
+  client: DroidmindClient,
+  ctx: Parameters<ValidationCase["run"]>[0],
+  mode: HvscWorkflowMode,
+): Promise<{
+  target: HvscSelectionTarget;
+  currentTrack: string;
+  audioCapture: Awaited<ReturnType<typeof captureAndAnalyzeStream>>;
+  logcat: { path: string; text: string };
+  playbackScreenshotPath: string;
+  lifecycle: { actionLabel: string; sawDownloadPhase: boolean; terminalLabel: string | null };
+}> {
+  const target = resolveHvscSelectionTarget();
+  await launchAppForeground(client, ctx.serial);
+  await navigateToRoute(client, ctx.serial, "/play");
+  await maybeClearPlaylist(client, ctx.serial);
+
+  const lifecycle = await runHvscLifecycle(client, ctx.serial, mode);
+
+  await openAddItemsDialog(client, ctx.serial);
+  await chooseSource(client, ctx.serial, HVSC_SOURCE_LABELS);
+  await openPathSegments(client, ctx.serial, target.folderSegments);
+  await tapCheckboxForText(client, ctx.serial, target.trackLabel);
+  await confirmAddItems(client, ctx.serial);
+  await tapByResourceId(client, ctx.serial, "playlist-play");
+
+  const currentTrack = await waitForTrackLabel(ctx.serial, target.trackLabel, [target.trackLabel], 12, 800);
+  const playbackScreenshotPath = path.join(ctx.artifactDir, `af-hvsc-${mode}-playback.png`);
+  await client.screenshotToFile(ctx.serial, playbackScreenshotPath);
+  const audioCapture = await captureAndAnalyzeStream({
+    streamType: "audio",
+    c64uHost: ctx.c64uHost,
+    artifactDir: path.join(ctx.artifactDir, `hvsc-${mode}-audio`),
+    durationMs: 2500,
+  });
+  const logcat = await capturePlaybackLogcat(ctx.serial, ctx.artifactDir, `hvsc-${mode}-logcat.txt`);
+
+  return {
+    target,
+    currentTrack,
+    audioCapture,
+    logcat,
+    playbackScreenshotPath,
+    lifecycle,
+  };
+}
+
+async function runHvscWorkflowCase(
+  ctx: Parameters<ValidationCase["run"]>[0],
+  mode: HvscWorkflowMode,
+): Promise<ReturnType<ValidationCase["run"]>> {
+  const trace = {
+    routeDiscovery: ["/play"],
+    decisionLog: [
+      `${ts()} Decision: execute the HVSC ${mode} workflow through the Play route only`,
+      `${ts()} Decision: use bounded UI polling for download/ingest progress and fail on 120s stalls`,
+      `${ts()} Decision: browse the HVSC source, add one selected SID to the playlist, then start playback`,
+      `${ts()} Decision: correlate the selected track with current-track UI, action timeline metadata, logcat, and C64U audio analysis`,
+    ],
+    safetyBudget: `bounded-hvsc-${mode}-workflow`,
+    oracleSelection: [
+      "UI: HVSC progress states, selected track row, and current-track label",
+      "Diagnostics and logs: case timeline metadata plus logcat around playback",
+      "A/V signal: C64U audio packets with RMS >= 0.005",
+    ],
+    recoveryActions: [] as string[],
+  };
+
+  const droidmind = new DroidmindClient();
+
+  try {
+    await droidmind.connect();
+    const playback = await runHvscPlaylistPlayback(droidmind, ctx, mode);
+    const audioAnalysis = requireAudioFeatures(playback.audioCapture.analysis, `hvsc ${mode} workflow`);
+    const rms = Number(audioAnalysis.rms ?? 0);
+    const packetCount = Number(audioAnalysis.stats?.packetCount ?? 0);
+    const logcatMatchesSelection =
+      playback.logcat.text.includes(playback.target.targetPath) ||
+      playback.logcat.text.includes(playback.target.trackLabel);
+    const downloadExpectationPassed =
+      mode === "cold" ? playback.lifecycle.sawDownloadPhase : !playback.lifecycle.sawDownloadPhase;
+
+    await ctx.store.recordStep({
+      runId: ctx.runId,
+      stepId: "step-01",
+      route: "/play",
+      featureArea: "Play",
+      action: `hvsc_${mode}_download_or_ingest`,
+      peerServer: "mobile_controller",
+      primaryOracle: "UI",
+      fallbackOracle: "Diagnostics and logs",
+      notes: `action=${playback.lifecycle.actionLabel}; terminal=${playback.lifecycle.terminalLabel ?? "<none>"}; sawDownload=${playback.lifecycle.sawDownloadPhase}`,
+    });
+
+    await ctx.store.recordStep({
+      runId: ctx.runId,
+      stepId: "step-02",
+      route: "/play",
+      featureArea: "Play",
+      action: `hvsc_${mode}_browse_add_and_play`,
+      peerServer: "mobile_controller",
+      primaryOracle: "UI",
+      fallbackOracle: "A/V signal",
+      notes: `targetPath=${playback.target.targetPath}; currentTrack=${playback.currentTrack}`,
+    });
+
+    await ctx.store.attachEvidence({
+      runId: ctx.runId,
+      evidenceId: `ev-af-hvsc-${mode}-screen`,
+      stepId: "step-02",
+      evidenceType: "screenshot",
+      summary: `Play page after HVSC ${mode} playback start`,
+      path: playback.playbackScreenshotPath,
+      metadata: {
+        targetPath: playback.target.targetPath,
+        trackLabel: playback.target.trackLabel,
+        currentTrack: playback.currentTrack,
+      },
+    });
+    await ctx.store.attachEvidence({
+      runId: ctx.runId,
+      evidenceId: `ev-af-hvsc-${mode}-logcat`,
+      stepId: "step-02",
+      evidenceType: "logcat",
+      summary: `Logcat around HVSC ${mode} playback`,
+      path: playback.logcat.path,
+      metadata: {
+        targetPath: playback.target.targetPath,
+        trackLabel: playback.target.trackLabel,
+        logcatMatchesSelection,
+      },
+    });
+    await ctx.store.attachEvidence({
+      runId: ctx.runId,
+      evidenceId: `ev-af-hvsc-${mode}-audio`,
+      stepId: "step-02",
+      evidenceType: "signal_capture",
+      summary: `Audio capture for HVSC ${mode} playback`,
+      path: playback.audioCapture.analysisPath,
+      metadata: {
+        packetsPath: playback.audioCapture.packetsPath,
+        rms,
+        packetCount,
+        minRms: AUDIO_RMS_THRESHOLD,
+      },
+    });
+
+    await ctx.store.recordAssertion({
+      runId: ctx.runId,
+      assertionId: "assert-01",
+      title:
+        mode === "cold"
+          ? "Cold HVSC workflow visibly enters the download phase before playback"
+          : "Warm HVSC workflow reuses cache without re-entering the download phase",
+      oracleClass: "UI",
+      passed: downloadExpectationPassed,
+      details: {
+        mode,
+        sawDownloadPhase: playback.lifecycle.sawDownloadPhase,
+        terminalLabel: playback.lifecycle.terminalLabel,
+      },
+    });
+    await ctx.store.recordAssertion({
+      runId: ctx.runId,
+      assertionId: "assert-02",
+      title: "Selected HVSC item becomes the current track after playback starts",
+      oracleClass: "UI",
+      passed: playback.currentTrack === playback.target.trackLabel,
+      details: {
+        targetPath: playback.target.targetPath,
+        expectedTrack: playback.target.trackLabel,
+        currentTrack: playback.currentTrack,
+      },
+    });
+    await ctx.store.recordAssertion({
+      runId: ctx.runId,
+      assertionId: "assert-03",
+      title: "Playback log capture preserves track-correlated metadata for the selected HVSC item",
+      oracleClass: "Diagnostics and logs",
+      passed: logcatMatchesSelection,
+      details: {
+        targetPath: playback.target.targetPath,
+        trackLabel: playback.target.trackLabel,
+        matched: logcatMatchesSelection,
+      },
+    });
+    await ctx.store.recordAssertion({
+      runId: ctx.runId,
+      assertionId: "assert-04",
+      title: "HVSC playback emits non-silent C64U audio",
+      oracleClass: "A/V signal",
+      passed: packetCount > 0 && rms >= AUDIO_RMS_THRESHOLD,
+      details: {
+        packetCount,
+        rms,
+        minRms: AUDIO_RMS_THRESHOLD,
+      },
+    });
+
+    trace.decisionLog.push(
+      `${ts()} Observed: track='${playback.currentTrack}' packets=${packetCount} rms=${rms.toFixed(4)} logMatch=${logcatMatchesSelection}`,
+    );
+
+    return {
+      assertions: [
+        { oracleClass: "UI", passed: downloadExpectationPassed, details: { mode } },
+        {
+          oracleClass: "UI",
+          passed: playback.currentTrack === playback.target.trackLabel,
+          details: { expectedTrack: playback.target.trackLabel, currentTrack: playback.currentTrack },
+        },
+        {
+          oracleClass: "Diagnostics and logs",
+          passed: logcatMatchesSelection,
+          details: { matched: logcatMatchesSelection },
+        },
+        {
+          oracleClass: "A/V signal",
+          passed: packetCount > 0 && rms >= AUDIO_RMS_THRESHOLD,
+          details: { packetCount, rms },
+        },
+      ],
+      explorationTrace: trace,
+    };
+  } finally {
+    await droidmind.close();
   }
 }
 
@@ -894,5 +1258,37 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
     } finally {
       await droidmind.close();
     }
+  },
+};
+
+export const appFirstHvscColdWorkflow: ValidationCase = {
+  id: "AF-012",
+  name: "App-first HVSC cold workflow with playback audio proof",
+  caseId: "AF-HVSC-DOWNLOAD-PLAY-001",
+  featureArea: "Play",
+  route: "/play",
+  safetyClass: "guarded-mutation",
+  validationTrack: "product",
+  expectedOutcome: "pass",
+  oracleClasses: ["UI", "Diagnostics and logs", "A/V signal"],
+
+  async run(ctx) {
+    return runHvscWorkflowCase(ctx, "cold");
+  },
+};
+
+export const appFirstHvscWarmWorkflow: ValidationCase = {
+  id: "AF-013",
+  name: "App-first HVSC cache-reuse workflow with playback audio proof",
+  caseId: "AF-HVSC-CACHE-PLAY-001",
+  featureArea: "Play",
+  route: "/play",
+  safetyClass: "guarded-mutation",
+  validationTrack: "product",
+  expectedOutcome: "pass",
+  oracleClasses: ["UI", "Diagnostics and logs", "A/V signal"],
+
+  async run(ctx) {
+    return runHvscWorkflowCase(ctx, "warm");
   },
 };

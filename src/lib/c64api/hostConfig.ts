@@ -10,6 +10,7 @@ import { addLog } from "@/lib/logging";
 
 export const DEFAULT_BASE_URL = "http://c64u";
 export const DEFAULT_DEVICE_HOST = "c64u";
+export const DEFAULT_HTTP_PORT = 80;
 export const DEFAULT_PROXY_URL = "http://127.0.0.1:8787";
 export const WEB_PROXY_PATH = "/api/rest";
 
@@ -35,6 +36,86 @@ export const normalizeDeviceHost = (input?: string) => {
   const sanitized = sanitizeHostInput(input);
   return sanitized || DEFAULT_DEVICE_HOST;
 };
+
+const parsePort = (value: string): number | null => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) return null;
+  return parsed;
+};
+
+const splitNormalizedDeviceHost = (deviceHost?: string) => {
+  const normalized = normalizeDeviceHost(deviceHost);
+
+  if (normalized.startsWith("[")) {
+    const closeBracketIndex = normalized.indexOf("]");
+    if (closeBracketIndex !== -1) {
+      const host = normalized.slice(0, closeBracketIndex + 1);
+      const rest = normalized.slice(closeBracketIndex + 1);
+      if (rest.startsWith(":")) {
+        const httpPort = parsePort(rest.slice(1));
+        if (httpPort !== null) {
+          return { host, httpPort };
+        }
+      }
+      return { host, httpPort: null };
+    }
+  }
+
+  const colonCount = (normalized.match(/:/g) ?? []).length;
+  if (colonCount === 1) {
+    const separatorIndex = normalized.lastIndexOf(":");
+    const httpPort = parsePort(normalized.slice(separatorIndex + 1));
+    if (httpPort !== null) {
+      return {
+        host: normalized.slice(0, separatorIndex) || DEFAULT_DEVICE_HOST,
+        httpPort,
+      };
+    }
+  }
+
+  return { host: normalized, httpPort: null };
+};
+
+const formatHostWithOptionalPort = (host: string, httpPort: number | null | undefined) => {
+  const normalizedHost = normalizeDeviceHost(host);
+  if (httpPort === null || httpPort === undefined || httpPort === DEFAULT_HTTP_PORT) {
+    return normalizedHost;
+  }
+  const hostWithBrackets =
+    normalizedHost.includes(":") && !normalizedHost.startsWith("[") ? `[${normalizedHost}]` : normalizedHost;
+  return `${hostWithBrackets}:${httpPort}`;
+};
+
+export const stripPortFromDeviceHost = (deviceHost?: string) => splitNormalizedDeviceHost(deviceHost).host;
+
+export const getDeviceHostHttpPort = (deviceHost?: string, baseUrl?: string) => {
+  const { httpPort } = splitNormalizedDeviceHost(deviceHost);
+  if (httpPort !== null) {
+    return httpPort;
+  }
+
+  if (baseUrl) {
+    try {
+      const parsed = new URL(baseUrl);
+      if (parsed.port) {
+        return parsePort(parsed.port) ?? DEFAULT_HTTP_PORT;
+      }
+      if (parsed.protocol === "https:") {
+        return 443;
+      }
+    } catch (error) {
+      addLog("warn", "Failed to parse base URL for HTTP port detection", {
+        baseUrl,
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  return DEFAULT_HTTP_PORT;
+};
+
+export const buildDeviceHostWithHttpPort = (host?: string, httpPort?: number | null) =>
+  formatHostWithOptionalPort(host ?? DEFAULT_DEVICE_HOST, httpPort ?? null);
 
 export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
   if (!baseUrl) return DEFAULT_DEVICE_HOST;

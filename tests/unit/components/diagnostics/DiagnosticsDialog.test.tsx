@@ -15,6 +15,7 @@ import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
 import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
 
@@ -171,6 +172,7 @@ describe("DiagnosticsDialog", () => {
     vi.clearAllMocks();
     updateC64APIConfig(buildBaseUrlFromDeviceHost("c64u:80"), undefined, "c64u:80");
     setStoredFtpPort(21);
+    setStoredTelnetPort(23);
   });
 
   afterEach(() => {
@@ -288,6 +290,7 @@ describe("DiagnosticsDialog", () => {
     fireEvent.change(screen.getByTestId("connection-edit-host"), { target: { value: "ultimate.local" } });
     fireEvent.change(screen.getByTestId("connection-edit-http"), { target: { value: "8081" } });
     fireEvent.change(screen.getByTestId("connection-edit-ftp"), { target: { value: "2121" } });
+    fireEvent.change(screen.getByTestId("connection-edit-telnet"), { target: { value: "2323" } });
     fireEvent.click(screen.getByTestId("connection-edit-save"));
 
     await waitFor(() => {
@@ -296,6 +299,7 @@ describe("DiagnosticsDialog", () => {
 
     expect(localStorage.getItem("c64u_device_host")).toBe("ultimate.local:8081");
     expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
+    expect(localStorage.getItem("c64u_telnet_port")).toBe("2323");
   });
 
   it("keeps filter configuration separate from filter visibility", () => {

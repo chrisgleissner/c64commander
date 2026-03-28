@@ -30,7 +30,7 @@ export const APP_INTERSTITIAL_BACKDROP_CLASSNAME = "bg-black";
 const INTERSTITIAL_LAYER_Z_STEP = 20;
 const INTERSTITIAL_SURFACE_Z_OFFSET = 10;
 
-const APP_BAR_HEIGHT_FALLBACK_PX = 88;
+const APP_BAR_HEIGHT_FALLBACK_PX = 72;
 const MIN_CENTERED_OVERLAY_HEIGHT_PX = 160;
 export const MAX_HEADER_OVERLAP_DELTA_PX = 12;
 export const OVERLAY_SAFE_ZONE_GAP_PX = 8;
@@ -195,11 +195,12 @@ export const assertOverlayRespectsBadgeSafeZone = (topPxOrBounds: number | Overl
     );
   }
 
-  const badgeBounds = getBadgeBounds();
-  const minimumBorderTop = badgeBounds ? Math.round(badgeBounds.bottom - resolveHeaderOverlapDeltaPx()) : null;
-  if (minimumBorderTop !== null && topPx < minimumBorderTop) {
+  const minimumBadgeSafeTop = badgeCriticalBounds
+    ? Math.round(badgeCriticalBounds.bottom - resolveHeaderOverlapDeltaPx())
+    : null;
+  if (minimumBadgeSafeTop !== null && topPx < minimumBadgeSafeTop) {
     console.error(
-      `[c64] Badge border overlap exceeded: "${name}" top=${topPx}px is above the allowed border overlap line=${minimumBorderTop}px.`,
+      `[c64] Badge safe-zone overlap exceeded: "${name}" top=${topPx}px is above the allowed badge-safe line=${minimumBadgeSafeTop}px.`,
     );
   }
 };

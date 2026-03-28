@@ -9,6 +9,7 @@
 import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type { SourceEntry, SourceLocation } from "./types";
 import { SOURCE_LABELS } from "./sourceTerms";
 
@@ -58,12 +59,7 @@ const saveCache = (state: FtpCacheState) => {
 const buildCacheKey = (host: string, port: number | undefined, path: string) => `${host}:${port ?? ""}:${path || "/"}`;
 
 export const normalizeFtpHost = (host: string) => {
-  if (!host) return host;
-  if (host.startsWith("[")) {
-    const end = host.indexOf("]");
-    if (end !== -1) return host.slice(0, end + 1);
-  }
-  return host.split(":")[0] ?? host;
+  return stripPortFromDeviceHost(host);
 };
 
 const getCachedEntries = (key: string): SourceEntry[] | null => {

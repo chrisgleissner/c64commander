@@ -62,6 +62,8 @@ const defaultProps = {
   onSaveRam: vi.fn(),
   onLoadRam: vi.fn(),
   onPowerOff: vi.fn(),
+  onReboot: vi.fn(),
+  onToggleMenu: vi.fn(),
   onAction: vi.fn().mockImplementation((fn: () => Promise<void>) => fn()),
 };
 
@@ -71,7 +73,7 @@ describe("MachineControls", () => {
   });
 
   it("renders the canonical eight primary quick actions in order", () => {
-    render(<MachineControls {...defaultProps} telnetAvailable={true} />);
+    render(<MachineControls {...defaultProps} />);
 
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
     expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
@@ -88,32 +90,30 @@ describe("MachineControls", () => {
   });
 
   it("keeps the primary reboot action enabled without telnet and executes the REST reboot mutation", () => {
-    render(<MachineControls {...defaultProps} telnetAvailable={false} />);
+    render(<MachineControls {...defaultProps} />);
 
     fireEvent.click(screen.getByTestId("action-Reboot"));
 
-    expect(defaultProps.controls.reboot.mutateAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it("routes the primary reboot action through telnet when a telnet reboot handler is provided", () => {
-    const onReboot = vi.fn();
-
-    render(<MachineControls {...defaultProps} telnetAvailable={true} onReboot={onReboot} />);
-
-    fireEvent.click(screen.getByTestId("action-Reboot"));
-
-    expect(onReboot).toHaveBeenCalledTimes(1);
+    expect(defaultProps.onReboot).toHaveBeenCalledTimes(1);
     expect(defaultProps.controls.reboot.mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("disables Power Cycle when Telnet is unavailable or no handler is provided", () => {
-    render(<MachineControls {...defaultProps} telnetAvailable={true} />);
+  it("calls the provided menu toggle handler", () => {
+    render(<MachineControls {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId("action-Menu"));
+
+    expect(defaultProps.onToggleMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables Power Cycle when no handler is provided", () => {
+    render(<MachineControls {...defaultProps} />);
     expect(screen.getByTestId("home-power-cycle")).toBeDisabled();
   });
 
   it("renders and calls Power Cycle when a handler is provided", () => {
     const onPowerCycle = vi.fn();
-    render(<MachineControls {...defaultProps} telnetAvailable={true} onPowerCycle={onPowerCycle} />);
+    render(<MachineControls {...defaultProps} onPowerCycle={onPowerCycle} />);
     fireEvent.click(screen.getByTestId("home-power-cycle"));
     expect(onPowerCycle).toHaveBeenCalledTimes(1);
   });
@@ -125,7 +125,6 @@ describe("MachineControls", () => {
     render(
       <MachineControls
         {...defaultProps}
-        telnetAvailable={true}
         overflowActions={[
           { id: "rebootKeepMemory", label: "Reboot (Keep RAM)", onSelect: rebootKeepMemory },
           { id: "saveReuMemory", label: "Save REU", onSelect: saveReu },
@@ -144,7 +143,6 @@ describe("MachineControls", () => {
     render(
       <MachineControls
         {...defaultProps}
-        telnetAvailable={true}
         overflowActions={[{ id: "rebootKeepMemory", label: "Reboot (Keep RAM)", onSelect: vi.fn(), loading: true }]}
       />,
     );

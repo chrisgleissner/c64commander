@@ -380,6 +380,23 @@ describe("SettingsPage", () => {
     });
   }, 15000);
 
+  it("persists HTTP, FTP, and Telnet ports when saving connection settings", async () => {
+    vi.mocked(discoverConnection).mockResolvedValue(undefined);
+
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByLabelText(/http port/i), { target: { value: "8081" } });
+    fireEvent.change(screen.getByLabelText(/ftp port/i), { target: { value: "2121" } });
+    fireEvent.change(screen.getByLabelText(/telnet port/i), { target: { value: "2323" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("c64u:8081", undefined);
+      expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
+      expect(localStorage.getItem("c64u_telnet_port")).toBe("2323");
+    });
+  });
+
   it("orders core sections and places network timing under Device Safety", () => {
     renderSettingsPage();
 

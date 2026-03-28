@@ -35,7 +35,7 @@ describe("displayProfiles", () => {
       pageMaxWidth: "960px",
       actionGridMinWidth: "0px",
       isCompactDialog: false,
-      pagePaddingTop: "1.25rem",
+      pagePaddingTop: "0.75rem",
       rootFontSize: "16px",
     });
     expect(getDisplayProfileLayoutTokens("expanded")).toMatchObject({
@@ -43,7 +43,7 @@ describe("displayProfiles", () => {
       actionGridMinWidth: "9rem",
       pageMaxWidth: "1200px",
       isCompactDialog: false,
-      pagePaddingTop: "1.5rem",
+      pagePaddingTop: "0.875rem",
       rootFontSize: "17.5px",
     });
   });

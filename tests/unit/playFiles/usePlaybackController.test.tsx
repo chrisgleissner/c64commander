@@ -5,7 +5,7 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
 
 vi.mock("@/lib/c64api", () => ({
@@ -256,6 +256,48 @@ describe("usePlaybackController", () => {
         durationMs: 12_000,
       }),
       undefined,
+    );
+  });
+
+  it("logs structured playback request details for HVSC items before execution", async () => {
+    const hvscFile = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(4)),
+    };
+    const playlist = [
+      createPlaylistItem({
+        id: "hvsc-item-1",
+        category: "sid",
+        label: "demo.sid",
+        path: "/MUSICIANS/Test/demo.sid",
+        request: {
+          source: "hvsc",
+          path: "/MUSICIANS/Test/demo.sid",
+          file: hvscFile as any,
+          songNr: 2,
+        },
+        durationMs: 12_000,
+        subsongCount: 4,
+        sourceId: "hvsc-library",
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "info",
+      "Playback request started",
+      expect.objectContaining({
+        itemId: "hvsc-item-1",
+        label: "demo.sid",
+        category: "sid",
+        source: "hvsc",
+        sourceId: "hvsc-library",
+        path: "/MUSICIANS/Test/demo.sid",
+        songNr: 2,
+        durationMs: 12_000,
+      }),
     );
   });
 

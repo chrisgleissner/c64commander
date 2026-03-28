@@ -6,12 +6,35 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { tapByTextMock, tapByTextContainingMock } = vi.hoisted(() => ({
+  tapByTextMock: vi.fn(),
+  tapByTextContainingMock: vi.fn(),
+}));
+
+vi.mock("../src/validation/appFirstPrimitives.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/validation/appFirstPrimitives.js")>(
+    "../src/validation/appFirstPrimitives.js",
+  );
+  return {
+    ...actual,
+    tapByText: tapByTextMock,
+    tapByTextContaining: tapByTextContainingMock,
+  };
+});
+
 import {
   expectedMuteToggleLabel,
   hasVisibleButtonLabel,
   requireAudioFeatures,
+  tapVisibleText,
 } from "../src/validation/cases/exploratoryPlayback.js";
+
+beforeEach(() => {
+  tapByTextMock.mockReset();
+  tapByTextContainingMock.mockReset();
+});
 
 describe("exploratory playback audio analysis guard", () => {
   it("rejects non-audio analysis payloads before latency calculations", () => {
@@ -77,5 +100,19 @@ describe("exploratory playback audio analysis guard", () => {
 
     expect(hasVisibleButtonLabel(xml, "Unmute", "volume-mute")).toBe(false);
     expect(hasVisibleButtonLabel(xml, "Mute", "volume-mute")).toBe(true);
+  });
+
+  it("reveals off-screen HVSC controls with a bounded swipe before tapping", async () => {
+    tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    tapByTextContainingMock.mockResolvedValue(false);
+
+    const swipe = vi.fn(async () => undefined);
+    const client = { swipe } as unknown as Parameters<typeof tapVisibleText>[0];
+
+    await expect(tapVisibleText(client, "serial-1", ["Download HVSC"])).resolves.toBe("Download HVSC");
+
+    expect(swipe).toHaveBeenCalledTimes(1);
+    expect(swipe).toHaveBeenCalledWith("serial-1", 540, 1750, 540, 950, 260);
+    expect(tapByTextMock).toHaveBeenCalledTimes(2);
   });
 });

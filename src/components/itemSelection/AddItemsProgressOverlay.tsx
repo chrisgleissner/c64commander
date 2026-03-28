@@ -57,7 +57,7 @@ export const AddItemsProgressOverlay = ({
   const overlay = (
     <div
       className={cn(
-        "fixed inset-0 flex items-start justify-center px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
+        "fixed inset-0 flex items-start justify-center px-4 pb-[calc(1.5rem+var(--safe-area-inset-bottom))]",
         APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       )}
       data-interstitial-depth={layer?.depth ?? 1}
@@ -71,7 +71,7 @@ export const AddItemsProgressOverlay = ({
       <div
         className={cn(
           "w-full max-w-sm rounded-[var(--interstitial-radius)] border border-border bg-background px-5 py-4 shadow-[var(--interstitial-shadow)]",
-          "max-h-[calc(100dvh-3rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))]",
+          "max-h-[calc(100dvh-3rem-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))]",
         )}
         style={{ zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
       >

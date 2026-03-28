@@ -9,7 +9,9 @@
 package uk.gleissner.c64commander
 
 import android.app.ActivityManager
+import android.graphics.Color
 import android.os.Bundle
+import androidx.core.view.WindowCompat
 import com.getcapacitor.BridgeActivity
 import java.io.File
 
@@ -66,9 +68,13 @@ class MainActivity : BridgeActivity() {
     registerPlugin(FeatureFlagsPlugin::class.java)
     registerPlugin(FtpClientPlugin::class.java)
     registerPlugin(HvscIngestionPlugin::class.java)
+    registerPlugin(SafeAreaPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)
     super.onCreate(savedInstanceState)
+    WindowCompat.setDecorFitsSystemWindows(window, false)
+    window.statusBarColor = Color.TRANSPARENT
+    window.navigationBarColor = Color.TRANSPARENT
 
     val manager = getSystemService(ACTIVITY_SERVICE) as? ActivityManager
     val memoryClass = manager?.memoryClass

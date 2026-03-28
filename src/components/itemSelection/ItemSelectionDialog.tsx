@@ -328,8 +328,8 @@ export const ItemSelectionDialog = ({
   const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
   const footerPaddingClassName =
     profile === "compact"
-      ? "px-3 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]"
-      : "px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]";
+      ? "px-3 pt-1 pb-[calc(0.25rem+var(--safe-area-inset-bottom))]"
+      : "px-6 pt-4 pb-[calc(1rem+var(--safe-area-inset-bottom))]";
   const bodyPaddingClassName = profile === "compact" ? "px-3 py-1.5" : "px-6 py-4";
   const sourceContentClassName = profile === "compact" ? "space-y-2" : "space-y-3";
   const selectedSourceLabel = source

@@ -1141,10 +1141,7 @@ test.describe("App screenshots", () => {
       const dialogMedium = page.getByRole("dialog", { name: "Lighting Studio" });
       await expect(dialogMedium).toBeVisible();
 
-      await captureScreenshot(page, testInfo, "home/dialogs/05-lighting-studio-medium.png", {
-        borderPx: 6,
-        borderColor: { r: 255, g: 255, b: 255, alpha: 1 },
-      });
+      await captureScreenshot(page, testInfo, "home/dialogs/05-lighting-studio-medium.png");
 
       await page.getByTestId("lighting-profile-studio-neon").click();
       await page.getByTestId("lighting-select-surface-keyboard").click();

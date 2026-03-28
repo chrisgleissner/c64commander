@@ -72,6 +72,7 @@ describe("UnifiedHealthBadge", () => {
       const textContent = badge.textContent ?? "";
 
       expect(textContent).toContain("999+");
+      expect(textContent).toMatch(/C64U\s+\S+\s+999\+/);
       expect(textContent).not.toContain("1000");
       expect(textContent.match(/999\+/g)).toHaveLength(1);
 
@@ -89,7 +90,7 @@ describe("UnifiedHealthBadge", () => {
 
     expect(textContent).toContain("Degraded · 12 problems");
     expect(textContent.match(/12/g)).toHaveLength(1);
-    expect(badge.querySelectorAll("span")).toHaveLength(3);
+    expect(badge.querySelectorAll('[data-overlay-critical="badge"]')).toHaveLength(3);
   });
 
   it("keeps connectivity text neutral while the health signal stays colored", () => {
@@ -97,10 +98,11 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
-    const spans = badge.querySelectorAll("span");
+    const spans = badge.querySelectorAll('[data-overlay-critical="badge"]');
 
     expect(spans[0]?.className).toContain("text-foreground");
     expect(spans[1]?.className).toContain("text-amber-500");
+    expect(spans[1]?.className).toContain("h-[1em]");
     expect(spans[2]?.className).toContain("text-amber-500");
     expect(spans[3]?.className).toContain("text-foreground");
   });
@@ -111,15 +113,26 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.className).toContain("whitespace-nowrap");
     expect(badge.className).toContain("min-w-0");
     expect(badge.className).toContain("max-w-full");
     expect(badge.className).toContain("overflow-hidden");
     expect(badge.querySelectorAll('[data-overlay-critical="badge"]')).toHaveLength(4);
+    expect(badge.querySelector(".app-chrome-badge-surface")?.className).toContain("py-[0.3rem]");
+    expect(badge.querySelector(".app-chrome-badge-surface span")?.className).toContain("whitespace-nowrap");
+  });
 
-    const trailingSpan = badge.querySelectorAll("span")[3];
-    expect(trailingSpan?.className).toContain("min-w-0");
-    expect(trailingSpan?.className).toContain("truncate");
+  it("renders as a bordered chrome control while preserving the 44px hit target", () => {
+    currentProfile = "medium";
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    const surface = badge.querySelector(".app-chrome-badge-surface");
+
+    expect(badge.className).toContain("app-chrome-badge");
+    expect(badge.className).toContain("bg-transparent");
+    expect(badge.className).toContain("min-h-[44px]");
+    expect(surface?.className).toContain("app-chrome-badge-surface");
+    expect(surface?.className).toContain("px-2");
   });
 
   it("keeps the leading device label visible", () => {
@@ -132,7 +145,39 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     expect(badge).toHaveAttribute("data-connected-device", "U64E2");
-    expect(badge.querySelectorAll("span")[0]?.textContent).toBe("U64E2");
+    expect(badge.querySelectorAll('[data-overlay-critical="badge"]')[0]?.textContent).toBe("U64E2");
+  });
+
+  it("makes the healthy glyph optically larger than the degraded glyph", () => {
+    currentProfile = "medium";
+    (mockHealthState as { state: string }).state = "Healthy";
+    mockHealthState.problemCount = 0;
+    const { unmount } = render(<UnifiedHealthBadge />);
+
+    let glyph = screen.getByTestId("unified-health-badge").querySelectorAll('[data-overlay-critical="badge"]')[1];
+    expect(glyph?.className).toContain("scale-[1.42]");
+    expect(glyph?.className).toContain("translate-y-[-0.11em]");
+
+    unmount();
+
+    (mockHealthState as { state: string }).state = "Degraded";
+    mockHealthState.problemCount = 3;
+    render(<UnifiedHealthBadge />);
+
+    glyph = screen.getByTestId("unified-health-badge").querySelectorAll('[data-overlay-critical="badge"]')[1];
+    expect(glyph?.className).toContain("scale-100");
+    expect(glyph?.className).toContain("translate-y-[-0.03em]");
+  });
+
+  it("keeps the badge data contract stable when online device labeling is unavailable", () => {
+    currentProfile = "medium";
+    (mockHealthState as { state: string }).state = "Healthy";
+    mockHealthState.problemCount = 0;
+    mockHealthState.connectedDeviceLabel = null;
+    mockConnectionStatus.deviceInfo = { product: "Ultimate 64-II", errors: [] };
+    render(<UnifiedHealthBadge />);
+
+    expect(screen.getByTestId("unified-health-badge")).not.toHaveAttribute("data-connected-device");
   });
 
   it("renders offline and not-yet-connected special copy unchanged", () => {
@@ -141,7 +186,7 @@ describe("UnifiedHealthBadge", () => {
     currentProfile = "expanded";
     const { unmount } = render(<UnifiedHealthBadge />);
 
-    expect(screen.getByTestId("unified-health-badge").textContent).toContain("Offline◌Device not reachable");
+    expect(screen.getByTestId("unified-health-badge").textContent).toContain("Offline ◌ Device not reachable");
 
     unmount();
 
@@ -150,7 +195,7 @@ describe("UnifiedHealthBadge", () => {
     currentProfile = "medium";
     render(<UnifiedHealthBadge />);
 
-    expect(screen.getByTestId("unified-health-badge").textContent).toBe("Not connected○");
+    expect(screen.getByTestId("unified-health-badge").textContent).toBe("Not connected ○");
   });
 
   it("clicking the badge calls requestDiagnosticsOpen with 'header'", async () => {

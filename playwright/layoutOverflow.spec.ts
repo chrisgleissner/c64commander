@@ -17,7 +17,7 @@ import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { saveCoverageFromPage } from "./withCoverage";
 import { clickSourceSelectionButton } from "./sourceSelection";
 import { layoutTest, enforceDeviceTestMapping } from "./layoutTest";
-import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
+import { DISPLAY_PROFILE_VIEWPORT_SEQUENCE, DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { seedBadgeHealthTraceState } from "./visualSeeds";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -54,7 +54,7 @@ const expectDialogWithinViewport = async (page: Page, dialog: Locator) => {
     .toBe(true);
 };
 
-const applyDisplayProfileOverride = async (page: Page, profileId: "compact" | "medium") => {
+const applyDisplayProfileOverride = async (page: Page, profileId: keyof typeof DISPLAY_PROFILE_VIEWPORTS) => {
   const profile = DISPLAY_PROFILE_VIEWPORTS[profileId];
   await page.setViewportSize(profile.viewport);
   await page.addInitScript(
@@ -64,6 +64,26 @@ const applyDisplayProfileOverride = async (page: Page, profileId: "compact" | "m
     { override: profile.override },
   );
 };
+
+const waitForConnectedBadge = async (page: Page) => {
+  const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveAttribute("data-connection-state", /REAL_CONNECTED|DEMO_CONNECTED/, { timeout: 10000 });
+  return badge;
+};
+
+const readRect = async (locator: Locator) =>
+  locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    };
+  });
 
 const expectVerticalOverflowHandled = async (container: Locator) => {
   const metrics = await container.evaluate((el: HTMLElement) => {
@@ -371,6 +391,150 @@ test.describe("Layout overflow safeguards", () => {
         await snap(page, testInfo, `settings-header-badge-${profileId}`);
         await expectNoHorizontalOverflow(page);
       }
+    },
+  );
+
+  layoutTest(
+    "shared header stays dense across profiles and workflow sheets reuse the reclaimed top space @layout",
+    async ({ page }, testInfo) => {
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await applyDisplayProfileOverride(page, profileId);
+        await page.goto("/settings", { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(
+          (expected) => document.documentElement.dataset.displayProfile === expected,
+          DISPLAY_PROFILE_VIEWPORTS[profileId].expectedProfile,
+        );
+
+        const header = page.locator("header").first();
+        const headerRow = page.getByTestId("app-bar-row");
+        const titleZone = page.getByTestId("app-bar-title-zone");
+        const badge = page.getByTestId("unified-health-badge");
+        const scrollContainer = page.locator('main[data-page-scroll-container="true"]').first();
+        const tabBar = page.locator("nav.tab-bar").first();
+        const firstCard = page.locator("main .profile-card").first();
+
+        await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+        await expect(badge).toBeVisible();
+        await expect.poll(() => header.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("0px");
+
+        const chromeStyles = await Promise.all([
+          header.evaluate((element) => ({
+            backgroundColor: getComputedStyle(element).backgroundColor,
+            borderBottomColor: getComputedStyle(element).borderBottomColor,
+          })),
+          tabBar.evaluate((element) => ({
+            backgroundColor: getComputedStyle(element).backgroundColor,
+            borderTopColor: getComputedStyle(element).borderTopColor,
+          })),
+        ]);
+
+        const [headerBox, headerRowBox, titleBox, badgeBox, tabBarBox, firstCardBox] = await Promise.all([
+          readRect(header),
+          readRect(headerRow),
+          readRect(titleZone),
+          readRect(badge),
+          readRect(tabBar),
+          readRect(firstCard),
+        ]);
+
+        expect(
+          chromeStyles[0].backgroundColor,
+          `${profileId} header/footer rails should share one surface family`,
+        ).toBe(chromeStyles[1].backgroundColor);
+        expect(
+          chromeStyles[0].borderBottomColor,
+          `${profileId} header/footer rails should share one divider tone`,
+        ).toBe(chromeStyles[1].borderTopColor);
+        expect(badgeBox.top, `${profileId} badge should stay inside the header`).toBeGreaterThanOrEqual(
+          headerBox.top - 1,
+        );
+        expect(badgeBox.bottom, `${profileId} badge should stay inside the header`).toBeLessThanOrEqual(
+          headerBox.bottom + 1,
+        );
+        expect(titleBox.bottom, `${profileId} title should stay inside the shared header row`).toBeLessThanOrEqual(
+          headerRowBox.bottom + 1,
+        );
+        expect(
+          Math.abs(headerBox.height - tabBarBox.height),
+          `${profileId} header rail should stay visually balanced against the footer rail`,
+        ).toBeLessThanOrEqual(20);
+        expect(headerBox.height, `${profileId} header rail should not exceed the footer rail`).toBeLessThanOrEqual(
+          tabBarBox.height,
+        );
+        expect(
+          firstCardBox.top - headerBox.bottom,
+          `${profileId} first content block should start close to the header`,
+        ).toBeGreaterThanOrEqual(7);
+        expect(
+          firstCardBox.top - headerBox.bottom,
+          `${profileId} first content block should avoid a detached blank band`,
+        ).toBeLessThanOrEqual(16);
+
+        await scrollContainer.evaluate((element) => {
+          if (!(element instanceof HTMLElement)) return;
+          element.scrollTop = element.scrollHeight;
+        });
+        await expect(badge).toBeVisible();
+
+        const scrolledBadgeBox = await readRect(badge);
+        expect(
+          scrolledBadgeBox.bottom,
+          `${profileId} badge should remain in header chrome after scroll`,
+        ).toBeLessThanOrEqual(headerBox.bottom + 1);
+
+        await snap(page, testInfo, `dense-header-${profileId}`);
+        await expectNoHorizontalOverflow(page);
+      }
+
+      await applyDisplayProfileOverride(page, "medium");
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(
+        (expected) => document.documentElement.dataset.displayProfile === expected,
+        DISPLAY_PROFILE_VIEWPORTS.medium.expectedProfile,
+      );
+      await waitForConnectedBadge(page);
+
+      const titleZone = page.getByTestId("app-bar-title-zone");
+      const badge = page.getByTestId("unified-health-badge");
+      await page.getByTestId("home-lighting-studio").click();
+
+      const lightingSheet = page.getByTestId("lighting-studio-sheet");
+      await expect(lightingSheet).toBeVisible();
+
+      const [titleBox, badgeCriticalBox, badgeBox, sheetBox] = await Promise.all([
+        readRect(titleZone),
+        badge.evaluate((element) => {
+          const nodes = Array.from(element.querySelectorAll<HTMLElement>('[data-overlay-critical="badge"]'));
+          const rects = nodes.map((node) => node.getBoundingClientRect());
+          return rects.reduce(
+            (combined, rect) => ({
+              top: Math.min(combined.top, rect.top),
+              right: Math.max(combined.right, rect.right),
+              bottom: Math.max(combined.bottom, rect.bottom),
+              left: Math.min(combined.left, rect.left),
+            }),
+            {
+              top: rects[0]?.top ?? 0,
+              right: rects[0]?.right ?? 0,
+              bottom: rects[0]?.bottom ?? 0,
+              left: rects[0]?.left ?? 0,
+            },
+          );
+        }),
+        readRect(badge),
+        readRect(lightingSheet),
+      ]);
+
+      expect(sheetBox.top, "workflow sheet should stop below the title safe zone").toBeGreaterThanOrEqual(
+        titleBox.bottom - 1,
+      );
+      expect(sheetBox.top, "workflow sheet should stop below the badge critical safe zone").toBeGreaterThanOrEqual(
+        badgeCriticalBox.bottom - 1,
+      );
+      expect(sheetBox.top, "workflow sheet should not cover the badge body").toBeGreaterThanOrEqual(badgeBox.top - 1);
+
+      await snap(page, testInfo, "dense-header-lighting-sheet");
+      await expectNoHorizontalOverflow(page);
     },
   );
 

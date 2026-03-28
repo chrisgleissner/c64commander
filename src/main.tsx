@@ -17,6 +17,7 @@ import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { addErrorLog } from "./lib/logging";
+import { installNativeSafeAreaSync } from "./lib/native/safeArea";
 import "./index.css";
 
 const loadFonts = () => {
@@ -79,5 +80,6 @@ const startDeferredStartupBootstrap = () => {
 
 initializeRuntimeMotionMode();
 registerServiceWorker();
+installNativeSafeAreaSync();
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

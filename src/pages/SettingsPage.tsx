@@ -24,7 +24,8 @@ import {
   Globe,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
-import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { C64_DEFAULTS, resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
@@ -122,6 +123,7 @@ import {
 } from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import { validateDeviceHost } from "@/lib/validation/connectionValidation";
+import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -133,8 +135,14 @@ import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDispl
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { buildDefaultArchiveClientConfig, validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
 import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
+import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 type Theme = "light" | "dark" | "system";
+
+const isValidConnectionPort = (value: string) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
+};
 
 export default function SettingsPage() {
   const { profile } = useDisplayProfile();
@@ -167,9 +175,14 @@ export default function SettingsPage() {
   };
 
   const [passwordInput, setPasswordInput] = useState(password);
-  const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
+  const [deviceHostInput, setDeviceHostInput] = useState(() => stripPortFromDeviceHost(deviceHost));
+  const [httpPortInput, setHttpPortInput] = useState(() => String(getDeviceHostHttpPort(deviceHost, runtimeBaseUrl)));
+  const [ftpPortInput, setFtpPortInput] = useState(() => String(getStoredFtpPort()));
+  const [telnetPortInput, setTelnetPortInput] = useState(() => String(getStoredTelnetPort()));
   const [hostnameError, setHostnameError] = useState<string | null>(null);
-  const runtimeDeviceHost = getDeviceHostFromBaseUrl(runtimeBaseUrl);
+  const [connectionFieldError, setConnectionFieldError] = useState<string | null>(null);
+  const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
+  const runtimeHttpPort = getDeviceHostHttpPort(deviceHost, runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
@@ -256,11 +269,18 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (isDemoActive) {
-      setDeviceHostInput(resolveDeviceHostFromStorage());
+      const storedHost = resolveDeviceHostFromStorage();
+      setDeviceHostInput(stripPortFromDeviceHost(storedHost));
+      setHttpPortInput(String(getDeviceHostHttpPort(storedHost, runtimeBaseUrl)));
+      setFtpPortInput(String(getStoredFtpPort()));
+      setTelnetPortInput(String(getStoredTelnetPort()));
       return;
     }
-    setDeviceHostInput(deviceHost);
-  }, [deviceHost, isDemoActive]);
+    setDeviceHostInput(stripPortFromDeviceHost(deviceHost));
+    setHttpPortInput(String(getDeviceHostHttpPort(deviceHost, runtimeBaseUrl)));
+    setFtpPortInput(String(getStoredFtpPort()));
+    setTelnetPortInput(String(getStoredTelnetPort()));
+  }, [deviceHost, isDemoActive, runtimeBaseUrl]);
 
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
@@ -390,10 +410,22 @@ export default function SettingsPage() {
   const handleSaveConnection = trace(async function handleSaveConnection() {
     const hostError = validateDeviceHost(deviceHostInput);
     setHostnameError(hostError);
-    if (hostError) return;
+    const portError = !isValidConnectionPort(httpPortInput)
+      ? "HTTP port must be 1 to 65535."
+      : !isValidConnectionPort(ftpPortInput)
+        ? "FTP port must be 1 to 65535."
+        : !isValidConnectionPort(telnetPortInput)
+          ? "Telnet port must be 1 to 65535."
+          : null;
+    setConnectionFieldError(portError);
+    if (hostError || portError) return;
     setIsSaving(true);
     try {
-      updateConfig(deviceHostInput.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
+      const nextHost = stripPortFromDeviceHost(deviceHostInput.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+      const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(httpPortInput));
+      setStoredFtpPort(Number(ftpPortInput));
+      setStoredTelnetPort(Number(telnetPortInput));
+      updateConfig(nextDeviceHost, passwordInput || undefined);
       await discoverConnection("settings");
       toast({ title: "Connection settings saved" });
     } catch (error) {
@@ -690,8 +722,61 @@ export default function SettingsPage() {
                     </p>
                   ) : null}
                   <p className="text-xs text-muted-foreground">Hostname or IP from the C64 menu.</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="httpPort" className="text-xs text-muted-foreground">
+                        HTTP Port
+                      </Label>
+                      <Input
+                        id="httpPort"
+                        inputMode="numeric"
+                        value={httpPortInput}
+                        onChange={(e) => {
+                          setHttpPortInput(e.target.value.replace(/[^0-9]/g, ""));
+                          if (connectionFieldError) setConnectionFieldError(null);
+                        }}
+                        className="font-sans"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="ftpPort" className="text-xs text-muted-foreground">
+                        FTP Port
+                      </Label>
+                      <Input
+                        id="ftpPort"
+                        inputMode="numeric"
+                        value={ftpPortInput}
+                        onChange={(e) => {
+                          setFtpPortInput(e.target.value.replace(/[^0-9]/g, ""));
+                          if (connectionFieldError) setConnectionFieldError(null);
+                        }}
+                        className="font-sans"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="telnetPort" className="text-xs text-muted-foreground">
+                        Telnet Port
+                      </Label>
+                      <Input
+                        id="telnetPort"
+                        inputMode="numeric"
+                        value={telnetPortInput}
+                        onChange={(e) => {
+                          setTelnetPortInput(e.target.value.replace(/[^0-9]/g, ""));
+                          if (connectionFieldError) setConnectionFieldError(null);
+                        }}
+                        className="font-sans"
+                      />
+                    </div>
+                  </div>
+                  {connectionFieldError ? (
+                    <p className="text-xs text-destructive" role="alert">
+                      {connectionFieldError}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
+                    {` · HTTP ${runtimeHttpPort} · FTP ${getStoredFtpPort()} · Telnet ${getStoredTelnetPort()}`}
                     {isDemoActive ? " (Demo mock)" : ""}
                   </p>
                   {isDemoActive ? (

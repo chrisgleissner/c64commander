@@ -63,6 +63,12 @@ import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
+import {
+  isDeviceControlError,
+  useDeviceControl,
+  type DeviceControlOperation,
+  type DeviceControlResult,
+} from "@/lib/deviceControl/deviceControl";
 
 export default function HomePage() {
   return (
@@ -131,6 +137,7 @@ function HomePageContent() {
     runMachineTask,
   } = useHomeActions();
   const telnet = useTelnetActions();
+  const deviceControl = useDeviceControl({ connected: status.isConnected });
   const {
     appConfigs,
     hasChanges,
@@ -153,6 +160,7 @@ function HomePageContent() {
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<SnapshotStorageEntry | null>(null);
   const [cpuSpeedOptimisticValue, setCpuSpeedOptimisticValue] = useState<string | null>(null);
+  const [deviceControlActionId, setDeviceControlActionId] = useState<DeviceControlOperation | null>(null);
   const cpuSpeedDraggingRef = useRef(false);
   const { snapshots } = useSnapshotStore();
 
@@ -172,7 +180,8 @@ function HomePageContent() {
   const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
-  const machineTaskBusy = machineTaskId !== null || pauseResumePending;
+  const deviceControlBusy = deviceControlActionId !== null;
+  const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy;
 
   const executeTelnetAction = async ({
     actionId,
@@ -202,10 +211,52 @@ function HomePageContent() {
     }
   };
 
+  const executeDeviceControl = async <T extends DeviceControlResult>({
+    actionId,
+    run,
+    successTitle,
+    failureOperation,
+    failureTitle,
+    onSuccess,
+  }: {
+    actionId: DeviceControlOperation;
+    run: () => Promise<T>;
+    successTitle: string | ((result: T) => string);
+    failureOperation: string;
+    failureTitle: string;
+    onSuccess?: (result: T) => void;
+  }) => {
+    setDeviceControlActionId(actionId);
+    try {
+      const result = await run();
+      toast({ title: typeof successTitle === "function" ? successTitle(result) : successTitle });
+      onSuccess?.(result);
+    } catch (error) {
+      reportUserError({
+        operation: failureOperation,
+        title: failureTitle,
+        description: (error as Error).message,
+        error,
+        context: isDeviceControlError(error)
+          ? {
+              deviceControlOperation: error.operation,
+              transport: error.transport,
+              endpoint: error.endpoint,
+              request: error.request,
+              response: error.response,
+            }
+          : undefined,
+      });
+    } finally {
+      setDeviceControlActionId((current) => (current === actionId ? null : current));
+    }
+  };
+
   const handlePowerCycle = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeTelnetAction({
+    await executeDeviceControl({
       actionId: "powerCycle",
+      run: () => deviceControl.powerCycle(),
       successTitle: "Power cycled",
       failureOperation: "HOME_POWER_CYCLE",
       failureTitle: "Power cycle failed",
@@ -213,10 +264,11 @@ function HomePageContent() {
     });
   };
 
-  const handleTelnetRebootClearMemory = async () => {
+  const handleRebootClearMemory = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeTelnetAction({
-      actionId: "rebootClearMemory",
+    await executeDeviceControl({
+      actionId: "rebootFull",
+      run: () => deviceControl.rebootFull(),
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
       failureTitle: "Reboot failed",
@@ -224,14 +276,26 @@ function HomePageContent() {
     });
   };
 
-  const handleTelnetRebootKeepMemory = async () => {
+  const handleRebootKeepMemory = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeTelnetAction({
-      actionId: "rebootKeepMemory",
+    await executeDeviceControl({
+      actionId: "rebootKeepRam",
+      run: () => deviceControl.rebootKeepRam(),
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_KEEP_MEMORY",
       failureTitle: "Reboot failed",
       onSuccess: () => setMachineExecutionState("running"),
+    });
+  };
+
+  const handleMenuToggle = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    await executeDeviceControl({
+      actionId: "toggleMenu",
+      run: () => deviceControl.toggleMenu(),
+      successTitle: (result) => (result.menuOpen ? "Menu opened" : "Menu closed"),
+      failureOperation: "HOME_MENU_TOGGLE",
+      failureTitle: "Menu toggle failed",
     });
   };
 
@@ -248,10 +312,10 @@ function HomePageContent() {
   const machineOverflowActions = [
     {
       id: "rebootKeepMemory",
-      label: TELNET_ACTIONS.rebootKeepMemory.label,
-      onSelect: () => void handleTelnetRebootKeepMemory(),
+      label: "Reboot (Keep RAM)",
+      onSelect: () => void handleRebootKeepMemory(),
       disabled: !isActive || machineTaskBusy || telnet.isBusy,
-      loading: telnet.activeActionId === "rebootKeepMemory",
+      loading: deviceControlActionId === "rebootKeepRam",
     },
     {
       id: "saveReuMemory",
@@ -565,11 +629,11 @@ function HomePageContent() {
       <AppBar
         title="Home"
         leading={
-          <div className="flex min-h-[52px] items-center gap-3 min-w-0">
+          <div className="flex min-h-11 items-center gap-2 min-w-0">
             <img
               src="/c64commander.png"
               alt="C64 Commander"
-              className="h-14 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-16"
+              className="h-9 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-11"
               data-testid="home-header-logo"
             />
             <div className="min-w-0 flex items-center">
@@ -599,13 +663,15 @@ function HomePageContent() {
             onSaveRam={() => setSaveRamDialogOpen(true)}
             onLoadRam={() => setSnapshotManagerOpen(true)}
             onPowerOff={handlePowerOff}
-            onReboot={() => void handleTelnetRebootClearMemory()}
+            onReboot={() => void handleRebootClearMemory()}
+            onToggleMenu={() => void handleMenuToggle()}
             onPowerCycle={() => void handlePowerCycle()}
+            rebootLoading={deviceControlActionId === "rebootFull"}
+            menuLoading={deviceControlActionId === "toggleMenu"}
+            powerCycleLoading={deviceControlActionId === "powerCycle"}
             overflowActions={machineOverflowActions}
             onAction={handleAction}
-            telnetAvailable={telnet.isAvailable}
             telnetBusy={telnet.isBusy}
-            telnetActiveActionId={telnet.activeActionId}
             footer={ramDumpFolderCard}
           />
 

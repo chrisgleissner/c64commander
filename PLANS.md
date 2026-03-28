@@ -1,3 +1,64 @@
+# HVSC Workflow Convergence + Real-Device Validation Plan (2026-03-28 Run 2)
+
+## Current state (verified 2026-03-28T20:30Z)
+
+- Branch: `fix/hvsc-workflow` HEAD `2d6f57b5`
+- Device: Pixel 4 serial `9B081FFAZ001WX` running `0.6.5-rc1` (needs fresh build/install)
+- C64U: `192.168.1.167` / hostname `c64u`
+- `deviceControl.ts` verified: all operations use REST exclusively
+- `healthCheckEngine.ts` verified: Telnet probe uses `stripPortFromDeviceHost()` + `getStoredTelnetPort()`
+- `SettingsPage.tsx` verified: Telnet port field visible/editable
+- Package.json version: `0.6.5-rc1`
+
+## Task list with status
+
+### Phase A – Build and deploy
+
+- [ ] A1: Run `./build --skip-tests --skip-format --install-apk --device-id 9B081FFAZ001WX`
+- [ ] A2: Verify `versionCode` advanced and app launched on device
+
+### Phase B – Device verification
+
+- [ ] B1: Screenshot Settings page – confirm Host, HTTP port, FTP port, Telnet port visible
+- [ ] B2: Confirm Telnet target = bare host + explicit Telnet port (no double-port)
+- [ ] B3: Trigger health check; capture Diagnostics screenshot
+- [ ] B4: Confirm TELNET probe passes
+- [ ] B5: Confirm CONFIG probe passes (or diagnose failure)
+- [ ] B6: Badge reaches HEALTHY
+
+### Phase C – HVSC end-to-end flow (only after badge HEALTHY)
+
+- [ ] C1: Locate c64scope HIL entrypoint
+- [ ] C2: Run `AF-HVSC-DOWNLOAD-PLAY-001` HIL case
+- [ ] C3: Capture download proof
+- [ ] C4: Capture ingest proof
+- [ ] C5: Capture playlist addition proof
+- [ ] C6: Capture playback proof
+- [ ] C7: Capture streamed-audio verification proof
+
+### Phase D – Validation and closeout
+
+- [ ] D1: Run `npm run lint && npm run test:coverage && npm run build`
+- [ ] D2: Confirm branch coverage ≥ 91%
+- [ ] D3: Update WORKLOG.md final entry
+- [ ] D4: Verify all acceptance criteria
+
+## Acceptance criteria
+
+1. Settings: Host, HTTP, FTP, Telnet port fields visible and editable
+2. Telnet target = bare host + explicit Telnet port
+3. Home reboot uses REST (verified by code inspection + trace)
+4. TELNET health check passes
+5. CONFIG health check passes
+6. Badge = HEALTHY
+7. HVSC download completes
+8. HVSC ingest completes
+9. Track added to playlist
+10. Playback starts on C64U
+11. Streamed-audio verification passes with evidence
+12. WORKLOG.md complete and timestamped
+13. All touched-code tests pass, coverage ≥ 91%
+
 # HVSC Workflow Convergence Plan
 
 ## Classification
@@ -277,3 +338,237 @@
 - [x] `npm run test:coverage` passes with global branch coverage `>= 91%`.
 - [x] `npm run build` passes.
 - [x] `WORKLOG.md` records inspections, edits, commands, results, and screenshot outputs.
+
+## New TODOs
+
+### TODO: FIX SAFE AREA / STATUS BAR OVERLAP (REAL DEVICE REGRESSION)
+
+Problem:
+
+- On a physical Pixel 4 device, the Android system status bar overlaps the app header.
+- This does not happen in emulator screenshots.
+- The footer behaves correctly.
+
+Reference:
+
+- `docs/img/devices/pixel4/home_v0.7.0.png`
+
+Constraints:
+
+- Do not reintroduce the previously removed header-padding workaround.
+- The fix must be systemic and platform-correct.
+- The result must work across Android, iOS, and Web.
+
+Required actions:
+
+1. Analyze Capacitor safe-area handling and viewport configuration.
+2. Identify why the top inset is ignored while the bottom inset works.
+3. Implement correct safe-area handling using platform-native insets.
+4. Ensure the header always sits fully below the system status bar.
+
+Validation:
+
+- Compare real-device and emulator screenshots.
+- Produce before/after evidence.
+
+Acceptance criteria:
+
+- Zero overlap on all platforms.
+- No hack-based padding.
+- Consistent behavior across compact, standard, and expanded profiles.
+
+### TODO: FIX HEALTH CHECK INCOMPLETE EXECUTION (TELNET + CONFIG)
+
+Observed diagnostics:
+
+TELNET:
+
+- Status: Timeout
+- Message: `TELNET timed out after 2000ms`
+- Duration: `2000ms`
+
+CONFIG:
+
+- Status: Cancelled
+- Message: `No suitable config roundtrip target available`
+
+Summary:
+
+- Result: `Degraded`
+- Total duration: `2631ms`
+- Latency: `p50 68ms`, `p90 88ms`, `p99 2076ms`
+
+Problem:
+
+- The TELNET check executes but fails systematically.
+- The CONFIG check is skipped entirely.
+
+Required actions:
+
+1. Trace the health-check execution path end-to-end.
+2. Ensure TELNET:
+   - uses the correct host (`c64u`)
+   - uses the correct protocol and timeout handling
+   - produces an actionable result instead of a silent timeout
+3. Ensure CONFIG:
+   - is not skipped
+   - has a valid roundtrip target
+   - executes real validation
+
+Validation:
+
+- Run against the real device (`c64u`), not only mocks.
+- Capture traces showing request and response.
+
+Acceptance criteria:
+
+- No skipped checks.
+- No silent failures.
+- Diagnostics reflect the real system state.
+
+### TODO: FIX POWER CYCLE FAILURE (REAL TELNET RESPONSE PARSING)
+
+Observed error:
+
+`Power cycle failed`
+
+`Item 'Power & Reset' not found. Available:
+[SD SD Card No media,
+ Flash Internal Memory Ready,
+ Temp RAM Disk Ready,
+ USB1 Verbaltqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqk Ready,
+ xPower & Reset x,
+ xBuilt-in Drive A x,
+ xBuilt-in Drive B x,
+ xSoftware IEC x,
+ xPrinter x,
+ xConfiguration x,
+ xStreams x,
+ xDeveloper x,
+ xReturn to Main Menu x,
+ mqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj]`
+
+Key observations:
+
+- Menu items are present but wrapped in `x ... x` markers.
+- Output contains noise:
+  - repeated `q` characters
+  - malformed borders such as `mqqq...`
+  - malformed content such as `Verbaltqqq...`
+- The parser fails to detect `Power & Reset` even though it is present.
+
+Problem:
+
+- The Telnet parser assumes clean or mock-formatted output.
+- Real-device output contains control-character or PETSCII-style artifacts, border-drawing noise, and repeated malformed characters.
+- Matching is too strict and fails against the real output.
+
+Required actions:
+
+1. Capture raw Telnet output from the real device (`c64u`).
+2. Compare it with the mock responses used in tests.
+3. Identify the parser assumptions that break:
+   - exact string matching
+   - formatting dependencies
+4. Rewrite the parser so it:
+   - ignores border and noise characters
+   - normalizes text before matching
+   - detects menu entries semantically instead of by exact formatting
+   - tolerates repeated or malformed characters
+5. Ensure the navigation path detects and selects `Power & Reset` reliably.
+
+Validation:
+
+- Execute Power Cycle successfully on real hardware.
+- Capture the full trace:
+  - raw Telnet output
+  - normalized representation
+  - selection steps
+
+Testing:
+
+- Add cases for:
+  - real-device noisy output
+  - clean mock output
+  - corrupted or partial output
+
+Acceptance criteria:
+
+- Power Cycle works on real hardware.
+- The parser is robust against noisy output.
+- Error messages remain clean and bounded.
+
+### TODO: FIX HOME DEVICE CONTROL ROUTING AND MENU TOGGLE
+
+Classification:
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+
+Objective:
+
+- Replace the current split Home-page machine control routing with one authoritative control layer.
+- Eliminate invalid Telnet usage for reboot and power cycle.
+- Make the Menu quick action behave as a strict open/close toggle without drift.
+
+Required implementation:
+
+1. Introduce `src/lib/deviceControl/deviceControl.ts` as the single orchestration layer for:
+
+- `toggleMenu()`
+- `rebootKeepRam()`
+- `rebootFull()`
+- `powerCycle()`
+
+2. Route Home-page quick actions and overflow actions through that layer only.
+3. Keep REST first for:
+
+- Menu toggle
+- Reboot (Keep RAM)
+- Full Reboot
+
+4. Remove Telnet routing for:
+
+- `powerCycle`
+- `rebootClearMemory`
+- `rebootKeepMemory`
+
+5. Leave Telnet only for actions that still require it, such as REU/config file flows.
+6. Emit structured diagnostics logging for each control operation including:
+
+- operation
+- transport
+- endpoint or command
+- request/response payload or error context
+
+Validation criteria:
+
+- Menu toggle path performs a deterministic alternating open/close request sequence in tests for 10 consecutive invocations.
+- Primary Reboot calls REST-only full reboot orchestration and never invokes Telnet.
+- Overflow Reboot (Keep RAM) calls REST reboot only and never invokes Telnet.
+- Power Cycle no longer invokes Telnet anywhere in the Home control path.
+- Regression tests fail if these operations are re-routed back to Telnet.
+- `npm run lint`, `npm run test`, `npm run test:coverage`, and `npm run build` pass.
+
+Execution order:
+
+1. Add authoritative device control module.
+2. Cut Home-page quick actions and overflow actions over to the module.
+3. Add targeted unit regressions for routing, sequencing, and toggle determinism.
+4. Run targeted tests while iterating, then full required validation.
+5. Record evidence in `WORKLOG.md`.
+
+Current status:
+
+- Steps 1 through 3 are complete.
+- Focused regression coverage is complete for the new control layer and Home-page routing.
+- `npm run lint` and `npm run build` passed after the implementation.
+- Repo-wide `npm run test` and `npm run test:coverage` are currently blocked by an unrelated existing failure in `tests/unit/lib/native/safeArea.test.ts` on this branch.
+
+## Global Execution Rules For New TODOs
+
+- Do not assume completion based on existing code or files.
+- Every fix must include traces, logs, and screenshots when visually relevant.
+- Prefer real-device validation over mocks.
+- Maintain minimal, non-invasive changes.
+- Do not regress existing functionality.

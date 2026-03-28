@@ -377,6 +377,17 @@ export function usePlaybackController({
         const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
         const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
         const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
+        addLog("info", "Playback request started", {
+          itemId: item.id,
+          label: item.label,
+          category: item.category,
+          source: request.source,
+          sourceId: item.sourceId,
+          path: request.path,
+          songNr: request.songNr ?? null,
+          durationMs: request.durationMs ?? null,
+          rebootBeforePlay: Boolean(executionOptions?.rebootBeforeMount),
+        });
         setElapsedMs(0);
         setDurationMs(resolvedDuration);
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
