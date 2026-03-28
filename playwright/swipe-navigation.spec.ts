@@ -35,6 +35,17 @@ const swipe = async (page: Page, fromX: number, fromY: number, toX: number, toY:
   await page.mouse.up();
 };
 
+const getSwipeLane = async (page: Page) => {
+  const box = await page.getByTestId("swipe-navigation-container").boundingBox();
+  if (!box) throw new Error("Swipe navigation container bounding box is unavailable.");
+
+  return {
+    centerX: box.x + box.width / 2,
+    y: box.y + 24,
+    swipeLen: Math.min(260, box.width * 0.66),
+  };
+};
+
 const readSwipeLogs = async (page: Page): Promise<SwipeLogEntry[]> =>
   page.evaluate((logsKey) => {
     const raw = localStorage.getItem(logsKey);
@@ -102,15 +113,13 @@ test.describe("Swipe navigation", () => {
     }
   });
 
-  const cx = 195;
-  const cy = 400;
-  const swipeLen = 260;
-
   test("swipe left from Home navigates to Play", async ({ page }, testInfo) => {
     await page.goto("/");
     await attachStepScreenshot(page, testInfo, "home-initial");
 
-    await swipe(page, cx, cy, cx - swipeLen, cy);
+    const { centerX, y, swipeLen } = await getSwipeLane(page);
+
+    await swipe(page, centerX, y, centerX - swipeLen, y);
 
     await waitForRouteIndex(page, 1);
     await attachStepScreenshot(page, testInfo, "play-after-swipe");
@@ -137,7 +146,9 @@ test.describe("Swipe navigation", () => {
     await page.goto("/play");
     await waitForRouteIndex(page, 1);
 
-    await swipe(page, cx, cy, cx + swipeLen, cy);
+    const { centerX, y, swipeLen } = await getSwipeLane(page);
+
+    await swipe(page, centerX, y, centerX + swipeLen, y);
 
     await waitForRouteIndex(page, 0);
     await attachStepScreenshot(page, testInfo, "home-after-swipe");
@@ -149,7 +160,9 @@ test.describe("Swipe navigation", () => {
     await page.goto("/docs");
     await waitForRouteIndex(page, 5);
 
-    await swipe(page, cx, cy, cx - swipeLen, cy);
+    const { centerX, y, swipeLen } = await getSwipeLane(page);
+
+    await swipe(page, centerX, y, centerX - swipeLen, y);
 
     await waitForRouteIndex(page, 0);
     await attachStepScreenshot(page, testInfo, "home-after-wrap");
@@ -171,7 +184,9 @@ test.describe("Swipe navigation", () => {
     await page.goto("/");
     await waitForRouteIndex(page, 0);
 
-    await swipe(page, cx, cy, cx + swipeLen, cy);
+    const { centerX, y, swipeLen } = await getSwipeLane(page);
+
+    await swipe(page, centerX, y, centerX + swipeLen, y);
 
     await waitForRouteIndex(page, 5);
     await attachStepScreenshot(page, testInfo, "docs-after-wrap");
@@ -238,13 +253,15 @@ test.describe("Swipe navigation", () => {
     await page.goto("/");
     await waitForCommittedRouteIndex(page, 0);
 
-    await swipe(page, cx, cy, cx - swipeLen, cy);
+    const { centerX, y, swipeLen } = await getSwipeLane(page);
+
+    await swipe(page, centerX, y, centerX - swipeLen, y);
     await waitForCommittedRouteIndex(page, 1);
 
-    await swipe(page, cx, cy, cx - swipeLen, cy);
+    await swipe(page, centerX, y, centerX - swipeLen, y);
     await waitForCommittedRouteIndex(page, 2);
 
-    await swipe(page, cx, cy, cx - swipeLen, cy);
+    await swipe(page, centerX, y, centerX - swipeLen, y);
     await waitForCommittedRouteIndex(page, 3);
 
     await attachStepScreenshot(page, testInfo, "config-after-rapid-swipes");
