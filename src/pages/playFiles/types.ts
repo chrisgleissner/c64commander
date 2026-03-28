@@ -17,6 +17,8 @@ export type PlayableEntry = {
   path: string;
   file?: LocalPlayFile;
   durationMs?: number;
+  songNr?: number;
+  subsongCount?: number;
   sourceId?: string | null;
   sizeBytes?: number | null;
   modifiedAt?: string | null;
@@ -45,6 +47,7 @@ export type StoredPlaylistState = {
     name: string;
     durationMs?: number;
     songNr?: number;
+    subsongCount?: number;
     sourceId?: string | null;
     sizeBytes?: number | null;
     modifiedAt?: string | null;

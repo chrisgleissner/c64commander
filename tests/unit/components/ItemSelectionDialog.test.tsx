@@ -531,6 +531,88 @@ describe("ItemSelectionDialog source picker", () => {
     expect(screen.queryByTestId("import-selection-interstitial")).toBeInTheDocument();
   });
 
+  it("uses query-backed browsing for HVSC filters and preserves selection metadata", async () => {
+    const setQuery = vi.fn();
+    const loadMore = vi.fn();
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: "/",
+      entries: [
+        {
+          type: "file",
+          name: "demo.sid",
+          path: "/MUSICIANS/Test/demo.sid",
+          durationMs: 87_000,
+          songNr: 2,
+          subsongCount: 4,
+        },
+      ],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      query: "",
+      setQuery,
+      hasMore: true,
+      loadMore,
+      isQueryBacked: true,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={[
+          {
+            label: "HVSC",
+            sources: [
+              {
+                id: "hvsc-1",
+                name: "HVSC Collection",
+                type: "hvsc" as "ultimate",
+                rootPath: "/",
+                isAvailable: true,
+                listEntries: async () => [],
+                listFilesRecursive: async () => [],
+              },
+            ],
+          },
+        ]}
+        onAddLocalSource={vi.fn().mockResolvedValue(null)}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-hvsc"));
+    fireEvent.change(screen.getByTestId("add-items-filter"), { target: { value: "demo" } });
+
+    expect(setQuery).toHaveBeenCalledWith("demo");
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByTestId("add-items-load-more"));
+    fireEvent.click(screen.getByTestId("add-items-confirm"));
+
+    expect(loadMore).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(onConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "hvsc-1" }),
+        [
+          expect.objectContaining({
+            path: "/MUSICIANS/Test/demo.sid",
+            durationMs: 87_000,
+            songNr: 2,
+            subsongCount: 4,
+          }),
+        ],
+      );
+    });
+  });
+
   it("shows progress footer with cancel scan button when scanning", async () => {
     vi.mocked(useSourceNavigator).mockReturnValue({
       path: "/",

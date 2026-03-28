@@ -128,6 +128,8 @@ export function usePlaybackPersistence({
           name: entry.name,
           path: entry.path,
           durationMs: entry.durationMs,
+          songNr: entry.songNr,
+          subsongCount: entry.subsongCount,
           sourceId: entry.sourceId ?? null,
           file:
             entry.source === "local"
@@ -235,6 +237,7 @@ export function usePlaybackPersistence({
             name: track.title,
             durationMs: track.defaultDurationMs ?? undefined,
             songNr: playlistItem.songNr,
+            subsongCount: track.subsongCount ?? undefined,
             sourceId: resolveHydratedLocalSourceId(track),
             sizeBytes: track.sizeBytes ?? null,
             modifiedAt: track.modifiedAt ?? null,
@@ -425,6 +428,7 @@ export function usePlaybackPersistence({
         name: item.label,
         durationMs: item.durationMs,
         songNr: item.request.songNr,
+        subsongCount: item.subsongCount,
         sourceId: item.sourceId ?? null,
         sizeBytes: item.sizeBytes ?? null,
         modifiedAt: item.modifiedAt ?? null,

@@ -312,12 +312,21 @@ export function usePlaybackController({
         }
         let durationOverride: number | undefined;
         let subsongCount: number | undefined;
-        if (item.category === "sid" && item.request.source === "local") {
-          const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
-          durationOverride = metadata.durationMs;
-          subsongCount = metadata.subsongCount;
-          if (!metadata.readable) {
-            throw new Error("Local file unavailable. Re-add it to the playlist.");
+        if (item.category === "sid" && item.request.source !== "ultimate") {
+          if (item.durationMs !== undefined && item.subsongCount !== undefined) {
+            durationOverride = item.durationMs;
+            subsongCount = item.subsongCount;
+          } else {
+            const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
+            durationOverride = item.durationMs ?? metadata.durationMs;
+            subsongCount = item.subsongCount ?? metadata.subsongCount;
+            if (!metadata.readable) {
+              throw new Error(
+                item.request.source === "hvsc"
+                  ? "HVSC file unavailable. Reinstall or re-add it to the playlist."
+                  : "Local file unavailable. Re-add it to the playlist.",
+              );
+            }
           }
         } else if (item.category === "sid" && item.request.source === "ultimate" && !item.durationMs) {
           try {
@@ -359,13 +368,14 @@ export function usePlaybackController({
         } else {
           setCurrentSubsongCount(null);
         }
-        const request: PlayRequest = durationOverride
-          ? { ...item.request, durationMs: durationOverride }
-          : item.request;
+        const resolvedDurationBase = durationOverride ?? item.durationMs;
+        const request: PlayRequest =
+          typeof resolvedDurationBase === "number"
+            ? { ...item.request, durationMs: resolvedDurationBase }
+            : item.request;
         const plan = buildPlayPlan(request);
         const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
         const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
-        const resolvedDurationBase = durationOverride ?? item.durationMs;
         const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
         setElapsedMs(0);
         setDurationMs(resolvedDuration);

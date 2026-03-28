@@ -476,7 +476,10 @@ export default function PlayFilesPage() {
     (entry: PlayableEntry, songNrOverride?: number, addedAtOverride?: string | null): PlaylistItem | null => {
       const category = getPlayCategory(entry.path);
       if (!category) return null;
-      const songNrValue = songNrOverride ?? (songNrInput.trim() === "" ? undefined : Math.max(1, Number(songNrInput)));
+      const songNrValue =
+        songNrOverride ??
+        entry.songNr ??
+        (songNrInput.trim() === "" ? undefined : Math.max(1, Number(songNrInput)));
       const request: PlayRequest = {
         source: entry.source,
         path: entry.path,
@@ -492,6 +495,7 @@ export default function PlayFilesPage() {
         label: entry.name,
         path: entry.path,
         durationMs: entry.durationMs,
+        subsongCount: entry.subsongCount,
         sourceId: resolvedSourceId,
         sizeBytes: entry.sizeBytes ?? null,
         modifiedAt: entry.modifiedAt ?? null,

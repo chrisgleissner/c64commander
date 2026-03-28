@@ -224,12 +224,13 @@ export const ItemSelectionDialog = ({
     const filesFiltered = filterEntry
       ? browser.entries.filter((entry) => entry.type === "dir" || filterEntry(entry))
       : browser.entries;
+    if (browser.isQueryBacked) return filesFiltered;
     if (!filterText) return filesFiltered;
     const lower = filterText.toLowerCase();
     return filesFiltered.filter(
       (entry) => entry.name.toLowerCase().includes(lower) || entry.path.toLowerCase().includes(lower),
     );
-  }, [browser.entries, filterEntry, filterText]);
+  }, [browser.entries, browser.isQueryBacked, filterEntry, filterText]);
 
   const toggleSelection = (entry: SourceEntry) => {
     setSelection((prev) => {
@@ -266,6 +267,11 @@ export const ItemSelectionDialog = ({
           type: entry.type,
           name: entry.name,
           path: entry.path,
+          durationMs: entry.durationMs,
+          songNr: entry.songNr,
+          subsongCount: entry.subsongCount,
+          sizeBytes: entry.sizeBytes ?? null,
+          modifiedAt: entry.modifiedAt ?? null,
         }));
     try {
       const success = await onConfirm(source, selections);
@@ -488,8 +494,15 @@ export const ItemSelectionDialog = ({
             {!isArchiveSource ? (
               <Input
                 placeholder="Filter files…"
-                value={filterText}
-                onChange={(event) => setFilterText(event.target.value)}
+                value={browser.isQueryBacked ? browser.query ?? "" : filterText}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  if (browser.isQueryBacked) {
+                    browser.setQuery?.(nextValue);
+                    return;
+                  }
+                  setFilterText(nextValue);
+                }}
                 data-testid="add-items-filter"
               />
             ) : null}
@@ -552,6 +565,19 @@ export const ItemSelectionDialog = ({
                   emptyLabel="No matching items in this folder."
                 />
               )}
+              {!isArchiveSource && browser.hasMore ? (
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => browser.loadMore?.()}
+                    disabled={browser.isLoading}
+                    data-testid="add-items-load-more"
+                  >
+                    Load more
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </AppSheetBody>
 

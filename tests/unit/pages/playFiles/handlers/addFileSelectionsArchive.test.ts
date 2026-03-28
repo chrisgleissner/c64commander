@@ -461,14 +461,7 @@ describe("addFileSelections archive source handler", () => {
 
   it("adds hvsc selections using the hvsc file builder", async () => {
     vi.useFakeTimers();
-    const hvscSource = createHvscSource(async () => [
-      {
-        type: "file",
-        name: "demo.sid",
-        path: "/MUSICIANS/D/Demo/demo.sid",
-        sizeBytes: 4096,
-      },
-    ]);
+    const hvscSource = createHvscSource(async () => []);
     const hvscFile = {
       name: "demo.sid",
       lastModified: 0,
@@ -491,7 +484,17 @@ describe("addFileSelections archive source handler", () => {
     }));
     const handler = createAddFileSelectionsHandler(deps as any);
 
-    const promise = handler(hvscSource, [{ type: "file", name: "demo.sid", path: "/MUSICIANS/D/Demo/demo.sid" }]);
+    const promise = handler(hvscSource, [
+      {
+        type: "file",
+        name: "demo.sid",
+        path: "/MUSICIANS/D/Demo/demo.sid",
+        durationMs: 87_000,
+        songNr: 2,
+        subsongCount: 4,
+        sizeBytes: 4096,
+      },
+    ]);
 
     await vi.runAllTimersAsync();
     const result = await promise;
@@ -502,6 +505,9 @@ describe("addFileSelections archive source handler", () => {
       expect.objectContaining({
         source: "hvsc",
         sourceId: "hvsc-library",
+        durationMs: 87_000,
+        songNr: 2,
+        subsongCount: 4,
         file: hvscFile,
       }),
     );

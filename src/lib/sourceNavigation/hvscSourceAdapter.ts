@@ -6,12 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getHvscFolderListing } from "@/lib/hvsc";
+import { getHvscFolderListing, getHvscFolderListingPaged } from "@/lib/hvsc";
 import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
-import type { SourceEntry, SourceLocation } from "./types";
+import type { SourceEntry, SourceEntryPage, SourceLocation } from "./types";
 
 const normalizeHvscPath = (path: string) => normalizeSourcePath(path || "/");
+
+const sortEntriesByName = (entries: SourceEntry[]) =>
+  [...entries].sort((left, right) => left.name.localeCompare(right.name) || left.path.localeCompare(right.path));
 
 const folderToEntry = (path: string): SourceEntry => ({
   type: "dir",
@@ -23,20 +26,44 @@ const songToEntry = (song: {
   virtualPath: string;
   fileName: string;
   durationSeconds?: number | null;
+  sidMetadata?: { songs?: number; startSong?: number } | null;
+  trackSubsongs?: Array<{ songNr: number; isDefault: boolean }> | null;
+  subsongCount?: number | null;
 }): SourceEntry => ({
   type: "file",
   name: song.fileName,
   path: normalizeHvscPath(song.virtualPath),
+  durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
+  songNr:
+    song.trackSubsongs?.find((entry) => entry.isDefault)?.songNr ?? song.sidMetadata?.startSong ?? undefined,
+  subsongCount: song.trackSubsongs?.length ?? song.subsongCount ?? song.sidMetadata?.songs ?? undefined,
 });
+
+const mapListingEntries = (folders: string[], songs: Parameters<typeof songToEntry>[0][]) =>
+  sortEntriesByName([...folders.map(folderToEntry), ...songs.map(songToEntry)]);
 
 export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
   const normalizedRoot = normalizeHvscPath(rootPath);
 
   const listEntries = async (path: string): Promise<SourceEntry[]> => {
     const listing = await getHvscFolderListing(path);
-    const folders = listing.folders.map(folderToEntry);
-    const songs = listing.songs.map(songToEntry);
-    return [...folders, ...songs].sort((a, b) => a.name.localeCompare(b.name));
+    return mapListingEntries(listing.folders, listing.songs);
+  };
+
+  const listEntriesPage = async (options: {
+    path: string;
+    query?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<SourceEntryPage> => {
+    const page = await getHvscFolderListingPaged(options);
+    const loadedSongs = page.songs.length;
+    const nextOffset = page.offset + loadedSongs < page.totalSongs ? page.offset + loadedSongs : null;
+    return {
+      entries: mapListingEntries(page.folders, page.songs),
+      totalCount: page.totalFolders + page.totalSongs,
+      nextOffset,
+    };
   };
 
   const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
@@ -50,9 +77,24 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
       const next = queue.shift();
       if (!next || visited.has(next)) continue;
       visited.add(next);
-      const listing = await getHvscFolderListing(next);
-      listing.folders.forEach((folder) => queue.push(normalizeHvscPath(folder)));
-      listing.songs.forEach((song) => files.push(songToEntry(song)));
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        if (options?.signal?.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
+        const page = await getHvscFolderListingPaged({
+          path: next,
+          offset,
+          limit: 200,
+        });
+        if (offset === 0) {
+          page.folders.forEach((folder) => queue.push(normalizeHvscPath(folder)));
+        }
+        page.songs.forEach((song) => files.push(songToEntry(song)));
+        offset += page.songs.length;
+        hasMore = offset < page.totalSongs;
+      }
     }
     return files;
   };
@@ -64,6 +106,7 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
     rootPath: normalizedRoot,
     isAvailable: true,
     listEntries,
+    listEntriesPage,
     listFilesRecursive,
   };
 };

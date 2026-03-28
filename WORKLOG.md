@@ -1,3 +1,21 @@
+# HVSC Workflow Convergence Worklog
+
+## 2026-03-28T00:00:00Z
+
+### Task start and classification
+
+- Classified the task as `CODE_CHANGE` with possible `DOC_PLUS_CODE` follow-up only if validation or operator documentation needs to change after the implementation is verified.
+- Confirmed `PLANS.md` and `WORKLOG.md` already exist in the repo and added a dedicated HVSC convergence section rather than replacing prior history.
+- Began the mandated read pass across repo guidance, UX, Maestro, HVSC runtime, playlist, Android ingest, existing tests, and `c64scope` playback proof files.
+
+### Initial observations
+
+- Prior repo memory confirms the browser HVSC availability gate may be too broad in web contexts, so current UI affordances cannot be treated as proof of native workflow readiness.
+- The required terminal state depends on real Pixel 4 plus real C64U availability; that will be tested explicitly during HIL preflight rather than assumed.
+
+### Next steps
+
+- Finish the required file audit and map the actual HVSC ingestion, browse, metadata, playback, and proof paths before editing code.
 # Health Badge Overflow Fix Worklog
 
 ## 2026-03-28T11:14:41Z

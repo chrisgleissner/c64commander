@@ -253,4 +253,90 @@ describe("useSourceNavigator", () => {
       expect.objectContaining({ path: "/A" }),
     );
   });
+
+  it("uses paged source queries and loads more without calling full listings", async () => {
+    const listEntries = vi.fn();
+    const listEntriesPage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        entries: [{ type: "dir", name: "Collections", path: "/root/Collections" }],
+        totalCount: 3,
+        nextOffset: 0,
+      })
+      .mockResolvedValueOnce({
+        entries: [{ type: "file", name: "demo.sid", path: "/root/demo.sid", durationMs: 12_000 }],
+        totalCount: 3,
+        nextOffset: 1,
+      })
+      .mockResolvedValueOnce({
+        entries: [{ type: "file", name: "extra.sid", path: "/root/extra.sid", durationMs: 24_000 }],
+        totalCount: 3,
+        nextOffset: null,
+      });
+    const source: SourceLocation = {
+      id: "hvsc-1",
+      type: "hvsc",
+      name: "HVSC",
+      rootPath: "/root",
+      isAvailable: true,
+      listEntries,
+      listEntriesPage,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() =>
+      expect(listEntriesPage).toHaveBeenCalledWith({
+        path: "/root",
+        query: "",
+        offset: 0,
+        limit: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.setQuery?.("demo");
+    });
+
+    await waitFor(() =>
+      expect(listEntriesPage).toHaveBeenCalledWith({
+        path: "/root",
+        query: "demo",
+        offset: 0,
+        limit: 200,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.query).toBe("demo");
+      expect(result.current.entries).toEqual([
+        { type: "file", name: "demo.sid", path: "/root/demo.sid", durationMs: 12_000 },
+      ]);
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    act(() => {
+      result.current.loadMore?.();
+    });
+
+    await waitFor(() =>
+      expect(listEntriesPage).toHaveBeenCalledWith({
+        path: "/root",
+        query: "demo",
+        offset: 1,
+        limit: 200,
+      }),
+    );
+
+    expect(listEntries).not.toHaveBeenCalled();
+    expect(result.current.isQueryBacked).toBe(true);
+    await waitFor(() => {
+      expect(result.current.entries).toEqual([
+        { type: "file", name: "demo.sid", path: "/root/demo.sid", durationMs: 12_000 },
+        { type: "file", name: "extra.sid", path: "/root/extra.sid", durationMs: 24_000 },
+      ]);
+      expect(result.current.hasMore).toBe(false);
+    });
+  });
 });

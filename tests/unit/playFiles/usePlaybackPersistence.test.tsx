@@ -89,6 +89,7 @@ const usePlaybackPersistenceHarness = ({
       label: entry.name,
       path: entry.path,
       durationMs: entry.durationMs,
+      subsongCount: entry.subsongCount,
       sourceId: entry.sourceId ?? null,
       sizeBytes: entry.sizeBytes ?? null,
       modifiedAt: entry.modifiedAt ?? null,
@@ -164,6 +165,7 @@ describe("usePlaybackPersistence", () => {
             path: "/MUSICIANS/Test/demo.sid",
             name: "demo.sid",
             sourceId: "hvsc-library",
+            subsongCount: 4,
             addedAt: new Date().toISOString(),
           },
         ],
@@ -183,6 +185,7 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
+      expect(result.current.playlist[0].subsongCount).toBe(4);
     });
   });
 
@@ -242,6 +245,7 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("repo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
+      expect(result.current.playlist[0].subsongCount).toBe(1);
     });
   });
 

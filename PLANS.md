@@ -1,3 +1,37 @@
+# HVSC Workflow Convergence Plan
+
+## Classification
+
+- `CODE_CHANGE`
+- escalate to `DOC_PLUS_CODE` only if validation or operator docs must change to match the final implementation
+
+## Required Outcome
+
+- Fix the real HVSC workflow so the app uses one reliable ingestion and browse source of truth.
+- Preserve HVSC metadata through selection, playlist import, persistence, and playback.
+- Strengthen CI-safe regression coverage across web/runtime, playlist scale, and Android-native ingest.
+- Attempt real HIL validation on a physical Pixel 4 against a real C64U with `c64scope` audio proof.
+- End only in `COMPLETE`, `FAILED`, or `BLOCKED`.
+
+## Execution Plan
+
+1. Read the mandated repo, UX, Maestro, HVSC, playback, playlist, Android, Playwright, and `c64scope` files.
+2. Map the current source of truth for HVSC ingest, browse, import, playlist persistence, playback routing, and HIL proof.
+3. Identify the concrete root cause(s), especially metadata loss, store divergence, or large-list materialization.
+4. Implement the smallest coherent fix in app and native layers.
+5. Add dedicated regression coverage for every confirmed bug fixed.
+6. Run CI-safe validation: `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, `cd android && ./gradlew test`, plus any focused suites needed while iterating.
+7. Run HIL preflight for attached Android hardware and C64U reachability.
+8. If preflight passes, execute cold, warm-cache, and large-playlist HIL runs with `c64scope` audio capture and archive artifacts.
+9. Record all evidence in `WORKLOG.md` and report the terminal state precisely.
+
+## Open Questions To Resolve During Audit
+
+- Does the JS HVSC browser query the same native-ingested store that Android ingest populates?
+- Where do duration, song length, and subsong fields first enter the app model, and where can they be dropped?
+- Does the current HVSC browser or playlist flow materialize too much data in memory for large folders or playlists?
+- What existing coverage proves only mock/web behavior versus native ingest and true hardware playback?
+- Are current HIL primitives sufficient to correlate app-driven playback with captured C64U audio?
 # Health Badge Overflow Fix Plan
 
 ## Classification

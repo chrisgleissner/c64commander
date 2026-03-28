@@ -277,8 +277,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       for (const selection of selections) {
         if (selection.type === "dir") {
           if (recurseFolders) {
-            const nested = await collectRecursive(selection.path);
+            const nested =
+              source.type === "hvsc" ? await source.listFilesRecursive(selection.path) : await collectRecursive(selection.path);
             selectedFiles.push(...nested);
+            if (source.type === "hvsc") {
+              updateProgress(nested.length);
+            }
           } else {
             const entries = await source.listEntries(selection.path);
             const files = entries.filter((entry) => entry.type === "file");
@@ -287,11 +291,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           }
         } else {
           const normalizedPath = normalizeSourcePath(selection.path);
-          const meta = await resolveSelectionEntry(normalizedPath);
+          const meta =
+            selection.durationMs !== undefined ||
+            selection.songNr !== undefined ||
+            selection.subsongCount !== undefined ||
+            selection.sizeBytes !== undefined ||
+            selection.modifiedAt !== undefined
+              ? selection
+              : await resolveSelectionEntry(normalizedPath);
           selectedFiles.push({
             type: "file",
             name: meta?.name ?? selection.name,
             path: normalizedPath,
+            durationMs: meta?.durationMs,
+            songNr: meta?.songNr,
+            subsongCount: meta?.subsongCount,
             sizeBytes: meta?.sizeBytes ?? null,
             modifiedAt: meta?.modifiedAt ?? null,
           });
@@ -471,7 +485,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
           name: file.name,
           path: normalizedPath,
-          durationMs: undefined,
+          durationMs: file.durationMs,
+          songNr: file.songNr,
+          subsongCount: file.subsongCount,
           sourceId: source.type === "local" || source.type === "hvsc" ? source.id : null,
           file: hvscFile ?? localFile,
           sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,

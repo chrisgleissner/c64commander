@@ -214,6 +214,51 @@ describe("usePlaybackController", () => {
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
   });
 
+  it("preserves imported HVSC SID duration and subsong metadata in the play request", async () => {
+    const hvscFile = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(4)),
+    };
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "demo.sid",
+        path: "/MUSICIANS/Test/demo.sid",
+        request: {
+          source: "hvsc",
+          path: "/MUSICIANS/Test/demo.sid",
+          file: hvscFile as any,
+          songNr: 2,
+        },
+        durationMs: 12_000,
+        subsongCount: 4,
+        sourceId: "hvsc-library",
+      }),
+    ];
+    const setCurrentSubsongCount = vi.fn();
+    const setDurationMs = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      setCurrentSubsongCount,
+      setDurationMs,
+    });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(hvscFile.arrayBuffer).not.toHaveBeenCalled();
+    expect(setCurrentSubsongCount).toHaveBeenCalledWith(4);
+    expect(setDurationMs).toHaveBeenCalledWith(12_000);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: "hvsc",
+        path: "/MUSICIANS/Test/demo.sid",
+        songNr: 2,
+        durationMs: 12_000,
+      }),
+      undefined,
+    );
+  });
+
   it("refreshes playback mute state before starting playback and only then executes the play plan", async () => {
     const playlist = [createPlaylistItem()];
     const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
