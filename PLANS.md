@@ -32,6 +32,7 @@
 - Does the current HVSC browser or playlist flow materialize too much data in memory for large folders or playlists?
 - What existing coverage proves only mock/web behavior versus native ingest and true hardware playback?
 - Are current HIL primitives sufficient to correlate app-driven playback with captured C64U audio?
+
 # Health Badge Overflow Fix Plan
 
 ## Classification

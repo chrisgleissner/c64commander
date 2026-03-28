@@ -16,6 +16,7 @@
 ### Next steps
 
 - Finish the required file audit and map the actual HVSC ingestion, browse, metadata, playback, and proof paths before editing code.
+
 # Health Badge Overflow Fix Worklog
 
 ## 2026-03-28T11:14:41Z
