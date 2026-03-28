@@ -1,5 +1,24 @@
 # HVSC Workflow Convergence Worklog
 
+## 2026-03-28T22:02:57+00:00
+
+### Action
+
+- Established the new real-device execution control state for the active `fix/hvsc-workflow` run.
+- Re-read the repo operating instructions in `README.md`, `.github/copilot-instructions.md`, and `AGENTS.md`.
+- Verified the current branch/worktree with `git status --short --branch`.
+- Located the authoritative real-device HIL entrypoint as `npm run hil:evidence` in `c64scope/package.json`, with the HVSC cases wired in `c64scope/src/validation/cases/exploratoryPlayback.ts` and `c64scope/src/fullAppCoverageExecutor.ts`.
+- Updated `PLANS.md` to make this run's numbered checklist and acceptance checks authoritative.
+
+### Result
+
+- Branch confirmed as `fix/hvsc-workflow...origin/fix/hvsc-workflow` with no tracked worktree drift reported by `git status --short`.
+- The current run now has an explicit execution plan tied to the real Pixel 4, real C64U, and real `c64scope` HIL command.
+
+### Next step
+
+- Read the runtime-critical files that changed recently, then verify the current app version and the live on-device Settings and health-check state before making any new code edits.
+
 ## 2026-03-28T00:00:00Z
 
 ### Task start and classification

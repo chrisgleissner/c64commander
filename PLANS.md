@@ -1,3 +1,52 @@
+# HVSC Workflow Real-Device Execution Plan (2026-03-28T22:02:57+00:00)
+
+## Classification
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+
+## Control State
+
+- Branch: `fix/hvsc-workflow`
+- Device serial: `9B081FFAZ001WX`
+- Android package: `uk.gleissner.c64commander`
+- C64U host: `192.168.1.167`
+- Expected ports: HTTP `80`, FTP `21`, Telnet `23`
+- Real HIL entrypoint: `npm run hil:evidence` in `c64scope/`
+
+## Authoritative Task List
+
+1. [ ] Verify repo control state and read the current runtime-critical files.
+2. [ ] Verify the installed app version on the Pixel 4 and launch the current app build.
+3. [ ] Prove Settings shows host, HTTP port, FTP port, and Telnet port, visible and editable, with captured evidence.
+4. [ ] Prove Telnet target construction uses bare host plus explicit Telnet port.
+5. [ ] Prove Home primary reboot uses REST, not Telnet.
+6. [ ] Reproduce on-device health state and capture diagnostics evidence for `TELNET`, `CONFIG`, and the top-right badge.
+7. [ ] Fix any remaining runtime defects blocking `TELNET`, `CONFIG`, or `HEALTHY`.
+8. [ ] Rebuild, reinstall, and re-verify on the real Pixel 4 after each meaningful fix.
+9. [ ] Run the real HVSC download -> ingest -> playlist -> playback flow against the real C64U.
+10. [ ] Capture real streamed-audio verification evidence under `artifacts`.
+11. [ ] Run the smallest honest validation set for all touched code, including targeted tests and `npm run lint`, `npm run test:coverage`, and `npm run build` if code changes land.
+12. [ ] Re-read this plan and `WORKLOG.md`; confirm every acceptance check with current evidence before stopping.
+
+## Acceptance Checks
+
+- [ ] Settings screen shows host, HTTP port, FTP port, and Telnet port, visible and editable.
+- [ ] Telnet target is built from bare host plus explicit Telnet port.
+- [ ] Home primary reboot uses REST.
+- [ ] `TELNET` health check passes.
+- [ ] `CONFIG` health check passes.
+- [ ] App badge is `HEALTHY`.
+- [ ] Real HVSC download completes on the Pixel 4.
+- [ ] Real HVSC ingest completes.
+- [ ] A real HVSC track is added to playlist.
+- [ ] Playback starts on the real C64U.
+- [ ] Streamed-audio verification succeeds with captured evidence.
+- [ ] Evidence is stored under `artifacts`.
+- [ ] `WORKLOG.md` is complete and timestamped throughout the run.
+- [ ] Touched-code validation was run honestly.
+- [ ] Build is green, or an exact unrelated blocker is proven.
+
 # HVSC Workflow Convergence + Real-Device Validation Plan (2026-03-28 Run 2)
 
 ## Current state (verified 2026-03-28T20:30Z)
