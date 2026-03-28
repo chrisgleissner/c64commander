@@ -192,6 +192,87 @@ export const LOG_SEED = [
 const isoMinutesAgo = (minutesAgo: number, offsetMs = 0) =>
   new Date(FIXED_NOW_MS - minutesAgo * 60_000 + offsetMs).toISOString();
 
+type BadgeHealthSeed = {
+  health: "Healthy" | "Degraded" | "Unhealthy";
+  problemCount: number;
+};
+
+const createSeedTraceEvent = <T extends Record<string, unknown>>(
+  index: number,
+  type: TraceEvent["type"],
+  timestampMs: number,
+  data: T,
+): TraceEvent<T> => ({
+  id: `badge-seed-${index}`,
+  timestamp: new Date(timestampMs).toISOString(),
+  relativeMs: 0,
+  type,
+  origin: "system",
+  correlationId: `badge-seed-correlation-${Math.floor(index / 1000)}`,
+  data: {
+    lifecycleState: "foreground",
+    sourceKind: null,
+    localAccessMode: null,
+    trackInstanceId: null,
+    playlistItemId: null,
+    ...data,
+  },
+});
+
+const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): TraceEvent[] => {
+  const baseTimestampMs = Date.now();
+  const events: TraceEvent[] = [];
+  let index = 0;
+
+  const pushSuccessRestEvents = (count: number) => {
+    for (let offset = 0; offset < count; offset += 1) {
+      events.push(
+        createSeedTraceEvent(index, "rest-response", baseTimestampMs - index, {
+          method: "GET",
+          path: `/v1/info?ok=${offset}`,
+          status: 200,
+        }),
+      );
+      index += 1;
+    }
+  };
+
+  if (health === "Healthy") {
+    pushSuccessRestEvents(8);
+    return events;
+  }
+
+  if (health === "Degraded") {
+    const failureCount = Math.max(problemCount, 1);
+    const successCount = Math.max(failureCount + 1, Math.ceil(failureCount * 1.5));
+    pushSuccessRestEvents(successCount);
+    for (let offset = 0; offset < failureCount; offset += 1) {
+      events.push(
+        createSeedTraceEvent(index, "rest-response", baseTimestampMs - index, {
+          method: "GET",
+          path: `/v1/diag/failure/${offset}`,
+          status: 500,
+          error: `Seeded degraded failure ${offset + 1}`,
+        }),
+      );
+      index += 1;
+    }
+    return events;
+  }
+
+  pushSuccessRestEvents(1);
+  for (let offset = 0; offset < problemCount; offset += 1) {
+    events.push(
+      createSeedTraceEvent(index, "error", baseTimestampMs - index, {
+        message: `Seeded unhealthy problem ${offset + 1}`,
+      }),
+    );
+    index += 1;
+  }
+
+  return events;
+};
+
 type SeedScenario = {
   minutesAgo: number;
   actionName: string;
@@ -1088,6 +1169,34 @@ export const seedDiagnosticsTraces = async (page: Page) => {
       }
     });
   }, TRACE_SEED);
+};
+
+export const seedBadgeHealthTraceState = async (page: Page, seed: BadgeHealthSeed) => {
+  await page.evaluate((traceSeed) => {
+    return new Promise<void>((resolve) => {
+      const handler = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        setTimeout(resolve, 50);
+      };
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
+      }, 250);
+      window.addEventListener("c64u-traces-updated", handler);
+      const tracing = (
+        window as Window & {
+          __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+        }
+      ).__c64uTracing;
+      tracing?.seedTraces?.(traceSeed as TraceEvent[]);
+      if (!tracing?.seedTraces) {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
+      }
+    });
+  }, buildBadgeHealthTraceSeed(seed));
 };
 
 export const seedDiagnosticsTracesForAction = async (page: Page, actionName: string) => {

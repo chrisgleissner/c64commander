@@ -1,3 +1,65 @@
+# Health Badge Overflow Fix Plan
+
+## Classification
+
+- `UI_CHANGE`
+- `CODE_CHANGE`
+- documentation asset refresh limited to `docs/img/app/settings/header/`
+
+## Affected Files
+
+- `src/components/UnifiedHealthBadge.tsx`
+- `src/lib/diagnostics/healthModel.ts`
+- `src/components/AppBar.tsx` only if required for badge shrink behavior
+- `tests/unit/components/UnifiedHealthBadge.test.tsx`
+- `tests/unit/lib/diagnostics/healthModel.test.ts`
+- `playwright/connectionStatusLayout.spec.ts` or `playwright/layoutOverflow.spec.ts`
+- `playwright/screenshots.spec.ts`
+- `playwright/displayProfileViewports.ts` if existing helpers require extension
+- `docs/img/app/settings/header/`
+- `WORKLOG.md`
+
+## Implementation Order
+
+1. Read the required repo guidance, badge implementation, shared formatter, tests, and screenshot harness.
+2. Confirm the exact badge text contract and the smallest badge-local overflow containment change.
+3. Refactor the shared formatter in `healthModel.ts` so visible text rules and count capping live in one place.
+4. Update `UnifiedHealthBadge.tsx` to consume the shared formatter contract and add badge-local overflow safety.
+5. Touch `AppBar.tsx` only if the current flex row prevents the badge from shrinking.
+6. Add deterministic unit regression coverage for formatter output and rendered badge DOM behavior.
+7. Add one targeted Playwright overflow regression for the header on `/settings`.
+8. Extend the screenshot harness to capture only the settings header badge matrix into `docs/img/app/settings/header/`.
+9. Run required validation: `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, targeted Playwright regression, targeted screenshot generation.
+10. Update `WORKLOG.md` with evidence, outputs, screenshot paths, and any issues resolved.
+
+## Test Plan
+
+- Unit: expand `tests/unit/lib/diagnostics/healthModel.test.ts` with profile, health-state, and count-capping coverage.
+- Unit: expand `tests/unit/components/UnifiedHealthBadge.test.tsx` with DOM assertions for nowrap, overflow containment, text rendering, and click behavior.
+- Browser: add one deterministic `/settings` header overflow regression proving no badge, header-row, or page-level horizontal overflow in compact and medium worst cases.
+- Validation: run `npm run lint`, `npm run test`, `npm run test:coverage`, and `npm run build`.
+
+## Screenshot Plan
+
+- Use the existing Playwright screenshot harness.
+- Capture only the settings header area containing the title and badge.
+- Regenerate only `docs/img/app/settings/header/`.
+- Cover the required compact, medium, and expanded cases for healthy, degraded, and unhealthy visible outputs, including `999+` capping.
+
+## Completion Checklist
+
+- [ ] Shared visible badge formatter caps visible counts at `999+`.
+- [ ] Compact, medium, and expanded badge outputs match the required grammar.
+- [ ] Offline and not-yet-connected badge text remains unchanged.
+- [ ] Badge remains single-line and shrink-safe within the header.
+- [ ] Regression tests cover formatter, DOM rendering, and browser overflow behavior.
+- [ ] Targeted header screenshots exist under `docs/img/app/settings/header/`.
+- [ ] `npm run lint` passes.
+- [ ] `npm run test` passes.
+- [ ] `npm run test:coverage` passes with global branch coverage `>= 91%`.
+- [ ] `npm run build` passes.
+- [ ] `WORKLOG.md` records inspections, edits, commands, results, and screenshot outputs.
+
 # Overlay And Scroll Containment Plan
 
 ## Classification

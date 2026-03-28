@@ -15,6 +15,8 @@ export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unava
 // §6.8 — Connectivity states (fixed labels)
 export type ConnectivityState = "Online" | "Demo" | "Offline" | "Not yet connected" | "Checking";
 
+export type DisplayProfile = "compact" | "medium" | "expanded";
+
 // §6.3 — Health indicator contributors
 export type ContributorKey = "App" | "REST" | "FTP" | "TELNET";
 
@@ -43,7 +45,7 @@ export const getBadgeConnectivityLabel = (connectivity: ConnectivityState, produ
   }
 };
 
-export const getBadgeHealthLabel = (health: HealthState, profile: "compact" | "medium" | "expanded"): string | null => {
+export const getBadgeHealthLabel = (health: HealthState, profile: DisplayProfile): string | null => {
   if (profile === "compact") {
     return null;
   }
@@ -53,6 +55,102 @@ export const getBadgeHealthLabel = (health: HealthState, profile: "compact" | "m
   }
 
   return health;
+};
+
+export type BadgeTextContract = {
+  leadingLabel: string;
+  glyph: string;
+  countLabel: string | null;
+  trailingLabel: string | null;
+};
+
+export const getBadgeVisibleProblemCount = (problemCount: number): string | null => {
+  if (problemCount <= 0) {
+    return null;
+  }
+
+  return problemCount > 999 ? "999+" : String(problemCount);
+};
+
+const getBadgeLeadingLabel = (
+  connectivity: ConnectivityState,
+  profile: DisplayProfile,
+  product?: string | null,
+  connectedDeviceLabel?: string | null,
+) => {
+  if (connectivity === "Not yet connected") {
+    if (profile === "compact") {
+      return "—";
+    }
+
+    return profile === "medium" ? "Not connected" : "Not yet connected";
+  }
+
+  if (connectivity === "Online" || connectivity === "Checking") {
+    return connectedDeviceLabel ?? getBadgeConnectivityLabel(connectivity, product);
+  }
+
+  return getBadgeConnectivityLabel(connectivity, product);
+};
+
+export const getBadgeTextContract = (
+  health: HealthState,
+  connectivity: ConnectivityState,
+  problemCount: number,
+  profile: DisplayProfile,
+  glyph: string,
+  product?: string | null,
+  connectedDeviceLabel?: string | null,
+): BadgeTextContract => {
+  const leadingLabel = getBadgeLeadingLabel(connectivity, profile, product, connectedDeviceLabel);
+
+  if (connectivity === "Offline") {
+    return {
+      leadingLabel,
+      glyph,
+      countLabel: null,
+      trailingLabel: profile === "expanded" ? "Device not reachable" : null,
+    };
+  }
+
+  if (connectivity === "Not yet connected") {
+    return {
+      leadingLabel,
+      glyph,
+      countLabel: null,
+      trailingLabel: null,
+    };
+  }
+
+  const countLabel = getBadgeVisibleProblemCount(problemCount);
+  const healthLabel = getBadgeHealthLabel(health, profile);
+
+  if (profile === "compact") {
+    return {
+      leadingLabel,
+      glyph,
+      countLabel,
+      trailingLabel: null,
+    };
+  }
+
+  if (profile === "medium") {
+    return {
+      leadingLabel,
+      glyph,
+      countLabel,
+      trailingLabel: healthLabel,
+    };
+  }
+
+  const problemSuffix = countLabel ? `· ${countLabel} problem${problemCount === 1 ? "" : "s"}` : null;
+
+  return {
+    leadingLabel,
+    glyph,
+    countLabel: null,
+    trailingLabel: [healthLabel, problemSuffix].filter(Boolean).join(" ") || null,
+  };
 };
 
 export type LastActivity = {
@@ -326,37 +424,24 @@ export const getBadgeLabel = (
   health: HealthState,
   connectivity: ConnectivityState,
   problemCount: number,
-  profile: "compact" | "medium" | "expanded",
+  profile: DisplayProfile,
   glyph: string,
   product?: string | null,
+  connectedDeviceLabel?: string | null,
 ): string => {
-  const connLabel = getBadgeConnectivityLabel(connectivity, product);
+  const badgeText = getBadgeTextContract(
+    health,
+    connectivity,
+    problemCount,
+    profile,
+    glyph,
+    product,
+    connectedDeviceLabel,
+  );
 
-  if (connectivity === "Offline") {
-    if (profile === "expanded") return `${connLabel} ${glyph} Device not reachable`;
-    return `${connLabel} ${glyph}`;
-  }
-
-  if (connectivity === "Not yet connected") {
-    if (profile === "compact") return `${connLabel} ${glyph}`;
-    if (profile === "medium") return `Not connected ${glyph}`;
-    return `Not yet connected ${glyph}`;
-  }
-
-  const countStr = problemCount > 0 ? String(Math.min(problemCount, 99)) : "";
-
-  if (profile === "compact") {
-    return `${connLabel} ${glyph}${countStr}`.trim();
-  }
-
-  const healthLabel = getBadgeHealthLabel(health, profile);
-
-  if (profile === "medium") {
-    return `${connLabel} ${glyph}${countStr} ${healthLabel}`;
-  }
-
-  const problemSuffix = problemCount > 0 ? ` · ${problemCount} problem${problemCount !== 1 ? "s" : ""}` : "";
-  return `${connLabel} ${glyph} ${healthLabel}${problemSuffix}`;
+  return [badgeText.leadingLabel, badgeText.glyph, badgeText.countLabel, badgeText.trailingLabel]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
 };
 
 // §8.5 — aria-label

@@ -1,3 +1,14 @@
+# Health Badge Overflow Fix Worklog
+
+## 2026-03-28T10:51:32Z
+
+### Task start and classification
+
+- Classified this task as `UI_CHANGE` and `CODE_CHANGE` because it changes executable header UI behavior, regression coverage, and targeted documentation screenshots.
+- Confirmed the active branch already contains unrelated prompt work in `docs/prompts/health-badge-overflow-fix.md`; that file is being left untouched.
+- Updated `PLANS.md` with the implementation scope, validation contract, and screenshot boundary before reading the feature files.
+- Next step: read the required badge, formatter, test, and screenshot files; then map the smallest possible implementation surface.
+
 # Interstitial, Header, and Density Refactor Worklog
 
 ## 2026-03-28T00:35:00Z

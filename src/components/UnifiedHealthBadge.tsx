@@ -12,9 +12,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import {
   HEALTH_GLYPHS,
   getBadgeAriaLabel,
-  getBadgeConnectivityLabel,
-  getBadgeHealthLabel,
-  type ConnectivityState,
+  getBadgeTextContract,
   type HealthState,
 } from "@/lib/diagnostics/healthModel";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -49,14 +47,15 @@ export function UnifiedHealthBadge({ className }: Props) {
   const glyph = HEALTH_GLYPHS[state];
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product);
   const glyphColor = HEALTH_COLOR[state];
-  const connectivityLabel = getBadgeConnectivityLabel(connectivity, deviceInfo?.product);
-  const healthLabel = getBadgeHealthLabel(state, profile);
-  const showsCount =
-    problemCount > 0 && profile !== "expanded" && connectivity !== "Offline" && connectivity !== "Not yet connected";
-  const leadingLabel =
-    connectivity === "Online" || connectivity === "Checking"
-      ? (connectedDeviceLabel ?? connectivityLabel)
-      : connectivityLabel;
+  const badgeText = getBadgeTextContract(
+    state,
+    connectivity,
+    problemCount,
+    profile,
+    glyph,
+    deviceInfo?.product,
+    connectedDeviceLabel,
+  );
 
   const handleClick = () => {
     requestDiagnosticsOpen("header");
@@ -76,7 +75,7 @@ export function UnifiedHealthBadge({ className }: Props) {
       }
       onClick={handleClick}
       className={cn(
-        "flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 min-h-[44px] min-w-[44px] touch-none",
+        "flex min-w-0 max-w-full items-center gap-1 overflow-hidden whitespace-nowrap rounded-lg px-2 py-1.5 min-h-[44px] touch-none",
         "border border-border hover:border-primary/60 transition-colors",
         className,
       )}
@@ -86,13 +85,7 @@ export function UnifiedHealthBadge({ className }: Props) {
         data-overlay-critical="badge"
         aria-hidden="true"
       >
-        {connectivity === "Not yet connected"
-          ? profile === "compact"
-            ? "—"
-            : profile === "medium"
-              ? "Not connected"
-              : "Not yet connected"
-          : leadingLabel}
+        {badgeText.leadingLabel}
       </span>
 
       <span
@@ -100,62 +93,28 @@ export function UnifiedHealthBadge({ className }: Props) {
         data-overlay-critical="badge"
         aria-hidden="true"
       >
-        {glyph}
+        {badgeText.glyph}
       </span>
 
-      {showsCount && (
+      {badgeText.countLabel && (
         <span
           className={cn("text-xs font-semibold leading-none shrink-0", glyphColor)}
           data-overlay-critical="badge"
           aria-hidden="true"
         >
-          {Math.min(problemCount, 99)}
+          {badgeText.countLabel}
         </span>
       )}
 
-      {renderBadgeText(connectivity, problemCount, profile, healthLabel)}
+      {badgeText.trailingLabel ? (
+        <span
+          className="min-w-0 truncate text-xs font-semibold leading-none tracking-wide uppercase text-foreground"
+          data-overlay-critical="badge"
+          aria-hidden="true"
+        >
+          {badgeText.trailingLabel}
+        </span>
+      ) : null}
     </button>
-  );
-}
-
-/**
- * Renders the trailing neutral text after the health signal.
- */
-function renderBadgeText(
-  connectivity: ConnectivityState,
-  problemCount: number,
-  profile: "compact" | "medium" | "expanded",
-  healthLabel: string | null,
-): React.ReactNode {
-  if (connectivity === "Offline") {
-    return profile === "expanded" ? (
-      <span
-        className="text-xs font-semibold leading-none tracking-wide uppercase shrink-0 text-foreground"
-        aria-hidden="true"
-      >
-        Device not reachable
-      </span>
-    ) : null;
-  }
-
-  if (connectivity === "Not yet connected") {
-    return null;
-  }
-
-  if (healthLabel === null) {
-    return null;
-  }
-
-  const problemSuffix =
-    profile === "expanded" && problemCount > 0 ? ` · ${problemCount} problem${problemCount !== 1 ? "s" : ""}` : "";
-
-  return (
-    <span
-      className="text-xs font-semibold leading-none tracking-wide uppercase shrink-0 text-foreground"
-      data-overlay-critical="badge"
-      aria-hidden="true"
-    >
-      {`${healthLabel}${problemSuffix}`}
-    </span>
   );
 }

@@ -44,6 +44,7 @@ import {
 import {
   installFixedClock,
   installListPreviewLimit,
+  seedBadgeHealthTraceState,
   installStableStorage,
   seedDiagnosticsAnalytics,
   seedDiagnosticsLogs,
@@ -1423,6 +1424,52 @@ test.describe("App screenshots", () => {
         await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("settings", profileId, "01-overview.png"));
+      }
+    },
+  );
+
+  test(
+    "capture settings header badge screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      const headerRow = page.getByTestId("app-bar-row");
+      const badge = page.getByTestId("unified-health-badge");
+      const scenarios = [
+        { fileSuffix: "healthy", health: "Healthy" as const, problemCount: 0, expectedText: null },
+        { fileSuffix: "degraded-12", health: "Degraded" as const, problemCount: 12, expectedText: "12" },
+        { fileSuffix: "degraded-999plus", health: "Degraded" as const, problemCount: 1808, expectedText: "999+" },
+        { fileSuffix: "unhealthy-12", health: "Unhealthy" as const, problemCount: 12, expectedText: "12" },
+        {
+          fileSuffix: "unhealthy-999plus",
+          health: "Unhealthy" as const,
+          problemCount: 1808,
+          expectedText: "999+",
+        },
+      ];
+
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        for (const scenario of scenarios) {
+          await page.goto("/settings");
+          await applyDisplayProfileViewport(page, profileId);
+          await waitForConnected(page);
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await seedBadgeHealthTraceState(page, {
+            health: scenario.health,
+            problemCount: scenario.problemCount,
+          });
+
+          await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+          await expect(badge).toBeVisible();
+          await expect(badge).toHaveAttribute("data-health-state", scenario.health);
+
+          if (scenario.expectedText) {
+            await expect(badge).toContainText(scenario.expectedText);
+          }
+
+          await captureScreenshot(page, testInfo, `settings/header/badge-${profileId}-${scenario.fileSuffix}.png`, {
+            locator: headerRow,
+          });
+        }
       }
     },
   );
