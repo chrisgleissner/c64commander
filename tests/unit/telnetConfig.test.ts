@@ -34,4 +34,17 @@ describe("telnetConfig", () => {
     setStoredTelnetPort(0);
     expect(getStoredTelnetPort()).toBe(2323);
   });
+
+  it("rejects non-integer and out-of-range Telnet ports", () => {
+    localStorage.setItem("c64u_telnet_port", "70000");
+    expect(getStoredTelnetPort()).toBe(23);
+
+    localStorage.setItem("c64u_telnet_port", "12.5");
+    expect(getStoredTelnetPort()).toBe(23);
+
+    setStoredTelnetPort(2323);
+    setStoredTelnetPort(70000);
+    setStoredTelnetPort(12.5);
+    expect(getStoredTelnetPort()).toBe(2323);
+  });
 });

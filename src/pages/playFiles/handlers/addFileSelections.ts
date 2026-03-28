@@ -102,6 +102,13 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     return { resultId, category };
   };
 
+  const hasResolvedSelectionMetadata = (selection: SelectedItem) =>
+    selection.durationMs !== undefined ||
+    selection.songNr !== undefined ||
+    selection.subsongCount !== undefined ||
+    selection.sizeBytes != null ||
+    typeof selection.modifiedAt === "string";
+
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
     addItemsStartedAtRef.current = startedAt;
@@ -293,14 +300,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           }
         } else {
           const normalizedPath = normalizeSourcePath(selection.path);
-          const meta =
-            selection.durationMs !== undefined ||
-            selection.songNr !== undefined ||
-            selection.subsongCount !== undefined ||
-            selection.sizeBytes !== undefined ||
-            selection.modifiedAt !== undefined
-              ? selection
-              : await resolveSelectionEntry(normalizedPath);
+          const meta = hasResolvedSelectionMetadata(selection)
+            ? selection
+            : await resolveSelectionEntry(normalizedPath);
           selectedFiles.push({
             type: "file",
             name: meta?.name ?? selection.name,

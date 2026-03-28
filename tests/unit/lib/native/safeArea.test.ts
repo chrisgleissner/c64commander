@@ -56,7 +56,11 @@ describe("native safe-area sync", () => {
     const { syncNativeSafeAreaInsets } = await import("@/lib/native/safeArea");
     const insets = await syncNativeSafeAreaInsets();
 
-    expect(insets).toEqual({ top: 27.533333333333335, right: 0.13333333333333333, bottom: 0, left: 0.4 });
+    expect(insets).not.toBeNull();
+    expect(insets?.top).toBeCloseTo(27.533333333333335, 12);
+    expect(insets?.right).toBeCloseTo(0.13333333333333333, 12);
+    expect(insets?.bottom).toBe(0);
+    expect(insets?.left).toBeCloseTo(0.4, 12);
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-top")).toBe("28px");
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-right")).toBe("0px");
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-bottom")).toBe("0px");

@@ -135,6 +135,36 @@ describe("hvscSourceAdapter", () => {
     });
   });
 
+  it("preserves zero-second HVSC durations instead of dropping them", async () => {
+    vi.mocked(getHvscFolderListingPaged).mockResolvedValue({
+      path: "/ROOT",
+      folders: [],
+      songs: [
+        {
+          virtualPath: "/ROOT/silent.sid",
+          fileName: "silent.sid",
+          durationSeconds: 0,
+        },
+      ],
+      totalFolders: 0,
+      totalSongs: 1,
+      offset: 0,
+      limit: 50,
+    });
+
+    const source = createHvscSourceLocation("/ROOT");
+    const page = await source.listEntriesPage?.({ path: "/ROOT", offset: 0, limit: 50 });
+
+    expect(page?.entries).toEqual([
+      {
+        type: "file",
+        name: "silent.sid",
+        path: "/ROOT/silent.sid",
+        durationMs: 0,
+      },
+    ]);
+  });
+
   it("aborts recursive listing when signal is cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
