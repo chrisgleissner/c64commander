@@ -67,6 +67,30 @@ describe("native safe-area sync", () => {
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-left")).toBe("0px");
   });
 
+  it("uses raw inset values when devicePixelRatio is not positive", async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    getPlatformMock.mockReturnValue("android");
+    getInsetsMock.mockResolvedValue({
+      top: 2.4,
+      right: 1.6,
+      bottom: 5,
+      left: 1.2,
+    });
+    Object.defineProperty(window, "devicePixelRatio", {
+      configurable: true,
+      value: 0,
+    });
+
+    const { syncNativeSafeAreaInsets } = await import("@/lib/native/safeArea");
+    const insets = await syncNativeSafeAreaInsets();
+
+    expect(insets).toEqual({ top: 2.4, right: 1.6, bottom: 0, left: 1.2 });
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-top")).toBe("2px");
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-right")).toBe("2px");
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-bottom")).toBe("0px");
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-left")).toBe("1px");
+  });
+
   it("clears native inset variables outside Android native builds", async () => {
     isNativePlatformMock.mockReturnValue(false);
     getPlatformMock.mockReturnValue("web");
@@ -79,6 +103,20 @@ describe("native safe-area sync", () => {
     expect(insets).toBeNull();
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-top")).toBe("0px");
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-bottom")).toBe("0px");
+  });
+
+  it("clears native inset variables on non-android native platforms", async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    getPlatformMock.mockReturnValue("ios");
+    document.documentElement.style.setProperty("--native-safe-area-inset-top", "83px");
+    document.documentElement.style.setProperty("--native-safe-area-inset-left", "12px");
+
+    const { syncNativeSafeAreaInsets } = await import("@/lib/native/safeArea");
+    const insets = await syncNativeSafeAreaInsets();
+
+    expect(insets).toBeNull();
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-top")).toBe("0px");
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-left")).toBe("0px");
   });
 
   it("logs and clears the variables when the native lookup fails", async () => {

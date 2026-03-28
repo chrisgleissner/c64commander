@@ -10,7 +10,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { clearStoredTelnetPort, getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 describe("telnetConfig", () => {
+  const originalLocalStorage = globalThis.localStorage;
+
   beforeEach(() => {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: originalLocalStorage,
+    });
     localStorage.clear();
   });
 
@@ -46,5 +52,16 @@ describe("telnetConfig", () => {
     setStoredTelnetPort(70000);
     setStoredTelnetPort(12.5);
     expect(getStoredTelnetPort()).toBe(2323);
+  });
+
+  it("returns defaults and no-ops when localStorage is unavailable", () => {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: undefined,
+    });
+
+    expect(getStoredTelnetPort()).toBe(23);
+    expect(() => setStoredTelnetPort(2323)).not.toThrow();
+    expect(() => clearStoredTelnetPort()).not.toThrow();
   });
 });

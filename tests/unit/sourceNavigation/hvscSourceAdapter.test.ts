@@ -165,6 +165,101 @@ describe("hvscSourceAdapter", () => {
     ]);
   });
 
+  it("falls back to sid metadata and declared subsong count when track metadata is absent", async () => {
+    vi.mocked(getHvscFolderListingPaged).mockResolvedValue({
+      path: "/ROOT",
+      folders: [],
+      songs: [
+        {
+          virtualPath: "/ROOT/fallback.sid",
+          fileName: "fallback.sid",
+          durationSeconds: null,
+          sidMetadata: {
+            songs: 5,
+            startSong: 3,
+          },
+          subsongCount: 4,
+          trackSubsongs: null,
+        },
+      ],
+      totalFolders: 0,
+      totalSongs: 1,
+      offset: 0,
+      limit: 50,
+    });
+
+    const source = createHvscSourceLocation("");
+    const page = await source.listEntriesPage?.({ path: "/ROOT", offset: 0, limit: 50 });
+
+    expect(source.rootPath).toBe("/");
+    expect(page).toEqual({
+      entries: [
+        {
+          type: "file",
+          name: "fallback.sid",
+          path: "/ROOT/fallback.sid",
+          songNr: 3,
+          subsongCount: 4,
+        },
+      ],
+      totalCount: 1,
+      nextOffset: null,
+    });
+  });
+
+  it("paginates recursive HVSC listings without re-adding folders after the first page", async () => {
+    vi.mocked(getHvscFolderListingPaged).mockImplementation(async ({ path, offset = 0 }: { path: string; offset?: number }) => {
+      if (path === "/ROOT" && offset === 0) {
+        return {
+          path,
+          folders: ["/ROOT/Sub"],
+          songs: [{ virtualPath: "/ROOT/root-a.sid", fileName: "root-a.sid" }],
+          totalFolders: 1,
+          totalSongs: 2,
+          offset,
+          limit: 200,
+        };
+      }
+      if (path === "/ROOT" && offset === 1) {
+        return {
+          path,
+          folders: ["/ROOT/ShouldNotBeQueuedAgain"],
+          songs: [{ virtualPath: "/ROOT/root-b.sid", fileName: "root-b.sid" }],
+          totalFolders: 1,
+          totalSongs: 2,
+          offset,
+          limit: 200,
+        };
+      }
+      if (path === "/ROOT/Sub") {
+        return {
+          path,
+          folders: [],
+          songs: [{ virtualPath: "/ROOT/Sub/deep.sid", fileName: "deep.sid" }],
+          totalFolders: 0,
+          totalSongs: 1,
+          offset,
+          limit: 200,
+        };
+      }
+      throw new Error(`Unexpected path ${path} offset ${offset}`);
+    });
+
+    const source = createHvscSourceLocation("/ROOT");
+    const entries = await source.listFilesRecursive("/ROOT");
+
+    expect(entries).toEqual([
+      { type: "file", name: "root-a.sid", path: "/ROOT/root-a.sid" },
+      { type: "file", name: "root-b.sid", path: "/ROOT/root-b.sid" },
+      { type: "file", name: "deep.sid", path: "/ROOT/Sub/deep.sid" },
+    ]);
+    expect(vi.mocked(getHvscFolderListingPaged).mock.calls).toEqual([
+      [{ path: "/ROOT", offset: 0, limit: 200 }],
+      [{ path: "/ROOT", offset: 1, limit: 200 }],
+      [{ path: "/ROOT/Sub", offset: 0, limit: 200 }],
+    ]);
+  });
+
   it("aborts recursive listing when signal is cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
