@@ -10,16 +10,16 @@
 ### Investigation Steps
 
 1. Reviewed the source-of-truth documents:
-   - `doc/display-profiles.md`
-   - `doc/ux-guidelines.md`
-   - `doc/ux-interactions.md`
+   - `docs/internals/display-profiles.md`
+   - `docs/ux-guidelines.md`
+   - `docs/ux-interactions.md`
    - `README.md`
    - `AGENTS.md`
 2. Reviewed existing planning and prior display-profile research:
    - `PLANS.md`
-   - `doc/plans/display-profiles/display-profiles-implementation-plan.md`
-   - `doc/plans/display-profiles/work-log.md`
-   - `doc/research/review-8/review-8.md`
+   - `docs/plans/display-profiles/display-profiles-implementation-plan.md`
+   - `docs/plans/display-profiles/work-log.md`
+   - `docs/research/review-8/review-8.md`
 3. Traced the current display-profile architecture in implementation files:
    - `src/lib/displayProfiles.ts`
    - `src/hooks/useDisplayProfile.tsx`
@@ -46,7 +46,7 @@
    - `playwright/layoutOverflow.spec.ts`
    - `playwright/displayProfileViewports.ts`
    - `playwright/screenshots.spec.ts`
-   - `doc/img/app/**/profiles/`
+   - `docs/img/app/**/profiles/`
 
 ### Confirmed Architecture Findings
 
@@ -91,7 +91,7 @@
 - Every major page named in the prompt was inspected directly or through its profile-aware shared boundaries.
 - Shared component inventory was completed for the high-value profile-sensitive surfaces.
 - Compact, Medium, and Expanded behavior were assessed.
-- Modal behavior, CTA reachability evidence, screenshot coverage, and test coverage gaps were documented in `doc/research/review-9/review-9.md`.
+- Modal behavior, CTA reachability evidence, screenshot coverage, and test coverage gaps were documented in `docs/research/review-9/review-9.md`.
 
 ## 2026-03-15
 

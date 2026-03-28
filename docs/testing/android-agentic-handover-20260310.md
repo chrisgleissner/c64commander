@@ -16,24 +16,24 @@ Execute. Do not advise. Do not broaden scope.
 
 Read these files before taking any action:
 
-1. `doc/testing/agentic-tests/agentic-test-architecture.md`
-2. `doc/testing/agentic-tests/agentic-action-model.md`
-3. `doc/testing/agentic-tests/agentic-oracle-catalog.md`
-4. `doc/testing/agentic-tests/agentic-safety-policy.md`
-5. `doc/testing/agentic-tests/agentic-android-runtime-contract.md`
-6. `doc/testing/agentic-tests/agentic-observability-model.md`
-7. `doc/testing/agentic-tests/agentic-infrastructure-reuse.md`
-8. `doc/testing/agentic-tests/full-app-coverage/prompts/F005-home-ram-workflows.md`
-9. `doc/testing/agentic-tests/full-app-coverage/prompts/F013-playback-queue-and-volume.md`
-10. `doc/testing/agentic-tests/full-app-coverage/prompts/F014-songlength-duration-subsong.md`
-11. `doc/testing/agentic-tests/full-app-coverage/prompts/F015-hvsc-download-ingest.md`
-12. `doc/testing/agentic-tests/full-app-coverage/prompts/F016-hvsc-cache-reuse.md`
-13. `doc/testing/agentic-tests/full-app-coverage/prompts/F017-lock-screen-autoadvance.md`
-14. `doc/testing/agentic-tests/full-app-coverage/prompts/F023-persistence-and-recovery.md`
-15. `doc/developer.md`:
+1. `docs/testing/agentic-tests/agentic-test-architecture.md`
+2. `docs/testing/agentic-tests/agentic-action-model.md`
+3. `docs/testing/agentic-tests/agentic-oracle-catalog.md`
+4. `docs/testing/agentic-tests/agentic-safety-policy.md`
+5. `docs/testing/agentic-tests/agentic-android-runtime-contract.md`
+6. `docs/testing/agentic-tests/agentic-observability-model.md`
+7. `docs/testing/agentic-tests/agentic-infrastructure-reuse.md`
+8. `docs/testing/agentic-tests/full-app-coverage/prompts/F005-home-ram-workflows.md`
+9. `docs/testing/agentic-tests/full-app-coverage/prompts/F013-playback-queue-and-volume.md`
+10. `docs/testing/agentic-tests/full-app-coverage/prompts/F014-songlength-duration-subsong.md`
+11. `docs/testing/agentic-tests/full-app-coverage/prompts/F015-hvsc-download-ingest.md`
+12. `docs/testing/agentic-tests/full-app-coverage/prompts/F016-hvsc-cache-reuse.md`
+13. `docs/testing/agentic-tests/full-app-coverage/prompts/F017-lock-screen-autoadvance.md`
+14. `docs/testing/agentic-tests/full-app-coverage/prompts/F023-persistence-and-recovery.md`
+15. `docs/developer.md`:
     - `HVSC ingestion completeness contract`
     - `Playback auto-advance under lock/background`
-16. `doc/internals/duration-propagation.md`
+16. `docs/internals/duration-propagation.md`
 
 Important context:
 
@@ -344,7 +344,7 @@ Blocked:
 
 ## Deliverables
 
-Create one run folder under `doc/testing/agentic-tests/runs/<utc-run-id>-deep-edge/` containing:
+Create one run folder under `docs/testing/agentic-tests/runs/<utc-run-id>-deep-edge/` containing:
 
 - `corpus-manifest.json`
 - `mission-results.json`

@@ -22,5 +22,9 @@ export const useAppChromeMode = () => useContext(AppChromeModeContext);
 
 export const usePrimaryPageShellClassName = (className?: string) => {
   const appChromeMode = useAppChromeMode();
-  return cn("min-h-screen", appChromeMode === "fixed" ? "pt-[var(--app-bar-height)]" : undefined, className);
+  return cn(
+    "flex min-h-0 flex-col overflow-hidden",
+    appChromeMode === "fixed" ? "min-h-screen pt-[var(--app-bar-height)]" : "h-full",
+    className,
+  );
 };

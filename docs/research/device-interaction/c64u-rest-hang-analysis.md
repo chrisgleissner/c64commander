@@ -433,7 +433,7 @@ Client-side files reviewed:
 - `src/pages/home/components/AudioMixer.tsx`
 - `tests/unit/playFiles/volumeMuteRace.test.ts`
 - `tests/unit/playFiles/usePlaybackController.test.tsx`
-- `doc/testing/investigations/interactions1/verification-notes.md`
+- `docs/testing/investigations/interactions1/verification-notes.md`
 
 Firmware-side files reviewed:
 

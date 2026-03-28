@@ -1,7 +1,7 @@
 # Review 3 Implementation Plan (Autonomous Multi-Phase)
 
 Date baseline: 2026-02-18  
-Source findings: `doc/research/review-3/REPORT.md`
+Source findings: `docs/research/review-3/REPORT.md`
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Execute a productionization program that fixes all issues identified in Review 3
 - Do not skip failing tests. Fix root cause.
 - Keep repository buildable at every checkpoint.
 - Preserve existing behavior unless a change is explicitly required by this plan.
-- For each phase, update a running journal under `doc/research/review-3/implementation-journal.md`.
+- For each phase, update a running journal under `docs/research/review-3/implementation-journal.md`.
 
 ## Mandatory Constraints
 
@@ -26,17 +26,17 @@ Execute a productionization program that fixes all issues identified in Review 3
 
 ## Inputs
 
-- `doc/research/review-3/REPORT.md`
-- `doc/research/review-3/tables/risk-register.md`
-- `doc/research/review-3/tables/coverage-matrix.md`
-- `doc/research/review-3/metrics/*`
-- `doc/research/review-3/logs/*`
+- `docs/research/review-3/REPORT.md`
+- `docs/research/review-3/tables/risk-register.md`
+- `docs/research/review-3/tables/coverage-matrix.md`
+- `docs/research/review-3/metrics/*`
+- `docs/research/review-3/logs/*`
 
 ## Final Outputs Required
 
 - Code and tests implementing all accepted remediations.
 - Updated docs for any changed behavior.
-- New evidence bundle under `doc/research/review-3/post-fix/`:
+- New evidence bundle under `docs/research/review-3/post-fix/`:
   - `metrics/`
   - `logs/`
   - `tables/`
@@ -59,7 +59,7 @@ Goal: establish reproducible starting point and prevent moving targets.
 ### Steps
 
 1. Create branch and snapshot current baseline metrics/logs.
-2. Create `doc/research/review-3/implementation-journal.md` with timestamped entries.
+2. Create `docs/research/review-3/implementation-journal.md` with timestamped entries.
 3. Re-run baseline commands to verify starting deltas.
 
 ### Commands
@@ -75,8 +75,8 @@ cd android && ./gradlew test || true
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/logs/phase-0-baseline.log`
-- `doc/research/review-3/post-fix/metrics/phase-0-baseline-summary.md`
+- `docs/research/review-3/post-fix/logs/phase-0-baseline.log`
+- `docs/research/review-3/post-fix/metrics/phase-0-baseline-summary.md`
 
 ### Exit Criteria
 
@@ -109,8 +109,8 @@ cd android
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/logs/phase-1-android-jvm.log`
-- `doc/research/review-3/post-fix/metrics/phase-1-android-jvm-summary.md`
+- `docs/research/review-3/post-fix/logs/phase-1-android-jvm.log`
+- `docs/research/review-3/post-fix/metrics/phase-1-android-jvm-summary.md`
 
 ### Exit Criteria
 
@@ -138,8 +138,8 @@ npm run test:e2e
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/logs/phase-2-playwright.log`
-- `doc/research/review-3/post-fix/screenshots/phase-2/`
+- `docs/research/review-3/post-fix/logs/phase-2-playwright.log`
+- `docs/research/review-3/post-fix/screenshots/phase-2/`
 
 ### Exit Criteria
 
@@ -173,9 +173,9 @@ npm run docker:web:build
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/tables/bundle-delta.md`
-- `doc/research/review-3/post-fix/metrics/docker-constrained-after.txt`
-- `doc/research/review-3/post-fix/logs/phase-3-web-opt.log`
+- `docs/research/review-3/post-fix/tables/bundle-delta.md`
+- `docs/research/review-3/post-fix/metrics/docker-constrained-after.txt`
+- `docs/research/review-3/post-fix/logs/phase-3-web-opt.log`
 
 ### Exit Criteria
 
@@ -206,8 +206,8 @@ npm run test:coverage
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/tables/web-server-coverage-delta.md`
-- `doc/research/review-3/post-fix/logs/phase-4-web-server.log`
+- `docs/research/review-3/post-fix/tables/web-server-coverage-delta.md`
+- `docs/research/review-3/post-fix/logs/phase-4-web-server.log`
 
 ### Exit Criteria
 
@@ -235,8 +235,8 @@ npm run ios:build:sim || true
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/tables/platform-parity-matrix.md`
-- `doc/research/review-3/post-fix/logs/phase-5-lifecycle.log`
+- `docs/research/review-3/post-fix/tables/platform-parity-matrix.md`
+- `docs/research/review-3/post-fix/logs/phase-5-lifecycle.log`
 
 ### Exit Criteria
 
@@ -263,8 +263,8 @@ npx playwright test --project=android-tablet playwright/layoutOverflow.spec.ts
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/screenshots/phase-6/`
-- `doc/research/review-3/post-fix/logs/phase-6-ui.log`
+- `docs/research/review-3/post-fix/screenshots/phase-6/`
+- `docs/research/review-3/post-fix/logs/phase-6-ui.log`
 
 ### Exit Criteria
 
@@ -294,9 +294,9 @@ npm run docker:web:build
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/metrics/endurance-web.md`
-- `doc/research/review-3/post-fix/metrics/endurance-android.md`
-- `doc/research/review-3/post-fix/logs/phase-7-endurance.log`
+- `docs/research/review-3/post-fix/metrics/endurance-web.md`
+- `docs/research/review-3/post-fix/metrics/endurance-android.md`
+- `docs/research/review-3/post-fix/logs/phase-7-endurance.log`
 
 ### Exit Criteria
 
@@ -323,8 +323,8 @@ Goal: reduce flakiness in high-risk flows while preserving coverage.
 
 ### Artifacts
 
-- `doc/research/review-3/post-fix/tables/maestro-stability-report.md`
-- `doc/research/review-3/post-fix/logs/phase-8-maestro.log`
+- `docs/research/review-3/post-fix/tables/maestro-stability-report.md`
+- `docs/research/review-3/post-fix/logs/phase-8-maestro.log`
 
 ### Exit Criteria
 
@@ -354,9 +354,9 @@ cd android && ./gradlew test
 
 ### Final Deliverables
 
-- `doc/research/review-3/post-fix/SUMMARY.md`
-- `doc/research/review-3/post-fix/tables/final-risk-status.md`
-- `doc/research/review-3/post-fix/tables/before-after-kpis.md`
+- `docs/research/review-3/post-fix/SUMMARY.md`
+- `docs/research/review-3/post-fix/tables/final-risk-status.md`
+- `docs/research/review-3/post-fix/tables/before-after-kpis.md`
 
 ### Exit Criteria
 

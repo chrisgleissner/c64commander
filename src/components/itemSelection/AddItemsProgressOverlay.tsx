@@ -7,6 +7,13 @@
  */
 
 import { Button } from "@/components/ui/button";
+import {
+  APP_INTERSTITIAL_BACKDROP_CLASSNAME,
+  INTERSTITIAL_Z_INDEX,
+  resolveCenteredOverlayLayout,
+  resolveInterstitialBackdropOpacity,
+} from "@/components/ui/interstitialStyles";
+import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 
@@ -40,12 +47,25 @@ export const AddItemsProgressOverlay = ({
   visible,
   onCancel,
 }: AddItemsProgressOverlayProps) => {
-  if (visible === false) return null;
-  if (visible !== true && progress.status !== "scanning") return null;
+  const isVisible = visible === true || (visible !== false && progress.status === "scanning");
+  const layer = useRegisterInterstitial("progress", isVisible);
+
+  if (!isVisible) return null;
+
+  const { top } = resolveCenteredOverlayLayout(176);
 
   const overlay = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+      className={cn(
+        "fixed inset-0 flex items-start justify-center px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
+        APP_INTERSTITIAL_BACKDROP_CLASSNAME,
+      )}
+      data-interstitial-depth={layer?.depth ?? 1}
+      style={{
+        backgroundColor: `rgb(0 0 0 / ${layer?.backdropOpacity ?? resolveInterstitialBackdropOpacity(1)})`,
+        paddingTop: `${top}px`,
+        zIndex: layer?.backdropZIndex ?? INTERSTITIAL_Z_INDEX.backdrop,
+      }}
       data-testid={testId}
     >
       <div
@@ -53,6 +73,7 @@ export const AddItemsProgressOverlay = ({
           "w-full max-w-sm rounded-[var(--interstitial-radius)] border border-border bg-background px-5 py-4 shadow-[var(--interstitial-shadow)]",
           "max-h-[calc(100dvh-3rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))]",
         )}
+        style={{ zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold">{title}</p>

@@ -90,8 +90,8 @@ cf7d0826a429802524b6ee86beb73e81449f4e04
 ```text
 2026-02-28T19:53:28Z
  M PLANS.md
-?? doc/research/production-readiness-assessment-2026-02-28/
-?? doc/research/review-5/
+?? docs/research/review-5/
+?? docs/research/review-5/
 ```
 
 - `command:cmd-npm-ci-dryrun-2026-02-28T19:53:30Z` (passed)
@@ -131,11 +131,11 @@ Major module and integration inventory:
 
 | Component                                    | Evidence                                                                                                                    | Purpose                                                                   | Platform coverage | Risk notes                                                            |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
-| React UI pages/components                    | `doc/architecture.md:7-11`, `src/pages/*`, `src/components/*`                                                               | User workflows (connection, playback, config, diagnostics)                | Android/iOS/Web   | Large Settings surface has extensive hard-coded strings.              |
+| React UI pages/components                    | `docs/architecture.md:7-11`, `src/pages/*`, `src/components/*`                                                               | User workflows (connection, playback, config, diagnostics)                | Android/iOS/Web   | Large Settings surface has extensive hard-coded strings.              |
 | REST client (`c64api`)                       | `src/lib/c64api.ts:28-33`, `src/lib/c64api.ts:557-567`                                                                      | C64U REST calls, retries, host/password routing                           | Android/iOS/Web   | Defaults to HTTP and header password transport.                       |
 | Secure storage abstraction                   | `src/lib/secureStorage.ts:34-71`, `src/lib/native/secureStorage.web.ts:44-82`                                               | Persist network password locally                                          | Android/iOS/Web   | Web server mode proxy endpoint stores password in server config file. |
 | Playlist repository (IndexedDB/localStorage) | `src/lib/playlistRepository/indexedDbRepository.ts:24-35`, `src/lib/playlistRepository/localStorageRepository.ts:21-29`     | Track/session persistence                                                 | Android/iOS/Web   | Parse/version mismatch paths reset state to defaults.                 |
-| Diagnostics and tracing                      | `doc/diagnostics/tracing-spec.md:22-49`, `src/lib/logging.ts:52-66`, `src/App.tsx:181-186`                                  | Always-on local observability                                             | Android/iOS/Web   | No built-in remote crash reporting channel.                           |
+| Diagnostics and tracing                      | `docs/diagnostics/tracing-spec.md:22-49`, `src/lib/logging.ts:52-66`, `src/App.tsx:181-186`                                  | Always-on local observability                                             | Android/iOS/Web   | No built-in remote crash reporting channel.                           |
 | Capacitor config                             | `capacitor.config.ts:11-20`                                                                                                 | App identity + plugin config                                              | Android/iOS       | `CapacitorHttp` disabled; browser fetch path retained.                |
 | Android native plugins                       | `android/.../MainActivity.kt:60-67`                                                                                         | Folder picker, FTP, secure storage, diagnostics, HVSC, background service | Android           | FTP and cleartext defaults are high risk outside trusted LAN.         |
 | iOS native plugins                           | `ios/App/App/AppDelegate.swift:47-53`                                                                                       | Folder picker, FTP, secure storage, diagnostics, background service       | iOS               | FTP implementation uses raw socket streams without TLS.               |
@@ -208,7 +208,7 @@ Storage map:
 Migration posture:
 
 - Current repository adapters are version-1 object stores with fallback reset behavior on mismatch (`indexedDbRepository.ts:97-109`, `localStorageRepository.ts:74-88`).
-- `doc/db.md` defines target relational schema as planned target state, not current runtime (`doc/db.md:11-15`).
+- `docs/db.md` defines target relational schema as planned target state, not current runtime (`docs/db.md:11-15`).
 
 ## 07. Runtime Stability and Crash Risk
 
@@ -240,7 +240,7 @@ Mobile runtime notes:
 
 Current implementation:
 
-- Rich local diagnostics pipeline with logs, traces, and action summaries (`doc/diagnostics/tracing-spec.md`, `doc/diagnostics/action-summary-spec.md`).
+- Rich local diagnostics pipeline with logs, traces, and action summaries (`docs/diagnostics/tracing-spec.md`, `docs/diagnostics/action-summary-spec.md`).
 - CI telemetry gates exist for docker and fuzz workflows (`web.yaml:195-220`, `fuzz.yaml:174-201`, `:366-393`).
 
 Gap:
@@ -305,7 +305,7 @@ Observed quality gates:
 - Local lint and unit tests pass in this run (`command:cmd-lint-2026-02-28T19:53:34Z`, `command:cmd-test-unit-2026-02-28T19:53:45Z`).
 - CI enforces coverage threshold at 80 (`android.yaml:372-376`).
 - Repository guidance states 82% branch safety margin for code-change tasks (`AGENTS.md:95-99`).
-- E2E and Maestro workflows exist across Android/iOS/Web (`android.yaml`, `ios.yaml`, `doc/testing/maestro.md:18-23`).
+- E2E and Maestro workflows exist across Android/iOS/Web (`android.yaml`, `ios.yaml`, `docs/testing/maestro.md:18-23`).
 
 ## 15. Compliance, Licenses, Attribution
 
@@ -648,7 +648,7 @@ Observed compliance state:
 
 - **ID:** PRA-019
 - **Area:** Data
-- **Evidence:** `src/lib/playlistRepository/indexedDbRepository.ts:97-109`; `src/lib/playlistRepository/localStorageRepository.ts:74-88`; `doc/db.md:11-15`
+- **Evidence:** `src/lib/playlistRepository/indexedDbRepository.ts:97-109`; `src/lib/playlistRepository/localStorageRepository.ts:74-88`; `docs/db.md:11-15`
 - **Problem:** On corrupt or version-mismatched persisted state, repository adapters return default empty state rather than migration/recovery path.
 - **Risk:** User playlists/sessions can appear lost after incompatible or corrupt state events.
 - **Severity:** Major
@@ -821,7 +821,7 @@ Ranking rules:
 
 A. Repository and architecture: Covered.
 
-- Evidence: `README.md`, `doc/architecture.md`, `doc/diagnostics/*.md`, module inspections.
+- Evidence: `README.md`, `docs/architecture.md`, `docs/diagnostics/*.md`, module inspections.
 
 B. CI/CD and release readiness: Covered.
 
@@ -833,7 +833,7 @@ C. Security and privacy: Covered.
 
 D. Data integrity and lifecycle: Covered.
 
-- Evidence: config and playlist repository adapters + `doc/db.md` target state.
+- Evidence: config and playlist repository adapters + `docs/db.md` target state.
 
 E. Stability and error handling: Covered.
 
@@ -874,7 +874,7 @@ N/A markers with evidence:
 
 Self-check results:
 
-- Required deliverables for updated request exist: `doc/research/review-5/production-readiness-assessment-2026-02-28.md` and `doc/research/review-5/issues.csv`.
+- Required deliverables for updated request exist: `docs/research/review-5/review-5.md` and `docs/research/review-5/issues.csv`.
 - PRA IDs are unique and sequential (PRA-001 through PRA-023).
 - `issues.csv` contains every issue exactly once.
 - Executive summary severity ordering is aligned with risk register priorities.

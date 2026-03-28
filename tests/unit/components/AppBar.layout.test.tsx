@@ -39,9 +39,10 @@ describe("AppBar", () => {
     const header = container.querySelector("header");
     const shell = container.querySelector(".app-shell-container");
 
-    expect(header?.className).not.toContain("pt-safe");
-    expect(shell).toHaveStyle({ paddingTop: "0.5rem", paddingBottom: "0.5rem" });
+    expect(header?.style.paddingTop).toBe("0px");
+    expect(shell).toHaveStyle({ paddingTop: "calc(0.5rem * 0.8)", paddingBottom: "calc(0.5rem * 0.8)" });
     expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
+    expect(screen.queryByText("Compact")).not.toBeInTheDocument();
   });
 
   it("preserves the safe-area top padding outside compact mode", () => {
@@ -57,9 +58,10 @@ describe("AppBar", () => {
     const header = container.querySelector("header");
     const shell = container.querySelector(".app-shell-container");
 
-    expect(header?.className).toContain("pt-safe");
-    expect(shell?.className).toContain("py-4");
+    expect(header?.style.paddingTop).toBe("var(--app-header-top-inset, env(safe-area-inset-top))");
+    expect(shell).toHaveStyle({ paddingTop: "calc(1.5rem * 0.8)", paddingBottom: "calc(1.5rem * 0.8)" });
     expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
+    expect(screen.queryByText("Expanded")).not.toBeInTheDocument();
   });
 
   it("renders the unified health badge as the sole diagnostic/connectivity element", () => {
@@ -75,7 +77,7 @@ describe("AppBar", () => {
     expect(screen.getByTestId("unified-health-badge")).toBeVisible();
   });
 
-  it("uses sticky chrome inside the swipe runway", () => {
+  it("uses shell-owned relative chrome inside the swipe runway", () => {
     localStorage.clear();
     setViewportWidth(390);
 
@@ -91,8 +93,22 @@ describe("AppBar", () => {
 
     const header = container.querySelector("header");
     expect(header?.getAttribute("data-app-chrome-mode")).toBe("sticky");
-    expect(header?.className).toContain("sticky");
+    expect(header?.className).toContain("relative");
     expect(header?.className).not.toContain("fixed");
     expect(screen.getByRole("heading", { name: "Docs" })).toBeVisible();
+  });
+
+  it("uses a shared header row with balanced height", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <AppBar title="Config" />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("app-bar-row").className).toContain("min-h-[52px]");
+    expect(screen.getByTestId("app-bar-title-zone")).toBeVisible();
   });
 });

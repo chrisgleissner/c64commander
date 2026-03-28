@@ -10,8 +10,8 @@ The research is grounded in the current repository state:
 - generic Config browsing in `ConfigBrowserPage`
 - config transport in `useC64Connection`, `useInteractiveConfigWrite`, and `c64api`
 - app pacing controls in `appSettings`, `configWriteThrottle`, `slider`, and `sliderBehavior`
-- device capability fixtures in `doc/c64/c64u-config.yaml` and versioned device snapshots under `doc/c64/devices`
-- UX constraints from `doc/ux-guidelines.md` and `doc/display-profiles.md`
+- device capability fixtures in `docs/c64/c64u-config.yaml` and versioned device snapshots under `docs/c64/devices`
+- UX constraints from `docs/ux-guidelines.md` and `docs/internals/display-profiles.md`
 
 This is a design and product research document only. It does not prescribe code-level implementation steps.
 

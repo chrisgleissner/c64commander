@@ -1246,7 +1246,7 @@ This chapter specifies how Telnet-only features integrate into C64 Commander's e
 
 Users never see "Telnet", "REST", or "FTP" in the UI. The transport layer is an implementation detail. A user tapping "Power Cycle" on the Home page does not know or care that it uses Telnet while "Reset" uses REST. Both feel identical: tap → loading spinner → done/error toast.
 
-This follows the existing pattern where FTP-based file browsing and REST-based config reads appear as a single unified experience. The `doc/ux-guidelines.md` principle of source transparency ("consistent handling, no source-kind text labels") extends directly to Telnet actions.
+This follows the existing pattern where FTP-based file browsing and REST-based config reads appear as a single unified experience. The `docs/ux-guidelines.md` principle of source transparency ("consistent handling, no source-kind text labels") extends directly to Telnet actions.
 
 #### 18.1.2 Progressive Disclosure
 
@@ -1258,7 +1258,7 @@ Telnet-only features are introduced at the appropriate level of detail for each 
 
 #### 18.1.3 Intent-Driven Language
 
-Following `doc/ux-guidelines.md`, all labels describe what the user wants to accomplish, not how it is achieved:
+Following `docs/ux-guidelines.md`, all labels describe what the user wants to accomplish, not how it is achieved:
 
 | Telnet action label    | Intent-driven label used in UI |
 | ---------------------- | ------------------------------ |

@@ -21,7 +21,7 @@ Read these files before changing code:
 9. `tests/contract/scenarios/rest/index.ts`
 10. `tests/contract/mockRestServer.ts`
 11. `tests/contract/compare.ts`
-12. `doc/c64/c64u-config.yaml`
+12. `docs/c64/c64u-config.yaml`
 
 Do not start implementation until you understand how those pieces fit together.
 

@@ -987,10 +987,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Dump C64U telnet menus to YAML.")
     parser.add_argument("--base-url", default="http://c64u", help="Base URL for REST metadata lookup")
     parser.add_argument("--password", default=None, help="Optional network password for REST, FTP, and Telnet")
-    parser.add_argument("--output", default="doc/c64u-telnet.yaml", help="Primary YAML output path")
+    parser.add_argument("--output", default="docs/c64/c64u-telnet.yaml", help="Primary YAML output path")
     parser.add_argument(
         "--mirror-output",
-        default="doc/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml",
+        default="docs/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml",
         help="Optional secondary output path template. Use {firmware_version} as a placeholder.",
     )
     parser.add_argument(

@@ -558,27 +558,24 @@ function HomePageContent() {
   const ramExpansionAvailable =
     ramExpansionOptions.length > 0 && ramExpansionModeToken !== normalizeOptionToken(unavailableLabel);
   const reuSizeVisible = isActive && ramExpansionAvailable && ramExpansionModeToken === normalizeOptionToken("Enabled");
-  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
+  const pageShellClassName = usePrimaryPageShellClassName();
 
   return (
     <div className={pageShellClassName}>
       <AppBar
         title="Home"
         leading={
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex min-h-[52px] items-center gap-3 min-w-0">
             <img
               src="/c64commander.png"
               alt="C64 Commander"
-              className="h-9 w-auto rounded-md shrink-0 object-contain"
+              className="h-14 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-16"
               data-testid="home-header-logo"
             />
-            <div className="min-w-0">
-              <h1 className="c64-header text-xl truncate" data-testid="home-header-title">
+            <div className="min-w-0 flex items-center">
+              <h1 className="c64-header text-xl leading-none truncate" data-testid="home-header-title">
                 Home
               </h1>
-              <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="home-header-subtitle">
-                C64 Commander
-              </p>
             </div>
           </div>
         }

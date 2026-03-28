@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, Activity } from "lucide-react";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
@@ -334,12 +335,12 @@ function DocSectionCard({ section }: { section: DocSection }) {
 }
 
 export default function DocsPage() {
-  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
+  const pageShellClassName = usePrimaryPageShellClassName();
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Docs" subtitle="How to use this app" />
+      <AppBar title="Docs" />
 
-      <main className="app-shell-container py-6 space-y-4">
+      <PageContainer className="py-6 space-y-4">
         {docSections.map((section, index) => (
           <motion.div
             key={section.id}
@@ -396,7 +397,7 @@ export default function DocsPage() {
             </a>
           </div>
         </motion.div>
-      </main>
+      </PageContainer>
     </div>
   );
 }

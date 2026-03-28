@@ -20,23 +20,23 @@ Production-readiness execution for Review 3 across Android, Web/Docker, Playwrig
 
 ## Evidence Bundle
 
-- Master summary: `doc/research/review-3/post-fix/SUMMARY.md`
-- Final risk closure matrix: `doc/research/review-3/post-fix/tables/final-risk-status.md`
-- KPI before/after table: `doc/research/review-3/post-fix/tables/before-after-kpis.md`
-- Full final gate log: `doc/research/review-3/post-fix/logs/phase-9-final-gate.log`
-- Full build log (`./build`): `doc/research/review-3/post-fix/logs/final-full-build.log`
+- Master summary: `docs/research/review-3/post-fix/SUMMARY.md`
+- Final risk closure matrix: `docs/research/review-3/post-fix/tables/final-risk-status.md`
+- KPI before/after table: `docs/research/review-3/post-fix/tables/before-after-kpis.md`
+- Full final gate log: `docs/research/review-3/post-fix/logs/phase-9-final-gate.log`
+- Full build log (`./build`): `docs/research/review-3/post-fix/logs/final-full-build.log`
 
 ## Validation Highlights
 
 - Mandatory final gate command set executed (lint, unit, coverage, web-platform, e2e, build, Android JVM).
 - Global branch coverage remained above threshold; web server branch coverage delta recorded:
-  - `doc/research/review-3/post-fix/tables/web-server-coverage-delta.md`
+  - `docs/research/review-3/post-fix/tables/web-server-coverage-delta.md`
 - Constrained runtime and bundle deltas recorded:
-  - `doc/research/review-3/post-fix/tables/bundle-delta.md`
-  - `doc/research/review-3/post-fix/metrics/docker-constrained-delta.md`
+  - `docs/research/review-3/post-fix/tables/bundle-delta.md`
+  - `docs/research/review-3/post-fix/metrics/docker-constrained-delta.md`
 - Endurance artifacts:
-  - `doc/research/review-3/post-fix/metrics/endurance-web.md`
-  - `doc/research/review-3/post-fix/metrics/endurance-android.md`
+  - `docs/research/review-3/post-fix/metrics/endurance-web.md`
+  - `docs/research/review-3/post-fix/metrics/endurance-android.md`
 
 ## Known Constraints / Notes
 
@@ -47,4 +47,4 @@ Production-readiness execution for Review 3 across Android, Web/Docker, Playwrig
 
 Phase-by-phase completion proof is tracked in:
 
-- `doc/research/review-3/implementation-journal.md`
+- `docs/research/review-3/implementation-journal.md`

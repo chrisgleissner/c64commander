@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This plan operationalizes `doc/research/production-readiness-audit.md` into an implementation sequence for an autonomous LLM.
+This plan operationalizes `docs/research/review-1/production-readiness-audit.md` into an implementation sequence for an autonomous LLM.
 
 Primary target: Android MVP production readiness.
 Secondary target: iOS structure and portability risk reduction.

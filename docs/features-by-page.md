@@ -7,9 +7,9 @@ This document defines the implemented UI-driven feature surface of C64 Commander
 - Source of truth: current code in `src/pages/`, `src/components/`, `src/hooks/`, and `src/lib/`.
 - Scope: user-facing routes, global page-affecting surfaces, and routed auxiliary pages.
 - This complements:
-  - `doc/architecture.md`: runtime layers, data flow, and storage model
-  - `doc/ux-interactions.md`: interaction inventory and historical coverage notes
-  - `doc/code-coverage.md`: test and coverage strategy
+  - `docs/architecture.md`: runtime layers, data flow, and storage model
+  - `docs/ux-interactions.md`: interaction inventory and historical coverage notes
+  - `docs/code-coverage.md`: test and coverage strategy
 
 This document favors implemented behavior over intended behavior. Where the code does not confirm behavior, the status is marked `uncertain`.
 
@@ -292,7 +292,7 @@ Full configuration browser. Exposes all categories returned by the device and ap
 #### Known or Suspected Bugs
 
 - No confirmed active defect from code inspection.
-- Historical doc/test terminology about generic “reset category” is broader than the current implementation; current UI exposes category-level actions only for Audio Mixer and Clock Settings.
+- Historical documentation terminology about generic “reset category” is broader than the current implementation; current UI exposes category-level actions only for Audio Mixer and Clock Settings.
 
 #### Testability Assessment
 

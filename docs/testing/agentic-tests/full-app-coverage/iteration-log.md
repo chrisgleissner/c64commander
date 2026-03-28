@@ -10,7 +10,7 @@ Target:
 
 Actions:
 
-- inspected `doc/testing/agentic-tests/**`
+- inspected `docs/testing/agentic-tests/**`
 - inspected routes/pages/components/hooks for Home, Disks, Play, Config, Settings, Docs
 - checked existing `full-app-coverage/` directory state
 
@@ -111,7 +111,7 @@ Target:
 
 Execution artifact:
 
-- `/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T103247Z-mcp-probe.json`
+- `/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T103247Z-mcp-probe.json`
 
 Server results:
 

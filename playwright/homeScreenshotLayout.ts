@@ -134,7 +134,12 @@ export const selectCanonicalHomeScreenshotSlices = (slices: HomeScreenshotSlice[
         : remainingSlices.find((candidate) =>
             requirement.fallbackSectionSlugs!.every((sectionSlug) => candidate.sectionSlugs.includes(sectionSlug)),
           );
-    const slice = exactMatch ?? fallbackMatch;
+    const terminalSectionSlug = requirement.requiredSectionSlugs[requirement.requiredSectionSlugs.length - 1];
+    const terminalMatch =
+      exactMatch || fallbackMatch
+        ? null
+        : remainingSlices.find((candidate) => candidate.sectionSlugs.includes(terminalSectionSlug));
+    const slice = exactMatch ?? fallbackMatch ?? terminalMatch;
     if (!slice) {
       throw new Error(
         `Missing canonical Home screenshot slice for ${requirement.fileName} (${requirement.requiredSectionSlugs.join(

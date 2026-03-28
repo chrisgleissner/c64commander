@@ -57,7 +57,7 @@ flowchart TD
 
 | Concern                | Current implementation                                                                                                                          |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| C64U control plane     | REST API via `src/lib/c64api.ts`, documented in `doc/c64/c64u-openapi.yaml` and `doc/c64/c64u-rest-api.md`                                      |
+| C64U control plane     | REST API via `src/lib/c64api.ts`, documented in `docs/c64/c64u-openapi.yaml` and `docs/c64/c64u-rest-api.md`                                      |
 | C64U file access       | FTP via `src/lib/ftp/ftpClient.ts` and `src/lib/native/ftpClient.ts`; Android native implementation in `FtpClientPlugin.kt`                     |
 | HVSC acquisition       | Release discovery and download via `src/lib/hvsc/hvscReleaseService.ts`; extraction/indexing in `src/lib/hvsc/`                                 |
 | Local app state        | localStorage/sessionStorage-backed stores plus repository abstractions under `src/lib/playlistRepository/`, `src/lib/disks/`, and config stores |

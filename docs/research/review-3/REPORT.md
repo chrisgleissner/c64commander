@@ -1,7 +1,7 @@
 # Review 3: Production Readiness Report
 
 Date: 2026-02-18
-Scope rule: no production code changes were made. Artifacts only under `doc/research/review-3/` plus `PLANS.md` updates.
+Scope rule: no production code changes were made. Artifacts only under `docs/research/review-3/` plus `PLANS.md` updates.
 
 ## 1) Executive summary
 
@@ -227,5 +227,5 @@ Key executed commands in this review set:
 - `npm run test:web-platform`
 - `npm run test:coverage`
 - `cd android && ./gradlew test`
-- `node scripts/startup/collect-android-startup-baseline.mjs --loops=3 --serial=emulator-5554 --outDir=doc/research/review-3/metrics/startup-baseline`
+- `node scripts/startup/collect-android-startup-baseline.mjs --loops=3 --serial=emulator-5554 --outDir=docs/research/review-3/metrics/startup-baseline`
 - `npx playwright test --project=web ...` (targeted suite; see log)

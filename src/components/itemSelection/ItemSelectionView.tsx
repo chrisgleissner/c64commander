@@ -75,10 +75,10 @@ export const ItemSelectionView = ({
         </Button>
       </div>
 
-      <div className="flex items-start gap-2 w-full min-w-0 font-semibold text-sm">
+      <div className="flex items-start gap-2 w-full min-w-0 font-semibold text-sm" data-testid="source-path-label">
         <Folder className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
         <div className="min-w-0">
-          <span className="mr-1">Path:</span> <PathWrap path={path} className="text-foreground" />
+          <PathWrap path={path} className="text-foreground" />
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export const ItemSelectionView = ({
           return (
             <div
               key={entry.path}
-              className="flex items-center gap-2 min-w-0 border-b border-border/50 py-2"
+              className="flex items-center gap-2 min-w-0 border-b border-border/50 py-[0.44rem]"
               data-testid="source-entry-row"
               data-entry-type={entry.type}
               role={isFolder ? "button" : undefined}

@@ -108,7 +108,7 @@ export function toFeatureResult(runResult: RunResult): "PASS" | "FAIL" {
 
 export async function main(): Promise<void> {
   const workspaceRoot = resolveWorkspaceRoot();
-  const docsRoot = path.join(workspaceRoot, "doc", "testing", "agentic-tests", "full-app-coverage");
+  const docsRoot = path.join(workspaceRoot, "docs", "testing", "agentic-tests", "full-app-coverage");
   const runsRoot = path.join(docsRoot, "runs");
   const matrixPath = path.join(docsRoot, "feature-status-matrix.md");
   const artifactRoot = path.join(workspaceRoot, "c64scope", "artifacts");

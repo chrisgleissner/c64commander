@@ -1447,7 +1447,7 @@ if [[ "$RUN_DUMP_C64U_CONFIG" == "true" ]]; then
   log "Dumping C64U config"
   (cd "$ROOT_DIR/scripts" && ./dump_c64u_config.py \
     --base-url "http://${CONFIG_HOST}" \
-    --output "$ROOT_DIR/doc/c64/c64u-config.yaml")
+    --output "$ROOT_DIR/docs/c64/c64u-config.yaml")
   exit 0
 fi
 
@@ -1459,8 +1459,8 @@ if [[ "$RUN_DUMP_C64_TELNET_SCREENS" == "true" ]]; then
   log "Dumping C64U telnet screens"
   (cd "$ROOT_DIR/scripts" && ./dump_c64_telnet_screens.py \
     --base-url "http://${CONFIG_HOST}" \
-    --output "$ROOT_DIR/doc/c64u-telnet.yaml" \
-    --mirror-output "$ROOT_DIR/doc/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml")
+    --output "$ROOT_DIR/docs/c64/c64u-telnet.yaml" \
+    --mirror-output "$ROOT_DIR/docs/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml")
   exit 0
 fi
 

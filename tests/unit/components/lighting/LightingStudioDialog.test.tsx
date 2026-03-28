@@ -1,8 +1,9 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { getBadgeSafeZoneBottomPx, assertOverlayRespectsBadgeSafeZone } from "@/components/ui/interstitialStyles";
 
 const mocks = vi.hoisted(() => ({
   useLightingStudio: vi.fn(),
@@ -336,7 +337,7 @@ describe("LightingStudioDialog", () => {
 
     expect(screen.getByText("Shape looks and automate them.")).toBeInTheDocument();
     expect(screen.getByTestId("lighting-active-profile-chip")).toHaveTextContent("Device look");
-    expect(screen.getByTestId("lighting-unlock")).toHaveTextContent("Resume");
+    expect(screen.getByTestId("lighting-unlock")).toHaveTextContent("Unlock look");
     expect(screen.getByText("Which resolver layer currently owns each lighting surface.")).toBeInTheDocument();
     expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Unsupported").length).toBeGreaterThan(0);
@@ -436,5 +437,25 @@ describe("LightingStudioDialog", () => {
     expect(screen.queryByTestId("lighting-case-color")).not.toBeInTheDocument();
     expect(screen.queryByTestId("lighting-case-tint")).not.toBeInTheDocument();
     expect(screen.queryByTestId("lighting-case-sid-select")).not.toBeInTheDocument();
+  });
+});
+
+describe("LightingStudioDialog — badge safe zone invariant", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uses the measured header fallback when no badge geometry is present", () => {
+    document.documentElement.style.setProperty("--app-bar-height", "80px");
+    const safeZoneBottom = getBadgeSafeZoneBottomPx();
+    expect(safeZoneBottom).toBe(80);
+  });
+
+  it("assertOverlayRespectsBadgeSafeZone does not log when top stays within the allowed overlap band", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    document.documentElement.style.setProperty("--app-bar-height", "80px");
+    assertOverlayRespectsBadgeSafeZone(68, "LightingStudio[expanded]");
+    assertOverlayRespectsBadgeSafeZone(200, "LightingStudio[collapsed]");
+    expect(consoleSpy).not.toHaveBeenCalled();
   });
 });

@@ -6,7 +6,7 @@
 | Background execution smoke flow                   | Historically produced repeated failed screenshots in prior runs                                | `test-results/maestro/*/screenshot-❌-*(smoke-background-execution).png`                | Medium     |
 | File picker cancel flow                           | Flow repeatedly observed with historical failure screenshots across runs                       | `test-results/maestro/*/screenshot-❌-*(smoke-file-picker-cancel).png`                  | Medium     |
 | Timing sensitivity in animation-heavy transitions | Frequent `waitForAnimationToEnd` + `extendedWaitUntil` patterns indicate state timing coupling | `.maestro/subflows/*.yaml`, `.maestro/smoke-*.yaml`                                     | Medium     |
-| Device/perf variance in CI                        | Maestro docs define short/medium timeouts and selective CI tags to manage run-time variance    | `doc/testing/maestro.md` (timeouts and tag filtering sections)                          | High       |
+| Device/perf variance in CI                        | Maestro docs define short/medium timeouts and selective CI tags to manage run-time variance    | `docs/testing/maestro.md` (timeouts and tag filtering sections)                          | High       |
 
 ## Current-run note
 

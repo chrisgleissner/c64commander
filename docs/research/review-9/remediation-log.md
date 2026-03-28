@@ -4,7 +4,7 @@
 
 ### Current remediation pass opened
 
-- Re-read the full `doc/research/review-9/` document set, including `review-9.md`, `display-profiles-review.md`, `carry-forward.md`, `remediation-log.md`, `work-log.md`, and `worklog.md`.
+- Re-read the full `docs/research/review-9/` document set, including `review-9.md`, `display-profiles-review.md`, `carry-forward.md`, `remediation-log.md`, `work-log.md`, and `worklog.md`.
 - Confirmed that the previously resolved items remain resolved and that the live remaining work is still concentrated in:
   - profile-sensitive Home / Play / Settings layout debt
   - `QuickActionCard` caller-owned density contract
@@ -23,7 +23,7 @@
 - Replaced the remaining reviewed `sm:` / `md:` structural branches in Home, Play, Settings, and the shared selection list with display-profile-aware logic.
 - Normalized `QuickActionCard` to consume shared profile/grid density context and updated `ConfigItemRow` so Compact layout is profile-driven before measurement fallback.
 - Added regression coverage for shared profile behavior and new Playwright proofs for Home machine quick actions, confirmed power off, System theme, Refresh connection, and Recurse folders.
-- Reconciled `doc/ux-interactions.md` with the current suite and renamed diagnostics screenshot outputs to avoid reusing `expanded` outside the profile-folder convention.
+- Reconciled `docs/ux-interactions.md` with the current suite and renamed diagnostics screenshot outputs to avoid reusing `expanded` outside the profile-folder convention.
 
 ## 2026-03-15T00:00:00Z
 
@@ -50,8 +50,8 @@
 - `src/components/itemSelection/ItemSelectionDialog.tsx`
 - `playwright/displayProfiles.spec.ts`
 - `README.md`
-- `doc/research/review-9/carry-forward.md`
-- `doc/research/review-9/remediation-log.md`
+- `docs/research/review-9/carry-forward.md`
+- `docs/research/review-9/remediation-log.md`
 
 ### Files removed
 

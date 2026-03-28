@@ -163,10 +163,13 @@ Every interstitial must be exactly one of these surface types:
 
 ### Modal (Decision Interstitial)
 
+- Centered
+- Compact
 - Blocking
 - Short-lived
-- Requires an explicit decision or acknowledgement
-- Must not be used for browsing, exploration, or multi-step workflows
+- Must remain decision-only
+- Must not be used for browsing, exploration, filtering, or multi-step workflows
+- Must not rely on outer-surface scrolling
 
 Examples:
 
@@ -182,7 +185,10 @@ Examples:
 
 - Scrollable, exploratory, or stateful
 - May stay open while the user browses, filters, or edits
-- Preserves background context
+- Persistent workflow surface
+- Must fully occupy the available height from the bottom edge to the shared overlay top
+- Must slightly overlap the header using the shared overlap delta
+- Must leave the badge text, badge glyph, and header title readable at all times
 
 Examples:
 
@@ -197,6 +203,7 @@ Examples:
 
 ### Interaction Invariant
 
+- Exactly one interactive surface may own the screen at a time.
 - Do not choose modal vs bottom sheet by screen size or height.
 - Choose the surface by interaction type only.
 - Hybrid flows are forbidden.
@@ -207,6 +214,148 @@ Required split examples:
 - Snapshot browser is a bottom sheet; restore confirmation is a separate modal.
 - Source chooser is a modal; source browser is a bottom sheet.
 - Config manager is a bottom sheet; rename and delete are separate modals.
+
+### Safe Area Rules
+
+- `compact` profile uses full-screen top alignment: `HEADER_TOP = 0`.
+- `medium` and `expanded` profiles respect the runtime top safe area: `HEADER_TOP = env(safe-area-inset-top)`.
+- Do not hardcode top offsets.
+- Do not add extra top padding beyond `HEADER_TOP`.
+- System UI, cutouts, and status indicators must never be obstructed.
+
+### Controlled Header Overlap
+
+- Workflow sheets use one shared top equation only:
+  `overlay.top = getBadgeSafeZoneBottomPx() - min(12px, 0.15 * headerHeight)`
+- No workflow sheet may introduce extra top gaps, custom viewport fractions, or custom top margins.
+- Overlap may intersect only the badge border area.
+- Overlap must never intersect header title text, badge text, or the status glyph.
+
+### Shared Header Row
+
+- Every interstitial header starts with one title row only.
+- The title sits on the left edge of the header content area.
+- The close control sits on the right edge of that same row and shares the title's visual vertical center.
+- Diagnostics header actions such as the overflow menu share that same row and align to the same right-side action rail as the close control.
+- There must be no spacer row, no secondary row above the title, and no per-screen header padding overrides.
+
+### Close Control
+
+- All interstitial dismissal uses one shared `CloseControl` component.
+- The close control renders as a plain `×` glyph with no visible button chrome, border, fill, shadow, or hover background.
+- The visual footprint stays minimal while the interactive hit target remains at least `40px`.
+- No interstitial may implement its own bespoke close button.
+
+### Header Cleanup Rules
+
+- Drag handles and pill bars are forbidden on workflow sheets.
+- `Collapse` and `Expand` controls are forbidden in interstitial headers.
+- Lighting Studio and Diagnostics follow the same header-row contract as every other sheet.
+- Any additional controls must render on the title row or move into the body immediately below the header.
+
+### Z-Index Hierarchy
+
+- Main content: level `10`
+- Backdrop: level `20`
+- Header surface: level `30`
+- Active modal or workflow sheet: level `40`
+- The header stays above the backdrop and below the active surface.
+- No interstitial component may exceed level `40`.
+
+### Dimming Standard
+
+- All overlays use the same backdrop: `bg-black/40`.
+- This applies to modals, workflow sheets, and progress overlays.
+- Do not use blur on overlay backdrops.
+- Do not introduce per-component dimming overrides.
+
+### Navigation Suppression
+
+- When any interstitial is active, bottom navigation is visually removed with `transform: translateY(100%)`.
+- Navigation space remains reserved through a persistent layout constraint.
+- Overlay activation must not reflow content, resize the viewport, or shift scroll position.
+- Background content and header controls must be non-interactive while another surface owns the screen.
+
+### Full Height Utilization
+
+- Bottom sheets must fill the full available height from the bottom edge to `overlay.top`.
+- No visual sliver gap is allowed between the header overlap line and the sheet.
+- Lighting Studio follows the same overlay top contract as Diagnostics and every other workflow sheet.
+
+---
+
+### Overlay and Badge Visibility Contract
+
+This contract is **mandatory with zero exceptions**.
+
+#### Health Badge
+
+The health badge is the element in the top-right of the app bar labeled with the connectivity state
+(for example "C64U ● HEALTHY", "C64U ● DEGRADED", "C64U ● UNHEALTHY"). It must remain:
+
+- Visually present at all times while an overlay is active.
+- Clearly readable at all times — text, status label, and health glyph must be distinguishable even when a backdrop is present.
+
+Rationale: the health badge is the primary connectivity signal. Masking it prevents the user from noticing that the device has become degraded or unreachable while a workflow sheet is open.
+
+#### Badge Safe Zone
+
+The shared badge reference is the measured badge surface bounds.
+
+- `getBadgeSafeZoneBottomPx()` returns the badge bottom edge used as the workflow-sheet top base.
+- The sheet may overlap only by the shared overlap delta.
+- Badge text and glyph are treated as critical bounds and may never be intersected.
+
+#### Header Critical Bounds
+
+- Header title text is also a critical bound.
+- Runtime assertions must fail if an overlay intersects header title text or badge critical content.
+
+#### Runtime Assertions
+
+- `assertOverlayRespectsBadgeSafeZone(...)` logs a `console.error` in non-production builds when:
+- a workflow sheet rises above the allowed overlap line
+- header title text is intersected
+- badge text or glyph is intersected
+- badge border overlap exceeds the shared delta
+
+---
+
+## Subtitle Usage Policy
+
+Visible subtitles are forbidden for top-of-page headers.
+
+- Do not render a second line directly below the primary page title in the shared top header.
+- Embedded explanatory copy inside page content is allowed when it is part of the page body rather than the page header.
+- Do not use a page-header subtitle as a fallback for weak page naming.
+- Accessibility descriptions may exist only when they are visually hidden (`sr-only`) and required for semantics.
+
+Allowed exceptions:
+
+- Embedded page explanations and helper text inside the main content area
+- Error text
+- Inline validation
+- Live status output
+- Intentional body content that is not acting as a subtitle
+
+---
+
+## Header Layout Standard
+
+All top-level page headers must use the same structure.
+
+- Left side: page title or branded leading content.
+- Right side: unified health badge.
+- Vertical alignment: exact center alignment on the same header row.
+- Minimum row height: 52 px.
+- Spacing must make the header feel taller through padding, not larger title text.
+- The Home page may use a larger logo for brand identity, but it still follows the same shared row alignment.
+
+Header prohibitions:
+
+- No visible subtitle line.
+- No extra status chips to the left of the health badge.
+- No per-page header spacing overrides that break row alignment across display profiles.
 
 ---
 
@@ -400,9 +549,7 @@ The following terms are consistently used across the UI:
 Terminology rule:
 
 - Use only `Local`, `C64U`, and `HVSC` when naming sources in code and user-facing text.
-- The long forms `Local Device`, `Commodore 64 Ultimate`, and `High Voltage SID Collection` are allowed only in:
-  - the source-selection interstitial (as subtitles/explanations), and
-  - the Docs page (as explanatory text).
+- The long forms `Local Device`, `Commodore 64 Ultimate`, and `High Voltage SID Collection` are allowed only in documentation or explanatory prose outside the interactive UI.
 - "Select all" / "Deselect all" - Bulk selection
 - "Remove selected" - Destructive bulk action
 - "View all" - List expansion

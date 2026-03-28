@@ -1,7 +1,7 @@
 # Reliability Remediation Plan (Convergence-First)
 
 Date: 2026-03-06
-Source analysis: `doc/testing/investigations/reliability1/analysis.md`
+Source analysis: `docs/testing/investigations/reliability1/analysis.md`
 Plan intent: execute fixes for all six reliability issues with machine-verifiable closure.
 
 ## 1. Current State
@@ -21,9 +21,9 @@ No issue may be marked `DONE` without passing all acceptance checks in this docu
 
 The implementation session must create and maintain:
 
-1. `doc/testing/investigations/reliability1/work-log.md`
-2. `doc/testing/investigations/reliability1/convergence-report.md`
-3. `doc/testing/investigations/reliability1/convergence-status.json`
+1. `docs/testing/investigations/reliability1/work-log.md`
+2. `docs/testing/investigations/reliability1/convergence-report.md`
+3. `docs/testing/investigations/reliability1/convergence-status.json`
 
 `convergence-status.json` schema:
 
@@ -201,13 +201,13 @@ Coverage gate:
 
 These checks must succeed before marking complete:
 
-1. `test -f doc/testing/investigations/reliability1/reliability-remediation-plan.md`
-2. `test -f doc/testing/investigations/reliability1/work-log.md`
-3. `test -f doc/testing/investigations/reliability1/convergence-report.md`
-4. `test -f doc/testing/investigations/reliability1/convergence-status.json`
-5. `node -e "const s=require('./doc/testing/investigations/reliability1/convergence-status.json'); const keys=['issue1','issue2','issue3','issue4','issue5','issue6']; for (const k of keys) { if (!s[k] || s[k].status!=='DONE') process.exit(1); }"`
-6. `rg -n '^## Issue [1-6]$' doc/testing/investigations/reliability1/convergence-report.md`
-7. `rg -n 'pre_fix_failure_evidence|post_fix_pass_evidence' doc/testing/investigations/reliability1/convergence-report.md`
+1. `test -f docs/testing/investigations/reliability1/reliability-remediation-plan.md`
+2. `test -f docs/testing/investigations/reliability1/work-log.md`
+3. `test -f docs/testing/investigations/reliability1/convergence-report.md`
+4. `test -f docs/testing/investigations/reliability1/convergence-status.json`
+5. `node -e "const s=require('./docs/testing/investigations/reliability1/convergence-status.json'); const keys=['issue1','issue2','issue3','issue4','issue5','issue6']; for (const k of keys) { if (!s[k] || s[k].status!=='DONE') process.exit(1); }"`
+6. `rg -n '^## Issue [1-6]$' docs/testing/investigations/reliability1/convergence-report.md`
+7. `rg -n 'pre_fix_failure_evidence|post_fix_pass_evidence' docs/testing/investigations/reliability1/convergence-report.md`
 
 ## 8. Definition of Done
 

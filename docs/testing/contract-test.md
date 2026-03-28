@@ -7,7 +7,7 @@ Harness Version: v2 (comprehensive, auto-generated from OpenAPI)
 
 Empirically validated contract test for the C64 Ultimate (C64U) REST API and FTP service. Based on:
 
-- OpenAPI spec: `doc/c64/c64u-openapi.yaml` (SHA256: `e11763d2...`)
+- OpenAPI spec: `docs/c64/c64u-openapi.yaml` (SHA256: `e11763d2...`)
 - Firmware source: `1541ultimate/` (SHA1: `b831b01f...`)
 - SAFE and STRESS mode measurements on a real device
 
@@ -52,7 +52,7 @@ AUTH ON was not exercised in this run (device configured AUTH OFF).
 
 ## Canonical REST Endpoint Inventory (48 endpoints)
 
-Auto-parsed from `doc/c64/c64u-openapi.yaml`.
+Auto-parsed from `docs/c64/c64u-openapi.yaml`.
 
 ### Information (read-only)
 

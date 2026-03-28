@@ -16,8 +16,8 @@ No deviation from this sequence. No shortcuts.
 
 | Input    | Path                                 | PRA-ID range      | Severity terms used             | Effort terms used | Issue count |
 | -------- | ------------------------------------ | ----------------- | ------------------------------- | ----------------- | ----------- |
-| Review A | `doc/research/review-5/review-5a.md` | PRA-001 – PRA-023 | Blocker, Critical, Major, Minor | S, M, L           | 23          |
-| Review B | `doc/research/review-5/review-5b.md` | PRA-001 – PRA-033 | Critical, Major, Minor, Trivial | S, M, L           | 33          |
+| Review A | `docs/research/review-5/review-5a.md` | PRA-001 – PRA-023 | Blocker, Critical, Major, Minor | S, M, L           | 23          |
+| Review B | `docs/research/review-5/review-5b.md` | PRA-001 – PRA-033 | Critical, Major, Minor, Trivial | S, M, L           | 33          |
 
 Both reviews target the same commit (`cf7d0826`), same date (2026-02-28), same repository.
 
@@ -32,7 +32,7 @@ Both reviews target the same commit (`cf7d0826`), same date (2026-02-28), same r
 Create exactly one file:
 
 ```
-doc/research/review-5/review-5.md
+docs/research/review-5/review-5.md
 ```
 
 Do not modify any source code, test, CI config, manifest, lockfile, or build script during this phase.
@@ -200,7 +200,7 @@ Cross-cutting concerns must be handled via `Dependencies` or `Notes on Reconcili
 
 ### Step 9: Write the consolidated document
 
-Structure of `doc/research/review-5/review-5.md`:
+Structure of `docs/research/review-5/review-5.md`:
 
 ```markdown
 # Consolidated Production Readiness Assessment — C64 Commander
@@ -317,7 +317,7 @@ If any check fails, fix it before proceeding.
 Create exactly one file:
 
 ```
-doc/research/review-5/ROLLOUT-PLAN.md
+docs/research/review-5/ROLLOUT-PLAN.md
 ```
 
 ### Structure
@@ -325,7 +325,7 @@ doc/research/review-5/ROLLOUT-PLAN.md
 ```markdown
 # Rollout Plan — C64 Commander Production Readiness
 
-Source: doc/research/review-5/review-5.md
+Source: docs/research/review-5/review-5.md
 Created: <date>
 
 ## Phase 0 — Precondition & Safety Controls
@@ -443,8 +443,8 @@ If a task requires:
 
 Work is complete when all of the following are true:
 
-1. `doc/research/review-5/review-5.md` exists and passes the self-check in Step 10.
-2. `doc/research/review-5/ROLLOUT-PLAN.md` exists with all phases populated.
+1. `docs/research/review-5/review-5.md` exists and passes the self-check in Step 10.
+2. `docs/research/review-5/ROLLOUT-PLAN.md` exists with all phases populated.
 3. Every Phase 1 task in ROLLOUT-PLAN.md is either `[x]` (completed) or prefixed with `BLOCKED:` (with documented blocker).
 4. `npm run test` passes.
 5. `npm run lint` passes.

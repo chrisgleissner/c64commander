@@ -11,7 +11,6 @@
 // The diagnostics overlay stays mounted underneath, rendered inert.
 
 import { useEffect } from "react";
-import { X } from "lucide-react";
 import {
   AppSheet,
   AppSheetBody,
@@ -70,7 +69,6 @@ export function AnalyticPopup({
       }}
     >
       <AppSheetContent
-        showClose={false}
         className={cn("z-[61] overflow-hidden p-0 sm:w-[min(100vw-2rem,52rem)]", contentClassName)}
         data-testid={testId ?? "analytic-popup"}
         onEscapeKeyDown={(event) => {
@@ -81,34 +79,25 @@ export function AnalyticPopup({
           event.preventDefault();
         }}
       >
-        <AppSheetDescription className="sr-only">{description ?? `${title} details.`}</AppSheetDescription>
-        <AppSheetHeader className="border-b border-border px-4 py-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 space-y-1.5">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  aria-label="Return to Diagnostics"
-                  data-testid="analytic-popup-return"
-                >
-                  ← Diagnostics
-                </button>
-                <AppSheetTitle className="min-w-0 truncate text-sm font-semibold">{title}</AppSheetTitle>
-              </div>
-              {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+        <AppSheetHeader
+          closeTestId="analytic-popup-close"
+          descriptionContent={description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+          titleContent={
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="Return to Diagnostics"
+                data-testid="analytic-popup-return"
+              >
+                ← Diagnostics
+              </button>
+              <AppSheetTitle className="min-w-0 truncate text-sm font-semibold">{title}</AppSheetTitle>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="shrink-0 rounded p-1 hover:bg-muted transition-colors"
-              aria-label="Close"
-              data-testid="analytic-popup-close"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
+          }
+        >
+          <AppSheetDescription className="sr-only">{description ?? `${title} details.`}</AppSheetDescription>
         </AppSheetHeader>
         <AppSheetBody className="flex min-h-0 flex-col overflow-auto">{children}</AppSheetBody>
       </AppSheetContent>

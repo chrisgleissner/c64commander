@@ -8,7 +8,7 @@ The audit did not find a single blocking architecture flaw in the shared TypeScr
 
 - Slider propagation during drag exists and is intentional, but the repository still lacks a narrow regression proof that the full stack continues emitting downstream device updates while the drag is in progress.
 - Connection freshness is surfaced with misleading wording. `src/components/ConnectivityIndicator.tsx` combines probe activity and device request activity, then labels the result `Last request`, while `src/components/ConnectionController.tsx` only schedules background rediscovery when the app is in demo or offline states.
-- Coverage enforcement is inconsistent across repo surfaces. CI and `scripts/check-coverage-threshold.mjs` enforce 91% line and branch coverage, but `doc/code-coverage.md` still documents 90%, and the local `./build --coverage` path still invokes the threshold script with `COVERAGE_MIN=90`.
+- Coverage enforcement is inconsistent across repo surfaces. CI and `scripts/check-coverage-threshold.mjs` enforce 91% line and branch coverage, but `docs/code-coverage.md` still documents 90%, and the local `./build --coverage` path still invokes the threshold script with `COVERAGE_MIN=90`.
 - Android and web are materially better hardened than iOS. iOS has active CI and native validation, but its FTP bridge surface is thinner, less observable, and less directly tested than Android.
 
 Based on current repository evidence, Android and self-hosted web appear conditionally production-ready for trusted-LAN deployment. Uniform all-platform production readiness is not yet demonstrated.
@@ -94,7 +94,7 @@ The code is internally consistent, but the UI wording is misleading for operator
 Diagnostics are one of the strongest subsystems in the repository:
 
 - `src/lib/tracing/traceSession.ts` defines append-only trace storage and event capture.
-- `doc/diagnostics/tracing-spec.md` is specific and aligned with the implementation goals.
+- `docs/diagnostics/tracing-spec.md` is specific and aligned with the implementation goals.
 - `src/lib/diagnostics/actionSummaries.ts` projects traces into operator-facing summaries instead of treating summaries as the source of truth.
 - `src/lib/diagnostics/diagnosticsExport.ts` exports zipped JSON payloads by tab or as a combined bundle.
 - `src/lib/diagnostics/webServerLogs.ts` polls web-server logs into the app every 5 seconds.
@@ -113,11 +113,11 @@ The biggest platform-specific production risk is therefore not Android. It is iO
 
 ## Documentation Consistency Audit
 
-The canonical docs are generally useful and current, especially `README.md`, `doc/architecture.md`, `doc/developer.md`, `doc/c64/c64u-rest-api.md`, and `doc/c64/c64u-ftp.md`. The following consistency issues were verified:
+The canonical docs are generally useful and current, especially `README.md`, `docs/architecture.md`, `docs/developer.md`, `docs/c64/c64u-rest-api.md`, and `docs/c64/c64u-ftp.md`. The following consistency issues were verified:
 
 1. Coverage thresholds are documented inconsistently.
-	- `doc/code-coverage.md` still states 90% line and branch enforcement.
-	- `doc/developer.md`, `.github/workflows/android.yaml`, `scripts/check-coverage-threshold.mjs`, and `scripts/collect-coverage.sh` enforce or document 91%.
+	- `docs/code-coverage.md` still states 90% line and branch enforcement.
+	- `docs/developer.md`, `.github/workflows/android.yaml`, `scripts/check-coverage-threshold.mjs`, and `scripts/collect-coverage.sh` enforce or document 91%.
 	- The local `build` helper still runs coverage enforcement with `COVERAGE_MIN=90`.
 
 2. Trusted-LAN and insecure-transport assumptions are documented consistently.
@@ -131,7 +131,7 @@ The canonical docs are generally useful and current, especially `README.md`, `do
 4. Historical research documents remain present and useful, but they contain stale threshold values and prior-state conclusions.
 	- This is acceptable as history, but it increases the need to keep canonical docs precise.
 
-The most concrete documentation fix is to reconcile the 90/91 coverage story across `doc/code-coverage.md`, `build`, and any related prompts or helper docs.
+The most concrete documentation fix is to reconcile the 90/91 coverage story across `docs/code-coverage.md`, `build`, and any related prompts or helper docs.
 
 ## Test Coverage Evaluation
 
@@ -217,7 +217,7 @@ No silent-exception defect was found in the current `web/server/src/staticAssets
 | Risk | Evidence | Severity | Likelihood | Detectability | Assessment |
 | --- | --- | --- | --- | --- | --- |
 | Connection freshness wording is misleading | `src/components/ConnectivityIndicator.tsx`, `src/components/ConnectionController.tsx` | Medium | High | Medium | Quiet healthy sessions can look stale because the UI label and sampling model do not match. |
-| Coverage governance is inconsistent | `doc/code-coverage.md`, `doc/developer.md`, `scripts/check-coverage-threshold.mjs`, `build`, `.github/workflows/android.yaml` | Medium | High | High | Local reproduction can disagree with CI because thresholds are not uniformly configured. |
+| Coverage governance is inconsistent | `docs/code-coverage.md`, `docs/developer.md`, `scripts/check-coverage-threshold.mjs`, `build`, `.github/workflows/android.yaml` | Medium | High | High | Local reproduction can disagree with CI because thresholds are not uniformly configured. |
 | Slider drag semantics lack end-to-end regression proof | `src/lib/ui/sliderBehavior.ts`, `src/lib/ui/sliderDeviceAdapter.ts`, `src/pages/playFiles/hooks/useVolumeOverride.ts`, current tests | Medium | Medium | Medium | The implementation exists, but a future pacing change could regress it without a focused test. |
 | iOS FTP bridge parity is weaker than Android | `ios/App/App/IOSFtp.swift`, Android plugin tests, iOS native-tests inventory | Medium | Medium | Medium | iOS ignores timeout/trace options from the shared contract and lacks equivalent direct plugin tests. |
 | Web password is stored plaintext in config volume | `web/server/src/index.ts`, `README.md` | Medium | Medium | High | Acceptable only when the trusted-LAN and host-disk assumptions are enforced operationally. |
@@ -231,7 +231,7 @@ Single points of failure worth noting:
 ## Required Fixes
 
 1. Align coverage enforcement everywhere.
-	- Update `doc/code-coverage.md` to 91%.
+	- Update `docs/code-coverage.md` to 91%.
 	- Update `build` coverage mode to use the same 91/91 gate as CI and `scripts/check-coverage-threshold.mjs`.
 
 2. Fix connection freshness signaling.

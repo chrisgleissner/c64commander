@@ -1,7 +1,7 @@
 # Reliability 2 Implementation Plan
 
 Date: 2026-03-06
-Source: `doc/testing/investigations/reliability2/analysis.md`
+Source: `docs/testing/investigations/reliability2/analysis.md`
 
 ## 1. Goal
 
@@ -285,6 +285,6 @@ Run all gates after implementation:
 ## 5. Deliverables
 
 1. Updated code + tests for R2-1..R2-13.
-2. `doc/testing/investigations/reliability2/execution-log.md` with timestamped commands/results.
-3. `doc/testing/investigations/reliability2/convergence-report.md` with per-issue before/after evidence.
+2. `docs/testing/investigations/reliability2/execution-log.md` with timestamped commands/results.
+3. `docs/testing/investigations/reliability2/convergence-report.md` with per-issue before/after evidence.
 4. Optional `convergence-status.json` if a machine-readable tracker is needed by CI.

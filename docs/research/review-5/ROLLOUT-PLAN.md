@@ -1,6 +1,6 @@
 # Rollout Plan — C64 Commander Production Readiness
 
-Source: doc/research/review-5/review-5.md
+Source: docs/research/review-5/review-5.md
 Created: 2026-02-28
 
 ## Phase 0 — Precondition & Safety Controls
@@ -315,7 +315,7 @@ Created: 2026-02-28
     - Validation confirms no pipeline or runtime regression.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert governance update and restore prior metadata/configuration.
-  - **Implementation notes:** Integrated optional Sentry initialization (`src/lib/observability/sentry.ts`) and wired it in `src/main.tsx`, gated by `VITE_SENTRY_DSN`; documented in `doc/architecture.md`.
+  - **Implementation notes:** Integrated optional Sentry initialization (`src/lib/observability/sentry.ts`) and wired it in `src/main.tsx`, gated by `VITE_SENTRY_DSN`; documented in `docs/architecture.md`.
 - [x] TASK-037: Complete governance hardening for no codeowners file
   - **Addresses:** ISSUE-032
   - **Acceptance criteria:**

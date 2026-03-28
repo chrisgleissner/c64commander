@@ -9,10 +9,10 @@
 
 ### Research scope completed for the initial planning pass
 
-- Reviewed `doc/display-profiles.md`, `doc/ux-guidelines.md`, `doc/ux-interactions.md`, `README.md`, `AGENTS.md`, and the repository instructions.
-- Reviewed the current viewport and screenshot guidance in `doc/testing/dual-resolution.md` and `doc/testing/viewport-finalization-summary.md`.
+- Reviewed `docs/internals/display-profiles.md`, `docs/ux-guidelines.md`, `docs/ux-interactions.md`, `README.md`, `AGENTS.md`, and the repository instructions.
+- Reviewed the current viewport and screenshot guidance in `docs/testing/dual-resolution.md` and `docs/testing/viewport-finalization-summary.md`.
 - Audited primary pages and shared UI surfaces under `src/pages/` and `src/components/` with emphasis on Home, Play, Disks, Config Browser, Settings, selection browser, diagnostics, and modal primitives.
-- Audited screenshot generation and evidence infrastructure under `playwright/` and `doc/img/app/`.
+- Audited screenshot generation and evidence infrastructure under `playwright/` and `docs/img/app/`.
 
 ### Findings
 
@@ -38,9 +38,9 @@
 
 ### Deliverables produced during the planning pass
 
-- `doc/plans/display-profiles/display-profiles-gap-analysis.md`
-- `doc/plans/display-profiles/display-profiles-implementation-plan.md`
-- `doc/plans/display-profiles/work-log.md`
+- `docs/plans/display-profiles/display-profiles-gap-analysis.md`
+- `docs/plans/display-profiles/display-profiles-implementation-plan.md`
+- `docs/plans/display-profiles/work-log.md`
 
 ### Plan adjustments
 
@@ -60,5 +60,5 @@
 
 - Increased Expanded root UI scale and rebalanced expanded action-grid minimums so larger screens gain larger typography and controls without introducing horizontal overflow.
 - Updated compact full-screen modal geometry to keep a minimal inset from the viewport edges and aligned modal/layout tests to that shared contract.
-- Regenerated the full documentation screenshot set, including profile-specific images under `doc/img/app/**/profiles/`.
+- Regenerated the full documentation screenshot set, including profile-specific images under `docs/img/app/**/profiles/`.
 - Validation completed with `npm run lint`, `npm run test:coverage` (`All files` branch coverage `91.01%`), `npm run build`, `playwright/displayProfiles.spec.ts`, full `npm run screenshots`, `npm run test:e2e`, `npm run validate:evidence`, and `npm run validate:traces`.

@@ -60,6 +60,12 @@ test.describe("HVSC Play page", () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
+  const waitForRealConnectionBadge = async (page: Page) => {
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
+    return indicator;
+  };
+
   const openHvscSourceBrowser = async (page: Page) => {
     await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
@@ -851,7 +857,7 @@ test.describe("HVSC Play page", () => {
   }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto("/play");
-    await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+    await waitForRealConnectionBadge(page);
     await snap(page, testInfo, "play-connected");
 
     await page.getByRole("button", { name: "Download HVSC" }).click();

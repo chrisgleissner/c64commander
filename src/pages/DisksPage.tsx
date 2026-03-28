@@ -15,11 +15,11 @@ import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialo
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 
 export default function DisksPage() {
-  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
+  const pageShellClassName = usePrimaryPageShellClassName();
   const { resolved, openStudio, openContextLens } = useLightingStudio();
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Disks" subtitle="Drive control & disk library" />
+      <AppBar title="Disks" />
 
       <PageContainer>
         <PageStack>

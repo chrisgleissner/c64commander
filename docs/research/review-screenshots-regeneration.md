@@ -6,8 +6,8 @@ Rule set: git metadata plus deterministic regeneration only
 
 ## Scope
 
-- All PNG screenshots under `doc/img/app/`
-- References from `README.md`, `doc/**/*.md`, and `docs/**/*.md`
+- All PNG screenshots under `docs/img/app/`
+- References from `README.md`, `docs/**/*.md`, and `docs/**/*.md`
 - Screenshot generator logic in `playwright/screenshots.spec.ts`
 - Home slice planning in `playwright/homeScreenshotLayout.ts`
 
@@ -15,7 +15,7 @@ Image contents were not inspected during this review. Decisions were based on pa
 
 ## Inventory and Git-Date Classification
 
-- Total tracked screenshots under `doc/img/app`: `149`
+- Total tracked screenshots under `docs/img/app`: `149`
 - Screenshots already dated `2026-03-26` by git history before regeneration: `42`
 - Screenshots classified as outdated and deleted for regeneration: `107`
 
@@ -23,7 +23,7 @@ Image contents were not inspected during this review. Decisions were based on pa
 
 1. Audited the existing screenshot pipeline and identified image-decoding comparison logic that would violate the no-image-access constraint for this task.
 2. Added a force-regeneration path in `playwright/screenshots.spec.ts` so screenshots can be recreated without loading prior PNGs.
-3. Deleted the stale screenshot corpus under `doc/img/app` and regenerated the suite output from Playwright.
+3. Deleted the stale screenshot corpus under `docs/img/app` and regenerated the suite output from Playwright.
 4. Verified screenshot-test coverage still existed for the full documented surface area.
 5. Extended Home screenshot generation so the top-level `README.md` canonical storytelling assets are recreated exactly.
 6. Fixed Home section capture to scroll and measure the active swipe-slot container instead of `window`.
@@ -40,17 +40,17 @@ Final result:
 
 The Home storytelling section now deterministically recreates these canonical files:
 
-- `doc/img/app/home/sections/01-system-info-to-cpu-ram.png`
-- `doc/img/app/home/sections/02-quick-config-to-keyboard-light.png`
-- `doc/img/app/home/sections/03-quick-config-to-printers.png`
-- `doc/img/app/home/sections/04-printers-to-sid.png`
-- `doc/img/app/home/sections/05-sid-to-config.png`
+- `docs/img/app/home/sections/01-system-info-to-cpu-ram.png`
+- `docs/img/app/home/sections/02-quick-config-to-keyboard-light.png`
+- `docs/img/app/home/sections/03-quick-config-to-printers.png`
+- `docs/img/app/home/sections/04-printers-to-sid.png`
+- `docs/img/app/home/sections/05-sid-to-config.png`
 
 ## Live Documentation Reference Check
 
 After cleanup, the live Markdown reference scan found:
 
-- Real missing screenshot paths in `README.md`, `doc/**/*.md`, and `docs/**/*.md`: `0`
+- Real missing screenshot paths in `README.md`, `docs/**/*.md`, and `docs/**/*.md`: `0`
 
 One historical audit note and one placeholder path in developer documentation were updated so they no longer look like broken screenshot references.
 

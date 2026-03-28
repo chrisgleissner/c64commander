@@ -62,7 +62,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
         actionGridColumns: 2,
         actionGridMinWidth: "0px",
         actionGridGap: "0.625rem",
-        modalMaxWidth: "100vw",
+        modalMaxWidth: "100dvw",
         modalInset: "1rem",
         isCompactDialog: true,
       };

@@ -11,6 +11,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import sharp from "sharp";
 
 import { compareScreenshotBuffers } from "./screenshotMetadataDedupe.js";
@@ -145,7 +146,9 @@ const generateDiffImage = async (filePath, headBlob, outPath) => {
 
 const OUT_ROOT = path.resolve(".tmp/screenshot-diffs");
 
-const run = async () => {
+export const toDiffOutputRelativePath = (filePath) => filePath.replace(/^docs\/img\/app\//, "");
+
+export const run = async () => {
   const files = await listModifiedPngs();
   if (files.length === 0) {
     console.log("[diff] No modified screenshot PNGs found.");
@@ -157,7 +160,7 @@ const run = async () => {
   const results = await Promise.all(
     files.map(async (filePath) => {
       const headBlob = await loadHeadBlob(filePath);
-      const relOut = filePath.replace(/^doc\/img\/app\//, "");
+      const relOut = toDiffOutputRelativePath(filePath);
       const outPath = path.join(OUT_ROOT, relOut);
 
       if (!headBlob) {
@@ -257,7 +260,9 @@ const run = async () => {
   console.log("[diff] Grey = exact-identical. Red overlay = changed pixels (FUZZY and CHANGED both get overlays).");
 };
 
-run().catch((err) => {
-  console.error("[diff] Fatal:", err);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  run().catch((err) => {
+    console.error("[diff] Fatal:", err);
+    process.exitCode = 1;
+  });
+}

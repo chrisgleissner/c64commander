@@ -26,13 +26,13 @@ All features are now terminally classified and passing under app-first execution
 - result: `AF-001`…`AF-008` all PASS
 
 3. Full-app coverage executor manifests
-- transient manifest with intermediate flake: [fac-20260308T113247Z-executor-manifest.json](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113247Z-executor-manifest.json)
-- converged manifest: [fac-20260308T113632Z-executor-manifest.json](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.json)
-- converged summary: [fac-20260308T113632Z-executor-manifest.md](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md)
+- transient manifest with intermediate flake: [fac-20260308T113247Z-executor-manifest.json](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113247Z-executor-manifest.json)
+- converged manifest: [fac-20260308T113632Z-executor-manifest.json](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.json)
+- converged summary: [fac-20260308T113632Z-executor-manifest.md](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md)
 - result: all 23 features mapped and executed with `PASS:23`, `FAIL:0`, `BLOCKED:0`
 
 4. MCP server capability probe
-- run file: [fac-20260308T103247Z-mcp-probe.json](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T103247Z-mcp-probe.json)
+- run file: [fac-20260308T103247Z-mcp-probe.json](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T103247Z-mcp-probe.json)
 - result: `droidmind`, `c64scope`, and `c64bridge` all callable
 
 ## Residual Defects / Blockers
@@ -41,10 +41,10 @@ All features are now terminally classified and passing under app-first execution
 
 ## Package Index
 
-- [feature-inventory.md](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/feature-inventory.md)
-- [feature-test-catalog.md](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/feature-test-catalog.md)
-- [feature-status-matrix.md](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)
-- [tool-gap-analysis.md](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/tool-gap-analysis.md)
-- [iteration-log.md](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/iteration-log.md)
-- [prompts/](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/prompts)
-- [runs/](/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs)
+- [feature-inventory.md](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/feature-inventory.md)
+- [feature-test-catalog.md](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/feature-test-catalog.md)
+- [feature-status-matrix.md](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)
+- [tool-gap-analysis.md](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/tool-gap-analysis.md)
+- [iteration-log.md](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/iteration-log.md)
+- [prompts/](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/prompts)
+- [runs/](/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs)

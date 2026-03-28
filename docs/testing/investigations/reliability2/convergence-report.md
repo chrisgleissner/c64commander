@@ -177,7 +177,7 @@ Fix:
 - preserved `capacitor.config.ts` settings:
   - `server.androidScheme = "http"`
   - `plugins.CapacitorHttp.enabled = true`
-- added release-process note in `doc/developer.md` so these settings are treated as protected Android connectivity requirements
+- added release-process note in `docs/developer.md` so these settings are treated as protected Android connectivity requirements
 
 ---
 

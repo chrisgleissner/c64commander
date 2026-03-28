@@ -71,7 +71,7 @@ In C64 Commander:
 
 1. Open **Settings > Device > Connection**.
 2. Enter the C64 Ultimate IP address or hostname.
-3. A compact C64U connectivity badge with a green health indicator confirms the connection:
+3. A green health indicator at the top right confirms the successful connection:
 
 ![Connected C64U badge](docs/img/app/home/02-connection-status-popover.png)
 
@@ -79,7 +79,7 @@ In C64 Commander:
 
 ### Home
 
-Operational dashboard: machine controls, Telnet-backed quick actions, light effects, drives, printer, SID mixer, streams, and configuration snapshots.
+Operational dashboard: machine controls, quick actions, light effects, drives, printer, SID mixer, streams, and configuration snapshots.
 
 <table>
   <tr>
@@ -106,7 +106,7 @@ Operational dashboard: machine controls, Telnet-backed quick actions, light effe
 
 ### Play
 
-Build playlists from local files, C64U storage, CommoServe search results, or HVSC. Supports autoplay, shuffle, repeat, subsong selection, and duration overrides.
+Build playlists for programs and songs sourced from the local device, C64U storage, CommoServe, or HVSC. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.
 
 <table>
   <tr>
@@ -118,7 +118,7 @@ Build playlists from local files, C64U storage, CommoServe search results, or HV
 
 ### Browse & Import
 
-Choose an import source from the same playlist workflow: browse C64U storage, add local folders from your device, or search CommoServe and import the matching results.
+Choose an import source from the same playlist workflow: add local folders from your device, browse your C64U storage, or search CommoServe and import the matching results.
 
 <table>
   <tr>
@@ -369,9 +369,9 @@ export GITHUB_TOKEN=<your-token>
 
 ## For Developers
 
-- [Documentation index](doc/index.md)
-- [Developer guide](doc/developer.md)
-- [Chaos/fuzz testing](doc/testing/chaos-fuzz.md)
+- [Documentation index](docs/index.md)
+- [Developer guide](docs/developer.md)
+- [Chaos/fuzz testing](docs/testing/chaos-fuzz.md)
 
 Third-party notices: `npm run notices:generate` regenerates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). `npm run build` packages notices into distribution bundles automatically.
 

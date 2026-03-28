@@ -5,11 +5,19 @@ import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import {
   AlertDialog,
   AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {
@@ -68,5 +76,71 @@ describe("profile-aware dialog surfaces", () => {
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveAttribute("data-modal-presentation", "centered");
     expect(screen.getByText("Clear").parentElement?.className).not.toContain("sticky");
+  });
+
+  it("supports dialog header overrides, extras, and hidden close controls", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    render(
+      <DisplayProfileProvider>
+        <Dialog open>
+          <DialogContent showClose={false} closeTestId="dialog-close">
+            <DialogHeader
+              titleContent={<span data-testid="dialog-title-override">Override title</span>}
+              descriptionContent={<span data-testid="dialog-description-override">Override description</span>}
+              hideClose
+              actions={<button type="button">Action</button>}
+            >
+              <DialogTitle>Ignored title</DialogTitle>
+              <DialogDescription>Ignored description</DialogDescription>
+              <div data-testid="dialog-header-extra">Header extra</div>
+            </DialogHeader>
+            <DialogFooter>
+              <button type="button">Confirm</button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("dialog-title-override")).toHaveTextContent("Override title");
+    expect(screen.getByTestId("dialog-description-override")).toHaveTextContent("Override description");
+    expect(screen.getByTestId("dialog-header-extra")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Action" })).toBeVisible();
+    expect(screen.queryByTestId("dialog-close")).not.toBeInTheDocument();
+  });
+
+  it("supports alert dialog header extras and hidden close controls", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    render(
+      <DisplayProfileProvider>
+        <AlertDialog open>
+          <AlertDialogContent>
+            <AlertDialogHeader
+              titleContent={<span data-testid="alert-title-override">Alert override</span>}
+              descriptionContent={<span data-testid="alert-description-override">Alert description</span>}
+              hideClose
+              actions={<button type="button">Inspect</button>}
+            >
+              <AlertDialogTitle>Ignored alert title</AlertDialogTitle>
+              <AlertDialogDescription>Ignored alert description</AlertDialogDescription>
+              <div data-testid="alert-header-extra">Alert extra</div>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <button type="button">Confirm</button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("alert-title-override")).toHaveTextContent("Alert override");
+    expect(screen.getByTestId("alert-description-override")).toHaveTextContent("Alert description");
+    expect(screen.getByTestId("alert-header-extra")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Inspect" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
   });
 });

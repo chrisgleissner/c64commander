@@ -29,7 +29,7 @@ Tab navigation across Home/Play/Disks/Config/Settings/Docs
 
 ## Execution Steps (Deterministic)
 
-1. Start a `c64scope` session with caseId `F002` and artifact root under `/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs/`.
+1. Start a `c64scope` session with caseId `F002` and artifact root under `/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/`.
 2. Use `droidmind` to bring app to `/`.
 3. Perform feature actions through app UI only.
 4. After each meaningful action, record intermediate assertion and capture app screenshot.
@@ -68,7 +68,7 @@ Tab navigation across Home/Play/Disks/Config/Settings/Docs
 
 ## Artifact Output Contract
 
-- Run folder: `/home/chris/dev/c64/c64commander/doc/testing/agentic-tests/full-app-coverage/runs/<run-id>/`
+- Run folder: `/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/<run-id>/`
 - Mandatory files:
 - `result.json` (`PASS|FAIL|BLOCKED`, root cause class, retry recommendation)
 - `steps.json`

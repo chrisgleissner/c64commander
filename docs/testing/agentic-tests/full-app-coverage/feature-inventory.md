@@ -10,7 +10,7 @@ Derived from:
 - `src/pages/playFiles/components/**`
 - `src/pages/ConfigBrowserPage.tsx`
 - `src/pages/SettingsPage.tsx`
-- `doc/testing/agentic-tests/**`
+- `docs/testing/agentic-tests/**`
 
 | Feature ID | Feature Name | Screen / Flow Location | Why Key | User-Visible Outcome | Backend / Device Interaction | Observability Options | Current Testability Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |

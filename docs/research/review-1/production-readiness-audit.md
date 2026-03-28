@@ -222,7 +222,7 @@ iOS is structurally integrated but still **forward-looking / non-parity** (not a
 ### Battery optimization risks
 
 - No explicit system-level battery optimization exemption flow in codebase.
-- Known OEM constraints are documented (`doc/developer.md:123`) but not enforced via automated device-level reliability gates.
+- Known OEM constraints are documented (`docs/developer.md:123`) but not enforced via automated device-level reliability gates.
 
 ### Additional readiness concerns
 

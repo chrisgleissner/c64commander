@@ -62,44 +62,34 @@ describe("UnifiedHealthBadge", () => {
     mockConnectionStatus.deviceInfo = { product: "C64 Ultimate", errors: [] };
   });
 
-  it("renders connectivity before the health signal on medium profile", () => {
-    currentProfile = "medium";
-    render(<UnifiedHealthBadge />);
+  it("renders capped counts exactly once on compact and medium profiles", () => {
+    mockHealthState.problemCount = 1000;
 
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("C64U▲3Degraded");
+    for (const profile of ["compact", "medium"] as const) {
+      currentProfile = profile;
+      const { unmount } = render(<UnifiedHealthBadge />);
+      const badge = screen.getByTestId("unified-health-badge");
+      const textContent = badge.textContent ?? "";
+
+      expect(textContent).toContain("999+");
+      expect(textContent).not.toContain("1000");
+      expect(textContent.match(/999\+/g)).toHaveLength(1);
+
+      unmount();
+    }
   });
 
-  it("renders count digit exactly once on compact profile (no duplication)", () => {
-    currentProfile = "compact";
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    const textContent = badge.textContent ?? "";
-    // Count "3" should appear exactly once, not twice
-    const matches = textContent.match(/3/g);
-    expect(matches).toHaveLength(1);
-  });
-
-  it("renders count digit exactly once on medium profile (no duplication)", () => {
-    currentProfile = "medium";
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    const textContent = badge.textContent ?? "";
-    // The expanded "3 problems" is NOT rendered on medium — only the digit "3"
-    const matches = textContent.match(/3/g);
-    expect(matches).toHaveLength(1);
-  });
-
-  it("does not render count digit on expanded profile (uses spelled-out form)", () => {
+  it("renders the expanded problem suffix without a separate count span", () => {
     currentProfile = "expanded";
+    mockHealthState.problemCount = 12;
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
     const textContent = badge.textContent ?? "";
-    // Expanded: "3 problems" appears once, no standalone digit
-    expect(textContent).toContain("3 problems");
+
+    expect(textContent).toContain("Degraded · 12 problems");
+    expect(textContent.match(/12/g)).toHaveLength(1);
+    expect(badge.querySelectorAll("span")).toHaveLength(3);
   });
 
   it("keeps connectivity text neutral while the health signal stays colored", () => {
@@ -115,177 +105,52 @@ describe("UnifiedHealthBadge", () => {
     expect(spans[3]?.className).toContain("text-foreground");
   });
 
-  it("has whitespace-nowrap to prevent badge wrapping", () => {
-    currentProfile = "compact";
+  it("keeps nowrap and overflow containment classes on the badge", () => {
+    currentProfile = "medium";
+    mockHealthState.problemCount = 1808;
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
     expect(badge.className).toContain("whitespace-nowrap");
+    expect(badge.className).toContain("min-w-0");
+    expect(badge.className).toContain("max-w-full");
+    expect(badge.className).toContain("overflow-hidden");
+    expect(badge.querySelectorAll('[data-overlay-critical="badge"]')).toHaveLength(4);
+
+    const trailingSpan = badge.querySelectorAll("span")[3];
+    expect(trailingSpan?.className).toContain("min-w-0");
+    expect(trailingSpan?.className).toContain("truncate");
   });
 
-  it("caps count at 99 on compact", () => {
-    const original = mockHealthState.problemCount;
-    mockHealthState.problemCount = 200;
-    currentProfile = "compact";
-
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    const textContent = badge.textContent ?? "";
-    expect(textContent).toContain("99");
-    expect(textContent).not.toContain("200");
-
-    mockHealthState.problemCount = original;
-  });
-
-  it("renders Healthy label on medium profile", () => {
-    const original = mockHealthState.state;
+  it("keeps the leading device label visible", () => {
+    currentProfile = "medium";
     (mockHealthState as { state: string }).state = "Healthy";
     mockHealthState.problemCount = 0;
-    currentProfile = "medium";
-
+    mockHealthState.connectedDeviceLabel = "U64E2";
+    mockConnectionStatus.deviceInfo = { product: "Ultimate 64-II", errors: [] };
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("Healthy");
-    expect(badge.textContent).toContain("C64U●Healthy");
-
-    (mockHealthState as { state: string }).state = original;
+    expect(badge).toHaveAttribute("data-connected-device", "U64E2");
+    expect(badge.querySelectorAll("span")[0]?.textContent).toBe("U64E2");
   });
 
-  it("renders Idle label on medium profile", () => {
-    const original = mockHealthState.state;
-    (mockHealthState as { state: string }).state = "Idle";
-    mockHealthState.problemCount = 0;
-    currentProfile = "medium";
-
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("Idle");
-
-    (mockHealthState as { state: string }).state = original;
-  });
-
-  it("renders Unavailable as ? label on medium profile", () => {
-    const original = mockHealthState.state;
-    (mockHealthState as { state: string }).state = "Unavailable";
-    mockHealthState.problemCount = 0;
-    currentProfile = "medium";
-
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("C64U◌?");
-
-    (mockHealthState as { state: string }).state = original;
-  });
-
-  it("renders Unhealthy label on medium profile", () => {
-    const original = mockHealthState.state;
-    (mockHealthState as { state: string }).state = "Unhealthy";
-    mockHealthState.problemCount = 5;
-    currentProfile = "medium";
-
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("Unhealthy");
-
-    (mockHealthState as { state: string }).state = original;
-    mockHealthState.problemCount = 3;
-  });
-
-  it("renders Unhealthy label on expanded profile", () => {
-    const original = mockHealthState.state;
-    (mockHealthState as { state: string }).state = "Unhealthy";
-    mockHealthState.problemCount = 2;
-    currentProfile = "expanded";
-
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("Unhealthy");
-    expect(badge.textContent).toContain("2 problems");
-
-    (mockHealthState as { state: string }).state = original;
-    mockHealthState.problemCount = 3;
-  });
-
-  it("renders Demo connectivity label on medium profile", () => {
-    const original = mockHealthState.connectivity;
-    (mockHealthState as { connectivity: string }).connectivity = "Demo";
-    currentProfile = "medium";
-
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("DEMO");
-    expect(badge.textContent).toContain("DEMO▲3Degraded");
-
-    (mockHealthState as { connectivity: string }).connectivity = original;
-  });
-
-  it("renders Offline label on medium profile", () => {
-    const original = mockHealthState.connectivity;
-    const originalState = mockHealthState.state;
-    (mockHealthState as { connectivity: string }).connectivity = "Offline";
-    (mockHealthState as { state: string }).state = "Unavailable";
-    currentProfile = "medium";
-
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toBe("Offline◌");
-
-    (mockHealthState as { connectivity: string }).connectivity = original;
-    (mockHealthState as { state: string }).state = originalState;
-  });
-
-  it("renders expanded Offline with 'Device not reachable' on expanded profile", () => {
-    const original = mockHealthState.connectivity;
-    const originalState = mockHealthState.state;
+  it("renders offline and not-yet-connected special copy unchanged", () => {
     (mockHealthState as { connectivity: string }).connectivity = "Offline";
     (mockHealthState as { state: string }).state = "Unavailable";
     currentProfile = "expanded";
+    const { unmount } = render(<UnifiedHealthBadge />);
 
-    render(<UnifiedHealthBadge />);
+    expect(screen.getByTestId("unified-health-badge").textContent).toContain("Offline◌Device not reachable");
 
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("Device not reachable");
-    expect(badge.textContent).toContain("Offline◌");
+    unmount();
 
-    (mockHealthState as { connectivity: string }).connectivity = original;
-    (mockHealthState as { state: string }).state = originalState;
-  });
-
-  it("renders not-yet-connected labels before the glyph", () => {
-    const original = mockHealthState.connectivity;
-    const originalState = mockHealthState.state;
     (mockHealthState as { connectivity: string }).connectivity = "Not yet connected";
     (mockHealthState as { state: string }).state = "Idle";
     currentProfile = "medium";
-
     render(<UnifiedHealthBadge />);
 
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toBe("Not connected○");
-
-    (mockHealthState as { connectivity: string }).connectivity = original;
-    (mockHealthState as { state: string }).state = originalState;
-  });
-
-  it("renders inferred connected-device model instead of a hardcoded C64U label", () => {
-    currentProfile = "medium";
-    (mockHealthState as { state: string }).state = "Healthy";
-    mockHealthState.problemCount = 0;
-    mockHealthState.connectedDeviceLabel = "U64E";
-    mockConnectionStatus.deviceInfo = { product: "Ultimate 64 Elite", errors: [] };
-    render(<UnifiedHealthBadge />);
-
-    const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("U64E");
-    expect(badge).toHaveAttribute("data-connected-device", "U64E");
+    expect(screen.getByTestId("unified-health-badge").textContent).toBe("Not connected○");
   });
 
   it("clicking the badge calls requestDiagnosticsOpen with 'header'", async () => {

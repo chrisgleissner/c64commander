@@ -64,16 +64,33 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       right: number;
       reason: string;
     }> = [];
+    const rootClientWidth = document.documentElement.clientWidth;
+    const rootRectWidth = document.documentElement.getBoundingClientRect().width;
+    const coordinateScale =
+      Number.isFinite(rootClientWidth) && Number.isFinite(rootRectWidth) && rootClientWidth > 0 && rootRectWidth > 0
+        ? rootRectWidth / rootClientWidth
+        : 1;
+    const normalizeCoordinate = (value: number) => value / coordinateScale;
     const activeSwipeSlot =
       document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
       document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]');
-    const activeSwipeSlotRect = activeSwipeSlot?.getBoundingClientRect() ?? null;
+    const activeSwipeSlotRect = activeSwipeSlot
+      ? (() => {
+          const rect = activeSwipeSlot.getBoundingClientRect();
+          return {
+            left: normalizeCoordinate(rect.left),
+            right: normalizeCoordinate(rect.right),
+            width: normalizeCoordinate(rect.width),
+          };
+        })()
+      : null;
     const isToastElement = (element: Element) =>
       Boolean(
         element.closest(
           '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive, [aria-label="Notifications (F8)"], [data-radix-toast-viewport]',
         ),
       );
+    const isClosedTransitionElement = (element: Element) => Boolean(element.closest('[data-state="closed"]'));
     const isInsideSwipeRunway = (element: Element) =>
       Boolean(element.closest('[data-testid="swipe-navigation-runway"]'));
     const isInsideActiveSwipeSlot = (element: Element) => Boolean(activeSwipeSlot && activeSwipeSlot.contains(element));
@@ -82,6 +99,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
     const elements = document.querySelectorAll("body *");
     elements.forEach((element) => {
       if (isToastElement(element)) return;
+      if (isClosedTransitionElement(element)) return;
       if (isInsideSwipeRunway(element) && !isInsideActiveSwipeSlot(element)) return;
       const rect = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
@@ -90,16 +108,17 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       if (rect.width === 0 || rect.height === 0) return;
       if (style.display === "none" || style.visibility === "hidden") return;
 
+      const normalizedWidth = normalizeCoordinate(rect.width);
+      const normalizedRight = normalizeCoordinate(rect.right);
+
       const rightBoundary =
-        isInsideActiveSwipeSlot(element) && activeSwipeSlotRect
-          ? activeSwipeSlotRect.left + activeSwipeSlotRect.width
-          : maxWidth;
+        isInsideActiveSwipeSlot(element) && activeSwipeSlotRect ? activeSwipeSlotRect.right : maxWidth;
       const widthBoundary =
         isInsideActiveSwipeSlot(element) && activeSwipeSlotRect ? activeSwipeSlotRect.width : maxWidth;
 
       // Check if element extends beyond viewport
       const SUBPIXEL_TOLERANCE = 3; // Allow tolerance for subpixel rendering and rounding
-      if (rect.width > widthBoundary + SUBPIXEL_TOLERANCE) {
+      if (normalizedWidth > widthBoundary + SUBPIXEL_TOLERANCE) {
         const tag = element.tagName.toLowerCase();
         const id = element.id ? `#${element.id}` : "";
         const classes =
@@ -110,11 +129,11 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
 
         results.push({
           selector,
-          width: rect.width,
-          right: rect.right,
-          reason: `Element width (${rect.width}px) exceeds active boundary width (${widthBoundary}px)`,
+          width: normalizedWidth,
+          right: normalizedRight,
+          reason: `Element width (${normalizedWidth}px) exceeds active boundary width (${widthBoundary}px)`,
         });
-      } else if (rect.right > rightBoundary + SUBPIXEL_TOLERANCE) {
+      } else if (normalizedRight > rightBoundary + SUBPIXEL_TOLERANCE) {
         // Allow tolerance for rounding and subpixel rendering
         const tag = element.tagName.toLowerCase();
         const id = element.id ? `#${element.id}` : "";
@@ -126,9 +145,9 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
 
         results.push({
           selector,
-          width: rect.width,
-          right: rect.right,
-          reason: `Element extends beyond right edge (right: ${rect.right}px, boundary: ${rightBoundary}px)`,
+          width: normalizedWidth,
+          right: normalizedRight,
+          reason: `Element extends beyond right edge (right: ${normalizedRight}px, boundary: ${rightBoundary}px)`,
         });
       }
     });

@@ -2,7 +2,7 @@
 
 Date: 2026-03-06
 Scope: Implement and verify fixes for Issues 1-6 from `analysis.md`
-Primary reference: `doc/testing/investigations/reliability1/analysis.md`
+Primary reference: `docs/testing/investigations/reliability1/analysis.md`
 
 ## 1. Goal
 
@@ -19,8 +19,8 @@ Completion is blocked unless all issue gates and global gates pass.
 
 Create and maintain these two documents during execution:
 
-1. `doc/testing/investigations/reliability1/execution-log.md`
-2. `doc/testing/investigations/reliability1/convergence-report.md`
+1. `docs/testing/investigations/reliability1/execution-log.md`
+2. `docs/testing/investigations/reliability1/convergence-report.md`
 
 `execution-log.md` must include timestamped actions and command results.
 `convergence-report.md` must include one section per issue (`Issue 1` ... `Issue 6`) with:
@@ -175,10 +175,10 @@ Tag requirements:
 
 The implementing LLM must run and record these checks:
 
-1. `rg -n "^### Issue [1-6]:" doc/testing/investigations/reliability1/plan.md`
-2. `rg -n "^## Issue [1-6]$" doc/testing/investigations/reliability1/convergence-report.md`
-3. `test -f doc/testing/investigations/reliability1/execution-log.md`
-4. `test -f doc/testing/investigations/reliability1/convergence-report.md`
+1. `rg -n "^### Issue [1-6]:" docs/testing/investigations/reliability1/plan.md`
+2. `rg -n "^## Issue [1-6]$" docs/testing/investigations/reliability1/convergence-report.md`
+3. `test -f docs/testing/investigations/reliability1/execution-log.md`
+4. `test -f docs/testing/investigations/reliability1/convergence-report.md`
 5. `npm run lint`
 6. `npm run test`
 7. `npm run build`

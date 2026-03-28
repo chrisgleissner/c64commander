@@ -11,6 +11,7 @@ import {
   deriveTelnetContributorHealth,
   getBadgeAriaLabel,
   getBadgeLabel,
+  getBadgeTextContract,
   getContributorSupportingPhrase,
   HEALTH_GLYPHS,
   rollUpHealth,
@@ -515,129 +516,129 @@ describe("derivePrimaryProblem", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// getBadgeLabel
+// getBadgeTextContract / getBadgeLabel
 // ──────────────────────────────────────────────────────────────────────────────
+describe("getBadgeTextContract", () => {
+  const profiles = ["compact", "medium", "expanded"] as const;
+  const healthStates = ["Healthy", "Degraded", "Unhealthy", "Idle", "Unavailable"] as const;
+  const counts = [0, 1, 12, 999, 1000, 1808] as const;
+  const zeroCountSuppressedStates = new Set(["Healthy", "Idle", "Unavailable"]);
+
+  it("applies the shared visible badge contract across profiles, states, and capped counts", () => {
+    for (const profile of profiles) {
+      for (const health of healthStates) {
+        for (const count of counts) {
+          const badge = getBadgeTextContract(
+            health,
+            "Online",
+            count,
+            profile,
+            HEALTH_GLYPHS[health],
+            "Ultimate 64 Elite",
+          );
+          const visibleCount = count === 0 ? null : count > 999 ? "999+" : String(count);
+
+          expect(badge.leadingLabel).toBe("U64E");
+          expect(badge.glyph).toBe(HEALTH_GLYPHS[health]);
+
+          if (profile === "compact") {
+            expect(badge.countLabel).toBe(visibleCount);
+            expect(badge.trailingLabel).toBeNull();
+          }
+
+          if (profile === "medium") {
+            expect(badge.countLabel).toBe(visibleCount);
+            expect(badge.trailingLabel).toBe(health === "Unavailable" ? "?" : health);
+          }
+
+          if (profile === "expanded") {
+            const expectedSuffix = visibleCount ? `· ${visibleCount} problem${count === 1 ? "" : "s"}` : null;
+            const expectedTrailingLabel = expectedSuffix ? `${health} ${expectedSuffix}` : health;
+
+            expect(badge.countLabel).toBeNull();
+            expect(badge.trailingLabel).toBe(expectedTrailingLabel);
+          }
+
+          if (count === 0 && zeroCountSuppressedStates.has(health)) {
+            expect(badge.countLabel).toBeNull();
+            expect(badge.trailingLabel?.includes("·")).not.toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it("preserves the demo leading label", () => {
+    const badge = getBadgeTextContract("Degraded", "Demo", 12, "medium", HEALTH_GLYPHS.Degraded);
+
+    expect(badge.leadingLabel).toBe("DEMO");
+    expect(badge.countLabel).toBe("12");
+    expect(badge.trailingLabel).toBe("Degraded");
+  });
+
+  it("prefers the explicit connected device label when present", () => {
+    const badge = getBadgeTextContract(
+      "Healthy",
+      "Online",
+      0,
+      "medium",
+      HEALTH_GLYPHS.Healthy,
+      "Ultimate 64-II",
+      "U64E2",
+    );
+
+    expect(badge.leadingLabel).toBe("U64E2");
+  });
+
+  it("keeps offline and not-yet-connected visible copy unchanged", () => {
+    expect(getBadgeTextContract("Unavailable", "Offline", 1808, "compact", HEALTH_GLYPHS.Unavailable)).toEqual({
+      leadingLabel: "Offline",
+      glyph: HEALTH_GLYPHS.Unavailable,
+      countLabel: null,
+      trailingLabel: null,
+    });
+
+    expect(getBadgeTextContract("Unavailable", "Offline", 1808, "expanded", HEALTH_GLYPHS.Unavailable)).toEqual({
+      leadingLabel: "Offline",
+      glyph: HEALTH_GLYPHS.Unavailable,
+      countLabel: null,
+      trailingLabel: "Device not reachable",
+    });
+
+    expect(getBadgeTextContract("Idle", "Not yet connected", 0, "compact", HEALTH_GLYPHS.Idle)).toMatchObject({
+      leadingLabel: "—",
+      trailingLabel: null,
+    });
+
+    expect(getBadgeTextContract("Idle", "Not yet connected", 0, "medium", HEALTH_GLYPHS.Idle)).toMatchObject({
+      leadingLabel: "Not connected",
+      trailingLabel: null,
+    });
+
+    expect(getBadgeTextContract("Idle", "Not yet connected", 0, "expanded", HEALTH_GLYPHS.Idle)).toMatchObject({
+      leadingLabel: "Not yet connected",
+      trailingLabel: null,
+    });
+  });
+});
+
 describe("getBadgeLabel", () => {
-  const g = HEALTH_GLYPHS.Healthy;
-
-  it("compact — Offline → Offline + glyph", () => {
-    const label = getBadgeLabel("Unavailable", "Offline", 0, "compact", HEALTH_GLYPHS.Unavailable);
-    expect(label).toBe(`Offline ${HEALTH_GLYPHS.Unavailable}`);
+  it("keeps compact output terse", () => {
+    expect(getBadgeLabel("Unhealthy", "Online", 1808, "compact", HEALTH_GLYPHS.Unhealthy)).toBe(
+      `C64U ${HEALTH_GLYPHS.Unhealthy} 999+`,
+    );
   });
 
-  it("expanded — Offline → Offline + glyph + Device not reachable", () => {
-    const label = getBadgeLabel("Unavailable", "Offline", 0, "expanded", HEALTH_GLYPHS.Unavailable);
-    expect(label).toContain(`Offline ${HEALTH_GLYPHS.Unavailable}`);
-    expect(label).toContain("Device not reachable");
+  it("includes the health label on medium", () => {
+    expect(getBadgeLabel("Unhealthy", "Online", 12, "medium", HEALTH_GLYPHS.Unhealthy)).toBe(
+      `C64U ${HEALTH_GLYPHS.Unhealthy} 12 Unhealthy`,
+    );
   });
 
-  it("compact — Not yet connected → — + glyph", () => {
-    const label = getBadgeLabel("Idle", "Not yet connected", 0, "compact", HEALTH_GLYPHS.Idle);
-    expect(label).toBe(`— ${HEALTH_GLYPHS.Idle}`);
-  });
-
-  it("medium — Not yet connected → Not connected + glyph", () => {
-    const label = getBadgeLabel("Idle", "Not yet connected", 0, "medium", HEALTH_GLYPHS.Idle);
-    expect(label).toBe(`Not connected ${HEALTH_GLYPHS.Idle}`);
-  });
-
-  it("expanded — Not yet connected → Not yet connected + glyph", () => {
-    const label = getBadgeLabel("Idle", "Not yet connected", 0, "expanded", HEALTH_GLYPHS.Idle);
-    expect(label).toBe(`Not yet connected ${HEALTH_GLYPHS.Idle}`);
-  });
-
-  it("medium — Demo connectivity uses DEMO label", () => {
-    const label = getBadgeLabel("Healthy", "Demo", 0, "medium", HEALTH_GLYPHS.Healthy);
-    expect(label).toContain("DEMO");
-  });
-
-  it("compact — Online + Healthy → C64U + glyph", () => {
-    const label = getBadgeLabel("Healthy", "Online", 0, "compact", g);
-    expect(label).toBe(`C64U ${g}`);
-  });
-
-  it("compact — Online uses inferred /v1/info product label", () => {
-    const label = getBadgeLabel("Healthy", "Online", 0, "compact", g, "Ultimate 64 Elite");
-    expect(label).toBe(`U64E ${g}`);
-  });
-
-  it("compact — Online + Degraded 3 → C64U + glyph + 3", () => {
-    const label = getBadgeLabel("Degraded", "Online", 3, "compact", HEALTH_GLYPHS.Degraded);
-    expect(label).toContain("C64U");
-    expect(label).toContain("3");
-    expect(label.indexOf("C64U")).toBeLessThan(label.indexOf("3"));
-  });
-
-  it("medium — Online + Unhealthy 5 → C64U + count + Unhealthy", () => {
-    const label = getBadgeLabel("Unhealthy", "Online", 5, "medium", HEALTH_GLYPHS.Unhealthy);
-    expect(label.startsWith("C64U")).toBe(true);
-    expect(label).toContain("5");
-    expect(label).toContain("Unhealthy");
-  });
-
-  it("medium — Online + Degraded 3 → C64U + Degraded", () => {
-    const label = getBadgeLabel("Degraded", "Online", 3, "medium", HEALTH_GLYPHS.Degraded);
-    expect(label.startsWith("C64U")).toBe(true);
-    expect(label).toContain("Degraded");
-  });
-
-  it("medium — Online + Healthy → C64U + Healthy", () => {
-    const label = getBadgeLabel("Healthy", "Online", 0, "medium", HEALTH_GLYPHS.Healthy);
-    expect(label.startsWith("C64U")).toBe(true);
-    expect(label).toContain("Healthy");
-  });
-
-  it("medium — Online + Idle → C64U + Idle", () => {
-    const label = getBadgeLabel("Idle", "Online", 0, "medium", HEALTH_GLYPHS.Idle);
-    expect(label.startsWith("C64U")).toBe(true);
-    expect(label).toContain("Idle");
-  });
-
-  it("medium — Checking + Unavailable → ? label", () => {
-    const label = getBadgeLabel("Unavailable", "Checking", 0, "medium", HEALTH_GLYPHS.Unavailable);
-    expect(label).toContain("?");
-  });
-
-  it("expanded — Online + Degraded 2 → spells out problems count", () => {
-    const label = getBadgeLabel("Degraded", "Online", 2, "expanded", HEALTH_GLYPHS.Degraded);
-    expect(label.startsWith("C64U")).toBe(true);
-    expect(label).toContain("2 problems");
-    expect(label).toContain("Degraded");
-  });
-
-  it("expanded — Online + Degraded 1 → singular problem", () => {
-    const label = getBadgeLabel("Degraded", "Online", 1, "expanded", HEALTH_GLYPHS.Degraded);
-    expect(label).toContain("1 problem");
-    expect(label).not.toContain("1 problems");
-  });
-
-  it("caps count at 99", () => {
-    const label = getBadgeLabel("Unhealthy", "Online", 200, "compact", HEALTH_GLYPHS.Unhealthy);
-    expect(label).toContain("99");
-    expect(label).not.toContain("200");
-  });
-
-  it("expanded — Online + Healthy → Healthy label", () => {
-    const label = getBadgeLabel("Healthy", "Online", 0, "expanded", HEALTH_GLYPHS.Healthy);
-    expect(label.startsWith("C64U")).toBe(true);
-    expect(label).toContain("Healthy");
-  });
-
-  it("expanded — Online + Unhealthy → Unhealthy label", () => {
-    const label = getBadgeLabel("Unhealthy", "Online", 3, "expanded", HEALTH_GLYPHS.Unhealthy);
-    expect(label).toContain("Unhealthy");
-    expect(label).toContain("3 problems");
-  });
-
-  it("expanded — Online + Idle → Idle label", () => {
-    const label = getBadgeLabel("Idle", "Online", 0, "expanded", HEALTH_GLYPHS.Idle);
-    expect(label.startsWith("C64U")).toBe(true);
-    expect(label).toContain("Idle");
-  });
-
-  it("expanded — Checking + Unavailable → Unavailable label", () => {
-    const label = getBadgeLabel("Unavailable", "Checking", 0, "expanded", HEALTH_GLYPHS.Unavailable);
-    expect(label).toContain("Unavailable");
+  it("uses the expanded problem suffix only on expanded", () => {
+    expect(getBadgeLabel("Degraded", "Online", 1000, "expanded", HEALTH_GLYPHS.Degraded)).toBe(
+      `C64U ${HEALTH_GLYPHS.Degraded} Degraded · 999+ problems`,
+    );
   });
 });
 

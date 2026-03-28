@@ -32,9 +32,9 @@ This was a repo-and-runtime audit, not a code-change task. The work focused on c
 
 Method used:
 
-1. Read the current planning lineage and prior review material under `doc/research/`.
+1. Read the current planning lineage and prior review material under `docs/research/`.
 2. Inspected current implementation for diagnostics, tracing, health, HVSC, routing, Android, and iOS bridge code.
-3. Read the most relevant product and internal documentation, especially `README.md`, `doc/ux-interactions.md`, `doc/developer.md`, `doc/internals/ios-parity-matrix.md`, and `doc/internals/module-boundary-inventory.md`.
+3. Read the most relevant product and internal documentation, especially `README.md`, `docs/ux-interactions.md`, `docs/developer.md`, `docs/internals/ios-parity-matrix.md`, and `docs/internals/module-boundary-inventory.md`.
 4. Read focused tests, especially diagnostics and HVSC Playwright coverage.
 5. Exercised the live web product where practical using a production build plus preview server.
 6. Exercised the Android app on the attached Pixel 4 directly once the device was unlocked, captured live screenshots, and correlated the on-device diagnostics state with the connection-management code.
@@ -188,9 +188,9 @@ These gaps are reflected in the finding severities below. Runtime-verified web i
 
 - Severity: Medium
 - Platforms: Docs / Android / iOS / Web
-- Files: `README.md`, `doc/ux-interactions.md`, `doc/img/app/diagnostics/*`, current implementation in `src/components/diagnostics/DiagnosticsDialog.tsx`
+- Files: `README.md`, `docs/ux-interactions.md`, `docs/img/app/diagnostics/*`, current implementation in `src/components/diagnostics/DiagnosticsDialog.tsx`
 - Reproduction:
-  1. Read the diagnostics guidance in `README.md` and `doc/ux-interactions.md`.
+  1. Read the diagnostics guidance in `README.md` and `docs/ux-interactions.md`.
   2. Compare those instructions with the current diagnostics overlay implementation and current live preview behavior.
 - Expected:
   - Public docs and screenshots should match the currently shipped diagnostics affordances and terminology.
@@ -199,7 +199,7 @@ These gaps are reflected in the finding severities below. Runtime-verified web i
   - The current overlay has evolved toward a unified evidence feed, a filter editor, detailed action row titles, a footer tool strip, and overflow-based sharing/maintenance actions.
   - README screenshots still point at earlier diagnostics captures that no longer communicate the current navigation model clearly.
 - Evidence:
-  - `doc/ux-interactions.md` still documents button-level flows around `Clear All`, `Share All`, `Filter entries`, and per-tab sharing.
+  - `docs/ux-interactions.md` still documents button-level flows around `Clear All`, `Share All`, `Filter entries`, and per-tab sharing.
   - `README.md` still embeds older diagnostics screenshots and describes diagnostics primarily through that older surface.
   - `src/components/diagnostics/DiagnosticsDialog.tsx` now exposes footer entry points for Config Drift, Latency, Health History, REST Heat Map, FTP Heat Map, and Config Heat Map, plus overflow actions such as `Share filtered`.
   - The diagnostics list now uses 20 visible entries and more descriptive action titles than earlier reviews reported.
@@ -211,7 +211,7 @@ These gaps are reflected in the finding severities below. Runtime-verified web i
   - Users reading the README will develop the wrong mental model of where diagnostics tools live.
 - Fix guidance:
   - Refresh the diagnostics documentation to describe the current overlay information architecture.
-  - Replace only the stale diagnostics screenshots under `doc/img/app/diagnostics/` instead of bulk-regenerating unrelated image sets.
+  - Replace only the stale diagnostics screenshots under `docs/img/app/diagnostics/` instead of bulk-regenerating unrelated image sets.
   - Align terminology across README, UX docs, and the live overlay.
 - Recommended tests:
   - Regenerate only the impacted diagnostics screenshots.
@@ -223,10 +223,10 @@ These gaps are reflected in the finding severities below. Runtime-verified web i
 
 - Severity: Medium
 - Platforms: Internal docs / Android / iOS / Web
-- Files: `doc/internals/ios-parity-matrix.md`, `doc/internals/module-boundary-inventory.md`, `ios/App/App/HvscIngestionPlugin.swift`, `ios/App/App/AppDelegate.swift`, `ios/App/Podfile`, `src/lib/native/hvscIngestion.ts`
+- Files: `docs/internals/ios-parity-matrix.md`, `docs/internals/module-boundary-inventory.md`, `ios/App/App/HvscIngestionPlugin.swift`, `ios/App/App/AppDelegate.swift`, `ios/App/Podfile`, `src/lib/native/hvscIngestion.ts`
 - Reproduction:
-  1. Read the HVSC row in `doc/internals/ios-parity-matrix.md`.
-  2. Read the HVSC-related entries in `doc/internals/module-boundary-inventory.md`.
+  1. Read the HVSC row in `docs/internals/ios-parity-matrix.md`.
+  2. Read the HVSC-related entries in `docs/internals/module-boundary-inventory.md`.
   3. Compare those claims against the current iOS native code and current source tree.
 - Expected:
   - Internal architecture docs should reflect the actual native bridge layout and current ownership.
@@ -235,8 +235,8 @@ These gaps are reflected in the finding severities below. Runtime-verified web i
   - The module inventory still points readers at a nonexistent `src/lib/hvsc/native/hvscIngestion.ts` path and describes several bridge surfaces as deprecated shims even though the active bridge lives elsewhere.
   - Current source shows a native `HvscIngestionPlugin` on iOS, plugin registration in `AppDelegate`, and `SWCompression` declared in the Podfile.
 - Evidence:
-  - `doc/internals/ios-parity-matrix.md` states: `Shared TypeScript (no native code)` for HVSC.
-  - `doc/internals/module-boundary-inventory.md` references `src/lib/hvsc/native/hvscIngestion.ts`, which is not the active runtime path.
+  - `docs/internals/ios-parity-matrix.md` states: `Shared TypeScript (no native code)` for HVSC.
+  - `docs/internals/module-boundary-inventory.md` references `src/lib/hvsc/native/hvscIngestion.ts`, which is not the active runtime path.
   - `ios/App/App/HvscIngestionPlugin.swift` contains the native iOS implementation.
   - `ios/App/App/AppDelegate.swift` registers `HvscIngestionPlugin()`.
   - `ios/App/Podfile` includes `pod 'SWCompression', '~> 4.8'`.

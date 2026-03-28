@@ -291,8 +291,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--output",
-        default="doc/c64/c64u-config.yaml",
-        help="Output YAML path (default: doc/c64/c64u-config.yaml)",
+        default="docs/c64/c64u-config.yaml",
+        help="Output YAML path (default: docs/c64/c64u-config.yaml)",
     )
     parser.add_argument(
         "--timeout",

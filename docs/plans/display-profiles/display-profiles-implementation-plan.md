@@ -4,14 +4,14 @@
 
 This is MANDATORY reading before any work is done:
 
-- doc/display-profiles.md
-- doc/architecture.md
-- doc/ux-guidelines.md
-- doc/ux-interactions.md
+- docs/internals/display-profiles.md
+- docs/architecture.md
+- docs/ux-guidelines.md
+- docs/ux-interactions.md
 
 ## Phase 0 — Baseline Alignment
 
-- [x] Confirm the authoritative profile contract from `doc/display-profiles.md` and freeze the first implementation thresholds: Compact `<= 360`, Medium `361-599`, Expanded `>= 600`.
+- [x] Confirm the authoritative profile contract from `docs/internals/display-profiles.md` and freeze the first implementation thresholds: Compact `<= 360`, Medium `361-599`, Expanded `>= 600`.
 - [x] Record the change classification for the implementation work as `CODE_CHANGE` and flag UI-affecting phases as `UI_CHANGE` once code work starts.
 - [x] Add a short architecture note describing how profile resolution relates to existing viewport-validation and dual-resolution Playwright infrastructure.
 - [x] Identify the exact page shells, shared components, dialogs, and screenshot paths that will be touched before any code changes begin.
@@ -66,7 +66,7 @@ This is MANDATORY reading before any work is done:
 - [x] Define screenshot naming and folder rules that treat Medium as the default documentation profile.
 - [x] Add explicit Compact and Expanded screenshot generation only for surfaces whose visible behavior differs from Medium.
 - [x] Update `playwright/screenshots.spec.ts` and screenshot catalog metadata so profile-specific captures are deterministic.
-- [x] Map each profile-specific screenshot to its corresponding `doc/img/app/` destination before regenerating assets.
+- [x] Map each profile-specific screenshot to its corresponding `docs/img/app/` destination before regenerating assets.
 - [x] Update documentation references and captions so profile-specific screenshots are not confused with state-specific screenshots.
 
 ## Phase 7 — Test Coverage

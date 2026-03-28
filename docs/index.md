@@ -35,4 +35,4 @@ This folder is the canonical location for durable repository documentation.
 
 ## Historical investigations
 
-Time-scoped analysis and rollout records remain under `doc/research/` and `doc/testing/investigations/`. They are useful as historical evidence, but the current-state reference docs above are the canonical source for present repository behavior.
+Time-scoped analysis and rollout records remain under `docs/research/` and `docs/testing/investigations/`. They are useful as historical evidence, but the current-state reference docs above are the canonical source for present repository behavior.

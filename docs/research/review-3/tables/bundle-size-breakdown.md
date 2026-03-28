@@ -1,6 +1,6 @@
 # Bundle Size Breakdown
 
-Source: `doc/research/review-3/metrics/web-bundle-sizes.txt`, `doc/research/review-3/logs/npm-run-build.log`
+Source: `docs/research/review-3/metrics/web-bundle-sizes.txt`, `docs/research/review-3/logs/npm-run-build.log`
 
 | Artifact                       |        Size |     Compressed | Notes                                           |
 | ------------------------------ | ----------: | -------------: | ----------------------------------------------- |

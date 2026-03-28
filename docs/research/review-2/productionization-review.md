@@ -136,7 +136,7 @@ What remains risky:
 
 - State stores generally fail closed to defaults on parse failures.
 - Several parse failure paths use `console.warn` instead of diagnostics pipeline logging (`src/lib/hvsc/hvscStateStore.ts:57`, `src/lib/hvsc/hvscStatusStore.ts:69`, `src/lib/sourceNavigation/ftpSourceAdapter.ts:41`, `src/lib/playlistRepository/localStorageRepository.ts:82`).
-- Architecture doc mandates avoiding large playlist JSON blobs in localStorage at 100k scale (`doc/architecture.md:175`), but playback persistence still writes full blob snapshots (`src/pages/playFiles/hooks/usePlaybackPersistence.ts:373`).
+- Architecture doc mandates avoiding large playlist JSON blobs in localStorage at 100k scale (`docs/architecture.md:175`), but playback persistence still writes full blob snapshots (`src/pages/playFiles/hooks/usePlaybackPersistence.ts:373`).
 
 ### Security/privacy
 
@@ -151,7 +151,7 @@ What remains risky:
 - Unit: extensive Vitest coverage across core libs/hooks/components (examples: HVSC, c64api, device interaction, RAM operations).
 - Integration/E2E:
   - Playwright with screenshots/video/traces (`playwright.config.ts:84`, `playwright.config.ts:86`).
-  - Maestro Android/iOS flow sets with CI tagging rules (`doc/testing/maestro.md`, `.maestro/config.yaml:11`).
+  - Maestro Android/iOS flow sets with CI tagging rules (`docs/testing/maestro.md`, `.maestro/config.yaml:11`).
   - Android emulator smoke harness and contract harness exist (`tests/android-emulator/README.md`, `tests/contract/README.md`).
 - Android JVM tests cover multiple plugins and fixtures (`android/app/src/test/java/uk/gleissner/c64commander/*`).
 
@@ -202,7 +202,7 @@ What remains risky:
 | F-02 | CI crash detection      | Telemetry monitor exit code `3` (process disappearance/restart detected) is downgraded to warning, so CI can pass despite crash/restart signal. | `ci/telemetry/android/monitor_android.sh:310`<br>`ci/telemetry/ios/monitor_ios.sh:297`<br>`.github/workflows/android.yaml:965`<br>`.github/workflows/ios.yaml:440`                                                                                         | High (false release confidence) | Medium     | Low (as gate) | Small        | P1       | Fail telemetry gate on exit code `3` for release branches/tags; keep warning-only mode for dev branches if needed.        |
 | F-03 | REST reliability        | `parseResponseJson` returns synthetic `{ errors: [] }` for non-JSON or JSON parse failure on HTTP 200, masking malformed backend responses.     | `src/lib/c64api.ts:495`<br>`src/lib/c64api.ts:497`<br>`src/lib/c64api.ts:505`<br>`tests/unit/c64api.test.ts:247`<br>`tests/unit/c64api.test.ts:381`                                                                                                        | High (silent bad state)         | Medium     | Low           | Medium       | P1       | Treat malformed 200 responses as typed failures (or explicit degraded status), not empty success payload.                 |
 | F-04 | FTP resilience          | FTP bridge/plugin behavior is inconsistent: web hard-timeout 3s/no retry; Android/iOS plugin paths lack explicit retry policy at bridge level.  | `src/lib/native/ftpClient.web.ts:20`<br>`src/lib/native/ftpClient.web.ts:63`<br>`android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt:68`<br>`ios/App/App/IOSFtp.swift:14`                                                               | Medium                          | Medium     | Medium        | Medium       | P2       | Unify timeout/retry policy and make configurable; add retry-classification tests for transient FTP failures.              |
-| F-05 | Persistence scalability | Playlist persistence still writes full JSON blobs to localStorage each cycle, conflicting with architecture rule for large playlists.           | `doc/architecture.md:175`<br>`src/pages/playFiles/hooks/usePlaybackPersistence.ts:373`<br>`src/pages/playFiles/hooks/usePlaybackPersistence.ts:390`                                                                                                        | Medium (performance/quota)      | Medium     | Medium-Low    | Medium       | P2       | Keep repository-backed persistence as source of truth and gate/disable large legacy blob writes by size/count.            |
+| F-05 | Persistence scalability | Playlist persistence still writes full JSON blobs to localStorage each cycle, conflicting with architecture rule for large playlists.           | `docs/architecture.md:175`<br>`src/pages/playFiles/hooks/usePlaybackPersistence.ts:373`<br>`src/pages/playFiles/hooks/usePlaybackPersistence.ts:390`                                                                                                        | Medium (performance/quota)      | Medium     | Medium-Low    | Medium       | P2       | Keep repository-backed persistence as source of truth and gate/disable large legacy blob writes by size/count.            |
 | F-06 | Slider/mute testability | `useVolumeOverride` contains high-complexity sync/race logic but has no dedicated hook-level tests; current detection relies mostly on E2E.     | `src/pages/playFiles/hooks/useVolumeOverride.ts:266`<br>`src/pages/playFiles/hooks/useVolumeOverride.ts:423`<br>`playwright/playback.spec.ts:1045`<br>`playwright/playback.part2.spec.ts:1027`                                                             | Medium                          | Medium     | Low-Medium    | Small-Medium | P2       | Add focused hook tests for deferred sync decisions, mute/unmute snapshots, timer sequencing, and stale UI target expiry.  |
 | F-07 | Native HVSC test gap    | Android has HVSC runtime fixture test, but no direct JVM tests for `HvscIngestionPlugin` ingestion/cancel/error/progress semantics.             | `android/app/src/test/java/uk/gleissner/c64commander/HvscSevenZipRuntimeTest.kt:8`<br>`android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt:274`<br>`android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt:580` | Medium                          | Medium     | Low           | Medium       | P2       | Add plugin-level JVM tests using fixture archives and fake calls for success/cancel/error/progress contract verification. |
 | F-08 | Observability           | Some storage parse failures log only to `console.warn`, bypassing diagnostics log ingestion and exported troubleshooting payloads.              | `src/lib/hvsc/hvscStateStore.ts:57`<br>`src/lib/hvsc/hvscStatusStore.ts:69`<br>`src/lib/sourceNavigation/ftpSourceAdapter.ts:41`<br>`src/lib/playlistRepository/localStorageRepository.ts:82`                                                              | Low                             | Medium     | Medium        | Small        | P3       | Route these warnings through `addLog('warn', ...)` with context while preserving fallback behavior.                       |
@@ -320,9 +320,9 @@ Minimal gating criteria before broader release:
 
 - App/docs/policies:
   - `README.md`
-  - `doc/ux-guidelines.md`
-  - `doc/testing/maestro.md`
-  - `doc/architecture.md`
+  - `docs/ux-guidelines.md`
+  - `docs/testing/maestro.md`
+  - `docs/architecture.md`
   - `.github/copilot-instructions.md`
 - HVSC:
   - `src/lib/hvsc/hvscDownload.ts`

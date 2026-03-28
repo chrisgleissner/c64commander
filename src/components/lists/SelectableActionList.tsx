@@ -108,7 +108,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
       <div
-        className="flex items-start gap-2 px-2 py-1 rounded-md bg-muted/30 min-w-0 max-w-full"
+        className="flex items-start gap-2 rounded-md bg-muted/30 px-2 py-[0.44rem] min-w-0 max-w-full"
         data-testid={headerTestId}
         data-row-id={item.id}
       >
@@ -127,7 +127,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
   return (
     <div
       className={cn(
-        "flex items-center gap-2 py-2 px-1 rounded-md min-w-0 max-w-full",
+        "flex items-center gap-2 rounded-md px-1 py-[0.44rem] min-w-0 max-w-full",
         item.isDimmed
           ? "opacity-40"
           : isPlaying
@@ -483,7 +483,9 @@ export const SelectableActionList = ({
               <AppSheetHeader
                 className={cn(
                   "border-b border-border",
-                  isCompact ? "space-y-2 px-3 pb-2 pt-3" : "space-y-3 px-6 pb-3 pt-6",
+                  isCompact
+                    ? "space-y-2 px-3 pb-[0.375rem] pt-[0.75rem]"
+                    : "space-y-3 px-6 pb-[0.5625rem] pt-[1.125rem]",
                 )}
               >
                 <div>

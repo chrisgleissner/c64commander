@@ -17,6 +17,8 @@ import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { saveCoverageFromPage } from "./withCoverage";
 import { clickSourceSelectionButton } from "./sourceSelection";
 import { layoutTest, enforceDeviceTestMapping } from "./layoutTest";
+import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
+import { seedBadgeHealthTraceState } from "./visualSeeds";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -50,6 +52,17 @@ const expectDialogWithinViewport = async (page: Page, dialog: Locator) => {
       );
     })
     .toBe(true);
+};
+
+const applyDisplayProfileOverride = async (page: Page, profileId: "compact" | "medium") => {
+  const profile = DISPLAY_PROFILE_VIEWPORTS[profileId];
+  await page.setViewportSize(profile.viewport);
+  await page.addInitScript(
+    ({ override }) => {
+      localStorage.setItem("c64u_display_profile_override", override);
+    },
+    { override: profile.override },
+  );
 };
 
 const expectVerticalOverflowHandled = async (container: Locator) => {
@@ -318,6 +331,48 @@ test.describe("Layout overflow safeguards", () => {
     await snap(page, testInfo, "settings-long-log");
     await expectNoHorizontalOverflow(page);
   });
+
+  layoutTest(
+    "settings header badge avoids overflow in compact and medium worst cases @layout",
+    async ({ page }, testInfo) => {
+      for (const profileId of ["compact", "medium"] as const) {
+        await applyDisplayProfileOverride(page, profileId);
+        await page.goto("/settings", { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(
+          (expected) => document.documentElement.dataset.displayProfile === expected,
+          profileId,
+        );
+        await seedBadgeHealthTraceState(page, { health: "Unhealthy", problemCount: 1808 });
+
+        const headerRow = page.getByTestId("app-bar-row");
+        const badge = page.getByTestId("unified-health-badge");
+
+        await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+        await expect(badge).toBeVisible();
+        await expect(badge).toHaveAttribute("data-health-state", "Unhealthy");
+        await expect(badge).toContainText("999+");
+
+        const badgeMetrics = await badge.evaluate((element) => ({
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+        }));
+        expect(badgeMetrics.scrollWidth, `${profileId} badge overflow detected`).toBeLessThanOrEqual(
+          badgeMetrics.clientWidth + 1,
+        );
+
+        const headerMetrics = await headerRow.evaluate((element) => ({
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+        }));
+        expect(headerMetrics.scrollWidth, `${profileId} header row overflow detected`).toBeLessThanOrEqual(
+          headerMetrics.clientWidth + 1,
+        );
+
+        await snap(page, testInfo, `settings-header-badge-${profileId}`);
+        await expectNoHorizontalOverflow(page);
+      }
+    },
+  );
 
   layoutTest("play dialogs stay within viewport @layout", async ({ page }, testInfo) => {
     await page.addInitScript(() => {

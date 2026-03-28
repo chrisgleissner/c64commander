@@ -90,7 +90,7 @@ def test_snapshot_git_status_returns_set(
     patched_env: RuntimePaths, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mock_result = MagicMock()
-    mock_result.stdout = " M src/foo.ts\n?? doc/bar.md\n"
+    mock_result.stdout = " M src/foo.ts\n?? docs/bar.md\n"
     monkeypatch.setattr(
         "openhands.run_loop.subprocess.run",
         lambda *a, **kw: mock_result,
@@ -98,7 +98,7 @@ def test_snapshot_git_status_returns_set(
     result = snapshot_git_status()
     # snapshot_git_status uses rstrip() which preserves any leading whitespace.
     assert " M src/foo.ts" in result
-    assert "?? doc/bar.md" in result
+    assert "?? docs/bar.md" in result
 
 
 def test_snapshot_git_status_empty(

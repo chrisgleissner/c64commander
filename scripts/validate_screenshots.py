@@ -2,7 +2,7 @@
 """
 validate_screenshots.py — Lighting Studio screenshot validator
 
-Checks screenshots in doc/img/app/home/dialogs/ against a set of layout rules
+Checks screenshots in docs/img/app/home/dialogs/ against a set of layout rules
 to detect visual regressions introduced by design changes.
 
 Rules
@@ -21,7 +21,7 @@ Usage
     python scripts/validate_screenshots.py [--screenshot-dir PATH] [--metadata-dir PATH]
 
     --screenshot-dir   Directory containing the dialog PNGs
-                       (default: doc/img/app/home/dialogs)
+                       (default: docs/img/app/home/dialogs)
     --metadata-dir     Directory containing layout-metadata JSON sidecars
                        (default: playwright/fixtures/layout-metadata)
 
@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--screenshot-dir",
-        default="doc/img/app/home/dialogs",
+        default="docs/img/app/home/dialogs",
         type=Path,
         help="Directory containing lighting-studio dialog PNGs",
     )

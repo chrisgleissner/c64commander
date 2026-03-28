@@ -68,12 +68,12 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
 - Canonical viewports are defined in `playwright/displayProfileViewports.ts:1-16`.
 - Playwright profile coverage includes overflow, dialog presentation, text scaling, reduced height, zoom, and route matrix checks in `playwright/displayProfiles.spec.ts:212-524`.
 - Screenshot generation writes profile-specific captures via `profileScreenshotPath` in `playwright/screenshots.spec.ts:48-49`.
-- Profile-specific assets exist under `doc/img/app/**/profiles/**`, including Home, Play, Play import, Disks, Config, Settings, and Diagnostics.
+- Profile-specific assets exist under `docs/img/app/**/profiles/**`, including Home, Play, Play import, Disks, Config, Settings, and Diagnostics.
 
 ### Current source-of-truth documentation is aligned
 
-- `doc/display-profiles.md:46-55`, `doc/architecture.md:20-31`, and `README.md:210-216` consistently describe the same three-profile model and override behavior.
-- `README.md:262-263` and `doc/display-profiles.md:268-277` consistently describe screenshot storage rules.
+- `docs/internals/display-profiles.md:46-55`, `docs/architecture.md:20-31`, and `README.md:210-216` consistently describe the same three-profile model and override behavior.
+- `README.md:262-263` and `docs/internals/display-profiles.md:268-277` consistently describe screenshot storage rules.
 
 ## Identified Issues
 
@@ -96,7 +96,7 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
   - Settings still contains at least one `md:grid-cols-2` layout branch.
 - UX impact:
   - Current layout behavior is harder to reason about and easier to regress because some profile-sensitive changes bypass the shared profile model.
-  - This directly violates the specification rule in `doc/display-profiles.md:46-55` that components should consume the resolved profile instead of performing ad hoc breakpoint checks.
+  - This directly violates the specification rule in `docs/internals/display-profiles.md:46-55` that components should consume the resolved profile instead of performing ad hoc breakpoint checks.
 - Proposed fix:
   - Move remaining breakpoint-conditioned layout branches into profile-aware helpers or profile-token variants.
   - Reserve raw responsive utility classes for non-profile concerns only.
@@ -123,7 +123,7 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
 - Severity: Medium
 - Impacted files:
   - `playwright/displayProfiles.spec.ts:402-487`
-  - `doc/display-profiles.md:95-106`
+  - `docs/internals/display-profiles.md:95-106`
 - Evidence:
   - Playwright reduces viewport height for diagnostics, item selection, and snapshot-manager checks.
   - The test matrix does not simulate a live soft keyboard or assert visual-viewport-driven layout changes.
@@ -136,9 +136,9 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
 
 - Severity: Medium
 - Impacted files:
-  - `doc/ux-interactions.md:35-110`
-  - `doc/ux-interactions.md:129-181`
-  - `doc/ux-interactions.md:326-367`
+  - `docs/ux-interactions.md:35-110`
+  - `docs/ux-interactions.md:129-181`
+  - `docs/ux-interactions.md:326-367`
 - Evidence:
   - The UX inventory now marks Shuffle, Reshuffle, Home quick actions, Add disks, Refresh connection, Recurse folders, and System theme as covered.
   - The remaining uncovered or partial entries are concentrated in secondary controls such as Android folder picking, file-type filtering, some per-item menus, and lower-priority navigation paths.
@@ -152,13 +152,13 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
 - Severity: Low
 - Impacted files:
   - `docs/diagnostics/index.md:1-13`
-  - `doc/img/app/diagnostics/`
+  - `docs/img/app/diagnostics/`
 - Evidence:
-  - `README.md` and the diagnostics index now reference the diagnostics gallery under `doc/img/app/diagnostics/`, where numbered folders map the overlay entry point, activity stream, summary drill-downs, and tools.
+  - `README.md` and the diagnostics index now reference the diagnostics gallery under `docs/img/app/diagnostics/`, where numbered folders map the overlay entry point, activity stream, summary drill-downs, and tools.
 - UX impact:
   - The diagnostics screenshot corpus is easier to reason about when the overlay gallery lives inside the app screenshot tree and uses numbered folders that mirror the click path.
 - Proposed fix:
-  - Keep diagnostics screenshots in `doc/img/app/diagnostics/` and remove the obsolete legacy folder.
+  - Keep diagnostics screenshots in `docs/img/app/diagnostics/` and remove the obsolete legacy folder.
 
 ## UX Risks For Small Displays
 
@@ -208,7 +208,7 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
 ## Follow-Up Tasks
 
 1. Add a lint or review rule forbidding new raw breakpoint logic in profile-sensitive surfaces.
-2. Close the CTA test gaps listed in `doc/ux-interactions.md:326-367`.
+2. Close the CTA test gaps listed in `docs/ux-interactions.md:326-367`.
 3. Add live keyboard or visual-viewport compact dialog tests.
 4. Normalize `QuickActionCard` and `ConfigItemRow` profile contracts.
 5. Clean up legacy diagnostics screenshot naming.

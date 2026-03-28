@@ -9,7 +9,7 @@
 3. **Keep the repo buildable**:
    - If changes break builds, fix them before declaring work complete.
 4. **Before declaring work complete**:
-   - Ensure relevant docs are updated (`README.md`, `doc/`, `docs/`).
+   - Ensure relevant docs are updated (`README.md`, `docs/`).
    - Run tests and build steps that apply to your actual change set.
    - Do **not** run a build, test suite, screenshot flow, or asset regeneration step that is irrelevant to the files you changed.
    - If work only affected Markdown or other non-executable documentation files, do **not** run build steps purely for ceremony.

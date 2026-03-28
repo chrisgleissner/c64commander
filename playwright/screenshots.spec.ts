@@ -44,6 +44,7 @@ import {
 import {
   installFixedClock,
   installListPreviewLimit,
+  seedBadgeHealthTraceState,
   installStableStorage,
   seedDiagnosticsAnalytics,
   seedDiagnosticsLogs,
@@ -645,17 +646,19 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
   await waitForStableRender(page);
   const layout = await page.evaluate(() => {
     const activeSlot = document.querySelector('[data-slot-active="true"]');
-    const activeMain = activeSlot?.querySelector("main");
+    const activeMain =
+      activeSlot?.querySelector('[data-page-scroll-container="true"]') ?? activeSlot?.querySelector("main");
     const slotElement = activeSlot instanceof HTMLElement ? activeSlot : null;
-    const slotRect = slotElement?.getBoundingClientRect() ?? null;
+    const scrollElement = activeMain instanceof HTMLElement ? activeMain : slotElement;
+    const scrollRect = scrollElement?.getBoundingClientRect() ?? null;
     const sections = Array.from(activeMain?.querySelectorAll("[data-section-label]") ?? [])
       .map((node) => {
         const label = node.getAttribute("data-section-label")?.trim() ?? "";
         const rect = node.getBoundingClientRect();
         return {
           label,
-          top: slotRect ? rect.top - slotRect.top + slotElement!.scrollTop : rect.top + window.scrollY,
-          bottom: slotRect ? rect.bottom - slotRect.top + slotElement!.scrollTop : rect.bottom + window.scrollY,
+          top: scrollRect ? rect.top - scrollRect.top + scrollElement!.scrollTop : rect.top + window.scrollY,
+          bottom: scrollRect ? rect.bottom - scrollRect.top + scrollElement!.scrollTop : rect.bottom + window.scrollY,
         };
       })
       .filter((section) => section.label.length > 0 && section.bottom > section.top);
@@ -665,8 +668,8 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
     const mainStyle = main ? getComputedStyle(main) : null;
     const appBarHeight = Number.parseFloat(rootStyle.getPropertyValue("--app-bar-height")) || 0;
     const bottomInset = Number.parseFloat(mainStyle?.paddingBottom ?? "0") || 0;
-    const viewportHeight = slotElement?.clientHeight ?? window.innerHeight;
-    const maxScroll = slotElement ? Math.max(0, slotElement.scrollHeight - slotElement.clientHeight) : 0;
+    const viewportHeight = scrollElement?.clientHeight ?? window.innerHeight;
+    const maxScroll = scrollElement ? Math.max(0, scrollElement.scrollHeight - scrollElement.clientHeight) : 0;
 
     return {
       sections,
@@ -693,9 +696,12 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
 
   for (let index = 0; index < canonicalSlices.length; index += 1) {
     const { fileName, slice } = canonicalSlices[index];
-    await getActiveSlot(page).evaluate((node, nextScrollTop) => {
-      if (node instanceof HTMLElement) {
-        node.scrollTop = nextScrollTop;
+    await page.evaluate((nextScrollTop) => {
+      const activeSlot = document.querySelector<HTMLElement>('[data-slot-active="true"]');
+      const scrollContainer =
+        activeSlot?.querySelector<HTMLElement>('[data-page-scroll-container="true"]') ?? activeSlot ?? null;
+      if (scrollContainer) {
+        scrollContainer.scrollTop = nextScrollTop;
       }
     }, slice.scrollTop);
     await waitForStableRender(page);
@@ -1294,7 +1300,7 @@ test.describe("App screenshots", () => {
 
       await interstitial.getByTestId("import-option-c64u").click();
       await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
-      await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
+      await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("From C64U");
       await captureScreenshot(page, testInfo, "play/import/02-c64u-file-picker.png", { skipFuzzyHeadRestore: true });
 
       await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -1312,7 +1318,7 @@ test.describe("App screenshots", () => {
       await expect(input).toBeAttached();
       await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
       await expect(localDialog.getByTestId("local-file-picker")).toBeVisible();
-      await expect(localDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from Local Device");
+      await expect(localDialog.getByTestId("add-items-selection-heading")).toHaveText("From Local");
       await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png", { skipFuzzyHeadRestore: true });
 
       await localDialog.getByRole("button", { name: "Cancel" }).click();
@@ -1330,17 +1336,25 @@ test.describe("App screenshots", () => {
       const archivePicker = archiveDialog.getByTestId("commoserve-picker");
       await expect(archivePicker).toBeVisible();
       await archivePicker.getByLabel("Name").fill("joyride");
-      await archivePicker.getByRole("combobox").nth(0).click();
-      await page.getByRole("option", { name: "Apps" }).click();
+      const categoryTrigger = archivePicker.getByRole("combobox").nth(0);
+      await categoryTrigger.click();
+      const categoryOption = page.getByRole("option", { name: "Apps" });
+      await expect(categoryOption).toBeVisible();
+      await categoryOption.evaluate((node) => {
+        if (node instanceof HTMLElement) {
+          node.click();
+        }
+      });
+      await expect(categoryTrigger).toContainText("Apps");
       await expect(archivePicker.getByTestId("archive-query-preview")).toContainText(SCREENSHOT_ARCHIVE_QUERY);
-      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("From CommoServe");
       await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png", { skipFuzzyHeadRestore: true });
 
       await archivePicker.getByTestId("archive-search-button").click();
       await expect(archivePicker.getByTestId("archive-result-row")).toHaveCount(2);
       await archivePicker.getByRole("checkbox", { name: /^Select Joyride$/ }).click();
       await expect(archiveDialog.getByTestId("add-items-selection-count")).toHaveText(/1 selected/i);
-      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from CommoServe");
+      await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("From CommoServe");
       await captureScreenshot(page, testInfo, "play/import/05-commoserve-results-selected.png", {
         skipFuzzyHeadRestore: true,
       });
@@ -1374,7 +1388,7 @@ test.describe("App screenshots", () => {
 
         await interstitial.getByTestId("import-option-c64u").click();
         await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
-        await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("Select items from C64U");
+        await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("From C64U");
         await captureScreenshot(
           page,
           testInfo,
@@ -1410,6 +1424,52 @@ test.describe("App screenshots", () => {
         await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("settings", profileId, "01-overview.png"));
+      }
+    },
+  );
+
+  test(
+    "capture settings header badge screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      const headerRow = page.getByTestId("app-bar-row");
+      const badge = page.getByTestId("unified-health-badge");
+      const scenarios = [
+        { fileSuffix: "healthy", health: "Healthy" as const, problemCount: 0, expectedText: null },
+        { fileSuffix: "degraded-12", health: "Degraded" as const, problemCount: 12, expectedText: "12" },
+        { fileSuffix: "degraded-999plus", health: "Degraded" as const, problemCount: 1808, expectedText: "999+" },
+        { fileSuffix: "unhealthy-12", health: "Unhealthy" as const, problemCount: 12, expectedText: "12" },
+        {
+          fileSuffix: "unhealthy-999plus",
+          health: "Unhealthy" as const,
+          problemCount: 1808,
+          expectedText: "999+",
+        },
+      ];
+
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        for (const scenario of scenarios) {
+          await page.goto("/settings");
+          await applyDisplayProfileViewport(page, profileId);
+          await waitForConnected(page);
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await seedBadgeHealthTraceState(page, {
+            health: scenario.health,
+            problemCount: scenario.problemCount,
+          });
+
+          await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+          await expect(badge).toBeVisible();
+          await expect(badge).toHaveAttribute("data-health-state", scenario.health);
+
+          if (scenario.expectedText) {
+            await expect(badge).toContainText(scenario.expectedText);
+          }
+
+          await captureScreenshot(page, testInfo, `settings/header/badge-${profileId}-${scenario.fileSuffix}.png`, {
+            locator: headerRow,
+          });
+        }
       }
     },
   );

@@ -21,6 +21,8 @@
   --display-profile-action-grid-min: 9.5rem;
   --display-profile-modal-max-width: 48rem;
   --display-profile-modal-inset: 1rem;
+  --app-header-top-inset: env(safe-area-inset-top);
+  --app-tab-bar-reserved-height: calc(5rem + env(safe-area-inset-bottom));
 }
 
 :root[data-c64-motion-mode="reduced"] {
@@ -112,10 +114,6 @@
 
     /* App bar layout */
     --app-bar-height: 88px;
-  }
-
-  main {
-    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }
 
   .dark {
@@ -368,14 +366,16 @@ button:focus-visible,
 
   .page-shell {
     box-sizing: border-box;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     width: 100%;
     max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
     padding-top: var(--display-profile-page-padding-top);
-    /* Must clear the fixed TabBar (~5rem) plus safe-area inset.
-       @layer components wins over @layer base so the main{} rule in base
-       is not effective here; we set the clearance explicitly. */
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    padding-bottom: var(--display-profile-page-padding-y);
     padding-left: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left));
     padding-right: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right));
   }
@@ -408,8 +408,10 @@ button:focus-visible,
 
   /* Settings row */
   .settings-row {
-    @apply flex items-center justify-between py-3 px-1
+    @apply flex items-center justify-between px-1
            border-b border-border last:border-0;
+    padding-top: 0.66rem;
+    padding-bottom: 0.66rem;
   }
 
   /* Tab navigation (mobile-native feel) */
@@ -417,6 +419,7 @@ button:focus-visible,
     @apply flex items-center justify-around
            bg-card border-t border-border
            px-2 pb-safe pt-2;
+    min-height: var(--app-tab-bar-reserved-height);
   }
 
   .tab-item {
@@ -431,10 +434,6 @@ button:focus-visible,
   /* Safe area padding for mobile */
   .pb-safe {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-  }
-
-  .pt-safe {
-    padding-top: max(0.75rem, env(safe-area-inset-top));
   }
 
   /* Scrollable area with fade */

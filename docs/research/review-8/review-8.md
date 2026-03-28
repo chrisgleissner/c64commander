@@ -2,12 +2,12 @@
 
 ## Scope And Method
 
-This review audited the current repository state with emphasis on the newly added display-profile system and its productionization quality. Evidence was gathered from the current implementation, current test inventory, and the previous audit in `doc/research/review-7/review-7.md`.
+This review audited the current repository state with emphasis on the newly added display-profile system and its productionization quality. Evidence was gathered from the current implementation, current test inventory, and the previous audit in `docs/research/review-7/review-7.md`.
 
 Primary evidence reviewed:
 
-- `doc/display-profiles.md`
-- `doc/plans/display-profiles/display-profiles-implementation-plan.md`
+- `docs/internals/display-profiles.md`
+- `docs/plans/display-profiles/display-profiles-implementation-plan.md`
 - `src/lib/displayProfiles.ts`
 - `src/hooks/useDisplayProfile.tsx`
 - `src/lib/uiPreferences.ts`
@@ -29,7 +29,7 @@ Three review-7 items were verified as resolved in the current repository state:
 
 1. Slider drag propagation now has an end-to-end regression proof. `playwright/playback.part2.spec.ts` contains `rapid volume drag coalesces into one write when preview interval is long`, which exercises pointer-down drag movement and verifies downstream config writes before release.
 2. Connection freshness wording is no longer misleading. `src/components/ConnectivityIndicator.tsx` now labels the mixed signal as `Last activity` instead of `Last request`, which matches the underlying `Math.max(deviceState.lastRequestAtMs, snapshot.lastProbeAtMs)` computation.
-3. Coverage governance is now aligned. `build`, `scripts/collect-coverage.sh`, `doc/code-coverage.md`, and `doc/developer.md` all reflect the 91% line and branch gate.
+3. Coverage governance is now aligned. `build`, `scripts/collect-coverage.sh`, `docs/code-coverage.md`, and `docs/developer.md` all reflect the 91% line and branch gate.
 
 One inherited item remains open in narrower form:
 
@@ -61,8 +61,8 @@ Status: confirmed
 
 Evidence:
 
-- `doc/display-profiles.md` requires verification for `layout-safe behavior with keyboard open and with increased text size or zoom` and says `primary actions remain reachable at increased text size and browser zoom`.
-- `doc/plans/display-profiles/display-profiles-implementation-plan.md` marks the following as complete:
+- `docs/internals/display-profiles.md` requires verification for `layout-safe behavior with keyboard open and with increased text size or zoom` and says `primary actions remain reachable at increased text size and browser zoom`.
+- `docs/plans/display-profiles/display-profiles-implementation-plan.md` marks the following as complete:
   - `Add modal tests for Compact full-screen behavior, footer visibility, and keyboard-safe layouts.`
   - `Verify primary CTAs remain reachable at increased text size and browser zoom.`
 - The current executable evidence does not match those claims:
@@ -106,7 +106,7 @@ This remains the only inherited open item that still materially affects uniform 
 | Risk                                                            | Evidence                                                                                                                                                                   | Severity | Likelihood | Detectability | Assessment                                                                                                                                             |
 | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Display-profile override does not propagate across tabs/windows | `src/lib/uiPreferences.ts`, `src/hooks/useDisplayProfile.tsx`                                                                                                              | Low      | Medium     | High          | The failure mode is easy to reproduce on web and limited to multi-window usage, but it breaks the persistence contract outside the single-window case. |
-| Display-profile accessibility verification is overstated        | `doc/display-profiles.md`, `doc/plans/display-profiles/display-profiles-implementation-plan.md`, `playwright/displayProfiles.spec.ts`, `src/components/ui/dialog.test.tsx` | Medium   | High       | Medium        | The repo claims keyboard/zoom validation without executable proof for those cases.                                                                     |
+| Display-profile accessibility verification is overstated        | `docs/internals/display-profiles.md`, `docs/plans/display-profiles/display-profiles-implementation-plan.md`, `playwright/displayProfiles.spec.ts`, `src/components/ui/dialog.test.tsx` | Medium   | High       | Medium        | The repo claims keyboard/zoom validation without executable proof for those cases.                                                                     |
 | iOS FTP plugin proof remains thinner than Android               | `ios/App/App/IOSFtp.swift`, `ios/native-tests/**`, `android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt`                                            | Medium   | Medium     | Medium        | Shared contract handling improved, but plugin-boundary test parity is still missing.                                                                   |
 
 ## Security Evaluation
@@ -137,8 +137,8 @@ The most important documentation issue in the current cycle is within the displa
 
 Confirmed drift:
 
-1. `doc/plans/display-profiles/display-profiles-implementation-plan.md` marks keyboard-safe modal tests and zoom/text-size verification as complete.
-2. `doc/display-profiles.md` treats those cases as mandatory verification obligations.
+1. `docs/plans/display-profiles/display-profiles-implementation-plan.md` marks keyboard-safe modal tests and zoom/text-size verification as complete.
+2. `docs/internals/display-profiles.md` treats those cases as mandatory verification obligations.
 3. The current test inventory does not yet provide matching executable proof.
 
 By contrast, the review-7 coverage threshold inconsistency has been corrected in the current repo state.

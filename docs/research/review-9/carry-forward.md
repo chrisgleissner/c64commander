@@ -40,7 +40,7 @@
 ### R9-006 - CTA coverage gaps outside current remediation scope
 
 - Status: resolved
-- Evidence: `playwright/homeInteractivity.spec.ts`, `playwright/settingsConnection.spec.ts`, and `playwright/playlistControls.spec.ts` now cover Home machine quick actions, confirmed power off, System theme, Refresh connection, and Recurse folders; `doc/ux-interactions.md` was reconciled with the pre-existing Add disks, Shuffle, and Reshuffle coverage already present elsewhere in the suite.
+- Evidence: `playwright/homeInteractivity.spec.ts`, `playwright/settingsConnection.spec.ts`, and `playwright/playlistControls.spec.ts` now cover Home machine quick actions, confirmed power off, System theme, Refresh connection, and Recurse folders; `docs/ux-interactions.md` was reconciled with the pre-existing Add disks, Shuffle, and Reshuffle coverage already present elsewhere in the suite.
 - Next action: none.
 
 ### R9-007 - Config row remains measurement-driven instead of profile-driven

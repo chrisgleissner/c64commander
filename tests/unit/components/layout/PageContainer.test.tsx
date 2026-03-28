@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
+import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 
 const setViewportWidth = (width: number) => {
@@ -100,5 +101,21 @@ describe("profile layout primitives", () => {
     const split = screen.getByTestId("split");
     expect(split).toHaveAttribute("data-profile", "expanded");
     expect(split.className).toContain("profile-split-section-expanded");
+  });
+
+  it("uses an explicit bounded scroll viewport below the header in sticky chrome mode", () => {
+    render(
+      <AppChromeModeProvider mode="sticky">
+        <DisplayProfileProvider>
+          <PageContainer as="section">
+            <div data-testid="sticky-container-child">Content</div>
+          </PageContainer>
+        </DisplayProfileProvider>
+      </AppChromeModeProvider>,
+    );
+
+    const container = screen.getByTestId("sticky-container-child").closest("section");
+    expect(container).toHaveAttribute("data-page-scroll-container", "true");
+    expect(container).toHaveStyle({ height: "calc(100% - var(--app-bar-height))", minHeight: "0" });
   });
 });

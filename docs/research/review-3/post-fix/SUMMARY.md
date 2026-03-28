@@ -1,6 +1,6 @@
 # Review 3 Post-fix Summary
 
-All implementation phases from `doc/research/review-3/IMPLEMENTATION-PLAN.md` were executed in sequence with evidence captured under `doc/research/review-3/post-fix/`.
+All implementation phases from `docs/research/review-3/IMPLEMENTATION-PLAN.md` were executed in sequence with evidence captured under `docs/research/review-3/post-fix/`.
 
 ## High/Critical Risk Closure
 
@@ -21,4 +21,4 @@ All implementation phases from `doc/research/review-3/IMPLEMENTATION-PLAN.md` we
 - `npm run build`
 - `cd android && ./gradlew test`
 
-See `doc/research/review-3/post-fix/logs/phase-9-final-gate.log` for the full final gate transcript.
+See `docs/research/review-3/post-fix/logs/phase-9-final-gate.log` for the full final gate transcript.

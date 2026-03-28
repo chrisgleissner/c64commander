@@ -4,17 +4,17 @@ This directory holds the current diagnostics overlay screenshots used for docume
 
 ## Contents
 
-### Overview (`doc/img/app/diagnostics/`)
+### Overview (`docs/img/app/diagnostics/`)
 
 - `01-overview.png`: default diagnostics overlay showing health summary, filters, activity, and analysis controls together.
 
-### Header (`doc/img/app/diagnostics/header/`)
+### Header (`docs/img/app/diagnostics/header/`)
 
 - `01-expanded.png`: expanded health summary header with seeded latency percentiles visible.
 - `02-health-check-detail.png`: completed health-check detail showing REST, FTP, CONFIG, RASTER, and JIFFY outcomes with latency and overall result.
 - `03-health-check-live-progress.png`: in-flight health-check detail showing completed, running, and pending probes in the documented execution order.
 
-### Activity (`doc/img/app/diagnostics/activity/`)
+### Activity (`docs/img/app/diagnostics/activity/`)
 
 - `01-visible-list.png`: activity list with mixed action, REST, FTP, and Telnet-attributed entries visible.
 - `02-expanded-problems.png`: expanded problem entry showing a canonical application error line with exception type, stack trace, and structured detail.
@@ -28,26 +28,26 @@ This directory holds the current diagnostics overlay screenshots used for docume
 - `10-traces-only.png`: activity list filtered to traces only.
 - `11-errors-only.png`: activity list filtered to error-severity entries across activity types.
 
-### Filters (`doc/img/app/diagnostics/filters/`)
+### Filters (`docs/img/app/diagnostics/filters/`)
 
 - `01-summary-bar.png`: compact filter summary bar visible in the main overlay.
 - `02-editor.png`: filter editor sheet with activity type, contributor, severity, and Telnet-aware contributor controls.
 
-### Connection (`doc/img/app/diagnostics/connection/`)
+### Connection (`docs/img/app/diagnostics/connection/`)
 
 - `01-view.png`: connection view showing the current device target and ports.
 - `02-edit.png`: connection editor with host and port fields ready to update.
 
-### Analysis (`doc/img/app/diagnostics/analysis/`)
+### Analysis (`docs/img/app/diagnostics/analysis/`)
 
 - `01-latency.png`: latency analysis popup with request timing percentiles and chart.
 - `02-history.png`: health history timeline with seeded state transitions.
 
-### Tools (`doc/img/app/diagnostics/tools/`)
+### Tools (`docs/img/app/diagnostics/tools/`)
 
 - `01-menu.png`: overflow tools menu with export and clear actions visible.
 
-### Profile-specific screenshots (`doc/img/app/diagnostics/profiles/`)
+### Profile-specific screenshots (`docs/img/app/diagnostics/profiles/`)
 
 - `profiles/compact/01-overview.png`: compact display profile overview.
 - `profiles/medium/01-overview.png`: medium display profile overview.

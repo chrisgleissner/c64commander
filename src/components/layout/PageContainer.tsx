@@ -8,6 +8,7 @@
 
 import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 
+import { useAppChromeMode } from "@/components/layout/AppChromeContext";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { cn } from "@/lib/utils";
 
@@ -26,14 +27,17 @@ export const useProfileActionGridDensity = () => useContext(ProfileActionGridDen
 
 export function PageContainer({ children, className, size = "default", as = "main" }: PageContainerProps) {
   const { tokens } = useDisplayProfile();
+  const appChromeMode = useAppChromeMode();
   const Component = as;
   const style: CSSProperties = {
+    height: appChromeMode === "sticky" ? "calc(100% - var(--app-bar-height))" : undefined,
+    minHeight: 0,
     width: size === "full" ? "100%" : undefined,
     maxWidth: size === "full" ? "100%" : size === "reading" ? tokens.readingMaxWidth : tokens.pageMaxWidth,
   };
 
   return (
-    <Component className={cn("page-shell", className)} style={style}>
+    <Component className={cn("page-shell", className)} data-page-scroll-container="true" style={style}>
       {children}
     </Component>
   );

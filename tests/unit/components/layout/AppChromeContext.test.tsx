@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AppChromeModeProvider, usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 
 function TestPageShell() {
-  const className = usePrimaryPageShellClassName("pb-24");
+  const className = usePrimaryPageShellClassName("custom-shell");
   return <div data-testid="page-shell" className={className} />;
 }
 
@@ -12,6 +12,7 @@ describe("AppChromeContext", () => {
   it("adds the app bar offset when fixed chrome is active", () => {
     render(<TestPageShell />);
 
+    expect(screen.getByTestId("page-shell").className).toContain("flex");
     expect(screen.getByTestId("page-shell").className).toContain("pt-[var(--app-bar-height)]");
   });
 
@@ -23,6 +24,7 @@ describe("AppChromeContext", () => {
     );
 
     expect(screen.getByTestId("page-shell").className).not.toContain("pt-[var(--app-bar-height)]");
-    expect(screen.getByTestId("page-shell").className).toContain("pb-24");
+    expect(screen.getByTestId("page-shell").className).toContain("h-full");
+    expect(screen.getByTestId("page-shell").className).toContain("custom-shell");
   });
 });

@@ -246,6 +246,6 @@ ls -la android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
 ## Resources
 
 - [Vitest Coverage](https://vitest.dev/guide/coverage)
-- [Jacoco Documentation](https://www.jacoco.org/jacoco/trunk/doc/)
+- [Jacoco Documentation](https://www.jacoco.org/jacoco/trunk/docs/)
 - [Codecov Documentation](https://docs.codecov.com/)
 - [Playwright Best Practices](https://playwright.dev/docs/best-practices)

@@ -8,7 +8,10 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import { AddItemsProgressOverlay } from "@/components/itemSelection/AddItemsProgressOverlay";
+import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
+import { resolveCenteredOverlayLayout } from "@/components/ui/interstitialStyles";
 
 const buildProgress = (overrides?: Partial<Parameters<typeof AddItemsProgressOverlay>[0]["progress"]>) => ({
   status: "scanning" as const,
@@ -59,5 +62,57 @@ describe("AddItemsProgressOverlay", () => {
     const { container } = render(<AddItemsProgressOverlay progress={buildProgress({ status: "done" })} />);
 
     expect(container.firstChild).toBeNull();
+  });
+
+  it("stays visible when explicitly forced on after scanning finishes", () => {
+    render(<AddItemsProgressOverlay progress={buildProgress({ status: "done" })} visible testId="progress" />);
+
+    expect(screen.getByTestId("progress")).toBeInTheDocument();
+  });
+
+  it("anchors below the badge lane and falls back to the default status text", () => {
+    render(
+      <AddItemsProgressOverlay
+        progress={buildProgress({ elapsedMs: 900, message: null, total: null })}
+        testId="progress"
+      />,
+    );
+
+    const overlay = screen.getByTestId("progress");
+    expect(overlay).toHaveStyle({ paddingTop: `${resolveCenteredOverlayLayout(176).top}px` });
+    expect(screen.getByText(/Scanning files/)).toBeInTheDocument();
+    expect(screen.getByText(/3 found/)).toBeInTheDocument();
+    expect(screen.getByText("00:00")).toBeInTheDocument();
+    expect(screen.queryByText(/\//)).not.toBeInTheDocument();
+  });
+
+  it("returns the overlay element directly when document is unavailable", () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+
+    try {
+      // @ts-expect-error exercise the non-DOM fallback branch directly
+      delete globalThis.document;
+      // @ts-expect-error exercise the non-DOM fallback branch directly
+      delete globalThis.window;
+
+      const markup = renderToStaticMarkup(
+        <InterstitialStateProvider>
+          <AddItemsProgressOverlay progress={buildProgress()} testId="progress" />
+        </InterstitialStateProvider>,
+      );
+      expect(markup).toContain('data-testid="progress"');
+    } finally {
+      Object.defineProperty(globalThis, "document", {
+        value: originalDocument,
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(globalThis, "window", {
+        value: originalWindow,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 });

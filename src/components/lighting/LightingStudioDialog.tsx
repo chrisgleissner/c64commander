@@ -17,6 +17,7 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
+import { resolveAppSheetTopClearancePx, assertOverlayRespectsBadgeSafeZone } from "@/components/ui/interstitialStyles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +27,6 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ModalCloseButton } from "@/components/ui/modal-close-button";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
@@ -56,8 +56,6 @@ const CONNECTION_STATE_LABELS: Record<LightingConnectionSentinelState, string> =
 const FALLBACK_SURFACE_RGB = { r: 99, g: 102, b: 120 };
 const DEFAULT_STUDIO_INTENSITY = 18;
 const DEFAULT_STUDIO_COLOR_PREFERENCE = ["Amber", "Orange", "Yellow", "White"] as const;
-
-type LightingSheetMode = "collapsed" | "standard" | "expanded";
 
 const buildDraftFromCurrent = (
   surfaces: Partial<Record<LightingSurface, LightingSurfaceState>>,
@@ -738,7 +736,7 @@ function LightingContextLensDialog() {
         className="overflow-hidden p-0 sm:w-[min(100vw-2rem,36rem)]"
         data-testid="lighting-context-lens-sheet"
       >
-        <AppSheetHeader className="px-4 pb-3 pt-4 pr-14 sm:px-5">
+        <AppSheetHeader className="px-4 pb-[0.5625rem] pt-3 pr-14 sm:px-5">
           <AppSheetTitle>Context Lens</AppSheetTitle>
           <AppSheetDescription>Which resolver layer currently owns each lighting surface.</AppSheetDescription>
         </AppSheetHeader>
@@ -820,54 +818,16 @@ export function LightingStudioDialog() {
     buildStudioDraftBase(rawDeviceState, capabilities),
   );
   const [linkMode, setLinkMode] = React.useState<LightingLinkMode>("independent");
-  const [sheetMode, setSheetMode] = React.useState<LightingSheetMode>("standard");
-  const [dragTop, setDragTop] = React.useState<number | null>(null);
-  const [viewportHeight, setViewportHeight] = React.useState(() =>
-    typeof window === "undefined" ? 900 : window.innerHeight,
-  );
-  const dragStateRef = React.useRef<{ startY: number; startTop: number; currentTop: number } | null>(null);
 
   const draftBaseState = React.useMemo(
     () => buildStudioDraftBase(previewState ?? rawDeviceState, capabilities),
     [capabilities, previewState, rawDeviceState],
   );
 
-  const resolveSheetTop = React.useCallback(
-    (mode: LightingSheetMode) => {
-      const expandedTop = Math.max(12, Math.round(viewportHeight * 0.06));
-      const standardTop = Math.max(expandedTop + 48, Math.round(viewportHeight * 0.16));
-      const collapsedTop = Math.max(standardTop + 96, Math.round(viewportHeight * 0.58));
-
-      switch (mode) {
-        case "expanded":
-          return expandedTop;
-        case "collapsed":
-          return collapsedTop;
-        case "standard":
-        default:
-          return standardTop;
-      }
-    },
-    [viewportHeight],
-  );
-
-  const sheetTopByMode = React.useMemo(
-    () => ({
-      collapsed: resolveSheetTop("collapsed"),
-      standard: resolveSheetTop("standard"),
-      expanded: resolveSheetTop("expanded"),
-    }),
-    [resolveSheetTop],
-  );
-
-  const currentSheetTop = dragTop ?? sheetTopByMode[sheetMode];
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const handleResize = () => setViewportHeight(window.innerHeight);
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+  const currentSheetTop = React.useMemo(() => {
+    const result = resolveAppSheetTopClearancePx();
+    assertOverlayRespectsBadgeSafeZone(result, "LightingStudioDialog[expanded]");
+    return result;
   }, []);
 
   React.useEffect(() => {
@@ -880,8 +840,6 @@ export function LightingStudioDialog() {
     setSelectedCity(studioState.automation.circadian.locationPreference.city ?? "");
     setManualLatitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lat?.toString() ?? "");
     setManualLongitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lon?.toString() ?? "");
-    setSheetMode("standard");
-    setDragTop(null);
     setDraft(buildDraftFromCurrent(draftBaseState));
   }, [
     draftBaseState,
@@ -941,56 +899,6 @@ export function LightingStudioDialog() {
     setSaveName("");
   };
 
-  const handleSheetHandlePointerDown = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      dragStateRef.current = {
-        startY: event.clientY,
-        startTop: currentSheetTop,
-        currentTop: currentSheetTop,
-      };
-      setDragTop(currentSheetTop);
-      event.preventDefault();
-    },
-    [currentSheetTop],
-  );
-
-  React.useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
-      if (!dragStateRef.current) return;
-      const minTop = sheetTopByMode.expanded;
-      const maxTop = sheetTopByMode.collapsed;
-      const nextTop = dragStateRef.current.startTop + (event.clientY - dragStateRef.current.startY);
-      const boundedTop = Math.min(maxTop, Math.max(minTop, nextTop));
-      dragStateRef.current.currentTop = boundedTop;
-      setDragTop(boundedTop);
-    };
-
-    const handlePointerRelease = () => {
-      if (!dragStateRef.current) return;
-      const finalTop = dragStateRef.current.currentTop;
-      const nextMode = (Object.entries(sheetTopByMode) as Array<[LightingSheetMode, number]>).reduce(
-        (closestMode, candidate) =>
-          Math.abs(candidate[1] - finalTop) < Math.abs(sheetTopByMode[closestMode] - finalTop)
-            ? candidate[0]
-            : closestMode,
-        "standard" as LightingSheetMode,
-      );
-      dragStateRef.current = null;
-      setSheetMode(nextMode);
-      setDragTop(null);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerRelease);
-    window.addEventListener("pointercancel", handlePointerRelease);
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerRelease);
-      window.removeEventListener("pointercancel", handlePointerRelease);
-    };
-  }, [sheetTopByMode]);
-
   const activeProfileChip = resolved.activeProfile ? (
     <Badge variant="secondary" className="text-xs" data-testid="lighting-active-profile-chip">
       {resolved.activeProfile.name}
@@ -1006,100 +914,63 @@ export function LightingStudioDialog() {
     <>
       <AppSheet open={studioOpen} onOpenChange={(open) => (open ? undefined : closeStudio())}>
         <AppSheetContent
-          showClose={false}
           className="flex min-w-0 flex-col overflow-hidden p-0 sm:w-[min(100vw-2rem,64rem)]"
-          style={{ top: `${currentSheetTop}px` }}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+          }}
+          style={{
+            top: `${currentSheetTop}px`,
+          }}
           data-testid="lighting-studio-sheet"
         >
-          <AppSheetHeader
-            className={cn("shrink-0 border-b border-border/60", compact ? "p-3" : "p-4 pb-4 sm:p-5 sm:pb-4")}
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div
-                className="flex flex-1 cursor-grab items-center justify-center touch-none active:cursor-grabbing"
-                onPointerDown={handleSheetHandlePointerDown}
-                data-testid="lighting-sheet-handle"
-                role="presentation"
-              >
-                <span className="h-1.5 w-12 rounded-full bg-border/80" />
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 shrink-0 px-2 text-xs"
-                onClick={() => setSheetMode((current) => (current === "expanded" ? "collapsed" : "expanded"))}
-                data-testid="lighting-sheet-toggle"
-              >
-                {sheetMode === "expanded" ? "Collapse" : "Expand"}
-              </Button>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="min-w-0 flex-1">
-                <AppSheetTitle className={cn("min-w-0", compact && "text-base")}>Lighting Studio</AppSheetTitle>
-                <AppSheetDescription className={cn("mt-0.5 text-xs", compact && "sr-only")}>
-                  {compact ? "Shape looks and automate them." : "Shape looks, save them, and tune the resolver."}
-                </AppSheetDescription>
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  {activeProfileChip}
-                  {resolved.activeAutomationChip ? (
-                    <Badge className="text-xs">{resolved.activeAutomationChip}</Badge>
-                  ) : null}
-                  {circadianState?.fallbackActive ? (
-                    <Badge variant="outline" className="text-xs">
-                      Fallback
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-              <ModalCloseButton
-                className="static h-8 w-8 shrink-0 opacity-100"
-                data-testid="lighting-studio-close"
-                aria-label="Close"
-                onClick={closeStudio}
-              />
-            </div>
-            <div
-              className={cn("mt-3 flex gap-2", narrow ? "flex-wrap" : "items-center justify-between")}
-              data-testid="lighting-header-actions"
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 shrink-0 px-2 text-xs"
-                onClick={openContextLens}
-                data-testid="lighting-open-context-lens"
-              >
-                Why
-              </Button>
-              {manualLockEnabled ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 shrink-0 px-2 text-xs"
-                  onClick={unlockCurrentLook}
-                  data-testid="lighting-unlock"
-                >
-                  <PlayCircle className="h-3.5 w-3.5" />
-                  <span className="ml-1">Resume</span>
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 shrink-0 px-2 text-xs"
-                  onClick={lockCurrentLook}
-                  data-testid="lighting-lock"
-                >
-                  <PauseCircle className="h-3.5 w-3.5" />
-                  <span className="ml-1">Hold</span>
-                </Button>
-              )}
-            </div>
+          <AppSheetHeader closeTestId="lighting-studio-close">
+            <AppSheetTitle className={cn("min-w-0", compact && "text-base")}>Lighting Studio</AppSheetTitle>
+            <AppSheetDescription className={cn(compact && "sr-only")}>
+              {compact ? "Shape looks and automate them." : "Shape looks, save them, and tune the resolver."}
+            </AppSheetDescription>
           </AppSheetHeader>
 
           <AppSheetBody className="min-h-0 px-0 py-0">
             <ScrollArea className="flex-1 min-h-0">
               <div className={cn("space-y-6", compact ? "p-4" : "p-6")}>
+                <section data-testid="lighting-header-actions">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      {activeProfileChip}
+                      {resolved.activeAutomationChip ? (
+                        <Badge className="text-xs">{resolved.activeAutomationChip}</Badge>
+                      ) : null}
+                      {circadianState?.fallbackActive ? (
+                        <Badge variant="outline" className="text-xs">
+                          Fallback
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0 px-2 text-xs"
+                        onClick={openContextLens}
+                        data-testid="lighting-open-context-lens"
+                      >
+                        Why
+                      </Button>
+                      {manualLockEnabled ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 shrink-0 px-2 text-xs"
+                          onClick={unlockCurrentLook}
+                          data-testid="lighting-unlock"
+                        >
+                          Unlock look
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+
                 <section className="space-y-3" data-testid="lighting-profiles-section">
                   <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center")}>
                     <div className="min-w-0 flex-1">

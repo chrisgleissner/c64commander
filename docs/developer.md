@@ -48,11 +48,11 @@ The `./build` script runs `npm run format` automatically before build steps (use
 
 Use these files as the current-state canonical references:
 
-- [doc/index.md](index.md) - documentation entrypoint
-- [doc/architecture.md](architecture.md) - runtime architecture and integrations
-- [doc/features-by-page.md](features-by-page.md) - implemented feature surface
-- [doc/code-coverage.md](code-coverage.md) - coverage model and CI gates
-- [doc/c64/](c64/) - C64 Ultimate REST, FTP, and stream protocol docs
+- [docs/index.md](index.md) - documentation entrypoint
+- [docs/architecture.md](architecture.md) - runtime architecture and integrations
+- [docs/features-by-page.md](features-by-page.md) - implemented feature surface
+- [docs/code-coverage.md](code-coverage.md) - coverage model and CI gates
+- [docs/c64/](c64/) - C64 Ultimate REST, FTP, and stream protocol docs
 
 ## Manual SID playback (local file)
 
@@ -122,7 +122,7 @@ Primary signal: **duration-based due time** computed in JS (from Songlengths / H
 
 Why:
 
-- The published C64U REST API spec in `doc/c64/c64u-openapi.yaml` documents runner _start_ endpoints (e.g. `/v1/runners:sidplay`) but does not expose a reliable runner/player state endpoint that can be polled for an authoritative "finished" signal.
+- The published C64U REST API spec in `docs/c64/c64u-openapi.yaml` documents runner _start_ endpoints (e.g. `/v1/runners:sidplay`) but does not expose a reliable runner/player state endpoint that can be polled for an authoritative "finished" signal.
 - WebView timers are the only cross-platform completion mechanism available in the browser layer.
 
 Secondary watchdog (Android only): **foreground service dueAtMs watchdog**.
@@ -162,9 +162,9 @@ Lock/unlock cannot be fully validated in CI. For local Android validation:
 4. Unlock the device.
 5. Verify the playlist advanced exactly once.
 
-If you create/update a Maestro flow for this, follow `doc/testing/maestro.md` and keep the flow runnable locally.
+If you create/update a Maestro flow for this, follow `docs/testing/maestro.md` and keep the flow runnable locally.
 
-For productionization evidence runs (physical device + startup KPIs), use `doc/testing/physical-device-matrix.md` and execute:
+For productionization evidence runs (physical device + startup KPIs), use `docs/testing/physical-device-matrix.md` and execute:
 
 ```bash
 npm run fixtures:local-source
@@ -214,10 +214,10 @@ VS Code workspace settings in `.vscode/settings.json` enable:
 ## Mock timing profile
 
 - The external Node mock server and the Android in-app demo server now share one ordered timing profile definition from `android/app/src/main/assets/mock-timing-profile.json`.
-- The profile now contains explicit rules for the full documented safe REST surface from `doc/c64/c64u-openapi.yaml`, plus estimated timings for the small set of destructive or non-recoverable endpoints that were intentionally not live-probed.
+- The profile now contains explicit rules for the full documented safe REST surface from `docs/c64/c64u-openapi.yaml`, plus estimated timings for the small set of destructive or non-recoverable endpoints that were intentionally not live-probed.
 - The profile defines endpoint classes, deterministic jitter ranges, regex-capable route matching, and fallback fault-mode timing so Android demo mode and realistic mock clients observe the same request pacing model.
 - Both implementations serialize request handling through a single request-processing lane. This preserves request order under concurrent client activity and makes rate-limit regressions reproducible.
-- The profile is calibrated from live C64U measurements captured on 2026-03-12 against hostname `c64u` using five rebooted samples per safe endpoint series. Probe and stream/file artifacts are currently stored under `doc/c64/measurements/mock-timing-calibration-probes-2026-03-12.json` and `doc/c64/measurements/mock-timing-calibration-streams-files-2026-03-12.json`.
+- The profile is calibrated from live C64U measurements captured on 2026-03-12 against hostname `c64u` using five rebooted samples per safe endpoint series. Probe and stream/file artifacts are currently stored under `docs/c64/measurements/mock-timing-calibration-probes-2026-03-12.json` and `docs/c64/measurements/mock-timing-calibration-streams-files-2026-03-12.json`.
 - Measured medians now include, for example: `OPTIONS /` 29.6 ms, `GET /v1/version` 15.5 ms, `GET /v1/info` 15.5 ms, `PUT /v1/runners:run_prg` 1987.0 ms, `PUT /v1/drives/b:mount` about 753-766 ms across the earlier rebooted mount probe, `PUT /v1/streams/debug:start` 1017.2 ms, `GET /v1/files/{path}:info` 34.9 ms, and `PUT /v1/files/{path}:create_dnp` 981.8 ms.
 - `OPTIONS` now has its own timing class because the live device is consistently slower there than on `GET /v1/info` and `GET /v1/version`.
 - Drive mutations no longer share one generic class. The shared profile distinguishes list, mount, reset, remove, power, ROM load, and set-mode paths because live response times differ by orders of magnitude.
@@ -280,7 +280,7 @@ Notes:
 - `./build --test-maestro-*` auto-starts the Android emulator if none is running and uses it unless `--test-device-id` is provided.
 - `./build --install-apk` defaults to the debug APK. Use `--apk-variant release` to install the release APK instead. Release builds require the Android signing config to be present.
 
-Read `doc/testing/maestro.md` before writing or editing Maestro flows.
+Read `docs/testing/maestro.md` before writing or editing Maestro flows.
 
 You can also run the Maestro flows directly from repo root:
 
@@ -303,7 +303,7 @@ test-results/maestro/
 ### Screenshots
 
 ```bash
-./build --screenshots    # Update app screenshots in doc/img
+./build --screenshots    # Update app screenshots in docs/img
 ./build --screenshots-only  # Capture screenshots only (no tests or APK)
 ```
 
@@ -313,7 +313,7 @@ Notes:
 - `--screenshots-only` skips unit tests, E2E tests, and Android builds.
 - `--test-e2e` runs Playwright without screenshots.
 - `--test-e2e-ci` mirrors CI (screenshots + E2E + evidence validation).
-- Screenshot output is organized under page folders in `doc/img/app/`, with section captures written as page-specific PNG files such as `doc/img/app/home/sections/01-system-info-to-cpu-ram.png`.
+- Screenshot output is organized under page folders in `docs/img/app/`, with section captures written as page-specific PNG files such as `docs/img/app/home/sections/01-system-info-to-cpu-ram.png`.
 
 ### Video walkthrough
 
@@ -398,7 +398,7 @@ test-results/
           meta.json
 ```
 
-Android emulator smoke tests are Maestro flows under `.maestro/` (read `doc/testing/maestro.md` before editing):
+Android emulator smoke tests are Maestro flows under `.maestro/` (read `docs/testing/maestro.md` before editing):
 
 ```text
 .maestro/
@@ -552,7 +552,7 @@ src/
 playwright/         # E2E tests (Playwright)
 tests/              # Unit tests (Vitest)
 android/            # Android/Capacitor project + JVM tests
-doc/                # Documentation
+docs/                # Documentation
 scripts/            # Build and test scripts
 .maestro/           # Maestro smoke tests (Android emulator)
 ```

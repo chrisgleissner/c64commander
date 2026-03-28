@@ -11,6 +11,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
+import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
 type GestureCallbacks = {
   onProgress: (dx: number, velocityX: number) => void;
@@ -85,13 +86,21 @@ const NavigationProbe = () => {
   );
 };
 
-const renderLayer = (pathname: string, extra?: React.ReactNode) => {
+const InterstitialRegistrar = ({ active }: { active: boolean }) => {
+  useRegisterInterstitial("sheet", active);
+  return null;
+};
+
+const renderLayer = (pathname: string, extra?: React.ReactNode, interstitialActive = false) => {
   window.history.pushState({}, "", pathname);
   return render(
     <BrowserRouter>
-      <SwipeNavigationLayer />
-      <LocationProbe />
-      {extra}
+      <InterstitialStateProvider>
+        <InterstitialRegistrar active={interstitialActive} />
+        <SwipeNavigationLayer />
+        <LocationProbe />
+        {extra}
+      </InterstitialStateProvider>
     </BrowserRouter>,
   );
 };
@@ -210,6 +219,13 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
+  it("reserves the bottom navigation band from the swipe viewport height", async () => {
+    renderLayer("/");
+
+    const container = await screen.findByTestId("swipe-navigation-container");
+    expect(container.getAttribute("style")).toContain("height: calc(100dvh - var(--app-tab-bar-reserved-height))");
+  });
+
   it("uses the slow-motion test probe duration for deterministic evidence", async () => {
     (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     renderLayer("/");
@@ -288,5 +304,12 @@ describe("SwipeNavigationLayer", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("marks the runway container inert while an interstitial is active", async () => {
+    renderLayer("/", undefined, true);
+
+    expect(await screen.findByTestId("swipe-navigation-container")).toHaveAttribute("data-interstitial-active", "true");
+    expect(screen.getByTestId("swipe-navigation-container")).toHaveAttribute("inert", "");
   });
 });

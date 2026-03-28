@@ -13,6 +13,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { cn } from "@/lib/utils";
 import { useAppChromeMode } from "@/components/layout/AppChromeContext";
+import { INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 
 type Props = {
   title: ReactNode;
@@ -21,7 +22,7 @@ type Props = {
   children?: ReactNode;
 };
 
-export function AppBar({ title, subtitle, leading, children }: Props) {
+export function AppBar({ title, subtitle: _subtitle, leading, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const { profile, tokens } = useDisplayProfile();
   const screenActive = useScreenActivity();
@@ -47,12 +48,12 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       observer = new ResizeObserver(() => updateHeight());
       observer.observe(element);
     } else {
-      window.addEventListener("resize", updateHeight);
+      globalThis.addEventListener("resize", updateHeight);
     }
 
     return () => {
       observer?.disconnect();
-      window.removeEventListener("resize", updateHeight);
+      globalThis.removeEventListener("resize", updateHeight);
     };
   }, [screenActive]);
 
@@ -60,29 +61,28 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     <header
       ref={headerRef}
       className={cn(
-        "top-0 z-40 bg-background/80 border-b border-border backdrop-blur-lg",
-        appChromeMode === "sticky" ? "sticky w-full max-w-full" : "fixed left-0 w-screen max-w-screen",
-        !compact && "pt-safe",
+        "top-0 border-b border-border bg-background/88 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.55)]",
+        appChromeMode === "sticky" ? "relative w-full max-w-full shrink-0" : "fixed left-0 w-screen max-w-screen",
       )}
+      style={{
+        zIndex: INTERSTITIAL_Z_INDEX.header,
+        paddingTop: compact ? "0px" : "var(--app-header-top-inset, env(safe-area-inset-top))",
+      }}
       data-app-chrome-mode={appChromeMode}
     >
       <div
-        className={cn("app-shell-container", compact ? "space-y-2" : "py-4 space-y-3")}
-        style={compact ? { paddingTop: tokens.pagePaddingX, paddingBottom: tokens.pagePaddingY } : undefined}
+        className={cn("app-shell-container", children ? "space-y-3" : "space-y-0")}
+        style={{
+          paddingTop: `calc(${compact ? tokens.pagePaddingX : tokens.pagePaddingY} * 0.8)`,
+          paddingBottom: `calc(${compact ? tokens.pagePaddingX : tokens.pagePaddingY} * 0.8)`,
+        }}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            {leading ? (
-              leading
-            ) : (
-              <>
-                <h1 className="c64-header text-xl truncate">{title}</h1>
-                {subtitle ? <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p> : null}
-              </>
-            )}
+        <div className="flex min-h-[52px] items-center justify-between gap-4" data-testid="app-bar-row">
+          <div className="flex min-h-[52px] min-w-0 items-center" data-testid="app-bar-title-zone">
+            {leading ? leading : <h1 className="c64-header text-xl leading-none truncate">{title}</h1>}
           </div>
           {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
-          <UnifiedHealthBadge />
+          <UnifiedHealthBadge className="self-center" />
         </div>
         {children ? <div className="min-w-0">{children}</div> : null}
       </div>

@@ -11,7 +11,7 @@ After incorporating repository evidence and operator clarifications supplied on 
 
 This audit reviewed the repository structure, production code, tests, native layers, CI/CD workflows, build tooling, release configuration, security posture, and project documentation. Evidence came from source files, configuration files, test suites, workflow definitions, repository metadata, and local command output captured during the audit.
 
-All documents in `doc`, `doc/c64`, `doc/diagnostics`, and `doc/testing` were read before the main audit began, as required. Additional documentation reviewed during the audit included `README.md`, `docs/**`, `ci/telemetry/README.md`, `agents/README.md`, `c64scope/README.md`, `tests/**/README.md`, and prior `doc/research/review-*` materials.
+All documents in `docs/`, including `docs/c64`, `docs/diagnostics`, and `docs/testing`, were read before the main audit began, as required. Additional documentation reviewed during the audit included `README.md`, `docs/**`, `ci/telemetry/README.md`, `agents/README.md`, `c64scope/README.md`, `tests/**/README.md`, and prior `docs/research/review-*` materials.
 
 The audit also incorporates operator scope clarifications provided on March 13, 2026:
 
@@ -49,11 +49,11 @@ Architecturally, the central runtime responsibilities are split across:
 
 The documentation set establishes the following repository-wide expectations and constraints:
 
-- The shared TypeScript runtime is the primary implementation surface; native code should stay narrowly scoped to platform capabilities (`doc/architecture.md`, `doc/developer.md`).
-- C64 Ultimate communication is defined around REST API version `0.1`, optional `X-Password` auth, FTP port `21`, and documented UDP stream control behavior (`doc/c64/c64u-openapi.yaml`, `doc/c64/c64u-rest-api.md`, `doc/c64/c64u-ftp.md`, `doc/c64/c64u-stream-spec.md`).
-- Tracing is intended to be always-on, bounded, redacted at capture/export time, and regression-checked through golden fixtures (`doc/diagnostics/tracing-spec.md`, `doc/diagnostics/action-summary-spec.md`).
-- Large playlist and HVSC workflows are intended to scale via app-owned persistent data and query-driven UX rather than page-local lists (`doc/db.md`, `doc/ux-guidelines.md`, `doc/architecture.md`).
-- Testing policy is intentionally strict: merged coverage targets at 90% line and branch coverage, evidence-driven Playwright runs, Maestro conventions, Android physical-device validation, contract testing, fuzzing, and agentic full-app coverage (`doc/code-coverage.md`, `doc/testing/**`).
+- The shared TypeScript runtime is the primary implementation surface; native code should stay narrowly scoped to platform capabilities (`docs/architecture.md`, `docs/developer.md`).
+- C64 Ultimate communication is defined around REST API version `0.1`, optional `X-Password` auth, FTP port `21`, and documented UDP stream control behavior (`docs/c64/c64u-openapi.yaml`, `docs/c64/c64u-rest-api.md`, `docs/c64/c64u-ftp.md`, `docs/c64/c64u-stream-spec.md`).
+- Tracing is intended to be always-on, bounded, redacted at capture/export time, and regression-checked through golden fixtures (`docs/diagnostics/tracing-spec.md`, `docs/diagnostics/action-summary-spec.md`).
+- Large playlist and HVSC workflows are intended to scale via app-owned persistent data and query-driven UX rather than page-local lists (`docs/db.md`, `docs/ux-guidelines.md`, `docs/architecture.md`).
+- Testing policy is intentionally strict: merged coverage targets at 90% line and branch coverage, evidence-driven Playwright runs, Maestro conventions, Android physical-device validation, contract testing, fuzzing, and agentic full-app coverage (`docs/code-coverage.md`, `docs/testing/**`).
 - The user-facing network model is already documented as HTTP/FTP because that is what the current device supports (`README.md:267-299`).
 - Current repository docs position iOS around sideload installation rather than paid-developer App Store/TestFlight distribution (`README.md:77-84`).
 
@@ -125,7 +125,7 @@ The documentation set establishes the following repository-wide expectations and
 
 **Evidence:**
 
-- `doc/db.md:11-15` states that the current repository adapters are temporary and the target design is app-owned relational storage with query-backed access.
+- `docs/db.md:11-15` states that the current repository adapters are temporary and the target design is app-owned relational storage with query-backed access.
 - The repository factory falls back to `localStorage` outside native IndexedDB-capable paths in `src/lib/playlistRepository/factory.ts:10-21`.
 - IndexedDB queries sort, filter, and paginate after loading entire playlist state in memory in `src/lib/playlistRepository/indexedDbRepository.ts:203-247`.
 - The `localStorage` repository does the same in `src/lib/playlistRepository/localStorageRepository.ts:156-196`.
@@ -212,7 +212,7 @@ The documentation set establishes the following repository-wide expectations and
 | R6-04 | Make web deployments update-safe. | Version the service-worker cache from build metadata, stop using cache-first for the app shell, add service-worker lifecycle/update tests, and document cache-busting behavior for operators. | `public/sw.js`, `src/lib/startup/serviceWorkerRegistration.ts`, service-worker tests, web deployment docs | P0 |
 | R6-06 | Clear the audited dependency backlog. | Upgrade or replace vulnerable direct packages first (`@capacitor/cli`, `ftp-srv`, `ajv`, `jsdom`), refresh overrides, rerun `npm audit`, and record any accepted residual risk explicitly. | `package.json`, `package-lock.json`, dependent scripts/tests | P1 |
 | R6-07 | Enforce one release version source of truth. | Decide whether Git tags or `package.json` own semantic versioning, make all build surfaces consume the same source, and fail or remove mismatch-tolerant paths instead of logging and continuing. | `package.json`, `vite.config.ts`, `.github/workflows/web.yaml`, `README.md` | P1 |
-| R6-08 | Move playlist persistence toward the documented query-backed model. | Introduce indexed/queryable storage for playlist rows and sessions, push filtering/sorting into the storage layer, add explicit migration handling, and preserve recovery artifacts on parse/load failure. | `src/lib/playlistRepository/**`, `doc/db.md`, playlist tests | P1 |
+| R6-08 | Move playlist persistence toward the documented query-backed model. | Introduce indexed/queryable storage for playlist rows and sessions, push filtering/sorting into the storage layer, add explicit migration handling, and preserve recovery artifacts on parse/load failure. | `src/lib/playlistRepository/**`, `docs/db.md`, playlist tests | P1 |
 | R6-09 | Raise static-safety and modularity standards in hotspot files. | Re-enable stricter TypeScript options incrementally, split the largest files by responsibility, and use regression tests to preserve behavior while carving out smaller modules. | `tsconfig*.json`, `src/lib/c64api.ts`, `src/pages/SettingsPage.tsx`, `src/pages/PlayFilesPage.tsx`, `src/components/disks/HomeDiskManager.tsx`, `src/lib/hvsc/hvscIngestionRuntime.ts` | P1 |
 | R6-10 | Tighten Android backup policy. | Decide whether the app should opt out of backups entirely; if yes, disable backup globally, or otherwise document and explicitly scope which non-secret state is allowed to transfer. | `android/app/src/main/AndroidManifest.xml`, backup XML rules, privacy/docs | P2 |
 | R6-11 | Remove documentation contradictions and stale rollout notes. | Update privacy language to describe optional Sentry capability accurately, align Node version guidance with repository engines, refresh artifact examples, and remove stale Android release TODO text. | `docs/privacy-policy.md`, `tests/contract/README.md`, `README.md`, `AGENTS.md` | P1 |
@@ -232,7 +232,7 @@ The repository has unusually broad test infrastructure for an app of this size:
 
 Coverage governance is also explicitly documented and automated:
 
-- Merged coverage workflow and threshold policy are documented in `doc/code-coverage.md`.
+- Merged coverage workflow and threshold policy are documented in `docs/code-coverage.md`.
 - CI threshold logic enforces 90% line and 90% branch coverage through `scripts/check-coverage-threshold.mjs:5-9,109-120`.
 - Codecov mirrors the same 90% project and patch targets in `codecov.yml:6-19`.
 
