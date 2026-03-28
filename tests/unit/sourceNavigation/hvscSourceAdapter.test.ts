@@ -38,6 +38,26 @@ describe("hvscSourceAdapter", () => {
     expect(entries[0]).toMatchObject({ type: "dir", path: "/ROOT/A" });
   });
 
+  it("sorts same-name songs by path and preserves the root folder label", async () => {
+    vi.mocked(getHvscFolderListing).mockResolvedValue({
+      path: "/",
+      folders: ["/"],
+      songs: [
+        { virtualPath: "/ROOT/B/demo.sid", fileName: "demo.sid" },
+        { virtualPath: "/ROOT/A/demo.sid", fileName: "demo.sid" },
+      ],
+    });
+
+    const source = createHvscSourceLocation("/");
+    const entries = await source.listEntries("/");
+
+    expect(entries).toEqual([
+      { type: "dir", name: "/", path: "/" },
+      { type: "file", name: "demo.sid", path: "/ROOT/A/demo.sid" },
+      { type: "file", name: "demo.sid", path: "/ROOT/B/demo.sid" },
+    ]);
+  });
+
   it("walks folders recursively and collects songs", async () => {
     vi.mocked(getHvscFolderListingPaged).mockImplementation(async ({ path }: { path: string }) => {
       if (path === "/ROOT") {
@@ -207,43 +227,81 @@ describe("hvscSourceAdapter", () => {
     });
   });
 
-  it("paginates recursive HVSC listings without re-adding folders after the first page", async () => {
-    vi.mocked(getHvscFolderListingPaged).mockImplementation(async ({ path, offset = 0 }: { path: string; offset?: number }) => {
-      if (path === "/ROOT" && offset === 0) {
-        return {
-          path,
-          folders: ["/ROOT/Sub"],
-          songs: [{ virtualPath: "/ROOT/root-a.sid", fileName: "root-a.sid" }],
-          totalFolders: 1,
-          totalSongs: 2,
-          offset,
-          limit: 200,
-        };
-      }
-      if (path === "/ROOT" && offset === 1) {
-        return {
-          path,
-          folders: ["/ROOT/ShouldNotBeQueuedAgain"],
-          songs: [{ virtualPath: "/ROOT/root-b.sid", fileName: "root-b.sid" }],
-          totalFolders: 1,
-          totalSongs: 2,
-          offset,
-          limit: 200,
-        };
-      }
-      if (path === "/ROOT/Sub") {
-        return {
-          path,
-          folders: [],
-          songs: [{ virtualPath: "/ROOT/Sub/deep.sid", fileName: "deep.sid" }],
-          totalFolders: 0,
-          totalSongs: 1,
-          offset,
-          limit: 200,
-        };
-      }
-      throw new Error(`Unexpected path ${path} offset ${offset}`);
+  it("falls back to sid metadata song totals when explicit subsong count is absent", async () => {
+    vi.mocked(getHvscFolderListingPaged).mockResolvedValue({
+      path: "/ROOT",
+      folders: [],
+      songs: [
+        {
+          virtualPath: "/ROOT/metadata-only.sid",
+          fileName: "metadata-only.sid",
+          sidMetadata: {
+            songs: 6,
+            startSong: 1,
+          },
+          trackSubsongs: null,
+          subsongCount: null,
+        },
+      ],
+      totalFolders: 0,
+      totalSongs: 1,
+      offset: 0,
+      limit: 50,
     });
+
+    const source = createHvscSourceLocation("/ROOT");
+    const page = await source.listEntriesPage?.({ path: "/ROOT", offset: 0, limit: 50 });
+
+    expect(page?.entries).toEqual([
+      {
+        type: "file",
+        name: "metadata-only.sid",
+        path: "/ROOT/metadata-only.sid",
+        songNr: 1,
+        subsongCount: 6,
+      },
+    ]);
+  });
+
+  it("paginates recursive HVSC listings without re-adding folders after the first page", async () => {
+    vi.mocked(getHvscFolderListingPaged).mockImplementation(
+      async ({ path, offset = 0 }: { path: string; offset?: number }) => {
+        if (path === "/ROOT" && offset === 0) {
+          return {
+            path,
+            folders: ["/ROOT/Sub"],
+            songs: [{ virtualPath: "/ROOT/root-a.sid", fileName: "root-a.sid" }],
+            totalFolders: 1,
+            totalSongs: 2,
+            offset,
+            limit: 200,
+          };
+        }
+        if (path === "/ROOT" && offset === 1) {
+          return {
+            path,
+            folders: ["/ROOT/ShouldNotBeQueuedAgain"],
+            songs: [{ virtualPath: "/ROOT/root-b.sid", fileName: "root-b.sid" }],
+            totalFolders: 1,
+            totalSongs: 2,
+            offset,
+            limit: 200,
+          };
+        }
+        if (path === "/ROOT/Sub") {
+          return {
+            path,
+            folders: [],
+            songs: [{ virtualPath: "/ROOT/Sub/deep.sid", fileName: "deep.sid" }],
+            totalFolders: 0,
+            totalSongs: 1,
+            offset,
+            limit: 200,
+          };
+        }
+        throw new Error(`Unexpected path ${path} offset ${offset}`);
+      },
+    );
 
     const source = createHvscSourceLocation("/ROOT");
     const entries = await source.listFilesRecursive("/ROOT");
@@ -263,6 +321,31 @@ describe("hvscSourceAdapter", () => {
   it("aborts recursive listing when signal is cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
+    const source = createHvscSourceLocation("/ROOT");
+
+    await expect(source.listFilesRecursive("/ROOT", { signal: controller.signal })).rejects.toThrow("Aborted");
+  });
+
+  it("aborts recursive listing between paged HVSC requests", async () => {
+    const controller = new AbortController();
+    vi.mocked(getHvscFolderListingPaged).mockImplementation(
+      async ({ path, offset = 0 }: { path: string; offset?: number }) => {
+        if (path === "/ROOT" && offset === 0) {
+          controller.abort();
+          return {
+            path,
+            folders: [],
+            songs: [{ virtualPath: "/ROOT/root.sid", fileName: "root.sid" }],
+            totalFolders: 0,
+            totalSongs: 2,
+            offset,
+            limit: 200,
+          };
+        }
+        throw new Error("Unexpected additional page fetch");
+      },
+    );
+
     const source = createHvscSourceLocation("/ROOT");
 
     await expect(source.listFilesRecursive("/ROOT", { signal: controller.signal })).rejects.toThrow("Aborted");
