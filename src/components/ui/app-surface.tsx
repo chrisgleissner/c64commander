@@ -11,7 +11,11 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@/lib/utils";
 import { CloseControl } from "@/components/ui/modal-close-button";
-import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
+import {
+  APP_INTERSTITIAL_BACKDROP_CLASSNAME,
+  INTERSTITIAL_Z_INDEX,
+  resolveInterstitialBackdropStyle,
+} from "@/components/ui/interstitialStyles";
 import { useCenteredOverlayPosition, useWorkflowSheetPosition } from "@/components/ui/useCenteredOverlayPosition";
 import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
@@ -167,8 +171,8 @@ function renderAppSurfaceHeader(
 
 const AppSurfaceOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & { depth?: number }
+>(({ className, depth = 1, style, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
@@ -176,7 +180,8 @@ const AppSurfaceOverlay = React.forwardRef<
       APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       className,
     )}
-    style={{ zIndex: INTERSTITIAL_Z_INDEX.backdrop }}
+    data-interstitial-depth={depth}
+    style={{ ...resolveInterstitialBackdropStyle(depth), ...style }}
     {...props}
   />
 ));
@@ -196,17 +201,17 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
       style: positionedStyle,
     } = useWorkflowSheetPosition(ref, "AppSheetContent");
     const isOpen = useInterstitialOpenState(nodeRef, nodeVersion);
-    useRegisterInterstitial("sheet", isOpen);
+    const layer = useRegisterInterstitial("sheet", isOpen);
     const contentStyle = {
       ...positionedStyle,
       ...((style as React.CSSProperties | undefined) ?? {}),
       "--app-sheet-bottom-clearance": APP_SHEET_BOTTOM_CLEARANCE,
-      zIndex: INTERSTITIAL_Z_INDEX.surface,
+      zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface,
     } as React.CSSProperties;
 
     return (
       <AppSurfacePortal>
-        <AppSurfaceOverlay />
+        <AppSurfaceOverlay depth={layer?.depth ?? 1} />
         <AppSurfaceHeaderContext.Provider value={{ closeTestId, showClose }}>
           <DialogPrimitive.Content
             ref={composedRef}
@@ -221,6 +226,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
             )}
             style={contentStyle}
             data-app-surface="sheet"
+            data-interstitial-depth={layer?.depth ?? 1}
             data-sheet-presentation="sheet"
             {...props}
           >
@@ -293,24 +299,25 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
       style: centeredStyle,
     } = useCenteredOverlayPosition(ref, "AppDialogContent");
     const isOpen = useInterstitialOpenState(nodeRef, nodeVersion);
-    useRegisterInterstitial("modal", isOpen);
+    const layer = useRegisterInterstitial("modal", isOpen);
 
     return (
       <AppSurfacePortal>
-        <AppSurfaceOverlay />
+        <AppSurfaceOverlay depth={layer?.depth ?? 1} />
         <AppSurfaceHeaderContext.Provider value={{ closeTestId, showClose }}>
           <DialogPrimitive.Content
             ref={composedRef}
             className={cn(
-              "fixed left-1/2 flex w-[min(90vw,32rem)] max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)]",
+              "fixed left-[50dvw] flex w-[min(90dvw,32rem)] max-w-[calc(100dvw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)]",
               "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
               className,
             )}
             data-app-surface="dialog"
+            data-interstitial-depth={layer?.depth ?? 1}
             style={{
               ...centeredStyle,
               ...style,
-              zIndex: INTERSTITIAL_Z_INDEX.surface,
+              zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface,
             }}
             {...props}
           >

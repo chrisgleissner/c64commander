@@ -137,7 +137,7 @@ describe("AppBar", () => {
   it("renders the header at the shared interstitial header z-index", () => {
     const { container } = render(<AppBar title="Test" />);
     const header = container.querySelector("header");
-    expect(header).toHaveStyle({ zIndex: "30" });
+    expect(header).toHaveStyle({ zIndex: "1000" });
   });
 
   it("skips publishing app-bar height while the screen is inactive", () => {

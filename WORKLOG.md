@@ -1,5 +1,42 @@
 # Interstitial, Header, and Density Refactor Worklog
 
+## 2026-03-28T00:35:00Z
+
+### Overlay and scroll containment completed
+
+- Replaced the fixed interstitial z-level model with registration-based overlay depth tracking in `src/components/ui/interstitial-state.tsx` and depth-aware backdrop/surface helpers in `src/components/ui/interstitialStyles.ts`.
+- Updated shared dialogs, alert dialogs, app surfaces, and the add-items progress overlay to publish per-layer depth metadata, opacity, and deterministic z-index ordering.
+- Moved sticky-shell pages onto a bounded flex column where `PageContainer` owns scrolling and `SwipeNavigationLayer` reserves the fixed tab-bar band instead of relying on per-page bottom padding hacks.
+- Migrated the Docs page onto the shared `PageContainer` so every primary tab now follows the same header-to-content-to-tab-bar geometry.
+
+### Validation completed
+
+- `npm run lint` passed. The only reported warnings are pre-existing generated warnings under `android/coverage/**`.
+- `npm run build` passed for the runtime code changes.
+- `npm run test:e2e` passed with `416 passed` and `1 skipped` after updating stale connection assertions and the viewport validator.
+- `npm run maestro:gating` passed after bootstrapping `ANDROID_AVD_HOME` in `scripts/run-maestro-gating.sh`.
+- `npm run screenshots` passed with `20 passed`; prune summary was `scanned=128 reverted=0 deleted=0 kept=128`.
+- Final `npm run test:coverage` passed with `428` test files and `5010` tests green, plus global coverage at `93.47%` statements and `91.01%` branches.
+
+### Screenshot refresh scope
+
+- The shared shell and overlay changes visibly affected screenshots across the primary page families, so the refreshed documentation images were limited to the impacted folders under `docs/img/app/`: `home`, `play`, `disks`, `config`, `settings`, `docs`, and `diagnostics`.
+
+## 2026-03-27T22:40:00Z
+
+### Overlay and scroll containment audit started
+
+- Classified the task as `UI_CHANGE` and `CODE_CHANGE` because it changes shared executable UI behavior.
+- Audited the current shell entry in `src/App.tsx`, swipe-runway layout in `src/components/SwipeNavigationLayer.tsx`, bottom navigation in `src/components/TabBar.tsx`, and shared overlay primitives in `src/components/ui/dialog.tsx`, `sheet.tsx`, and `popover.tsx`.
+- Confirmed the current overlay model still uses fixed shared z-levels (`INTERSTITIAL_Z_INDEX.backdrop` and `.surface`) rather than per-depth registration, which cannot satisfy hierarchical dimming for nested overlays.
+- Confirmed the shell still mounts the tab bar as a global fixed layer while route content manages most of its own vertical space, which is the likely root cause for content bleeding behind the header and bottom navigation.
+- Created `PLANS.md` to lock the implementation scope, detection strategy, and validation contract before code changes.
+
+### Next execution slice
+
+- Patch the shared overlay state and styling layer to provide deterministic depth registration and per-level backdrop opacities.
+- Patch the shared app shell so scrolling is constrained to a single explicit viewport between the header band and bottom navigation band.
+
 ## 2026-03-27T22:15:00Z
 
 ### Close control standardization

@@ -645,17 +645,19 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
   await waitForStableRender(page);
   const layout = await page.evaluate(() => {
     const activeSlot = document.querySelector('[data-slot-active="true"]');
-    const activeMain = activeSlot?.querySelector("main");
+    const activeMain =
+      activeSlot?.querySelector('[data-page-scroll-container="true"]') ?? activeSlot?.querySelector("main");
     const slotElement = activeSlot instanceof HTMLElement ? activeSlot : null;
-    const slotRect = slotElement?.getBoundingClientRect() ?? null;
+    const scrollElement = activeMain instanceof HTMLElement ? activeMain : slotElement;
+    const scrollRect = scrollElement?.getBoundingClientRect() ?? null;
     const sections = Array.from(activeMain?.querySelectorAll("[data-section-label]") ?? [])
       .map((node) => {
         const label = node.getAttribute("data-section-label")?.trim() ?? "";
         const rect = node.getBoundingClientRect();
         return {
           label,
-          top: slotRect ? rect.top - slotRect.top + slotElement!.scrollTop : rect.top + window.scrollY,
-          bottom: slotRect ? rect.bottom - slotRect.top + slotElement!.scrollTop : rect.bottom + window.scrollY,
+          top: scrollRect ? rect.top - scrollRect.top + scrollElement!.scrollTop : rect.top + window.scrollY,
+          bottom: scrollRect ? rect.bottom - scrollRect.top + scrollElement!.scrollTop : rect.bottom + window.scrollY,
         };
       })
       .filter((section) => section.label.length > 0 && section.bottom > section.top);
@@ -665,8 +667,8 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
     const mainStyle = main ? getComputedStyle(main) : null;
     const appBarHeight = Number.parseFloat(rootStyle.getPropertyValue("--app-bar-height")) || 0;
     const bottomInset = Number.parseFloat(mainStyle?.paddingBottom ?? "0") || 0;
-    const viewportHeight = slotElement?.clientHeight ?? window.innerHeight;
-    const maxScroll = slotElement ? Math.max(0, slotElement.scrollHeight - slotElement.clientHeight) : 0;
+    const viewportHeight = scrollElement?.clientHeight ?? window.innerHeight;
+    const maxScroll = scrollElement ? Math.max(0, scrollElement.scrollHeight - scrollElement.clientHeight) : 0;
 
     return {
       sections,
@@ -693,9 +695,12 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
 
   for (let index = 0; index < canonicalSlices.length; index += 1) {
     const { fileName, slice } = canonicalSlices[index];
-    await getActiveSlot(page).evaluate((node, nextScrollTop) => {
-      if (node instanceof HTMLElement) {
-        node.scrollTop = nextScrollTop;
+    await page.evaluate((nextScrollTop) => {
+      const activeSlot = document.querySelector<HTMLElement>('[data-slot-active="true"]');
+      const scrollContainer =
+        activeSlot?.querySelector<HTMLElement>('[data-page-scroll-container="true"]') ?? activeSlot ?? null;
+      if (scrollContainer) {
+        scrollContainer.scrollTop = nextScrollTop;
       }
     }, slice.scrollTop);
     await waitForStableRender(page);
@@ -1330,8 +1335,16 @@ test.describe("App screenshots", () => {
       const archivePicker = archiveDialog.getByTestId("commoserve-picker");
       await expect(archivePicker).toBeVisible();
       await archivePicker.getByLabel("Name").fill("joyride");
-      await archivePicker.getByRole("combobox").nth(0).click();
-      await page.getByRole("option", { name: "Apps" }).click();
+      const categoryTrigger = archivePicker.getByRole("combobox").nth(0);
+      await categoryTrigger.click();
+      const categoryOption = page.getByRole("option", { name: "Apps" });
+      await expect(categoryOption).toBeVisible();
+      await categoryOption.evaluate((node) => {
+        if (node instanceof HTMLElement) {
+          node.click();
+        }
+      });
+      await expect(categoryTrigger).toContainText("Apps");
       await expect(archivePicker.getByTestId("archive-query-preview")).toContainText(SCREENSHOT_ARCHIVE_QUERY);
       await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("From CommoServe");
       await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png", { skipFuzzyHeadRestore: true });

@@ -7,9 +7,10 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { isValidElement } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import { AddItemsProgressOverlay } from "@/components/itemSelection/AddItemsProgressOverlay";
+import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { resolveCenteredOverlayLayout } from "@/components/ui/interstitialStyles";
 
 const buildProgress = (overrides?: Partial<Parameters<typeof AddItemsProgressOverlay>[0]["progress"]>) => ({
@@ -95,9 +96,12 @@ describe("AddItemsProgressOverlay", () => {
       // @ts-expect-error exercise the non-DOM fallback branch directly
       delete globalThis.window;
 
-      const result = AddItemsProgressOverlay({ progress: buildProgress(), testId: "progress" });
-      expect(isValidElement(result)).toBe(true);
-      expect(result?.props["data-testid"]).toBe("progress");
+      const markup = renderToStaticMarkup(
+        <InterstitialStateProvider>
+          <AddItemsProgressOverlay progress={buildProgress()} testId="progress" />
+        </InterstitialStateProvider>,
+      );
+      expect(markup).toContain('data-testid="progress"');
     } finally {
       Object.defineProperty(globalThis, "document", {
         value: originalDocument,

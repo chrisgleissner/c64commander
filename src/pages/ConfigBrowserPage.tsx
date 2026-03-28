@@ -608,7 +608,7 @@ export default function ConfigBrowserPage() {
 
     return categoriesData.categories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [categoriesData?.categories, searchQuery]);
-  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
+  const pageShellClassName = usePrimaryPageShellClassName();
 
   return (
     <div className={pageShellClassName}>

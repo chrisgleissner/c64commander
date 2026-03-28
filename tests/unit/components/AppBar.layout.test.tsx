@@ -77,7 +77,7 @@ describe("AppBar", () => {
     expect(screen.getByTestId("unified-health-badge")).toBeVisible();
   });
 
-  it("uses sticky chrome inside the swipe runway", () => {
+  it("uses shell-owned relative chrome inside the swipe runway", () => {
     localStorage.clear();
     setViewportWidth(390);
 
@@ -93,7 +93,7 @@ describe("AppBar", () => {
 
     const header = container.querySelector("header");
     expect(header?.getAttribute("data-app-chrome-mode")).toBe("sticky");
-    expect(header?.className).toContain("sticky");
+    expect(header?.className).toContain("relative");
     expect(header?.className).not.toContain("fixed");
     expect(screen.getByRole("heading", { name: "Docs" })).toBeVisible();
   });

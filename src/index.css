@@ -116,10 +116,6 @@
     --app-bar-height: 88px;
   }
 
-  main {
-    padding-bottom: var(--app-tab-bar-reserved-height);
-  }
-
   .dark {
     /* Deep C64-inspired dark theme */
     --background: 237 35% 10%;
@@ -370,14 +366,16 @@ button:focus-visible,
 
   .page-shell {
     box-sizing: border-box;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     width: 100%;
     max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
     padding-top: var(--display-profile-page-padding-top);
-    /* Must clear the fixed TabBar (~5rem) plus safe-area inset.
-       @layer components wins over @layer base so the main{} rule in base
-       is not effective here; we set the clearance explicitly. */
-    padding-bottom: var(--app-tab-bar-reserved-height);
+    padding-bottom: var(--display-profile-page-padding-y);
     padding-left: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left));
     padding-right: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right));
   }

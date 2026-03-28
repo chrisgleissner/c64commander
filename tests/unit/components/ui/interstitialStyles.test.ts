@@ -4,6 +4,9 @@ import {
   assertOverlayRespectsBadgeSafeZone,
   getBadgeSafeZoneBottomPx,
   resolveAppSheetTopClearancePx,
+  resolveInterstitialBackdropOpacity,
+  resolveInterstitialBackdropZIndex,
+  resolveInterstitialSurfaceZIndex,
   resolveCenteredOverlayLayout,
   resolveHeaderOverlapDeltaPx,
 } from "@/components/ui/interstitialStyles";
@@ -65,6 +68,18 @@ describe("interstitialStyles", () => {
     const layout = resolveCenteredOverlayLayout(220, 900);
     expect(layout.top).toBeGreaterThanOrEqual(100);
     expect(layout.maxHeight).toBeGreaterThan(220);
+  });
+
+  it("assigns deterministic stacked dimming and z-index values by overlay depth", () => {
+    expect(resolveInterstitialBackdropOpacity(1)).toBe(0.4);
+    expect(resolveInterstitialBackdropOpacity(2)).toBe(0.25);
+    expect(resolveInterstitialBackdropOpacity(3)).toBe(0.15);
+    expect(resolveInterstitialBackdropOpacity(6)).toBe(0.15);
+
+    expect(resolveInterstitialBackdropZIndex(1)).toBe(200);
+    expect(resolveInterstitialBackdropZIndex(2)).toBe(220);
+    expect(resolveInterstitialSurfaceZIndex(1)).toBe(210);
+    expect(resolveInterstitialSurfaceZIndex(2)).toBe(230);
   });
 
   it("reports intersections with header title and badge-critical text", () => {

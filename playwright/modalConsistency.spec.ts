@@ -36,6 +36,66 @@ const seedOfflineState = async (page: Page) => {
 test.describe("Modal close-control consistency", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
+  const expectActivePageViewportBoundaries = async (page: Page) => {
+    const header = page.locator('header[data-app-chrome-mode="sticky"]').first();
+    const scrollContainer = page.locator('main[data-page-scroll-container="true"]').first();
+    const tabBar = page.locator("nav.tab-bar").first();
+
+    await Promise.all([
+      header.waitFor({ state: "attached" }),
+      scrollContainer.waitFor({ state: "attached" }),
+      tabBar.waitFor({ state: "attached" }),
+    ]);
+
+    const [headerBox, scrollBox, tabBarBox] = await Promise.all([
+      header.boundingBox(),
+      scrollContainer.boundingBox(),
+      tabBar.boundingBox(),
+    ]);
+
+    expect(headerBox, "active page header should expose bounds").not.toBeNull();
+    expect(scrollBox, "active page scroll container should expose bounds").not.toBeNull();
+    expect(tabBarBox, "tab bar should expose bounds").not.toBeNull();
+
+    if (!headerBox || !scrollBox || !tabBarBox) {
+      throw new Error("Unable to measure active page shell boundaries.");
+    }
+
+    expect(scrollBox.y, "scroll container must begin below the page header").toBeGreaterThanOrEqual(
+      headerBox.y + headerBox.height - 1,
+    );
+    expect(scrollBox.y + scrollBox.height, "scroll container must end above the fixed tab bar").toBeLessThanOrEqual(
+      tabBarBox.y + 1,
+    );
+
+    const scrollMetrics = await scrollContainer.evaluate((visibleScroll) => {
+      if (!(visibleScroll instanceof HTMLElement)) {
+        return null;
+      }
+
+      visibleScroll.scrollTop = visibleScroll.scrollHeight;
+      return {
+        clientHeight: visibleScroll.clientHeight,
+        scrollHeight: visibleScroll.scrollHeight,
+        scrollTop: visibleScroll.scrollTop,
+      };
+    });
+
+    expect(scrollMetrics, "active scroll container should expose measurable scroll metrics").not.toBeNull();
+    if (!scrollMetrics) {
+      throw new Error("Unable to measure active scroll container metrics.");
+    }
+
+    expect(scrollMetrics.clientHeight, "scroll container should retain a measurable viewport").toBeGreaterThan(0);
+    expect(scrollMetrics.scrollHeight, "scroll container should expose stable scroll metrics").toBeGreaterThanOrEqual(
+      scrollMetrics.clientHeight,
+    );
+    expect(
+      scrollMetrics.scrollTop,
+      "scroll container should remain scrollable without leaking into chrome",
+    ).toBeGreaterThanOrEqual(0);
+  };
+
   test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
@@ -158,6 +218,95 @@ test.describe("Modal close-control consistency", () => {
 
     const transform = await tabBarWrapper.evaluate((element) => getComputedStyle(element).transform);
     expect(transform).not.toBe("none");
+  });
+
+  test("diagnostics confirmation dialog adds a second deterministic dim layer above the sheet", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    server = await createMockC64Server({});
+    await page.addInitScript(
+      ({ url }: { url: string }) => {
+        (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = url;
+      },
+      { url: server.baseUrl },
+    );
+    await seedUiMocks(page, server.baseUrl);
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
+    await indicator.click();
+
+    const diagSheet = page.getByTestId("diagnostics-sheet");
+    await expect(diagSheet).toBeVisible({ timeout: 5000 });
+    await page.getByTestId("diagnostics-overflow-menu").click();
+    await page.getByTestId("diagnostics-clear-all-trigger").click();
+    await expect(page.getByTestId("diagnostics-clear-all-confirm")).toBeVisible();
+
+    await expect(page.locator("html")).toHaveAttribute("data-interstitial-depth", "2");
+
+    const layers = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll<HTMLElement>('[data-state="open"][data-interstitial-depth]')).map(
+        (element) => ({
+          depth: element.getAttribute("data-interstitial-depth"),
+          position: getComputedStyle(element).position,
+          role: element.getAttribute("role"),
+          zIndex: getComputedStyle(element).zIndex,
+          backgroundColor: getComputedStyle(element).backgroundColor,
+        }),
+      );
+    });
+
+    const surfaces = layers.filter((element) => element.role === "dialog" || element.role === "alertdialog");
+    const backdrops = layers.filter((element) => element.position === "fixed" && element.role === null);
+
+    const sheetSurface = surfaces.find((element) => element.depth === "1" && element.role === "dialog");
+    const alertSurface = surfaces.find((element) => element.depth === "2" && element.role === "alertdialog");
+    const firstBackdrop = backdrops.find((element) => element.depth === "1");
+    const secondBackdrop = backdrops.find((element) => element.depth === "2");
+
+    expect(sheetSurface).toBeDefined();
+    expect(alertSurface).toBeDefined();
+    expect(firstBackdrop).toBeDefined();
+    expect(secondBackdrop).toBeDefined();
+
+    expect(Number(alertSurface?.zIndex ?? 0)).toBeGreaterThan(Number(sheetSurface?.zIndex ?? 0));
+    expect(Number(secondBackdrop?.zIndex ?? 0)).toBeGreaterThan(Number(firstBackdrop?.zIndex ?? 0));
+    expect(firstBackdrop?.backgroundColor).toBe("rgba(0, 0, 0, 0.4)");
+    expect(secondBackdrop?.backgroundColor).toBe("rgba(0, 0, 0, 0.25)");
+  });
+
+  test("every primary page keeps its scroll container between the header and fixed tab bar", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    server = await createMockC64Server({});
+    await page.addInitScript(
+      ({ url }: { url: string }) => {
+        (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = url;
+        sessionStorage.setItem("c64u_demo_interstitial_shown", "1");
+      },
+      { url: server.baseUrl },
+    );
+    await seedUiMocks(page, server.baseUrl);
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    for (const tab of [
+      { label: "Home", testId: "tab-home" },
+      { label: "Play", testId: "tab-play" },
+      { label: "Disks", testId: "tab-disks" },
+      { label: "Config", testId: "tab-config" },
+      { label: "Settings", testId: "tab-settings" },
+      { label: "Docs", testId: "tab-docs" },
+    ]) {
+      const tabButton = page.getByTestId(tab.testId);
+      await tabButton.click();
+      await expect(tabButton).toHaveAttribute("aria-current", "page");
+      await expectActivePageViewportBoundaries(page);
+    }
   });
 
   test("Diagnostics overflow menu stays left of the close button on small screens", async ({

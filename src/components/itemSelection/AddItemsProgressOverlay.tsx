@@ -11,6 +11,7 @@ import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
   INTERSTITIAL_Z_INDEX,
   resolveCenteredOverlayLayout,
+  resolveInterstitialBackdropOpacity,
 } from "@/components/ui/interstitialStyles";
 import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 import { cn } from "@/lib/utils";
@@ -32,11 +33,6 @@ type AddItemsProgressOverlayProps = {
   onCancel?: () => void;
 };
 
-const ProgressOverlayRegistration = ({ active }: { active: boolean }) => {
-  useRegisterInterstitial("progress", active);
-  return null;
-};
-
 const formatElapsed = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -52,6 +48,7 @@ export const AddItemsProgressOverlay = ({
   onCancel,
 }: AddItemsProgressOverlayProps) => {
   const isVisible = visible === true || (visible !== false && progress.status === "scanning");
+  const layer = useRegisterInterstitial("progress", isVisible);
 
   if (!isVisible) return null;
 
@@ -63,16 +60,20 @@ export const AddItemsProgressOverlay = ({
         "fixed inset-0 flex items-start justify-center px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
         APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       )}
-      style={{ paddingTop: `${top}px`, zIndex: INTERSTITIAL_Z_INDEX.backdrop }}
+      data-interstitial-depth={layer?.depth ?? 1}
+      style={{
+        backgroundColor: `rgb(0 0 0 / ${layer?.backdropOpacity ?? resolveInterstitialBackdropOpacity(1)})`,
+        paddingTop: `${top}px`,
+        zIndex: layer?.backdropZIndex ?? INTERSTITIAL_Z_INDEX.backdrop,
+      }}
       data-testid={testId}
     >
-      <ProgressOverlayRegistration active={isVisible} />
       <div
         className={cn(
           "w-full max-w-sm rounded-[var(--interstitial-radius)] border border-border bg-background px-5 py-4 shadow-[var(--interstitial-shadow)]",
           "max-h-[calc(100dvh-3rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))]",
         )}
-        style={{ zIndex: INTERSTITIAL_Z_INDEX.surface }}
+        style={{ zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold">{title}</p>

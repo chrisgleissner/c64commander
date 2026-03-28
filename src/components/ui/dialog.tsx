@@ -13,7 +13,11 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresentation";
 import { cn } from "@/lib/utils";
 import { CloseControl } from "@/components/ui/modal-close-button";
-import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
+import {
+  APP_INTERSTITIAL_BACKDROP_CLASSNAME,
+  INTERSTITIAL_Z_INDEX,
+  resolveInterstitialBackdropStyle,
+} from "@/components/ui/interstitialStyles";
 import { useCenteredOverlayPosition } from "@/components/ui/useCenteredOverlayPosition";
 import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
@@ -27,8 +31,8 @@ const DialogClose = DialogPrimitive.Close;
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & { depth?: number }
+>(({ className, depth = 1, style, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
@@ -36,7 +40,8 @@ const DialogOverlay = React.forwardRef<
       APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       className,
     )}
-    style={{ zIndex: INTERSTITIAL_Z_INDEX.backdrop }}
+    data-interstitial-depth={depth}
+    style={{ ...resolveInterstitialBackdropStyle(depth), ...style }}
     {...props}
   />
 ));
@@ -121,19 +126,20 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
     const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
     const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(ref, `DialogContent[${surface}]`);
     const isOpen = useDialogOpenState(nodeRef, nodeVersion);
-    useRegisterInterstitial("modal", isOpen);
+    const layer = useRegisterInterstitial("modal", isOpen);
 
     return (
       <DialogPresentationContext.Provider value={presentation}>
         <DialogHeaderContext.Provider value={{ closeTestId, showClose }}>
           <DialogPortal>
-            <DialogOverlay />
+            <DialogOverlay depth={layer?.depth ?? 1} />
             <DialogPrimitive.Content
               ref={composedRef}
               className={cn(presentation.contentClassName, className)}
+              data-interstitial-depth={layer?.depth ?? 1}
               data-modal-surface={surface}
               data-modal-presentation={presentation.mode}
-              style={{ ...style, zIndex: INTERSTITIAL_Z_INDEX.surface }}
+              style={{ ...style, zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
               {...props}
             >
               {children}

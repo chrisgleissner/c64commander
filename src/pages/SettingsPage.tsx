@@ -561,7 +561,7 @@ export default function SettingsPage() {
       });
     }
   });
-  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
+  const pageShellClassName = usePrimaryPageShellClassName();
 
   return (
     <div className={pageShellClassName}>

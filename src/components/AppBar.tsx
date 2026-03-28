@@ -62,7 +62,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, children }: Props)
       ref={headerRef}
       className={cn(
         "top-0 border-b border-border bg-background/88 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.55)]",
-        appChromeMode === "sticky" ? "sticky w-full max-w-full" : "fixed left-0 w-screen max-w-screen",
+        appChromeMode === "sticky" ? "relative w-full max-w-full shrink-0" : "fixed left-0 w-screen max-w-screen",
       )}
       style={{
         zIndex: INTERSTITIAL_Z_INDEX.header,

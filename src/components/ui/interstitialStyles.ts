@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { CSSProperties } from "react";
+
 export type OverlayBounds = {
   top: number;
   right: number;
@@ -15,18 +17,44 @@ export type OverlayBounds = {
 
 export const INTERSTITIAL_Z_INDEX = {
   content: 10,
-  backdrop: 20,
-  header: 30,
-  surface: 40,
+  backdrop: 200,
+  header: 1000,
+  surface: 210,
 } as const;
 
 export const STANDARD_DIM_OPACITY = 0.4;
-export const APP_INTERSTITIAL_BACKDROP_CLASSNAME = "bg-black/40";
+export const SECONDARY_DIM_OPACITY = 0.25;
+export const TERTIARY_DIM_OPACITY = 0.15;
+export const APP_INTERSTITIAL_BACKDROP_CLASSNAME = "bg-black";
+
+const INTERSTITIAL_LAYER_Z_STEP = 20;
+const INTERSTITIAL_SURFACE_Z_OFFSET = 10;
 
 const APP_BAR_HEIGHT_FALLBACK_PX = 88;
 const MIN_CENTERED_OVERLAY_HEIGHT_PX = 160;
 export const MAX_HEADER_OVERLAP_DELTA_PX = 12;
 export const OVERLAY_SAFE_ZONE_GAP_PX = 8;
+
+export const resolveInterstitialBackdropOpacity = (depth: number): number => {
+  if (depth <= 1) return STANDARD_DIM_OPACITY;
+  if (depth === 2) return SECONDARY_DIM_OPACITY;
+  return TERTIARY_DIM_OPACITY;
+};
+
+export const resolveInterstitialBackdropZIndex = (depth: number): number =>
+  INTERSTITIAL_Z_INDEX.backdrop + Math.max(0, depth - 1) * INTERSTITIAL_LAYER_Z_STEP;
+
+export const resolveInterstitialSurfaceZIndex = (depth: number): number =>
+  resolveInterstitialBackdropZIndex(depth) + INTERSTITIAL_SURFACE_Z_OFFSET;
+
+export const resolveInterstitialBackdropStyle = (depth: number): CSSProperties => ({
+  backgroundColor: `rgb(0 0 0 / ${resolveInterstitialBackdropOpacity(depth)})`,
+  zIndex: resolveInterstitialBackdropZIndex(depth),
+});
+
+export const resolveInterstitialSurfaceStyle = (depth: number): CSSProperties => ({
+  zIndex: resolveInterstitialSurfaceZIndex(depth),
+});
 
 const toBounds = (rect: { top: number; right: number; bottom: number; left: number }): OverlayBounds => ({
   top: rect.top,

@@ -219,6 +219,13 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
+  it("reserves the bottom navigation band from the swipe viewport height", async () => {
+    renderLayer("/");
+
+    const container = await screen.findByTestId("swipe-navigation-container");
+    expect(container.getAttribute("style")).toContain("height: calc(100dvh - var(--app-tab-bar-reserved-height))");
+  });
+
   it("uses the slow-motion test probe duration for deterministic evidence", async () => {
     (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     renderLayer("/");

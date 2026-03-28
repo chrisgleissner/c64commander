@@ -558,7 +558,7 @@ function HomePageContent() {
   const ramExpansionAvailable =
     ramExpansionOptions.length > 0 && ramExpansionModeToken !== normalizeOptionToken(unavailableLabel);
   const reuSizeVisible = isActive && ramExpansionAvailable && ramExpansionModeToken === normalizeOptionToken("Enabled");
-  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
+  const pageShellClassName = usePrimaryPageShellClassName();
 
   return (
     <div className={pageShellClassName}>

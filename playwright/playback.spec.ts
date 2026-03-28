@@ -1470,7 +1470,8 @@ test.describe("Playback file browser", () => {
 
   test("mute button toggles and slider does not unmute", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
-    await expect(page.getByText("Connected")).toBeVisible();
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
 
     const muteButton = page.getByTestId("volume-mute");
     const slider = page.getByTestId("volume-slider");

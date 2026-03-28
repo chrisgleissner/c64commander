@@ -71,6 +71,12 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const waitForRealConnectionBadge = async (page: Page) => {
+  const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+  await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
+  return indicator;
+};
+
 const sectorsPerTrack1541 = (track: number) => {
   if (track <= 17) return 21;
   if (track <= 24) return 19;
@@ -313,7 +319,7 @@ test.describe("Playback file browser (part 2)", () => {
     const initialState = server.getState()["Audio Mixer"];
 
     await page.goto("/play");
-    await expect(page.getByText("Connected")).toBeVisible();
+    await waitForRealConnectionBadge(page);
     const slider = page.getByTestId("volume-slider").getByRole("slider");
     await expect(slider).toBeVisible();
     await expect(page.getByTestId("volume-mute")).toBeEnabled();
@@ -787,7 +793,7 @@ test.describe("Playback file browser (part 2)", () => {
     const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+    await waitForRealConnectionBadge(page);
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     await snap(page, testInfo, "playlist-populated");
   });
@@ -1315,7 +1321,7 @@ test.describe("Playback file browser (part 2)", () => {
     });
 
     await page.goto("/play");
-    await expect(page.getByText("Connected")).toBeVisible();
+    await waitForRealConnectionBadge(page);
     const slider = page.getByTestId("volume-slider");
     const label = page.getByTestId("volume-label");
     await expect(slider).toBeVisible();

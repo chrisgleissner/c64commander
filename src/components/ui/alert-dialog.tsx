@@ -14,7 +14,11 @@ import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresenta
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { CloseControl } from "@/components/ui/modal-close-button";
-import { APP_INTERSTITIAL_BACKDROP_CLASSNAME, INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
+import {
+  APP_INTERSTITIAL_BACKDROP_CLASSNAME,
+  INTERSTITIAL_Z_INDEX,
+  resolveInterstitialBackdropStyle,
+} from "@/components/ui/interstitialStyles";
 import { useCenteredOverlayPosition } from "@/components/ui/useCenteredOverlayPosition";
 import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
@@ -93,15 +97,16 @@ function collectAlertDialogHeaderSlots(children: React.ReactNode) {
 
 const AlertDialogOverlay = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay> & { depth?: number }
+>(({ className, depth = 1, style, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
       "fixed inset-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       className,
     )}
-    style={{ zIndex: INTERSTITIAL_Z_INDEX.backdrop }}
+    data-interstitial-depth={depth}
+    style={{ ...resolveInterstitialBackdropStyle(depth), ...style }}
     {...props}
     ref={ref}
   />
@@ -119,19 +124,20 @@ const AlertDialogContent = React.forwardRef<
     `AlertDialogContent[${surface}]`,
   );
   const isOpen = useAlertDialogOpenState(nodeRef, nodeVersion);
-  useRegisterInterstitial("modal", isOpen);
+  const layer = useRegisterInterstitial("modal", isOpen);
 
   return (
     <AlertDialogPresentationContext.Provider value={presentation}>
       <AlertDialogHeaderContext.Provider value={{ showClose: true }}>
         <AlertDialogPortal>
-          <AlertDialogOverlay />
+          <AlertDialogOverlay depth={layer?.depth ?? 1} />
           <AlertDialogPrimitive.Content
             ref={composedRef}
             className={cn(presentation.contentClassName, className)}
+            data-interstitial-depth={layer?.depth ?? 1}
             data-modal-surface={surface}
             data-modal-presentation={presentation.mode}
-            style={{ ...style, zIndex: INTERSTITIAL_Z_INDEX.surface }}
+            style={{ ...style, zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
             {...props}
           />
         </AlertDialogPortal>

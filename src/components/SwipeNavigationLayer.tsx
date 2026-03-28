@@ -313,7 +313,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     <div
       ref={containerRef}
       className="relative w-screen overflow-hidden"
-      style={{ height: "100dvh", touchAction: "pan-y pinch-zoom" }}
+      style={{ height: "calc(100dvh - var(--app-tab-bar-reserved-height))", touchAction: "pan-y pinch-zoom" }}
       inert={interstitialActive ? "" : undefined}
       data-testid="swipe-navigation-container"
       data-swipe-motion-mode={runtimeMotionMode}
@@ -345,7 +345,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
             return (
               <div
                 key={`${panelPosition}-${pageIndex}`}
-                className="relative h-full overflow-y-auto overflow-x-hidden"
+                className="relative h-full overflow-hidden"
                 style={{ width: "33.333333%", flexShrink: 0 }}
                 aria-hidden={true}
                 inert=""
@@ -360,7 +360,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
           return (
             <div
               key={`${panelPosition}-${pageIndex}`}
-              className="relative h-full overflow-y-auto overflow-x-hidden"
+              className="relative h-full overflow-hidden"
               style={{ width: "33.333333%", flexShrink: 0 }}
               aria-hidden={!isActive}
               inert={isActive ? undefined : ""}
