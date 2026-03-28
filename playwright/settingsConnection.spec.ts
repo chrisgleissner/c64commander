@@ -21,6 +21,10 @@ import {
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 
+const hostFromBaseUrl = (baseUrl: string) => new URL(baseUrl).host;
+const hostnameFromHost = (host: string) => new URL(`http://${host}`).hostname;
+const portFromHost = (host: string) => new URL(`http://${host}`).port || "80";
+
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
@@ -50,16 +54,24 @@ test.describe("Settings connection management", () => {
       type: "allow-warnings",
       description: "Expected connection failures to non-existent URL",
     });
+    const expectedHost = hostFromBaseUrl(server.baseUrl);
+    const expectedHostname = hostnameFromHost(expectedHost);
+    const expectedPort = portFromHost(expectedHost);
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
     const urlInput = page.locator("#deviceHost");
+    const portInput = page.locator("#httpPort");
     await expect(urlInput).toBeVisible();
+    await expect(portInput).toBeVisible();
 
     const originalUrl = await urlInput.inputValue();
+    expect(originalUrl).toBe(expectedHostname);
+    await expect(portInput).toHaveValue(expectedPort);
     await snap(page, testInfo, "original-url");
 
-    await urlInput.fill("localhost:8064");
+    await urlInput.fill(expectedHostname);
+    await portInput.fill(expectedPort);
     await snap(page, testInfo, "url-changed");
 
     await page.getByRole("button", { name: /Save & Connect|Save connection/i }).click();
@@ -69,7 +81,7 @@ test.describe("Settings connection management", () => {
     await snap(page, testInfo, "toast-shown");
 
     const stored = await page.evaluate(() => localStorage.getItem("c64u_device_host"));
-    expect(stored).toBe("localhost:8064");
+    expect(stored).toBe(expectedHost);
     await snap(page, testInfo, "url-saved");
   });
 
