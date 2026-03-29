@@ -38,12 +38,6 @@ env:
     timeout: ${LONG_TIMEOUT}
 - scrollUntilVisible:
     element:
-      text: "HVSC"
-    direction: DOWN
-    speed: 80
-    timeout: ${LONG_TIMEOUT}
-- scrollUntilVisible:
-    element:
       text: "Download HVSC"
     direction: DOWN
     speed: 80
