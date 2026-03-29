@@ -305,7 +305,7 @@ Summary: 798 dependencies across NPM (781), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | agent-base | 7.1.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/agent-base/-/agent-base-7.1.4.tgz](https://registry.npmjs.org/agent-base/-/agent-base-7.1.4.tgz) |
 | NPM | aggregate-error | 3.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/aggregate-error/-/aggregate-error-3.1.0.tgz](https://registry.npmjs.org/aggregate-error/-/aggregate-error-3.1.0.tgz) |
 | NPM | ajv | 6.12.6 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/ajv/-/ajv-6.12.6.tgz](https://registry.npmjs.org/ajv/-/ajv-6.12.6.tgz) |
-| NPM | ajv-formats | 2.1.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/ajv-formats/-/ajv-formats-2.1.1.tgz](https://registry.npmjs.org/ajv-formats/-/ajv-formats-2.1.1.tgz) |
+| NPM | ajv-formats | 3.0.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/ajv-formats/-/ajv-formats-3.0.1.tgz](https://registry.npmjs.org/ajv-formats/-/ajv-formats-3.0.1.tgz) |
 | NPM | ansi-regex | 5.0.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz](https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz) |
 | NPM | ansi-styles | 5.2.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/ansi-styles/-/ansi-styles-5.2.0.tgz](https://registry.npmjs.org/ansi-styles/-/ansi-styles-5.2.0.tgz) |
 | NPM | any-promise | 1.3.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/any-promise/-/any-promise-1.3.0.tgz](https://registry.npmjs.org/any-promise/-/any-promise-1.3.0.tgz) |
