@@ -8,6 +8,22 @@ import { createArchiveMock } from "../../mocks/archiveMock";
 
 const closers: Array<() => Promise<void>> = [];
 
+const createArchiveClientStub = () => ({
+  getPresets: vi.fn().mockResolvedValue([]),
+  search: vi.fn(),
+  getEntries: vi.fn(),
+  getBinaryUrl: vi.fn(),
+  downloadBinary: vi.fn(),
+  getResolvedConfig: vi.fn(),
+});
+
+const flushArchivePresetRefresh = async () => {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+};
+
 afterEach(async () => {
   __resetArchivePresetCacheForTests();
   vi.useRealTimers();
@@ -74,12 +90,17 @@ describe("useOnlineArchive", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-29T12:00:00Z"));
 
+    const client = createArchiveClientStub();
+    client.getPresets.mockRejectedValue(new Error("preset refresh failed"));
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
     const { result } = renderHook(() =>
       useOnlineArchive(buildDefaultArchiveClientConfig({ hostOverride: "127.0.0.1:1" })),
     );
 
-    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+    await flushArchivePresetRefresh();
 
+    expect(result.current.presetsLoading).toBe(false);
     expect(result.current.state.phase).toBe("idle");
     expect(result.current.presets).toEqual(
       expect.arrayContaining([
@@ -88,6 +109,8 @@ describe("useOnlineArchive", () => {
       ]),
     );
     expect(result.current.presets.find((preset) => preset.type === "date")?.values.at(-1)?.aqlKey).toBe("2026");
+
+    spy.mockRestore();
   });
 
   it("refreshes presets only once per app launch for the same source config", async () => {
@@ -140,7 +163,12 @@ describe("useOnlineArchive", () => {
         expect.objectContaining({ type: "sort" }),
       ]),
     );
-    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(result.current.presetsLoading).toBe(false);
     expect(result.current.state.phase).toBe("idle");
 
     spy.mockRestore();
@@ -150,26 +178,21 @@ describe("useOnlineArchive", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-29T12:00:00Z"));
 
-    const client = {
-      getPresets: vi.fn().mockResolvedValue([
+    const client = createArchiveClientStub();
+    client.getPresets.mockResolvedValue([
         {
           type: "date",
           description: "Date",
           values: Array.from({ length: 46 }, (_, index) => ({ aqlKey: String(1980 + index) })),
         },
-      ]),
-      search: vi.fn(),
-      getEntries: vi.fn(),
-      getBinaryUrl: vi.fn(),
-      downloadBinary: vi.fn(),
-      getResolvedConfig: vi.fn(),
-    };
+      ]);
     const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
 
     const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
 
-    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+    await flushArchivePresetRefresh();
 
+    expect(result.current.presetsLoading).toBe(false);
     const datePreset = result.current.presets.find((preset) => preset.type === "date");
     expect(datePreset?.values[0]?.aqlKey).toBe("1980");
     expect(datePreset?.values.at(-1)?.aqlKey).toBe("2026");
