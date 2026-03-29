@@ -14,7 +14,8 @@ env:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
 - scrollUntilVisible:
-    element: "HVSC"
+  element:
+    text: "Download HVSC"
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn: "Download HVSC"

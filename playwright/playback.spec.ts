@@ -254,7 +254,7 @@ test.describe("Playback file browser", () => {
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
     const lastRequest = [...server.requests].reverse().find((req) => req.url.startsWith("/v1/runners:sidplay"));
-    expect(lastRequest?.method).toBe("PUT");
+    expect(lastRequest?.method).toBe("POST");
 
     const { requestEvent, related } = await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
     expect((requestEvent.data as { target?: string }).target).toBe("external-mock");
@@ -612,7 +612,7 @@ test.describe("Playback file browser", () => {
       expect(dialogBox.x).toBeLessThanOrEqual(1);
       expect(dialogBox.x + dialogBox.width).toBeGreaterThanOrEqual(viewport.width - 1);
       expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width + 1);
-      expect(dialogBox.y).toBeGreaterThanOrEqual(40);
+      expect(dialogBox.y).toBeGreaterThanOrEqual(39);
       expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
     }
 

@@ -15,12 +15,10 @@ env:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
 - scrollUntilVisible:
-    element: "HVSC"
+    element:
+      text: "Download HVSC"
     direction: DOWN
     timeout: ${TIMEOUT}
-- extendedWaitUntil:
-    visible: "HVSC"
-    timeout: ${SHORT_TIMEOUT}
 - takeScreenshot: hvsc-controls
 - assertVisible: "Download HVSC"
 - assertVisible: "Ingest HVSC"
