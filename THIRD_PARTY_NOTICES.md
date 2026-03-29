@@ -589,7 +589,7 @@ Summary: 798 dependencies across NPM (781), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | natural-compare | 1.4.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/natural-compare/-/natural-compare-1.4.0.tgz](https://registry.npmjs.org/natural-compare/-/natural-compare-1.4.0.tgz) |
 | NPM | ncp | 2.0.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/ncp/-/ncp-2.0.0.tgz](https://registry.npmjs.org/ncp/-/ncp-2.0.0.tgz) |
 | NPM | next-themes | 0.3.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/next-themes/-/next-themes-0.3.0.tgz](https://registry.npmjs.org/next-themes/-/next-themes-0.3.0.tgz) |
-| NPM | nextcov | 1.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/nextcov/-/nextcov-1.1.0.tgz](https://registry.npmjs.org/nextcov/-/nextcov-1.1.0.tgz) |
+| NPM | nextcov | 1.2.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/nextcov/-/nextcov-1.2.1.tgz](https://registry.npmjs.org/nextcov/-/nextcov-1.2.1.tgz) |
 | NPM | node-preload | 0.2.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/node-preload/-/node-preload-0.2.1.tgz](https://registry.npmjs.org/node-preload/-/node-preload-0.2.1.tgz) |
 | NPM | node-releases | 2.0.19 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/node-releases/-/node-releases-2.0.19.tgz](https://registry.npmjs.org/node-releases/-/node-releases-2.0.19.tgz) |
 | NPM | normalize-path | 3.0.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/normalize-path/-/normalize-path-3.0.0.tgz](https://registry.npmjs.org/normalize-path/-/normalize-path-3.0.0.tgz) |
