@@ -63,6 +63,7 @@ import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
+import { shouldShowHvscControls } from "@/pages/playFiles/hvscControlsVisibility";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
@@ -185,8 +186,8 @@ export default function PlayFilesPage() {
   const isAndroid = getPlatform() === "android" && isNativePlatform();
   const trace = useActionTrace("PlayFilesPage");
 
-  const { flags, isLoaded } = useFeatureFlags();
-  const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
+  const featureFlags = useFeatureFlags();
+  const hvscControlsEnabled = shouldShowHvscControls(featureFlags);
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
 
   const {
