@@ -144,7 +144,10 @@ const createProgressReporter = (
   return { emit, succeed, fail };
 };
 
-export const detectUpdatedTempConfigFile = (before: ConfigRemoteFile[], after: ConfigRemoteFile[]): ConfigRemoteFile | null => {
+export const detectUpdatedTempConfigFile = (
+  before: ConfigRemoteFile[],
+  after: ConfigRemoteFile[],
+): ConfigRemoteFile | null => {
   const beforeMap = new Map(before.map((entry) => [entry.name, `${entry.size ?? -1}:${entry.modifiedAt ?? ""}`]));
   const changed = after
     .filter((entry) => entry.name.toLowerCase().endsWith(".cfg"))
@@ -296,7 +299,12 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
     const reporter = createProgressReporter("apply-local", onProgress);
     const remoteFileName = normalizeConfigFileName(fileName);
     const remotePath = `/Temp/${remoteFileName}`;
-    let logContext: ConfigWorkflowLogContext = { localFileName: fileName, localPath: fileName, remoteFileName, remotePath };
+    let logContext: ConfigWorkflowLogContext = {
+      localFileName: fileName,
+      localPath: fileName,
+      remoteFileName,
+      remotePath,
+    };
     const emit = (state: ConfigProgressState, context: ConfigWorkflowLogContext = {}) => {
       logContext = { ...logContext, ...context };
       reporter.emit(state, logContext);

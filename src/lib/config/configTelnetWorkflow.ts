@@ -87,7 +87,11 @@ export const saveRemoteConfigFromTemp = async (session: TelnetSessionApi, menuKe
   await executor.execute("saveConfigToFile");
 };
 
-export const applyRemoteConfigFromPath = async (session: TelnetSessionApi, menuKey: TelnetMenuKey, remotePath: string) => {
+export const applyRemoteConfigFromPath = async (
+  session: TelnetSessionApi,
+  menuKey: TelnetMenuKey,
+  remotePath: string,
+) => {
   const targetFile = basename(remotePath);
   if (!targetFile) {
     throw new TelnetError(`Invalid config path: ${remotePath}`, "ITEM_NOT_FOUND", { remotePath });

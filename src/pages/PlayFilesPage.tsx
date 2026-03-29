@@ -497,7 +497,11 @@ export default function PlayFilesPage() {
       if (configuredSourceId && localSources.some((source) => source.id === configuredSourceId)) {
         return configuredSourceId;
       }
-      if (item.request.source === "local" && item.sourceId && localSources.some((source) => source.id === item.sourceId)) {
+      if (
+        item.request.source === "local" &&
+        item.sourceId &&
+        localSources.some((source) => source.id === item.sourceId)
+      ) {
         return item.sourceId;
       }
       return localSources.length === 1 ? (localSources[0]?.id ?? null) : null;
@@ -549,7 +553,7 @@ export default function PlayFilesPage() {
   );
 
   const configPickerTarget = useMemo(
-    () => (configPickerState ? playlist.find((item) => item.id === configPickerState.itemId) ?? null : null),
+    () => (configPickerState ? (playlist.find((item) => item.id === configPickerState.itemId) ?? null) : null),
     [configPickerState, playlist],
   );
 
@@ -578,7 +582,10 @@ export default function PlayFilesPage() {
       }
 
       try {
-        updatePlaylistItemConfigRef(configPickerState.itemId, buildConfigReferenceFromBrowserSelection(source, selections[0]));
+        updatePlaylistItemConfigRef(
+          configPickerState.itemId,
+          buildConfigReferenceFromBrowserSelection(source, selections[0]),
+        );
         return true;
       } catch (error) {
         reportUserError({

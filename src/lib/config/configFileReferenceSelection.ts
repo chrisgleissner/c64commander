@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { FolderPickerFileResult } from '@/lib/native/folderPicker';
-import { createLocalSourceFromFileList, setLocalSourceRuntimeFiles } from '@/lib/sourceNavigation/localSourcesStore';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import type { SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
-import type { ConfigFileReference, LocalConfigFileReference } from './configFileReference';
+import type { FolderPickerFileResult } from "@/lib/native/folderPicker";
+import { createLocalSourceFromFileList, setLocalSourceRuntimeFiles } from "@/lib/sourceNavigation/localSourcesStore";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
+import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
+import type { ConfigFileReference, LocalConfigFileReference } from "./configFileReference";
 
-export const isConfigFileName = (name: string) => name.trim().toLowerCase().endsWith('.cfg');
+export const isConfigFileName = (name: string) => name.trim().toLowerCase().endsWith(".cfg");
 
 const requireConfigFileName = (name?: string | null) => {
-  const trimmed = name?.trim() ?? '';
+  const trimmed = name?.trim() ?? "";
   if (!trimmed || !isConfigFileName(trimmed)) {
-    throw new Error('Select a .cfg file.');
+    throw new Error("Select a .cfg file.");
   }
   return trimmed;
 };
@@ -26,14 +26,14 @@ export const buildConfigReferenceFromBrowserSelection = (
   source: SourceLocation,
   selection: SelectedItem,
 ): ConfigFileReference => {
-  if (selection.type !== 'file') {
-    throw new Error('Select a .cfg file.');
+  if (selection.type !== "file") {
+    throw new Error("Select a .cfg file.");
   }
 
   const fileName = requireConfigFileName(selection.name);
-  if (source.type === 'ultimate') {
+  if (source.type === "ultimate") {
     return {
-      kind: 'ultimate',
+      kind: "ultimate",
       fileName,
       path: normalizeSourcePath(selection.path),
       modifiedAt: selection.modifiedAt ?? null,
@@ -41,9 +41,9 @@ export const buildConfigReferenceFromBrowserSelection = (
     };
   }
 
-  if (source.type === 'local') {
+  if (source.type === "local") {
     return {
-      kind: 'local',
+      kind: "local",
       fileName,
       path: normalizeSourcePath(selection.path),
       sourceId: source.id,
@@ -52,19 +52,19 @@ export const buildConfigReferenceFromBrowserSelection = (
     };
   }
 
-  throw new Error('Only local or C64U config files can be attached.');
+  throw new Error("Only local or C64U config files can be attached.");
 };
 
 export const buildLocalConfigReferenceFromAndroidPicker = (
   result: FolderPickerFileResult,
 ): LocalConfigFileReference => {
   if (!result.permissionPersisted || !result.uri) {
-    throw new Error('Config file access was not granted.');
+    throw new Error("Config file access was not granted.");
   }
 
   const fileName = requireConfigFileName(result.name);
   return {
-    kind: 'local',
+    kind: "local",
     fileName,
     path: normalizeSourcePath(`/${fileName}`),
     uri: result.uri,
@@ -78,12 +78,12 @@ export const buildLocalConfigReferenceFromWebFile = (file: File): LocalConfigFil
   const { source, runtimeFiles } = createLocalSourceFromFileList([file]);
   const entry = source.entries?.[0];
   if (!entry) {
-    throw new Error('Selected config file is unavailable.');
+    throw new Error("Selected config file is unavailable.");
   }
 
   setLocalSourceRuntimeFiles(source.id, runtimeFiles);
   return {
-    kind: 'local',
+    kind: "local",
     fileName,
     path: normalizeSourcePath(entry.relativePath),
     sourceId: source.id,

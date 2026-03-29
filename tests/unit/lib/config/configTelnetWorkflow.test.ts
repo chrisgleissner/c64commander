@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyRemoteConfigFromPath, applyRemoteConfigFromTemp, saveRemoteConfigFromTemp } from "@/lib/config/configTelnetWorkflow";
+import {
+  applyRemoteConfigFromPath,
+  applyRemoteConfigFromTemp,
+  saveRemoteConfigFromTemp,
+} from "@/lib/config/configTelnetWorkflow";
 import { TelnetError, type TelnetScreen, type TelnetSessionApi } from "@/lib/telnet/telnetTypes";
 
 const executeSpy = vi.fn().mockResolvedValue(undefined);

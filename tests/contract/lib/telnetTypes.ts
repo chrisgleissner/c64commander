@@ -126,7 +126,10 @@ export const DEFAULT_MENU_FIXTURE: MenuFixture = {
       "/USB1/test-data/d81": [{ name: "10_Years_HVSC.d81", type: "file" }],
       "/USB1/test-data/mod": [{ name: "jukebox_packtune.mod", type: "file" }],
       "/USB1/test-data/prg": [{ name: "1k-mini-bdash-note.prg", type: "file" }],
-      "/USB1/test-data/snapshots": [{ name: "reu.reu", type: "file" }],
+      "/USB1/test-data/snapshots": [
+        { name: "config.cfg", type: "file" },
+        { name: "reu.reu", type: "file" },
+      ],
     },
   },
   initialActionMenu: {
@@ -337,6 +340,11 @@ export const DEFAULT_MENU_FIXTURE: MenuFixture = {
         representativeFile: "/USB1/test-data/mod/jukebox_packtune.mod",
         items: ["Play MOD", "Load into REU", "Preload on Startup", "View", "Rename", "Delete"],
         defaultItem: "Play MOD",
+      },
+      cfg: {
+        representativeFile: "/USB1/test-data/snapshots/config.cfg",
+        items: ["Load Settings", "View", "Rename", "Delete"],
+        defaultItem: "Load Settings",
       },
       prg: {
         representativeFile: "/USB1/test-data/prg/1k-mini-bdash-note.prg",

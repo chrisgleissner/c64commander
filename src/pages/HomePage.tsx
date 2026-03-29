@@ -37,6 +37,13 @@ import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
 import { ConfigActionsProvider } from "./home/hooks/ConfigActionsContext";
 import { buildSidSilenceTargets, silenceSidTargets } from "@/lib/sid/sidSilence";
+import { createConfigWorkflow } from "@/lib/config/configWorkflow";
+import {
+  applyRemoteConfigFromPath,
+  applyRemoteConfigFromTemp,
+  saveRemoteConfigFromTemp,
+} from "@/lib/config/configTelnetWorkflow";
+import { persistConfigSnapshotFile, pickConfigSnapshotFile } from "@/lib/config/configSnapshotStorage";
 import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
 import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
 import { SnapshotManagerDialog } from "./home/dialogs/SnapshotManagerDialog";
@@ -183,6 +190,7 @@ function HomePageContent() {
   const [reuTaskPending, setReuTaskPending] = useState(false);
   const [cpuSpeedOptimisticValue, setCpuSpeedOptimisticValue] = useState<string | null>(null);
   const [deviceControlActionId, setDeviceControlActionId] = useState<DeviceControlOperation | null>(null);
+  const [configFileTaskPending, setConfigFileTaskPending] = useState<"save" | "load" | null>(null);
   const cpuSpeedDraggingRef = useRef(false);
   const { snapshots } = useSnapshotStore();
   const { snapshots: reuSnapshots } = useReuSnapshotStore();
@@ -287,6 +295,70 @@ function HomePageContent() {
         withConnectedReuTelnetSession((session, menuKey) => saveRemoteReuFromTemp(session, menuKey)),
       runRestoreRemoteReu: (fileName, mode) =>
         withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReuFromTemp(session, menuKey, fileName, mode)),
+    });
+
+  const withConnectedConfigTelnetSession = async <T,>(
+    callback: (session: ReturnType<typeof createTelnetSession>, menuKey: "F5" | "F1") => Promise<T>,
+  ) => {
+    if (!telnet.isAvailable) {
+      throw new Error("Telnet is unavailable for config file actions on this device.");
+    }
+    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const password = await getPassword();
+    const transport = createTelnetClient();
+    const session = createTelnetSession(transport);
+    const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
+
+    await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+    try {
+      return await callback(session, menuKey);
+    } finally {
+      await session.disconnect();
+    }
+  };
+
+  const createHomeConfigFileWorkflow = () =>
+    createConfigWorkflow({
+      ensureLocalSnapshotStorage: async () => {
+        if (!isNativePlatform()) {
+          throw new Error("Config snapshots are only supported on native builds.");
+        }
+        if (getPlatform() === "android") {
+          await ensureRamDumpFolder();
+        }
+      },
+      listRemoteTempFiles: async () => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
+        return result.entries
+          .filter((entry) => entry.type === "file")
+          .map((entry) => ({
+            name: entry.name,
+            path: entry.path,
+            size: entry.size,
+            modifiedAt: entry.modifiedAt,
+          }));
+      },
+      readRemoteFile: async (path) => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await readFtpFile({ ...ftpOptions, path });
+        return base64ToUint8(result.data);
+      },
+      writeRemoteFile: async (path, bytes) => {
+        const ftpOptions = await resolveFtpOptions();
+        await writeFtpFile({
+          ...ftpOptions,
+          path,
+          data: uint8ToBase64(bytes),
+        });
+      },
+      persistLocalSnapshot: persistConfigSnapshotFile,
+      runSaveRemoteConfig: () =>
+        withConnectedConfigTelnetSession((session, menuKey) => saveRemoteConfigFromTemp(session, menuKey)),
+      runApplyRemoteConfig: (fileName) =>
+        withConnectedConfigTelnetSession((session, menuKey) => applyRemoteConfigFromTemp(session, menuKey, fileName)),
+      runApplyRemoteConfigByPath: (path) =>
+        withConnectedConfigTelnetSession((session, menuKey) => applyRemoteConfigFromPath(session, menuKey, path)),
     });
 
   const runReuWorkflow = async <T,>(
@@ -698,6 +770,45 @@ function HomePageContent() {
       });
     } finally {
       setApplyingConfigId(null);
+    }
+  });
+
+  const localConfigFileActionsAvailable = telnet.isAvailable && isNativePlatform();
+
+  const handleSaveToFile = trace(async function handleSaveToFile() {
+    setConfigFileTaskPending("save");
+    try {
+      const workflow = createHomeConfigFileWorkflow();
+      const result = await workflow.saveSnapshot();
+      toast({ title: "Config saved to file", description: result.fileName });
+    } catch (error) {
+      reportUserError({
+        operation: "HOME_CONFIG_SAVE_FILE",
+        title: "Save config to file failed",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setConfigFileTaskPending(null);
+    }
+  });
+
+  const handleLoadFromFile = trace(async function handleLoadFromFile() {
+    setConfigFileTaskPending("load");
+    try {
+      const picked = await pickConfigSnapshotFile({ preferredFolder: ramDumpFolder });
+      const workflow = createHomeConfigFileWorkflow();
+      await workflow.applyLocalSnapshot(picked.name, picked.bytes);
+      toast({ title: "Config loaded from file", description: picked.name });
+    } catch (error) {
+      reportUserError({
+        operation: "HOME_CONFIG_LOAD_FILE",
+        title: "Load config from file failed",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setConfigFileTaskPending(null);
     }
   });
 
@@ -1394,27 +1505,26 @@ function HomePageContent() {
                 onClick={() => setManageDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
               />
-              {telnet.isAvailable && (
+              {localConfigFileActionsAvailable && (
                 <QuickActionCard
                   icon={Download}
                   label="Save"
                   description="To File"
                   dataTestId="home-config-save-file"
-                  onClick={async () => {
-                    try {
-                      await telnet.executeAction("saveConfigToFile");
-                      toast({ title: "Config saved to file" });
-                    } catch (error) {
-                      reportUserError({
-                        operation: "HOME_CONFIG_SAVE_FILE",
-                        title: "Save config to file failed",
-                        description: (error as Error).message,
-                        error,
-                      });
-                    }
-                  }}
+                  onClick={() => void handleSaveToFile()}
                   disabled={!isActive || machineTaskBusy || telnet.isBusy}
-                  loading={telnet.activeActionId === "saveConfigToFile"}
+                  loading={configFileTaskPending === "save"}
+                />
+              )}
+              {localConfigFileActionsAvailable && (
+                <QuickActionCard
+                  icon={Download}
+                  label="Load"
+                  description="From File"
+                  dataTestId="home-config-load-file"
+                  onClick={() => void handleLoadFromFile()}
+                  disabled={!isActive || machineTaskBusy || telnet.isBusy}
+                  loading={configFileTaskPending === "load"}
                 />
               )}
               {telnet.isAvailable && (

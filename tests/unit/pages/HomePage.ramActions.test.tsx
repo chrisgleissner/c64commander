@@ -31,6 +31,9 @@ const {
   getCurrentPlaybackSnapshotLabelSpy,
   reuWorkflowSaveSnapshotSpy,
   reuWorkflowRestoreSnapshotSpy,
+  configWorkflowSaveSnapshotSpy,
+  configWorkflowApplyLocalSnapshotSpy,
+  pickConfigSnapshotFileSpy,
   telnetState,
   deviceControlErrorState,
 } = vi.hoisted(() => ({
@@ -53,6 +56,9 @@ const {
   getCurrentPlaybackSnapshotLabelSpy: vi.fn(),
   reuWorkflowSaveSnapshotSpy: vi.fn(),
   reuWorkflowRestoreSnapshotSpy: vi.fn(),
+  configWorkflowSaveSnapshotSpy: vi.fn(),
+  configWorkflowApplyLocalSnapshotSpy: vi.fn(),
+  pickConfigSnapshotFileSpy: vi.fn(),
   telnetState: {
     isBusy: false,
     activeActionId: null as string | null,
@@ -196,6 +202,11 @@ vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
   useInteractiveConfigWrite: () => ({ write: vi.fn(), isPending: false }),
 }));
 
+vi.mock("@/lib/native/platform", () => ({
+  getPlatform: () => "android",
+  isNativePlatform: () => true,
+}));
+
 vi.mock("@/lib/machine/ramOperations", () => ({
   FULL_RAM_SIZE_BYTES: 0x10000,
   clearRamAndReboot: clearRamAndRebootSpy,
@@ -255,6 +266,25 @@ vi.mock("@/lib/reu/reuWorkflow", () => ({
 vi.mock("@/lib/reu/reuTelnetWorkflow", () => ({
   saveRemoteReuFromTemp: vi.fn(),
   restoreRemoteReuFromTemp: vi.fn(),
+}));
+
+vi.mock("@/lib/config/configWorkflow", () => ({
+  createConfigWorkflow: () => ({
+    saveSnapshot: configWorkflowSaveSnapshotSpy,
+    applyLocalSnapshot: configWorkflowApplyLocalSnapshotSpy,
+    applyRemoteSnapshot: vi.fn(),
+  }),
+}));
+
+vi.mock("@/lib/config/configTelnetWorkflow", () => ({
+  saveRemoteConfigFromTemp: vi.fn(),
+  applyRemoteConfigFromTemp: vi.fn(),
+  applyRemoteConfigFromPath: vi.fn(),
+}));
+
+vi.mock("@/lib/config/configSnapshotStorage", () => ({
+  persistConfigSnapshotFile: vi.fn(),
+  pickConfigSnapshotFile: pickConfigSnapshotFileSpy,
 }));
 
 vi.mock("@/lib/ftp/ftpClient", () => ({
@@ -398,6 +428,23 @@ describe("HomePage RAM actions", () => {
       snapshotType: "reu",
     });
     reuWorkflowRestoreSnapshotSpy.mockResolvedValue(undefined);
+    configWorkflowSaveSnapshotSpy.mockResolvedValue({
+      fileName: "c64u-config-2026-03-29.cfg",
+      createdAt: "2026-03-29T00:00:00.000Z",
+      sizeBytes: 42,
+      remoteFileName: "CONFIG.CFG",
+      storage: { kind: "android-tree", treeUri: "content://cfg", path: "/c64u-config-2026-03-29.cfg" },
+    });
+    configWorkflowApplyLocalSnapshotSpy.mockResolvedValue({
+      remoteFileName: "picked.cfg",
+      remotePath: "/Temp/picked.cfg",
+    });
+    pickConfigSnapshotFileSpy.mockResolvedValue({
+      name: "picked.cfg",
+      sizeBytes: 16,
+      modifiedAt: "2026-03-29T00:00:00.000Z",
+      bytes: new Uint8Array([1, 2, 3]),
+    });
     getCurrentPlaybackSnapshotLabelSpy.mockReturnValue(undefined);
     loadMemoryRangesSpy.mockResolvedValue(undefined);
     telnetState.isBusy = false;
@@ -490,6 +537,35 @@ describe("HomePage RAM actions", () => {
 
     await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
   }, 15000);
+
+  it("saves config to a local file through the shared config workflow", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-config-save-file"));
+
+    await waitFor(() => expect(configWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("saveConfigToFile");
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Config saved to file",
+      description: "c64u-config-2026-03-29.cfg",
+    });
+  });
+
+  it("loads config from a local file through the shared config workflow", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-config-load-file"));
+
+    await waitFor(() => expect(pickConfigSnapshotFileSpy).toHaveBeenCalled(), { timeout: 5000 });
+    await waitFor(
+      () => expect(configWorkflowApplyLocalSnapshotSpy).toHaveBeenCalledWith("picked.cfg", new Uint8Array([1, 2, 3])),
+      { timeout: 5000 },
+    );
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Config loaded from file",
+      description: "picked.cfg",
+    });
+  });
 
   it("saves program snapshot and shows toast when Program type is selected", async () => {
     renderHomePage();

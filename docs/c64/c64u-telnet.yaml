@@ -264,6 +264,14 @@ telnet:
           - Rename
           - Delete
         default_item: "Play MOD"
+      cfg:
+        representative_file: /USB1/test-data/snapshots/config.cfg
+        items:
+          - Load Settings
+          - View
+          - Rename
+          - Delete
+        default_item: "Load Settings"
       prg:
         representative_file: /USB1/test-data/prg/1k-mini-bdash-note.prg
         items:

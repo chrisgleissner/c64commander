@@ -9,7 +9,11 @@
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
-import { applyRemoteConfigFromPath, applyRemoteConfigFromTemp, saveRemoteConfigFromTemp } from "@/lib/config/configTelnetWorkflow";
+import {
+  applyRemoteConfigFromPath,
+  applyRemoteConfigFromTemp,
+  saveRemoteConfigFromTemp,
+} from "@/lib/config/configTelnetWorkflow";
 import { createConfigWorkflow } from "@/lib/config/configWorkflow";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
