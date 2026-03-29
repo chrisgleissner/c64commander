@@ -180,12 +180,12 @@ describe("useOnlineArchive", () => {
 
     const client = createArchiveClientStub();
     client.getPresets.mockResolvedValue([
-        {
-          type: "date",
-          description: "Date",
-          values: Array.from({ length: 46 }, (_, index) => ({ aqlKey: String(1980 + index) })),
-        },
-      ]);
+      {
+        type: "date",
+        description: "Date",
+        values: Array.from({ length: 46 }, (_, index) => ({ aqlKey: String(1980 + index) })),
+      },
+    ]);
     const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
 
     const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));

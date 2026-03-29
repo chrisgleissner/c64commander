@@ -119,6 +119,66 @@ describe("featureFlags", () => {
       });
     });
 
+    it("reuses the in-flight load when load is called again before completion", async () => {
+      let resolveFlags: ((flags: Partial<FeatureFlags>) => void) | null = null;
+      const deferredRepo = {
+        getFlag: vi.fn(async () => null),
+        getAllFlags: vi.fn(
+          () =>
+            new Promise<Partial<FeatureFlags>>((resolve) => {
+              resolveFlags = resolve;
+            }),
+        ),
+        setFlag: vi.fn(async () => undefined),
+      };
+      const deferredManager = new FeatureFlagManager(deferredRepo, defaults);
+
+      const firstLoad = deferredManager.load();
+      const secondLoad = deferredManager.load();
+
+      expect(deferredRepo.getAllFlags).toHaveBeenCalledTimes(1);
+
+      resolveFlags?.({ hvsc_enabled: false });
+      await Promise.all([firstLoad, secondLoad]);
+
+      expect(deferredManager.getSnapshot()).toEqual({
+        flags: { hvsc_enabled: false },
+        isLoaded: true,
+      });
+    });
+
+    it("reruns the repository load when reload is requested during an in-flight load", async () => {
+      let resolveFirstLoad: ((flags: Partial<FeatureFlags>) => void) | null = null;
+      const deferredRepo = {
+        getFlag: vi.fn(async () => null),
+        getAllFlags: vi
+          .fn<() => Promise<Partial<FeatureFlags>>>()
+          .mockImplementationOnce(
+            () =>
+              new Promise<Partial<FeatureFlags>>((resolve) => {
+                resolveFirstLoad = resolve;
+              }),
+          )
+          .mockResolvedValueOnce({ hvsc_enabled: true }),
+        setFlag: vi.fn(async () => undefined),
+      };
+      const deferredManager = new FeatureFlagManager(deferredRepo, defaults);
+
+      const initialLoad = deferredManager.load();
+      const forcedReload = deferredManager.reload();
+
+      expect(deferredRepo.getAllFlags).toHaveBeenCalledTimes(1);
+
+      resolveFirstLoad?.({ hvsc_enabled: false });
+      await Promise.all([initialLoad, forcedReload]);
+
+      expect(deferredRepo.getAllFlags).toHaveBeenCalledTimes(2);
+      expect(deferredManager.getSnapshot()).toEqual({
+        flags: { hvsc_enabled: true },
+        isLoaded: true,
+      });
+    });
+
     it("subscribes and receives initial snapshot", () => {
       const listener = vi.fn();
       manager.subscribe(listener);
