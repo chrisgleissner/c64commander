@@ -106,6 +106,19 @@ describe("featureFlags", () => {
       expect(manager.getSnapshot().isLoaded).toBe(true);
     });
 
+    it("reloads flags after stored values change post-load", async () => {
+      await repo.setFlag("hvsc_enabled", false);
+      await manager.load();
+
+      await repo.setFlag("hvsc_enabled", true);
+      await manager.reload();
+
+      expect(manager.getSnapshot()).toEqual({
+        flags: { hvsc_enabled: true },
+        isLoaded: true,
+      });
+    });
+
     it("subscribes and receives initial snapshot", () => {
       const listener = vi.fn();
       manager.subscribe(listener);

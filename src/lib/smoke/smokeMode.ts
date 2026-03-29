@@ -11,6 +11,12 @@ import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { FEATURE_FLAG_DEFINITIONS, type FeatureFlagKey, type FeatureFlags } from "@/lib/config/featureFlags";
+import {
+  FEATURE_FLAG_DEFINITIONS,
+  featureFlagManager,
+  type FeatureFlagKey,
+  type FeatureFlags,
+} from "@/lib/config/featureFlags";
 import { normalizeDeviceHost } from "@/lib/c64api";
 import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
 
@@ -86,6 +92,8 @@ const persistSmokeFeatureFlags = async (featureFlags: SmokeFeatureFlags | undefi
       });
     }
   }
+
+  await featureFlagManager.reload();
 };
 
 const getErrorMessage = (error: unknown) => {

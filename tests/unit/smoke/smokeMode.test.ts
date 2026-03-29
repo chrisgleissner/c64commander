@@ -18,6 +18,7 @@ import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { featureFlagManager } from "@/lib/config/featureFlags";
 import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
 
 vi.mock("@capacitor/core", () => ({
@@ -45,6 +46,16 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDebugLoggingEnabled: vi.fn(),
 }));
 
+vi.mock("@/lib/config/featureFlags", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/config/featureFlags")>("@/lib/config/featureFlags");
+  return {
+    ...actual,
+    featureFlagManager: {
+      reload: vi.fn(async () => undefined),
+    },
+  };
+});
+
 vi.mock("@/lib/native/featureFlags", () => ({
   FeatureFlags: {
     setFlag: vi.fn(),
@@ -57,6 +68,7 @@ describe("smokeMode", () => {
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = false;
     vi.mocked(addLog).mockClear();
     vi.mocked(saveDebugLoggingEnabled).mockClear();
+    vi.mocked(featureFlagManager.reload).mockClear();
     vi.mocked(FeatureFlagsPlugin.setFlag).mockClear();
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(Filesystem.readFile).mockReset();
@@ -132,6 +144,7 @@ describe("smokeMode", () => {
       key: "hvsc_enabled",
       value: true,
     });
+    expect(featureFlagManager.reload).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("1");
     expect(sessionStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("1");
   });

@@ -87,7 +87,7 @@ const buildDefaultFlags = (): FeatureFlags => {
 export class FeatureFlagManager {
   private snapshot: FeatureFlagSnapshot;
   private listeners = new Set<FeatureFlagListener>();
-  private isLoading = false;
+  private loadPromise: Promise<void> | null = null;
 
   constructor(
     private repository: FeatureFlagRepository,
@@ -107,8 +107,32 @@ export class FeatureFlagManager {
   }
 
   async load() {
-    if (this.isLoading || this.snapshot.isLoaded) return;
-    this.isLoading = true;
+    await this.runLoad(false);
+  }
+
+  async reload() {
+    await this.runLoad(true);
+  }
+
+  private async runLoad(force: boolean) {
+    if (!force && this.snapshot.isLoaded) return;
+    if (this.loadPromise) {
+      if (!force) {
+        await this.loadPromise;
+        return;
+      }
+      await this.loadPromise;
+    }
+    if (!force && this.snapshot.isLoaded) return;
+    this.loadPromise = this.performLoad();
+    try {
+      await this.loadPromise;
+    } finally {
+      this.loadPromise = null;
+    }
+  }
+
+  private async performLoad() {
     try {
       const keys = Object.keys(this.defaults) as FeatureFlagKey[];
       const stored = await this.repository.getAllFlags(keys);
@@ -123,8 +147,6 @@ export class FeatureFlagManager {
       });
       this.snapshot = { flags: { ...this.defaults }, isLoaded: true };
       this.emit();
-    } finally {
-      this.isLoading = false;
     }
   }
 
