@@ -599,8 +599,9 @@ Required implementation:
   - `Order`: `Ascending`, `Descending`
 - On first open, still issue one background request per category to verify the server-provided values.
 - Cache the verified values in app memory and reuse them until the next app restart.
+- On the download page, show the message `You agree you have a necessary license or rights to download any software.` immediately above the `Search` button.
 
-1. Emit structured diagnostics logging for each control operation including:
+8. Emit structured diagnostics logging for each control operation including:
 
 - operation
 - transport
