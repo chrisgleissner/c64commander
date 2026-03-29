@@ -119,23 +119,23 @@ describe("MachineControls", () => {
   });
 
   it("renders overflow actions in the section header menu", () => {
-    const rebootKeepMemory = vi.fn();
+    const rebootClearMemory = vi.fn();
     const saveReu = vi.fn();
 
     render(
       <MachineControls
         {...defaultProps}
         overflowActions={[
-          { id: "rebootKeepMemory", label: "Reboot (Keep RAM)", onSelect: rebootKeepMemory },
+          { id: "rebootClearMemory", label: "Reboot (Clear RAM)", onSelect: rebootClearMemory },
           { id: "saveReuMemory", label: "Save REU", onSelect: saveReu },
         ]}
       />,
     );
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-rebootKeepMemory"));
+    fireEvent.click(screen.getByTestId("home-machine-overflow-rebootClearMemory"));
     fireEvent.click(screen.getByTestId("home-machine-overflow-saveReuMemory"));
 
-    expect(rebootKeepMemory).toHaveBeenCalledTimes(1);
+    expect(rebootClearMemory).toHaveBeenCalledTimes(1);
     expect(saveReu).toHaveBeenCalledTimes(1);
   });
 
@@ -143,10 +143,10 @@ describe("MachineControls", () => {
     render(
       <MachineControls
         {...defaultProps}
-        overflowActions={[{ id: "rebootKeepMemory", label: "Reboot (Keep RAM)", onSelect: vi.fn(), loading: true }]}
+        overflowActions={[{ id: "rebootClearMemory", label: "Reboot (Clear RAM)", onSelect: vi.fn(), loading: true }]}
       />,
     );
 
-    expect(screen.getByTestId("home-machine-overflow-rebootKeepMemory")).toHaveTextContent("Reboot (Keep RAM)…");
+    expect(screen.getByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent("Reboot (Clear RAM)…");
   });
 });

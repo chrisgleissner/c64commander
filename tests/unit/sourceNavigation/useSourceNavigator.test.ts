@@ -299,14 +299,13 @@ describe("useSourceNavigator", () => {
       result.current.setQuery?.("demo");
     });
 
-    await waitFor(() =>
-      expect(listEntriesPage).toHaveBeenCalledWith({
-        path: "/root",
-        query: "demo",
-        offset: 0,
-        limit: 200,
-      }),
-    );
+    await waitFor(() => expect(listEntriesPage).toHaveBeenCalledTimes(2));
+    expect(listEntriesPage).toHaveBeenNthCalledWith(2, {
+      path: expect.stringMatching(/^\/root\/?$/),
+      query: "demo",
+      offset: 0,
+      limit: 200,
+    });
 
     await waitFor(() => {
       expect(result.current.query).toBe("demo");
@@ -320,14 +319,13 @@ describe("useSourceNavigator", () => {
       result.current.loadMore?.();
     });
 
-    await waitFor(() =>
-      expect(listEntriesPage).toHaveBeenCalledWith({
-        path: "/root",
-        query: "demo",
-        offset: 1,
-        limit: 200,
-      }),
-    );
+    await waitFor(() => expect(listEntriesPage).toHaveBeenCalledTimes(3));
+    expect(listEntriesPage).toHaveBeenNthCalledWith(3, {
+      path: expect.stringMatching(/^\/root\/?$/),
+      query: "demo",
+      offset: 1,
+      limit: 200,
+    });
 
     expect(listEntries).not.toHaveBeenCalled();
     expect(result.current.isQueryBacked).toBe(true);

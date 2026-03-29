@@ -583,7 +583,24 @@ Required implementation:
 - `rebootKeepMemory`
 
 5. Leave Telnet only for actions that still require it, such as REU/config file flows.
-6. Emit structured diagnostics logging for each control operation including:
+6. For REU snapshot save/load specifically:
+
+- Always use `/Temp` on the C64U side for both save and restore flows.
+- Treat save/restore plus FTP transfer back to the local device as a long-running operation that takes about 30 seconds for a 16MiB REU, proportionally shorter for a smaller REU.
+- Show a blocking progress UI while the operation is running, tell the user to wait, and poll/check progress so the UI can report forward movement and completion rather than appearing stuck.
+7. For the CommoServe screen:
+
+- Prepopulate the first-open option sets locally so they render instantly for `Category`, `Date`, `Type`, `Sort`, and `Order`.
+- Seed the initial values as:
+  - `Category`: `Apps`, `Demos`, `Games`, `Graphics`, `Music`
+  - `Date`: every year from `1980` through the current year
+  - `Type`: `crt`, `d64`, `d71`, `d81`, `sid`, `t64`, `tap`
+  - `Sort`: `Name`, `Year`
+  - `Order`: `Ascending`, `Descending`
+- On first open, still issue one background request per category to verify the server-provided values.
+- Cache the verified values in app memory and reuse them until the next app restart.
+
+1. Emit structured diagnostics logging for each control operation including:
 
 - operation
 - transport

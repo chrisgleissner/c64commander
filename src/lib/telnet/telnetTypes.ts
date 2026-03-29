@@ -174,7 +174,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     shortLabel: "Reboot (Clr Mem)",
     menuPath: ["Power & Reset", "Reboot (Clr Mem)"],
     subsystem: "C64",
-    homePlacement: "primary",
+    homePlacement: "overflow",
   },
   rebootKeepMemory: {
     id: "rebootKeepMemory",
@@ -182,7 +182,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     shortLabel: "Reboot C64",
     menuPath: ["Power & Reset", "Reboot C64"],
     subsystem: "C64",
-    homePlacement: "overflow",
+    homePlacement: null,
   },
   saveC64Memory: {
     id: "saveC64Memory",

@@ -14,6 +14,7 @@ import HomePage from "@/pages/HomePage";
 const {
   toastSpy,
   reportUserErrorSpy,
+  addErrorLogSpy,
   clearRamAndRebootSpy,
   executeTelnetActionSpy,
   rebootFullSpy,
@@ -33,6 +34,7 @@ const {
 } = vi.hoisted(() => ({
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
+  addErrorLogSpy: vi.fn(),
   clearRamAndRebootSpy: vi.fn(),
   executeTelnetActionSpy: vi.fn(),
   rebootFullSpy: vi.fn(),
@@ -172,6 +174,14 @@ vi.mock("@/hooks/use-toast", () => ({
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: reportUserErrorSpy,
 }));
+
+vi.mock("@/lib/logging", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/logging")>("@/lib/logging");
+  return {
+    ...actual,
+    addErrorLog: addErrorLogSpy,
+  };
+});
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({}),
@@ -327,13 +337,12 @@ describe("HomePage RAM actions", () => {
     telnetState.isAvailable = true;
   });
 
-  it("runs reboot clear memory action", async () => {
+  it("runs quick reboot through REST without telnet", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /^reboot$/i }));
 
-    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
-    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("rebootClearMemory");
+    await waitFor(() => expect(rebootKeepRamSpy).toHaveBeenCalled(), { timeout: 5000 });
     expect(executeTelnetActionSpy).not.toHaveBeenCalled();
     await waitFor(
       () =>
@@ -354,28 +363,56 @@ describe("HomePage RAM actions", () => {
     fireEvent.click(rebootButton);
 
     expect(executeTelnetActionSpy).not.toHaveBeenCalled();
-    expect(rebootFullSpy).not.toHaveBeenCalled();
+    expect(rebootKeepRamSpy).not.toHaveBeenCalled();
   });
 
-  it("runs power cycle through the device control layer without telnet", async () => {
+  it("runs power cycle through telnet", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /^power cycle$/i }));
 
-    await waitFor(() => expect(powerCycleSpy).toHaveBeenCalled(), { timeout: 5000 });
-    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("powerCycle");
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("powerCycle"), { timeout: 5000 });
+    expect(powerCycleSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Power cycled" }), { timeout: 5000 });
   });
 
-  it("runs keep-ram reboot from the overflow menu without telnet", async () => {
+  it("runs clear-ram reboot from the overflow menu through telnet when available", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootKeepMemory"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
 
-    await waitFor(() => expect(rebootKeepRamSpy).toHaveBeenCalled(), { timeout: 5000 });
-    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("rebootKeepMemory");
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
+    expect(rebootFullSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Machine rebooting" }), { timeout: 5000 });
+  });
+
+  it("falls back to REST clear-ram reboot when telnet is unavailable", async () => {
+    telnetState.isAvailable = false;
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
+
+    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to REST clear-ram reboot when telnet execution fails", async () => {
+    executeTelnetActionSpy.mockRejectedValueOnce(new Error("telnet offline"));
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
+
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
+    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(addErrorLogSpy).toHaveBeenCalledWith(
+      "Reboot clear memory telnet failed; falling back to REST",
+      expect.objectContaining({
+        error: expect.objectContaining({ message: "telnet offline" }),
+      }),
+    );
   });
 
   it("opens Save RAM dialog when Save RAM button is clicked", async () => {

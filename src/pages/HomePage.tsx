@@ -31,6 +31,7 @@ import { LoadConfigDialog } from "./home/dialogs/LoadConfigDialog";
 import { ManageConfigDialog } from "./home/dialogs/ManageConfigDialog";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
+import { addErrorLog } from "@/lib/logging";
 import { useAppConfigState } from "@/hooks/useAppConfigState";
 import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
@@ -254,9 +255,8 @@ function HomePageContent() {
 
   const handlePowerCycle = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeDeviceControl({
+    await executeTelnetAction({
       actionId: "powerCycle",
-      run: () => deviceControl.powerCycle(),
       successTitle: "Power cycled",
       failureOperation: "HOME_POWER_CYCLE",
       failureTitle: "Power cycle failed",
@@ -266,6 +266,24 @@ function HomePageContent() {
 
   const handleRebootClearMemory = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    if (telnet.isAvailable) {
+      try {
+        await telnet.executeAction("rebootClearMemory");
+        toast({ title: "Machine rebooting" });
+        setMachineExecutionState("running");
+        return;
+      } catch (error) {
+        const resolvedError = error as Error;
+        addErrorLog("Reboot clear memory telnet failed; falling back to REST", {
+          error: {
+            name: resolvedError.name,
+            message: resolvedError.message,
+            stack: resolvedError.stack,
+          },
+        });
+      }
+    }
+
     await executeDeviceControl({
       actionId: "rebootFull",
       run: () => deviceControl.rebootFull(),
@@ -276,7 +294,7 @@ function HomePageContent() {
     });
   };
 
-  const handleRebootKeepMemory = async () => {
+  const handleReboot = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
     await executeDeviceControl({
       actionId: "rebootKeepRam",
@@ -311,11 +329,11 @@ function HomePageContent() {
 
   const machineOverflowActions = [
     {
-      id: "rebootKeepMemory",
-      label: "Reboot (Keep RAM)",
-      onSelect: () => void handleRebootKeepMemory(),
+      id: "rebootClearMemory",
+      label: "Reboot (Clear RAM)",
+      onSelect: () => void handleRebootClearMemory(),
       disabled: !isActive || machineTaskBusy || telnet.isBusy,
-      loading: deviceControlActionId === "rebootKeepRam",
+      loading: telnet.activeActionId === "rebootClearMemory" || deviceControlActionId === "rebootFull",
     },
     {
       id: "saveReuMemory",
@@ -663,12 +681,12 @@ function HomePageContent() {
             onSaveRam={() => setSaveRamDialogOpen(true)}
             onLoadRam={() => setSnapshotManagerOpen(true)}
             onPowerOff={handlePowerOff}
-            onReboot={() => void handleRebootClearMemory()}
+            onReboot={() => void handleReboot()}
             onToggleMenu={() => void handleMenuToggle()}
-            onPowerCycle={() => void handlePowerCycle()}
-            rebootLoading={deviceControlActionId === "rebootFull"}
+            onPowerCycle={telnet.isAvailable ? () => void handlePowerCycle() : undefined}
+            rebootLoading={deviceControlActionId === "rebootKeepRam"}
             menuLoading={deviceControlActionId === "toggleMenu"}
-            powerCycleLoading={deviceControlActionId === "powerCycle"}
+            powerCycleLoading={telnet.activeActionId === "powerCycle"}
             overflowActions={machineOverflowActions}
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
