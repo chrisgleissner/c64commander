@@ -43,6 +43,7 @@ import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourc
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
+import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
@@ -82,6 +83,11 @@ import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
+import {
+  buildConfigReferenceFromBrowserSelection,
+  buildLocalConfigReferenceFromAndroidPicker,
+  buildLocalConfigReferenceFromWebFile,
+} from "@/lib/config/configFileReferenceSelection";
 import { syncPlaybackDecisionFromTrace } from "@/lib/diagnostics/decisionState";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
@@ -111,6 +117,10 @@ export default function PlayFilesPage() {
     autoFired: boolean;
     userCancelled: boolean;
   };
+
+  type ConfigPickerState =
+    | { itemId: string; sourceType: "ultimate" }
+    | { itemId: string; sourceType: "local"; sourceId: string };
 
   const navigate = useNavigate();
   const { status } = useC64Connection();
@@ -220,10 +230,12 @@ export default function PlayFilesPage() {
   const { localEntriesBySourceId, localSourceTreeUris } = useLocalEntries(localSources);
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
+  const localConfigInputRef = useRef<HTMLInputElement | null>(null);
   const songlengthsInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
   const addItemsStartedAtRef = useRef<number | null>(null);
+  const pendingLocalConfigItemIdRef = useRef<string | null>(null);
 
   const playTransitionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playStartInFlightRef = useRef(false);
@@ -232,6 +244,7 @@ export default function PlayFilesPage() {
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
   const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
   const backgroundExecutionActiveRef = useRef(false);
+  const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -291,6 +304,7 @@ export default function PlayFilesPage() {
     repeatEnabled,
     localEntriesBySourceId,
     localSourceTreeUris,
+    deviceProduct: status.deviceInfo?.product ?? null,
     ensurePlaybackConnection,
     resolveSonglengthDurationMsForPath,
     applySonglengthsToItems,
@@ -473,6 +487,132 @@ export default function PlayFilesPage() {
     [addSourceFromFiles],
   );
 
+  const updatePlaylistItemConfigRef = useCallback((itemId: string, configRef: PlaylistItem["configRef"]) => {
+    setPlaylist((prev) => prev.map((item) => (item.id === itemId ? { ...item, configRef } : item)));
+  }, []);
+
+  const resolveConfigBrowserSourceId = useCallback(
+    (item: PlaylistItem) => {
+      const configuredSourceId = item.configRef?.kind === "local" ? (item.configRef.sourceId ?? null) : null;
+      if (configuredSourceId && localSources.some((source) => source.id === configuredSourceId)) {
+        return configuredSourceId;
+      }
+      if (item.request.source === "local" && item.sourceId && localSources.some((source) => source.id === item.sourceId)) {
+        return item.sourceId;
+      }
+      return localSources.length === 1 ? (localSources[0]?.id ?? null) : null;
+    },
+    [localSources],
+  );
+
+  const handleAttachUltimateConfig = useCallback((item: PlaylistItem) => {
+    setConfigPickerState({ itemId: item.id, sourceType: "ultimate" });
+  }, []);
+
+  const handleAttachLocalConfig = useCallback(
+    async (item: PlaylistItem) => {
+      const browserSourceId = resolveConfigBrowserSourceId(item);
+      if (browserSourceId) {
+        setConfigPickerState({ itemId: item.id, sourceType: "local", sourceId: browserSourceId });
+        return;
+      }
+
+      if (isAndroid) {
+        try {
+          const result = await FolderPicker.pickFile({
+            extensions: ["cfg"],
+            mimeTypes: ["text/plain", "application/octet-stream"],
+          });
+          updatePlaylistItemConfigRef(item.id, buildLocalConfigReferenceFromAndroidPicker(result));
+        } catch (error) {
+          reportUserError({
+            operation: "PLAYLIST_CONFIG_PICK",
+            title: "Config file selection failed",
+            description: (error as Error).message,
+            error,
+          });
+        }
+        return;
+      }
+
+      pendingLocalConfigItemIdRef.current = item.id;
+      localConfigInputRef.current?.click();
+    },
+    [isAndroid, resolveConfigBrowserSourceId, updatePlaylistItemConfigRef],
+  );
+
+  const handleRemoveConfig = useCallback(
+    (item: PlaylistItem) => {
+      updatePlaylistItemConfigRef(item.id, null);
+    },
+    [updatePlaylistItemConfigRef],
+  );
+
+  const configPickerTarget = useMemo(
+    () => (configPickerState ? playlist.find((item) => item.id === configPickerState.itemId) ?? null : null),
+    [configPickerState, playlist],
+  );
+
+  const configPickerSourceGroups = useMemo((): SourceGroup[] => {
+    if (!configPickerState) return [];
+    if (configPickerState.sourceType === "ultimate") {
+      return [{ label: SOURCE_LABELS.c64u, sources: [createUltimateSourceLocation()] }];
+    }
+    const source = localSources.find((entry) => entry.id === configPickerState.sourceId);
+    if (!source) return [];
+    return [{ label: SOURCE_LABELS.local, sources: [createLocalSourceLocation(source)] }];
+  }, [configPickerState, localSources]);
+
+  const configPickerInitialSourceId = configPickerSourceGroups[0]?.sources[0]?.id ?? null;
+
+  const handleConfigPickerConfirm = useCallback(
+    async (source: SourceLocation, selections: SelectedItem[]) => {
+      if (!configPickerState) return false;
+      if (selections.length !== 1) {
+        reportUserError({
+          operation: "PLAYLIST_CONFIG_ATTACH",
+          title: "Select one config file",
+          description: "Choose exactly one .cfg file to attach.",
+        });
+        return false;
+      }
+
+      try {
+        updatePlaylistItemConfigRef(configPickerState.itemId, buildConfigReferenceFromBrowserSelection(source, selections[0]));
+        return true;
+      } catch (error) {
+        reportUserError({
+          operation: "PLAYLIST_CONFIG_ATTACH",
+          title: "Config attachment failed",
+          description: (error as Error).message,
+          error,
+        });
+        return false;
+      }
+    },
+    [configPickerState, updatePlaylistItemConfigRef],
+  );
+
+  const handleLocalConfigInput = useCallback(
+    (files: FileList | null) => {
+      const itemId = pendingLocalConfigItemIdRef.current;
+      pendingLocalConfigItemIdRef.current = null;
+      if (!itemId || !files?.length) return;
+
+      try {
+        updatePlaylistItemConfigRef(itemId, buildLocalConfigReferenceFromWebFile(files[0]));
+      } catch (error) {
+        reportUserError({
+          operation: "PLAYLIST_CONFIG_PICK",
+          title: "Config file selection failed",
+          description: (error as Error).message,
+          error,
+        });
+      }
+    },
+    [updatePlaylistItemConfigRef],
+  );
+
   const buildPlaylistItem = useCallback(
     (entry: PlayableEntry, songNrOverride?: number, addedAtOverride?: string | null): PlaylistItem | null => {
       const category = getPlayCategory(entry.path);
@@ -493,6 +633,7 @@ export default function PlayFilesPage() {
         category,
         label: entry.name,
         path: entry.path,
+        configRef: entry.configRef ?? null,
         durationMs: entry.durationMs,
         subsongCount: entry.subsongCount,
         sourceId: resolvedSourceId,
@@ -973,6 +1114,9 @@ export default function PlayFilesPage() {
     selectedPlaylistIds,
     isPlaylistLoading,
     handlePlaylistSelect,
+    onAttachLocalConfig: (item) => void handleAttachLocalConfig(item),
+    onAttachUltimateConfig: handleAttachUltimateConfig,
+    onRemoveConfig: handleRemoveConfig,
     startPlaylist,
     playlistItemDuration,
     formatTime,
@@ -1173,6 +1317,23 @@ export default function PlayFilesPage() {
           />
 
           <input
+            ref={localConfigInputRef}
+            type="file"
+            accept=".cfg,.CFG,text/plain,application/octet-stream"
+            className="hidden"
+            onChange={wrapUserEvent(
+              (event) => {
+                handleLocalConfigInput(event.target.files);
+                event.currentTarget.value = "";
+              },
+              "upload",
+              "PlayFilesPage",
+              { type: "file" },
+              "PlaylistConfigInput",
+            )}
+          />
+
+          <input
             ref={songlengthsInputRef}
             type="file"
             accept=".md5,.MD5,.txt,.TXT,text/plain,application/octet-stream"
@@ -1206,6 +1367,24 @@ export default function PlayFilesPage() {
             autoConfirmCloseBefore={isAndroid}
             onAutoConfirmStart={handleAutoConfirmStart}
             autoConfirmLocalSource
+          />
+
+          <ItemSelectionDialog
+            open={Boolean(configPickerState && configPickerSourceGroups.length && configPickerTarget)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setConfigPickerState(null);
+              }
+            }}
+            title={configPickerTarget ? `Attach .cfg to ${configPickerTarget.label}` : "Attach .cfg"}
+            confirmLabel="Attach config"
+            initialSourceId={configPickerInitialSourceId}
+            selectionMode="single"
+            sourceGroups={configPickerSourceGroups}
+            onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
+            onConfirm={handleConfigPickerConfirm}
+            filterEntry={(entry) => entry.type === "file" && entry.name.toLowerCase().endsWith(".cfg")}
+            allowFolderSelection={false}
           />
 
           {!browserOpen ? (

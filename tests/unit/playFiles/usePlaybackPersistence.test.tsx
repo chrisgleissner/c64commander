@@ -88,6 +88,7 @@ const usePlaybackPersistenceHarness = ({
       category: "sid",
       label: entry.name,
       path: entry.path,
+      configRef: entry.configRef ?? null,
       durationMs: entry.durationMs,
       subsongCount: entry.subsongCount,
       sourceId: entry.sourceId ?? null,
@@ -151,6 +152,49 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].status).toBe("ready");
+    });
+  });
+
+  it("restores config associations from legacy playlist blobs", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            configRef: {
+              kind: "ultimate",
+              fileName: "demo.cfg",
+              path: "/USB1/test-data/snapshots/demo.cfg",
+            },
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const localEntriesBySourceId = new Map([["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])]]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].configRef).toEqual({
+        kind: "ultimate",
+        fileName: "demo.cfg",
+        path: "/USB1/test-data/snapshots/demo.cfg",
+      });
     });
   });
 
@@ -308,6 +352,73 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].sourceId).toBe("local-source");
       expect(result.current.playlist[0].request.source).toBe("local");
+    });
+  });
+
+  it("hydrates repository-backed tracks with persisted config associations", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      "c64u_playlist_repo:v1",
+      JSON.stringify({
+        version: 1,
+        tracks: {
+          "ultimate::/MUSICIANS/Test/repo.sid": {
+            trackId: "ultimate::/MUSICIANS/Test/repo.sid",
+            sourceKind: "ultimate",
+            sourceLocator: "/MUSICIANS/Test/repo.sid",
+            category: "sid",
+            title: "repo.sid",
+            author: null,
+            released: null,
+            path: "/MUSICIANS/Test/repo.sid",
+            configRef: {
+              kind: "local",
+              fileName: "repo.cfg",
+              uri: "content://repo.cfg",
+            },
+            sizeBytes: null,
+            modifiedAt: null,
+            defaultDurationMs: 1000,
+            subsongCount: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        playlistItemsByPlaylistId: {
+          [playlistStorageKey]: [
+            {
+              playlistItemId: "repo-item-config-1",
+              playlistId: playlistStorageKey,
+              trackId: "ultimate::/MUSICIANS/Test/repo.sid",
+              songNr: 1,
+              sortKey: "00000001",
+              durationOverrideMs: null,
+              status: "ready",
+              unavailableReason: null,
+              addedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        sessionsByPlaylistId: {},
+        randomSessionsByPlaylistId: {},
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].configRef).toEqual({
+        kind: "local",
+        fileName: "repo.cfg",
+        uri: "content://repo.cfg",
+      });
     });
   });
 

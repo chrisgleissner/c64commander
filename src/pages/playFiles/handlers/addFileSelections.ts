@@ -26,6 +26,7 @@ import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import type { SonglengthsFileEntry } from "@/pages/playFiles/hooks/useSonglengths";
 import { isSonglengthsFileName } from "@/lib/sid/songlengthsDiscovery";
+import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 
 export type AddFileSelectionsDeps = {
@@ -317,6 +318,58 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
       }
 
+      const stripExtension = (name: string) => name.replace(/\.[^.]+$/, "");
+      const selectedFilesByParent = new Map<string, SourceEntry[]>();
+      selectedFiles.forEach((file) => {
+        const parent = getParentPath(file.path);
+        const existing = selectedFilesByParent.get(parent) ?? [];
+        existing.push(file);
+        selectedFilesByParent.set(parent, existing);
+      });
+      const getDirectoryEntries = (parentPath: string) => {
+        const selectedEntries = selectedFilesByParent.get(parentPath) ?? [];
+        const cachedEntries = listingCache.get(parentPath) ?? [];
+        const merged = new Map<string, SourceEntry>();
+        [...selectedEntries, ...cachedEntries].forEach((entry) => {
+          if (entry.type === "file") {
+            merged.set(normalizeSourcePath(entry.path), entry);
+          }
+        });
+        return [...merged.values()];
+      };
+      const resolveConfigRef = (file: SourceEntry): ConfigFileReference | null => {
+        if (source.type !== "local" && source.type !== "ultimate") return null;
+        const parentPath = getParentPath(file.path);
+        const baseName = stripExtension(file.name).toLowerCase();
+        const sibling = getDirectoryEntries(parentPath).find(
+          (entry) =>
+            entry.type === "file" &&
+            entry.name.toLowerCase().endsWith(".cfg") &&
+            stripExtension(entry.name).toLowerCase() === baseName,
+        );
+        if (!sibling) return null;
+        const normalizedConfigPath = normalizeSourcePath(sibling.path);
+        if (source.type === "ultimate") {
+          return {
+            kind: "ultimate",
+            fileName: sibling.name,
+            path: normalizedConfigPath,
+            modifiedAt: sibling.modifiedAt ?? null,
+            sizeBytes: sibling.sizeBytes ?? null,
+          };
+        }
+        const localConfigEntry = localEntriesBySourceId.get(source.id)?.get(normalizedConfigPath);
+        return {
+          kind: "local",
+          fileName: sibling.name,
+          path: normalizedConfigPath,
+          sourceId: source.id,
+          uri: localConfigEntry?.uri ?? null,
+          modifiedAt: localConfigEntry?.modifiedAt ?? sibling.modifiedAt ?? null,
+          sizeBytes: localConfigEntry?.sizeBytes ?? sibling.sizeBytes ?? null,
+        };
+      };
+
       const playlistItems: PlaylistItem[] = [];
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
       if (source.type === "local") {
@@ -489,6 +542,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
           name: file.name,
           path: normalizedPath,
+          configRef: resolveConfigRef(file),
           durationMs: file.durationMs,
           songNr: file.songNr,
           subsongCount: file.subsongCount,

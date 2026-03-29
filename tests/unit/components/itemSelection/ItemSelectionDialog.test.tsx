@@ -323,6 +323,42 @@ describe("ItemSelectionDialog display profiles", () => {
       expect(screen.getByText("From Local")).toBeVisible();
     });
   });
+
+  it("opens directly into the requested source and keeps only one single-selection item", async () => {
+    const onConfirm = vi.fn(async () => true);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Attach config"
+          confirmLabel="Attach"
+          initialSourceId="ultimate-1"
+          selectionMode="single"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={onConfirm}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(await screen.findByText("From C64U")).toBeVisible();
+
+    fireEvent.click(screen.getByLabelText("Select Alpha.sid"));
+    fireEvent.click(screen.getByLabelText("Select Beta.sid"));
+    fireEvent.click(screen.getByTestId("add-items-confirm"));
+
+    await waitFor(() => {
+      expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "ultimate-1" }), [
+        expect.objectContaining({
+          type: "file",
+          name: "Beta.sid",
+          path: "/music/Beta.sid",
+        }),
+      ]);
+    });
+  });
 });
 
 describe("ItemSelectionDialog archive source buttons", () => {

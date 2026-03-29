@@ -51,11 +51,13 @@ export type ItemSelectionDialogProps = {
   onOpenChange: (open: boolean) => void;
   title: string;
   confirmLabel: string;
+  initialSourceId?: string | null;
   sourceGroups: SourceGroup[];
   onAddLocalSource: () => Promise<string | null>;
   onConfirm: (source: SourceLocation, selections: SelectedItem[]) => Promise<boolean>;
   filterEntry?: (entry: SourceEntry) => boolean;
   allowFolderSelection?: boolean;
+  selectionMode?: "single" | "multiple";
   isConfirming?: boolean;
   autoConfirmLocalSource?: boolean;
   progress?: AddItemsProgressState;
@@ -71,11 +73,13 @@ export const ItemSelectionDialog = ({
   onOpenChange,
   title,
   confirmLabel,
+  initialSourceId = null,
   sourceGroups,
   onAddLocalSource,
   onConfirm,
   filterEntry,
   allowFolderSelection = true,
+  selectionMode = "multiple",
   isConfirming = false,
   autoConfirmLocalSource = false,
   progress,
@@ -141,7 +145,7 @@ export const ItemSelectionDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    setSelectedSourceId(null);
+    setSelectedSourceId(initialSourceId);
     setSelection(new Map());
     setArchiveSelection(new Map());
     setFilterText("");
@@ -149,7 +153,7 @@ export const ItemSelectionDialog = ({
     setPendingLocalSourceCount(0);
     setPendingLocalSourceId(null);
     setAutoConfirming(false);
-  }, [open]);
+  }, [initialSourceId, open]);
 
   const confirmLocalSource = useCallback(
     async (target: SourceLocation) => {
@@ -234,6 +238,13 @@ export const ItemSelectionDialog = ({
 
   const toggleSelection = (entry: SourceEntry) => {
     setSelection((prev) => {
+      if (selectionMode === "single") {
+        if (prev.has(entry.path) && prev.size === 1) {
+          return new Map();
+        }
+        return new Map([[entry.path, entry]]);
+      }
+
       const next = new Map(prev);
       if (next.has(entry.path)) {
         next.delete(entry.path);

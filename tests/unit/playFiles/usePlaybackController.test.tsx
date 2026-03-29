@@ -7,6 +7,7 @@ import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
+import { applyConfigFileReference } from "@/lib/config/applyConfigFileReference";
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
@@ -34,6 +35,10 @@ vi.mock("@/lib/logging", () => ({
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
+}));
+
+vi.mock("@/lib/config/applyConfigFileReference", () => ({
+  applyConfigFileReference: vi.fn(async () => undefined),
 }));
 
 const createPlaylistItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem => ({
@@ -125,6 +130,7 @@ const renderPlaybackController = (
       repeatEnabled: options?.repeatEnabled ?? false,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
+      deviceProduct: "C64 Ultimate",
       ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
       resolveSonglengthDurationMsForPath:
         options?.resolveSonglengthDurationMsForPath ?? vi.fn().mockResolvedValue(null),
@@ -319,6 +325,53 @@ describe("usePlaybackController", () => {
     expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(executePlayPlan).mock.invocationCallOrder[0],
     );
+  });
+
+  it("applies an associated config before executing the play plan", async () => {
+    const playlist = [
+      createPlaylistItem({
+        configRef: {
+          kind: "ultimate",
+          fileName: "demo.cfg",
+          path: "/USB1/test-data/snapshots/demo.cfg",
+        },
+      }),
+    ];
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderPlaybackController(playlist, { ensurePlaybackConnection, ensureUnmuted });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(vi.mocked(applyConfigFileReference)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configRef: playlist[0].configRef,
+        deviceProduct: "C64 Ultimate",
+      }),
+    );
+    expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(applyConfigFileReference).mock.invocationCallOrder[0],
+    );
+    expect(vi.mocked(applyConfigFileReference).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(executePlayPlan).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("fails playback start when applying the associated config fails", async () => {
+    vi.mocked(applyConfigFileReference).mockRejectedValueOnce(new Error("config apply failed"));
+    const playlist = [
+      createPlaylistItem({
+        configRef: {
+          kind: "ultimate",
+          fileName: "demo.cfg",
+          path: "/USB1/test-data/snapshots/demo.cfg",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow("config apply failed");
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 
   it("fails playback start when unmuting before playback start fails", async () => {
