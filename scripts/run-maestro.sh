@@ -173,7 +173,7 @@ ensure_hvsc_library() {
 
 write_smoke_config() {
   local payload
-  payload=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:target==='real',debugLogging:true};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
+  payload=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:target==='real',debugLogging:true,featureFlags:{hvsc_enabled:true}};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
   adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c64u-smoke.json'" <<<"$payload" || true
 }
 

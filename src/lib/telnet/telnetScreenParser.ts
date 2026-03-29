@@ -481,10 +481,22 @@ function extractMenuItems(
 }
 
 /** Find the currently selected (reverse-video) item text across all menus */
-function findSelectedItem(_cells: ScreenCell[][], menus: ParsedMenu[]): string | null {
+function findSelectedItem(cells: ScreenCell[][], menus: ParsedMenu[]): string | null {
   for (const menu of menus) {
     const selected = menu.items.find((item) => item.selected);
     if (selected) return selected.label;
+  }
+
+  for (let row = 0; row < TELNET_SCREEN_HEIGHT - 1; row += 1) {
+    const line = cells[row];
+    const hasReverse = line.some((cell) => cell.reverse);
+    if (!hasReverse) continue;
+    const label = replaceControlCharacters(line.map((cell) => cell.char).join(""))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (label.length > 0) {
+      return label;
+    }
   }
   return null;
 }

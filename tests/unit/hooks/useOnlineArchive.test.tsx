@@ -3,12 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
 import * as archiveClient from "@/lib/archive/client";
 import * as archiveExecution from "@/lib/archive/execution";
-import { useOnlineArchive } from "@/hooks/useOnlineArchive";
+import { __resetArchivePresetCacheForTests, useOnlineArchive } from "@/hooks/useOnlineArchive";
 import { createArchiveMock } from "../../mocks/archiveMock";
 
 const closers: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
+  __resetArchivePresetCacheForTests();
   await Promise.allSettled(closers.splice(0).map((close) => close()));
 });
 
@@ -68,37 +69,162 @@ describe("useOnlineArchive", () => {
     expect(custom.requests.some((request) => request.url.includes("wizball"))).toBe(true);
   });
 
-  it("clears an error state back to idle after a failed preset load", async () => {
+  it("keeps seeded presets and idle state when the preset refresh fails", async () => {
     const { result } = renderHook(() =>
       useOnlineArchive(buildDefaultArchiveClientConfig({ hostOverride: "127.0.0.1:1" })),
     );
 
-    await waitFor(() => expect(result.current.state.phase).toBe("error"));
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+
+    expect(result.current.state.phase).toBe("idle");
+    expect(result.current.presets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "category" }),
+        expect.objectContaining({ type: "sort" }),
+      ]),
+    );
+  });
+
+  it("refreshes presets only once per app launch for the same source config", async () => {
+    const client = {
+      getPresets: vi.fn().mockResolvedValue([{ type: "category", description: "Category", values: [] }]),
+      search: vi.fn(),
+      getEntries: vi.fn(),
+      getBinaryUrl: vi.fn(),
+      downloadBinary: vi.fn(),
+      getResolvedConfig: vi.fn(),
+    };
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const { result, unmount } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+
+    unmount();
+
+    const second = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+    await waitFor(() => expect(second.result.current.presetsLoading).toBe(false));
+
+    expect(client.getPresets).toHaveBeenCalledTimes(1);
+
+    spy.mockRestore();
+    second.unmount();
+  });
+
+  it("keeps the seeded presets visible until the background refresh completes", async () => {
+    const deferred = new Promise<Array<{ type: string; description: string; values: never[] }>>((resolve) => {
+      setTimeout(() => resolve([{ type: "category", description: "Category", values: [] }]), 0);
+    });
+    const client = {
+      getPresets: vi.fn().mockReturnValue(deferred),
+      search: vi.fn(),
+      getEntries: vi.fn(),
+      getBinaryUrl: vi.fn(),
+      downloadBinary: vi.fn(),
+      getResolvedConfig: vi.fn(),
+    };
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+
+    expect(result.current.presets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "category" }),
+        expect.objectContaining({ type: "sort" }),
+      ]),
+    );
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+    expect(result.current.state.phase).toBe("idle");
+
+    spy.mockRestore();
+  });
+
+  it("returns to idle when cancelling an in-flight search", async () => {
+    const client = {
+      getPresets: vi.fn().mockResolvedValue([]),
+      search: vi.fn(
+        () =>
+          new Promise<never>(() => {
+            // intentionally unresolved
+          }),
+      ),
+      getEntries: vi.fn(),
+      getBinaryUrl: vi.fn(),
+      downloadBinary: vi.fn(),
+      getResolvedConfig: vi.fn(),
+    };
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+
+    act(() => {
+      void result.current.search({ name: "joyride", category: "apps" });
+    });
+    await waitFor(() => expect(result.current.state.phase).toBe("searching"));
+
+    act(() => {
+      result.current.cancel();
+    });
+
+    expect(result.current.state).toEqual({ phase: "idle" });
+    spy.mockRestore();
+  });
+
+  it("records an entry-loading failure with the search results as recoverable state", async () => {
+    const client = {
+      getPresets: vi.fn().mockResolvedValue([]),
+      search: vi.fn().mockResolvedValue([{ id: "100", category: 40, name: "Joyride" }]),
+      getEntries: vi.fn().mockRejectedValue(new Error("entries failed")),
+      getBinaryUrl: vi.fn(),
+      downloadBinary: vi.fn(),
+      getResolvedConfig: vi.fn(),
+    };
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+    await act(async () => {
+      await result.current.search({ name: "joyride", category: "apps" });
+    });
+    await act(async () => {
+      await result.current.openEntries(
+        { name: "joyride", category: "apps" },
+        { id: "100", category: 40, name: "Joyride" },
+        [{ id: "100", category: 40, name: "Joyride" }],
+      );
+    });
+
+    expect(result.current.state.phase).toBe("error");
+    expect(result.current.state.phase === "error" && result.current.state.recoverableState).toEqual({
+      phase: "results",
+      params: { name: "joyride", category: "apps" },
+      results: [{ id: "100", category: 40, name: "Joyride" }],
+    });
 
     act(() => {
       result.current.clearError();
     });
 
-    expect(result.current.state.phase).toBe("idle");
+    expect(result.current.state).toEqual({
+      phase: "results",
+      params: { name: "joyride", category: "apps" },
+      results: [{ id: "100", category: 40, name: "Joyride" }],
+    });
+    spy.mockRestore();
   });
 
-  it("clears a preset-load error automatically after the client is recreated successfully", async () => {
-    const server = await createArchiveMock();
-    closers.push(server.close);
-
-    const { result, rerender } = renderHook(
-      (props: Parameters<typeof useOnlineArchive>[0]) => useOnlineArchive(props),
-      {
-        initialProps: buildDefaultArchiveClientConfig({ hostOverride: "127.0.0.1:1" }),
-      },
+  it("leaves non-error state unchanged when clearError is called", async () => {
+    const { result } = renderHook(() =>
+      useOnlineArchive(buildDefaultArchiveClientConfig({ hostOverride: "127.0.0.1:1" })),
     );
-
-    await waitFor(() => expect(result.current.state.phase).toBe("error"));
-
-    rerender(buildDefaultArchiveClientConfig({ hostOverride: server.host }));
-
     await waitFor(() => expect(result.current.presetsLoading).toBe(false));
-    expect(result.current.state.phase).toBe("idle");
+
+    act(() => {
+      result.current.clearError();
+    });
+
+    expect(result.current.state).toEqual({ phase: "idle" });
   });
 
   it("preserves the current result context while entries are loading", async () => {

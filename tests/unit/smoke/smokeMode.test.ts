@@ -18,6 +18,7 @@ import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
@@ -44,15 +45,23 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDebugLoggingEnabled: vi.fn(),
 }));
 
+vi.mock("@/lib/native/featureFlags", () => ({
+  FeatureFlags: {
+    setFlag: vi.fn(),
+  },
+}));
+
 describe("smokeMode", () => {
   beforeEach(() => {
     localStorage.clear();
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = false;
     vi.mocked(addLog).mockClear();
     vi.mocked(saveDebugLoggingEnabled).mockClear();
+    vi.mocked(FeatureFlagsPlugin.setFlag).mockClear();
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(Filesystem.readFile).mockReset();
     vi.mocked(Filesystem.writeFile).mockReset();
+    sessionStorage.clear();
   });
 
   it("initializes from storage and persists host + logging", async () => {
@@ -103,6 +112,95 @@ describe("smokeMode", () => {
       debugLogging: false,
     });
     expect(saveDebugLoggingEnabled).not.toHaveBeenCalled();
+  });
+
+  it("applies smoke feature flags to plugin and storage during initialization", async () => {
+    localStorage.setItem(
+      "c64u_smoke_config",
+      JSON.stringify({
+        target: "mock",
+        featureFlags: {
+          hvsc_enabled: true,
+        },
+      }),
+    );
+
+    const config = await initializeSmokeMode();
+
+    expect(config?.featureFlags).toEqual({ hvsc_enabled: true });
+    expect(FeatureFlagsPlugin.setFlag).toHaveBeenCalledWith({
+      key: "hvsc_enabled",
+      value: true,
+    });
+    expect(localStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("1");
+    expect(sessionStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("1");
+  });
+
+  it("ignores unknown or invalid smoke feature flag values", async () => {
+    localStorage.setItem(
+      "c64u_smoke_config",
+      JSON.stringify({
+        target: "mock",
+        featureFlags: {
+          hvsc_enabled: "yes",
+          unknown_flag: true,
+        },
+      }),
+    );
+
+    const config = await initializeSmokeMode();
+
+    expect(config?.featureFlags).toBeUndefined();
+    expect(FeatureFlagsPlugin.setFlag).not.toHaveBeenCalled();
+  });
+
+  it("logs warning when applying a smoke feature flag fails", async () => {
+    vi.mocked(FeatureFlagsPlugin.setFlag).mockRejectedValueOnce(new Error("plugin write failed"));
+    localStorage.setItem(
+      "c64u_smoke_config",
+      JSON.stringify({
+        target: "mock",
+        featureFlags: {
+          hvsc_enabled: false,
+        },
+      }),
+    );
+
+    const config = await initializeSmokeMode();
+
+    expect(config?.featureFlags).toEqual({ hvsc_enabled: false });
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to apply smoke feature flag", expect.any(Object));
+    expect(localStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("0");
+    expect(sessionStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("0");
+  });
+
+  it("logs warning when persisting smoke feature flags to storage fails", async () => {
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (key, value) {
+      if (key.startsWith("c64u_feature_flag:")) {
+        throw new Error("storage quota exceeded");
+      }
+      return originalSetItem.call(this, key, value);
+    });
+    localStorage.setItem(
+      "c64u_smoke_config",
+      JSON.stringify({
+        target: "mock",
+        featureFlags: {
+          hvsc_enabled: true,
+        },
+      }),
+    );
+
+    await initializeSmokeMode();
+
+    expect(FeatureFlagsPlugin.setFlag).toHaveBeenCalledWith({
+      key: "hvsc_enabled",
+      value: true,
+    });
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to persist smoke feature flag in storage", expect.any(Object));
+
+    setItemSpy.mockRestore();
   });
 
   it("records smoke status on native platforms", async () => {
@@ -298,5 +396,18 @@ describe("smokeMode", () => {
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
     expect(addLog).toHaveBeenCalledWith("debug", expect.stringContaining("not found"), expect.any(Object));
+  });
+
+  it("handles filesystem read error using string fallback conversion", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    vi.mocked(Filesystem.readFile).mockRejectedValue(42);
+
+    const config = await initializeSmokeMode();
+
+    expect(config).toBeNull();
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to read smoke config from filesystem", {
+      error: undefined,
+    });
   });
 });

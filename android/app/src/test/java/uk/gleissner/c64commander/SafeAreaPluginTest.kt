@@ -75,9 +75,11 @@ class SafeAreaPluginTest {
     val call = mock(PluginCall::class.java)
     var resolved: JSObject? = null
     doAnswer { invocation ->
-      resolved = invocation.getArgument(0) as JSObject
-      null
-    }.`when`(call).resolve(org.mockito.Mockito.any())
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(org.mockito.Mockito.any())
 
     plugin.getInsets(call)
 

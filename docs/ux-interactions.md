@@ -183,18 +183,18 @@ Interaction split:
 
 ### 3.1 Quick Actions
 
-| CTA             | Label               | Purpose                                     | Importance | Test Coverage | Test File                                                 | Notes                               |
-| --------------- | ------------------- | ------------------------------------------- | ---------- | ------------- | --------------------------------------------------------- | ----------------------------------- |
-| QuickActionCard | "Reset"             | Hard reset C64                              | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
-| QuickActionCard | "Reboot"            | Reboot and clear RAM via REST orchestration | **HIGH**   | ⚠️ PARTIAL    | tests/unit/lib/deviceControl/deviceControl.test.ts        | Uses `deviceControl.rebootFull()`   |
-| QuickActionCard | "Pause" / "Resume"  | Pause or resume emulation                   | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control                     |
-| QuickActionCard | "Menu"              | Toggle C64U menu                            | **HIGH**   | ⚠️ PARTIAL    | tests/unit/lib/deviceControl/deviceControl.test.ts        | Serialized REST toggle              |
-| QuickActionCard | "Save RAM"          | Open RAM snapshot export flow               | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Folder-backed export                |
-| QuickActionCard | "Load RAM"          | Open RAM snapshot restore flow              | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                              | Snapshot sheet + confirmation modal |
-| QuickActionCard | "Power Cycle"       | Fallback full reboot via REST orchestration | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/HomePage.ramActions.test.tsx             | No Telnet routing                   |
-| QuickActionCard | "Power Off"         | Power down C64                              | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120                             | Machine control - destructive       |
-| Overflow action | "Reboot (Keep RAM)" | Reboot without clearing RAM via REST        | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/HomePage.ramActions.test.tsx             | Quick Actions overflow menu         |
-| Overflow action | "Save REU"          | Save REU memory via Telnet                  | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/home/components/MachineControls.test.tsx | Quick Actions overflow menu         |
+| CTA             | Label                | Purpose                                               | Importance | Test Coverage | Test File                                          | Notes                                    |
+| --------------- | -------------------- | ----------------------------------------------------- | ---------- | ------------- | -------------------------------------------------- | ---------------------------------------- |
+| QuickActionCard | "Reset"              | Hard reset C64                                        | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120                      | Machine control                          |
+| QuickActionCard | "Reboot"             | Reboot via REST without clearing RAM                  | **HIGH**   | ⚠️ PARTIAL    | tests/unit/lib/deviceControl/deviceControl.test.ts | Uses REST reboot only                    |
+| QuickActionCard | "Pause" / "Resume"   | Pause or resume emulation                             | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120                      | Machine control                          |
+| QuickActionCard | "Menu"               | Toggle C64U menu                                      | **HIGH**   | ⚠️ PARTIAL    | tests/unit/lib/deviceControl/deviceControl.test.ts | Serialized REST toggle                   |
+| QuickActionCard | "Save RAM"           | Open RAM snapshot export flow                         | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                       | Folder-backed export                     |
+| QuickActionCard | "Load RAM"           | Open unified RAM and REU restore flow                 | **HIGH**   | ⚠️ PARTIAL    | HomePage.ramActions.test.tsx                       | Snapshot sheet with REU-specific actions |
+| QuickActionCard | "Power Cycle"        | Full power cycle via Telnet                           | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/HomePage.ramActions.test.tsx      | Telnet-only routing                      |
+| QuickActionCard | "Power Off"          | Power down C64                                        | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120                      | Machine control - destructive            |
+| Overflow action | "Reboot (Clear RAM)" | Reboot with clear RAM, Telnet first and REST fallback | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/HomePage.ramActions.test.tsx      | Quick Actions overflow menu              |
+| Overflow action | "Save REU"           | Save REU through staged FTP plus Telnet workflow      | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/pages/HomePage.ramActions.test.tsx      | Quick Actions overflow menu              |
 
 ### 3.2 Configuration Management
 

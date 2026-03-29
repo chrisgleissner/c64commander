@@ -40,10 +40,29 @@ import { buildSidSilenceTargets, silenceSidTargets } from "@/lib/sid/sidSilence"
 import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
 import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
 import { SnapshotManagerDialog } from "./home/dialogs/SnapshotManagerDialog";
+import { ReuProgressDialog } from "./home/dialogs/ReuProgressDialog";
 import { ClearFlashDialog } from "./home/dialogs/ClearFlashDialog";
 import { useSnapshotStore } from "@/lib/snapshot/snapshotStore";
-import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { deriveRamDumpFolderDisplayPath } from "@/lib/config/ramDumpFolderStore";
+import { useReuSnapshotStore, deleteReuSnapshotFromStore, updateReuSnapshotLabel } from "@/lib/reu/reuSnapshotStore";
+import { createReuWorkflow } from "@/lib/reu/reuWorkflow";
+import { deleteReuSnapshotFile } from "@/lib/reu/reuSnapshotStorage";
+import { saveRemoteReuFromTemp, restoreRemoteReuFromTemp } from "@/lib/reu/reuTelnetWorkflow";
+import type { ReuProgressState, ReuRestoreMode } from "@/lib/reu/reuSnapshotTypes";
+import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
+import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { getPassword } from "@/lib/secureStorage";
+import { resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { createTelnetSession } from "@/lib/telnet/telnetSession";
+import { createTelnetClient } from "@/lib/telnet/telnetClient";
+import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import { resolveTelnetMenuKey } from "@/lib/telnet/telnetTypes";
+import { ensureRamDumpFolder } from "@/lib/machine/ramDumpStorage";
+import { isNativePlatform, getPlatform } from "@/lib/native/platform";
+import type { RestorableSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
+import { isReuSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
 import {
   C64_CARTRIDGE_HOME_ITEMS,
@@ -159,11 +178,14 @@ function HomePageContent() {
   const [saveRamDialogOpen, setSaveRamDialogOpen] = useState(false);
   const [clearFlashDialogOpen, setClearFlashDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
-  const [restoreTarget, setRestoreTarget] = useState<SnapshotStorageEntry | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<RestorableSnapshotEntry | null>(null);
+  const [reuProgress, setReuProgress] = useState<ReuProgressState | null>(null);
+  const [reuTaskPending, setReuTaskPending] = useState(false);
   const [cpuSpeedOptimisticValue, setCpuSpeedOptimisticValue] = useState<string | null>(null);
   const [deviceControlActionId, setDeviceControlActionId] = useState<DeviceControlOperation | null>(null);
   const cpuSpeedDraggingRef = useRef(false);
   const { snapshots } = useSnapshotStore();
+  const { snapshots: reuSnapshots } = useReuSnapshotStore();
 
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
@@ -182,7 +204,133 @@ function HomePageContent() {
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const deviceControlBusy = deviceControlActionId !== null;
-  const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy;
+  const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
+  const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...reuSnapshots].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
+
+  const uint8ToBase64 = (value: Uint8Array) => {
+    let binary = "";
+    value.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+  };
+
+  const resolveFtpOptions = async () => {
+    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const password = await getPassword();
+    return {
+      host,
+      port: getStoredFtpPort(),
+      username: "user",
+      password: password ?? "",
+    };
+  };
+
+  const withConnectedReuTelnetSession = async <T,>(
+    callback: (session: ReturnType<typeof createTelnetSession>, menuKey: "F5" | "F1") => Promise<T>,
+  ) => {
+    if (!telnet.isAvailable) {
+      throw new Error("Telnet is unavailable for REU actions on this device.");
+    }
+    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const password = await getPassword();
+    const transport = createTelnetClient();
+    const session = createTelnetSession(transport);
+    const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
+
+    await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+    try {
+      return await callback(session, menuKey);
+    } finally {
+      await session.disconnect();
+    }
+  };
+
+  const createHomeReuWorkflow = () =>
+    createReuWorkflow({
+      ensureLocalSnapshotStorage: async () => {
+        if (!isNativePlatform()) {
+          throw new Error("REU snapshots are only supported on native builds.");
+        }
+        if (getPlatform() === "android") {
+          await ensureRamDumpFolder();
+        }
+      },
+      listRemoteTempFiles: async () => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
+        return result.entries
+          .filter((entry) => entry.type === "file")
+          .map((entry) => ({
+            name: entry.name,
+            path: entry.path,
+            size: entry.size,
+            modifiedAt: entry.modifiedAt,
+          }));
+      },
+      readRemoteFile: async (path) => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await readFtpFile({ ...ftpOptions, path });
+        return base64ToUint8(result.data);
+      },
+      writeRemoteFile: async (path, bytes) => {
+        const ftpOptions = await resolveFtpOptions();
+        await writeFtpFile({
+          ...ftpOptions,
+          path,
+          data: uint8ToBase64(bytes),
+        });
+      },
+      runSaveRemoteReu: () =>
+        withConnectedReuTelnetSession((session, menuKey) => saveRemoteReuFromTemp(session, menuKey)),
+      runRestoreRemoteReu: (fileName, mode) =>
+        withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReuFromTemp(session, menuKey, fileName, mode)),
+    });
+
+  const runReuWorkflow = async <T,>(
+    operation: string,
+    failureTitle: string,
+    successTitle: string,
+    runner: () => Promise<T>,
+    successDescription?: (result: T) => string | undefined,
+  ) => {
+    setReuTaskPending(true);
+    try {
+      const result = await runner();
+      toast({ title: successTitle, description: successDescription?.(result) });
+      return result;
+    } catch (error) {
+      reportUserError({
+        operation,
+        title: failureTitle,
+        description: (error as Error).message,
+        error,
+      });
+      throw error;
+    } finally {
+      setReuTaskPending(false);
+      setReuProgress(null);
+    }
+  };
+
+  const handleDeleteStoredSnapshot = async (snapshot: RestorableSnapshotEntry) => {
+    if (isReuSnapshotEntry(snapshot)) {
+      await deleteReuSnapshotFile(snapshot);
+      deleteReuSnapshotFromStore(snapshot.id);
+      return;
+    }
+    handleDeleteSnapshot(snapshot.id);
+  };
+
+  const handleUpdateStoredSnapshotLabel = (snapshot: RestorableSnapshotEntry, label: string) => {
+    if (isReuSnapshotEntry(snapshot)) {
+      updateReuSnapshotLabel(snapshot.id, label);
+      return;
+    }
+    handleUpdateSnapshotLabel(snapshot.id, label);
+  };
 
   const executeTelnetAction = async ({
     actionId,
@@ -319,12 +467,33 @@ function HomePageContent() {
 
   const handleSaveReu = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeTelnetAction({
-      actionId: "saveReuMemory",
-      successTitle: "REU memory saved",
-      failureOperation: "HOME_SAVE_REU",
-      failureTitle: "Save REU failed",
-    });
+    const workflow = createHomeReuWorkflow();
+    await runReuWorkflow(
+      "HOME_SAVE_REU",
+      "Save REU failed",
+      "REU snapshot saved",
+      () => workflow.saveSnapshot((progress) => setReuProgress(progress)),
+      (result) => result.metadata.content_name,
+    );
+  };
+
+  const handleConfirmRestore = async (mode?: ReuRestoreMode) => {
+    if (!restoreTarget) return;
+    setSnapshotManagerOpen(false);
+    setRestoreTarget(null);
+    if (!isReuSnapshotEntry(restoreTarget)) {
+      await handleRestoreSnapshot(restoreTarget);
+      return;
+    }
+
+    const workflow = createHomeReuWorkflow();
+    await runReuWorkflow(
+      "HOME_RESTORE_REU",
+      "Restore REU failed",
+      mode === "preload-on-startup" ? "REU preload configured" : "REU image loaded",
+      () => workflow.restoreSnapshot(restoreTarget, mode ?? "load-into-reu", (progress) => setReuProgress(progress)),
+      () => restoreTarget.metadata.content_name,
+    );
   };
 
   const machineOverflowActions = [
@@ -1334,7 +1503,7 @@ function HomePageContent() {
           void handleSaveRam(type, customRanges);
         }}
         onSaveReu={handleSaveReu}
-        isSaving={machineTaskId === "save-ram"}
+        isSaving={machineTaskId === "save-ram" || reuTaskPending}
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}
       />
@@ -1342,15 +1511,21 @@ function HomePageContent() {
       <SnapshotManagerDialog
         open={snapshotManagerOpen}
         onOpenChange={setSnapshotManagerOpen}
-        snapshots={snapshots}
+        snapshots={allSnapshots}
         onRestore={(snapshot) => {
           setRestoreTarget(snapshot);
         }}
         onDelete={(id) => {
-          handleDeleteSnapshot(id);
+          const snapshot = allSnapshots.find((entry) => entry.id === id);
+          if (snapshot) {
+            void handleDeleteStoredSnapshot(snapshot);
+          }
         }}
         onUpdateLabel={(id, label) => {
-          handleUpdateSnapshotLabel(id, label);
+          const snapshot = allSnapshots.find((entry) => entry.id === id);
+          if (snapshot) {
+            handleUpdateStoredSnapshotLabel(snapshot, label);
+          }
         }}
       />
 
@@ -1360,15 +1535,12 @@ function HomePageContent() {
           if (!open) setRestoreTarget(null);
         }}
         snapshot={restoreTarget}
-        onConfirm={() => {
-          if (restoreTarget) {
-            setSnapshotManagerOpen(false);
-            setRestoreTarget(null);
-            void handleRestoreSnapshot(restoreTarget);
-          }
+        onConfirm={(mode) => {
+          void handleConfirmRestore(mode);
         }}
-        isPending={machineTaskId === "load-ram"}
+        isPending={machineTaskId === "load-ram" || reuTaskPending}
       />
+      <ReuProgressDialog open={reuTaskPending} progress={reuProgress} />
 
       <ClearFlashDialog
         open={clearFlashDialogOpen}

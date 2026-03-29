@@ -43,8 +43,22 @@ describe("featureFlags", () => {
       expect(flag).toBeNull();
     });
 
+    it("treats a corrupted stored flag as null", async () => {
+      const repo = new InMemoryFeatureFlagRepository();
+      (repo as unknown as { store: Map<string, boolean | undefined> }).store.set("hvsc_enabled", undefined);
+      const flag = await repo.getFlag("hvsc_enabled");
+      expect(flag).toBeNull();
+    });
+
     it("returns all stored flags for given keys", async () => {
       const repo = new InMemoryFeatureFlagRepository({ hvsc_enabled: false });
+      const flags = await repo.getAllFlags(["hvsc_enabled"]);
+      expect(flags).toEqual({ hvsc_enabled: false });
+    });
+
+    it("normalizes corrupted stored flag entries to false in bulk reads", async () => {
+      const repo = new InMemoryFeatureFlagRepository();
+      (repo as unknown as { store: Map<string, boolean | undefined> }).store.set("hvsc_enabled", undefined);
       const flags = await repo.getAllFlags(["hvsc_enabled"]);
       expect(flags).toEqual({ hvsc_enabled: false });
     });

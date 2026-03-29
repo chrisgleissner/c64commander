@@ -78,6 +78,12 @@ describe("ramDumpFolderStore", () => {
       vi.unstubAllGlobals();
     });
 
+    it("returns null when localStorage is unavailable", () => {
+      vi.unstubAllGlobals();
+      vi.stubGlobal("localStorage", undefined);
+      expect(loadRamDumpFolderConfig()).toBeNull();
+    });
+
     it("returns null if no config", () => {
       vi.mocked(localStorage.getItem).mockReturnValue(null);
       expect(loadRamDumpFolderConfig()).toBeNull();
@@ -152,6 +158,22 @@ describe("ramDumpFolderStore", () => {
 
       vi.unstubAllGlobals();
     });
+
+    it("does nothing when localStorage is unavailable", () => {
+      const dispatchEvent = vi.fn();
+      vi.stubGlobal("localStorage", undefined);
+      vi.stubGlobal("window", { dispatchEvent });
+
+      saveRamDumpFolderConfig({
+        treeUri: "u",
+        rootName: "r",
+        selectedAt: "s",
+      });
+
+      expect(dispatchEvent).not.toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
   });
 
   describe("clearRamDumpFolderConfig", () => {
@@ -171,6 +193,18 @@ describe("ramDumpFolderStore", () => {
 
       expect(localStorage.removeItem).toHaveBeenCalledWith("c64u_ram_dump_folder:v1");
       expect(window.dispatchEvent).toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
+
+    it("does nothing when localStorage is unavailable", () => {
+      const dispatchEvent = vi.fn();
+      vi.stubGlobal("localStorage", undefined);
+      vi.stubGlobal("window", { dispatchEvent });
+
+      clearRamDumpFolderConfig();
+
+      expect(dispatchEvent).not.toHaveBeenCalled();
 
       vi.unstubAllGlobals();
     });

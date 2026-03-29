@@ -72,6 +72,8 @@ const formatEntryMeta = (size?: number, date?: number) => {
 
 const getPresetMap = (presets: ArchivePreset[]) => new Map(presets.map((preset) => [preset.type, preset]));
 
+const LEGAL_NOTICE = "Use CommoServe in accordance with applicable copyright law and archive terms.";
+
 export type OnlineArchiveDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -191,7 +193,7 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
                           onValueChange={(value) =>
                             setForm((current) => ({ ...current, [field.key]: value === "__any__" ? "" : value }))
                           }
-                          disabled={presetsLoading || !preset}
+                          disabled={!preset}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder={presetsLoading ? "Loading…" : "Any"} />
@@ -218,10 +220,13 @@ export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiv
                       "Enter at least one search term."
                     )}
                   </div>
+                  <p className="text-xs text-muted-foreground" data-testid="online-archive-legal-notice">
+                    {LEGAL_NOTICE}
+                  </p>
                   <Button
                     className="w-full"
                     onClick={() => void handleSearch()}
-                    disabled={!queryPreview || presetsLoading || state.phase === "searching"}
+                    disabled={!queryPreview || state.phase === "searching"}
                   >
                     {state.phase === "searching" ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -221,6 +221,7 @@ const run = async () => {
             host: effectiveHost ?? undefined,
             readOnly: true,
             debugLogging: true,
+            featureFlags: { hvsc_enabled: true },
           });
           await ensureDeviceReadyForAutomation({
             deviceId: options.emulatorId,

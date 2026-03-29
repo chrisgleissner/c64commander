@@ -61,6 +61,25 @@ describe("FtpClientWeb retry policy", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("retries timeout failures and eventually succeeds for writeFile", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("FTP bridge request timed out"))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sizeBytes: 4 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const client = new FtpClientWeb();
+    const result = await client.writeFile({ host: "c64u", path: "/Temp/demo.reu", data: "QUJDRA==" });
+
+    expect(result.sizeBytes).toBe(4);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("does not retry HTTP 4xx responses", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: "bad request" }), {
@@ -107,6 +126,16 @@ describe("FtpClientWeb missing bridge URL", () => {
     const client = new FtpClientWeb();
     await expect(client.readFile({ host: "c64u", path: "/demo.sid" })).rejects.toThrow("missing FTP bridge URL");
   });
+
+  it("throws when bridge URL is not configured for writeFile", async () => {
+    const { getFtpBridgeUrl } = await import("@/lib/ftp/ftpConfig");
+    vi.mocked(getFtpBridgeUrl).mockReturnValueOnce(null);
+
+    const client = new FtpClientWeb();
+    await expect(client.writeFile({ host: "c64u", path: "/demo.sid", data: "QQ==" })).rejects.toThrow(
+      "missing FTP bridge URL",
+    );
+  });
 });
 
 describe("FtpClientWeb error handling", () => {
@@ -132,6 +161,21 @@ describe("FtpClientWeb error handling", () => {
 
     const client = new FtpClientWeb();
     await expect(client.readFile({ host: "c64u", path: "/demo.sid" })).rejects.toThrow("FTP bridge request timed out");
+  });
+
+  it("rejects writeFile when payload is missing sizeBytes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const client = new FtpClientWeb();
+    await expect(client.writeFile({ host: "c64u", path: "/demo.sid", data: "QQ==" })).rejects.toThrow(
+      "invalid write payload",
+    );
   });
 
   it("handles error response with no JSON body for listDirectory", async () => {

@@ -98,6 +98,45 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun writeFileRejectsMissingPath() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("path is required")
+
+    plugin.writeFile(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun writeFileRejectsMissingData() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/Temp/demo.reu")
+    `when`(call.getString("data")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("data is required")
+
+    plugin.writeFile(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+  }
+
+  @Test
   fun listDirectoryRejectsBlankHost() {
     val plugin = FtpClientPlugin()
     val call = mock(PluginCall::class.java)
@@ -434,6 +473,136 @@ class FtpClientPluginTest {
     verify(ftpClient).connect("127.0.0.1", 21)
     verify(ftpClient).login("user", "")
     verify(call).reject("FTP file read failed")
+  }
+
+  @Test
+  fun writeFileStoresPayloadAndReturnsSize() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    doAnswer { invocation ->
+              val input = invocation.getArgument<java.io.InputStream>(1)
+              val stored = input.readBytes().toString(Charsets.UTF_8)
+              assertEquals("ABCD", stored)
+              true
+            }
+            .`when`(ftpClient)
+            .storeFile(eq("/Temp/demo.reu"), any())
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/Temp/demo.reu")
+    `when`(call.getString("data")).thenReturn("QUJDRA==")
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.writeFile(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    assertEquals(4, resolved?.optInt("sizeBytes", -1))
+  }
+
+  @Test
+  fun writeFileRejectsOnLoginFailure() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "wrong")).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("wrong")
+    `when`(call.getString("path")).thenReturn("/Temp/demo.reu")
+    `when`(call.getString("data")).thenReturn("QUJDRA==")
+
+    plugin.writeFile(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(call).reject("FTP login failed")
+  }
+
+  @Test
+  fun writeFileUsesDefaultsAndRejectsWhenStoreFails() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "")).thenReturn(true)
+    `when`(ftpClient.storeFile(eq("/Temp/missing.reu"), any())).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/Temp/missing.reu")
+    `when`(call.getString("data")).thenReturn("QQ==")
+    `when`(call.getInt("port")).thenReturn(null)
+    `when`(call.getString("username")).thenReturn(null)
+    `when`(call.getString("password")).thenReturn(null)
+
+    plugin.writeFile(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(ftpClient).login("user", "")
+    verify(call).reject("FTP file write failed")
+  }
+
+  @Test
+  fun writeFileRejectsWithNormalizedTimeoutMessage() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    doAnswer { throw SocketTimeoutException("write timed out") }
+            .`when`(ftpClient)
+            .connect("127.0.0.1", 21)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/Temp/demo.reu")
+    `when`(call.getString("data")).thenReturn("QQ==")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getInt("timeoutMs")).thenReturn(2500)
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0)
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java))
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0)
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.writeFile(call)
+
+    assertTrue((rejectedMessage ?: "").startsWith("FTP writeFile timed out after "))
   }
 
   @Test

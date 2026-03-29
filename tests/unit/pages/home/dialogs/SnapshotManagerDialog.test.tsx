@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SnapshotManagerDialog } from "@/pages/home/dialogs/SnapshotManagerDialog";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
+import type { ReuSnapshotStorageEntry } from "@/lib/reu/reuSnapshotTypes";
+import type { RestorableSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -39,11 +41,27 @@ const SNAPSHOTS: SnapshotStorageEntry[] = [
   makeSnapshot("snap-3", "screen"),
 ];
 
+const REU_SNAPSHOT: ReuSnapshotStorageEntry = {
+  id: "reu-1",
+  filename: "local-capture.reu",
+  createdAt: "2026-01-10T10:00:00.000Z",
+  snapshotType: "reu",
+  sizeBytes: 8192,
+  remoteFileName: "capture.reu",
+  storage: { kind: "native-data", path: "reu-snapshots/local-capture.reu" },
+  metadata: {
+    snapshot_type: "reu",
+    display_ranges: ["REU image"],
+    created_at: "2026-01-10 10:00:00",
+    content_name: "capture.reu",
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const renderDialog = (snapshots: SnapshotStorageEntry[] = SNAPSHOTS) => {
+const renderDialog = (snapshots: RestorableSnapshotEntry[] = SNAPSHOTS) => {
   const onRestore = vi.fn();
   const onDelete = vi.fn();
   const onUpdateLabel = vi.fn();
@@ -162,6 +180,14 @@ describe("SnapshotManagerDialog – type filter", () => {
     renderDialog();
     fireEvent.click(screen.getByTestId("snapshot-filter-type-basic"));
     expect(screen.getAllByTestId("snapshot-row")).toHaveLength(1);
+  });
+
+  it("includes REU snapshots in the dedicated REU tab", () => {
+    renderDialog([...SNAPSHOTS, REU_SNAPSHOT]);
+    fireEvent.click(screen.getByTestId("snapshot-filter-type-reu"));
+    expect(screen.getAllByTestId("snapshot-row")).toHaveLength(1);
+    expect(screen.getByText("REU Snapshot")).toBeInTheDocument();
+    expect(screen.getByText("capture.reu")).toBeInTheDocument();
   });
 
   it("shows all rows when 'All' tab is active", () => {

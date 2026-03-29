@@ -19,6 +19,24 @@ import type {
   ArchiveSearchResult,
 } from "@/lib/archive/types";
 
+const SEEDED_PRESETS: ArchivePreset[] = [
+  { type: "category", description: "Category", values: [{ aqlKey: "apps", name: "Apps" }] },
+  { type: "type", description: "Type", values: [{ aqlKey: "prg", name: "PRG" }] },
+  { type: "sort", description: "Sort", values: [{ aqlKey: "name", name: "Name" }] },
+  { type: "order", description: "Order", values: [{ aqlKey: "asc", name: "Ascending" }] },
+  { type: "date", description: "Date", values: [{ aqlKey: "2024", name: "2024" }] },
+];
+
+const presetCache = new Map<string, ArchivePreset[]>();
+const presetRefreshStatus = new Map<string, "pending" | "settled">();
+const presetRefreshPromises = new Map<string, Promise<ArchivePreset[]>>();
+
+export const __resetArchivePresetCacheForTests = () => {
+  presetCache.clear();
+  presetRefreshStatus.clear();
+  presetRefreshPromises.clear();
+};
+
 export type OnlineArchiveState =
   | { phase: "idle" }
   | { phase: "searching" }
@@ -59,9 +77,6 @@ const toErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const resetIfPresetError = (current: OnlineArchiveState): OnlineArchiveState =>
-  current.phase === "error" && current.recoverableState === null ? { phase: "idle" } : current;
-
 export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   const configKey = JSON.stringify({
     id: config.id,
@@ -72,8 +87,8 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   });
   const resolvedConfig = useMemo<ArchiveClientResolvedConfig>(() => resolveArchiveClientConfig(config), [configKey]);
   const client = useMemo(() => createArchiveClient(config), [configKey]);
-  const [presets, setPresets] = useState<ArchivePreset[]>([]);
-  const [presetsLoading, setPresetsLoading] = useState(false);
+  const [presets, setPresets] = useState<ArchivePreset[]>(() => presetCache.get(configKey) ?? SEEDED_PRESETS);
+  const [presetsLoading, setPresetsLoading] = useState(presetRefreshStatus.get(configKey) === "pending");
   const [state, setState] = useState<OnlineArchiveState>({ phase: "idle" });
   const requestVersionRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -105,32 +120,52 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   }, []);
 
   useEffect(() => {
+    setPresets(presetCache.get(configKey) ?? SEEDED_PRESETS);
+    setPresetsLoading(presetRefreshStatus.get(configKey) === "pending");
+
+    if (presetRefreshStatus.get(configKey) === "settled") {
+      return undefined;
+    }
+
     const controller = new AbortController();
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = controller;
-    setPresetsLoading(true);
-    setState((current) => resetIfPresetError(current));
-    void client
-      .getPresets({ signal: controller.signal })
-      .then((next) => {
-        setPresets(next);
-        setState((current) => resetIfPresetError(current));
-      })
-      .catch((error) => {
-        if (controller.signal.aborted) return;
-        setState({
-          phase: "error",
-          message: toErrorMessage(error, "Failed to load archive presets."),
-          recoverableState: null,
+    let refreshPromise = presetRefreshPromises.get(configKey);
+    if (!refreshPromise) {
+      presetRefreshStatus.set(configKey, "pending");
+      refreshPromise = client
+        .getPresets({ signal: controller.signal })
+        .then((next) => {
+          presetCache.set(configKey, next);
+          presetRefreshStatus.set(configKey, "settled");
+          return next;
+        })
+        .catch((error) => {
+          if (controller.signal.aborted) {
+            throw error;
+          }
+          presetCache.set(configKey, presetCache.get(configKey) ?? SEEDED_PRESETS);
+          presetRefreshStatus.set(configKey, "settled");
+          return presetCache.get(configKey) ?? SEEDED_PRESETS;
+        })
+        .finally(() => {
+          presetRefreshPromises.delete(configKey);
         });
+      presetRefreshPromises.set(configKey, refreshPromise);
+    }
+
+    setPresetsLoading(true);
+    void refreshPromise
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        setPresets(next);
       })
       .finally(() => {
         if (!controller.signal.aborted) {
           setPresetsLoading(false);
         }
       });
+
     return () => controller.abort();
-  }, [client]);
+  }, [client, configKey]);
 
   const runRequest = useCallback(
     async <T>(

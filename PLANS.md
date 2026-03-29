@@ -588,6 +588,7 @@ Required implementation:
 - Always use `/Temp` on the C64U side for both save and restore flows.
 - Treat save/restore plus FTP transfer back to the local device as a long-running operation that takes about 30 seconds for a 16MiB REU, proportionally shorter for a smaller REU.
 - Show a blocking progress UI while the operation is running, tell the user to wait, and poll/check progress so the UI can report forward movement and completion rather than appearing stuck.
+
 7. For the CommoServe screen:
 
 - Prepopulate the first-open option sets locally so they render instantly for `Category`, `Date`, `Type`, `Sort`, and `Order`.

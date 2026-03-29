@@ -10,7 +10,9 @@ import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { FEATURE_FLAG_DEFINITIONS, type FeatureFlagKey, type FeatureFlags } from "@/lib/config/featureFlags";
 import { normalizeDeviceHost } from "@/lib/c64api";
+import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
 
 const SMOKE_CONFIG_STORAGE_KEY = "c64u_smoke_config";
 const SMOKE_MODE_STORAGE_KEY = "c64u_smoke_mode_enabled";
@@ -18,11 +20,13 @@ const SMOKE_CONFIG_FILENAME = "c64u-smoke.json";
 const SMOKE_STATUS_FILENAME = "c64u-smoke-status.json";
 
 export type SmokeTarget = "mock" | "real";
+export type SmokeFeatureFlags = Partial<FeatureFlags>;
 export type SmokeConfig = {
   target: SmokeTarget;
   host?: string;
   readOnly?: boolean;
   debugLogging?: boolean;
+  featureFlags?: SmokeFeatureFlags;
 };
 
 let cachedSmokeConfig: SmokeConfig | null = null;
@@ -33,6 +37,18 @@ type SmokeBootstrapWindow = Window & {
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
+const isFeatureFlagKey = (value: string): value is FeatureFlagKey => value in FEATURE_FLAG_DEFINITIONS;
+
+const parseSmokeFeatureFlags = (raw: unknown): SmokeFeatureFlags | undefined => {
+  if (!isObject(raw)) return undefined;
+  const featureFlags: SmokeFeatureFlags = {};
+  Object.entries(raw).forEach(([key, value]) => {
+    if (!isFeatureFlagKey(key) || typeof value !== "boolean") return;
+    featureFlags[key] = value;
+  });
+  return Object.keys(featureFlags).length > 0 ? featureFlags : undefined;
+};
+
 const parseSmokeConfig = (raw: unknown): SmokeConfig | null => {
   if (!isObject(raw)) return null;
   const target = raw.target === "real" ? "real" : raw.target === "mock" ? "mock" : null;
@@ -40,7 +56,36 @@ const parseSmokeConfig = (raw: unknown): SmokeConfig | null => {
   const host = typeof raw.host === "string" && raw.host.trim().length > 0 ? normalizeDeviceHost(raw.host) : undefined;
   const readOnly = typeof raw.readOnly === "boolean" ? raw.readOnly : true;
   const debugLogging = typeof raw.debugLogging === "boolean" ? raw.debugLogging : true;
-  return { target, host, readOnly, debugLogging };
+  const featureFlags = parseSmokeFeatureFlags(raw.featureFlags);
+  return { target, host, readOnly, debugLogging, featureFlags };
+};
+
+const persistSmokeFeatureFlags = async (featureFlags: SmokeFeatureFlags | undefined) => {
+  if (!featureFlags) return;
+  for (const [key, value] of Object.entries(featureFlags) as Array<[FeatureFlagKey, boolean]>) {
+    try {
+      await FeatureFlagsPlugin.setFlag({ key, value });
+    } catch (error) {
+      addLog("warn", "Failed to apply smoke feature flag", {
+        key,
+        error: (error as Error).message,
+      });
+    }
+
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(`c64u_feature_flag:${key}`, value ? "1" : "0");
+      }
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem(`c64u_feature_flag:${key}`, value ? "1" : "0");
+      }
+    } catch (error) {
+      addLog("warn", "Failed to persist smoke feature flag in storage", {
+        key,
+        error: (error as Error).message,
+      });
+    }
+  }
 };
 
 const getErrorMessage = (error: unknown) => {
@@ -135,6 +180,7 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
 
   cachedSmokeConfig = config;
   writeSmokeConfigToStorage(config);
+  await persistSmokeFeatureFlags(config.featureFlags);
 
   if (config.debugLogging) {
     saveDebugLoggingEnabled(true);

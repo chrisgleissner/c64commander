@@ -29,6 +29,8 @@ const {
   updateSnapshotLabelSpy,
   snapshotEntryToBytesSpy,
   getCurrentPlaybackSnapshotLabelSpy,
+  reuWorkflowSaveSnapshotSpy,
+  reuWorkflowRestoreSnapshotSpy,
   telnetState,
   deviceControlErrorState,
 } = vi.hoisted(() => ({
@@ -49,6 +51,8 @@ const {
   updateSnapshotLabelSpy: vi.fn(),
   snapshotEntryToBytesSpy: vi.fn(),
   getCurrentPlaybackSnapshotLabelSpy: vi.fn(),
+  reuWorkflowSaveSnapshotSpy: vi.fn(),
+  reuWorkflowRestoreSnapshotSpy: vi.fn(),
   telnetState: {
     isBusy: false,
     activeActionId: null as string | null,
@@ -185,6 +189,7 @@ vi.mock("@/lib/logging", async () => {
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({}),
+  resolveDeviceHostFromStorage: () => "c64u",
 }));
 
 vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
@@ -199,6 +204,12 @@ vi.mock("@/lib/machine/ramOperations", () => ({
 
 vi.mock("@/lib/machine/ramDumpStorage", () => ({
   selectRamDumpFolder: selectRamDumpFolderSpy,
+  ensureRamDumpFolder: vi.fn().mockResolvedValue({
+    treeUri: "content://ram-dumps",
+    rootName: "RAM DUMPS",
+    selectedAt: "2026-01-01T00:00:00.000Z",
+    displayPath: "content://ram-dumps",
+  }),
 }));
 
 vi.mock("@/lib/config/ramDumpFolderStore", () => ({
@@ -222,6 +233,58 @@ vi.mock("@/lib/snapshot/snapshotStore", () => ({
 
 vi.mock("@/lib/snapshot/currentPlaybackSnapshotLabel", () => ({
   getCurrentPlaybackSnapshotLabel: getCurrentPlaybackSnapshotLabelSpy,
+}));
+
+vi.mock("@/lib/reu/reuSnapshotStore", () => ({
+  useReuSnapshotStore: () => ({ snapshots: [] }),
+  deleteReuSnapshotFromStore: vi.fn(),
+  updateReuSnapshotLabel: vi.fn(),
+}));
+
+vi.mock("@/lib/reu/reuSnapshotStorage", () => ({
+  deleteReuSnapshotFile: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/reu/reuWorkflow", () => ({
+  createReuWorkflow: () => ({
+    saveSnapshot: reuWorkflowSaveSnapshotSpy,
+    restoreSnapshot: reuWorkflowRestoreSnapshotSpy,
+  }),
+}));
+
+vi.mock("@/lib/reu/reuTelnetWorkflow", () => ({
+  saveRemoteReuFromTemp: vi.fn(),
+  restoreRemoteReuFromTemp: vi.fn(),
+}));
+
+vi.mock("@/lib/ftp/ftpClient", () => ({
+  listFtpDirectory: vi.fn(),
+  readFtpFile: vi.fn(),
+  writeFtpFile: vi.fn(),
+}));
+
+vi.mock("@/lib/ftp/ftpConfig", () => ({
+  getStoredFtpPort: () => 21,
+}));
+
+vi.mock("@/lib/secureStorage", () => ({
+  getPassword: vi.fn().mockResolvedValue("secret"),
+}));
+
+vi.mock("@/lib/c64api/hostConfig", () => ({
+  stripPortFromDeviceHost: (host: string) => host,
+}));
+
+vi.mock("@/lib/telnet/telnetSession", () => ({
+  createTelnetSession: vi.fn(),
+}));
+
+vi.mock("@/lib/telnet/telnetClient", () => ({
+  createTelnetClient: vi.fn(),
+}));
+
+vi.mock("@/lib/telnet/telnetConfig", () => ({
+  getStoredTelnetPort: () => 23,
 }));
 
 vi.mock("@/lib/snapshot/snapshotFormat", () => ({
@@ -330,6 +393,11 @@ describe("HomePage RAM actions", () => {
       menuOpen: true,
     });
     createSnapshotSpy.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    reuWorkflowSaveSnapshotSpy.mockResolvedValue({
+      metadata: { content_name: "capture.reu" },
+      snapshotType: "reu",
+    });
+    reuWorkflowRestoreSnapshotSpy.mockResolvedValue(undefined);
     getCurrentPlaybackSnapshotLabelSpy.mockReturnValue(undefined);
     loadMemoryRangesSpy.mockResolvedValue(undefined);
     telnetState.isBusy = false;
@@ -460,4 +528,19 @@ describe("HomePage RAM actions", () => {
 
     await waitFor(() => expect(screen.getByTestId("snapshot-empty")).toBeInTheDocument());
   }, 15000);
+
+  it("runs Save REU through the REU workflow instead of the generic Telnet action", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+
+    await waitFor(() => expect(reuWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("saveReuMemory");
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "REU snapshot saved",
+      }),
+    );
+  });
 });

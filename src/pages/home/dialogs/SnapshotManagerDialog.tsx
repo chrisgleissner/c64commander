@@ -19,27 +19,55 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { Trash2 } from "lucide-react";
-import type { SnapshotStorageEntry, SnapshotType } from "@/lib/snapshot/snapshotTypes";
 import { SNAPSHOT_TYPE_LIST } from "@/lib/snapshot/snapshotTypes";
-import { filterSnapshots } from "@/lib/snapshot/snapshotFiltering";
-import type { SnapshotTypeFilter } from "@/lib/snapshot/snapshotFiltering";
+import type { RestorableSnapshotEntry, RestorableSnapshotType } from "@/pages/home/types/restorableSnapshots";
+import { isReuSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
 interface SnapshotManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  snapshots: SnapshotStorageEntry[];
-  onRestore: (snapshot: SnapshotStorageEntry) => void;
+  snapshots: RestorableSnapshotEntry[];
+  onRestore: (snapshot: RestorableSnapshotEntry) => void;
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
 }
 
-const TYPE_FILTERS: Array<{ value: SnapshotTypeFilter; label: string }> = [
+const TYPE_FILTERS: Array<{ value: RestorableSnapshotType | "all"; label: string }> = [
   { value: "all", label: "All" },
   { value: "program", label: "Program" },
   { value: "basic", label: "Basic" },
   { value: "screen", label: "Screen" },
   { value: "custom", label: "Custom" },
+  { value: "reu", label: "REU" },
 ];
+
+const filterSnapshots = (
+  entries: RestorableSnapshotEntry[],
+  query: string,
+  typeFilter: RestorableSnapshotType | "all",
+): RestorableSnapshotEntry[] => {
+  let filtered = entries;
+  if (typeFilter !== "all") {
+    filtered = filtered.filter((entry) => entry.snapshotType === typeFilter);
+  }
+
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return filtered;
+
+  return filtered.filter((entry) => {
+    const label = (entry.metadata.label ?? "").toLowerCase();
+    const contentName = (entry.metadata.content_name ?? "").toLowerCase();
+    const typeName = entry.snapshotType.toLowerCase();
+    const createdAt = (entry.metadata.created_at ?? "").toLowerCase();
+    return (
+      label.includes(trimmed) ||
+      contentName.includes(trimmed) ||
+      typeName.includes(trimmed) ||
+      createdAt.includes(trimmed) ||
+      entry.filename.toLowerCase().includes(trimmed)
+    );
+  });
+};
 
 function SnapshotRow({
   snapshot,
@@ -47,17 +75,18 @@ function SnapshotRow({
   onDelete,
   onUpdateLabel,
 }: {
-  snapshot: SnapshotStorageEntry;
-  onRestore: (s: SnapshotStorageEntry) => void;
+  snapshot: RestorableSnapshotEntry;
+  onRestore: (s: RestorableSnapshotEntry) => void;
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
 }) {
   const { profile } = useDisplayProfile();
   const typeConfig = SNAPSHOT_TYPE_LIST.find((c) => c.type === snapshot.snapshotType);
-  const typeLabel = typeConfig?.label ?? snapshot.snapshotType;
+  const typeLabel = isReuSnapshotEntry(snapshot) ? "REU Snapshot" : (typeConfig?.label ?? snapshot.snapshotType);
   const ranges = snapshot.metadata.display_ranges.join(", ");
   const label = snapshot.metadata.label;
   const createdAt = snapshot.metadata.created_at;
+  const contentName = snapshot.metadata.content_name ?? snapshot.filename;
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [labelDraft, setLabelDraft] = useState(label ?? "");
 
@@ -98,6 +127,7 @@ function SnapshotRow({
       <div className="flex-1 min-w-0 space-y-1">
         <div className="text-sm font-semibold leading-tight">{typeLabel}</div>
         <div className="text-xs text-muted-foreground">{ranges}</div>
+        <div className="truncate text-xs text-muted-foreground">{contentName}</div>
         {!isEditingLabel ? (
           <button
             type="button"
@@ -195,7 +225,7 @@ export function SnapshotManagerDialog({
 }: SnapshotManagerDialogProps) {
   const { profile } = useDisplayProfile();
   const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<SnapshotTypeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<RestorableSnapshotType | "all">("all");
   const compact = profile === "compact";
 
   const filtered = filterSnapshots(snapshots, query, typeFilter);
@@ -244,7 +274,7 @@ export function SnapshotManagerDialog({
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-transparent text-muted-foreground border-border hover:bg-accent",
                   ].join(" ")}
-                  onClick={() => setTypeFilter(value as SnapshotType | "all")}
+                  onClick={() => setTypeFilter(value)}
                 >
                   {label}
                 </button>

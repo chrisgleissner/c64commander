@@ -187,4 +187,35 @@ describe("SnapshotManagerDialog", () => {
     expect(onDelete).toHaveBeenCalledWith("snapshot-2");
     expect(onRestore).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the expanded comment editor layout and closes it on Escape", () => {
+    localStorage.clear();
+    setViewportWidth(800);
+    const onUpdateLabel = vi.fn();
+
+    render(
+      <DisplayProfileProvider>
+        <SnapshotManagerDialog
+          open
+          onOpenChange={vi.fn()}
+          snapshots={[unlabeledSnapshot]}
+          onRestore={vi.fn()}
+          onDelete={vi.fn()}
+          onUpdateLabel={onUpdateLabel}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add snapshot comment" }));
+
+    const editorLayout = screen.getByLabelText("Snapshot comment").closest("div[class*='grid']");
+    expect(editorLayout?.className).toContain("grid-cols-[minmax(0,1fr)_auto_auto]");
+
+    const input = screen.getByLabelText("Snapshot comment");
+    fireEvent.change(input, { target: { value: "Transient note" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(onUpdateLabel).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Snapshot comment")).not.toBeInTheDocument();
+  });
 });
