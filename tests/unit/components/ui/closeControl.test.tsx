@@ -20,6 +20,9 @@ describe("CloseControl", () => {
     expect(closeButton.className).not.toContain("rounded-full");
     expect(closeButton.className).not.toContain("shadow-sm");
     expect(closeButton.className).not.toContain("bg-background/80");
+    expect(closeButton.className).toContain("focus:ring-2");
+    expect(closeButton.className).toContain("focus:ring-ring");
+    expect(closeButton.className).toContain("focus:ring-offset-2");
   });
 
   it("is injected into shared interstitial headers", () => {

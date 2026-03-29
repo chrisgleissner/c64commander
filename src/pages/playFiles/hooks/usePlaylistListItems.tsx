@@ -19,6 +19,9 @@ export type PlaylistListItemsOptions = {
   selectedPlaylistIds: Set<string>;
   isPlaylistLoading: boolean;
   handlePlaylistSelect: (item: PlaylistItem, selected: boolean) => void;
+  onAttachLocalConfig: (item: PlaylistItem) => void;
+  onAttachUltimateConfig: (item: PlaylistItem) => void;
+  onRemoveConfig: (item: PlaylistItem) => void;
   startPlaylist: (items: PlaylistItem[], startIndex?: number) => Promise<void> | void;
   playlistItemDuration: (item: PlaylistItem, index: number) => number | undefined;
   formatTime: (ms?: number) => string;
@@ -35,6 +38,9 @@ export const usePlaylistListItems = ({
   selectedPlaylistIds,
   isPlaylistLoading,
   handlePlaylistSelect,
+  onAttachLocalConfig,
+  onAttachUltimateConfig,
+  onRemoveConfig,
   startPlaylist,
   playlistItemDuration,
   formatTime,
@@ -81,6 +87,44 @@ export const usePlaylistListItems = ({
         },
         { type: "info", label: "Size", value: formatBytes(item.sizeBytes) },
         { type: "info", label: "Date", value: formatDate(detailsDate) },
+        { type: "separator" },
+        { type: "label", label: "Config" },
+        {
+          type: "info",
+          label: "Attached",
+          value: item.configRef ? item.configRef.fileName : "None",
+        },
+        ...(item.configRef
+          ? [
+              {
+                type: "info" as const,
+                label: "Location",
+                value: item.configRef.kind === "local" ? "This device" : "C64 Ultimate",
+              },
+            ]
+          : []),
+        {
+          type: "action",
+          label: item.configRef ? "Change to local .cfg" : "Attach local .cfg",
+          onSelect: () => onAttachLocalConfig(item),
+          disabled: isPlaylistLoading,
+        },
+        {
+          type: "action",
+          label: item.configRef ? "Change to C64U .cfg" : "Attach C64U .cfg",
+          onSelect: () => onAttachUltimateConfig(item),
+          disabled: isPlaylistLoading,
+        },
+        ...(item.configRef
+          ? [
+              {
+                type: "action" as const,
+                label: "Remove config association",
+                onSelect: () => onRemoveConfig(item),
+                disabled: isPlaylistLoading,
+              },
+            ]
+          : []),
       ];
       items.push({
         id: item.id,
@@ -105,6 +149,12 @@ export const usePlaylistListItems = ({
             <span>{formatPlayCategory(item.category)}</span>
             <span>•</span>
             <span>{durationLabel}</span>
+            {item.configRef ? (
+              <>
+                <span>•</span>
+                <span>CFG</span>
+              </>
+            ) : null}
             {item.status === "unavailable" ? (
               <>
                 <span>•</span>
@@ -133,6 +183,9 @@ export const usePlaylistListItems = ({
     formatTime,
     getParentPath,
     handlePlaylistSelect,
+    onAttachLocalConfig,
+    onAttachUltimateConfig,
+    onRemoveConfig,
     isPlaylistLoading,
     playlist,
     playlistItemDuration,

@@ -88,6 +88,11 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
             ],
         )
 
+    def test_normalize_overlay_menu_item_removes_parent_menu_prefix(self) -> None:
+        self.assertEqual(MODULE.normalize_overlay_menu_item("Built-in Dri┐Turn Off"), "Turn Off")
+        self.assertEqual(MODULE.normalize_overlay_menu_item("Developer┐  Debug Stream"), "Debug Stream")
+        self.assertEqual(MODULE.normalize_overlay_menu_item("Save EDID to file"), "Save EDID to file")
+
     def test_collect_dropdown_options_from_windows_waits_for_real_scroll_end(self) -> None:
         windows = [[str(year) for year in range(1980, 1997)]] * 17
         windows += [[str(year) for year in range(start, start + 17)] for start in range(1981, 2006)]
@@ -119,6 +124,12 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
         definitions = MODULE.build_file_type_menu_definitions(
             [
                 {
+                    "label": "reu",
+                    "path": "/USB1/test-data/snapshots/reu.reu",
+                    "menu_items": ["Load into REU", "Preload on Startup", "Rename", "Delete"],
+                    "default_item": "Load into REU",
+                },
+                {
                     "label": "sid",
                     "path": "/USB1/test-data/SID/10_Orbyte.sid",
                     "menu_items": ["Play Main Tune", "Show Info", "View", "Rename", "Delete"],
@@ -133,7 +144,9 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(list(definitions.keys()), ["mod", "sid"])
+        self.assertEqual(list(definitions.keys()), ["mod", "reu", "sid"])
+        self.assertEqual(definitions["reu"]["representative_file"], "/USB1/test-data/snapshots/reu.reu")
+        self.assertEqual(definitions["reu"]["default_item"], "Load into REU")
         self.assertEqual(definitions["sid"]["representative_file"], "/USB1/test-data/SID/10_Orbyte.sid")
         self.assertEqual(definitions["mod"]["default_item"], "Play MOD")
 
@@ -196,6 +209,11 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
                     "representative_file": "/USB1/test-data/prg/1k-mini-bdash-note.prg",
                     "items": ["Enter", "Rename", "Delete"],
                     "default_item": "Enter",
+                },
+                "reu": {
+                    "representative_file": "/USB1/test-data/snapshots/reu.reu",
+                    "items": ["Load into REU", "Preload on Startup", "Rename", "Delete"],
+                    "default_item": "Load into REU",
                 }
             },
         )
@@ -206,6 +224,7 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
         self.assertEqual(document["telnet"]["selected_directory_action_menus"]["screen_context"], "filesystem browser with a directory selected and the action menu opened via function key")
         self.assertEqual(document["telnet"]["filesystem_context_menus"]["screen_context"], "filesystem browser with a selected entry and its ENTER-opened context menu")
         self.assertEqual(document["telnet"]["filesystem_context_menus"]["menu_definitions"]["prg"]["representative_file"], "/USB1/test-data/prg/1k-mini-bdash-note.prg")
+        self.assertEqual(document["telnet"]["filesystem_context_menus"]["menu_definitions"]["reu"]["items"], ["Load into REU", "Preload on Startup", "Rename", "Delete"])
         self.assertIn("filesystem_context_menus", document["telnet"])
         self.assertNotIn("commoserve", document["telnet"])
 

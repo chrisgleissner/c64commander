@@ -736,7 +736,7 @@ function LightingContextLensDialog() {
         className="overflow-hidden p-0 sm:w-[min(100vw-2rem,36rem)]"
         data-testid="lighting-context-lens-sheet"
       >
-        <AppSheetHeader className="px-4 pb-[0.5625rem] pt-3 pr-14 sm:px-5">
+        <AppSheetHeader>
           <AppSheetTitle>Context Lens</AppSheetTitle>
           <AppSheetDescription>Which resolver layer currently owns each lighting surface.</AppSheetDescription>
         </AppSheetHeader>
@@ -915,9 +915,6 @@ export function LightingStudioDialog() {
       <AppSheet open={studioOpen} onOpenChange={(open) => (open ? undefined : closeStudio())}>
         <AppSheetContent
           className="flex min-w-0 flex-col overflow-hidden p-0 sm:w-[min(100vw-2rem,64rem)]"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-          }}
           style={{
             top: `${currentSheetTop}px`,
           }}

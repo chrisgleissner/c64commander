@@ -194,6 +194,8 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(dialog).toHaveAttribute("data-app-surface", "dialog");
     expect(screen.getByTestId("import-selection-interstitial")).toBeVisible();
     expect(screen.queryByText("Select items to add from a specific source.")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(dialog);
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Close" }));
   });
 
   it("stacks medium interstitial source buttons with equal full width", () => {
@@ -255,6 +257,34 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(await screen.findByText("From U64E2")).toBeVisible();
   });
 
+  it("keeps the shared sheet close control unfocused when the source browser opens", async () => {
+    localStorage.clear();
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-c64u"));
+
+    const dialog = await screen.findByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(dialog);
+    });
+    expect(document.activeElement).not.toBe(close);
+  });
+
   it("shows the local source label in the selection heading", async () => {
     localStorage.clear();
 
@@ -291,6 +321,42 @@ describe("ItemSelectionDialog display profiles", () => {
 
     await waitFor(() => {
       expect(screen.getByText("From Local")).toBeVisible();
+    });
+  });
+
+  it("opens directly into the requested source and keeps only one single-selection item", async () => {
+    const onConfirm = vi.fn(async () => true);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Attach config"
+          confirmLabel="Attach"
+          initialSourceId="ultimate-1"
+          selectionMode="single"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={onConfirm}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(await screen.findByText("From C64U")).toBeVisible();
+
+    fireEvent.click(screen.getByLabelText("Select Alpha.sid"));
+    fireEvent.click(screen.getByLabelText("Select Beta.sid"));
+    fireEvent.click(screen.getByTestId("add-items-confirm"));
+
+    await waitFor(() => {
+      expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "ultimate-1" }), [
+        expect.objectContaining({
+          type: "file",
+          name: "Beta.sid",
+          path: "/music/Beta.sid",
+        }),
+      ]);
     });
   });
 });

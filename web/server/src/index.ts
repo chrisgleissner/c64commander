@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { URL } from "node:url";
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { Client as FtpClient } from "basic-ftp";
 import { normalizePassword, safeCompare, sanitizeHost, isTrustedInsecureHost } from "./hostValidation.js";
@@ -396,6 +396,58 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
   }
 };
 
+const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
+  const payload = await readJsonBody<{
+    host?: string;
+    port?: number;
+    username?: string;
+    password?: string;
+    path?: string;
+    data?: string;
+  }>(req);
+  if (!payload.path) {
+    writeJson(res, 400, { error: "Missing FTP path" });
+    return;
+  }
+  if (typeof payload.data !== "string") {
+    writeJson(res, 400, { error: "Missing FTP data" });
+    return;
+  }
+  const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
+  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
+    writeJson(res, 403, { error: "FTP host override is disabled" });
+    return;
+  }
+  const host = requestedHost;
+  const ftp = new FtpClient();
+  ftp.ftp.verbose = false;
+  try {
+    await ftp.access({
+      host,
+      port: Number(payload.port ?? 21),
+      user: payload.username ?? "anonymous",
+      password: config.networkPassword ?? payload.password ?? "",
+      secure: false,
+    });
+    const data = Buffer.from(payload.data, "base64");
+    await ftp.uploadFrom(Readable.from(data), payload.path);
+    writeJson(res, 200, { sizeBytes: data.byteLength });
+  } catch (error) {
+    log("error", "FTP write failed", {
+      host,
+      path: payload.path,
+      ...errorDetails(error),
+    });
+    writeJson(res, 502, { error: "FTP write failed" });
+  } finally {
+    try {
+      ftp.close();
+    } catch (error) {
+      log("warn", "FTP close failed after write", errorDetails(error));
+    }
+  }
+};
+
 export const startWebServer = async () => {
   let config = await loadConfig();
   cleanupExpiredSessions();
@@ -524,6 +576,15 @@ export const startWebServer = async () => {
           return;
         }
         await handleFtpRead(req, res, config);
+        return;
+      }
+
+      if (pathname === "/api/ftp/write") {
+        if (method !== "POST") {
+          writeJson(res, 405, { error: "Method not allowed" });
+          return;
+        }
+        await handleFtpWrite(req, res, config);
         return;
       }
 

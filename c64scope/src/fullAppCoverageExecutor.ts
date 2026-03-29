@@ -55,8 +55,8 @@ const featureToCaseIdMap: Record<string, string> = {
   F012: "AF-PLAY-SURFACE-001",
   F013: "AF-PLAY-SURFACE-001",
   F014: "AF-PLAY-SURFACE-001",
-  F015: "AF-PLAY-SURFACE-001",
-  F016: "AF-PLAY-SURFACE-001",
+  F015: "AF-HVSC-DOWNLOAD-PLAY-001",
+  F016: "AF-HVSC-CACHE-PLAY-001",
   F017: "AF-RUNTIME-RECOVERY-001",
   F018: "AF-CONFIG-SURFACE-001",
   F019: "AF-CONFIG-SURFACE-001",
@@ -65,6 +65,10 @@ const featureToCaseIdMap: Record<string, string> = {
   F022: "AF-TABS-001",
   F023: "AF-RUNTIME-RECOVERY-001",
 };
+
+export function resolveFeatureCaseId(featureId: string): string | null {
+  return featureToCaseIdMap[featureId] ?? null;
+}
 
 export function timestampId(): string {
   return new Date()
@@ -140,7 +144,7 @@ export async function main(): Promise<void> {
     const promptPath = path.join(docsRoot, entry.prompt);
     await assertPromptFileExists(promptPath);
 
-    const mappedCaseId = featureToCaseIdMap[entry.id] ?? null;
+    const mappedCaseId = resolveFeatureCaseId(entry.id);
     if (!mappedCaseId) {
       items.push({
         featureId: entry.id,

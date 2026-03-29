@@ -30,7 +30,11 @@ vi.mock("../src/validation/runner.js", () => ({
 }));
 
 vi.mock("../src/validation/cases/index.js", () => ({
-  ALL_CASES: [{ caseId: "AF-LAUNCH-SHELL-001", id: "AF-LAUNCH-SHELL-001", name: "Launch shell" }],
+  ALL_CASES: [
+    { caseId: "AF-LAUNCH-SHELL-001", id: "AF-LAUNCH-SHELL-001", name: "Launch shell" },
+    { caseId: "AF-HVSC-DOWNLOAD-PLAY-001", id: "AF-HVSC-COLD-001", name: "HVSC cold workflow" },
+    { caseId: "AF-HVSC-CACHE-PLAY-001", id: "AF-HVSC-WARM-001", name: "HVSC warm workflow" },
+  ],
 }));
 
 describe("full app coverage executor", () => {
@@ -66,6 +70,15 @@ describe("full app coverage executor", () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
+  });
+
+  it("maps HVSC lifecycle features to dedicated HVSC workflow cases", async () => {
+    const { resolveFeatureCaseId } = await import("../src/fullAppCoverageExecutor.js");
+
+    expect(resolveFeatureCaseId("F015")).toBe("AF-HVSC-DOWNLOAD-PLAY-001");
+    expect(resolveFeatureCaseId("F016")).toBe("AF-HVSC-CACHE-PLAY-001");
+    expect(resolveFeatureCaseId("F015")).not.toBe("AF-PLAY-SURFACE-001");
+    expect(resolveFeatureCaseId("F016")).not.toBe("AF-PLAY-SURFACE-001");
   });
 
   it("writes manifest and summary for mapped and blocked features", async () => {

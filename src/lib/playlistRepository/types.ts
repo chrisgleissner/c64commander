@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { ConfigFileReference } from "@/lib/config/configFileReference";
+
 export type SourceKind = "local" | "ultimate" | "hvsc" | "commoserve";
 
 export type TrackRecord = {
@@ -18,6 +20,7 @@ export type TrackRecord = {
   author?: string | null;
   released?: string | null;
   path: string;
+  configRef?: ConfigFileReference | null;
   sizeBytes?: number | null;
   modifiedAt?: string | null;
   defaultDurationMs?: number | null;

@@ -31,18 +31,45 @@ import { LoadConfigDialog } from "./home/dialogs/LoadConfigDialog";
 import { ManageConfigDialog } from "./home/dialogs/ManageConfigDialog";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
+import { addErrorLog } from "@/lib/logging";
 import { useAppConfigState } from "@/hooks/useAppConfigState";
 import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
 import { ConfigActionsProvider } from "./home/hooks/ConfigActionsContext";
 import { buildSidSilenceTargets, silenceSidTargets } from "@/lib/sid/sidSilence";
+import { createConfigWorkflow } from "@/lib/config/configWorkflow";
+import {
+  applyRemoteConfigFromPath,
+  applyRemoteConfigFromTemp,
+  saveRemoteConfigFromTemp,
+} from "@/lib/config/configTelnetWorkflow";
+import { persistConfigSnapshotFile, pickConfigSnapshotFile } from "@/lib/config/configSnapshotStorage";
 import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
 import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
 import { SnapshotManagerDialog } from "./home/dialogs/SnapshotManagerDialog";
+import { ReuProgressDialog } from "./home/dialogs/ReuProgressDialog";
 import { ClearFlashDialog } from "./home/dialogs/ClearFlashDialog";
 import { useSnapshotStore } from "@/lib/snapshot/snapshotStore";
-import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { deriveRamDumpFolderDisplayPath } from "@/lib/config/ramDumpFolderStore";
+import { useReuSnapshotStore, deleteReuSnapshotFromStore, updateReuSnapshotLabel } from "@/lib/reu/reuSnapshotStore";
+import { createReuWorkflow } from "@/lib/reu/reuWorkflow";
+import { deleteReuSnapshotFile } from "@/lib/reu/reuSnapshotStorage";
+import { saveRemoteReuFromTemp, restoreRemoteReuFromTemp } from "@/lib/reu/reuTelnetWorkflow";
+import type { ReuProgressState, ReuRestoreMode } from "@/lib/reu/reuSnapshotTypes";
+import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
+import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { getPassword } from "@/lib/secureStorage";
+import { resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { createTelnetSession } from "@/lib/telnet/telnetSession";
+import { createTelnetClient } from "@/lib/telnet/telnetClient";
+import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import { resolveTelnetMenuKey } from "@/lib/telnet/telnetTypes";
+import { ensureRamDumpFolder } from "@/lib/machine/ramDumpStorage";
+import { isNativePlatform, getPlatform } from "@/lib/native/platform";
+import type { RestorableSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
+import { isReuSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
 import {
   C64_CARTRIDGE_HOME_ITEMS,
@@ -63,6 +90,12 @@ import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
+import {
+  isDeviceControlError,
+  useDeviceControl,
+  type DeviceControlOperation,
+  type DeviceControlResult,
+} from "@/lib/deviceControl/deviceControl";
 
 export default function HomePage() {
   return (
@@ -131,6 +164,7 @@ function HomePageContent() {
     runMachineTask,
   } = useHomeActions();
   const telnet = useTelnetActions();
+  const deviceControl = useDeviceControl({ connected: status.isConnected });
   const {
     appConfigs,
     hasChanges,
@@ -151,10 +185,15 @@ function HomePageContent() {
   const [saveRamDialogOpen, setSaveRamDialogOpen] = useState(false);
   const [clearFlashDialogOpen, setClearFlashDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
-  const [restoreTarget, setRestoreTarget] = useState<SnapshotStorageEntry | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<RestorableSnapshotEntry | null>(null);
+  const [reuProgress, setReuProgress] = useState<ReuProgressState | null>(null);
+  const [reuTaskPending, setReuTaskPending] = useState(false);
   const [cpuSpeedOptimisticValue, setCpuSpeedOptimisticValue] = useState<string | null>(null);
+  const [deviceControlActionId, setDeviceControlActionId] = useState<DeviceControlOperation | null>(null);
+  const [configFileTaskPending, setConfigFileTaskPending] = useState<"save" | "load" | null>(null);
   const cpuSpeedDraggingRef = useRef(false);
   const { snapshots } = useSnapshotStore();
+  const { snapshots: reuSnapshots } = useReuSnapshotStore();
 
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
@@ -172,7 +211,198 @@ function HomePageContent() {
   const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
-  const machineTaskBusy = machineTaskId !== null || pauseResumePending;
+  const deviceControlBusy = deviceControlActionId !== null;
+  const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
+  const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...reuSnapshots].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
+
+  const uint8ToBase64 = (value: Uint8Array) => {
+    let binary = "";
+    value.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+  };
+
+  const resolveFtpOptions = async () => {
+    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const password = await getPassword();
+    return {
+      host,
+      port: getStoredFtpPort(),
+      username: "user",
+      password: password ?? "",
+    };
+  };
+
+  const withConnectedReuTelnetSession = async <T,>(
+    callback: (session: ReturnType<typeof createTelnetSession>, menuKey: "F5" | "F1") => Promise<T>,
+  ) => {
+    if (!telnet.isAvailable) {
+      throw new Error("Telnet is unavailable for REU actions on this device.");
+    }
+    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const password = await getPassword();
+    const transport = createTelnetClient();
+    const session = createTelnetSession(transport);
+    const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
+
+    await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+    try {
+      return await callback(session, menuKey);
+    } finally {
+      await session.disconnect();
+    }
+  };
+
+  const createHomeReuWorkflow = () =>
+    createReuWorkflow({
+      ensureLocalSnapshotStorage: async () => {
+        if (!isNativePlatform()) {
+          throw new Error("REU snapshots are only supported on native builds.");
+        }
+        if (getPlatform() === "android") {
+          await ensureRamDumpFolder();
+        }
+      },
+      listRemoteTempFiles: async () => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
+        return result.entries
+          .filter((entry) => entry.type === "file")
+          .map((entry) => ({
+            name: entry.name,
+            path: entry.path,
+            size: entry.size,
+            modifiedAt: entry.modifiedAt,
+          }));
+      },
+      readRemoteFile: async (path) => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await readFtpFile({ ...ftpOptions, path });
+        return base64ToUint8(result.data);
+      },
+      writeRemoteFile: async (path, bytes) => {
+        const ftpOptions = await resolveFtpOptions();
+        await writeFtpFile({
+          ...ftpOptions,
+          path,
+          data: uint8ToBase64(bytes),
+        });
+      },
+      runSaveRemoteReu: () =>
+        withConnectedReuTelnetSession((session, menuKey) => saveRemoteReuFromTemp(session, menuKey)),
+      runRestoreRemoteReu: (fileName, mode) =>
+        withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReuFromTemp(session, menuKey, fileName, mode)),
+    });
+
+  const withConnectedConfigTelnetSession = async <T,>(
+    callback: (session: ReturnType<typeof createTelnetSession>, menuKey: "F5" | "F1") => Promise<T>,
+  ) => {
+    if (!telnet.isAvailable) {
+      throw new Error("Telnet is unavailable for config file actions on this device.");
+    }
+    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const password = await getPassword();
+    const transport = createTelnetClient();
+    const session = createTelnetSession(transport);
+    const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
+
+    await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+    try {
+      return await callback(session, menuKey);
+    } finally {
+      await session.disconnect();
+    }
+  };
+
+  const createHomeConfigFileWorkflow = () =>
+    createConfigWorkflow({
+      ensureLocalSnapshotStorage: async () => {
+        if (!isNativePlatform()) {
+          throw new Error("Config snapshots are only supported on native builds.");
+        }
+        if (getPlatform() === "android") {
+          await ensureRamDumpFolder();
+        }
+      },
+      listRemoteTempFiles: async () => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
+        return result.entries
+          .filter((entry) => entry.type === "file")
+          .map((entry) => ({
+            name: entry.name,
+            path: entry.path,
+            size: entry.size,
+            modifiedAt: entry.modifiedAt,
+          }));
+      },
+      readRemoteFile: async (path) => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await readFtpFile({ ...ftpOptions, path });
+        return base64ToUint8(result.data);
+      },
+      writeRemoteFile: async (path, bytes) => {
+        const ftpOptions = await resolveFtpOptions();
+        await writeFtpFile({
+          ...ftpOptions,
+          path,
+          data: uint8ToBase64(bytes),
+        });
+      },
+      persistLocalSnapshot: persistConfigSnapshotFile,
+      runSaveRemoteConfig: () =>
+        withConnectedConfigTelnetSession((session, menuKey) => saveRemoteConfigFromTemp(session, menuKey)),
+      runApplyRemoteConfig: (fileName) =>
+        withConnectedConfigTelnetSession((session, menuKey) => applyRemoteConfigFromTemp(session, menuKey, fileName)),
+      runApplyRemoteConfigByPath: (path) =>
+        withConnectedConfigTelnetSession((session, menuKey) => applyRemoteConfigFromPath(session, menuKey, path)),
+    });
+
+  const runReuWorkflow = async <T,>(
+    operation: string,
+    failureTitle: string,
+    successTitle: string,
+    runner: () => Promise<T>,
+    successDescription?: (result: T) => string | undefined,
+  ) => {
+    setReuTaskPending(true);
+    try {
+      const result = await runner();
+      toast({ title: successTitle, description: successDescription?.(result) });
+      return result;
+    } catch (error) {
+      reportUserError({
+        operation,
+        title: failureTitle,
+        description: (error as Error).message,
+        error,
+      });
+      return undefined;
+    } finally {
+      setReuTaskPending(false);
+      setReuProgress(null);
+    }
+  };
+
+  const handleDeleteStoredSnapshot = async (snapshot: RestorableSnapshotEntry) => {
+    if (isReuSnapshotEntry(snapshot)) {
+      await deleteReuSnapshotFile(snapshot);
+      deleteReuSnapshotFromStore(snapshot.id);
+      return;
+    }
+    handleDeleteSnapshot(snapshot.id);
+  };
+
+  const handleUpdateStoredSnapshotLabel = (snapshot: RestorableSnapshotEntry, label: string) => {
+    if (isReuSnapshotEntry(snapshot)) {
+      updateReuSnapshotLabel(snapshot.id, label);
+      return;
+    }
+    handleUpdateSnapshotLabel(snapshot.id, label);
+  };
 
   const executeTelnetAction = async ({
     actionId,
@@ -202,6 +432,47 @@ function HomePageContent() {
     }
   };
 
+  const executeDeviceControl = async <T extends DeviceControlResult>({
+    actionId,
+    run,
+    successTitle,
+    failureOperation,
+    failureTitle,
+    onSuccess,
+  }: {
+    actionId: DeviceControlOperation;
+    run: () => Promise<T>;
+    successTitle: string | ((result: T) => string);
+    failureOperation: string;
+    failureTitle: string;
+    onSuccess?: (result: T) => void;
+  }) => {
+    setDeviceControlActionId(actionId);
+    try {
+      const result = await run();
+      toast({ title: typeof successTitle === "function" ? successTitle(result) : successTitle });
+      onSuccess?.(result);
+    } catch (error) {
+      reportUserError({
+        operation: failureOperation,
+        title: failureTitle,
+        description: (error as Error).message,
+        error,
+        context: isDeviceControlError(error)
+          ? {
+              deviceControlOperation: error.operation,
+              transport: error.transport,
+              endpoint: error.endpoint,
+              request: error.request,
+              response: error.response,
+            }
+          : undefined,
+      });
+    } finally {
+      setDeviceControlActionId((current) => (current === actionId ? null : current));
+    }
+  };
+
   const handlePowerCycle = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
     await executeTelnetAction({
@@ -213,10 +484,29 @@ function HomePageContent() {
     });
   };
 
-  const handleTelnetRebootClearMemory = async () => {
+  const handleRebootClearMemory = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeTelnetAction({
-      actionId: "rebootClearMemory",
+    if (telnet.isAvailable) {
+      try {
+        await telnet.executeAction("rebootClearMemory");
+        toast({ title: "Machine rebooting" });
+        setMachineExecutionState("running");
+        return;
+      } catch (error) {
+        const resolvedError = error as Error;
+        addErrorLog("Reboot clear memory telnet failed; falling back to REST", {
+          error: {
+            name: resolvedError.name,
+            message: resolvedError.message,
+            stack: resolvedError.stack,
+          },
+        });
+      }
+    }
+
+    await executeDeviceControl({
+      actionId: "rebootFull",
+      run: () => deviceControl.rebootFull(),
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
       failureTitle: "Reboot failed",
@@ -224,10 +514,11 @@ function HomePageContent() {
     });
   };
 
-  const handleTelnetRebootKeepMemory = async () => {
+  const handleReboot = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeTelnetAction({
-      actionId: "rebootKeepMemory",
+    await executeDeviceControl({
+      actionId: "rebootKeepRam",
+      run: () => deviceControl.rebootKeepRam(),
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_KEEP_MEMORY",
       failureTitle: "Reboot failed",
@@ -235,23 +526,55 @@ function HomePageContent() {
     });
   };
 
+  const handleMenuToggle = async () => {
+    if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
+    await executeDeviceControl({
+      actionId: "toggleMenu",
+      run: () => deviceControl.toggleMenu(),
+      successTitle: (result) => (result.menuOpen ? "Menu opened" : "Menu closed"),
+      failureOperation: "HOME_MENU_TOGGLE",
+      failureTitle: "Menu toggle failed",
+    });
+  };
+
   const handleSaveReu = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    await executeTelnetAction({
-      actionId: "saveReuMemory",
-      successTitle: "REU memory saved",
-      failureOperation: "HOME_SAVE_REU",
-      failureTitle: "Save REU failed",
-    });
+    const workflow = createHomeReuWorkflow();
+    await runReuWorkflow(
+      "HOME_SAVE_REU",
+      "Save REU failed",
+      "REU snapshot saved",
+      () => workflow.saveSnapshot((progress) => setReuProgress(progress)),
+      (result) => result.metadata.content_name,
+    );
+  };
+
+  const handleConfirmRestore = async (mode?: ReuRestoreMode) => {
+    if (!restoreTarget) return;
+    setSnapshotManagerOpen(false);
+    setRestoreTarget(null);
+    if (!isReuSnapshotEntry(restoreTarget)) {
+      await handleRestoreSnapshot(restoreTarget);
+      return;
+    }
+
+    const workflow = createHomeReuWorkflow();
+    await runReuWorkflow(
+      "HOME_RESTORE_REU",
+      "Restore REU failed",
+      mode === "preload-on-startup" ? "REU preload configured" : "REU image loaded",
+      () => workflow.restoreSnapshot(restoreTarget, mode ?? "load-into-reu", (progress) => setReuProgress(progress)),
+      () => restoreTarget.metadata.content_name,
+    );
   };
 
   const machineOverflowActions = [
     {
-      id: "rebootKeepMemory",
-      label: TELNET_ACTIONS.rebootKeepMemory.label,
-      onSelect: () => void handleTelnetRebootKeepMemory(),
+      id: "rebootClearMemory",
+      label: "Reboot (Clear RAM)",
+      onSelect: () => void handleRebootClearMemory(),
       disabled: !isActive || machineTaskBusy || telnet.isBusy,
-      loading: telnet.activeActionId === "rebootKeepMemory",
+      loading: telnet.activeActionId === "rebootClearMemory" || deviceControlActionId === "rebootFull",
     },
     {
       id: "saveReuMemory",
@@ -450,6 +773,45 @@ function HomePageContent() {
     }
   });
 
+  const localConfigFileActionsAvailable = telnet.isAvailable && isNativePlatform();
+
+  const handleSaveToFile = trace(async function handleSaveToFile() {
+    setConfigFileTaskPending("save");
+    try {
+      const workflow = createHomeConfigFileWorkflow();
+      const result = await workflow.saveSnapshot();
+      toast({ title: "Config saved to file", description: result.fileName });
+    } catch (error) {
+      reportUserError({
+        operation: "HOME_CONFIG_SAVE_FILE",
+        title: "Save config to file failed",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setConfigFileTaskPending(null);
+    }
+  });
+
+  const handleLoadFromFile = trace(async function handleLoadFromFile() {
+    setConfigFileTaskPending("load");
+    try {
+      const picked = await pickConfigSnapshotFile({ preferredFolder: ramDumpFolder });
+      const workflow = createHomeConfigFileWorkflow();
+      await workflow.applyLocalSnapshot(picked.name, picked.bytes);
+      toast({ title: "Config loaded from file", description: picked.name });
+    } catch (error) {
+      reportUserError({
+        operation: "HOME_CONFIG_LOAD_FILE",
+        title: "Load config from file failed",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setConfigFileTaskPending(null);
+    }
+  });
+
   const effectiveVideoModeOptions = videoModeOptions.length ? videoModeOptions : [videoModeValue];
   const effectiveAnalogVideoOptions = analogVideoOptions.length ? analogVideoOptions : [analogVideoValue];
   const effectiveHdmiResolutionOptions = hdmiResolutionOptions.length ? hdmiResolutionOptions : [hdmiResolutionValue];
@@ -565,11 +927,11 @@ function HomePageContent() {
       <AppBar
         title="Home"
         leading={
-          <div className="flex min-h-[52px] items-center gap-3 min-w-0">
+          <div className="flex min-h-11 items-center gap-2 min-w-0">
             <img
               src="/c64commander.png"
               alt="C64 Commander"
-              className="h-14 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-16"
+              className="h-9 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-11"
               data-testid="home-header-logo"
             />
             <div className="min-w-0 flex items-center">
@@ -599,13 +961,15 @@ function HomePageContent() {
             onSaveRam={() => setSaveRamDialogOpen(true)}
             onLoadRam={() => setSnapshotManagerOpen(true)}
             onPowerOff={handlePowerOff}
-            onReboot={() => void handleTelnetRebootClearMemory()}
-            onPowerCycle={() => void handlePowerCycle()}
+            onReboot={() => void handleReboot()}
+            onToggleMenu={() => void handleMenuToggle()}
+            onPowerCycle={telnet.isAvailable ? () => void handlePowerCycle() : undefined}
+            rebootLoading={deviceControlActionId === "rebootKeepRam"}
+            menuLoading={deviceControlActionId === "toggleMenu"}
+            powerCycleLoading={telnet.activeActionId === "powerCycle"}
             overflowActions={machineOverflowActions}
             onAction={handleAction}
-            telnetAvailable={telnet.isAvailable}
             telnetBusy={telnet.isBusy}
-            telnetActiveActionId={telnet.activeActionId}
             footer={ramDumpFolderCard}
           />
 
@@ -1141,27 +1505,26 @@ function HomePageContent() {
                 onClick={() => setManageDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
               />
-              {telnet.isAvailable && (
+              {localConfigFileActionsAvailable && (
                 <QuickActionCard
                   icon={Download}
                   label="Save"
                   description="To File"
                   dataTestId="home-config-save-file"
-                  onClick={async () => {
-                    try {
-                      await telnet.executeAction("saveConfigToFile");
-                      toast({ title: "Config saved to file" });
-                    } catch (error) {
-                      reportUserError({
-                        operation: "HOME_CONFIG_SAVE_FILE",
-                        title: "Save config to file failed",
-                        description: (error as Error).message,
-                        error,
-                      });
-                    }
-                  }}
+                  onClick={() => void handleSaveToFile()}
                   disabled={!isActive || machineTaskBusy || telnet.isBusy}
-                  loading={telnet.activeActionId === "saveConfigToFile"}
+                  loading={configFileTaskPending === "save"}
+                />
+              )}
+              {localConfigFileActionsAvailable && (
+                <QuickActionCard
+                  icon={Download}
+                  label="Load"
+                  description="From File"
+                  dataTestId="home-config-load-file"
+                  onClick={() => void handleLoadFromFile()}
+                  disabled={!isActive || machineTaskBusy || telnet.isBusy}
+                  loading={configFileTaskPending === "load"}
                 />
               )}
               {telnet.isAvailable && (
@@ -1250,7 +1613,7 @@ function HomePageContent() {
           void handleSaveRam(type, customRanges);
         }}
         onSaveReu={handleSaveReu}
-        isSaving={machineTaskId === "save-ram"}
+        isSaving={machineTaskId === "save-ram" || reuTaskPending}
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}
       />
@@ -1258,15 +1621,21 @@ function HomePageContent() {
       <SnapshotManagerDialog
         open={snapshotManagerOpen}
         onOpenChange={setSnapshotManagerOpen}
-        snapshots={snapshots}
+        snapshots={allSnapshots}
         onRestore={(snapshot) => {
           setRestoreTarget(snapshot);
         }}
         onDelete={(id) => {
-          handleDeleteSnapshot(id);
+          const snapshot = allSnapshots.find((entry) => entry.id === id);
+          if (snapshot) {
+            void handleDeleteStoredSnapshot(snapshot);
+          }
         }}
         onUpdateLabel={(id, label) => {
-          handleUpdateSnapshotLabel(id, label);
+          const snapshot = allSnapshots.find((entry) => entry.id === id);
+          if (snapshot) {
+            handleUpdateStoredSnapshotLabel(snapshot, label);
+          }
         }}
       />
 
@@ -1276,15 +1645,12 @@ function HomePageContent() {
           if (!open) setRestoreTarget(null);
         }}
         snapshot={restoreTarget}
-        onConfirm={() => {
-          if (restoreTarget) {
-            setSnapshotManagerOpen(false);
-            setRestoreTarget(null);
-            void handleRestoreSnapshot(restoreTarget);
-          }
+        onConfirm={(mode) => {
+          void handleConfirmRestore(mode);
         }}
-        isPending={machineTaskId === "load-ram"}
+        isPending={machineTaskId === "load-ram" || reuTaskPending}
       />
+      <ReuProgressDialog open={reuTaskPending} progress={reuProgress} />
 
       <ClearFlashDialog
         open={clearFlashDialogOpen}

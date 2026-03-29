@@ -329,35 +329,35 @@ capture_diagnostics() {
   local context="${2:-unknown}"
   local diag_dir="$RAW_OUTPUT_DIR/diagnostics-$(date +%s)"
   mkdir -p "$diag_dir"
-  
+
   log_info "Capturing diagnostics for context: $context"
-  
+
   echo "---- adb devices ----" > "$diag_dir/adb-devices.txt"
   timeout "$ADB_COMMAND_TIMEOUT" adb devices >> "$diag_dir/adb-devices.txt" 2>&1 || echo "adb devices timed out" >> "$diag_dir/adb-devices.txt"
-  
+
   if [[ -n "$emulator_id" ]]; then
     echo "---- adb get-state ($emulator_id) ----" > "$diag_dir/adb-state.txt"
     timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" get-state >> "$diag_dir/adb-state.txt" 2>&1 || echo "get-state timed out" >> "$diag_dir/adb-state.txt"
-    
+
     echo "---- logcat (last 500 lines) ----" > "$diag_dir/logcat.txt"
     timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" logcat -d 2>/dev/null | tail -n 500 >> "$diag_dir/logcat.txt" || echo "logcat capture failed" >> "$diag_dir/logcat.txt"
-    
+
     echo "---- running processes ----" > "$diag_dir/processes.txt"
     timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell ps 2>/dev/null >> "$diag_dir/processes.txt" || echo "ps failed" >> "$diag_dir/processes.txt"
   fi
-  
+
   if [[ -f /tmp/c64-emu.log ]]; then
     echo "---- emulator log (last 200 lines) ----" > "$diag_dir/emulator.log"
     tail -n 200 /tmp/c64-emu.log >> "$diag_dir/emulator.log" 2>/dev/null || true
   fi
-  
+
   # Write context summary
   cat > "$diag_dir/context.txt" <<CONTEXT
 Diagnostic capture at: $(timestamp)
 Context: $context
 Emulator ID: ${emulator_id:-none}
 CONTEXT
-  
+
   echo "$diag_dir"
 }
 
@@ -366,7 +366,7 @@ write_error_context() {
   local classification="$1"
   local description="$2"
   local diag_dir="${3:-}"
-  
+
   mkdir -p "$EVIDENCE_DIR"
   cat > "$EVIDENCE_DIR/error-context.md" <<EOF
 # Maestro Test Failure
@@ -419,33 +419,33 @@ wait_for_boot() {
   local emulator_id="$1"
   local start_time=$(date +%s)
   local max_end_time=$((start_time + BOOT_WAIT_TIMEOUT))
-  
+
   log_info "Waiting for emulator boot (max ${BOOT_WAIT_TIMEOUT}s)..."
-  
+
   # First wait for device to appear
   timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" wait-for-device || {
     log_error "adb wait-for-device timed out"
     return 1
   }
-  
+
   local boot_completed=""
   while [[ $(date +%s) -lt $max_end_time ]]; do
     boot_completed=$(timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || echo "")
-    
+
     if [[ "$boot_completed" == "1" ]]; then
       log_info "Boot completed in $(($(date +%s) - start_time))s"
       return 0
     fi
-    
+
     # Check if emulator is still responsive
     if ! check_emulator_responsive "$emulator_id"; then
       log_warn "Emulator became unresponsive during boot"
       return 1
     fi
-    
+
     sleep "$BOOT_CHECK_INTERVAL"
   done
-  
+
   log_error "Boot did not complete within ${BOOT_WAIT_TIMEOUT}s"
   return 1
 }
@@ -462,7 +462,7 @@ verify_screen_unlocked() {
   local emulator_id="$1"
   local dumpsys_output
   dumpsys_output=$(timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell dumpsys window 2>/dev/null || echo "")
-  
+
   if echo "$dumpsys_output" | grep -q "mDreamingLockscreen=true"; then
     return 1
   fi
@@ -475,26 +475,26 @@ ensure_app_running() {
   local start_time=$(date +%s)
   local max_end_time=$((start_time + APP_LAUNCH_TIMEOUT))
   local launch_attempts=0
-  
+
   log_info "Ensuring app is running (max ${APP_LAUNCH_TIMEOUT}s)..."
-  
+
   while [[ $(date +%s) -lt $max_end_time ]]; do
     # Check if app is running
     if timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell pidof "$APP_ID" >/dev/null 2>&1; then
       log_info "App is running"
       return 0
     fi
-    
+
     # Try to launch at specific intervals
     if [[ $launch_attempts -eq 0 || $launch_attempts -eq 5 || $launch_attempts -eq 15 ]]; then
       log_info "Launching app (attempt $((launch_attempts + 1)))..."
       timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell am start -n "$APP_ID/.MainActivity" >/dev/null 2>&1 || true
     fi
-    
+
     sleep "$APP_LAUNCH_INTERVAL"
     launch_attempts=$((launch_attempts + 1))
   done
-  
+
   log_error "Failed to launch app within ${APP_LAUNCH_TIMEOUT}s"
   return 1
 }
@@ -502,23 +502,23 @@ ensure_app_running() {
 # Verify UI is visible and responsive
 verify_ui_responsive() {
   local emulator_id="$1"
-  
+
   log_info "Verifying UI responsiveness..."
-  
+
   # Get current activity
   local activity
   activity=$(timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | head -1 || echo "")
-  
+
   if [[ -z "$activity" ]]; then
     log_warn "Could not determine current activity"
     return 1
   fi
-  
+
   if echo "$activity" | grep -q "$APP_ID"; then
     log_info "App activity is in foreground"
     return 0
   fi
-  
+
   log_warn "App is not in foreground: $activity"
   return 1
 }
@@ -526,19 +526,19 @@ verify_ui_responsive() {
 start_emulator_if_needed() {
   local emulator_id
   emulator_id="$(get_emulator_id)"
-  
+
   if [[ -n "$emulator_id" ]]; then
     log_info "Found existing emulator: $emulator_id"
     echo "$emulator_id"
     return
   fi
-  
+
   log_info "Starting emulator..."
   "$ROOT_DIR/scripts/android-emulator.sh" --no-prereqs --no-build --no-apk --no-install
-  
+
   local start_time=$(date +%s)
   local max_end_time=$((start_time + EMULATOR_START_TIMEOUT))
-  
+
   while [[ $(date +%s) -lt $max_end_time ]]; do
     emulator_id="$(get_emulator_id)"
     if [[ -n "$emulator_id" ]]; then
@@ -548,7 +548,7 @@ start_emulator_if_needed() {
     fi
     sleep 2
   done
-  
+
   log_error "Emulator did not start within ${EMULATOR_START_TIMEOUT}s"
   capture_diagnostics "" "emulator_start_timeout"
   write_error_context "Emulator instability" "Emulator failed to start within timeout"
@@ -558,28 +558,28 @@ start_emulator_if_needed() {
 # Pre-flight checks before running Maestro
 preflight_checks() {
   local emulator_id="$1"
-  
+
   log_info "Running pre-flight checks..."
-  
+
   # Check 1: Exactly one emulator in device state
   local device_count
   device_count=$(timeout "$ADB_COMMAND_TIMEOUT" adb devices 2>/dev/null | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {count++} END {print count+0}')
-  
+
   if [[ "$device_count" -ne 1 ]]; then
     log_error "Expected exactly 1 emulator, found $device_count"
     capture_diagnostics "$emulator_id" "preflight_device_count"
     return 1
   fi
-  
+
   # Check 2: sys.boot_completed == 1
   local boot_completed
   boot_completed=$(timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')
-  
+
   if [[ "$boot_completed" != "1" ]]; then
     log_error "Boot not completed: sys.boot_completed=$boot_completed"
     return 1
   fi
-  
+
   # Check 3: Screen is unlocked
   if ! verify_screen_unlocked "$emulator_id"; then
     log_warn "Screen may be locked, attempting unlock..."
@@ -590,19 +590,19 @@ preflight_checks() {
       return 1
     fi
   fi
-  
+
   # Check 4: App process is running
   if ! timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell pidof "$APP_ID" >/dev/null 2>&1; then
     log_error "App process not running"
     return 1
   fi
-  
+
   # Check 5: UI is visible
   if ! verify_ui_responsive "$emulator_id"; then
     log_warn "UI may not be responsive"
     # Don't fail on this, just warn
   fi
-  
+
   log_info "Pre-flight checks passed"
   return 0
 }
@@ -717,7 +717,7 @@ if [[ "$C64U_TARGET" == "real" && "$C64U_HOST" == "auto" ]]; then
   MOCK_INFO_PATH="$RAW_OUTPUT_DIR/external-mock.json"
   node "$ROOT_DIR/scripts/maestro-external-mock.mjs" --out "$MOCK_INFO_PATH" &
   MOCK_SERVER_PID=$!
-  
+
   mock_wait_start=$(date +%s)
   mock_wait_max=$((mock_wait_start + 10))
   while [[ $(date +%s) -lt $mock_wait_max ]]; do
@@ -726,7 +726,7 @@ if [[ "$C64U_TARGET" == "real" && "$C64U_HOST" == "auto" ]]; then
     fi
     sleep 0.25
   done
-  
+
   if [[ ! -f "$MOCK_INFO_PATH" ]]; then
     log_error "External mock server did not start within 10s"
     exit 1
@@ -766,7 +766,7 @@ fi
 timeout "$ADB_COMMAND_TIMEOUT" adb -s "$EMULATOR_ID" logcat -d > "$RAW_OUTPUT_DIR/logcat-pretest.txt" 2>/dev/null || true
 
 # Configure app for smoke test (allow mutations for mock playback)
-BUILD_PAYLOAD=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:target==='real',debugLogging:true};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
+BUILD_PAYLOAD=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:target==='real',debugLogging:true,featureFlags:{hvsc_enabled:true}};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
 timeout "$ADB_COMMAND_TIMEOUT" adb -s "$EMULATOR_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c64u-smoke.json'" <<<"$BUILD_PAYLOAD"
 
 # Run pre-flight checks
@@ -887,13 +887,13 @@ export MAESTRO_EXIT_CODE="$MAESTRO_STATUS"
 # Handle failure
 if [[ "$MAESTRO_STATUS" -ne 0 ]]; then
   diag_dir=$(capture_diagnostics "$EMULATOR_ID" "maestro_failure")
-  
+
   if [[ "$MAESTRO_STATUS" -eq 124 ]]; then
     write_error_context "Maestro framework limitation" "Maestro timed out after ${MAESTRO_TOTAL_TIMEOUT}s" "$diag_dir"
   else
     write_error_context "App UI state mismatch" "Maestro tests failed with exit code $MAESTRO_STATUS" "$diag_dir"
   fi
-  
+
   log_error "Maestro tests failed with exit code $MAESTRO_STATUS"
   exit "$MAESTRO_STATUS"
 fi

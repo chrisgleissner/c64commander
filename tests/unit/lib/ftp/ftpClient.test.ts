@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { listFtpDirectory, readFtpFile } from "@/lib/ftp/ftpClient";
+import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { FtpClient } from "@/lib/native/ftpClient";
 import { withFtpInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
@@ -19,6 +19,7 @@ vi.mock("@/lib/native/ftpClient", () => ({
   FtpClient: {
     listDirectory: vi.fn(),
     readFile: vi.fn(),
+    writeFile: vi.fn(),
   },
 }));
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
@@ -89,6 +90,14 @@ describe("ftpClient", () => {
       expect(runWithImplicitAction).not.toHaveBeenCalled();
       expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
     });
+
+    it("normalizes an empty path to the FTP root", async () => {
+      vi.mocked(FtpClient.listDirectory).mockResolvedValue({ entries: [] });
+
+      await listFtpDirectory({ ...mockListOptions, path: "" });
+
+      expect(FtpClient.listDirectory).toHaveBeenCalledWith(expect.objectContaining({ path: "/" }));
+    });
   });
 
   describe("readFtpFile", () => {
@@ -137,6 +146,58 @@ describe("ftpClient", () => {
 
       expect(addErrorLog).toHaveBeenCalled();
       expect(recordTraceError).toHaveBeenCalled();
+    });
+
+    it("uses an existing active action for FTP reads", async () => {
+      const mockAction = { id: "read-active" };
+      vi.mocked(getActiveAction).mockReturnValue(mockAction as any);
+      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+
+      await readFtpFile(mockReadOptions);
+
+      expect(runWithImplicitAction).not.toHaveBeenCalled();
+      expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
+    });
+  });
+
+  describe("writeFtpFile", () => {
+    const mockWriteOptions = { ...mockListOptions, path: "/Temp/test.reu", data: "QUJDRA==" };
+
+    it("writes file successfully", async () => {
+      vi.mocked(FtpClient.writeFile).mockResolvedValue({ sizeBytes: 4 });
+
+      const result = await writeFtpFile(mockWriteOptions);
+
+      expect(result).toEqual({ sizeBytes: 4 });
+      expect(recordFtpOperation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          operation: "write",
+          command: "STOR",
+          result: "success",
+          requestPayloadPreview: expect.objectContaining({ byteCount: 4, ascii: "ABCD" }),
+        }),
+      );
+    });
+
+    it("handles write failure", async () => {
+      vi.mocked(FtpClient.writeFile).mockRejectedValue(new Error("Write failed"));
+
+      await expect(writeFtpFile(mockWriteOptions)).rejects.toThrow("Write failed");
+
+      expect(addErrorLog).toHaveBeenCalled();
+      expect(recordTraceError).toHaveBeenCalled();
+    });
+
+    it("uses an existing active action for FTP writes", async () => {
+      const mockAction = { id: "write-active" };
+      vi.mocked(getActiveAction).mockReturnValue(mockAction as any);
+      vi.mocked(FtpClient.writeFile).mockResolvedValue({ sizeBytes: 4 });
+
+      await writeFtpFile(mockWriteOptions);
+
+      expect(runWithImplicitAction).not.toHaveBeenCalled();
+      expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
     });
   });
 });

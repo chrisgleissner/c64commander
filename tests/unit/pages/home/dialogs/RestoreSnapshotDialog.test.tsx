@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { RestoreSnapshotDialog } from "@/pages/home/dialogs/RestoreSnapshotDialog";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
+import type { ReuSnapshotStorageEntry } from "@/lib/reu/reuSnapshotTypes";
+import type { RestorableSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -55,11 +57,37 @@ const SNAPSHOT_UNKNOWN_TYPE: SnapshotStorageEntry = {
   },
 };
 
+const REU_SNAPSHOT: ReuSnapshotStorageEntry = {
+  id: "reu-1",
+  filename: "local.reu",
+  createdAt: "2026-01-10T10:00:00.000Z",
+  snapshotType: "reu",
+  sizeBytes: 8192,
+  remoteFileName: "capture.reu",
+  storage: { kind: "native-data", path: "reu-snapshots/local.reu" },
+  metadata: {
+    snapshot_type: "reu",
+    display_ranges: ["REU image"],
+    created_at: "2026-01-10 10:00:00",
+    content_name: "capture.reu",
+  },
+};
+
+const REU_SNAPSHOT_WITHOUT_CONTENT_NAME: ReuSnapshotStorageEntry = {
+  ...REU_SNAPSHOT,
+  id: "reu-2",
+  filename: "fallback-local.reu",
+  metadata: {
+    ...REU_SNAPSHOT.metadata,
+    content_name: undefined,
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const renderDialog = (snapshot: SnapshotStorageEntry | null, isPending = false) => {
+const renderDialog = (snapshot: RestorableSnapshotEntry | null, isPending = false) => {
   const onConfirm = vi.fn();
   const onOpenChange = vi.fn();
   const { container } = render(
@@ -159,5 +187,30 @@ describe("RestoreSnapshotDialog – actions", () => {
     const confirmBtn = screen.getByTestId("restore-snapshot-confirm");
     expect(confirmBtn).not.toBeDisabled();
     expect(confirmBtn).toHaveTextContent("Restore");
+  });
+
+  it("shows REU-specific action buttons", () => {
+    const { onConfirm } = renderDialog(REU_SNAPSHOT, false);
+    fireEvent.click(screen.getByTestId("restore-reu-load"));
+    fireEvent.click(screen.getByTestId("restore-reu-preload"));
+
+    expect(screen.getByText("Restore REU Snapshot")).toBeInTheDocument();
+    expect(onConfirm).toHaveBeenNthCalledWith(1, "load-into-reu");
+    expect(onConfirm).toHaveBeenNthCalledWith(2, "preload-on-startup");
+  });
+
+  it("falls back to the local file name when a REU snapshot has no content name", () => {
+    renderDialog(REU_SNAPSHOT_WITHOUT_CONTENT_NAME, false);
+
+    expect(screen.getByText("fallback-local.reu")).toBeInTheDocument();
+  });
+
+  it("shows applying labels and disables both REU action buttons while pending", () => {
+    renderDialog(REU_SNAPSHOT, true);
+
+    expect(screen.getByTestId("restore-reu-load")).toBeDisabled();
+    expect(screen.getByTestId("restore-reu-load")).toHaveTextContent("Applying…");
+    expect(screen.getByTestId("restore-reu-preload")).toBeDisabled();
+    expect(screen.getByTestId("restore-reu-preload")).toHaveTextContent("Applying…");
   });
 });

@@ -42,12 +42,14 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
+import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type {
   HealthCheckProbeRecord,
   HealthCheckProbeType,
   HealthCheckRunResult,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import type { DiagnosticsPanelKey } from "@/lib/diagnostics/diagnosticsOverlay";
 import {
   resolveActionSeverity,
@@ -114,6 +116,7 @@ type ConnectionDraft = {
   host: string;
   httpPort: string;
   ftpPort: string;
+  telnetPort: string;
 };
 
 const EVIDENCE_ORDER: EvidenceType[] = ["Problems", "Actions", "Logs", "Traces"];
@@ -289,23 +292,16 @@ const buildActionDetail = (summary: ActionSummary) => {
 const parseConnectionSnapshot = () => {
   const snapshot = getC64APIConfigSnapshot();
   const ftpPort = getStoredFtpPort();
+  const telnetPort = getStoredTelnetPort();
   const deviceHost = snapshot.deviceHost.replace(/^https?:\/\//, "");
-  const match = /^(.+):(\d+)$/.exec(deviceHost);
-  if (match) {
-    return {
-      host: match[1],
-      httpPort: Number(match[2]),
-      ftpPort,
-    };
-  }
 
   try {
     const url = new URL(snapshot.baseUrl, window.location.origin);
-    const derivedPort = url.port ? Number(url.port) : 80;
     return {
-      host: deviceHost || url.hostname,
-      httpPort: derivedPort,
+      host: stripPortFromDeviceHost(deviceHost || url.hostname),
+      httpPort: getDeviceHostHttpPort(deviceHost || url.hostname, snapshot.baseUrl),
       ftpPort,
+      telnetPort,
     };
   } catch (error) {
     console.warn("Failed to parse diagnostics connection snapshot base URL", {
@@ -314,9 +310,10 @@ const parseConnectionSnapshot = () => {
       error,
     });
     return {
-      host: deviceHost || "c64u",
-      httpPort: 80,
+      host: stripPortFromDeviceHost(deviceHost || "c64u"),
+      httpPort: getDeviceHostHttpPort(deviceHost, snapshot.baseUrl),
       ftpPort,
+      telnetPort,
     };
   }
 };
@@ -601,7 +598,7 @@ const FilterEditorSurface = ({
         className="z-[60] overflow-hidden p-0 sm:w-[min(100vw-2rem,22rem)]"
         data-testid="filters-editor-surface"
       >
-        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
+        <AppSheetHeader>
           <AppSheetTitle className="text-base">Filters</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Filter diagnostics activity by type, contributor, and severity.
@@ -755,6 +752,8 @@ const ConnectionSurface = ({
                 <span className="font-medium text-foreground">{draft.httpPort}</span>
                 <span className="text-muted-foreground">FTP</span>
                 <span className="font-medium text-foreground">{draft.ftpPort}</span>
+                <span className="text-muted-foreground">Telnet</span>
+                <span className="font-medium text-foreground">{draft.telnetPort}</span>
               </div>
               <Button type="button" onClick={onStartEdit} data-testid="connection-view-edit">
                 Edit
@@ -798,6 +797,20 @@ const ConnectionSurface = ({
                   data-testid="connection-edit-ftp"
                 />
               </label>
+              <label className="block space-y-1">
+                <span className="text-muted-foreground">Telnet</span>
+                <Input
+                  value={draft.telnetPort}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      telnetPort: event.target.value.replace(/[^0-9]/g, ""),
+                    })
+                  }
+                  data-testid="connection-edit-telnet"
+                />
+              </label>
               {error ? (
                 <p className="text-sm text-destructive" data-testid="connection-edit-error">
                   {error}
@@ -833,7 +846,7 @@ const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChang
         className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,34rem)]"
         data-testid="config-drift-surface"
       >
-        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
+        <AppSheetHeader>
           <AppSheetTitle className="text-base">Config Drift</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Review runtime configuration drift against persisted settings.
@@ -866,7 +879,7 @@ const DecisionStateSurface = ({
         className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]"
         data-testid="decision-state-surface"
       >
-        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
+        <AppSheetHeader>
           <AppSheetTitle className="text-base">Decision state</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Internal reconciliation, playback uncertainty, and recent diagnostics transitions.
@@ -1153,11 +1166,16 @@ export function DiagnosticsDialog({
       setConnectionError("FTP must be 1 to 65535.");
       return;
     }
+    if (!isValidPort(connectionDraft.telnetPort)) {
+      setConnectionError("Telnet must be 1 to 65535.");
+      return;
+    }
 
     const password = getC64APIConfigSnapshot().password;
-    const deviceHost = `${nextHost}:${connectionDraft.httpPort}`;
+    const deviceHost = buildDeviceHostWithHttpPort(nextHost, Number(connectionDraft.httpPort));
     updateC64APIConfig(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost);
     setStoredFtpPort(Number(connectionDraft.ftpPort));
+    setStoredTelnetPort(Number(connectionDraft.telnetPort));
     setConnectionError(null);
     setConnectionOpen(false);
     onRetryConnection();

@@ -33,6 +33,7 @@ const {
   drivesPayloadRef,
   machineControlPayloadRef,
   appConfigStatePayloadRef,
+  deviceControlPayloadRef,
 } = vi.hoisted(() => ({
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
@@ -135,6 +136,47 @@ const {
       loadAppConfig: vi.fn(),
       renameAppConfig: vi.fn(),
       deleteAppConfig: vi.fn(),
+    },
+  },
+  deviceControlPayloadRef: {
+    current: {
+      toggleMenu: vi.fn().mockResolvedValue({
+        operation: "toggleMenu",
+        transport: "REST",
+        endpoint: "PUT /v1/machine:menu_button",
+        request: { endpoint: "/v1/machine:menu_button" },
+        response: { errors: [] },
+        menuOpen: true,
+      }),
+      rebootKeepRam: vi.fn().mockResolvedValue({
+        operation: "rebootKeepRam",
+        transport: "REST",
+        endpoint: "PUT /v1/machine:reboot",
+        request: { endpoint: "/v1/machine:reboot" },
+        response: { errors: [] },
+        menuOpen: false,
+      }),
+      rebootFull: vi.fn().mockResolvedValue({
+        operation: "rebootFull",
+        transport: "REST",
+        endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
+        request: { strategy: "clear_ram_then_reboot" },
+        response: { errors: [] },
+        menuOpen: false,
+      }),
+      powerCycle: vi.fn().mockResolvedValue({
+        operation: "powerCycle",
+        transport: "REST_FALLBACK_FULL_REBOOT",
+        endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
+        request: { strategy: "fallback_full_reboot" },
+        response: { errors: [], fallback: true },
+        menuOpen: false,
+      }),
+      resetMenuState: vi.fn(),
+      getMenuState: vi.fn().mockReturnValue(false),
+      describePowerCycleFallback: vi
+        .fn()
+        .mockReturnValue("PUT /v1/machine:pause -> PUT /v1/machine:writemem -> PUT /v1/machine:reboot"),
     },
   },
 }));
@@ -552,6 +594,12 @@ vi.mock("framer-motion", () => ({
 
 vi.mock("@/hooks/useDiagnosticsActivity", () => ({
   useDiagnosticsActivity: () => ({ restInFlight: 0, setRestInFlight: vi.fn() }),
+}));
+
+vi.mock("@/lib/deviceControl/deviceControl", () => ({
+  useDeviceControl: () => deviceControlPayloadRef.current,
+  isDeviceControlError: (error: unknown) =>
+    error instanceof Error && "operation" in error && "transport" in error && "endpoint" in error,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
@@ -1041,8 +1089,14 @@ describe("HomePage SID status", () => {
   });
 
   it("handles machine actions and reports errors", async () => {
-    const menuError = new Error("menu failed");
-    machineControlPayloadRef.current.menuButton.mutateAsync = vi.fn().mockRejectedValue(menuError);
+    const menuError = Object.assign(new Error("menu failed"), {
+      operation: "toggleMenu",
+      transport: "REST",
+      endpoint: "PUT /v1/machine:menu_button",
+      request: { endpoint: "/v1/machine:menu_button" },
+      response: { error: "menu failed" },
+    });
+    deviceControlPayloadRef.current.toggleMenu = vi.fn().mockRejectedValue(menuError);
 
     renderHomePage();
 
@@ -1053,9 +1107,13 @@ describe("HomePage SID status", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Menu$/ }));
     await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalled());
     expect(reportUserErrorSpy.mock.calls[0][0]).toMatchObject({
-      operation: "HOME_ACTION",
-      title: "Error",
-      context: { action: "Menu toggled" },
+      operation: "HOME_MENU_TOGGLE",
+      title: "Menu toggle failed",
+      context: {
+        deviceControlOperation: "toggleMenu",
+        transport: "REST",
+        endpoint: "PUT /v1/machine:menu_button",
+      },
     });
   });
 
@@ -1440,6 +1498,22 @@ describe("HomePage SID status", () => {
     fireEvent.keyDown(document.activeElement ?? ledModeSelect, {
       key: "Escape",
     });
+  });
+
+  it("keeps the lighting header calm when no profile automation or manual lock chip is active", () => {
+    ledStripPayloadRef.current = {
+      "LED Strip Settings": buildLightingPayload(),
+    };
+    keyboardLightingPayloadRef.current = {
+      "Keyboard Lighting": buildLightingPayload(),
+    };
+
+    renderHomePage();
+
+    expect(screen.getByTestId("home-lighting-profile-chip")).toHaveTextContent("Device look");
+    expect(screen.queryByTestId("home-lighting-automation-chip")).toBeNull();
+    expect(screen.queryByTestId("home-lighting-lock-chip")).toBeNull();
+    expect(screen.getByTestId("home-lighting-lock-toggle")).toHaveTextContent("Hold look");
   });
 
   it("shows Single Color for lighting patterns while sending the raw API value", async () => {

@@ -17,7 +17,7 @@ import { delay } from "./timing.js";
 const execFileAsync = promisify(execFile);
 const DEFAULT_VERIFICATION_WINDOW_MS = 5_000;
 const DEFAULT_VERIFICATION_BACKOFF_MS = [250, 500, 1_000];
-const REQUIRED_PROTOCOLS: HealthProtocol[] = ["REST", "ICMP", "FTP"];
+const REQUIRED_PROTOCOLS: HealthProtocol[] = ["REST", "ICMP", "FTP", "TELNET"];
 
 export type HealthProtocol = "REST" | "ICMP" | "FTP" | "TELNET";
 export type HealthState = "HEALTHY" | "DEGRADED" | "UNRESPONSIVE";
@@ -131,7 +131,7 @@ export class MultiProtocolHealthMonitor {
       }
       if (batches.every((batch) => this.isRequiredUnavailable(batch.results))) {
         nextState = "UNRESPONSIVE";
-        reason = `REST, ICMP, and FTP probes failed continuously for ${this.verificationWindowMs}ms.`;
+        reason = `REST, ICMP, FTP, and Telnet probes failed continuously for ${this.verificationWindowMs}ms.`;
       } else {
         nextState = "DEGRADED";
         reason = `Probe failures were transient or partial during the ${this.verificationWindowMs}ms verification window.`;
@@ -240,7 +240,7 @@ export function createContractHealthProbes(config: HarnessConfig): ProbeFn[] {
     createRestInfoProbe(config),
     createPingProbe(host, config.health.timeoutMs),
     createFtpProbe(config),
-    createTelnetProbe(host, Math.min(config.health.timeoutMs, 1_000)),
+    createTelnetProbe(host, config.telnetPort ?? 23, Math.min(config.health.timeoutMs, 1_000)),
   ];
 }
 
@@ -370,7 +370,7 @@ function createFtpProbe(config: HarnessConfig): ProbeFn {
   };
 }
 
-function createTelnetProbe(host: string, timeoutMs: number): ProbeFn {
+function createTelnetProbe(host: string, port: number, timeoutMs: number): ProbeFn {
   return async () => {
     const startedAt = Date.now();
     const timestamp = new Date().toISOString();
@@ -393,7 +393,7 @@ function createTelnetProbe(host: string, timeoutMs: number): ProbeFn {
           cleanup();
           reject(error);
         });
-        socket.connect(23, host);
+        socket.connect(port, host);
       });
       return {
         protocol: "TELNET",

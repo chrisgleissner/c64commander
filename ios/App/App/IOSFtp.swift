@@ -24,6 +24,22 @@ private struct FtpRequestOptions {
     }
 }
 
+private struct FtpWriteRequestOptions {
+    let request: FtpRequestOptions
+    let data: Data
+
+    init(call: CAPPluginCall) throws {
+        self.request = try FtpRequestOptions(call: call)
+        guard let encoded = call.getString("data"), !encoded.isEmpty else {
+            throw NativePluginError.invalidArgument("data is required")
+        }
+        guard let data = Data(base64Encoded: encoded) else {
+            throw NativePluginError.invalidArgument("data must be valid base64")
+        }
+        self.data = data
+    }
+}
+
 @objc(FtpClientPlugin)
 public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "FtpClientPlugin"
@@ -31,6 +47,7 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "listDirectory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "writeFile", returnType: CAPPluginReturnPromise),
     ]
 
     private let queue = DispatchQueue(label: "uk.gleissner.c64commander.ftp")
@@ -93,6 +110,30 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
             } catch {
                 let details = FtpRequestOptions.failureDetails(for: call, operation: "readFile")
                 IOSDiagnostics.log(.error, "FTP readFile failed", details: details, error: error)
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc public func writeFile(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                let options = try FtpWriteRequestOptions(call: call)
+                let session = FtpSession(
+                    host: options.request.host,
+                    port: options.request.port,
+                    timeout: options.request.timeout
+                )
+                defer { session.disconnect() }
+                try session.connect()
+                try session.login(username: options.request.username, password: options.request.password)
+                try session.writeFile(path: options.request.path, data: options.data)
+                call.resolve([
+                    "sizeBytes": options.data.count,
+                ])
+            } catch {
+                let details = FtpRequestOptions.failureDetails(for: call, operation: "writeFile")
+                IOSDiagnostics.log(.error, "FTP writeFile failed", details: details, error: error)
                 call.reject(error.localizedDescription)
             }
         }
@@ -250,6 +291,17 @@ final class FtpSession {
         dataSession.disconnect()
         _ = try readResponse(expectPrefix: [226, 250])
         return Data(bytes)
+    }
+
+    func writeFile(path: String, data: Data) throws {
+        let passiveAddress = try openPassiveDataChannel()
+        let dataSession = FtpSession(host: passiveAddress.host, port: passiveAddress.port, timeout: timeout)
+        try dataSession.connectForData()
+
+        _ = try sendAndRead("STOR \(path)", expectedPrefix: [125, 150])
+        try dataSession.writeAllBytes(data)
+        dataSession.disconnect()
+        _ = try readResponse(expectPrefix: [226, 250])
     }
 
     private func listDirectory(path: String, command: String) throws -> [FtpEntry] {
@@ -461,6 +513,37 @@ final class FtpSession {
             .split(whereSeparator: { $0.isNewline })
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private func writeAllBytes(_ data: Data) throws {
+        guard let outputStream else {
+            throw NativePluginError.unavailable("FTP data output stream unavailable")
+        }
+
+        let bytes = [UInt8](data)
+        var offset = 0
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while offset < bytes.count {
+            if Date() > deadline {
+                throw NativePluginError.operationFailed("FTP data write timed out")
+            }
+            if !outputStream.hasSpaceAvailable {
+                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+                continue
+            }
+
+            let written = bytes.withUnsafeBytes { rawBuffer in
+                outputStream.write(
+                    rawBuffer.baseAddress!.advanced(by: offset).assumingMemoryBound(to: UInt8.self),
+                    maxLength: bytes.count - offset
+                )
+            }
+            if written < 0 {
+                throw outputStream.streamError ?? NativePluginError.operationFailed("FTP data write failed")
+            }
+            offset += written
+        }
     }
 
     private static func parseMLSD(line: String, basePath: String) -> FtpEntry? {

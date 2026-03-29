@@ -7,13 +7,16 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 import {
+  buildDeviceHostWithHttpPort,
   buildBaseUrlFromDeviceHost,
+  getDeviceHostHttpPort,
   getDeviceHostFromBaseUrl,
   isLocalProxy,
   normalizeDeviceHost,
   resolveDeviceHostFromStorage,
   resolvePlatformApiBaseUrl,
   resolvePreferredDeviceHost,
+  stripPortFromDeviceHost,
 } from "@/lib/c64api/hostConfig";
 
 describe("hostConfig", () => {
@@ -43,6 +46,10 @@ describe("hostConfig", () => {
     expect(normalizeDeviceHost(undefined)).toBe("c64u");
     expect(normalizeDeviceHost(" demo.local/path ")).toBe("demo.local");
     expect(buildBaseUrlFromDeviceHost("https://demo.local:8080/library")).toBe("http://demo.local:8080");
+    expect(stripPortFromDeviceHost("demo.local:8080")).toBe("demo.local");
+    expect(getDeviceHostHttpPort("demo.local:8080")).toBe(8080);
+    expect(buildDeviceHostWithHttpPort("demo.local", 8080)).toBe("demo.local:8080");
+    expect(buildDeviceHostWithHttpPort("demo.local", 80)).toBe("demo.local");
     expect(normalizeDeviceHost("http://[::1")).toBe("c64u");
     expect(addLogMock).toHaveBeenCalledWith(
       "warn",
@@ -70,6 +77,7 @@ describe("hostConfig", () => {
     expect(resolveDeviceHostFromStorage()).toBe("c64u");
 
     expect(getDeviceHostFromBaseUrl("not-a-url/path")).toBe("not-a-url");
+    expect(getDeviceHostHttpPort("demo.local", "not-a-url")).toBe(80);
     expect(addLogMock).toHaveBeenCalledWith(
       "warn",
       "Failed to parse device host from base URL",

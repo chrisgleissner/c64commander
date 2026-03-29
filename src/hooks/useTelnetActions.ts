@@ -20,11 +20,13 @@ import {
   type TelnetMenuKey,
 } from "@/lib/telnet/telnetTypes";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { getPassword } from "@/lib/secureStorage";
 import { addLog } from "@/lib/logging";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import { recordTelnetOperation } from "@/lib/tracing/traceSession";
 import { decrementTelnetInFlight, incrementTelnetInFlight } from "@/lib/diagnostics/diagnosticsActivity";
+import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 const LOG_TAG = "useTelnetActions";
 
@@ -132,13 +134,14 @@ export function useTelnetActions(): TelnetActionsState {
                 intent: "user",
               },
               async () => {
-                const host = resolveDeviceHostFromStorage();
+                const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+                const port = getStoredTelnetPort();
                 const password = await getPassword();
                 const transport = createTelnetClient();
                 const session = createTelnetSession(transport);
 
                 try {
-                  await session.connect(host, 23, password ?? undefined);
+                  await session.connect(host, port, password ?? undefined);
                   const executor = createActionExecutor(session, { menuKey: capability.menuKey ?? undefined });
                   await executor.execute(actionId);
                 } finally {

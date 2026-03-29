@@ -12,6 +12,9 @@ export type SourceEntry = {
   type: SourceEntryType;
   name: string;
   path: string;
+  durationMs?: number;
+  songNr?: number;
+  subsongCount?: number;
   sizeBytes?: number | null;
   modifiedAt?: string | null;
 };
@@ -22,6 +25,17 @@ export type SelectedItem = {
   type: SourceEntryType;
   name: string;
   path: string;
+  durationMs?: number;
+  songNr?: number;
+  subsongCount?: number;
+  sizeBytes?: number | null;
+  modifiedAt?: string | null;
+};
+
+export type SourceEntryPage = {
+  entries: SourceEntry[];
+  totalCount: number;
+  nextOffset: number | null;
 };
 
 export type SourceLocation = {
@@ -31,6 +45,12 @@ export type SourceLocation = {
   rootPath: string;
   isAvailable: boolean;
   listEntries: (path: string) => Promise<SourceEntry[]>;
+  listEntriesPage?: (options: {
+    path: string;
+    query?: string;
+    offset?: number;
+    limit?: number;
+  }) => Promise<SourceEntryPage>;
   listFilesRecursive: (path: string, options?: { signal?: AbortSignal }) => Promise<SourceEntry[]>;
   clearCacheForPath?: (path: string) => void;
 };

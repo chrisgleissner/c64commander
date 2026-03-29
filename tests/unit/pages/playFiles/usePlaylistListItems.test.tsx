@@ -11,17 +11,20 @@ import { describe, expect, it, vi } from "vitest";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
+import type { ConfigFileReference } from "@/lib/config/configFileReference";
 
 const buildItem = (
   source: "local" | "ultimate" | "hvsc",
   path: string,
   status: PlaylistItem["status"] = "ready",
+  configRef: ConfigFileReference | null = null,
 ): PlaylistItem => ({
   id: `${source}:${path}`,
   request: { source, path },
   category: "sid",
   label: path.split("/").pop() || path,
   path,
+  configRef,
   addedAt: "2026-02-12T00:00:00.000Z",
   status,
   unavailableReason: status === "unavailable" ? "file-inaccessible" : null,
@@ -42,6 +45,9 @@ describe("usePlaylistListItems", () => {
         selectedPlaylistIds: new Set<string>(),
         isPlaylistLoading: false,
         handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
         startPlaylist: vi.fn(),
         playlistItemDuration: () => undefined,
         formatTime: () => "—:—",
@@ -82,6 +88,9 @@ describe("usePlaylistListItems", () => {
         selectedPlaylistIds: new Set<string>(),
         isPlaylistLoading: false,
         handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
         startPlaylist: vi.fn(),
         playlistItemDuration: () => undefined,
         formatTime: () => "—:—",
@@ -100,5 +109,76 @@ describe("usePlaylistListItems", () => {
       label: "Status",
       value: "Unavailable",
     });
+  });
+
+  it("adds config menu actions and attached config details", () => {
+    const onAttachLocalConfig = vi.fn();
+    const onAttachUltimateConfig = vi.fn();
+    const onRemoveConfig = vi.fn();
+    const playlist = [
+      buildItem("local", "/Music/track.sid", "ready", {
+        kind: "local",
+        fileName: "track.cfg",
+        path: "/Music/track.cfg",
+        sourceId: "local-source",
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading: false,
+        handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig,
+        onAttachUltimateConfig,
+        onRemoveConfig,
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId: null,
+      }),
+    );
+
+    const row = result.current.find((entry) => entry.variant !== "header");
+    const attachedEntry = row?.menuItems?.find((menu) => menu.type === "info" && menu.label === "Attached");
+    const locationEntry = row?.menuItems?.find((menu) => menu.type === "info" && menu.label === "Location");
+    const localAction = row?.menuItems?.find((menu) => menu.type === "action" && menu.label === "Change to local .cfg");
+    const ultimateAction = row?.menuItems?.find(
+      (menu) => menu.type === "action" && menu.label === "Change to C64U .cfg",
+    );
+    const removeAction = row?.menuItems?.find(
+      (menu) => menu.type === "action" && menu.label === "Remove config association",
+    );
+
+    expect(attachedEntry).toEqual({
+      type: "info",
+      label: "Attached",
+      value: "track.cfg",
+    });
+    expect(locationEntry).toEqual({
+      type: "info",
+      label: "Location",
+      value: "This device",
+    });
+
+    if (localAction?.type === "action") {
+      localAction.onSelect();
+    }
+    if (ultimateAction?.type === "action") {
+      ultimateAction.onSelect();
+    }
+    if (removeAction?.type === "action") {
+      removeAction.onSelect();
+    }
+
+    expect(onAttachLocalConfig).toHaveBeenCalledWith(playlist[0]);
+    expect(onAttachUltimateConfig).toHaveBeenCalledWith(playlist[0]);
+    expect(onRemoveConfig).toHaveBeenCalledWith(playlist[0]);
   });
 });

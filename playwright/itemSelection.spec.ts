@@ -219,6 +219,31 @@ test.describe("Item Selection Dialog UX", () => {
     await dialog.getByTestId("import-option-c64u").click();
     await waitForFtpIdle(dialog);
     await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(1);
+    await expect
+      .poll(() =>
+        dialog.getByRole("button", { name: "Close" }).evaluate((button) => ({
+          activeTag: document.activeElement?.tagName ?? null,
+          isCloseFocused: document.activeElement === button,
+        })),
+      )
+      .toEqual({
+        activeTag: "DIV",
+        isCloseFocused: false,
+      });
+
+    const [titleBox, closeBox] = await Promise.all([
+      dialog.getByText("Add items", { exact: true }).boundingBox(),
+      dialog.getByRole("button", { name: "Close" }).boundingBox(),
+    ]);
+    expect(titleBox).not.toBeNull();
+    expect(closeBox).not.toBeNull();
+    if (!titleBox || !closeBox) {
+      throw new Error("Unable to measure Add items header row.");
+    }
+    const titleCenterY = titleBox.y + titleBox.height / 2;
+    const closeCenterY = closeBox.y + closeBox.height / 2;
+    expect(Math.abs(titleCenterY - closeCenterY)).toBeLessThanOrEqual(8);
     await snap(page, testInfo, "c64u-file-picker");
   });
 

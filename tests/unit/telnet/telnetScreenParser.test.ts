@@ -236,6 +236,44 @@ describe("detectMenus", () => {
     expect(menus).toEqual([]);
   });
 
+  it("strips edge wrappers from noisy real-device menu labels", () => {
+    const cells: Array<Array<{ char: string; reverse: boolean; color: number }>> = [];
+    for (let r = 0; r < TELNET_SCREEN_HEIGHT; r++) {
+      cells.push([]);
+      for (let c = 0; c < TELNET_SCREEN_WIDTH; c++) {
+        cells[r].push({ char: " ", reverse: false, color: 7 });
+      }
+    }
+
+    const boxTop = 2;
+    const boxLeft = 3;
+    const boxWidth = 18;
+    const boxHeight = 4;
+
+    cells[boxTop][boxLeft].char = "l";
+    for (let c = boxLeft + 1; c < boxLeft + boxWidth - 1; c++) {
+      cells[boxTop][c].char = "q";
+    }
+    cells[boxTop][boxLeft + boxWidth - 1].char = "k";
+    for (let r = boxTop + 1; r < boxTop + boxHeight - 1; r++) {
+      cells[r][boxLeft].char = "x";
+      cells[r][boxLeft + boxWidth - 1].char = "x";
+    }
+    cells[boxTop + boxHeight - 1][boxLeft].char = "m";
+    for (let c = boxLeft + 1; c < boxLeft + boxWidth - 1; c++) {
+      cells[boxTop + boxHeight - 1][c].char = "q";
+    }
+    cells[boxTop + boxHeight - 1][boxLeft + boxWidth - 1].char = "j";
+
+    const noisyLabel = "xPower & Reset x";
+    for (let j = 0; j < noisyLabel.length; j++) {
+      cells[boxTop + 1][boxLeft + 1 + j].char = noisyLabel[j];
+    }
+
+    const menus = detectMenus(cells);
+    expect(menus[0].items[0].label).toBe("Power & Reset");
+  });
+
   it("rejects incomplete box (no bottom-right corner)", () => {
     const cells: Array<Array<{ char: string; reverse: boolean; color: number }>> = [];
     for (let r = 0; r < TELNET_SCREEN_HEIGHT; r++) {

@@ -15,9 +15,128 @@ import type {
   ArchiveClientResolvedConfig,
   ArchiveEntry,
   ArchivePreset,
+  ArchivePresetType,
   ArchiveSearchParams,
   ArchiveSearchResult,
 } from "@/lib/archive/types";
+
+const PRESET_TYPE_ORDER: ArchivePresetType[] = ["category", "date", "type", "sort", "order"];
+const DEFAULT_DATE_START_YEAR = 1980;
+
+const buildYearPresetValues = (endYear: number) =>
+  Array.from({ length: Math.max(0, endYear - DEFAULT_DATE_START_YEAR + 1) }, (_, index) => {
+    const year = String(DEFAULT_DATE_START_YEAR + index);
+    return { aqlKey: year, name: year };
+  });
+
+const buildSeededPresets = (currentYear: number): ArchivePreset[] => [
+  {
+    type: "category",
+    description: "Category",
+    values: [
+      { aqlKey: "apps", name: "Apps" },
+      { aqlKey: "demos", name: "Demos" },
+      { aqlKey: "games", name: "Games" },
+      { aqlKey: "graphics", name: "Graphics" },
+      { aqlKey: "music", name: "Music" },
+    ],
+  },
+  {
+    type: "date",
+    description: "Date",
+    values: buildYearPresetValues(currentYear),
+  },
+  {
+    type: "type",
+    description: "Type",
+    values: [
+      { aqlKey: "crt", name: "crt" },
+      { aqlKey: "d64", name: "d64" },
+      { aqlKey: "d71", name: "d71" },
+      { aqlKey: "d81", name: "d81" },
+      { aqlKey: "sid", name: "sid" },
+      { aqlKey: "t64", name: "t64" },
+      { aqlKey: "tap", name: "tap" },
+    ],
+  },
+  {
+    type: "sort",
+    description: "Sort by",
+    values: [
+      { aqlKey: "name", name: "Name" },
+      { aqlKey: "year", name: "Year" },
+    ],
+  },
+  {
+    type: "order",
+    description: "Sort Order",
+    values: [
+      { aqlKey: "asc", name: "Ascending" },
+      { aqlKey: "desc", name: "Descending" },
+    ],
+  },
+];
+
+const deriveDatePreset = (
+  verifiedPreset: ArchivePreset | undefined,
+  seededPreset: ArchivePreset,
+  currentYear: number,
+) => {
+  const verifiedYears = (verifiedPreset?.values ?? [])
+    .map((value) => Number.parseInt(value.aqlKey, 10))
+    .filter((value) => Number.isFinite(value));
+  const maxVerifiedYear = verifiedYears.length ? Math.max(...verifiedYears) : DEFAULT_DATE_START_YEAR;
+  const endYear = Math.max(currentYear, maxVerifiedYear);
+  return {
+    type: "date" as const,
+    description: verifiedPreset?.description ?? seededPreset.description,
+    values: buildYearPresetValues(endYear),
+  };
+};
+
+const normalizePreset = (
+  verifiedPreset: ArchivePreset | undefined,
+  seededPreset: ArchivePreset,
+  currentYear: number,
+) => {
+  if (!verifiedPreset || verifiedPreset.values.length === 0) {
+    return seededPreset;
+  }
+
+  if (verifiedPreset.type === "date") {
+    return deriveDatePreset(verifiedPreset, seededPreset, currentYear);
+  }
+
+  return {
+    ...verifiedPreset,
+    values: verifiedPreset.values.map((value) => ({
+      ...value,
+      name: value.name ?? value.aqlKey,
+    })),
+  };
+};
+
+const normalizePresets = (verifiedPresets: ArchivePreset[], currentYear: number) => {
+  const seededPresets = buildSeededPresets(currentYear);
+  const verifiedByType = new Map(verifiedPresets.map((preset) => [preset.type, preset]));
+  return PRESET_TYPE_ORDER.map((type) =>
+    normalizePreset(
+      verifiedByType.get(type),
+      seededPresets.find((preset) => preset.type === type) as ArchivePreset,
+      currentYear,
+    ),
+  );
+};
+
+const presetCache = new Map<string, ArchivePreset[]>();
+const presetRefreshStatus = new Map<string, "pending" | "settled">();
+const presetRefreshPromises = new Map<string, Promise<ArchivePreset[]>>();
+
+export const __resetArchivePresetCacheForTests = () => {
+  presetCache.clear();
+  presetRefreshStatus.clear();
+  presetRefreshPromises.clear();
+};
 
 export type OnlineArchiveState =
   | { phase: "idle" }
@@ -59,10 +178,9 @@ const toErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const resetIfPresetError = (current: OnlineArchiveState): OnlineArchiveState =>
-  current.phase === "error" && current.recoverableState === null ? { phase: "idle" } : current;
-
 export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
+  const currentYear = new Date().getFullYear();
+  const seededPresets = useMemo(() => buildSeededPresets(currentYear), [currentYear]);
   const configKey = JSON.stringify({
     id: config.id,
     name: config.name,
@@ -72,8 +190,8 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   });
   const resolvedConfig = useMemo<ArchiveClientResolvedConfig>(() => resolveArchiveClientConfig(config), [configKey]);
   const client = useMemo(() => createArchiveClient(config), [configKey]);
-  const [presets, setPresets] = useState<ArchivePreset[]>([]);
-  const [presetsLoading, setPresetsLoading] = useState(false);
+  const [presets, setPresets] = useState<ArchivePreset[]>(() => presetCache.get(configKey) ?? seededPresets);
+  const [presetsLoading, setPresetsLoading] = useState(presetRefreshStatus.get(configKey) === "pending");
   const [state, setState] = useState<OnlineArchiveState>({ phase: "idle" });
   const requestVersionRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -105,32 +223,53 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   }, []);
 
   useEffect(() => {
+    setPresets(presetCache.get(configKey) ?? seededPresets);
+    setPresetsLoading(presetRefreshStatus.get(configKey) === "pending");
+
+    if (presetRefreshStatus.get(configKey) === "settled") {
+      return undefined;
+    }
+
     const controller = new AbortController();
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = controller;
-    setPresetsLoading(true);
-    setState((current) => resetIfPresetError(current));
-    void client
-      .getPresets({ signal: controller.signal })
-      .then((next) => {
-        setPresets(next);
-        setState((current) => resetIfPresetError(current));
-      })
-      .catch((error) => {
-        if (controller.signal.aborted) return;
-        setState({
-          phase: "error",
-          message: toErrorMessage(error, "Failed to load archive presets."),
-          recoverableState: null,
+    let refreshPromise = presetRefreshPromises.get(configKey);
+    if (!refreshPromise) {
+      presetRefreshStatus.set(configKey, "pending");
+      refreshPromise = client
+        .getPresets({ signal: controller.signal })
+        .then((next) => {
+          const normalized = normalizePresets(next, currentYear);
+          presetCache.set(configKey, normalized);
+          presetRefreshStatus.set(configKey, "settled");
+          return normalized;
+        })
+        .catch((error) => {
+          if (controller.signal.aborted) {
+            throw error;
+          }
+          presetCache.set(configKey, presetCache.get(configKey) ?? seededPresets);
+          presetRefreshStatus.set(configKey, "settled");
+          return presetCache.get(configKey) ?? seededPresets;
+        })
+        .finally(() => {
+          presetRefreshPromises.delete(configKey);
         });
+      presetRefreshPromises.set(configKey, refreshPromise);
+    }
+
+    setPresetsLoading(true);
+    void refreshPromise
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        setPresets(next);
       })
       .finally(() => {
         if (!controller.signal.aborted) {
           setPresetsLoading(false);
         }
       });
+
     return () => controller.abort();
-  }, [client]);
+  }, [client, configKey, currentYear, seededPresets]);
 
   const runRequest = useCallback(
     async <T>(

@@ -8,7 +8,13 @@
 
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
-import { FtpClient, type FtpEntry, type FtpListOptions, type FtpReadOptions } from "@/lib/native/ftpClient";
+import {
+  FtpClient,
+  type FtpEntry,
+  type FtpListOptions,
+  type FtpReadOptions,
+  type FtpWriteOptions,
+} from "@/lib/native/ftpClient";
 import { resolveNativeTraceContext } from "@/lib/native/nativeTraceContext";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordFtpOperation, recordTraceError } from "@/lib/tracing/traceSession";
@@ -220,5 +226,100 @@ export const readFtpFile = async (
       traceContext: resolveNativeTraceContext(action),
     };
     return executeFtpRead(action, optionsWithTrace, options.path, intent);
+  });
+};
+
+const executeFtpWrite = async (
+  action: TraceActionContext,
+  ftpOptions: FtpWriteOptions,
+  path: string,
+  intent: InteractionIntent,
+): Promise<{ sizeBytes: number }> => {
+  incrementFtpInFlight();
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const requestPayload = { ...ftpOptions, path };
+  return withFtpInteraction(
+    {
+      action,
+      operation: "write",
+      path,
+      intent,
+    },
+    async () => {
+      try {
+        const response = await FtpClient.writeFile({ ...ftpOptions, path });
+        const responsePayload = { sizeBytes: response.sizeBytes };
+        recordFtpOperation(action, {
+          operation: "write",
+          command: "STOR",
+          hostname: ftpOptions.host,
+          port: ftpOptions.port,
+          path,
+          durationMs: Math.max(
+            0,
+            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+          ),
+          result: "success",
+          requestPayload,
+          requestPayloadPreview: buildPayloadPreviewFromBase64(ftpOptions.data),
+          responsePayload,
+          responsePayloadPreview: buildPayloadPreviewFromJson(responsePayload),
+          error: null,
+        });
+        return response;
+      } catch (error) {
+        const err = error as Error;
+        addErrorLog(
+          "FTP file write failed",
+          buildErrorLogDetails(err, {
+            host: ftpOptions.host,
+            path,
+          }),
+        );
+        recordFtpOperation(action, {
+          operation: "write",
+          command: "STOR",
+          hostname: ftpOptions.host,
+          port: ftpOptions.port,
+          path,
+          durationMs: Math.max(
+            0,
+            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+          ),
+          result: "failure",
+          requestPayload,
+          requestPayloadPreview: buildPayloadPreviewFromBase64(ftpOptions.data),
+          error: err,
+        });
+        recordTraceError(action, err);
+        throw error;
+      } finally {
+        decrementFtpInFlight();
+      }
+    },
+  );
+};
+
+export const writeFtpFile = async (
+  options: FtpWriteOptions & { __c64uIntent?: InteractionIntent },
+): Promise<{ sizeBytes: number }> => {
+  const { __c64uIntent, ...ftpOptions } = options;
+  const intent = __c64uIntent ?? "user";
+
+  const activeAction = getActiveAction();
+  if (activeAction) {
+    const optionsWithTrace = {
+      ...ftpOptions,
+      traceContext: resolveNativeTraceContext(activeAction),
+    };
+    return executeFtpWrite(activeAction, optionsWithTrace, options.path, intent);
+  }
+
+  return runWithImplicitAction("ftp.write", async (action) => {
+    const optionsWithTrace = {
+      ...ftpOptions,
+      traceContext: resolveNativeTraceContext(action),
+    };
+    return executeFtpWrite(action, optionsWithTrace, options.path, intent);
   });
 };

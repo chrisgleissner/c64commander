@@ -30,10 +30,10 @@ export type ModalPresentation = {
 };
 
 const centeredBaseClass =
-  "fixed left-[50dvw] grid w-[min(calc(100dvw-1.5rem),var(--display-profile-modal-max-width))] translate-x-[-50%] gap-4 overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-6 shadow-[var(--interstitial-shadow)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95";
+  "fixed left-[50dvw] grid w-[min(calc(100dvw-1.5rem),var(--display-profile-modal-max-width))] translate-x-[-50%] gap-4 overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-6 shadow-[var(--interstitial-shadow)] outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95";
 
 const stickyFooterClass =
-  "sticky bottom-0 z-10 mt-auto border-t border-border bg-background pb-[calc(1rem+env(safe-area-inset-bottom))]";
+  "sticky bottom-0 z-10 mt-auto border-t border-border bg-background pb-[calc(1rem+var(--safe-area-inset-bottom))]";
 
 const largeDialogClass = `${centeredBaseClass} max-w-4xl overflow-hidden p-0`;
 const listDialogClass = `${centeredBaseClass} max-w-[42rem] overflow-hidden p-0`;

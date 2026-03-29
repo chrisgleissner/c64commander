@@ -257,6 +257,80 @@ class FtpClientPlugin : Plugin() {
     )
   }
 
+  @PluginMethod
+  fun writeFile(call: PluginCall) {
+    val host = call.getString("host")
+    if (host.isNullOrBlank()) {
+      call.reject("host is required")
+      return
+    }
+    val path = call.getString("path")
+    if (path.isNullOrBlank()) {
+      call.reject("path is required")
+      return
+    }
+    val data = call.getString("data")
+    if (data.isNullOrBlank()) {
+      call.reject("data is required")
+      return
+    }
+    val port = call.getInt("port") ?: 21
+    val username = call.getString("username") ?: "user"
+    val password = call.getString("password") ?: ""
+    val timeoutMs = resolveTimeoutMs(call)
+
+    runTask(
+            Runnable {
+              val client = ftpClientFactory()
+              try {
+                applyPreConnectTimeouts(client, timeoutMs)
+                client.connect(host, port)
+                applyConnectedTimeouts(client, timeoutMs)
+                val loggedIn = client.login(username, password)
+                if (!loggedIn) {
+                  call.reject("FTP login failed")
+                  return@Runnable
+                }
+                client.enterLocalPassiveMode()
+                client.setFileType(FTP.BINARY_FILE_TYPE)
+
+                val bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
+                val success = client.storeFile(path, bytes.inputStream())
+                if (!success) {
+                  call.reject("FTP file write failed")
+                  return@Runnable
+                }
+                val result = JSObject()
+                result.put("sizeBytes", bytes.size)
+                call.resolve(result)
+              } catch (error: Exception) {
+                val message = buildFailureMessage("writeFile", error, timeoutMs)
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "FTP writeFile failed",
+                        "FtpClientPlugin",
+                        error,
+                        traceFields(call),
+                )
+                call.reject(message, error)
+              } finally {
+                try {
+                  if (client.isConnected) client.disconnect()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to disconnect FTP client",
+                          "FtpClientPlugin",
+                          error
+                  )
+                }
+              }
+            }
+    )
+  }
+
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
       val listed = client.listFiles(path)

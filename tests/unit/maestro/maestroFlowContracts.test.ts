@@ -157,4 +157,18 @@ describe("Maestro flow contracts", () => {
     expect(rawSource).not.toContain("common-navigation");
     expect(readYaml(path.resolve(process.cwd(), ".maestro/ios-ci-smoke.yaml"))).toBeTruthy();
   });
+
+  it("keeps Android HVSC smoke flows anchored through playlist and HVSC section", () => {
+    const smokeHvsc = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml"), "utf8");
+    const smokeHvscLowRam = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"), "utf8");
+
+    for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
+      expect(rawSource).toContain("id: hvsc-flag");
+      expect(rawSource).toContain('text: "HVSC"');
+      expect(rawSource).toContain('assertVisible: "HVSC"');
+      expect(rawSource).toContain('text: "Download HVSC"');
+      expect(rawSource).toContain("speed: 60");
+      expect(rawSource).toContain("timeout: ${LONG_TIMEOUT}");
+    }
+  });
 });

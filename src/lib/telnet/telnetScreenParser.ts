@@ -34,6 +34,12 @@ const LINE_DRAW_CHARS = new Set([
   "n", // ┼ crossing
 ]);
 
+const MENU_LABEL_EDGE_NOISE = /^[lkmjqx]+\s*|\s*[lkmjqx]+$/gi;
+const MENU_LABEL_INTERNAL_NOISE = /q{4,}/gi;
+
+const replaceControlCharacters = (value: string) =>
+  Array.from(value, (char) => (char.charCodeAt(0) < 32 ? " " : char)).join("");
+
 /** Parser state for VT100 escape sequence processing */
 interface ParserState {
   cells: ScreenCell[][];
@@ -457,10 +463,14 @@ function extractMenuItems(
       if (cell.reverse) isReverse = true;
     }
 
-    const trimmedLabel = label.trim();
-    if (trimmedLabel.length > 0) {
+    const normalizedLabel = replaceControlCharacters(label)
+      .replace(MENU_LABEL_INTERNAL_NOISE, " ")
+      .replace(MENU_LABEL_EDGE_NOISE, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (normalizedLabel.length > 0) {
       items.push({
-        label: trimmedLabel,
+        label: normalizedLabel,
         selected: isReverse,
         enabled: true,
       });
@@ -471,10 +481,22 @@ function extractMenuItems(
 }
 
 /** Find the currently selected (reverse-video) item text across all menus */
-function findSelectedItem(_cells: ScreenCell[][], menus: ParsedMenu[]): string | null {
+function findSelectedItem(cells: ScreenCell[][], menus: ParsedMenu[]): string | null {
   for (const menu of menus) {
     const selected = menu.items.find((item) => item.selected);
     if (selected) return selected.label;
+  }
+
+  for (let row = 0; row < TELNET_SCREEN_HEIGHT - 1; row += 1) {
+    const line = cells[row];
+    const hasReverse = line.some((cell) => cell.reverse);
+    if (!hasReverse) continue;
+    const label = replaceControlCharacters(line.map((cell) => cell.char).join(""))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (label.length > 0) {
+      return label;
+    }
   }
   return null;
 }

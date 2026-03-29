@@ -382,6 +382,141 @@ describe("addFileSelections archive source handler", () => {
     vi.useRealTimers();
   });
 
+  it("falls back to source listing metadata when selections only carry null placeholders", async () => {
+    vi.useFakeTimers();
+    const localSource = createLocalSource(async () => [
+      {
+        type: "file",
+        name: "demo.prg",
+        path: "/demo.prg",
+        sizeBytes: 2048,
+        modifiedAt: "2024-01-02T03:04:05.000Z",
+      },
+    ]);
+    const deps = createMockDeps();
+    deps.buildPlaylistItem = vi.fn((entry) => ({
+      id: `local:${entry.path}`,
+      request: { source: entry.source, path: entry.path, file: entry.file },
+      category: "prg",
+      label: entry.name,
+      path: entry.path,
+      sourceId: entry.sourceId,
+      sizeBytes: entry.sizeBytes,
+      modifiedAt: entry.modifiedAt,
+      addedAt: new Date().toISOString(),
+      status: "ready",
+      unavailableReason: null,
+    }));
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [
+      { type: "file", name: "demo.prg", path: "/demo.prg", sizeBytes: null, modifiedAt: null },
+    ]);
+
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(deps.buildPlaylistItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "local",
+        path: "/demo.prg",
+        name: "demo.prg",
+        sizeBytes: 2048,
+        modifiedAt: "2024-01-02T03:04:05.000Z",
+      }),
+    );
+    vi.useRealTimers();
+  });
+
+  it("uses selection metadata directly when modifiedAt is already populated", async () => {
+    vi.useFakeTimers();
+    const localSource = createLocalSource(async () => {
+      throw new Error("selection lookup should not run");
+    });
+    const deps = createMockDeps();
+    deps.buildPlaylistItem = vi.fn((entry) => ({
+      id: `local:${entry.path}`,
+      request: { source: entry.source, path: entry.path, file: entry.file },
+      category: "prg",
+      label: entry.name,
+      path: entry.path,
+      sourceId: entry.sourceId,
+      sizeBytes: entry.sizeBytes,
+      modifiedAt: entry.modifiedAt,
+      addedAt: new Date().toISOString(),
+      status: "ready",
+      unavailableReason: null,
+    }));
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [
+      {
+        type: "file",
+        name: "demo.prg",
+        path: "/demo.prg",
+        sizeBytes: null,
+        modifiedAt: "2024-01-02T03:04:05.000Z",
+      },
+    ]);
+
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(deps.buildPlaylistItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "/demo.prg",
+        modifiedAt: "2024-01-02T03:04:05.000Z",
+      }),
+    );
+    vi.useRealTimers();
+  });
+
+  it("uses selection metadata directly when sizeBytes is zero", async () => {
+    vi.useFakeTimers();
+    const localSource = createLocalSource(async () => {
+      throw new Error("selection lookup should not run");
+    });
+    const deps = createMockDeps();
+    deps.buildPlaylistItem = vi.fn((entry) => ({
+      id: `local:${entry.path}`,
+      request: { source: entry.source, path: entry.path, file: entry.file },
+      category: "prg",
+      label: entry.name,
+      path: entry.path,
+      sourceId: entry.sourceId,
+      sizeBytes: entry.sizeBytes,
+      modifiedAt: entry.modifiedAt,
+      addedAt: new Date().toISOString(),
+      status: "ready",
+      unavailableReason: null,
+    }));
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [
+      {
+        type: "file",
+        name: "empty.prg",
+        path: "/empty.prg",
+        sizeBytes: 0,
+        modifiedAt: null,
+      },
+    ]);
+
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(deps.buildPlaylistItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "/empty.prg",
+        sizeBytes: 0,
+      }),
+    );
+    vi.useRealTimers();
+  });
+
   it("reports no supported files when local selections do not resolve to playable entries", async () => {
     const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
     const localSource = createLocalSource(async () => [
@@ -461,14 +596,7 @@ describe("addFileSelections archive source handler", () => {
 
   it("adds hvsc selections using the hvsc file builder", async () => {
     vi.useFakeTimers();
-    const hvscSource = createHvscSource(async () => [
-      {
-        type: "file",
-        name: "demo.sid",
-        path: "/MUSICIANS/D/Demo/demo.sid",
-        sizeBytes: 4096,
-      },
-    ]);
+    const hvscSource = createHvscSource(async () => []);
     const hvscFile = {
       name: "demo.sid",
       lastModified: 0,
@@ -491,7 +619,17 @@ describe("addFileSelections archive source handler", () => {
     }));
     const handler = createAddFileSelectionsHandler(deps as any);
 
-    const promise = handler(hvscSource, [{ type: "file", name: "demo.sid", path: "/MUSICIANS/D/Demo/demo.sid" }]);
+    const promise = handler(hvscSource, [
+      {
+        type: "file",
+        name: "demo.sid",
+        path: "/MUSICIANS/D/Demo/demo.sid",
+        durationMs: 87_000,
+        songNr: 2,
+        subsongCount: 4,
+        sizeBytes: 4096,
+      },
+    ]);
 
     await vi.runAllTimersAsync();
     const result = await promise;
@@ -502,6 +640,9 @@ describe("addFileSelections archive source handler", () => {
       expect.objectContaining({
         source: "hvsc",
         sourceId: "hvsc-library",
+        durationMs: 87_000,
+        songNr: 2,
+        subsongCount: 4,
         file: hvscFile,
       }),
     );

@@ -10,13 +10,17 @@ import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlayRequest } from "@/lib/playback/playbackRouter";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { PlaySource } from "@/lib/playback/playbackRouter";
+import type { ConfigFileReference } from "@/lib/config/configFileReference";
 
 export type PlayableEntry = {
   source: PlaySource;
   name: string;
   path: string;
   file?: LocalPlayFile;
+  configRef?: ConfigFileReference | null;
   durationMs?: number;
+  songNr?: number;
+  subsongCount?: number;
   sourceId?: string | null;
   sizeBytes?: number | null;
   modifiedAt?: string | null;
@@ -28,6 +32,7 @@ export type PlaylistItem = {
   category: PlayFileCategory;
   label: string;
   path: string;
+  configRef?: ConfigFileReference | null;
   durationMs?: number;
   subsongCount?: number;
   sourceId?: string | null;
@@ -43,8 +48,10 @@ export type StoredPlaylistState = {
     source: PlaySource;
     path: string;
     name: string;
+    configRef?: ConfigFileReference | null;
     durationMs?: number;
     songNr?: number;
+    subsongCount?: number;
     sourceId?: string | null;
     sizeBytes?: number | null;
     modifiedAt?: string | null;

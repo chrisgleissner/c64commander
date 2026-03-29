@@ -26,42 +26,34 @@ const setViewportWidth = (width: number) => {
 };
 
 describe("AppBar", () => {
-  it("caps compact top padding to the horizontal shell inset", () => {
+  it.each([
+    { profile: "compact", width: 360, title: "Home" },
+    { profile: "medium", width: 393, title: "Settings" },
+    { profile: "expanded", width: 800, title: "Docs" },
+  ])("uses the same dense header rail for $profile", ({ profile, width, title }) => {
     localStorage.clear();
-    setViewportWidth(360);
+    setViewportWidth(width);
 
-    const { container } = render(
+    const { container, unmount } = render(
       <DisplayProfileProvider>
-        <AppBar title="Home" subtitle="Compact" />
+        <AppBar title={title} subtitle={profile} />
       </DisplayProfileProvider>,
     );
 
     const header = container.querySelector("header");
     const shell = container.querySelector(".app-shell-container");
 
-    expect(header?.style.paddingTop).toBe("0px");
-    expect(shell).toHaveStyle({ paddingTop: "calc(0.5rem * 0.8)", paddingBottom: "calc(0.5rem * 0.8)" });
-    expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
-    expect(screen.queryByText("Compact")).not.toBeInTheDocument();
-  });
+    expect(header?.style.paddingTop).toBe("var(--safe-area-inset-top)");
+    expect(shell).toHaveStyle({
+      paddingTop: "var(--app-chrome-rail-padding-y)",
+      paddingBottom: "var(--app-chrome-rail-padding-y)",
+    });
+    expect(header).toHaveAttribute("data-display-profile", profile);
+    expect(header?.className).toContain("app-chrome-rail");
+    expect(screen.getByRole("heading", { name: title })).toBeVisible();
+    expect(screen.queryByText(profile)).not.toBeInTheDocument();
 
-  it("preserves the safe-area top padding outside compact mode", () => {
-    localStorage.clear();
-    setViewportWidth(800);
-
-    const { container } = render(
-      <DisplayProfileProvider>
-        <AppBar title="Settings" subtitle="Expanded" />
-      </DisplayProfileProvider>,
-    );
-
-    const header = container.querySelector("header");
-    const shell = container.querySelector(".app-shell-container");
-
-    expect(header?.style.paddingTop).toBe("var(--app-header-top-inset, env(safe-area-inset-top))");
-    expect(shell).toHaveStyle({ paddingTop: "calc(1.5rem * 0.8)", paddingBottom: "calc(1.5rem * 0.8)" });
-    expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
-    expect(screen.queryByText("Expanded")).not.toBeInTheDocument();
+    unmount();
   });
 
   it("renders the unified health badge as the sole diagnostic/connectivity element", () => {
@@ -98,7 +90,7 @@ describe("AppBar", () => {
     expect(screen.getByRole("heading", { name: "Docs" })).toBeVisible();
   });
 
-  it("uses a shared header row with balanced height", () => {
+  it("uses a shared single header row with dense balanced height", () => {
     localStorage.clear();
     setViewportWidth(600);
 
@@ -108,7 +100,8 @@ describe("AppBar", () => {
       </DisplayProfileProvider>,
     );
 
-    expect(screen.getByTestId("app-bar-row").className).toContain("min-h-[52px]");
+    expect(screen.getByTestId("app-bar-row").className).toContain("min-h-11");
     expect(screen.getByTestId("app-bar-title-zone")).toBeVisible();
+    expect(screen.getByTestId("app-bar-title-zone").className).toContain("min-h-11");
   });
 });

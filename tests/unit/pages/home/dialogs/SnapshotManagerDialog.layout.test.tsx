@@ -56,13 +56,17 @@ describe("SnapshotManagerDialog", () => {
     );
 
     const header = screen.getByText("Load RAM").closest("div[class*='border-b']");
+    const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
     const filters = screen.getByTestId("snapshot-type-filters").parentElement;
     const body = screen.getByTestId("snapshot-list");
     const description = screen.getByText("Select a snapshot to restore.");
 
-    expect(header?.className).toContain("px-4");
-    expect(header?.className).toContain("pt-3");
-    expect(header?.className).toContain("pb-[0.375rem]");
+    expect(header?.className).not.toContain("pr-12");
+    expect(header?.className).not.toContain("pr-14");
+    expect(headerRow).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" }).closest('[data-interstitial-header-row="true"]')).toBe(
+      headerRow,
+    );
     expect(filters?.className).toContain("space-y-2");
     expect(filters?.className).toContain("px-4");
     expect(filters?.className).toContain("py-3");
@@ -89,13 +93,17 @@ describe("SnapshotManagerDialog", () => {
     );
 
     const header = screen.getByText("Load RAM").closest("div[class*='border-b']");
+    const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
     const filters = screen.getByTestId("snapshot-type-filters").parentElement;
     const body = screen.getByTestId("snapshot-list");
     const description = screen.getByText("Select a snapshot to restore.");
 
-    expect(header?.className).toContain("px-6");
-    expect(header?.className).toContain("pt-[1.125rem]");
-    expect(header?.className).toContain("pb-[0.5625rem]");
+    expect(header?.className).not.toContain("pr-12");
+    expect(header?.className).not.toContain("pr-14");
+    expect(headerRow).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" }).closest('[data-interstitial-header-row="true"]')).toBe(
+      headerRow,
+    );
     expect(filters?.className).toContain("space-y-3");
     expect(filters?.className).toContain("px-6");
     expect(filters?.className).toContain("py-4");
@@ -178,5 +186,36 @@ describe("SnapshotManagerDialog", () => {
     fireEvent.click(screen.getByTestId("snapshot-delete"));
     expect(onDelete).toHaveBeenCalledWith("snapshot-2");
     expect(onRestore).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the expanded comment editor layout and closes it on Escape", () => {
+    localStorage.clear();
+    setViewportWidth(800);
+    const onUpdateLabel = vi.fn();
+
+    render(
+      <DisplayProfileProvider>
+        <SnapshotManagerDialog
+          open
+          onOpenChange={vi.fn()}
+          snapshots={[unlabeledSnapshot]}
+          onRestore={vi.fn()}
+          onDelete={vi.fn()}
+          onUpdateLabel={onUpdateLabel}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add snapshot comment" }));
+
+    const editorLayout = screen.getByLabelText("Snapshot comment").closest("div[class*='grid']");
+    expect(editorLayout?.className).toContain("grid-cols-[minmax(0,1fr)_auto_auto]");
+
+    const input = screen.getByLabelText("Snapshot comment");
+    fireEvent.change(input, { target: { value: "Transient note" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(onUpdateLabel).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Snapshot comment")).not.toBeInTheDocument();
   });
 });

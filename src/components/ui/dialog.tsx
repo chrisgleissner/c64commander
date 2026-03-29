@@ -13,6 +13,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresentation";
 import { cn } from "@/lib/utils";
 import { CloseControl } from "@/components/ui/modal-close-button";
+import { composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
 import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
   INTERSTITIAL_Z_INDEX,
@@ -85,8 +86,8 @@ function useDialogOpenState(nodeRef: React.RefObject<HTMLElement | null>, nodeVe
 const resolveDialogFooterClassName = () => "flex-row flex-wrap justify-end gap-2";
 
 const DIALOG_HEADER_STYLE = {
-  paddingLeft: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left))",
-  paddingRight: "calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right))",
+  paddingLeft: "calc(var(--display-profile-page-padding-x) + var(--safe-area-inset-left))",
+  paddingRight: "calc(var(--display-profile-page-padding-x) + var(--safe-area-inset-right))",
   paddingTop: "0.625rem",
   paddingBottom: "0.625rem",
 } satisfies React.CSSProperties;
@@ -121,7 +122,7 @@ function collectDialogHeaderSlots(children: React.ReactNode) {
 }
 
 const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, DialogContentProps>(
-  ({ className, children, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
+  ({ className, children, onOpenAutoFocus, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
     const { profile } = useDisplayProfile();
     const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
     const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(ref, `DialogContent[${surface}]`);
@@ -139,6 +140,7 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
               data-interstitial-depth={layer?.depth ?? 1}
               data-modal-surface={surface}
               data-modal-presentation={presentation.mode}
+              onOpenAutoFocus={composeInterstitialOpenAutoFocus(onOpenAutoFocus)}
               style={{ ...style, zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
               {...props}
             >
@@ -183,10 +185,10 @@ const DialogHeader = ({
       style={{ ...DIALOG_HEADER_STYLE, ...((style as React.CSSProperties | undefined) ?? {}) }}
       {...props}
     >
-      <div className="flex min-h-10 items-center gap-3">
+      <div className="flex min-h-10 items-center gap-3" data-interstitial-header-row="true">
         <div className="min-w-0 flex-1">{resolvedTitle}</div>
         {actions || shouldShowClose ? (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2" data-interstitial-header-actions="true">
             {actions}
             {shouldShowClose ? (
               <DialogClose asChild>

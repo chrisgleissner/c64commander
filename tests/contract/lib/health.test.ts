@@ -2,17 +2,18 @@ import { describe, expect, it } from "vitest";
 import { MultiProtocolHealthMonitor, type ProbeFn } from "./health.js";
 
 describe("MultiProtocolHealthMonitor", () => {
-  it("treats telnet as optional when the required protocols are healthy", async () => {
-    const monitor = new MultiProtocolHealthMonitor([
-      healthyProbe("REST"),
-      healthyProbe("ICMP"),
-      healthyProbe("FTP"),
-      failingProbe("TELNET"),
-    ]);
+  it("marks the device degraded when Telnet alone is unavailable", async () => {
+    const monitor = new MultiProtocolHealthMonitor(
+      [healthyProbe("REST"), healthyProbe("ICMP"), healthyProbe("FTP"), failingProbe("TELNET")],
+      {
+        verificationWindowMs: 5,
+        verificationBackoffMs: [1],
+      },
+    );
 
     const result = await monitor.check({ source: "test:optional-telnet" });
 
-    expect(result.state).toBe("HEALTHY");
+    expect(result.state).toBe("DEGRADED");
     expect(result.abort).toBe(false);
   });
 
@@ -70,10 +71,13 @@ describe("MultiProtocolHealthMonitor", () => {
   });
 
   it("classifies persistent cross-protocol failure as unresponsive", async () => {
-    const monitor = new MultiProtocolHealthMonitor([failingProbe("REST"), failingProbe("ICMP"), failingProbe("FTP")], {
-      verificationWindowMs: 5,
-      verificationBackoffMs: [1],
-    });
+    const monitor = new MultiProtocolHealthMonitor(
+      [failingProbe("REST"), failingProbe("ICMP"), failingProbe("FTP"), failingProbe("TELNET")],
+      {
+        verificationWindowMs: 5,
+        verificationBackoffMs: [1],
+      },
+    );
 
     const result = await monitor.check({ source: "test:persistent" });
 

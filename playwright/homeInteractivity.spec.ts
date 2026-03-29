@@ -42,6 +42,13 @@ const getTelnetTraces = async (page: Page) => {
   });
 };
 
+const getAllTraces = async (page: Page) => {
+  return page.evaluate(() => {
+    const tracing = (window as Window & { __c64uTracing?: { getTraces?: () => Array<any> } }).__c64uTracing;
+    return tracing?.getTraces?.() ?? [];
+  });
+};
+
 const applyCompactDisplayProfile = async (page: Page) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.evaluate(() => {
@@ -134,7 +141,7 @@ test.describe("Home interactions", () => {
     await expect(sidEntry).toHaveCount(0);
   });
 
-  test("machine quick actions use REST controls and telnet reboot where expected", async ({ page }: { page: Page }) => {
+  test("machine quick actions use REST controls where expected", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
@@ -163,19 +170,10 @@ test.describe("Home interactions", () => {
       .toBe(true);
     await expect
       .poll(() =>
-        getTelnetTraces(page).then((traces) =>
-          traces.some(
-            (event) =>
-              event.data?.actionId === "rebootClearMemory" &&
-              event.data?.result === "success" &&
-              event.data?.target === "external-mock",
-          ),
-        ),
+        hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot")),
       )
       .toBe(true);
-    expect(hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot"))).toBe(
-      false,
-    );
+    expect(await getTelnetTraces(page)).toEqual([]);
     await expect
       .poll(() => hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:menu")))
       .toBe(true);
@@ -192,6 +190,39 @@ test.describe("Home interactions", () => {
         hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:poweroff")),
       )
       .toBe(true);
+  });
+
+  test("overflow reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+    await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
+    await page.evaluate(() =>
+      (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
+    );
+
+    const rebootRequestsBefore = server.requests.filter(
+      (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot"),
+    ).length;
+
+    await page.getByTestId("home-machine-overflow-trigger").click();
+    await page.getByTestId("home-machine-overflow-rebootClearMemory").click();
+
+    await expect
+      .poll(() =>
+        getTelnetTraces(page).then((traces) =>
+          traces.some(
+            (event) =>
+              event.data?.actionId === "rebootClearMemory" &&
+              event.data?.result === "success" &&
+              event.data?.target === "external-mock",
+          ),
+        ),
+      )
+      .toBe(true);
+
+    expect(
+      server.requests.filter((req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot")).length,
+    ).toBe(rebootRequestsBefore);
   });
 
   test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
@@ -217,6 +248,9 @@ test.describe("Home interactions", () => {
         );
       })
       .toBe(true);
+    expect(hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot"))).toBe(
+      false,
+    );
   });
 
   test("power cycle stays available and succeeds in demo mode", async ({ page }: { page: Page }) => {
@@ -274,6 +308,9 @@ test.describe("Home interactions", () => {
           );
         })
         .toBe(true);
+      expect(
+        hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot")),
+      ).toBe(false);
     } finally {
       await demoServer.close();
     }

@@ -45,13 +45,15 @@ export interface MachineControlsProps {
   onSaveRam: () => void;
   onLoadRam: () => void;
   onPowerOff: () => void;
-  onReboot?: () => void;
+  onReboot: () => void;
+  onToggleMenu: () => void;
   onPowerCycle?: () => void;
+  rebootLoading?: boolean;
+  menuLoading?: boolean;
+  powerCycleLoading?: boolean;
   overflowActions?: MachineOverflowAction[];
   onAction: (fn: () => Promise<void>, label: string) => void;
-  telnetAvailable?: boolean;
   telnetBusy?: boolean;
-  telnetActiveActionId?: string | null;
   footer?: ReactNode;
 }
 
@@ -68,17 +70,18 @@ export function MachineControls({
   onLoadRam,
   onPowerOff,
   onReboot,
+  onToggleMenu,
   onPowerCycle,
+  rebootLoading = false,
+  menuLoading = false,
+  powerCycleLoading = false,
   overflowActions = [],
   onAction,
-  telnetAvailable = false,
   telnetBusy = false,
-  telnetActiveActionId = null,
   footer,
 }: MachineControlsProps) {
   const effectiveBusy = machineTaskBusy || telnetBusy;
-  const canRunTelnetReboot = telnetAvailable && typeof onReboot === "function";
-  const canRunPowerCycle = telnetAvailable && typeof onPowerCycle === "function";
+  const canRunPowerCycle = typeof onPowerCycle === "function";
   const hasOverflowActions = overflowActions.length > 0;
   return (
     <motion.div
@@ -149,18 +152,9 @@ export function MachineControls({
             label="Reboot"
             variant="danger"
             className="border-destructive/40 bg-destructive/[0.04]"
-            onClick={() => {
-              if (canRunTelnetReboot) {
-                void onReboot();
-                return;
-              }
-              onAction(async () => {
-                await controls.reboot.mutateAsync();
-                setMachineExecutionState("running");
-              }, "Machine rebooting");
-            }}
+            onClick={() => void onReboot()}
             disabled={!status.isConnected || effectiveBusy}
-            loading={canRunTelnetReboot ? telnetActiveActionId === "rebootClearMemory" : controls.reboot.isPending}
+            loading={rebootLoading}
           />
           <QuickActionCard
             icon={machineExecutionState === "paused" ? Play : Pause}
@@ -173,9 +167,9 @@ export function MachineControls({
           <QuickActionCard
             icon={Menu}
             label="Menu"
-            onClick={() => onAction(() => controls.menuButton.mutateAsync() as Promise<void>, "Menu toggled")}
+            onClick={() => void onToggleMenu()}
             disabled={!status.isConnected || effectiveBusy}
-            loading={controls.menuButton.isPending}
+            loading={menuLoading}
           />
           <QuickActionCard
             icon={Download}
@@ -201,7 +195,7 @@ export function MachineControls({
             dataTestId="home-power-cycle"
             onClick={() => void onPowerCycle?.()}
             disabled={!status.isConnected || effectiveBusy || !canRunPowerCycle}
-            loading={telnetActiveActionId === "powerCycle"}
+            loading={powerCycleLoading}
           />
           <QuickActionCard
             icon={PowerOff}

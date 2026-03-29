@@ -95,6 +95,10 @@ vi.mock("@/lib/ftp/ftpConfig", () => ({
   getStoredFtpPort: vi.fn(() => 21),
 }));
 
+vi.mock("@/lib/telnet/telnetConfig", () => ({
+  getStoredTelnetPort: vi.fn(() => 23),
+}));
+
 vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: vi.fn(() => ({ state: "REAL_CONNECTED" })),
 }));
@@ -499,6 +503,84 @@ describe("runHealthCheck — CONFIG probe", () => {
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Skipped");
   });
+
+  it("falls back to Keyboard Lighting when LED Strip Settings is unavailable", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const keyboardResp = { "Keyboard Lighting": { "Strip Intensity": { selected: 8 } } };
+    const keyboardReadback = { "Keyboard Lighting": { "Strip Intensity": { selected: 9 } } };
+    mockGetConfigItem.mockImplementation((category: string) => {
+      if (category === "LED Strip Settings") return Promise.resolve({});
+      if (category === "Keyboard Lighting") return Promise.resolve(keyboardResp);
+      return Promise.resolve({});
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce(keyboardResp)
+      .mockResolvedValueOnce(keyboardReadback)
+      .mockResolvedValueOnce(keyboardResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "Keyboard Lighting",
+      "Strip Intensity",
+      9,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
+
+  it("round-trips config items that expose current/min/max fields from the real device schema", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const currentResp = {
+      "LED Strip Settings": {
+        "Strip Intensity": {
+          current: 13,
+          min: 0,
+          max: 31,
+          format: "%d",
+        },
+      },
+    };
+    const currentReadbackResp = {
+      "LED Strip Settings": {
+        "Strip Intensity": {
+          current: 14,
+          min: 0,
+          max: 31,
+          format: "%d",
+        },
+      },
+    };
+    mockGetConfigItem
+      .mockResolvedValueOnce(currentResp)
+      .mockResolvedValueOnce(currentReadbackResp)
+      .mockResolvedValueOnce(currentResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "LED Strip Settings",
+      "Strip Intensity",
+      14,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
 });
 
 // ─── runHealthCheck — REST probe with device errors ──────────────────────────
@@ -750,6 +832,14 @@ describe("runHealthCheck — TELNET probe", () => {
 
     expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23, "secret");
   });
+
+  it("uses a shorter screen-read timeout so the probe fits inside the global telnet budget", async () => {
+    setupAllProbesSuccess();
+
+    await runHealthCheck();
+
+    expect(mockTelnetReadScreen).toHaveBeenCalledWith(250);
+  });
 });
 
 // ─── runHealthCheck — REST probe with undefined optional fields ───────────────
@@ -909,11 +999,18 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       },
     };
 
-    mockGetConfigItem
-      .mockResolvedValueOnce({ "LED Strip Settings": {} })
-      .mockResolvedValueOnce(audioResp)
-      .mockResolvedValueOnce(audioReadback)
-      .mockResolvedValueOnce(audioResp);
+    let audioMixerReads = 0;
+    mockGetConfigItem.mockImplementation((category: string, item: string) => {
+      if (category === "LED Strip Settings") return Promise.resolve({ "LED Strip Settings": {} });
+      if (category === "Keyboard Lighting") return Promise.resolve({});
+      if (category === "Audio Mixer" && item === "Vol UltiSid 1") {
+        audioMixerReads += 1;
+        if (audioMixerReads === 1) return Promise.resolve(audioResp);
+        if (audioMixerReads === 2) return Promise.resolve(audioReadback);
+        return Promise.resolve(audioResp);
+      }
+      return Promise.resolve({});
+    });
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
 
@@ -966,11 +1063,18 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       },
     };
 
-    mockGetConfigItem
-      .mockResolvedValueOnce({ "LED Strip Settings": {} })
-      .mockResolvedValueOnce(audioResp)
-      .mockResolvedValueOnce(audioReadback)
-      .mockResolvedValueOnce(audioResp);
+    let audioMixerReads = 0;
+    mockGetConfigItem.mockImplementation((category: string, item: string) => {
+      if (category === "LED Strip Settings") return Promise.resolve({ "LED Strip Settings": {} });
+      if (category === "Keyboard Lighting") return Promise.resolve({});
+      if (category === "Audio Mixer" && item === "Vol UltiSid 1") {
+        audioMixerReads += 1;
+        if (audioMixerReads === 1) return Promise.resolve(audioResp);
+        if (audioMixerReads === 2) return Promise.resolve(audioReadback);
+        return Promise.resolve(audioResp);
+      }
+      return Promise.resolve({});
+    });
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
 

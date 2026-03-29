@@ -5,8 +5,9 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
+import { applyConfigFileReference } from "@/lib/config/applyConfigFileReference";
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
@@ -34,6 +35,10 @@ vi.mock("@/lib/logging", () => ({
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
+}));
+
+vi.mock("@/lib/config/applyConfigFileReference", () => ({
+  applyConfigFileReference: vi.fn(async () => undefined),
 }));
 
 const createPlaylistItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem => ({
@@ -125,6 +130,7 @@ const renderPlaybackController = (
       repeatEnabled: options?.repeatEnabled ?? false,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
+      deviceProduct: "C64 Ultimate",
       ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
       resolveSonglengthDurationMsForPath:
         options?.resolveSonglengthDurationMsForPath ?? vi.fn().mockResolvedValue(null),
@@ -214,6 +220,93 @@ describe("usePlaybackController", () => {
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
   });
 
+  it("preserves imported HVSC SID duration and subsong metadata in the play request", async () => {
+    const hvscFile = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(4)),
+    };
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "demo.sid",
+        path: "/MUSICIANS/Test/demo.sid",
+        request: {
+          source: "hvsc",
+          path: "/MUSICIANS/Test/demo.sid",
+          file: hvscFile as any,
+          songNr: 2,
+        },
+        durationMs: 12_000,
+        subsongCount: 4,
+        sourceId: "hvsc-library",
+      }),
+    ];
+    const setCurrentSubsongCount = vi.fn();
+    const setDurationMs = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      setCurrentSubsongCount,
+      setDurationMs,
+    });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(hvscFile.arrayBuffer).not.toHaveBeenCalled();
+    expect(setCurrentSubsongCount).toHaveBeenCalledWith(4);
+    expect(setDurationMs).toHaveBeenCalledWith(12_000);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: "hvsc",
+        path: "/MUSICIANS/Test/demo.sid",
+        songNr: 2,
+        durationMs: 12_000,
+      }),
+      undefined,
+    );
+  });
+
+  it("logs structured playback request details for HVSC items before execution", async () => {
+    const hvscFile = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(4)),
+    };
+    const playlist = [
+      createPlaylistItem({
+        id: "hvsc-item-1",
+        category: "sid",
+        label: "demo.sid",
+        path: "/MUSICIANS/Test/demo.sid",
+        request: {
+          source: "hvsc",
+          path: "/MUSICIANS/Test/demo.sid",
+          file: hvscFile as any,
+          songNr: 2,
+        },
+        durationMs: 12_000,
+        subsongCount: 4,
+        sourceId: "hvsc-library",
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "info",
+      "Playback request started",
+      expect.objectContaining({
+        itemId: "hvsc-item-1",
+        label: "demo.sid",
+        category: "sid",
+        source: "hvsc",
+        sourceId: "hvsc-library",
+        path: "/MUSICIANS/Test/demo.sid",
+        songNr: 2,
+        durationMs: 12_000,
+      }),
+    );
+  });
+
   it("refreshes playback mute state before starting playback and only then executes the play plan", async () => {
     const playlist = [createPlaylistItem()];
     const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
@@ -232,6 +325,53 @@ describe("usePlaybackController", () => {
     expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(executePlayPlan).mock.invocationCallOrder[0],
     );
+  });
+
+  it("applies an associated config before executing the play plan", async () => {
+    const playlist = [
+      createPlaylistItem({
+        configRef: {
+          kind: "ultimate",
+          fileName: "demo.cfg",
+          path: "/USB1/test-data/snapshots/demo.cfg",
+        },
+      }),
+    ];
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderPlaybackController(playlist, { ensurePlaybackConnection, ensureUnmuted });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(vi.mocked(applyConfigFileReference)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configRef: playlist[0].configRef,
+        deviceProduct: "C64 Ultimate",
+      }),
+    );
+    expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(applyConfigFileReference).mock.invocationCallOrder[0],
+    );
+    expect(vi.mocked(applyConfigFileReference).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(executePlayPlan).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("fails playback start when applying the associated config fails", async () => {
+    vi.mocked(applyConfigFileReference).mockRejectedValueOnce(new Error("config apply failed"));
+    const playlist = [
+      createPlaylistItem({
+        configRef: {
+          kind: "ultimate",
+          fileName: "demo.cfg",
+          path: "/USB1/test-data/snapshots/demo.cfg",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow("config apply failed");
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 
   it("fails playback start when unmuting before playback start fails", async () => {

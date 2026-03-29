@@ -809,7 +809,7 @@ seed_smoke_config() {
     return 0
   fi
 
-  local payload='{"target":"mock","readOnly":false,"debugLogging":true}'
+  local payload='{"target":"mock","readOnly":false,"debugLogging":true,"featureFlags":{"hvsc_enabled":true}}'
   log "Smoke config payload for ${flow}: ${payload}"
   mkdir -p "$app_data_dir/Documents" "$app_data_dir/Library/NoCloud" "$app_data_dir/Library/Application Support"
   printf '%s' "$payload" > "$app_data_dir/Documents/c64u-smoke.json"

@@ -14,8 +14,13 @@ import HomePage from "@/pages/HomePage";
 const {
   toastSpy,
   reportUserErrorSpy,
+  addErrorLogSpy,
   clearRamAndRebootSpy,
   executeTelnetActionSpy,
+  rebootFullSpy,
+  rebootKeepRamSpy,
+  powerCycleSpy,
+  toggleMenuSpy,
   selectRamDumpFolderSpy,
   saveRamDumpFolderConfigSpy,
   createSnapshotSpy,
@@ -24,12 +29,23 @@ const {
   updateSnapshotLabelSpy,
   snapshotEntryToBytesSpy,
   getCurrentPlaybackSnapshotLabelSpy,
+  reuWorkflowSaveSnapshotSpy,
+  reuWorkflowRestoreSnapshotSpy,
+  configWorkflowSaveSnapshotSpy,
+  configWorkflowApplyLocalSnapshotSpy,
+  pickConfigSnapshotFileSpy,
   telnetState,
+  deviceControlErrorState,
 } = vi.hoisted(() => ({
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
+  addErrorLogSpy: vi.fn(),
   clearRamAndRebootSpy: vi.fn(),
   executeTelnetActionSpy: vi.fn(),
+  rebootFullSpy: vi.fn(),
+  rebootKeepRamSpy: vi.fn(),
+  powerCycleSpy: vi.fn(),
+  toggleMenuSpy: vi.fn(),
   selectRamDumpFolderSpy: vi.fn(),
   saveRamDumpFolderConfigSpy: vi.fn(),
   createSnapshotSpy: vi.fn(),
@@ -38,10 +54,19 @@ const {
   updateSnapshotLabelSpy: vi.fn(),
   snapshotEntryToBytesSpy: vi.fn(),
   getCurrentPlaybackSnapshotLabelSpy: vi.fn(),
+  reuWorkflowSaveSnapshotSpy: vi.fn(),
+  reuWorkflowRestoreSnapshotSpy: vi.fn(),
+  configWorkflowSaveSnapshotSpy: vi.fn(),
+  configWorkflowApplyLocalSnapshotSpy: vi.fn(),
+  pickConfigSnapshotFileSpy: vi.fn(),
   telnetState: {
     isBusy: false,
     activeActionId: null as string | null,
     isAvailable: true,
+  },
+  deviceControlErrorState: {
+    isDeviceControlError: (error: unknown) =>
+      error instanceof Error && "operation" in error && "transport" in error && "endpoint" in error,
   },
 }));
 
@@ -160,12 +185,26 @@ vi.mock("@/lib/uiErrors", () => ({
   reportUserError: reportUserErrorSpy,
 }));
 
+vi.mock("@/lib/logging", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/logging")>("@/lib/logging");
+  return {
+    ...actual,
+    addErrorLog: addErrorLogSpy,
+  };
+});
+
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({}),
+  resolveDeviceHostFromStorage: () => "c64u",
 }));
 
 vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
   useInteractiveConfigWrite: () => ({ write: vi.fn(), isPending: false }),
+}));
+
+vi.mock("@/lib/native/platform", () => ({
+  getPlatform: () => "android",
+  isNativePlatform: () => true,
 }));
 
 vi.mock("@/lib/machine/ramOperations", () => ({
@@ -176,6 +215,12 @@ vi.mock("@/lib/machine/ramOperations", () => ({
 
 vi.mock("@/lib/machine/ramDumpStorage", () => ({
   selectRamDumpFolder: selectRamDumpFolderSpy,
+  ensureRamDumpFolder: vi.fn().mockResolvedValue({
+    treeUri: "content://ram-dumps",
+    rootName: "RAM DUMPS",
+    selectedAt: "2026-01-01T00:00:00.000Z",
+    displayPath: "content://ram-dumps",
+  }),
 }));
 
 vi.mock("@/lib/config/ramDumpFolderStore", () => ({
@@ -199,6 +244,77 @@ vi.mock("@/lib/snapshot/snapshotStore", () => ({
 
 vi.mock("@/lib/snapshot/currentPlaybackSnapshotLabel", () => ({
   getCurrentPlaybackSnapshotLabel: getCurrentPlaybackSnapshotLabelSpy,
+}));
+
+vi.mock("@/lib/reu/reuSnapshotStore", () => ({
+  useReuSnapshotStore: () => ({ snapshots: [] }),
+  deleteReuSnapshotFromStore: vi.fn(),
+  updateReuSnapshotLabel: vi.fn(),
+}));
+
+vi.mock("@/lib/reu/reuSnapshotStorage", () => ({
+  deleteReuSnapshotFile: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/reu/reuWorkflow", () => ({
+  createReuWorkflow: () => ({
+    saveSnapshot: reuWorkflowSaveSnapshotSpy,
+    restoreSnapshot: reuWorkflowRestoreSnapshotSpy,
+  }),
+}));
+
+vi.mock("@/lib/reu/reuTelnetWorkflow", () => ({
+  saveRemoteReuFromTemp: vi.fn(),
+  restoreRemoteReuFromTemp: vi.fn(),
+}));
+
+vi.mock("@/lib/config/configWorkflow", () => ({
+  createConfigWorkflow: () => ({
+    saveSnapshot: configWorkflowSaveSnapshotSpy,
+    applyLocalSnapshot: configWorkflowApplyLocalSnapshotSpy,
+    applyRemoteSnapshot: vi.fn(),
+  }),
+}));
+
+vi.mock("@/lib/config/configTelnetWorkflow", () => ({
+  saveRemoteConfigFromTemp: vi.fn(),
+  applyRemoteConfigFromTemp: vi.fn(),
+  applyRemoteConfigFromPath: vi.fn(),
+}));
+
+vi.mock("@/lib/config/configSnapshotStorage", () => ({
+  persistConfigSnapshotFile: vi.fn(),
+  pickConfigSnapshotFile: pickConfigSnapshotFileSpy,
+}));
+
+vi.mock("@/lib/ftp/ftpClient", () => ({
+  listFtpDirectory: vi.fn(),
+  readFtpFile: vi.fn(),
+  writeFtpFile: vi.fn(),
+}));
+
+vi.mock("@/lib/ftp/ftpConfig", () => ({
+  getStoredFtpPort: () => 21,
+}));
+
+vi.mock("@/lib/secureStorage", () => ({
+  getPassword: vi.fn().mockResolvedValue("secret"),
+}));
+
+vi.mock("@/lib/c64api/hostConfig", () => ({
+  stripPortFromDeviceHost: (host: string) => host,
+}));
+
+vi.mock("@/lib/telnet/telnetSession", () => ({
+  createTelnetSession: vi.fn(),
+}));
+
+vi.mock("@/lib/telnet/telnetClient", () => ({
+  createTelnetClient: vi.fn(),
+}));
+
+vi.mock("@/lib/telnet/telnetConfig", () => ({
+  getStoredTelnetPort: () => 23,
 }));
 
 vi.mock("@/lib/snapshot/snapshotFormat", () => ({
@@ -236,6 +352,38 @@ vi.mock("@/hooks/useTelnetActions", () => ({
   }),
 }));
 
+vi.mock("@/lib/deviceControl/deviceControl", () => ({
+  useDeviceControl: () => ({
+    toggleMenu: toggleMenuSpy,
+    rebootKeepRam: rebootKeepRamSpy,
+    rebootFull: rebootFullSpy,
+    powerCycle: powerCycleSpy,
+    resetMenuState: vi.fn(),
+    getMenuState: vi.fn().mockReturnValue(false),
+    describePowerCycleFallback: vi
+      .fn()
+      .mockReturnValue("PUT /v1/machine:pause -> PUT /v1/machine:writemem -> PUT /v1/machine:reboot"),
+  }),
+  isDeviceControlError: deviceControlErrorState.isDeviceControlError,
+}));
+
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuContent: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+    <div {...props}>{children}</div>
+  ),
+  DropdownMenuItem: ({
+    children,
+    onSelect,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { onSelect?: () => void }) => (
+    <button type="button" onClick={onSelect} {...props}>
+      {children}
+    </button>
+  ),
+}));
+
 describe("HomePage RAM actions", () => {
   vi.setConfig({ testTimeout: 15000 });
 
@@ -246,7 +394,57 @@ describe("HomePage RAM actions", () => {
     (globalThis as any).__BUILD_TIME__ = "";
     clearRamAndRebootSpy.mockResolvedValue(undefined);
     executeTelnetActionSpy.mockResolvedValue(undefined);
+    rebootFullSpy.mockResolvedValue({
+      operation: "rebootFull",
+      transport: "REST",
+      endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
+      response: { errors: [] },
+      menuOpen: false,
+    });
+    rebootKeepRamSpy.mockResolvedValue({
+      operation: "rebootKeepRam",
+      transport: "REST",
+      endpoint: "PUT /v1/machine:reboot",
+      response: { errors: [] },
+      menuOpen: false,
+    });
+    powerCycleSpy.mockResolvedValue({
+      operation: "powerCycle",
+      transport: "REST_FALLBACK_FULL_REBOOT",
+      endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
+      response: { errors: [], fallback: true },
+      menuOpen: false,
+    });
+    toggleMenuSpy.mockResolvedValue({
+      operation: "toggleMenu",
+      transport: "REST",
+      endpoint: "PUT /v1/machine:menu_button",
+      response: { errors: [] },
+      menuOpen: true,
+    });
     createSnapshotSpy.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    reuWorkflowSaveSnapshotSpy.mockResolvedValue({
+      metadata: { content_name: "capture.reu" },
+      snapshotType: "reu",
+    });
+    reuWorkflowRestoreSnapshotSpy.mockResolvedValue(undefined);
+    configWorkflowSaveSnapshotSpy.mockResolvedValue({
+      fileName: "c64u-config-2026-03-29.cfg",
+      createdAt: "2026-03-29T00:00:00.000Z",
+      sizeBytes: 42,
+      remoteFileName: "CONFIG.CFG",
+      storage: { kind: "android-tree", treeUri: "content://cfg", path: "/c64u-config-2026-03-29.cfg" },
+    });
+    configWorkflowApplyLocalSnapshotSpy.mockResolvedValue({
+      remoteFileName: "picked.cfg",
+      remotePath: "/Temp/picked.cfg",
+    });
+    pickConfigSnapshotFileSpy.mockResolvedValue({
+      name: "picked.cfg",
+      sizeBytes: 16,
+      modifiedAt: "2026-03-29T00:00:00.000Z",
+      bytes: new Uint8Array([1, 2, 3]),
+    });
     getCurrentPlaybackSnapshotLabelSpy.mockReturnValue(undefined);
     loadMemoryRangesSpy.mockResolvedValue(undefined);
     telnetState.isBusy = false;
@@ -254,15 +452,20 @@ describe("HomePage RAM actions", () => {
     telnetState.isAvailable = true;
   });
 
-  it("runs reboot clear memory action", async () => {
+  it("runs quick reboot through REST without telnet", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /^reboot$/i }));
 
-    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"));
-    expect(toastSpy).toHaveBeenCalledWith({
-      title: "Machine rebooting",
-    });
+    await waitFor(() => expect(rebootKeepRamSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+    await waitFor(
+      () =>
+        expect(toastSpy).toHaveBeenCalledWith({
+          title: "Machine rebooting",
+        }),
+      { timeout: 5000 },
+    );
   }, 15000);
 
   it("disables reboot while a telnet action is already busy", () => {
@@ -275,6 +478,56 @@ describe("HomePage RAM actions", () => {
     fireEvent.click(rebootButton);
 
     expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+    expect(rebootKeepRamSpy).not.toHaveBeenCalled();
+  });
+
+  it("runs power cycle through telnet", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole("button", { name: /^power cycle$/i }));
+
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("powerCycle"), { timeout: 5000 });
+    expect(powerCycleSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Power cycled" }), { timeout: 5000 });
+  });
+
+  it("runs clear-ram reboot from the overflow menu through telnet when available", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
+
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
+    expect(rebootFullSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Machine rebooting" }), { timeout: 5000 });
+  });
+
+  it("falls back to REST clear-ram reboot when telnet is unavailable", async () => {
+    telnetState.isAvailable = false;
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
+
+    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to REST clear-ram reboot when telnet execution fails", async () => {
+    executeTelnetActionSpy.mockRejectedValueOnce(new Error("telnet offline"));
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
+
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
+    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(addErrorLogSpy).toHaveBeenCalledWith(
+      "Reboot clear memory telnet failed; falling back to REST",
+      expect.objectContaining({
+        error: expect.objectContaining({ message: "telnet offline" }),
+      }),
+    );
   });
 
   it("opens Save RAM dialog when Save RAM button is clicked", async () => {
@@ -284,6 +537,35 @@ describe("HomePage RAM actions", () => {
 
     await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
   }, 15000);
+
+  it("saves config to a local file through the shared config workflow", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-config-save-file"));
+
+    await waitFor(() => expect(configWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("saveConfigToFile");
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Config saved to file",
+      description: "c64u-config-2026-03-29.cfg",
+    });
+  });
+
+  it("loads config from a local file through the shared config workflow", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-config-load-file"));
+
+    await waitFor(() => expect(pickConfigSnapshotFileSpy).toHaveBeenCalled(), { timeout: 5000 });
+    await waitFor(
+      () => expect(configWorkflowApplyLocalSnapshotSpy).toHaveBeenCalledWith("picked.cfg", new Uint8Array([1, 2, 3])),
+      { timeout: 5000 },
+    );
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Config loaded from file",
+      description: "picked.cfg",
+    });
+  });
 
   it("saves program snapshot and shows toast when Program type is selected", async () => {
     renderHomePage();
@@ -322,4 +604,79 @@ describe("HomePage RAM actions", () => {
 
     await waitFor(() => expect(screen.getByTestId("snapshot-empty")).toBeInTheDocument());
   }, 15000);
+
+  it("runs Save REU through the REU workflow instead of the generic Telnet action", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+
+    await waitFor(() => expect(reuWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+    expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("saveReuMemory");
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "REU snapshot saved",
+      }),
+    );
+  });
+
+  it("shows the REU progress dialog while save is running and closes it after success", async () => {
+    let resolveSave: ((value: { metadata: { content_name: string }; snapshotType: "reu" }) => void) | undefined;
+    reuWorkflowSaveSnapshotSpy.mockImplementationOnce((onProgress?: (state: any) => void) => {
+      onProgress?.({
+        step: "saving-reu",
+        title: "Saving REU on the Ultimate",
+        description: "The menu action is running in /Temp.",
+        progress: 20,
+      });
+      return new Promise((resolve) => {
+        resolveSave = resolve;
+      });
+    });
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+
+    const dialog = await screen.findByTestId("reu-progress-dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText("Saving REU on the Ultimate")).toBeInTheDocument();
+    expect(screen.getByText("This can take around 30 seconds.")).toBeInTheDocument();
+
+    resolveSave?.({
+      metadata: { content_name: "capture.reu" },
+      snapshotType: "reu",
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("reu-progress-dialog")).not.toBeInTheDocument());
+  });
+
+  it("closes the REU progress dialog and reports the error when save fails", async () => {
+    reuWorkflowSaveSnapshotSpy.mockImplementationOnce(async (onProgress?: (state: any) => void) => {
+      onProgress?.({
+        step: "waiting-for-file",
+        title: "Waiting for REU file",
+        description: "The Ultimate can take around 30 seconds to finish saving the REU image.",
+        progress: 40,
+      });
+      throw new Error("Timed out waiting for the new REU file in /Temp.");
+    });
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+
+    await waitFor(() =>
+      expect(reportUserErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "HOME_SAVE_REU",
+          title: "Save REU failed",
+          description: "Timed out waiting for the new REU file in /Temp.",
+        }),
+      ),
+    );
+    expect(screen.queryByTestId("reu-progress-dialog")).not.toBeInTheDocument();
+  });
 });

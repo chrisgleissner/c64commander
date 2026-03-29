@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
@@ -111,6 +111,56 @@ describe("profile-aware dialog surfaces", () => {
     expect(screen.queryByTestId("dialog-close")).not.toBeInTheDocument();
   });
 
+  it("keeps dialog header string extras below the shared row", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    render(
+      <DisplayProfileProvider>
+        <Dialog open>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Shared row</DialogTitle>
+              <DialogDescription>Shared row description</DialogDescription>
+              Header note
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByText("Header note")).toBeVisible();
+  });
+
+  it("keeps dialog header actions on the shared row to the left of the close control", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    render(
+      <DisplayProfileProvider>
+        <Dialog open>
+          <DialogContent>
+            <DialogHeader actions={<button type="button">Action</button>}>
+              <DialogTitle>Shared row</DialogTitle>
+              <DialogDescription>Shared row description</DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+      </DisplayProfileProvider>,
+    );
+
+    const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
+    const actionsRail = document.querySelector('[data-interstitial-header-actions="true"]');
+    const action = screen.getByRole("button", { name: "Action" });
+    const close = screen.getByRole("button", { name: "Close" });
+
+    expect(headerRow).not.toBeNull();
+    expect(actionsRail).not.toBeNull();
+    expect(actionsRail).toContainElement(action);
+    expect(actionsRail).toContainElement(close);
+    expect(action.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("supports alert dialog header extras and hidden close controls", () => {
     localStorage.clear();
     setViewportWidth(480);
@@ -142,5 +192,51 @@ describe("profile-aware dialog surfaces", () => {
     expect(screen.getByTestId("alert-header-extra")).toBeVisible();
     expect(screen.getByRole("button", { name: "Inspect" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+  });
+
+  it("keeps alert dialog header string extras below the shared row", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    render(
+      <DisplayProfileProvider>
+        <AlertDialog open>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Alert title</AlertDialogTitle>
+              <AlertDialogDescription>Alert description</AlertDialogDescription>
+              Alert note
+            </AlertDialogHeader>
+          </AlertDialogContent>
+        </AlertDialog>
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByText("Alert note")).toBeVisible();
+  });
+
+  it("focuses the dialog surface instead of the close control when it opens", async () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    render(
+      <DisplayProfileProvider>
+        <Dialog open>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save RAM</DialogTitle>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+      </DisplayProfileProvider>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(dialog);
+    });
+    expect(document.activeElement).not.toBe(close);
   });
 });

@@ -1757,7 +1757,7 @@ export const HomeDiskManager = () => {
 
       <AppSheet open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
         <AppSheetContent className="overflow-hidden p-0" data-testid="mount-disk-sheet">
-          <AppSheetHeader className="px-4 pb-[0.5625rem] pt-3 pr-14 sm:px-6 sm:pb-[0.75rem] sm:pt-[0.9375rem]">
+          <AppSheetHeader>
             <AppSheetTitle>Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ""}</AppSheetTitle>
             <AppSheetDescription>Select a disk to mount in this drive.</AppSheetDescription>
           </AppSheetHeader>

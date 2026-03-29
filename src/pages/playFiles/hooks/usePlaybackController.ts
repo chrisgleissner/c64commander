@@ -35,6 +35,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
+import { applyConfigFileReference } from "@/lib/config/applyConfigFileReference";
 import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
@@ -88,6 +89,7 @@ interface UsePlaybackControllerProps {
     >
   >;
   localSourceTreeUris: Map<string, string | null>;
+  deviceProduct?: string | null;
   ensurePlaybackConnection: () => Promise<void>;
   resolveSonglengthDurationMsForPath: (
     path: string,
@@ -156,6 +158,7 @@ export function usePlaybackController({
   repeatEnabled,
   localEntriesBySourceId,
   localSourceTreeUris,
+  deviceProduct,
   ensurePlaybackConnection,
   resolveSonglengthDurationMsForPath,
   applySonglengthsToItems,
@@ -312,12 +315,21 @@ export function usePlaybackController({
         }
         let durationOverride: number | undefined;
         let subsongCount: number | undefined;
-        if (item.category === "sid" && item.request.source === "local") {
-          const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
-          durationOverride = metadata.durationMs;
-          subsongCount = metadata.subsongCount;
-          if (!metadata.readable) {
-            throw new Error("Local file unavailable. Re-add it to the playlist.");
+        if (item.category === "sid" && item.request.source !== "ultimate") {
+          if (item.durationMs !== undefined && item.subsongCount !== undefined) {
+            durationOverride = item.durationMs;
+            subsongCount = item.subsongCount;
+          } else {
+            const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
+            durationOverride = item.durationMs ?? metadata.durationMs;
+            subsongCount = item.subsongCount ?? metadata.subsongCount;
+            if (!metadata.readable) {
+              throw new Error(
+                item.request.source === "hvsc"
+                  ? "HVSC file unavailable. Reinstall or re-add it to the playlist."
+                  : "Local file unavailable. Re-add it to the playlist.",
+              );
+            }
           }
         } else if (item.category === "sid" && item.request.source === "ultimate" && !item.durationMs) {
           try {
@@ -353,20 +365,40 @@ export function usePlaybackController({
           });
           throw error;
         }
+        if (item.configRef) {
+          await applyConfigFileReference({
+            configRef: item.configRef,
+            deviceProduct,
+            localEntriesBySourceId,
+            localSourceTreeUris,
+          });
+        }
         const api = getC64API();
         if (isSongCategory(item.category)) {
           setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
         } else {
           setCurrentSubsongCount(null);
         }
-        const request: PlayRequest = durationOverride
-          ? { ...item.request, durationMs: durationOverride }
-          : item.request;
+        const resolvedDurationBase = durationOverride ?? item.durationMs;
+        const request: PlayRequest =
+          typeof resolvedDurationBase === "number"
+            ? { ...item.request, durationMs: resolvedDurationBase }
+            : item.request;
         const plan = buildPlayPlan(request);
         const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
         const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
-        const resolvedDurationBase = durationOverride ?? item.durationMs;
         const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
+        addLog("info", "Playback request started", {
+          itemId: item.id,
+          label: item.label,
+          category: item.category,
+          source: request.source,
+          sourceId: item.sourceId,
+          path: request.path,
+          songNr: request.songNr ?? null,
+          durationMs: request.durationMs ?? null,
+          rebootBeforePlay: Boolean(executionOptions?.rebootBeforeMount),
+        });
         setElapsedMs(0);
         setDurationMs(resolvedDuration);
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {

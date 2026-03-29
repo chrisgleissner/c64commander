@@ -29,6 +29,10 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   }
 };
 
+const hostnameFromHost = (host: string) => new URL(`http://${host}`).hostname;
+
+const portFromHost = (host: string) => new URL(`http://${host}`).port || "80";
+
 const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts = 3) => {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -668,7 +672,11 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
 
     const host = new URL(server.baseUrl).host;
+    const hostname = hostnameFromHost(host);
+    const port = portFromHost(host);
     const demoHost = new URL(demoServer.baseUrl).host;
+    const demoHostname = hostnameFromHost(demoHost);
+    const demoPort = portFromHost(demoHost);
     await page.addInitScript(
       ({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
@@ -743,7 +751,11 @@ test.describe("Deterministic Connectivity Simulation", () => {
     }
     await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 15000 });
-    await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();
+    const currentUsingInDemo = page.getByText("Currently using:");
+    await expect(currentUsingInDemo).toBeVisible();
+    await expect(currentUsingInDemo.locator("span")).toHaveText(demoHostname);
+    await expect(currentUsingInDemo).toContainText(`HTTP ${demoPort}`);
+    await expect(currentUsingInDemo).toContainText("(Demo mock)");
     await expect.poll(() => demoServer?.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(true);
 
     server.setReachable(true);
@@ -788,7 +800,8 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
       const state = await indicator.getAttribute("data-connection-state");
       const usingHost = (await currentUsing.locator("span").textContent())?.trim() ?? "";
-      if (state === "REAL_CONNECTED" && usingHost === host) {
+      const currentUsingText = (await currentUsing.textContent())?.trim() ?? "";
+      if (state === "REAL_CONNECTED" && usingHost === hostname && currentUsingText.includes(`HTTP ${port}`)) {
         connected = true;
         break;
       }
@@ -798,15 +811,15 @@ test.describe("Deterministic Connectivity Simulation", () => {
           attempt,
           state,
           usingHost,
-          expectedHost: host,
+          expectedHost: hostname,
+          expectedPort: port,
         });
       }
     }
 
     expect(connected).toBe(true);
-    await expect
-      .poll(async () => (await currentUsing.locator("span").textContent())?.trim() ?? "", { timeout: 30000 })
-      .toBe(host);
+    await expect(currentUsing.locator("span")).toHaveText(hostname, { timeout: 30000 });
+    await expect(currentUsing).toContainText(`HTTP ${port}`);
 
     await snap(page, testInfo, "real-demo-real-manual");
   });
@@ -823,6 +836,10 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     const host = new URL(server.baseUrl).host;
     const demoHost = new URL(demoServer.baseUrl).host;
+    const hostname = hostnameFromHost(host);
+    const port = portFromHost(host);
+    const demoHostname = hostnameFromHost(demoHost);
+    const demoPort = portFromHost(demoHost);
     await page.addInitScript(
       ({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
@@ -838,8 +855,11 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
-    await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();
-    await expect(page.getByText("(Demo mock)", { exact: false })).toBeVisible();
+    const currentUsingInDemo = page.getByText("Currently using:");
+    await expect(currentUsingInDemo).toBeVisible();
+    await expect(currentUsingInDemo.locator("span")).toHaveText(demoHostname);
+    await expect(currentUsingInDemo).toContainText(`HTTP ${demoPort}`);
+    await expect(currentUsingInDemo).toContainText("(Demo mock)");
 
     server.setReachable(true);
     await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
@@ -847,7 +867,8 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     const currentUsing = page.getByText("Currently using:");
     await expect(currentUsing).toBeVisible();
-    await expect(currentUsing.locator("span")).toHaveText(/127\.0\.0\.1:\d+/);
+    await expect(currentUsing.locator("span")).toHaveText(hostname);
+    await expect(currentUsing).toContainText(`HTTP ${port}`);
     await expect(page.getByText("(Demo mock)", { exact: false })).toHaveCount(0);
     await snap(page, testInfo, "currently-using-updated");
   });

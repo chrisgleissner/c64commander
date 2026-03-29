@@ -166,7 +166,7 @@ describe("ftpSourceAdapter", () => {
   });
 
   it("normalizeFtpHost returns empty string as-is", () => {
-    expect(normalizeFtpHost("")).toBe("");
+    expect(normalizeFtpHost("")).toBe("c64u");
   });
 
   it("normalizeFtpHost strips IPv6 brackets", () => {
@@ -404,7 +404,7 @@ describe("ftpSourceAdapter", () => {
     });
 
     it("returns empty for empty host", () => {
-      expect(normalizeFtpHost("")).toBe("");
+      expect(normalizeFtpHost("")).toBe("c64u");
     });
 
     it("handles IPv6 address in brackets", () => {
@@ -417,8 +417,7 @@ describe("ftpSourceAdapter", () => {
     });
 
     it("handles IPv6 with unclosed bracket", () => {
-      // `indexOf(']')` returns -1 → fallback to split(':')[0]
-      expect(normalizeFtpHost("[::1")).toBe("[");
+      expect(normalizeFtpHost("[::1")).toBe("[::1");
     });
   });
 });

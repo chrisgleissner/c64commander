@@ -1,3 +1,63 @@
+# HVSC Workflow Convergence Worklog
+
+## 2026-03-29T00:00:00Z
+
+### Action
+
+- Reclassified the active task as `CODE_CHANGE` with `UI_CHANGE` follow-up only where REU dialogs or user flows are affected.
+- Audited the current REU/FTP work surface from the repository: REU workflow, Telnet automation, snapshot storage, Home integration, Android FTP plugin, web FTP proxy, and REU unit tests.
+- Read the existing `PLANS.md` and `WORKLOG.md` and confirmed they were stale HVSC/overlay plans unrelated to the current REU save/load mission.
+- Prepared to replace `PLANS.md` with a concrete REU/FTP execution plan and start the branch/PR baseline loop.
+
+### Result
+
+- The working area is now scoped to the REU save/load feature set and its FTP extensions instead of prior unrelated tasks.
+- The next commands will baseline git state, branch diff, recent commits, PR review comments, and CI status before applying fixes.
+
+### Evidence
+
+- Relevant files identified: `src/lib/reu/reuWorkflow.ts`, `src/lib/reu/reuTelnetWorkflow.ts`, `src/lib/reu/reuSnapshotStorage.ts`, `src/lib/native/ftpClient.ts`, `src/pages/home/dialogs/ReuProgressDialog.tsx`, `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt`, `web/server/src/index.ts`, `tests/unit/lib/reu/reuWorkflow.test.ts`, `tests/unit/lib/reu/reuTelnetWorkflow.test.ts`, `tests/contract/scenarios/ftp/index.ts`.
+
+### Next step
+
+- Replace `PLANS.md` with the REU/FTP plan, then baseline git/gh state and enumerate unresolved PR review threads.
+
+## 2026-03-28T22:02:57+00:00
+
+### Action
+
+- Established the new real-device execution control state for the active `fix/hvsc-workflow` run.
+- Re-read the repo operating instructions in `README.md`, `.github/copilot-instructions.md`, and `AGENTS.md`.
+- Verified the current branch/worktree with `git status --short --branch`.
+- Located the authoritative real-device HIL entrypoint as `npm run hil:evidence` in `c64scope/package.json`, with the HVSC cases wired in `c64scope/src/validation/cases/exploratoryPlayback.ts` and `c64scope/src/fullAppCoverageExecutor.ts`.
+- Updated `PLANS.md` to make this run's numbered checklist and acceptance checks authoritative.
+
+### Result
+
+- Branch confirmed as `fix/hvsc-workflow...origin/fix/hvsc-workflow` with no tracked worktree drift reported by `git status --short`.
+- The current run now has an explicit execution plan tied to the real Pixel 4, real C64U, and real `c64scope` HIL command.
+
+### Next step
+
+- Read the runtime-critical files that changed recently, then verify the current app version and the live on-device Settings and health-check state before making any new code edits.
+
+## 2026-03-28T00:00:00Z
+
+### Task start and classification
+
+- Classified the task as `CODE_CHANGE` with possible `DOC_PLUS_CODE` follow-up only if validation or operator documentation needs to change after the implementation is verified.
+- Confirmed `PLANS.md` and `WORKLOG.md` already exist in the repo and added a dedicated HVSC convergence section rather than replacing prior history.
+- Began the mandated read pass across repo guidance, UX, Maestro, HVSC runtime, playlist, Android ingest, existing tests, and `c64scope` playback proof files.
+
+### Initial observations
+
+- Prior repo memory confirms the browser HVSC availability gate may be too broad in web contexts, so current UI affordances cannot be treated as proof of native workflow readiness.
+- The required terminal state depends on real Pixel 4 plus real C64U availability; that will be tested explicitly during HIL preflight rather than assumed.
+
+### Next steps
+
+- Finish the required file audit and map the actual HVSC ingestion, browse, metadata, playback, and proof paths before editing code.
+
 # Health Badge Overflow Fix Worklog
 
 ## 2026-03-28T11:14:41Z
@@ -221,6 +281,65 @@
 
 ### 2026-03-27T08:15:00Z
 
+# Consistent Close Control Worklog
+
+## 2026-03-28T11:56:48Z
+
+### Task start and classification
+
+- Classified this task as `UI_CHANGE` and `CODE_CHANGE` because it changes shared interstitial UI behavior, regression coverage, and targeted documentation screenshots.
+- Confirmed the worktree already contains unrelated in-progress edits, including existing `PLANS.md` and `WORKLOG.md` sections for other tasks; those sections are being preserved.
+- Added a dedicated close-control convergence section to `PLANS.md` instead of replacing prior plan history.
+
+### Files inspected
+
+- Repo guidance:
+  - `README.md`
+  - `.github/copilot-instructions.md`
+  - `AGENTS.md`
+  - `docs/ux-guidelines.md`
+- Shared primitives:
+  - `src/components/ui/modal-close-button.tsx`
+  - `src/components/ui/app-surface.tsx`
+  - `src/components/ui/dialog.tsx`
+  - `src/components/ui/alert-dialog.tsx`
+- Reference and affected UI surfaces:
+  - `src/components/itemSelection/ItemSelectionDialog.tsx`
+  - `src/components/lists/SelectableActionList.tsx`
+  - `src/components/disks/HomeDiskManager.tsx`
+  - `src/pages/home/dialogs/SnapshotManagerDialog.tsx`
+  - `src/pages/home/dialogs/LoadConfigDialog.tsx`
+  - `src/pages/home/dialogs/ManageConfigDialog.tsx`
+  - `src/components/archive/OnlineArchiveDialog.tsx`
+  - `src/components/lighting/LightingStudioDialog.tsx`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/components/diagnostics/LatencyAnalysisPopup.tsx`
+  - `src/components/diagnostics/AnalyticPopup.tsx`
+- Existing regression and screenshot coverage:
+  - `tests/unit/components/ui/closeControl.test.tsx`
+  - `tests/unit/components/ui/dialog.test.tsx`
+  - `tests/unit/components/ui/app-surface.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.layout.test.tsx`
+  - `playwright/modalConsistency.spec.ts`
+  - `playwright/itemSelection.spec.ts`
+  - `playwright/diskManagement.spec.ts`
+  - `playwright/screenshots.spec.ts`
+
+### Audit findings
+
+- The shared `CloseControl` already matches the required plain `×` glyph and still exposes a visible focus-ring class contract.
+- The main root cause is open-time autofocus behavior: many dialogs and sheets rely on default Radix autofocus, which allows the close button to become visibly focused immediately after open.
+- The secondary root cause is legacy sheet-header spacing overrides such as `pr-14`, `pr-12`, `pt-3`, and custom compact/expanded padding combinations that detach the close rail from the shared header row.
+- The `Add items` surfaces in `src/components/itemSelection/ItemSelectionDialog.tsx` remain the reference implementation because they already prevent open-time autofocus and do not use bespoke header padding hacks.
+
+### Next implementation slice
+
+- Patch the shared dialog/sheet primitives first so the open-focus policy is centralized.
+- Remove the affected per-screen header padding overrides next.
+- Add focused unit and Playwright regressions before refreshing the minimum screenshot set.
+
 - Validated `/tmp/c64-screenshots-proof.oFgWB2` as a detached local git worktree, not a separate repository or branch.
 - Compared the proof worktree copies of `playwright/screenshots.spec.ts`, `scripts/revert-identical-pngs.mjs`, `scripts/diff-screenshots.mjs`, and `scripts/screenshotMetadataDedupe.js` against the active branch and found no content differences.
 - Classified the proof worktree as disposable proof scaffolding with no unique logic to merge.
@@ -299,3 +418,153 @@
 - Investigated the unexpected non-overview Home PNGs by diffing working-tree images against `HEAD` with `node scripts/diff-screenshots.mjs` and spot-checking exported `HEAD` vs working-tree image pairs under `.tmp/head-vs-work/`.
 - Confirmed the non-overview Home files were not prune misses: they contained real visual deltas such as changed dialog contents, different section framing, and different scroll positions.
 - Restored all non-`overview` Home screenshot paths to `HEAD` so the remaining screenshot refresh set matches the current task scope: only `home/*overview*.png` variants remain modified.
+
+## Consistent Close Control
+
+### 2026-03-28T12:26:59Z
+
+- Created and maintained the repo-root `PLANS.md` and `WORKLOG.md` sections for the close-control convergence task.
+- Classified the task as `UI_CHANGE`.
+- Read the required guidance and touched-surface files before editing: `README.md`, `.github/copilot-instructions.md`, `AGENTS.md`, `docs/ux-guidelines.md`, the shared interstitial primitives, the audited dialog/sheet surfaces, the unit regressions, and the relevant Playwright specs.
+- Re-verified the root-cause split from the live code: shared close glyph already correct, Radix open-time autofocus causing visible rings, and legacy `AppSheetHeader` padding hacks detaching the close rail.
+
+### 2026-03-28T12:26:59Z
+
+- Added `src/components/ui/interstitialFocus.ts` with `composeInterstitialOpenAutoFocus()` to centralize the open-focus contract.
+- Updated `src/components/ui/app-surface.tsx`, `src/components/ui/dialog.tsx`, and `src/components/ui/alert-dialog.tsx` so dialogs and sheets focus the surface container on open instead of the close button while still composing caller-provided `onOpenAutoFocus` handlers.
+- Added shared header-row markers (`data-interstitial-header-row`, `data-interstitial-header-actions`) for layout assertions.
+- Removed now-redundant per-surface `onOpenAutoFocus={(e) => e.preventDefault()}` overrides from `src/components/itemSelection/ItemSelectionDialog.tsx`, `src/components/DemoModeInterstitial.tsx`, and the main `Lighting Studio` sheet path in `src/components/lighting/LightingStudioDialog.tsx`.
+
+### 2026-03-28T12:26:59Z
+
+- Removed legacy close-rail spacing overrides from:
+  - `src/components/archive/OnlineArchiveDialog.tsx`
+  - `src/pages/home/dialogs/LoadConfigDialog.tsx`
+  - `src/pages/home/dialogs/ManageConfigDialog.tsx`
+  - `src/components/disks/HomeDiskManager.tsx`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/components/diagnostics/LatencyAnalysisPopup.tsx`
+  - `src/pages/home/dialogs/SnapshotManagerDialog.tsx`
+  - `src/components/lighting/LightingStudioDialog.tsx`
+- Fixed `src/components/lists/SelectableActionList.tsx` to pass `AppSheetTitle` and `AppSheetDescription` as direct `AppSheetHeader` children so the shared header slot collector can keep title, actions, and close on one row.
+
+### 2026-03-28T12:26:59Z
+
+- Added and updated regression coverage in:
+  - `tests/unit/components/ui/closeControl.test.tsx`
+  - `tests/unit/components/ui/app-surface.test.tsx`
+  - `tests/unit/components/ui/dialog.test.tsx`
+  - `tests/unit/components/ui/interstitialFocus.test.ts`
+  - `tests/unit/components/lists/SelectableActionList.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.test.tsx`
+  - `tests/unit/pages/home/dialogs/SnapshotManagerDialog.layout.test.tsx`
+- Updated browser regressions in:
+  - `playwright/modalConsistency.spec.ts`
+  - `playwright/itemSelection.spec.ts`
+  - `playwright/diskManagement.spec.ts`
+- Added assertions for:
+  - no open-time focus on the close control
+  - one shared header row for title/actions/close
+  - exactly one close button on representative surfaces
+  - diagnostics overflow menu staying left of the close control
+
+### 2026-03-28T12:26:59Z
+
+- Bootstrapped a repo-local Node 24 toolchain in `.tools/node24` because the shell default Node was `v18.19.1` while the repo requires `>=24 <25`; Vitest/jsdom failed under Node 18.
+- Commands run with `PATH="/home/chris/dev/c64/c64commander/.tools/node24/bin:$PATH"`:
+  - `./node_modules/.bin/vitest run tests/unit/components/ui/closeControl.test.tsx tests/unit/components/ui/dialog.test.tsx tests/unit/components/ui/app-surface.test.tsx tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx tests/unit/pages/home/dialogs/SnapshotManagerDialog.test.tsx tests/unit/pages/home/dialogs/SnapshotManagerDialog.layout.test.tsx`
+    - passed: `6` files, `60` tests
+  - `./node_modules/.bin/playwright test playwright/modalConsistency.spec.ts playwright/itemSelection.spec.ts playwright/diskManagement.spec.ts --grep "Diagnostics overflow menu stays left of the close button on small screens|C64U file picker is reachable from interstitial|disk list view all shows full list" --reporter=line`
+    - passed: `4` tests
+  - `./node_modules/.bin/playwright test playwright/screenshots.spec.ts --grep "capture home screenshots|capture lighting studio screenshot|capture disks screenshots|capture play screenshots|capture diagnostics screenshots" --reporter=line`
+    - passed: `5` tests
+  - `npm run lint`
+    - passed with pre-existing warnings only from generated `android/coverage/**` files
+  - `npm run test`
+    - passed: `430` files, `5011` tests
+  - `npm run test:coverage`
+    - passed: `429` files, `5005` tests
+    - global branch coverage: `91.02%`
+  - `npm run build`
+    - passed
+- Coverage initially landed at `90.96%` branches after the first convergence pass. Added the narrow helper/header-slot regressions above to raise the global branch figure honestly to `91.02%`.
+
+### 2026-03-28T12:26:59Z
+
+- Screenshot files written by the targeted harness reruns:
+  - `docs/img/app/diagnostics/01-overview.png`
+  - `docs/img/app/diagnostics/activity/01-visible-list.png`
+  - `docs/img/app/diagnostics/activity/02-expanded-problems.png`
+  - `docs/img/app/diagnostics/activity/05-expanded-traces.png`
+  - `docs/img/app/diagnostics/activity/06-collapsed-after-toggle.png`
+  - `docs/img/app/diagnostics/activity/07-problems-only.png`
+  - `docs/img/app/diagnostics/activity/08-actions-only.png`
+  - `docs/img/app/diagnostics/activity/09-logs-only.png`
+  - `docs/img/app/diagnostics/activity/10-traces-only.png`
+  - `docs/img/app/diagnostics/activity/11-errors-only.png`
+  - `docs/img/app/diagnostics/connection/01-view.png`
+  - `docs/img/app/diagnostics/connection/02-edit.png`
+  - `docs/img/app/diagnostics/filters/01-summary-bar.png`
+  - `docs/img/app/diagnostics/filters/02-editor.png`
+  - `docs/img/app/diagnostics/header/01-expanded.png`
+  - `docs/img/app/diagnostics/header/02-health-check-detail.png`
+  - `docs/img/app/diagnostics/header/03-health-check-live-progress.png`
+  - `docs/img/app/diagnostics/tools/01-menu.png`
+  - `docs/img/app/disks/collection/01-view-all.png`
+  - `docs/img/app/home/00-overview-light.png`
+  - `docs/img/app/home/01-overview-dark.png`
+  - `docs/img/app/home/dialogs/08-lighting-context-lens-medium.png`
+  - `docs/img/app/home/sections/01-system-info-to-cpu-ram.png`
+  - `docs/img/app/play/playlist/01-view-all.png`
+- These were the only `docs/img/app/**` outputs changed by the targeted screenshot suites; no full-corpus screenshot refresh was run.
+
+# Home Device Control Routing Worklog
+
+## 2026-03-28T13:05:00Z
+
+### Task start and classification
+
+- Classified this task as `CODE_CHANGE` and `UI_CHANGE` because it changes executable Home-page device control behavior and its interaction contract.
+- Preserved the existing in-progress plan and worklog sections already present on this branch instead of rewriting them.
+- Added a dedicated execution section to `PLANS.md` for Home device control routing, reboot sequencing, power-cycle transport removal, and menu toggle determinism.
+
+### Initial audit findings
+
+- Confirmed the Home page still directly decides between REST and Telnet in `src/pages/HomePage.tsx` instead of delegating to one authoritative control layer.
+- Confirmed the page routes `powerCycle` and `rebootKeepMemory` through `useTelnetActions`, while `useHomeActions` already contains the correct REST-backed full-reboot primitive via `clearRamAndReboot(api)`.
+- Confirmed `MachineControls` currently treats the primary Reboot button as Telnet-capable when an `onReboot` handler is provided, which is the current root cause for the incorrect reboot transport.
+- Confirmed the REST contract and contract tests already model `/v1/machine:menu_button` as a toggle by issuing it twice in succession, so the menu regression belongs in app orchestration rather than in the API contract.
+- Confirmed tracing support already exists for action start/end, REST request/response, and Telnet operations, and Diagnostics error logging can carry structured details through `addErrorLog` and `reportUserError`.
+
+### Next execution slice
+
+- Introduce `src/lib/deviceControl/deviceControl.ts` as the single control orchestrator.
+- Cut the Home page over to that layer for Menu, Reboot, Reboot (Keep RAM), and Power Cycle.
+- Add regression tests that fail on any Telnet routing for those actions and prove the required sequencing and 10-step menu toggle alternation.
+
+## 2026-03-28T19:58:00Z
+
+### Implementation completed
+
+- Added `src/lib/deviceControl/deviceControl.ts` as the authoritative Home device-control layer with explicit `toggleMenu()`, `rebootKeepRam()`, `rebootFull()`, and `powerCycle()` operations.
+- Routed Home quick actions and overflow actions through that layer in `src/pages/HomePage.tsx` and removed transport selection from `src/pages/home/components/MachineControls.tsx`.
+- Removed invalid Home Telnet metadata for reboot and power cycle in `src/lib/telnet/telnetTypes.ts` so those paths cannot be reintroduced implicitly.
+- Kept Telnet only for remaining Telnet-only actions such as Save REU.
+- Updated `docs/features-by-page.md` and `docs/ux-interactions.md` so operator docs now match the current routing behavior.
+
+### Regression coverage added
+
+- Added `tests/unit/lib/deviceControl/deviceControl.test.ts` to lock in 10-step menu-toggle alternation, overlapping toggle serialization, REST-only keep-RAM reboot, full-reboot sequencing, power-cycle fallback sequencing, and structured error logging.
+- Updated `tests/unit/pages/HomePage.ramActions.test.tsx` to prove Reboot, Power Cycle, and Reboot (Keep RAM) route through the device-control layer and do not hit Telnet.
+- Updated `tests/unit/pages/HomePage.test.tsx` to verify device-control menu-toggle failures surface structured user-error context.
+- Updated `tests/unit/pages/home/components/MachineControls.test.tsx` so the component only asserts callback wiring and no longer encodes transport decisions.
+
+### Validation and evidence
+
+- Focused Vitest validation passed: `npx vitest run tests/unit/lib/deviceControl/deviceControl.test.ts tests/unit/pages/home/components/MachineControls.test.tsx tests/unit/pages/HomePage.ramActions.test.tsx tests/unit/pages/HomePage.test.tsx` -> `4` files passed, `50` tests passed.
+- `npm run lint` passed. Existing warnings remain only in generated coverage artifacts under `android/coverage/**` and `c64scope/coverage/**`.
+- `npm run build` passed.
+- `npm run test` failed due an unrelated pre-existing assertion in `tests/unit/lib/native/safeArea.test.ts`: floating-point equality mismatch on Android inset rounding (`27.53333333333333` vs `27.533333333333335`).
+- `npm run test:coverage` failed for the same unrelated `safeArea` assertion before the coverage artifact was finalized.
+- No screenshot regeneration was run because the visible Home UI contract did not change; this task changed routing and diagnostics behavior, not rendered layout or labels.

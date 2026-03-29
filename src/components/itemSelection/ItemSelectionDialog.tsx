@@ -51,11 +51,13 @@ export type ItemSelectionDialogProps = {
   onOpenChange: (open: boolean) => void;
   title: string;
   confirmLabel: string;
+  initialSourceId?: string | null;
   sourceGroups: SourceGroup[];
   onAddLocalSource: () => Promise<string | null>;
   onConfirm: (source: SourceLocation, selections: SelectedItem[]) => Promise<boolean>;
   filterEntry?: (entry: SourceEntry) => boolean;
   allowFolderSelection?: boolean;
+  selectionMode?: "single" | "multiple";
   isConfirming?: boolean;
   autoConfirmLocalSource?: boolean;
   progress?: AddItemsProgressState;
@@ -71,11 +73,13 @@ export const ItemSelectionDialog = ({
   onOpenChange,
   title,
   confirmLabel,
+  initialSourceId = null,
   sourceGroups,
   onAddLocalSource,
   onConfirm,
   filterEntry,
   allowFolderSelection = true,
+  selectionMode = "multiple",
   isConfirming = false,
   autoConfirmLocalSource = false,
   progress,
@@ -141,7 +145,7 @@ export const ItemSelectionDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    setSelectedSourceId(null);
+    setSelectedSourceId(initialSourceId);
     setSelection(new Map());
     setArchiveSelection(new Map());
     setFilterText("");
@@ -149,7 +153,7 @@ export const ItemSelectionDialog = ({
     setPendingLocalSourceCount(0);
     setPendingLocalSourceId(null);
     setAutoConfirming(false);
-  }, [open]);
+  }, [initialSourceId, open]);
 
   const confirmLocalSource = useCallback(
     async (target: SourceLocation) => {
@@ -224,15 +228,23 @@ export const ItemSelectionDialog = ({
     const filesFiltered = filterEntry
       ? browser.entries.filter((entry) => entry.type === "dir" || filterEntry(entry))
       : browser.entries;
+    if (browser.isQueryBacked) return filesFiltered;
     if (!filterText) return filesFiltered;
     const lower = filterText.toLowerCase();
     return filesFiltered.filter(
       (entry) => entry.name.toLowerCase().includes(lower) || entry.path.toLowerCase().includes(lower),
     );
-  }, [browser.entries, filterEntry, filterText]);
+  }, [browser.entries, browser.isQueryBacked, filterEntry, filterText]);
 
   const toggleSelection = (entry: SourceEntry) => {
     setSelection((prev) => {
+      if (selectionMode === "single") {
+        if (prev.has(entry.path) && prev.size === 1) {
+          return new Map();
+        }
+        return new Map([[entry.path, entry]]);
+      }
+
       const next = new Map(prev);
       if (next.has(entry.path)) {
         next.delete(entry.path);
@@ -266,6 +278,11 @@ export const ItemSelectionDialog = ({
           type: entry.type,
           name: entry.name,
           path: entry.path,
+          durationMs: entry.durationMs,
+          songNr: entry.songNr,
+          subsongCount: entry.subsongCount,
+          sizeBytes: entry.sizeBytes ?? null,
+          modifiedAt: entry.modifiedAt ?? null,
         }));
     try {
       const success = await onConfirm(source, selections);
@@ -322,8 +339,8 @@ export const ItemSelectionDialog = ({
   const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
   const footerPaddingClassName =
     profile === "compact"
-      ? "px-3 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]"
-      : "px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]";
+      ? "px-3 pt-1 pb-[calc(0.25rem+var(--safe-area-inset-bottom))]"
+      : "px-6 pt-4 pb-[calc(1rem+var(--safe-area-inset-bottom))]";
   const bodyPaddingClassName = profile === "compact" ? "px-3 py-1.5" : "px-6 py-4";
   const sourceContentClassName = profile === "compact" ? "space-y-2" : "space-y-3";
   const selectedSourceLabel = source
@@ -339,7 +356,7 @@ export const ItemSelectionDialog = ({
   if (!source) {
     return (
       <AppDialog open={open} onOpenChange={onOpenChange}>
-        <AppDialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-md">
+        <AppDialogContent className="max-w-md">
           <AppDialogHeader>
             <AppDialogTitle className="text-xl">{title}</AppDialogTitle>
             <AppDialogDescription>Choose a source.</AppDialogDescription>
@@ -454,7 +471,7 @@ export const ItemSelectionDialog = ({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent onOpenAutoFocus={(e) => e.preventDefault()} className="overflow-hidden p-0">
+      <AppSheetContent className="overflow-hidden p-0">
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           <AppSheetHeader>
             <AppSheetTitle className="text-xl">{title}</AppSheetTitle>
@@ -488,8 +505,15 @@ export const ItemSelectionDialog = ({
             {!isArchiveSource ? (
               <Input
                 placeholder="Filter files…"
-                value={filterText}
-                onChange={(event) => setFilterText(event.target.value)}
+                value={browser.isQueryBacked ? (browser.query ?? "") : filterText}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  if (browser.isQueryBacked) {
+                    browser.setQuery?.(nextValue);
+                    return;
+                  }
+                  setFilterText(nextValue);
+                }}
                 data-testid="add-items-filter"
               />
             ) : null}
@@ -552,6 +576,19 @@ export const ItemSelectionDialog = ({
                   emptyLabel="No matching items in this folder."
                 />
               )}
+              {!isArchiveSource && browser.hasMore ? (
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => browser.loadMore?.()}
+                    disabled={browser.isLoading}
+                    data-testid="add-items-load-more"
+                  >
+                    Load more
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </AppSheetBody>
 

@@ -34,6 +34,7 @@ RUN_DUMP_C64U_CONFIG=false
 RUN_DUMP_C64_TELNET_SCREENS=false
 RUN_CONTRACT_TEST=false
 RUN_CONTRACT_REPLAY=false
+RUN_CONTRACT_PARITY=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
 PLAYWRIGHT_DEVICES=""
@@ -121,6 +122,7 @@ Primary actions (exactly one; default build when omitted):
   --test-fuzz
   --test-contract
   --test-contract-replay
+  --test-contract-parity
   --test-smoke
   --docker-build
   --docker-start
@@ -171,7 +173,7 @@ Fuzz modifiers (require --test-fuzz):
   --fuzz-no-progress-steps N End session after N unchanged steps (default 20)
   --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
 
-Contract test modifiers (require --test-contract or --test-contract-replay):
+Contract test modifiers (require --test-contract, --test-contract-replay, or --test-contract-parity):
   --contract-config <path> Base JSON config template for the contract harness
   --contract-manifest <path> Replay manifest path for contract replay runs
   --contract-mode safe|unsafe
@@ -215,6 +217,7 @@ Examples:
   ./build --test-maestro-docker
   ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off
   ./build --test-contract-replay --c64u-target real --c64u-host c64u --contract-config tests/contract/config.stress.matrix.spike.json --contract-manifest test-results/contract/runs/RUN_ID/replay/manifest.json
+  ./build --test-contract-parity --c64u-target real --c64u-host c64u --contract-auth on --contract-password changeme
   ./build --test-smoke --c64u-target real --c64u-host C64U
 
 Notes:
@@ -254,7 +257,7 @@ set_primary_action() {
 
 is_test_action() {
   case "$PRIMARY_ACTION" in
-    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-contract-replay|test-smoke)
+    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-contract-replay|test-contract-parity|test-smoke)
       return 0
       ;;
     test-maestro-docker)
@@ -567,6 +570,7 @@ let cfg = {
   pacing: { restMinDelayMs: 100, ftpMinDelayMs: 100 },
   health: { endpoint: '/v1/version', intervalMs: 5000, timeoutMs: 2000 },
   timeouts: { restTimeoutMs: 8000, ftpTimeoutMs: 15000, scenarioTimeoutMs: 120000, maxDestructiveScenarioMs: 180000 },
+  telnetPort: 23,
   scratch: { ftpDir: '/Temp/contract-test' },
 };
 
@@ -666,8 +670,11 @@ run_contract_test() {
   set +e
   (cd "$ROOT_DIR" && npx tsc -p tests/contract/tsconfig.json)
   local tsc_status=$?
-  (cd "$ROOT_DIR" && node tests/contract/dist/run.js --config "$config_path")
-  local run_status=$?
+  local run_status=0
+  if [[ "$tsc_status" -eq 0 ]]; then
+    (cd "$ROOT_DIR" && node tests/contract/dist/run.js --config "$config_path")
+    run_status=$?
+  fi
   set -e
   if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
     echo "Contract test harness failed (tsc=${tsc_status}, run=${run_status})" >&2
@@ -699,11 +706,51 @@ run_contract_replay() {
   set +e
   (cd "$ROOT_DIR" && npx tsc -p tests/contract/tsconfig.json)
   local tsc_status=$?
-  (cd "$ROOT_DIR" && node tests/contract/dist/replay.js --manifest "$CONTRACT_MANIFEST_PATH" --config "$config_path")
-  local run_status=$?
+  local run_status=0
+  if [[ "$tsc_status" -eq 0 ]]; then
+    (cd "$ROOT_DIR" && node tests/contract/dist/replay.js --manifest "$CONTRACT_MANIFEST_PATH" --config "$config_path")
+    run_status=$?
+  fi
   set -e
   if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
     echo "Contract replay failed (tsc=${tsc_status}, run=${run_status})" >&2
+    harness_status=1
+  fi
+
+  if [[ "$harness_status" -ne 0 ]]; then
+    exit 1
+  fi
+}
+
+run_contract_parity() {
+  local mode
+  local auth
+  local config_path
+  local base_url
+  if [[ "${C64U_TARGET,,}" != "real" ]]; then
+    echo "Contract parity requires --c64u-target real" >&2
+    exit 1
+  fi
+
+  mode="SAFE"
+  auth="$(resolve_contract_auth)"
+  config_path="$(mktemp -t c64u-contract-parity.XXXXXX.json)"
+  trap 'rm -f "$config_path"' RETURN
+  base_url="$(write_contract_config "$config_path" "$mode" "$auth")"
+
+  log "Running contract parity snapshot against ${base_url} and the contract mock"
+  local harness_status=0
+  set +e
+  (cd "$ROOT_DIR" && npx tsc -p tests/contract/tsconfig.json)
+  local tsc_status=$?
+  local run_status=0
+  if [[ "$tsc_status" -eq 0 ]]; then
+    (cd "$ROOT_DIR" && node tests/contract/dist/parity.js --config "$config_path")
+    run_status=$?
+  fi
+  set -e
+  if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
+    echo "Contract parity failed (tsc=${tsc_status}, run=${run_status})" >&2
     harness_status=1
   fi
 
@@ -825,6 +872,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --test-contract-replay)
       set_primary_action "test-contract-replay" "$1"
+      shift
+      ;;
+    --test-contract-parity)
+      set_primary_action "test-contract-parity" "$1"
       shift
       ;;
     --test-smoke)
@@ -1199,14 +1250,14 @@ if [[ "$PRIMARY_ACTION" != "test-fuzz" && ${#FUZZ_FLAGS[@]} -gt 0 ]]; then
   exit 1
 fi
 
-if [[ "$PRIMARY_ACTION" != "test-contract" && "$PRIMARY_ACTION" != "test-contract-replay" && ${#CONTRACT_FLAGS[@]} -gt 0 ]]; then
-  echo "Contract test modifiers require --test-contract or --test-contract-replay" >&2
+if [[ "$PRIMARY_ACTION" != "test-contract" && "$PRIMARY_ACTION" != "test-contract-replay" && "$PRIMARY_ACTION" != "test-contract-parity" && ${#CONTRACT_FLAGS[@]} -gt 0 ]]; then
+  echo "Contract test modifiers require --test-contract, --test-contract-replay, or --test-contract-parity" >&2
   exit 1
 fi
 
 if [[ ${#TARGET_FLAGS[@]} -gt 0 ]]; then
   case "$PRIMARY_ACTION" in
-    test-contract|test-contract-replay|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
+    test-contract|test-contract-replay|test-contract-parity|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
       ;;
     *)
       echo "--c64u-target/--c64u-host are only valid with contract, Maestro, or smoke tests" >&2
@@ -1238,6 +1289,11 @@ fi
 
 if [[ "$PRIMARY_ACTION" == "test-contract-replay" && "$C64U_TARGET_SET" != "true" ]]; then
   echo "Contract replay requires --c64u-target mock|real" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-contract-parity" && "$C64U_TARGET_SET" != "true" ]]; then
+  echo "Contract parity requires --c64u-target real" >&2
   exit 1
 fi
 
@@ -1286,6 +1342,7 @@ RUN_TEST_MAESTRO_DOCKER=false
 RUN_FUZZ=false
 RUN_CONTRACT_TEST=false
 RUN_CONTRACT_REPLAY=false
+RUN_CONTRACT_PARITY=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_EMULATOR=false
@@ -1347,16 +1404,25 @@ case "$PRIMARY_ACTION" in
     RUN_APK=false
     ;;
   test-contract)
+    RUN_INSTALL=false
     RUN_TEST=false
     RUN_BUILD=false
     RUN_APK=false
     RUN_CONTRACT_TEST=true
     ;;
   test-contract-replay)
+    RUN_INSTALL=false
     RUN_TEST=false
     RUN_BUILD=false
     RUN_APK=false
     RUN_CONTRACT_REPLAY=true
+    ;;
+  test-contract-parity)
+    RUN_INSTALL=false
+    RUN_TEST=false
+    RUN_BUILD=false
+    RUN_APK=false
+    RUN_CONTRACT_PARITY=true
     ;;
   test-smoke)
     RUN_TEST=false
@@ -1447,7 +1513,10 @@ if [[ "$RUN_DUMP_C64U_CONFIG" == "true" ]]; then
   log "Dumping C64U config"
   (cd "$ROOT_DIR/scripts" && ./dump_c64u_config.py \
     --base-url "http://${CONFIG_HOST}" \
-    --output "$ROOT_DIR/docs/c64/c64u-config.yaml")
+    --output "$ROOT_DIR/docs/c64/c64u-config.yaml" \
+    --mirror-output "$ROOT_DIR/docs/c64/devices/c64u/{firmware_version}/c64u-config.yaml" \
+    --cfg-output "$ROOT_DIR/docs/c64/c64u-config.cfg" \
+    --cfg-mirror-output "$ROOT_DIR/docs/c64/devices/c64u/{firmware_version}/c64u-config.cfg")
   exit 0
 fi
 
@@ -1522,6 +1591,10 @@ fi
 
 if [[ "$RUN_CONTRACT_REPLAY" == "true" ]]; then
   run_contract_replay
+fi
+
+if [[ "$RUN_CONTRACT_PARITY" == "true" ]]; then
+  run_contract_parity
 fi
 
 if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then

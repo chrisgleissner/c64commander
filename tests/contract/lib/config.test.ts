@@ -64,6 +64,22 @@ describe("contract config stressBreakpoint", () => {
     expect(config.stressMatrix?.testType).toBe("stress");
   });
 
+  it("parses Telnet port and scenario filters", () => {
+    const config = loadConfig(
+      writeConfigFile(
+        buildConfig({
+          telnetPort: 2323,
+          scenarios: {
+            telnet: ["telnet.menu-tree"],
+          },
+        }),
+      ),
+    );
+
+    expect(config.telnetPort).toBe(2323);
+    expect(config.scenarios?.telnet).toEqual(["telnet.menu-tree"]);
+  });
+
   it("rejects simultaneous stress breakpoint and stress matrix configs", () => {
     expect(() =>
       loadConfig(
@@ -99,6 +115,7 @@ function buildConfig(overrides: Record<string, unknown> = {}): Record<string, un
     auth: "OFF",
     ftpMode: "PASV",
     ftpPort: 21,
+    telnetPort: 23,
     outputDir: "test-results/contract",
     concurrency: {
       restMaxInFlight: 3,

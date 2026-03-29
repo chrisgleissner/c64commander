@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- The app controls LAN C64U devices over HTTP, including direct IPv4 targets. -->
+    <base-config cleartextTrafficPermitted="true" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">commoserve.files.commodore.net</domain>
         <domain includeSubdomains="false">hackerswithstyle.se</domain>

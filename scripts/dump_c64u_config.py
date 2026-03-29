@@ -275,6 +275,35 @@ def _scrape_category(
     return {"items": menu_items, "errors": errors} if errors else {"items": menu_items}
 
 
+def resolve_output_paths(output: Path, mirror_output: Optional[str], firmware_version: str) -> list[Path]:
+    outputs = [output]
+    if mirror_output:
+        outputs.append(Path(mirror_output.format(firmware_version=firmware_version)))
+    return outputs
+
+
+def build_cfg_text(snapshot: dict[str, Any]) -> str:
+    lines: list[str] = []
+    categories = snapshot.get("config", {}).get("categories", {})
+    for category_name, category_payload in categories.items():
+        lines.append(f"[{category_name}]")
+        items = category_payload.get("items", {}) if isinstance(category_payload, dict) else {}
+        for item_name, item_payload in items.items():
+            selected = item_payload.get("selected", "") if isinstance(item_payload, dict) else ""
+            if selected is None:
+                selected = ""
+            lines.append(f"{item_name}={selected}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_text_outputs(text: str, outputs: list[Path]) -> None:
+    for destination in outputs:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(text, encoding="utf-8")
+        print(f"Wrote {destination}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Dump C64U configuration menu tree to YAML."
@@ -293,6 +322,21 @@ def main() -> int:
         "--output",
         default="docs/c64/c64u-config.yaml",
         help="Output YAML path (default: docs/c64/c64u-config.yaml)",
+    )
+    parser.add_argument(
+        "--mirror-output",
+        default="docs/c64/devices/c64u/{firmware_version}/c64u-config.yaml",
+        help="Optional secondary YAML output path template. Use {firmware_version} as a placeholder.",
+    )
+    parser.add_argument(
+        "--cfg-output",
+        default="docs/c64/c64u-config.cfg",
+        help="Primary cfg output path (default: docs/c64/c64u-config.cfg)",
+    )
+    parser.add_argument(
+        "--cfg-mirror-output",
+        default="docs/c64/devices/c64u/{firmware_version}/c64u-config.cfg",
+        help="Optional secondary cfg output path template. Use {firmware_version} as a placeholder.",
     )
     parser.add_argument(
         "--timeout",
@@ -324,6 +368,9 @@ def main() -> int:
     output_path = Path(args.output)
     if not output_path.is_absolute():
         output_path = repo_root / output_path
+    cfg_output_path = Path(args.cfg_output)
+    if not cfg_output_path.is_absolute():
+        cfg_output_path = repo_root / cfg_output_path
 
     config_list = _fetch_json(
         f"{base_url}/v1/configs",
@@ -387,10 +434,13 @@ def main() -> int:
     yaml_text = _quote_mapping_values_with_spaces(
         _convert_single_quoted_scalars(_indent_sequences(yaml_text))
     )
-    with output_path.open("w", encoding="utf-8") as handle:
-        handle.write(yaml_text)
 
-    print(f"Wrote {output_path}")
+    firmware_version = str(info_payload.get("firmware_version") or "unknown")
+    yaml_outputs = resolve_output_paths(output_path, args.mirror_output, firmware_version)
+    cfg_outputs = resolve_output_paths(cfg_output_path, args.cfg_mirror_output, firmware_version)
+
+    write_text_outputs(yaml_text, yaml_outputs)
+    write_text_outputs(build_cfg_text(snapshot), cfg_outputs)
     return 0
 
 

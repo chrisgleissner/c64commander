@@ -67,11 +67,17 @@ Compare AUTH ON vs AUTH OFF runs:
 node tests/contract/dist/compare.js --left test-results/contract/runs/<run-a> --right test-results/contract/runs/<run-b>
 ```
 
+Capture a real-vs-mock parity snapshot across REST, FTP, and Telnet:
+
+```bash
+node tests/contract/dist/parity.js --config tests/contract/config.sample.json
+```
+
 ## Output Layout
 
 Outputs are written to:
 
-```
+```text
 test-results/
   contract/
     runs/
@@ -97,6 +103,19 @@ test-results/
           device-replay.http
           device-replay.sh
     latest/
+    parity/
+      <timestamp>-parity/
+        real/
+          rest.json
+          ftp.json
+          telnet.json
+        mock/
+          rest.json
+          ftp.json
+          telnet.json
+        diff/
+          parity-diff.json
+          parity-summary.md
 ```
 
 `meta.json` includes an `outcome` field:
@@ -227,6 +246,7 @@ Replay limitations:
 
 - REST auth uses the network password (`X-Password` header).
 - FTP auth uses PASS with the same network password.
+- Telnet auth is parity-tested in both password-gated and passwordless modes.
 - If the network password is empty, AUTH OFF mode is supported by firmware.
 - The harness reboots the device and waits for `/v1/info` to recover before exiting, except after breakpoint or device-unresponsive abort paths that intentionally preserve state for forensics.
 

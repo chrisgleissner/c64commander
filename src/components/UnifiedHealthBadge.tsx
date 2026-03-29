@@ -27,6 +27,22 @@ const HEALTH_COLOR: Record<HealthState, string> = {
   Unavailable: "text-muted-foreground",
 };
 
+const HEALTH_GLYPH_VISUAL_CLASS: Record<HealthState, string> = {
+  Healthy: "scale-[1.42]",
+  Degraded: "scale-100",
+  Unhealthy: "scale-100",
+  Idle: "scale-[1.08]",
+  Unavailable: "scale-[1.08]",
+};
+
+const HEALTH_GLYPH_ALIGNMENT_CLASS: Record<HealthState, string> = {
+  Healthy: "translate-y-[-0.11em]",
+  Degraded: "translate-y-[-0.03em]",
+  Unhealthy: "translate-y-[-0.02em]",
+  Idle: "translate-y-[-0.06em]",
+  Unavailable: "translate-y-[-0.05em]",
+};
+
 type Props = {
   className?: string;
 };
@@ -75,46 +91,66 @@ export function UnifiedHealthBadge({ className }: Props) {
       }
       onClick={handleClick}
       className={cn(
-        "flex min-w-0 max-w-full items-center gap-1 overflow-hidden whitespace-nowrap rounded-lg px-2 py-1.5 min-h-[44px] touch-none",
-        "border border-border hover:border-primary/60 transition-colors",
+        "app-chrome-badge inline-flex shrink min-w-0 items-center overflow-hidden rounded-md bg-transparent px-0 py-0 min-h-[44px] touch-none",
+        profile === "compact" ? "max-w-[min(48vw,12rem)]" : "max-w-full",
+        "text-foreground transition-opacity hover:opacity-90 active:opacity-80",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-0",
         className,
       )}
     >
       <span
-        className="text-xs font-semibold leading-none tracking-wide uppercase shrink-0 text-foreground"
-        data-overlay-critical="badge"
+        className="app-chrome-badge-surface inline-flex min-w-0 max-w-full items-center overflow-hidden rounded-md px-2 py-[0.3rem]"
         aria-hidden="true"
       >
-        {badgeText.leadingLabel}
-      </span>
-
-      <span
-        className={cn("font-mono text-base leading-none shrink-0", glyphColor)}
-        data-overlay-critical="badge"
-        aria-hidden="true"
-      >
-        {badgeText.glyph}
-      </span>
-
-      {badgeText.countLabel && (
-        <span
-          className={cn("text-xs font-semibold leading-none shrink-0", glyphColor)}
-          data-overlay-critical="badge"
-          aria-hidden="true"
-        >
-          {badgeText.countLabel}
+        <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
+          <span
+            className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+            data-overlay-critical="badge"
+          >
+            {badgeText.leadingLabel}
+          </span>
+          <span className="shrink-0 whitespace-pre" aria-hidden="true">
+            {" "}
+          </span>
+          <span
+            className={cn(
+              "inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center align-middle font-sans text-[1rem] leading-none transform-gpu",
+              glyphColor,
+              HEALTH_GLYPH_VISUAL_CLASS[state],
+              HEALTH_GLYPH_ALIGNMENT_CLASS[state],
+            )}
+            data-overlay-critical="badge"
+          >
+            {badgeText.glyph}
+          </span>
+          {badgeText.countLabel ? (
+            <>
+              <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                {" "}
+              </span>
+              <span
+                className={cn("shrink-0 text-xs font-semibold leading-none", glyphColor)}
+                data-overlay-critical="badge"
+              >
+                {badgeText.countLabel}
+              </span>
+            </>
+          ) : null}
+          {badgeText.trailingLabel ? (
+            <>
+              <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                {" "}
+              </span>
+              <span
+                className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                data-overlay-critical="badge"
+              >
+                {badgeText.trailingLabel}
+              </span>
+            </>
+          ) : null}
         </span>
-      )}
-
-      {badgeText.trailingLabel ? (
-        <span
-          className="min-w-0 truncate text-xs font-semibold leading-none tracking-wide uppercase text-foreground"
-          data-overlay-critical="badge"
-          aria-hidden="true"
-        >
-          {badgeText.trailingLabel}
-        </span>
-      ) : null}
+      </span>
     </button>
   );
 }

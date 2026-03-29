@@ -45,4 +45,10 @@ describe("modalPresentation", () => {
     expect(resolveModalPresentation("medium", "secondary-editor")).toMatchObject({ mode: "centered" });
     expect(resolveModalPresentation("expanded", "secondary-editor")).toMatchObject({ mode: "centered" });
   });
+
+  it("suppresses browser default focus outlines on centered dialog surfaces", () => {
+    expect(resolveModalPresentation("medium", "default").contentClassName).toContain("outline-none");
+    expect(resolveModalPresentation("medium", "confirmation").contentClassName).toContain("outline-none");
+    expect(resolveModalPresentation("medium", "popover").contentClassName).toContain("outline-none");
+  });
 });

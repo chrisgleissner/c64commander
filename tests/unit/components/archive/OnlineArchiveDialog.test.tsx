@@ -76,6 +76,9 @@ describe("OnlineArchiveDialog", () => {
     render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
 
     expect(screen.queryByText(/Overrides are active/i)).toBeNull();
+    expect(screen.getByTestId("online-archive-legal-notice")).toHaveTextContent(
+      "You agree you have a necessary license or rights to download any software.",
+    );
     expect(screen.getByText("Joyride")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "demo" } });
@@ -299,6 +302,19 @@ describe("OnlineArchiveDialog", () => {
 
     expect(screen.getByRole("button", { name: /Search archive/i })).toBeDisabled();
     expect(document.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  it("keeps Search enabled while presets are refreshing in the background", () => {
+    vi.mocked(useOnlineArchive).mockReturnValue({
+      ...baseReturn,
+      presetsLoading: true,
+      state: { phase: "idle" },
+    } as never);
+
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "demo" } });
+    expect(screen.getByRole("button", { name: /Search archive/i })).not.toBeDisabled();
   });
 
   it("shows the empty entries state and lets the user return to results", () => {

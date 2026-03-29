@@ -165,7 +165,7 @@ const FilterEditorSurface = ({
         className="z-[62] overflow-hidden p-0 sm:w-[min(100vw-2rem,24rem)]"
         data-testid="latency-filters-editor"
       >
-        <AppSheetHeader className="px-4 py-[0.5625rem] pr-14">
+        <AppSheetHeader>
           <AppSheetTitle className="text-base">Latency filters</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Filter latency samples by transport and endpoint class.

@@ -38,6 +38,12 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDebugLoggingEnabled: vi.fn(),
 }));
 
+vi.mock("@/lib/native/featureFlags", () => ({
+  FeatureFlags: {
+    setFlag: vi.fn(),
+  },
+}));
+
 vi.mock("@/lib/c64api", () => ({
   normalizeDeviceHost: vi.fn((host: string) => host.replace(/\/$/, "")),
 }));
@@ -109,6 +115,21 @@ describe("smokeMode", () => {
       const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
       expect(result).toBeNull();
+    });
+
+    it("skips native smoke bootstrap when localStorage is unavailable without an explicit probe flag", async () => {
+      Object.defineProperty(global, "localStorage", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
+      const result = await initializeSmokeMode();
+
+      expect(result).toBeNull();
+      expect(Filesystem.readFile).not.toHaveBeenCalled();
     });
 
     it("loads config from localStorage", async () => {
@@ -210,6 +231,35 @@ describe("smokeMode", () => {
 
       expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
       expect(result?.target).toBe("mock");
+      vi.unstubAllEnvs();
+    });
+
+    it("loads native smoke config without localStorage when test probes force bootstrap", async () => {
+      Object.defineProperty(global, "localStorage", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
+      vi.mocked(Filesystem.readFile).mockResolvedValue({
+        data: JSON.stringify({
+          target: "mock",
+          debugLogging: false,
+        }),
+      } as any);
+
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
+      const result = await initializeSmokeMode();
+
+      expect(result).toEqual({
+        target: "mock",
+        host: undefined,
+        readOnly: true,
+        debugLogging: false,
+        featureFlags: undefined,
+      });
+      expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
       vi.unstubAllEnvs();
     });
   });

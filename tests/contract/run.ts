@@ -14,6 +14,7 @@ import { startContractMockServers, type ContractMockServers } from "./mockServer
 import { RestClient } from "./lib/restClient.js";
 import { buildRestScenarios } from "./scenarios/rest/index.js";
 import { buildFtpScenarios } from "./scenarios/ftp/index.js";
+import { buildTelnetScenarios } from "./scenarios/telnet/index.js";
 import { buildMixedScenarios } from "./scenarios/mixed/index.js";
 import {
   createContractHealthMonitor,
@@ -59,11 +60,14 @@ const args = parseArgs(process.argv.slice(2));
 let config = loadConfig(args.configPath);
 let mockServers: ContractMockServers | null = null;
 if (process.env.CONTRACT_TEST_TARGET?.toLowerCase() === "mock") {
-  mockServers = await startContractMockServers();
+  mockServers = await startContractMockServers({
+    password: config.auth === "ON" ? config.password || "" : undefined,
+  });
   config = {
     ...config,
     baseUrl: mockServers.baseUrl,
     ftpPort: mockServers.ftpPort,
+    telnetPort: mockServers.telnetPort,
   };
 }
 config = applyTestTypeOverride(config, args.testTypeOverride);
@@ -225,6 +229,7 @@ const healthMonitor = createContractHealthMonitor(config, {
 const allRestScenarios = buildRestScenarios();
 const restScenarios = filterScenarios(allRestScenarios, config.scenarios?.rest);
 const ftpScenarios = filterScenarios(buildFtpScenarios(), config.scenarios?.ftp);
+const telnetScenarios = filterScenarios(buildTelnetScenarios(), config.scenarios?.telnet);
 const mixedScenarios = filterScenarios(buildMixedScenarios(), config.scenarios?.mixed);
 let breakpointResult: BreakpointRunResult | null = null;
 let matrixResult: MatrixRunResult | null = null;
@@ -292,6 +297,10 @@ try {
       await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log, traceCollector }));
     });
 
+    await runScenarioGroup("telnet", telnetScenarios, async (scenario) => {
+      await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log }));
+    });
+
     await runScenarioGroup("mixed", mixedScenarios, async (scenario) => {
       await runScenario(scenario.id, scenario.safe, () =>
         scenario.run({ rest: restClient, request: restRequest, config, log, traceCollector }),
@@ -342,6 +351,7 @@ try {
     "MLSD",
     "FEAT",
   ];
+  const telnetCommands = ["connect", "Password:", "F1", "F5", "UP", "DOWN", "RIGHT", "LEFT", "ENTER", "ESCAPE"];
 
   const endpointsPayload = {
     generatedAt: new Date().toISOString(),
@@ -349,6 +359,7 @@ try {
     auth: config.auth,
     rest: endpoints,
     ftp: ftpCommands.map((command) => ({ command, safe: true })),
+    telnet: telnetCommands.map((command) => ({ command, safe: true })),
   };
 
   const concurrencyPayload = {

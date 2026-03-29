@@ -6,17 +6,43 @@ env:
   HVSC_INGEST_TIMEOUT: ${HVSC_INGEST_TIMEOUT || "900000"}
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "15000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    point: "75%,95%"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: hvsc-flag
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: hvsc-flag
+    checked: false
+    optional: true
 - tapOn:
     point: "25%,95%"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
 - scrollUntilVisible:
-    element: "HVSC"
+    element:
+      text: "HVSC"
     direction: DOWN
-    timeout: ${TIMEOUT}
+    speed: 60
+    timeout: ${LONG_TIMEOUT}
+- scrollUntilVisible:
+    element:
+      text: "Download HVSC"
+    direction: DOWN
+    speed: 60
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "HVSC"
 - tapOn: "Download HVSC"
 - extendedWaitUntil:
     visible: "Status: Ready"
