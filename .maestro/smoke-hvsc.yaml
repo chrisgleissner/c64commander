@@ -32,15 +32,15 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      text: "No tracks in playlist yet."
+      text: "HVSC"
     direction: DOWN
-    speed: 80
+    speed: 60
     timeout: ${LONG_TIMEOUT}
 - scrollUntilVisible:
     element:
       text: "Download HVSC"
     direction: DOWN
-    speed: 80
+    speed: 60
     timeout: ${LONG_TIMEOUT}
 - takeScreenshot: hvsc-controls
 - assertVisible: "HVSC"
