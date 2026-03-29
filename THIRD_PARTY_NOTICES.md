@@ -628,7 +628,7 @@ Summary: 798 dependencies across NPM (781), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | playwright | 1.57.0 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [https://registry.npmjs.org/playwright/-/playwright-1.57.0.tgz](https://registry.npmjs.org/playwright/-/playwright-1.57.0.tgz) |
 | NPM | playwright-core | 1.57.0 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [https://registry.npmjs.org/playwright-core/-/playwright-core-1.57.0.tgz](https://registry.npmjs.org/playwright-core/-/playwright-core-1.57.0.tgz) |
 | NPM | plist | 3.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/plist/-/plist-3.1.0.tgz](https://registry.npmjs.org/plist/-/plist-3.1.0.tgz) |
-| NPM | postcss | 8.5.6 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/postcss/-/postcss-8.5.6.tgz](https://registry.npmjs.org/postcss/-/postcss-8.5.6.tgz) |
+| NPM | postcss | 8.5.8 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/postcss/-/postcss-8.5.8.tgz](https://registry.npmjs.org/postcss/-/postcss-8.5.8.tgz) |
 | NPM | postcss-import | 15.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/postcss-import/-/postcss-import-15.1.0.tgz](https://registry.npmjs.org/postcss-import/-/postcss-import-15.1.0.tgz) |
 | NPM | postcss-js | 4.0.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/postcss-js/-/postcss-js-4.0.1.tgz](https://registry.npmjs.org/postcss-js/-/postcss-js-4.0.1.tgz) |
 | NPM | postcss-load-config | 4.0.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/postcss-load-config/-/postcss-load-config-4.0.2.tgz](https://registry.npmjs.org/postcss-load-config/-/postcss-load-config-4.0.2.tgz) |
