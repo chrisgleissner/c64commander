@@ -1,4 +1,66 @@
-# HVSC Workflow Real-Device Execution Plan (2026-03-28T22:02:57+00:00)
+# REU Save/Load And FTP Extension Execution Plan
+
+## Classification
+
+- `CODE_CHANGE`
+- `UI_CHANGE` only where the REU progress dialog, Home actions, or documented user flows visibly change
+
+## Control State
+
+- Repository: `chrisgleissner/c64commander`
+- Branch: `fix/hvsc-workflow`
+- Active PR: `#177`
+- Feature scope: REU save/load workflow plus FTP extensions required to list, read, and write remote REU files robustly across web and Android
+
+## Authoritative Task List
+
+1. [ ] Baseline branch state, recent commits, and exact diff against `main` for REU/FTP-related files.
+2. [ ] Enumerate all open PR review comments and unresolved threads for PR `#177` using `gh`.
+3. [ ] Verify each review concern against current code; implement missing fixes instead of assuming prior runs were correct.
+4. [ ] Update or add regression tests for each REU/FTP bug fixed, including error-path coverage.
+5. [ ] Make `npm run lint` pass, including any formatting or golden-trace issues currently blocking it.
+6. [ ] Make `npm run build` pass after the final code changes.
+7. [ ] Run the standard unit test path and the standard coverage path; if coverage fails, fix the harness or code path rather than relying on ad hoc substitutes.
+8. [ ] Run targeted Playwright coverage for REU/FTP behavior first, then the broader required Playwright validation for this change set.
+9. [ ] Run Maestro coverage for the touched user flows; add a Maestro flow if REU/FTP coverage is missing.
+10. [ ] Re-investigate Android JVM and plugin-level validation for the FTP extension work; fix failures or prove a hard external blocker with exact evidence.
+11. [ ] Reply to every open PR comment with evidence-based status via `gh` and resolve each thread only after the underlying concern is verified fixed.
+12. [ ] Inspect PR checks and workflow runs via `gh`, reproduce any failing CI jobs locally where feasible, fix them, and iterate until CI is green.
+13. [ ] Keep `WORKLOG.md` current with timestamped commands, results, evidence, and next actions until final closeout.
+
+## Required Acceptance Checks
+
+- [ ] REU save succeeds and stores a correct local snapshot entry.
+- [ ] REU load succeeds and uploads the intended REU image before the Telnet restore action.
+- [ ] FTP list/read/write extensions behave correctly across web and Android plugin boundaries.
+- [ ] Error handling is correct for missing files, failed transfers, partial writes, invalid paths, permission problems, and device-side failures where applicable.
+- [ ] Adjacent FTP flows do not regress.
+- [ ] `npm run lint` passes.
+- [ ] `npm run build` passes.
+- [ ] Required unit tests pass.
+- [ ] Required coverage passes using the intended repository workflow, or a proven repo-supported equivalent if the primary path is externally broken and cannot be safely fixed here.
+- [ ] Required Playwright validation passes.
+- [ ] Required Maestro validation passes.
+- [ ] Android JVM/plugin validation is green, or a hard external blocker is proven with exact commands and logs.
+- [ ] Every PR comment has a specific reply and is resolved via `gh`.
+- [ ] CI for PR `#177` is fully green.
+- [ ] `WORKLOG.md` reflects final reality with evidence.
+
+## Evidence Checklist To Fill During Execution
+
+- [ ] Git baseline captured
+- [ ] PR comments exported
+- [ ] Local fixes implemented
+- [ ] Regression tests updated
+- [ ] Lint green
+- [ ] Build green
+- [ ] Unit green
+- [ ] Coverage green
+- [ ] Playwright green
+- [ ] Maestro green
+- [ ] Android JVM/plugin validation green or hard blocker documented
+- [ ] Review replies posted and threads resolved
+- [ ] CI green# HVSC Workflow Real-Device Execution Plan (2026-03-28T22:02:57+00:00)
 
 ## Classification
 

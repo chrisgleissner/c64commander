@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { URL } from "node:url";
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { Client as FtpClient } from "basic-ftp";
 import { normalizePassword, safeCompare, sanitizeHost, isTrustedInsecureHost } from "./hostValidation.js";
@@ -430,7 +430,7 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
       secure: false,
     });
     const data = Buffer.from(payload.data, "base64");
-    await ftp.uploadFrom(data, payload.path);
+    await ftp.uploadFrom(Readable.from(data), payload.path);
     writeJson(res, 200, { sizeBytes: data.byteLength });
   } catch (error) {
     log("error", "FTP write failed", {

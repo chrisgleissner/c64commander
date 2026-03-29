@@ -4693,31 +4693,19 @@
             },
             "Pan Socket 1": {
               "selected": "Left 1",
-              "options": [
-                "Left 1",
-                "Right 1"
-              ]
+              "options": ["Left 1", "Right 1"]
             },
             "Pan Socket 2": {
               "selected": "Left 2",
-              "options": [
-                "Left 2",
-                "Right 2"
-              ]
+              "options": ["Left 2", "Right 2"]
             },
             "Pan UltiSID 1": {
               "selected": "Left 1",
-              "options": [
-                "Left 1",
-                "Right 1"
-              ]
+              "options": ["Left 1", "Right 1"]
             },
             "Pan UltiSID 2": {
               "selected": "Left 2",
-              "options": [
-                "Left 2",
-                "Right 2"
-              ]
+              "options": ["Left 2", "Right 2"]
             }
           }
         },
@@ -4782,17 +4770,11 @@
           "items": {
             "SID Socket 1": {
               "selected": "Enabled",
-              "options": [
-                "Enabled",
-                "Disabled"
-              ]
+              "options": ["Enabled", "Disabled"]
             },
             "SID Socket 2": {
               "selected": "Enabled",
-              "options": [
-                "Enabled",
-                "Disabled"
-              ]
+              "options": ["Enabled", "Disabled"]
             }
           }
         },
@@ -4857,31 +4839,19 @@
           "items": {
             "SID Socket 1 Address": {
               "selected": "$D400",
-              "options": [
-                "$D400",
-                "Unmapped"
-              ]
+              "options": ["$D400", "Unmapped"]
             },
             "SID Socket 2 Address": {
               "selected": "$D440",
-              "options": [
-                "$D420",
-                "Unmapped"
-              ]
+              "options": ["$D420", "Unmapped"]
             },
             "UltiSID 1 Address": {
               "selected": "$D420",
-              "options": [
-                "$D420",
-                "Unmapped"
-              ]
+              "options": ["$D420", "Unmapped"]
             },
             "UltiSID 2 Address": {
               "selected": "$D440",
-              "options": [
-                "$D440",
-                "Unmapped"
-              ]
+              "options": ["$D440", "Unmapped"]
             }
           }
         },

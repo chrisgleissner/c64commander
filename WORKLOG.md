@@ -1,5 +1,27 @@
 # HVSC Workflow Convergence Worklog
 
+## 2026-03-29T00:00:00Z
+
+### Action
+
+- Reclassified the active task as `CODE_CHANGE` with `UI_CHANGE` follow-up only where REU dialogs or user flows are affected.
+- Audited the current REU/FTP work surface from the repository: REU workflow, Telnet automation, snapshot storage, Home integration, Android FTP plugin, web FTP proxy, and REU unit tests.
+- Read the existing `PLANS.md` and `WORKLOG.md` and confirmed they were stale HVSC/overlay plans unrelated to the current REU save/load mission.
+- Prepared to replace `PLANS.md` with a concrete REU/FTP execution plan and start the branch/PR baseline loop.
+
+### Result
+
+- The working area is now scoped to the REU save/load feature set and its FTP extensions instead of prior unrelated tasks.
+- The next commands will baseline git state, branch diff, recent commits, PR review comments, and CI status before applying fixes.
+
+### Evidence
+
+- Relevant files identified: `src/lib/reu/reuWorkflow.ts`, `src/lib/reu/reuTelnetWorkflow.ts`, `src/lib/reu/reuSnapshotStorage.ts`, `src/lib/native/ftpClient.ts`, `src/pages/home/dialogs/ReuProgressDialog.tsx`, `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt`, `web/server/src/index.ts`, `tests/unit/lib/reu/reuWorkflow.test.ts`, `tests/unit/lib/reu/reuTelnetWorkflow.test.ts`, `tests/contract/scenarios/ftp/index.ts`.
+
+### Next step
+
+- Replace `PLANS.md` with the REU/FTP plan, then baseline git/gh state and enumerate unresolved PR review threads.
+
 ## 2026-03-28T22:02:57+00:00
 
 ### Action
