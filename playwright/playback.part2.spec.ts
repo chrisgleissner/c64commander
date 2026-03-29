@@ -360,6 +360,7 @@ test.describe("Playback file browser (part 2)", () => {
     ]);
 
     await page.goto("/play");
+      await waitForRealConnectionBadge(page);
     const muteButton = page.getByTestId("volume-mute");
     const playButton = page.getByTestId("playlist-play");
     await expect(page.getByTestId("playlist-item")).toHaveCount(1);
@@ -405,6 +406,7 @@ test.describe("Playback file browser (part 2)", () => {
     ]);
 
     await page.goto("/play");
+      await waitForRealConnectionBadge(page);
     await snap(page, testInfo, "play-open");
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(1);
@@ -833,6 +835,7 @@ test.describe("Playback file browser (part 2)", () => {
     }, playlist);
 
     await page.goto("/play");
+      await waitForRealConnectionBadge(page);
     await snap(page, testInfo, "play-open");
 
     const shuffleCheckbox = page.getByTestId("playback-shuffle");

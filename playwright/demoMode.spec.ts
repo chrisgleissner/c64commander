@@ -379,7 +379,9 @@ test.describe("Automatic Demo Mode", () => {
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     const urlInput = page.locator("#deviceHost");
-    await expect(urlInput).toHaveValue("127.0.0.1:1");
+    const httpPortInput = page.locator("#httpPort");
+    await expect(urlInput).toHaveValue("127.0.0.1");
+    await expect(httpPortInput).toHaveValue("1");
 
     const stored = await page.evaluate(() => localStorage.getItem("c64u_base_url"));
     expect(stored).toBeNull();
@@ -417,8 +419,11 @@ test.describe("Automatic Demo Mode", () => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await dismissDemoModeDialogIfVisible(page);
     const urlInput = page.locator("#deviceHost");
+    const httpPortInput = page.locator("#httpPort");
     const host = new URL(server.baseUrl).host;
-    await urlInput.fill(host);
+    const targetUrl = new URL(server.baseUrl);
+    await urlInput.fill(targetUrl.hostname);
+    await httpPortInput.fill(targetUrl.port);
     await clearTraces(page);
     let saveButton = page.getByRole("button", {
       name: /Save & Connect|Save connection/i,
