@@ -119,6 +119,18 @@ describe("UnifiedHealthBadge", () => {
     expect(badge.querySelectorAll('[data-overlay-critical="badge"]')).toHaveLength(4);
     expect(badge.querySelector(".app-chrome-badge-surface")?.className).toContain("py-[0.3rem]");
     expect(badge.querySelector(".app-chrome-badge-surface span")?.className).toContain("whitespace-nowrap");
+    expect(badge.querySelector('[data-overlay-critical="badge"]')?.className).toContain("truncate");
+  });
+
+  it("caps compact badge width so the app bar can shrink without overflowing", () => {
+    currentProfile = "compact";
+    mockHealthState.connectedDeviceLabel = "Ultimate-64-Elite-Living-Room";
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+
+    expect(badge.className).toContain("max-w-[min(48vw,12rem)]");
+    expect(badge.className).toContain("shrink");
   });
 
   it("renders as a bordered chrome control while preserving the 44px hit target", () => {

@@ -290,10 +290,14 @@ AppSheetDescription.displayName = DialogPrimitive.Description.displayName;
 type AppDialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   showClose?: boolean;
   closeTestId?: string;
+  hideClose?: boolean;
 };
 
 const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppDialogContentProps>(
-  ({ className, children, onOpenAutoFocus, showClose = true, closeTestId, style, ...props }, ref) => {
+  (
+    { className, children, onOpenAutoFocus, showClose = true, closeTestId, hideClose = false, style, ...props },
+    ref,
+  ) => {
     const {
       composedRef,
       nodeRef,
@@ -306,7 +310,7 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
     return (
       <AppSurfacePortal>
         <AppSurfaceOverlay depth={layer?.depth ?? 1} />
-        <AppSurfaceHeaderContext.Provider value={{ closeTestId, showClose }}>
+        <AppSurfaceHeaderContext.Provider value={{ closeTestId, showClose: showClose && !hideClose }}>
           <DialogPrimitive.Content
             ref={composedRef}
             className={cn(

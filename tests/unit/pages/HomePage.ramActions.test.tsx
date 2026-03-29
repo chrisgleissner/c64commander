@@ -543,4 +543,64 @@ describe("HomePage RAM actions", () => {
       }),
     );
   });
+
+  it("shows the REU progress dialog while save is running and closes it after success", async () => {
+    let resolveSave: ((value: { metadata: { content_name: string }; snapshotType: "reu" }) => void) | undefined;
+    reuWorkflowSaveSnapshotSpy.mockImplementationOnce((onProgress?: (state: any) => void) => {
+      onProgress?.({
+        step: "saving-reu",
+        title: "Saving REU on the Ultimate",
+        description: "The menu action is running in /Temp.",
+        progress: 20,
+      });
+      return new Promise((resolve) => {
+        resolveSave = resolve;
+      });
+    });
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+
+    const dialog = await screen.findByTestId("reu-progress-dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText("Saving REU on the Ultimate")).toBeInTheDocument();
+    expect(screen.getByText("This can take around 30 seconds.")).toBeInTheDocument();
+
+    resolveSave?.({
+      metadata: { content_name: "capture.reu" },
+      snapshotType: "reu",
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("reu-progress-dialog")).not.toBeInTheDocument());
+  });
+
+  it("closes the REU progress dialog and reports the error when save fails", async () => {
+    reuWorkflowSaveSnapshotSpy.mockImplementationOnce(async (onProgress?: (state: any) => void) => {
+      onProgress?.({
+        step: "waiting-for-file",
+        title: "Waiting for REU file",
+        description: "The Ultimate can take around 30 seconds to finish saving the REU image.",
+        progress: 40,
+      });
+      throw new Error("Timed out waiting for the new REU file in /Temp.");
+    });
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+
+    await waitFor(() =>
+      expect(reportUserErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "HOME_SAVE_REU",
+          title: "Save REU failed",
+          description: "Timed out waiting for the new REU file in /Temp.",
+        }),
+      ),
+    );
+    expect(screen.queryByTestId("reu-progress-dialog")).not.toBeInTheDocument();
+  });
 });

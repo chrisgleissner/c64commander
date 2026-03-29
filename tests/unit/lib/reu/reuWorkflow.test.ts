@@ -1,8 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as logging from "@/lib/logging";
 import { createReuWorkflow, detectUpdatedTempReuFile, waitForTempReuFile } from "@/lib/reu/reuWorkflow";
 import type { ReuSnapshotStorageEntry } from "@/lib/reu/reuSnapshotTypes";
 
+const addLogSpy = vi.spyOn(logging, "addLog").mockImplementation(() => undefined);
+const addErrorLogSpy = vi.spyOn(logging, "addErrorLog").mockImplementation(() => undefined);
+
 describe("reuWorkflow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("detects the newest changed .reu file in /Temp", () => {
     const file = detectUpdatedTempReuFile(
       [{ name: "old.reu", path: "/Temp/old.reu", modifiedAt: "2026-03-29T10:00:00Z", size: 10 }],
@@ -68,9 +76,10 @@ describe("reuWorkflow", () => {
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
-  it("saves REU snapshots into the dedicated REU store flow", async () => {
+  it("emits the authoritative save step order and stores the REU snapshot", async () => {
     const saveToStore = vi.fn();
     const persistLocalSnapshot = vi.fn().mockResolvedValue({ kind: "native-data", path: "reu-snapshots/test.reu" });
+    const onProgress = vi.fn();
     const workflow = createReuWorkflow({
       ensureLocalSnapshotStorage: vi.fn().mockResolvedValue(undefined),
       listRemoteTempFiles: vi
@@ -87,17 +96,37 @@ describe("reuWorkflow", () => {
       now: () => new Date("2026-03-29T10:02:00Z"),
     });
 
-    const entry = await workflow.saveSnapshot();
+    const entry = await workflow.saveSnapshot(onProgress);
 
     expect(entry.snapshotType).toBe("reu");
     expect(entry.remoteFileName).toBe("capture.reu");
     expect(saveToStore).toHaveBeenCalledWith(expect.objectContaining({ snapshotType: "reu" }));
     expect(persistLocalSnapshot).toHaveBeenCalled();
+    expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual([
+      "preparing",
+      "scanning-temp",
+      "saving-reu",
+      "waiting-for-file",
+      "downloading",
+      "persisting",
+      "complete",
+    ]);
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "info",
+      "REU workflow complete",
+      expect.objectContaining({
+        operation: "save",
+        status: "success",
+        remoteFileName: "capture.reu",
+        remotePath: "/Temp/capture.reu",
+      }),
+    );
   });
 
-  it("uploads a local REU snapshot back to /Temp before restore", async () => {
+  it("emits the authoritative restore step order before applying the uploaded REU file", async () => {
     const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
     const runRestoreRemoteReu = vi.fn().mockResolvedValue(undefined);
+    const onProgress = vi.fn();
     const snapshot: ReuSnapshotStorageEntry = {
       id: "reu-1",
       filename: "local.reu",
@@ -118,10 +147,26 @@ describe("reuWorkflow", () => {
       runRestoreRemoteReu,
     });
 
-    await workflow.restoreSnapshot(snapshot, "preload-on-startup");
+    await workflow.restoreSnapshot(snapshot, "preload-on-startup", onProgress);
 
     expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/capture.reu", new Uint8Array([1, 2, 3]));
     expect(runRestoreRemoteReu).toHaveBeenCalledWith("capture.reu", "preload-on-startup");
+    expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual([
+      "reading-local",
+      "uploading",
+      "restoring",
+      "complete",
+    ]);
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "info",
+      "REU workflow complete",
+      expect.objectContaining({
+        operation: "restore",
+        status: "success",
+        localPath: "reu-snapshots/local.reu",
+        remotePath: "/Temp/capture.reu",
+      }),
+    );
   });
 
   it("falls back to the local file name when the remote file name is blank", async () => {
@@ -173,6 +218,106 @@ describe("reuWorkflow", () => {
       expect.objectContaining({
         step: "waiting-for-file",
         progress: 98,
+      }),
+    );
+  });
+
+  it("fails cleanly when save never produces a new /Temp REU file", async () => {
+    const workflow = createReuWorkflow({
+      ensureLocalSnapshotStorage: vi.fn().mockResolvedValue(undefined),
+      listRemoteTempFiles: vi.fn().mockResolvedValue([]),
+      runSaveRemoteReu: vi.fn().mockResolvedValue(undefined),
+      readRemoteFile: vi.fn(),
+      persistLocalSnapshot: vi.fn(),
+      saveToStore: vi.fn(),
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await expect(workflow.saveSnapshot()).rejects.toThrow("Timed out waiting for the new REU file in /Temp.");
+
+    expect(addErrorLogSpy).toHaveBeenCalledWith(
+      "REU workflow failed",
+      expect.objectContaining({
+        operation: "save",
+        step: "waiting-for-file",
+        phase: "waiting-for-file",
+        transport: "ftp",
+        remotePath: "/Temp",
+        status: "error",
+      }),
+    );
+  });
+
+  it("fails cleanly when restore cannot upload the REU file to /Temp", async () => {
+    const snapshot: ReuSnapshotStorageEntry = {
+      id: "reu-upload-failure",
+      filename: "upload-failure.reu",
+      createdAt: "2026-03-29T10:02:00Z",
+      snapshotType: "reu",
+      sizeBytes: 3,
+      remoteFileName: "upload-failure.reu",
+      storage: { kind: "native-data", path: "reu-snapshots/upload-failure.reu" },
+      metadata: {
+        snapshot_type: "reu",
+        display_ranges: ["REU image"],
+        created_at: "2026-03-29 10:02:00",
+      },
+    };
+    const workflow = createReuWorkflow({
+      readLocalSnapshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      writeRemoteFile: vi.fn().mockRejectedValue(new Error("FTP upload failed")),
+      runRestoreRemoteReu: vi.fn(),
+    });
+
+    await expect(workflow.restoreSnapshot(snapshot, "load-into-reu")).rejects.toThrow("FTP upload failed");
+
+    expect(addErrorLogSpy).toHaveBeenCalledWith(
+      "REU workflow failed",
+      expect.objectContaining({
+        operation: "restore",
+        step: "uploading",
+        phase: "uploading",
+        transport: "ftp",
+        localPath: "reu-snapshots/upload-failure.reu",
+        remotePath: "/Temp/upload-failure.reu",
+        status: "error",
+      }),
+    );
+  });
+
+  it("fails cleanly when restore cannot apply the uploaded REU file over telnet", async () => {
+    const snapshot: ReuSnapshotStorageEntry = {
+      id: "reu-restore-failure",
+      filename: "restore-failure.reu",
+      createdAt: "2026-03-29T10:02:00Z",
+      snapshotType: "reu",
+      sizeBytes: 3,
+      remoteFileName: "restore-failure.reu",
+      storage: { kind: "native-data", path: "reu-snapshots/restore-failure.reu" },
+      metadata: {
+        snapshot_type: "reu",
+        display_ranges: ["REU image"],
+        created_at: "2026-03-29 10:02:00",
+      },
+    };
+    const workflow = createReuWorkflow({
+      readLocalSnapshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+      runRestoreRemoteReu: vi.fn().mockRejectedValue(new Error("Telnet apply failed")),
+    });
+
+    await expect(workflow.restoreSnapshot(snapshot, "load-into-reu")).rejects.toThrow("Telnet apply failed");
+
+    expect(addErrorLogSpy).toHaveBeenCalledWith(
+      "REU workflow failed",
+      expect.objectContaining({
+        operation: "restore",
+        step: "restoring",
+        phase: "restoring",
+        transport: "telnet",
+        localPath: "reu-snapshots/restore-failure.reu",
+        remotePath: "/Temp/restore-failure.reu",
+        status: "error",
       }),
     );
   });

@@ -104,6 +104,7 @@ export const ConfigSchema = z
     password: z.string().optional(),
     ftpMode: FtpModeSchema,
     ftpPort: z.number().int().min(1).max(65535).optional(),
+    telnetPort: z.number().int().min(1).max(65535).optional(),
     outputDir: z.string(),
     concurrency: z.object({
       restMaxInFlight: z.number().int().min(1),
@@ -132,6 +133,7 @@ export const ConfigSchema = z
       .object({
         rest: z.array(z.string()).optional(),
         ftp: z.array(z.string()).optional(),
+        telnet: z.array(z.string()).optional(),
         mixed: z.array(z.string()).optional(),
       })
       .optional(),
@@ -191,6 +193,7 @@ export const DefaultConfig: HarnessConfig = {
   password: "",
   ftpMode: "PASV",
   ftpPort: 21,
+  telnetPort: 23,
   outputDir: "test-results/contract",
   concurrency: {
     restMaxInFlight: 2,

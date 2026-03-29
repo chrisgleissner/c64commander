@@ -39,6 +39,11 @@
       "minimum": 1,
       "maximum": 65535
     },
+    "telnetPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
     "outputDir": {
       "type": "string"
     },
@@ -138,6 +143,12 @@
           }
         },
         "ftp": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "telnet": {
           "type": "array",
           "items": {
             "type": "string"

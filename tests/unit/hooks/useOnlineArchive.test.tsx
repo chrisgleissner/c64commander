@@ -10,6 +10,7 @@ const closers: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
   __resetArchivePresetCacheForTests();
+  vi.useRealTimers();
   await Promise.allSettled(closers.splice(0).map((close) => close()));
 });
 
@@ -70,6 +71,9 @@ describe("useOnlineArchive", () => {
   });
 
   it("keeps seeded presets and idle state when the preset refresh fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-29T12:00:00Z"));
+
     const { result } = renderHook(() =>
       useOnlineArchive(buildDefaultArchiveClientConfig({ hostOverride: "127.0.0.1:1" })),
     );
@@ -83,6 +87,7 @@ describe("useOnlineArchive", () => {
         expect.objectContaining({ type: "sort" }),
       ]),
     );
+    expect(result.current.presets.find((preset) => preset.type === "date")?.values.at(-1)?.aqlKey).toBe("2026");
   });
 
   it("refreshes presets only once per app launch for the same source config", async () => {
@@ -111,6 +116,9 @@ describe("useOnlineArchive", () => {
   });
 
   it("keeps the seeded presets visible until the background refresh completes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-29T12:00:00Z"));
+
     const deferred = new Promise<Array<{ type: string; description: string; values: never[] }>>((resolve) => {
       setTimeout(() => resolve([{ type: "category", description: "Category", values: [] }]), 0);
     });
@@ -134,6 +142,38 @@ describe("useOnlineArchive", () => {
     );
     await waitFor(() => expect(result.current.presetsLoading).toBe(false));
     expect(result.current.state.phase).toBe("idle");
+
+    spy.mockRestore();
+  });
+
+  it("keeps the current year in the date presets even when the server lags behind", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-29T12:00:00Z"));
+
+    const client = {
+      getPresets: vi.fn().mockResolvedValue([
+        {
+          type: "date",
+          description: "Date",
+          values: Array.from({ length: 46 }, (_, index) => ({ aqlKey: String(1980 + index) })),
+        },
+      ]),
+      search: vi.fn(),
+      getEntries: vi.fn(),
+      getBinaryUrl: vi.fn(),
+      downloadBinary: vi.fn(),
+      getResolvedConfig: vi.fn(),
+    };
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+
+    const datePreset = result.current.presets.find((preset) => preset.type === "date");
+    expect(datePreset?.values[0]?.aqlKey).toBe("1980");
+    expect(datePreset?.values.at(-1)?.aqlKey).toBe("2026");
+    expect(datePreset?.values.at(-1)?.name).toBe("2026");
 
     spy.mockRestore();
   });

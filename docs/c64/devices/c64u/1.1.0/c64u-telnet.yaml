@@ -54,14 +54,14 @@ telnet:
           items:
             - Turn On
             - Reset
-            - Set directory here
+            - Set dir. here
           default_item: "Turn On"
         Printer:
           items:
             - Flush/Eject
             - Reset
             - Turn On
-          default_item: "Flush/Eject"
+          default_item: Flush/Eject
         Configuration:
           items:
             - Save to Flash
@@ -79,7 +79,7 @@ telnet:
           items:
             - Clear Debug Log
             - Save Debug Log
-            - Save EDID to File
+            - Save EDID to file
             - Debug Stream
           default_item: "Clear Debug Log"
   selected_directory_action_menus:
@@ -146,7 +146,7 @@ telnet:
           items:
             - Turn On
             - Reset
-            - Set directory here
+            - Set dir. here
           default_item: "Turn On"
         UltiCopy:
           items:
@@ -165,7 +165,7 @@ telnet:
             - Flush/Eject
             - Reset
             - Turn On
-          default_item: "Flush/Eject"
+          default_item: Flush/Eject
         Configuration:
           items:
             - Save to Flash
@@ -183,7 +183,7 @@ telnet:
           items:
             - Clear Debug Log
             - Save Debug Log
-            - Save EDID to File
+            - Save EDID to file
             - Debug Stream
           default_item: "Clear Debug Log"
   filesystem_context_menus:
@@ -274,6 +274,14 @@ telnet:
           - Rename
           - Delete
         default_item: Run
+      reu:
+        representative_file: /USB1/test-data/snapshots/reu.reu
+        items:
+          - Load into REU
+          - Preload on Startup
+          - Rename
+          - Delete
+        default_item: "Load into REU"
       sid:
         representative_file: /USB1/test-data/SID/10_Orbyte.sid
         items:

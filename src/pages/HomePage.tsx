@@ -308,7 +308,7 @@ function HomePageContent() {
         description: (error as Error).message,
         error,
       });
-      throw error;
+      return undefined;
     } finally {
       setReuTaskPending(false);
       setReuProgress(null);

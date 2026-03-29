@@ -5,6 +5,7 @@
   "password": "changeme",
   "ftpMode": "PASV",
   "ftpPort": 21,
+  "telnetPort": 23,
   "outputDir": "test-results/contract",
   "concurrency": {
     "restMaxInFlight": 2,

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["generatedAt", "mode", "auth", "rest", "ftp"],
+  "required": ["generatedAt", "mode", "auth", "rest", "ftp", "telnet"],
   "properties": {
     "generatedAt": {
       "type": "string",
@@ -45,6 +45,25 @@
       }
     },
     "ftp": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "safe"],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "safe": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "telnet": {
       "type": "array",
       "items": {
         "type": "object",

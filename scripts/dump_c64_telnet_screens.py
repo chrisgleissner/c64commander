@@ -230,6 +230,7 @@ class TelnetSession:
         password: Optional[str],
         connect_timeout: float,
         read_timeout: float,
+        telnet_port: int = TELNET_PORT,
         debug_screens: bool = False,
         debug_prefix: str = "telnet",
     ) -> None:
@@ -237,11 +238,12 @@ class TelnetSession:
         self.password = password
         self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
+        self.telnet_port = telnet_port
         self.debug_screens = debug_screens
         self.debug_prefix = debug_prefix
         self.screen_counter = 0
         self.screen = TerminalScreen()
-        self.socket = socket.create_connection((host, TELNET_PORT), timeout=connect_timeout)
+        self.socket = socket.create_connection((host, self.telnet_port), timeout=connect_timeout)
         self.socket.settimeout(read_timeout)
         self._authenticate_if_needed()
         self.wait_for_quiet(initial_timeout=0.20, quiet_window=QUIET_WINDOW)
@@ -508,6 +510,15 @@ def clean_menu_item(raw_text: str) -> str:
     return text
 
 
+def normalize_overlay_menu_item(text: str) -> str:
+    last_separator = max(text.rfind(char) for char in "│┌┐└┘─├┤┬┴┼")
+    if last_separator >= 0:
+        normalized = text[last_separator + 1 :].strip()
+        if normalized:
+            return normalized
+    return text
+
+
 def extract_menu_items(screen: TerminalScreen, box: Box) -> dict[str, Any]:
     items: list[str] = []
     selected_index: Optional[int] = None
@@ -566,9 +577,9 @@ def fetch_device_metadata(base_url: str, headers: dict[str, str], timeout: float
     }
 
 
-def open_ftp(host: str, password: Optional[str], timeout: float) -> ftplib.FTP:
+def open_ftp(host: str, password: Optional[str], timeout: float, ftp_port: int = FTP_PORT) -> ftplib.FTP:
     ftp = ftplib.FTP()
-    ftp.connect(host, FTP_PORT, timeout=timeout)
+    ftp.connect(host, ftp_port, timeout=timeout)
     ftp.login(passwd=password or "")
     return ftp
 
@@ -617,6 +628,7 @@ def representative_files(ftp: ftplib.FTP, root_path: str) -> list[dict[str, str]
         ("d81", ".d81"),
         ("mod", ".mod"),
         ("prg", ".prg"),
+        ("reu", ".reu"),
         ("sid", ".sid"),
         ("archive_7z", ".7z"),
     ]
@@ -625,6 +637,8 @@ def representative_files(ftp: ftplib.FTP, root_path: str) -> list[dict[str, str]
         directory = root_path if entry_name == "archive_7z" else f"{root_path}/{entry_name.upper() if entry_name == 'sid' else entry_name}"
         if entry_name == "archive_7z":
             directory = f"{root_path}/SID"
+        elif entry_name == "reu":
+            directory = f"{root_path}/snapshots"
         items = ftp_entries(ftp, directory)
         for item in items:
             if item.lower().endswith(extension):
@@ -714,7 +728,7 @@ def extract_overlay_menu_items(screen: TerminalScreen, parent_box: Box) -> Optio
         parts = raw.split("│")
         if len(parts) < 2:
             continue
-        candidate = clean_menu_item(parts[-2])
+        candidate = normalize_overlay_menu_item(clean_menu_item(parts[-2]))
         if not candidate:
             continue
         if candidate not in items:
@@ -807,6 +821,7 @@ def capture_initial_context_menus(
     password: Optional[str],
     connect_timeout: float,
     read_timeout: float,
+    telnet_port: int = TELNET_PORT,
     action_keys: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     for action_key in (action_keys or ["F1", "F5"]):
@@ -816,6 +831,7 @@ def capture_initial_context_menus(
             password,
             connect_timeout,
             read_timeout,
+            telnet_port=telnet_port,
             debug_screens=args_debug_screens,
             debug_prefix=f"initial-context-{action_key.lower()}",
         ) as session:
@@ -839,6 +855,7 @@ def capture_selected_directory_action_menus(
     read_timeout: float,
     ftp: ftplib.FTP,
     path: str,
+    telnet_port: int = TELNET_PORT,
     action_keys: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     parent = parent_path(path)
@@ -850,6 +867,7 @@ def capture_selected_directory_action_menus(
             password,
             connect_timeout,
             read_timeout,
+            telnet_port=telnet_port,
             debug_screens=args_debug_screens,
             debug_prefix=f"selected-directory-action-{action_key.lower()}",
         ) as session:
@@ -958,6 +976,7 @@ def run_telnet_capture(
     password: Optional[str],
     connect_timeout: float,
     read_timeout: float,
+    telnet_port: int = TELNET_PORT,
     debug_screens: bool,
     debug_prefix: str,
     action,
@@ -971,6 +990,7 @@ def run_telnet_capture(
                 password,
                 connect_timeout,
                 read_timeout,
+                telnet_port=telnet_port,
                 debug_screens=debug_screens,
                 debug_prefix=debug_prefix,
             ) as session:
@@ -1007,6 +1027,8 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=5.0, help="REST and FTP timeout in seconds")
     parser.add_argument("--connect-timeout", type=float, default=5.0, help="Telnet connect timeout in seconds")
     parser.add_argument("--read-timeout", type=float, default=0.3, help="Telnet read timeout in seconds")
+    parser.add_argument("--ftp-port", type=int, default=FTP_PORT, help="FTP port to probe")
+    parser.add_argument("--telnet-port", type=int, default=TELNET_PORT, help="Telnet port to probe")
     parser.add_argument("--retries", type=int, default=2, help="REST retry count")
     parser.add_argument("--retry-delay", type=float, default=1.0, help="REST retry delay in seconds")
     parser.add_argument(
@@ -1035,7 +1057,7 @@ def main() -> int:
     metadata = fetch_device_metadata(base_url, headers, args.timeout, args.retries, args.retry_delay)
     action_keys = ["F1"] if metadata.get("device_type") == "C64 Ultimate" else ["F5"]
 
-    with open_ftp(host, args.password, args.timeout) as ftp:
+    with open_ftp(host, args.password, args.timeout, ftp_port=args.ftp_port) as ftp:
         candidates = [args.preferred_test_data_path, *args.fallback_test_data_path]
         log(f"Resolving test-data path from {candidates}")
         resolved_test_data_path = resolve_test_data_path(ftp, candidates)
@@ -1046,6 +1068,7 @@ def main() -> int:
             password=args.password,
             connect_timeout=args.connect_timeout,
             read_timeout=args.read_timeout,
+            telnet_port=args.telnet_port,
             debug_screens=args.debug_screens,
             debug_prefix="directory-menu",
             action=lambda session: open_context_menu(
@@ -1063,6 +1086,7 @@ def main() -> int:
                 password=args.password,
                 connect_timeout=args.connect_timeout,
                 read_timeout=args.read_timeout,
+                telnet_port=args.telnet_port,
                 debug_screens=args.debug_screens,
                 debug_prefix=f"file-menu-{file_info['label']}",
                 action=lambda session, file_info=file_info: open_context_menu(
@@ -1088,10 +1112,11 @@ def main() -> int:
         args.password,
         connect_timeout=args.connect_timeout,
         read_timeout=args.read_timeout,
+        telnet_port=args.telnet_port,
         action_keys=action_keys,
     )
 
-    with open_ftp(host, args.password, args.timeout) as ftp:
+    with open_ftp(host, args.password, args.timeout, ftp_port=args.ftp_port) as ftp:
         selected_directory_action_menus = capture_selected_directory_action_menus(
             host,
             args.password,
@@ -1099,6 +1124,7 @@ def main() -> int:
             read_timeout=args.read_timeout,
             ftp=ftp,
             path=resolved_test_data_path,
+            telnet_port=args.telnet_port,
             action_keys=action_keys,
         )
 

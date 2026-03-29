@@ -77,7 +77,7 @@ describe("OnlineArchiveDialog", () => {
 
     expect(screen.queryByText(/Overrides are active/i)).toBeNull();
     expect(screen.getByTestId("online-archive-legal-notice")).toHaveTextContent(
-      "Use CommoServe in accordance with applicable copyright law and archive terms.",
+      "You agree you have a necessary license or rights to download any software.",
     );
     expect(screen.getByText("Joyride")).toBeInTheDocument();
 

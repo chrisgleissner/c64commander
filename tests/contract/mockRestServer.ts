@@ -15,6 +15,7 @@ type DriveState = {
   enabled: boolean;
   bus_id: number;
   type?: string;
+  rom?: string;
   image_file?: string;
   image_path?: string;
   last_error?: string;
@@ -25,6 +26,8 @@ type ConfigItem = {
   min?: number;
   max?: number;
   values?: string[];
+  default?: string | number;
+  format?: string;
 };
 
 type ConfigState = Record<string, Record<string, ConfigItem>>;
@@ -63,55 +66,254 @@ const json = (res: ServerResponse, status: number, payload: unknown) => {
 
 const normalizePath = (value: string) => value.replace(/\/+/g, "/");
 
+const toDrivePayload = (drive: DriveState) => ({
+  enabled: drive.enabled,
+  bus_id: drive.bus_id,
+  ...(drive.type ? { type: drive.type } : {}),
+  ...(drive.rom ? { rom: drive.rom } : {}),
+  ...(typeof drive.image_file === "string" ? { image_file: drive.image_file } : {}),
+  ...(typeof drive.image_path === "string" ? { image_path: drive.image_path } : {}),
+  ...(drive.last_error ? { last_error: drive.last_error } : {}),
+});
+
+const stringConfig = (value: string, options: { values?: string[]; default?: string } = {}): ConfigItem => ({
+  value,
+  ...(options.values ? { values: options.values } : {}),
+  default: options.default ?? value,
+});
+
+const numberConfig = (
+  value: number,
+  options: { min?: number; max?: number; default?: number; format?: string } = {},
+): ConfigItem => ({
+  value,
+  ...(typeof options.min === "number" ? { min: options.min } : {}),
+  ...(typeof options.max === "number" ? { max: options.max } : {}),
+  ...(typeof options.format === "string" ? { format: options.format } : {}),
+  default: options.default ?? value,
+});
+
 const createDefaultConfigState = (): ConfigState => ({
-  "Data Streams": {
-    "Stream Audio to": { value: "off", values: ["off", "on"] },
-    "Stream VIC to": { value: "239.0.1.90:11000" },
+  "Audio Mixer": {
+    "Vol UltiSid 1": stringConfig(" 0 dB", {
+      values: [
+        "OFF",
+        "-42 dB",
+        "-36 dB",
+        "-30 dB",
+        "-27 dB",
+        "-24 dB",
+        "-18 dB",
+        "-17 dB",
+        "-16 dB",
+        "-15 dB",
+        "-14 dB",
+        "-13 dB",
+        "-12 dB",
+        "-11 dB",
+        "-10 dB",
+        "-9 dB",
+        "-8 dB",
+        "-7 dB",
+        "-6 dB",
+        "-5 dB",
+        "-4 dB",
+        "-3 dB",
+        "-2 dB",
+        "-1 dB",
+        " 0 dB",
+        "+1 dB",
+        "+2 dB",
+        "+3 dB",
+        "+4 dB",
+        "+5 dB",
+        "+6 dB",
+      ],
+    }),
+    "Vol UltiSid 2": stringConfig(" 0 dB", {
+      values: [
+        "OFF",
+        "-42 dB",
+        "-36 dB",
+        "-30 dB",
+        "-27 dB",
+        "-24 dB",
+        "-18 dB",
+        "-17 dB",
+        "-16 dB",
+        "-15 dB",
+        "-14 dB",
+        "-13 dB",
+        "-12 dB",
+        "-11 dB",
+        "-10 dB",
+        "-9 dB",
+        "-8 dB",
+        "-7 dB",
+        "-6 dB",
+        "-5 dB",
+        "-4 dB",
+        "-3 dB",
+        "-2 dB",
+        "-1 dB",
+        " 0 dB",
+        "+1 dB",
+        "+2 dB",
+        "+3 dB",
+        "+4 dB",
+        "+5 dB",
+        "+6 dB",
+      ],
+    }),
+    "Vol Socket 1": stringConfig(" 0 dB", {
+      values: [
+        "OFF",
+        "-42 dB",
+        "-36 dB",
+        "-30 dB",
+        "-27 dB",
+        "-24 dB",
+        "-18 dB",
+        "-17 dB",
+        "-16 dB",
+        "-15 dB",
+        "-14 dB",
+        "-13 dB",
+        "-12 dB",
+        "-11 dB",
+        "-10 dB",
+        "-9 dB",
+        "-8 dB",
+        "-7 dB",
+        "-6 dB",
+        "-5 dB",
+        "-4 dB",
+        "-3 dB",
+        "-2 dB",
+        "-1 dB",
+        " 0 dB",
+        "+1 dB",
+        "+2 dB",
+        "+3 dB",
+        "+4 dB",
+        "+5 dB",
+        "+6 dB",
+      ],
+    }),
+    "Vol Socket 2": stringConfig(" 0 dB", {
+      values: [
+        "OFF",
+        "-42 dB",
+        "-36 dB",
+        "-30 dB",
+        "-27 dB",
+        "-24 dB",
+        "-18 dB",
+        "-17 dB",
+        "-16 dB",
+        "-15 dB",
+        "-14 dB",
+        "-13 dB",
+        "-12 dB",
+        "-11 dB",
+        "-10 dB",
+        "-9 dB",
+        "-8 dB",
+        "-7 dB",
+        "-6 dB",
+        "-5 dB",
+        "-4 dB",
+        "-3 dB",
+        "-2 dB",
+        "-1 dB",
+        " 0 dB",
+        "+1 dB",
+        "+2 dB",
+        "+3 dB",
+        "+4 dB",
+        "+5 dB",
+        "+6 dB",
+      ],
+    }),
+    "Vol Sampler L": stringConfig(" 0 dB"),
+    "Vol Sampler R": stringConfig(" 0 dB"),
+    "Vol Drive 1": stringConfig("OFF"),
+    "Vol Drive 2": stringConfig("OFF"),
+    "Vol Tape Read": stringConfig("OFF"),
+    "Vol Tape Write": stringConfig("OFF"),
+    "Pan UltiSID 1": stringConfig("Center"),
+    "Pan UltiSID 2": stringConfig("Center"),
+    "Pan Socket 1": stringConfig("Left 3", {
+      values: [
+        "Left 5",
+        "Left 4",
+        "Left 3",
+        "Left 2",
+        "Left 1",
+        "Center",
+        "Right 1",
+        "Right 2",
+        "Right 3",
+        "Right 4",
+        "Right 5",
+      ],
+    }),
+    "Pan Socket 2": stringConfig("Right 3"),
+    "Pan Sampler L": stringConfig("Left 3"),
+    "Pan Sampler R": stringConfig("Right 3"),
+    "Pan Drive 1": stringConfig("Left 2"),
+    "Pan Drive 2": stringConfig("Right 2"),
+    "Pan Tape Read": stringConfig("Center"),
+    "Pan Tape Write": stringConfig("Center"),
   },
   "Drive A Settings": {
-    Drive: { value: "enabled", values: ["enabled", "disabled"] },
-    "Drive Bus ID": { value: 8, min: 8, max: 11 },
-    "Drive Type": { value: "1541", values: ["1541", "1571"] },
+    Drive: stringConfig("Enabled", { values: ["Disabled", "Enabled"] }),
+    "Drive Type": stringConfig("1541", { values: ["1541", "1571", "1581"] }),
+    "Drive Bus ID": numberConfig(8, { min: 8, max: 11, format: "%d" }),
+    "ROM for 1541 mode": stringConfig("1541.rom"),
+    "ROM for 1571 mode": stringConfig("1571.rom"),
+    "ROM for 1581 mode": stringConfig("1581.rom"),
+    "Extra RAM": stringConfig("Disabled"),
+    "Disk swap delay": numberConfig(1, { min: 0, max: 10, format: "%d" }),
+    "Resets when C64 resets": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "Freezes in menu": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "GCR Save Align Tracks": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "Leave Menu on Mount": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "D64 Geos Copy Protection": stringConfig("none"),
   },
   "Drive B Settings": {
-    Drive: { value: "enabled", values: ["enabled", "disabled"] },
-    "Drive Bus ID": { value: 9, min: 8, max: 11 },
-    "Drive Type": { value: "1541", values: ["1541", "1571"] },
+    Drive: stringConfig("Disabled", { values: ["Disabled", "Enabled"] }),
+    "Drive Type": stringConfig("1541", { values: ["1541", "1571", "1581"] }),
+    "Drive Bus ID": numberConfig(9, { min: 8, max: 11, format: "%d" }),
+    "ROM for 1541 mode": stringConfig("1541.rom"),
+    "ROM for 1571 mode": stringConfig("1571.rom"),
+    "ROM for 1581 mode": stringConfig("1581.rom"),
+    "Extra RAM": stringConfig("Disabled"),
+    "Disk swap delay": numberConfig(1, { min: 0, max: 10, format: "%d" }),
+    "Resets when C64 resets": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "Freezes in menu": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "GCR Save Align Tracks": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "Leave Menu on Mount": stringConfig("Yes", { values: ["No", "Yes"] }),
+    "D64 Geos Copy Protection": stringConfig("none"),
   },
-  "Audio Mixer": {
-    "Vol Socket 1": {
-      value: " 0 dB",
-      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
-    },
-    "Vol Socket 2": {
-      value: " 0 dB",
-      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
-    },
-    "Vol UltiSid 1": {
-      value: " 0 dB",
-      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
-    },
-    "Vol UltiSid 2": {
-      value: " 0 dB",
-      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
-    },
-    "Pan Socket 1": {
-      value: "Center",
-      values: ["Left 1", "Center", "Right 1"],
-    },
+  "Data Streams": {
+    "Stream VIC to": stringConfig("239.0.1.64:11000"),
+    "Stream Audio to": stringConfig("239.0.1.65:11001"),
+    "Stream Debug to": stringConfig("239.0.1.66:11002"),
+    "Debug Stream Mode": stringConfig("6510 Only"),
   },
 });
 
 export async function createMockRestServer(options: MockRestServerOptions = {}): Promise<MockRestServer> {
   const configState: ConfigState = createDefaultConfigState();
   const driveState: Record<"a" | "b" | "softiec" | "printer", DriveState> = {
-    a: { enabled: true, bus_id: 8, type: "1541" },
-    b: { enabled: true, bus_id: 9, type: "1541" },
+    a: { enabled: true, bus_id: 8, type: "1541", rom: "1541.rom", image_file: "", image_path: "" },
+    b: { enabled: false, bus_id: 9, type: "1541", rom: "1541.rom", image_file: "", image_path: "" },
     softiec: {
       enabled: false,
       bus_id: 11,
       type: "DOS emulation",
-      last_error: "73,MOCK ERROR",
+      last_error: "73,U64IEC ULTIMATE DOS V1.1,00,00",
     },
     printer: { enabled: false, bus_id: 4 },
   };
@@ -141,10 +343,10 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
     if (method === "GET" && parsed.pathname === "/v1/info") {
       json(res, 200, {
         product: "C64 Ultimate",
-        firmware_version: "3.14",
-        fpga_version: "121",
-        core_version: "1.45",
-        hostname: "c64u-mock",
+        firmware_version: "1.1.0",
+        fpga_version: "122",
+        core_version: "1.49",
+        hostname: "c64u",
         unique_id: "MOCK-" + randomUUID().slice(0, 8),
         errors: [],
       });
@@ -152,16 +354,16 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
     }
 
     if (method === "GET" && parsed.pathname === "/v1/version") {
-      json(res, 200, { version: "3.14", errors: [] });
+      json(res, 200, { version: "0.1", errors: [] });
       return;
     }
 
     if (method === "GET" && parsed.pathname === "/v1/drives") {
       json(res, 200, {
         drives: [
-          { a: { ...driveState.a } },
-          { b: { ...driveState.b } },
-          { "IEC Drive": { ...driveState.softiec } },
+          { a: toDrivePayload(driveState.a) },
+          { b: toDrivePayload(driveState.b) },
+          { "IEC Drive": { ...toDrivePayload(driveState.softiec), partitions: [{ id: 0, path: "/USB0/" }] } },
           {
             "Printer Emulation": {
               enabled: driveState.printer.enabled,
@@ -182,7 +384,11 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
     const configCategoryMatch = parsed.pathname.match(/^\/v1\/configs\/([^/]+)$/);
     if (method === "GET" && configCategoryMatch) {
       const category = decodeURIComponent(configCategoryMatch[1]);
-      json(res, 200, { [category]: configState[category] ?? {}, errors: [] });
+      const entries = configState[category] ?? {};
+      json(res, 200, {
+        [category]: Object.fromEntries(Object.entries(entries).map(([name, entry]) => [name, entry.value])),
+        errors: [],
+      });
       return;
     }
 
@@ -201,8 +407,9 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
           entry.value = isNaN(Number(nextValue)) ? nextValue : Number(nextValue);
         }
       }
+      const { value: _value, ...details } = entry;
       json(res, 200, {
-        [category]: { [item]: { ...entry, current: entry.value } },
+        [category]: { [item]: { current: entry.value, ...details } },
         errors: [],
       });
       return;
@@ -215,7 +422,8 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
         Object.entries(payload).forEach(([category, items]) => {
           configState[category] = configState[category] ?? {};
           Object.entries(items).forEach(([item, value]) => {
-            configState[category][item] = { value };
+            const existing = configState[category][item];
+            configState[category][item] = existing ? { ...existing, value } : { value, default: value };
           });
         });
       } catch {
@@ -239,12 +447,17 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
 
     if (method === "GET" && parsed.pathname === "/v1/machine:readmem") {
       const length = Math.max(1, Number(parsed.searchParams.get("length") || "1"));
-      json(res, 200, { data: new Array(length).fill(0), errors: [] });
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
+      res.end(Buffer.alloc(length, 0));
       return;
     }
 
     if (method === "GET" && parsed.pathname === "/v1/machine:debugreg") {
-      json(res, 200, { registers: {}, errors: [] });
+      json(res, 200, { value: "00", errors: [] });
       return;
     }
 
@@ -275,7 +488,7 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
       if (driveState[drive]) {
         if (action === "on") driveState[drive].enabled = true;
         if (action === "off") driveState[drive].enabled = false;
-        if (action === "reset" && drive === "softiec") delete driveState.softiec.last_error;
+        if (action === "reset" && drive === "softiec") driveState.softiec.last_error = undefined;
       }
       json(res, 200, { errors: [] });
       return;
@@ -284,7 +497,10 @@ export async function createMockRestServer(options: MockRestServerOptions = {}):
     if (method === "PUT" && parsed.pathname.match(/^\/v1\/drives\/[ab]:set_mode$/)) {
       const drive = parsed.pathname.includes("/a:") ? "a" : "b";
       const mode = parsed.searchParams.get("mode");
-      if (mode) driveState[drive].type = mode;
+      if (mode) {
+        driveState[drive].type = mode;
+        driveState[drive].rom = `${mode}.rom`;
+      }
       json(res, 200, { errors: [] });
       return;
     }

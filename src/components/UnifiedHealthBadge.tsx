@@ -91,26 +91,30 @@ export function UnifiedHealthBadge({ className }: Props) {
       }
       onClick={handleClick}
       className={cn(
-        "app-chrome-badge inline-flex min-w-0 max-w-full items-center overflow-hidden rounded-md bg-transparent px-0 py-0 min-h-[44px] touch-none",
+        "app-chrome-badge inline-flex shrink min-w-0 items-center overflow-hidden rounded-md bg-transparent px-0 py-0 min-h-[44px] touch-none",
+        profile === "compact" ? "max-w-[min(48vw,12rem)]" : "max-w-full",
         "text-foreground transition-opacity hover:opacity-90 active:opacity-80",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-0",
         className,
       )}
     >
       <span
-        className="app-chrome-badge-surface inline-flex max-w-full items-center overflow-hidden rounded-md px-2 py-[0.3rem]"
+        className="app-chrome-badge-surface inline-flex min-w-0 max-w-full items-center overflow-hidden rounded-md px-2 py-[0.3rem]"
         aria-hidden="true"
       >
-        <span className="min-w-0 overflow-hidden whitespace-nowrap leading-none">
+        <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
           <span
-            className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+            className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
             data-overlay-critical="badge"
           >
             {badgeText.leadingLabel}
-          </span>{" "}
+          </span>
+          <span className="shrink-0 whitespace-pre" aria-hidden="true">
+            {" "}
+          </span>
           <span
             className={cn(
-              "inline-flex h-[1em] w-[1em] items-center justify-center align-middle font-sans text-[1rem] leading-none transform-gpu",
+              "inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center align-middle font-sans text-[1rem] leading-none transform-gpu",
               glyphColor,
               HEALTH_GLYPH_VISUAL_CLASS[state],
               HEALTH_GLYPH_ALIGNMENT_CLASS[state],
@@ -121,17 +125,24 @@ export function UnifiedHealthBadge({ className }: Props) {
           </span>
           {badgeText.countLabel ? (
             <>
-              {" "}
-              <span className={cn("text-xs font-semibold leading-none", glyphColor)} data-overlay-critical="badge">
+              <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                {" "}
+              </span>
+              <span
+                className={cn("shrink-0 text-xs font-semibold leading-none", glyphColor)}
+                data-overlay-critical="badge"
+              >
                 {badgeText.countLabel}
               </span>
             </>
           ) : null}
           {badgeText.trailingLabel ? (
             <>
-              {" "}
+              <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                {" "}
+              </span>
               <span
-                className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
                 data-overlay-critical="badge"
               >
                 {badgeText.trailingLabel}
