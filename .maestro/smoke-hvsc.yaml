@@ -30,22 +30,22 @@ env:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
-- scrollUntilVisible:
-    element:
-      text: "HVSC"
-    direction: DOWN
-    speed: 60
-    timeout: ${LONG_TIMEOUT}
-- scrollUntilVisible:
-    element:
-      text: "Download HVSC"
-    direction: DOWN
-    speed: 60
-    timeout: ${LONG_TIMEOUT}
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          start: 50%, 82%
+          end: 50%, 24%
+          duration: 900
+          waitToSettleTimeoutMs: 500
+      - waitForAnimationToEnd
+- assertVisible:
+    id: hvsc-download
 - takeScreenshot: hvsc-controls
-- assertVisible: "HVSC"
-- assertVisible: "Download HVSC"
-- assertVisible: "Ingest HVSC"
+- assertVisible:
+    id: hvsc-download
+- assertVisible:
+    id: hvsc-ingest
 - takeScreenshot: hvsc-actions
 - runFlow:
     when:

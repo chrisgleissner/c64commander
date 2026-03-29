@@ -86,7 +86,11 @@ export const HvscControls = ({
   })();
 
   return (
-    <div className="bg-card border border-border rounded-xl p-4 space-y-4" data-testid="hvsc-controls">
+    <div
+      id="hvsc-controls"
+      className="bg-card border border-border rounded-xl p-4 space-y-4"
+      data-testid="hvsc-controls"
+    >
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium">HVSC</p>
@@ -99,6 +103,7 @@ export const HvscControls = ({
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <Button
+            id="hvsc-download"
             variant="default"
             size="sm"
             onClick={onInstall}
@@ -108,6 +113,7 @@ export const HvscControls = ({
             Download HVSC
           </Button>
           <Button
+            id="hvsc-ingest"
             variant="outline"
             size="sm"
             onClick={onIngest}
