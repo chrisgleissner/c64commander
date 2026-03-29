@@ -4,7 +4,7 @@ config:
     rest_api_version: "0.1"
     device_type: "C64 Ultimate"
     firmware_version: 1.1.0
-    fetched_at: "2026-03-19T19:10:35.263951+00:00"
+    fetched_at: "2026-03-29T11:46:09.474875+00:00"
   categories:
     Audio Mixer:
       items:
@@ -894,7 +894,7 @@ config:
     UltiSID Configuration:
       items:
         UltiSID 1 Filter Curve:
-          selected: 8580 Lo
+          selected: "6581"
           options:
             - 8580 Lo
             - 8580 Hi
@@ -1363,10 +1363,11 @@ config:
     C64 and Cartridge Settings:
       items:
         Cartridge:
-          selected: ""
+          selected: Final_Cartridge_3_1988-13.crt
           details:
             presets:
               - ""
+              - Final_Cartridge_3_1988-13.crt
         Cartridge Preference:
           selected: Auto
           options:
@@ -1440,7 +1441,7 @@ config:
             - Disabled
             - Enabled
         REU Preload Image:
-          selected: /Usb0/preload.reu
+          selected: /Temp/memory.reu
         REU Preload Offset:
           selected: 0 KB
           options:
