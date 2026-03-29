@@ -459,7 +459,7 @@ jobs:
         run: node scripts/check-lcov-paths.mjs
 
       - name: Upload web coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         env:
           CODECOV_SHA: ${{ env.CI_SHA }}
           CC_SHA: ${{ env.CI_SHA }}
@@ -652,7 +652,7 @@ jobs:
 
       - name: Upload Android coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         env:
           CODECOV_SHA: ${{ env.CI_SHA }}
           CC_SHA: ${{ env.CI_SHA }}
@@ -699,7 +699,7 @@ jobs:
 
       - name: Upload Python coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         env:
           CODECOV_SHA: ${{ env.CI_SHA }}
           CC_SHA: ${{ env.CI_SHA }}

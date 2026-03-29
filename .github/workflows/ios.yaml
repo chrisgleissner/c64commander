@@ -100,7 +100,7 @@ jobs:
           echo "Swift lcov generated: $(wc -l < ios/native-tests/swift-lcov.info) lines"
 
       - name: Upload Swift coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         env:
           CODECOV_SHA: ${{ env.CI_SHA }}
           CC_SHA: ${{ env.CI_SHA }}
