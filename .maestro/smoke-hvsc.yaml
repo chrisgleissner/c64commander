@@ -29,12 +29,27 @@ env:
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "No tracks in playlist yet."
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+- scrollUntilVisible:
+    element:
+      text: "HVSC"
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
 - scrollUntilVisible:
     element:
       text: "Download HVSC"
     direction: DOWN
-    timeout: ${TIMEOUT}
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
 - takeScreenshot: hvsc-controls
+- assertVisible: "HVSC"
 - assertVisible: "Download HVSC"
 - assertVisible: "Ingest HVSC"
 - takeScreenshot: hvsc-actions
