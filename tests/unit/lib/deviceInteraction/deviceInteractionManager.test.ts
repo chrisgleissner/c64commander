@@ -768,6 +768,235 @@ describe("deviceInteractionManager", () => {
     expect(result).toBe("recovered");
   });
 
+  it("withFtpInteraction: uses fast path in test env (success)", async () => {
+    restoreEnv?.();
+    restoreEnv = null;
+    (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = false;
+
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("ftp-fast-ok");
+    const meta = { action, operation: "get", path: "/fast", intent: "system" as const };
+    const handler = vi.fn().mockResolvedValue("fast-result");
+
+    const result = await withFtpInteraction(meta, handler);
+    expect(result).toBe("fast-result");
+    expect(markDeviceRequestStart).toHaveBeenCalled();
+    expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: true });
+  });
+
+  it("withFtpInteraction: uses fast path in test env (error)", async () => {
+    restoreEnv?.();
+    restoreEnv = null;
+    (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = false;
+
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("ftp-fast-err");
+    const meta = { action, operation: "get", path: "/fast-err", intent: "system" as const };
+    const handler = vi.fn().mockRejectedValue(new Error("Fast FTP error"));
+
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("Fast FTP error");
+    expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: false, errorMessage: "Fast FTP error" });
+  });
+
+  it("withFtpInteraction: blocks when device state is ERROR and intent is system", async () => {
+    deviceStateValue = "ERROR";
+
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("ftp-state-err");
+    const meta = { action, operation: "list", path: "/root", intent: "system" as const };
+    const handler = vi.fn().mockResolvedValue("ok");
+
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("Device not ready for FTP");
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      action,
+      expect.objectContaining({ decision: "block", reason: "state" }),
+    );
+  });
+
+  it("withRestInteraction: resolves to null policy for unknown REST path", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("rest-custom");
+    const meta = {
+      action,
+      method: "GET",
+      path: "/v1/custom-endpoint",
+      normalizedUrl: "http://device/v1/custom-endpoint",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+    const handler = vi.fn().mockResolvedValue({ ok: true });
+
+    const result = await withRestInteraction(meta, handler);
+    expect(result).toEqual({ ok: true });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("withRestInteraction: blocks system intent when device state is ERROR", async () => {
+    deviceStateValue = "ERROR";
+
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("rest-err-state");
+    const meta = {
+      action,
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+    const handler = vi.fn().mockResolvedValue("ok");
+
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow();
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      action,
+      expect.objectContaining({ decision: "block", reason: "state" }),
+    );
+  });
+
+  it("withTelnetInteraction: uses fast path in test env (success)", async () => {
+    restoreEnv?.();
+    restoreEnv = null;
+    (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = false;
+
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-fast-ok");
+    const meta = { action, actionId: "telnet-fast-ok", intent: "system" as const };
+    const handler = vi.fn().mockResolvedValue("fast-telnet");
+
+    const result = await withTelnetInteraction(meta, handler);
+    expect(result).toBe("fast-telnet");
+    expect(markDeviceRequestStart).toHaveBeenCalled();
+    expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: true });
+  });
+
+  it("withTelnetInteraction: uses fast path in test env (error)", async () => {
+    restoreEnv?.();
+    restoreEnv = null;
+    (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = false;
+
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-fast-err");
+    const meta = { action, actionId: "telnet-fast-err", intent: "system" as const };
+    const handler = vi.fn().mockRejectedValue(new Error("Fast Telnet error"));
+
+    await expect(withTelnetInteraction(meta, handler)).rejects.toThrow("Fast Telnet error");
+    expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: false, errorMessage: "Fast Telnet error" });
+  });
+
+  it("withTelnetInteraction: succeeds via full path and marks device lifecycle", async () => {
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-ok");
+    const meta = { action, actionId: "telnet-ok", intent: "system" as const };
+    const handler = vi.fn().mockResolvedValue("telnet-result");
+
+    const result = await withTelnetInteraction(meta, handler);
+    expect(result).toBe("telnet-result");
+    expect(markDeviceRequestStart).toHaveBeenCalled();
+    expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: true });
+    expect(addErrorLog).not.toHaveBeenCalled();
+  });
+
+  it("withTelnetInteraction: logs and rethrows error on handler failure", async () => {
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-fail");
+    const meta = { action, actionId: "telnet-fail", intent: "system" as const };
+    const handler = vi.fn().mockRejectedValue(new Error("Telnet connection lost"));
+
+    await expect(withTelnetInteraction(meta, handler)).rejects.toThrow("Telnet connection lost");
+    expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: false, errorMessage: "Telnet connection lost" });
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Telnet request failed",
+      expect.objectContaining({ actionId: "telnet-fail" }),
+    );
+  });
+
+  it("withTelnetInteraction: blocks system intent when Telnet circuit is open", async () => {
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-circuit");
+    const meta = { action, actionId: "telnet-circuit", intent: "system" as const };
+    const handler = vi.fn().mockRejectedValue(new Error("Telnet fail"));
+
+    await expect(withTelnetInteraction(meta, handler)).rejects.toThrow("Telnet fail");
+    await expect(withTelnetInteraction(meta, handler)).rejects.toThrow("Telnet fail");
+    await expect(withTelnetInteraction(meta, handler)).rejects.toThrow("Telnet circuit open");
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ decision: "block", reason: "circuit-open" }),
+    );
+  });
+
+  it("withTelnetInteraction: user intent overrides open Telnet circuit", async () => {
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const sysAction = makeAction("telnet-sys-fail");
+    const sysMeta = { action: sysAction, actionId: "telnet-sys-fail", intent: "system" as const };
+    const failHandler = vi.fn().mockRejectedValue(new Error("Telnet fail"));
+
+    await expect(withTelnetInteraction(sysMeta, failHandler)).rejects.toThrow("Telnet fail");
+    await expect(withTelnetInteraction(sysMeta, failHandler)).rejects.toThrow("Telnet fail");
+
+    const userAction = makeAction("telnet-user-override");
+    const userMeta = { action: userAction, actionId: "telnet-user-override", intent: "user" as const };
+    const successHandler = vi.fn().mockResolvedValue("telnet-ok");
+
+    const result = await withTelnetInteraction(userMeta, successHandler);
+    expect(result).toBe("telnet-ok");
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      userAction,
+      expect.objectContaining({ decision: "override", reason: "circuit-open" }),
+    );
+  });
+
+  it("withTelnetInteraction: blocks when device state is ERROR and intent is system", async () => {
+    deviceStateValue = "ERROR";
+
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-state-block");
+    const meta = { action, actionId: "telnet-state-block", intent: "system" as const };
+    const handler = vi.fn().mockResolvedValue("ok");
+
+    await expect(withTelnetInteraction(meta, handler)).rejects.toThrow("Device not ready for Telnet");
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      action,
+      expect.objectContaining({ decision: "block", reason: "state" }),
+    );
+  });
+
   it("user override works for FTP circuit too", async () => {
     const { withFtpInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");
