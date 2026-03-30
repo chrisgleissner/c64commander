@@ -318,6 +318,8 @@ export function usePlaybackController({
       const cachedPlayback = getCachedArchivePlayback(archiveRef);
       if (cachedPlayback) {
         item.request.file = cachedPlayback.file;
+        item.request.path = cachedPlayback.path;
+        item.path = cachedPlayback.path;
         return;
       }
 
@@ -344,6 +346,8 @@ export function usePlaybackController({
         file: playPlan.file,
       });
       item.request.file = cached.file;
+      item.request.path = cached.path;
+      item.path = cached.path;
     },
     [archiveConfigs],
   );

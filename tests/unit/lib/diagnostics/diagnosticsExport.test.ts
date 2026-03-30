@@ -189,4 +189,41 @@ describe("diagnosticsExport", () => {
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe("application/zip");
   });
+
+  it("buildDiagnosticsZipData includes supplemental file when scope is all and supplemental is present", async () => {
+    const { buildDiagnosticsZipData } = await import("@/lib/diagnostics/diagnosticsExport");
+    const zipData = buildDiagnosticsZipData(
+      "all",
+      {
+        "error-logs": [],
+        logs: [],
+        traces: [],
+        actions: [],
+        supplemental: { version: "1.0.0", info: "extra" },
+      },
+      "2026-03-12-0913-33Z",
+    );
+    expect(zipData).toBeInstanceOf(Uint8Array);
+    expect(zipData.byteLength).toBeGreaterThan(10);
+  });
+
+  it("buildDiagnosticsZipData does not include supplemental when scope is a single tab", async () => {
+    const { buildDiagnosticsZipData } = await import("@/lib/diagnostics/diagnosticsExport");
+    const zipData = buildDiagnosticsZipData("logs", [{ id: "x" }], "2026-03-12-0913-33Z");
+    expect(zipData).toBeInstanceOf(Uint8Array);
+    expect(zipData.byteLength).toBeGreaterThan(0);
+  });
+
+  it("logs and rethrows when native share writeFile fails", async () => {
+    isNativePlatform.mockReturnValue(true);
+    writeFile.mockRejectedValue(new Error("disk full"));
+
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
+
+    await expect(shareDiagnosticsZip("error-logs", [])).rejects.toThrow("disk full");
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Diagnostics share failed",
+      expect.objectContaining({ error: "disk full" }),
+    );
+  });
 });

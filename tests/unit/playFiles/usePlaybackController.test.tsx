@@ -437,6 +437,112 @@ describe("usePlaybackController", () => {
     expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
   });
 
+  it("normalizes extensionless archive entry path on item and request when downloading", async () => {
+    mockArchiveClient.downloadBinary.mockResolvedValueOnce({
+      fileName: "joyride",
+      bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve/files/joyride",
+    });
+    mockBuildArchivePlayPlan.mockReturnValueOnce({
+      category: "sid",
+      source: "local",
+      path: "joyride.sid",
+      file: { name: "joyride.sid", lastModified: 0, arrayBuffer: vi.fn(async () => new ArrayBuffer(4)) },
+    });
+    const item = createPlaylistItem({
+      id: "archive-extensionless",
+      category: "sid",
+      label: "Joyride",
+      path: "joyride",
+      request: { source: "commoserve", path: "joyride" },
+      sourceId: "archive-commoserve",
+      archiveRef: {
+        sourceId: "archive-commoserve",
+        resultId: "100",
+        category: 40,
+        entryId: 1,
+        entryPath: "joyride",
+      },
+    });
+    const { result } = renderPlaybackController([item], {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await result.current.playItem(item, { playlistIndex: 0 });
+
+    expect(item.request.path).toBe("joyride.sid");
+    expect(item.path).toBe("joyride.sid");
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ path: "joyride.sid" }),
+      undefined,
+    );
+  });
+
+  it("normalizes extensionless archive entry path on item and request on cache hit", async () => {
+    mockArchiveClient.downloadBinary.mockResolvedValueOnce({
+      fileName: "joyride",
+      bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve/files/joyride",
+    });
+    mockBuildArchivePlayPlan.mockReturnValueOnce({
+      category: "sid",
+      source: "local",
+      path: "joyride.sid",
+      file: { name: "joyride.sid", lastModified: 0, arrayBuffer: vi.fn(async () => new ArrayBuffer(4)) },
+    });
+    const archiveRef = {
+      sourceId: "archive-commoserve",
+      resultId: "100",
+      category: 40,
+      entryId: 1,
+      entryPath: "joyride",
+    };
+    const archiveConfigs = {
+      "archive-commoserve": {
+        id: "archive-commoserve",
+        name: "CommoServe",
+        baseUrl: "http://commoserve.files.commodore.net",
+        enabled: true,
+      },
+    };
+    const firstItem = createPlaylistItem({
+      id: "archive-ext-1",
+      category: "sid",
+      label: "Joyride",
+      path: "joyride",
+      request: { source: "commoserve", path: "joyride" },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const secondItem = createPlaylistItem({
+      id: "archive-ext-2",
+      category: "sid",
+      label: "Joyride Again",
+      path: "joyride",
+      request: { source: "commoserve", path: "joyride" },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const { result } = renderPlaybackController([firstItem, secondItem], { archiveConfigs });
+
+    await result.current.playItem(firstItem, { playlistIndex: 0 });
+    await result.current.playItem(secondItem, { playlistIndex: 1 });
+
+    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
+    expect(secondItem.request.path).toBe("joyride.sid");
+    expect(secondItem.path).toBe("joyride.sid");
+  });
+
   it("reports an archive playback error when playlist metadata is missing", async () => {
     const playlist = [
       createPlaylistItem({

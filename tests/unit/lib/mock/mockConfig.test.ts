@@ -108,4 +108,62 @@ describe("mockConfig", () => {
     const payload = await getMockConfigPayload();
     expect(payload.categories.EmptyCat).toEqual({});
   });
+
+  it("caches payload on second call without clearing", async () => {
+    setMockConfigLoader(() => ({ config: { general: { base_url: "http://cached" } } }));
+    const first = await getMockConfigPayload();
+    const second = await getMockConfigPayload();
+    expect(first).toBe(second);
+    expect(first.general.baseUrl).toBe("http://cached");
+  });
+
+  it("filters out empty-string options", async () => {
+    setMockConfigLoader(() => ({
+      config: {
+        categories: {
+          Test: {
+            items: {
+              Item: {
+                selected: "a",
+                options: ["valid", 0, ""],
+              },
+            },
+          },
+        },
+      },
+    }));
+    const payload = await getMockConfigPayload();
+    // empty string filtered, 0 converted by asString to "0"
+    expect(payload.categories.Test.Item.options).toEqual(["valid", "0"]);
+  });
+
+  it("stores format in details and uses empty presets array as undefined", async () => {
+    setMockConfigLoader(() => ({
+      config: {
+        categories: {
+          Test: {
+            items: {
+              Item: {
+                selected: "x",
+                details: { format: "hex", presets: [] },
+              },
+            },
+          },
+        },
+      },
+    }));
+    const payload = await getMockConfigPayload();
+    expect(payload.categories.Test.Item.details?.format).toBe("hex");
+    // empty presets array → presets not set on payload
+    expect(payload.categories.Test.Item.details?.presets).toBeUndefined();
+  });
+
+  it("falls back to defaults when general fields are missing", async () => {
+    setMockConfigLoader(() => ({ config: {} }));
+    const payload = await getMockConfigPayload();
+    expect(payload.general.baseUrl).toBe("http://c64u");
+    expect(payload.general.restApiVersion).toBe("0.1");
+    expect(payload.general.deviceType).toBe("Ultimate 64");
+    expect(payload.general.firmwareVersion).toBe("3.12a");
+  });
 });

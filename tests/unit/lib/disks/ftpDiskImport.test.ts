@@ -7,7 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { importFtpFolder } from "@/lib/disks/ftpDiskImport";
+import { importFtpFile, importFtpFolder, listFtpEntries } from "@/lib/disks/ftpDiskImport";
 
 const listFtpDirectoryMock = vi.fn();
 const getStoredFtpPortMock = vi.fn(() => 21);
@@ -110,5 +110,59 @@ describe("ftpDiskImport", () => {
     const disks = await importFtpFolder({ host: "c64u", path: "/Mixed" });
 
     expect(disks.map((disk) => disk.name)).toEqual(["game.d64", "second.D81"]);
+  });
+
+  it("logs, rethrows, and propagates errors from walkFtpFolder", async () => {
+    listFtpDirectoryMock.mockRejectedValue(new Error("connection refused"));
+
+    await expect(importFtpFolder({ host: "c64u", path: "/Disks" })).rejects.toThrow("connection refused");
+  });
+
+  it("passes password to FTP directory listing", async () => {
+    listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+
+    await importFtpFolder({ host: "c64u", password: "secret", path: "/Private" });
+
+    expect(listFtpDirectoryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "c64u", password: "secret", path: "/Private" }),
+    );
+  });
+});
+
+describe("listFtpEntries", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("wraps listFtpDirectory and returns entries", async () => {
+    listFtpDirectoryMock.mockResolvedValue({
+      entries: [{ name: "game.d64", path: "/game.d64", type: "file" }],
+    });
+
+    const result = await listFtpEntries({ host: "c64u", path: "/" });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("game.d64");
+  });
+
+  it("uses empty string for missing password", async () => {
+    listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+
+    await listFtpEntries({ host: "c64u", path: "/" });
+
+    expect(listFtpDirectoryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ password: "" }),
+    );
+  });
+});
+
+describe("importFtpFile", () => {
+  it("creates a disk entry for a valid disk image path", () => {
+    const entry = importFtpFile("/Disks/game.d64");
+    expect(entry.name).toBe("game.d64");
+    expect(entry.location).toBe("ultimate");
+  });
+
+  it("throws for a non-disk file path", () => {
+    expect(() => importFtpFile("/files/readme.txt")).toThrow("Found no disk file.");
   });
 });

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
@@ -45,6 +45,8 @@ vi.mock("@/lib/songlengths", () => ({
 }));
 
 import { Filesystem } from "@capacitor/filesystem";
+import { addLog, addErrorLog } from "@/lib/logging";
+import { InMemoryTextBackend } from "@/lib/songlengths";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
   ensureHvscSonglengthsReadyOnColdStart,
@@ -54,6 +56,22 @@ import {
   resetHvscSonglengths,
   __test__,
 } from "@/lib/hvsc/hvscSongLengthService";
+
+// Capture constructor options before any beforeEach clears mock call history
+let capturedBackendOpts:
+  | {
+      onRejectedLine: (args: { sourceFile: string; line: number; raw: string; reason: string }) => void;
+      onAmbiguous: (args: {
+        fileName: string;
+        partialPath: string;
+        candidateCount: number;
+        candidates: string[];
+      }) => void;
+    }
+  | undefined;
+beforeAll(() => {
+  capturedBackendOpts = vi.mocked(InMemoryTextBackend).mock.calls[0]?.[0] as typeof capturedBackendOpts;
+});
 
 describe("hvscSongLengthService", () => {
   beforeEach(() => {
@@ -211,6 +229,38 @@ describe("hvscSongLengthService", () => {
       const files = await __test__.discoverSonglengthFiles();
       expect(files).toHaveLength(1);
     });
+
+    it("puts md5 first even when txt is discovered before md5 across roots", async () => {
+      // txt discovered from first root, md5 from second root → comparator line 171
+      vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+      vi.mocked(Filesystem.readdir)
+        .mockResolvedValueOnce({ files: ["Songlengths.txt"] } as any)
+        .mockResolvedValueOnce({ files: ["Songlengths.md5"] } as any);
+      vi.mocked(Filesystem.stat)
+        .mockResolvedValueOnce({ type: "file" } as any)
+        .mockResolvedValueOnce({ type: "file" } as any);
+      vi.mocked(Filesystem.readFile)
+        .mockResolvedValueOnce({ data: btoa("txt data") } as any)
+        .mockResolvedValueOnce({ data: btoa("md5 data") } as any);
+
+      const files = await __test__.discoverSonglengthFiles();
+      expect(files).toHaveLength(2);
+      expect(files[0].path.toLowerCase().endsWith(".md5")).toBe(true);
+    });
+
+    it("sorts two md5 files alphabetically via localeCompare", async () => {
+      // two md5 files → comparator line 172
+      vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+      vi.mocked(Filesystem.readdir)
+        .mockResolvedValueOnce({ files: ["Songlengths.md5"] } as any)
+        .mockResolvedValueOnce({ files: ["Songlengths.md5"] } as any);
+      // duplicate paths → deduped to 1
+      vi.mocked(Filesystem.stat).mockResolvedValueOnce({ type: "file" } as any);
+      vi.mocked(Filesystem.readFile).mockResolvedValueOnce({ data: btoa("md5 data") } as any);
+
+      const files = await __test__.discoverSonglengthFiles();
+      expect(files).toHaveLength(1);
+    });
   });
 
   describe("ensureSonglengthDirectory", () => {
@@ -311,6 +361,36 @@ describe("hvscSongLengthService", () => {
       resolveLoad();
       await Promise.all([p1, p2]);
       expect(mockFacade.reloadOnConfigChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("backend callbacks (onRejectedLine and onAmbiguous)", () => {
+    it("onRejectedLine logs at warn level", () => {
+      capturedBackendOpts?.onRejectedLine({
+        sourceFile: "test.md5",
+        line: 5,
+        raw: "bad entry",
+        reason: "invalid format",
+      });
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "warn",
+        "Songlengths rejected line",
+        expect.objectContaining({ sourceFile: "test.md5", line: 5 }),
+      );
+    });
+
+    it("onAmbiguous logs at warn level", () => {
+      capturedBackendOpts?.onAmbiguous({
+        fileName: "test.sid",
+        partialPath: "/DEMOS/",
+        candidateCount: 2,
+        candidates: ["/DEMOS/test.sid", "/DEMOS/test2.sid"],
+      });
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "warn",
+        "Songlengths ambiguity detected",
+        expect.objectContaining({ fileName: "test.sid", candidateCount: 2 }),
+      );
     });
   });
 });

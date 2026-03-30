@@ -9,7 +9,7 @@
 import * as http from "node:http";
 import type { ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import type { ArchiveEntry, ArchivePreset, ArchiveSearchResult } from "@/lib/archive/types";
+import type { ArchiveEntry, ArchivePreset, ArchiveSearchResult } from "../src/lib/archive/types";
 
 export type ArchiveMockFixtures = {
   presets: ArchivePreset[];
