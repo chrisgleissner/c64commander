@@ -89,6 +89,7 @@ const usePlaybackPersistenceHarness = ({
       label: entry.name,
       path: entry.path,
       configRef: entry.configRef ?? null,
+      archiveRef: entry.archiveRef ?? null,
       durationMs: entry.durationMs,
       subsongCount: entry.subsongCount,
       sourceId: entry.sourceId ?? null,
@@ -230,6 +231,52 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
       expect(result.current.playlist[0].subsongCount).toBe(4);
+    });
+  });
+
+  it("restores persisted CommoServe archive references", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "commoserve",
+            path: "joyride.sid",
+            name: "Joyride",
+            sourceId: "archive-commoserve",
+            archiveRef: {
+              sourceId: "archive-commoserve",
+              resultId: "100",
+              category: 40,
+              entryId: 1,
+              entryPath: "joyride.sid",
+            },
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].request.source).toBe("commoserve");
+      expect(result.current.playlist[0].archiveRef).toEqual({
+        sourceId: "archive-commoserve",
+        resultId: "100",
+        category: 40,
+        entryId: 1,
+        entryPath: "joyride.sid",
+      });
     });
   });
 

@@ -468,6 +468,18 @@ describe("HomePage RAM actions", () => {
     );
   }, 15000);
 
+  it("keeps quick reboot and clear-ram reboot visibly distinct", async () => {
+    renderHomePage();
+
+    expect(screen.getByRole("button", { name: /^reboot$/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
+
+    expect(await screen.findByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent(
+      /^Reboot \(Clear RAM\)$/,
+    );
+  });
+
   it("disables reboot while a telnet action is already busy", () => {
     telnetState.isBusy = true;
     renderHomePage();

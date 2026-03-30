@@ -7,6 +7,10 @@
  */
 
 import { useCallback, useRef, type MutableRefObject } from "react";
+import { createArchiveClient } from "@/lib/archive/client";
+import { getCachedArchivePlayback, setCachedArchivePlayback } from "@/lib/archive/archivePlaybackCache";
+import { buildArchivePlayPlan } from "@/lib/archive/execution";
+import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import {
@@ -97,6 +101,7 @@ interface UsePlaybackControllerProps {
     songNr: number | null,
   ) => Promise<number | null>;
   applySonglengthsToItems: (items: PlaylistItem[]) => Promise<PlaylistItem[]>;
+  archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 
   // Volume Control
   restoreVolumeOverrides: (reason: string) => Promise<void>;
@@ -162,6 +167,7 @@ export function usePlaybackController({
   ensurePlaybackConnection,
   resolveSonglengthDurationMsForPath,
   applySonglengthsToItems,
+  archiveConfigs,
   restoreVolumeOverrides,
   applyAudioMixerUpdates,
   buildEnabledSidMuteUpdates,
@@ -293,9 +299,68 @@ export function usePlaybackController({
     [],
   );
 
+  const resolveCommoServeRuntimeFile = useCallback(
+    async (item: PlaylistItem) => {
+      if (item.request.source !== "commoserve" || item.request.file) return;
+      const archiveRef = item.archiveRef;
+      if (!archiveRef) {
+        throw new Error("Archive item metadata is missing. Re-add it to the playlist.");
+      }
+
+      const cachedPlayback = getCachedArchivePlayback(archiveRef);
+      if (cachedPlayback) {
+        item.request.file = cachedPlayback.file;
+        return;
+      }
+
+      const archiveConfig = archiveConfigs?.[archiveRef.sourceId];
+      if (!archiveConfig) {
+        throw new Error(`Archive source configuration unavailable for ${archiveRef.sourceId}.`);
+      }
+
+      const archiveClient = createArchiveClient(archiveConfig);
+      const binary = await archiveClient.downloadBinary(
+        archiveRef.resultId,
+        archiveRef.category,
+        archiveRef.entryId,
+        archiveRef.entryPath,
+      );
+      const playPlan = buildArchivePlayPlan(binary);
+      if (!playPlan.file) {
+        throw new Error(`Archive entry ${archiveRef.entryPath} did not resolve to a playable file.`);
+      }
+
+      const cached = setCachedArchivePlayback(archiveRef, {
+        category: playPlan.category,
+        path: playPlan.path,
+        file: playPlan.file,
+      });
+      item.request.file = cached.file;
+    },
+    [archiveConfigs],
+  );
+
   const playItem = useCallback(
     async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean; playlistIndex?: number }) => {
       return enqueuePlayTransition(async () => {
+        if (item.request.source === "commoserve" && !item.request.file) {
+          try {
+            await resolveCommoServeRuntimeFile(item);
+          } catch (error) {
+            reportUserError({
+              operation: "PLAYBACK_ARCHIVE_RESOLVE",
+              title: "Archive playback unavailable",
+              description: (error as Error).message,
+              error,
+              context: {
+                item: item.label,
+                sourceId: item.sourceId ?? null,
+                archivePath: item.archiveRef?.entryPath ?? item.path,
+              },
+            });
+            throw error;
+          }
+        }
         if (item.request.source === "local" && !item.request.file) {
           const sourceId = item.sourceId;
           const treeUri = sourceId ? localSourceTreeUris.get(sourceId) : null;
@@ -448,6 +513,7 @@ export function usePlaybackController({
       ensureUnmuted,
       localEntriesBySourceId,
       localSourceTreeUris,
+      resolveCommoServeRuntimeFile,
       resolveSidMetadata,
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,

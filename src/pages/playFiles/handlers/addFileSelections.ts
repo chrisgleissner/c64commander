@@ -9,7 +9,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "@/hooks/use-toast";
 import { createArchiveClient } from "@/lib/archive/client";
-import { buildArchivePlayPlan } from "@/lib/archive/execution";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
@@ -25,6 +24,7 @@ import type { AddItemsProgressState } from "@/components/itemSelection/AddItemsP
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import type { SonglengthsFileEntry } from "@/pages/playFiles/hooks/useSonglengths";
+import type { SonglengthResolutionOptions } from "@/pages/playFiles/songlengthsResolution";
 import { isSonglengthsFileName } from "@/lib/sid/songlengthsDiscovery";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
@@ -63,6 +63,7 @@ export type AddFileSelectionsDeps = {
   applySonglengthsToItems: (
     items: PlaylistItem[],
     songlengthsOverrides?: SonglengthsFileEntry[],
+    options?: SonglengthResolutionOptions,
   ) => Promise<PlaylistItem[]>;
   mergeSonglengthsFiles: (entries: SonglengthsFileEntry[]) => void;
   collectSonglengthsCandidates: (paths: string[]) => string[];
@@ -221,15 +222,19 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             throw new Error(`No playable archive file found for ${selection.name}.`);
           }
 
-          const binary = await archiveClient.downloadBinary(resultId, category, playableEntry.id, playableEntry.path);
-          const playPlan = buildArchivePlayPlan(binary);
           const item = buildPlaylistItem(
             {
               source: "commoserve",
               name: selection.name,
-              path: playPlan.path,
-              file: playPlan.file,
+              path: playableEntry.path,
               sourceId: source.id,
+              archiveRef: {
+                sourceId: source.id,
+                resultId,
+                category,
+                entryId: playableEntry.id,
+                entryPath: playableEntry.path,
+              },
               sizeBytes: playableEntry.size ?? null,
               modifiedAt: playableEntry.date ? new Date(playableEntry.date).toISOString() : null,
             },

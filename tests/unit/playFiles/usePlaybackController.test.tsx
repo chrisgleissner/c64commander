@@ -3,11 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference } from "@/lib/config/applyConfigFileReference";
+
+const mockArchiveClient = {
+  downloadBinary: vi.fn(),
+};
+
+const mockBuildArchivePlayPlan = vi.fn();
+
+vi.mock("@/lib/archive/client", () => ({
+  createArchiveClient: vi.fn(() => mockArchiveClient),
+}));
+
+vi.mock("@/lib/archive/execution", () => ({
+  buildArchivePlayPlan: vi.fn((binary) => mockBuildArchivePlayPlan(binary)),
+}));
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
@@ -107,6 +122,7 @@ const renderPlaybackController = (
     enqueuePlayTransition?: ReturnType<typeof vi.fn>;
     resolveSonglengthDurationMsForPath?: ReturnType<typeof vi.fn>;
     snapshotToUpdates?: ReturnType<typeof vi.fn>;
+    archiveConfigs?: Record<string, { id: string; name: string; baseUrl: string; enabled: boolean }>;
   },
 ) =>
   renderHook(() =>
@@ -135,6 +151,7 @@ const renderPlaybackController = (
       resolveSonglengthDurationMsForPath:
         options?.resolveSonglengthDurationMsForPath ?? vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: options?.applySonglengthsToItems ?? vi.fn().mockImplementation(async (items) => items),
+      archiveConfigs: options?.archiveConfigs,
       restoreVolumeOverrides: options?.restoreVolumeOverrides ?? vi.fn().mockResolvedValue(undefined),
       applyAudioMixerUpdates: options?.applyAudioMixerUpdates ?? vi.fn().mockResolvedValue(undefined),
       buildEnabledSidMuteUpdates: options?.buildEnabledSidMuteUpdates ?? vi.fn().mockReturnValue({}),
@@ -176,6 +193,23 @@ const renderPlaybackController = (
 describe("usePlaybackController", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearArchivePlaybackCacheForTests();
+    mockArchiveClient.downloadBinary.mockResolvedValue({
+      fileName: "joyride.sid",
+      bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve/files/joyride.sid",
+    });
+    mockBuildArchivePlayPlan.mockImplementation((binary) => ({
+      category: "sid",
+      source: "local",
+      path: binary.fileName,
+      file: {
+        name: binary.fileName,
+        lastModified: 0,
+        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
+      },
+    }));
   });
 
   it("applies fallback duration for non-song playlist rows before playback starts", () => {
@@ -305,6 +339,102 @@ describe("usePlaybackController", () => {
         durationMs: 12_000,
       }),
     );
+  });
+
+  it("downloads CommoServe playlist items lazily when playback starts", async () => {
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-1",
+        category: "sid",
+        label: "Joyride",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: {
+          sourceId: "archive-commoserve",
+          resultId: "100",
+          category: 40,
+          entryId: 1,
+          entryPath: "joyride.sid",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledWith("100", 40, 1, "joyride.sid");
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: "commoserve",
+        path: "joyride.sid",
+        file: expect.objectContaining({ name: "joyride.sid" }),
+      }),
+      undefined,
+    );
+  });
+
+  it("reuses cached CommoServe runtime files across playback attempts", async () => {
+    const archiveRef = {
+      sourceId: "archive-commoserve",
+      resultId: "100",
+      category: 40,
+      entryId: 1,
+      entryPath: "joyride.sid",
+    };
+    const firstItem = createPlaylistItem({
+      id: "archive-item-1",
+      category: "sid",
+      label: "Joyride",
+      path: "joyride.sid",
+      request: {
+        source: "commoserve",
+        path: "joyride.sid",
+      },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const secondItem = createPlaylistItem({
+      id: "archive-item-2",
+      category: "sid",
+      label: "Joyride Again",
+      path: "joyride.sid",
+      request: {
+        source: "commoserve",
+        path: "joyride.sid",
+      },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const archiveConfigs = {
+      "archive-commoserve": {
+        id: "archive-commoserve",
+        name: "CommoServe",
+        baseUrl: "http://commoserve.files.commodore.net",
+        enabled: true,
+      },
+    };
+    const { result } = renderPlaybackController([firstItem, secondItem], { archiveConfigs });
+
+    await result.current.playItem(firstItem, { playlistIndex: 0 });
+    await result.current.playItem(secondItem, { playlistIndex: 1 });
+
+    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes playback mute state before starting playback and only then executes the play plan", async () => {

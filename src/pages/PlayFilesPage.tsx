@@ -274,6 +274,14 @@ export default function PlayFilesPage() {
     }
   }, [status.isConnected]);
 
+  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
+    const configs: Record<string, ArchiveClientConfigInput> = {};
+    if (commoserveEnabled) {
+      configs[archiveConfig.id] = archiveConfig;
+    }
+    return configs;
+  }, [archiveConfig, commoserveEnabled]);
+
   const {
     playItem,
     startPlaylist,
@@ -308,6 +316,7 @@ export default function PlayFilesPage() {
     ensurePlaybackConnection,
     resolveSonglengthDurationMsForPath,
     applySonglengthsToItems,
+    archiveConfigs,
     restoreVolumeOverrides,
     applyAudioMixerUpdates,
     buildEnabledSidMuteUpdates,
@@ -471,14 +480,6 @@ export default function PlayFilesPage() {
     return groups;
   }, [archiveConfig, commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
 
-  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
-    const configs: Record<string, ArchiveClientConfigInput> = {};
-    if (commoserveEnabled) {
-      configs[archiveConfig.id] = archiveConfig;
-    }
-    return configs;
-  }, [archiveConfig, commoserveEnabled]);
-
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {
       if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
@@ -641,6 +642,7 @@ export default function PlayFilesPage() {
         label: entry.name,
         path: entry.path,
         configRef: entry.configRef ?? null,
+        archiveRef: entry.archiveRef ?? null,
         durationMs: entry.durationMs,
         subsongCount: entry.subsongCount,
         sourceId: resolvedSourceId,

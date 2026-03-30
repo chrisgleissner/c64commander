@@ -13,11 +13,27 @@ import { TelnetError } from "@/lib/telnet/telnetTypes";
 
 const BROWSER_STEP_TIMEOUT_MS = 500;
 const MAX_BROWSER_STEPS = 96;
+const MAX_SETTLE_READS = 3;
+const MAX_STALLED_STEPS = 3;
 const LOAD_SETTINGS_LABEL = "Load Settings";
 
 const readScreen = async (session: TelnetSessionApi) => session.readScreen(BROWSER_STEP_TIMEOUT_MS);
 
-const findTopMenu = (screen: TelnetScreen): ParsedMenu | null => screen.menus[0] ?? null;
+const waitForScreen = async (
+  session: TelnetSessionApi,
+  initialScreen: TelnetScreen,
+  predicate: (screen: TelnetScreen) => boolean,
+) => {
+  let screen = initialScreen;
+  for (let attempt = 0; attempt < MAX_SETTLE_READS; attempt += 1) {
+    if (predicate(screen)) return screen;
+    screen = await readScreen(session);
+  }
+  return screen;
+};
+
+const findTopMenu = (screen: TelnetScreen): ParsedMenu | null =>
+  screen.menus.find((menu) => menu.level === 0) ?? screen.menus[0] ?? null;
 
 const navigateToMenuItem = async (session: TelnetSessionApi, screen: TelnetScreen, label: string) => {
   const menu = findTopMenu(screen);
@@ -35,7 +51,10 @@ const navigateToMenuItem = async (session: TelnetSessionApi, screen: TelnetScree
   let currentScreen = screen;
   while (currentIndex !== targetIndex) {
     await session.sendKey(targetIndex > currentIndex ? "DOWN" : "UP");
-    currentScreen = await readScreen(session);
+    currentScreen = await waitForScreen(session, await readScreen(session), (candidate) => {
+      const refreshedMenu = findTopMenu(candidate);
+      return Boolean(refreshedMenu) && refreshedMenu!.selectedIndex !== currentIndex;
+    });
     const refreshedMenu = findTopMenu(currentScreen);
     if (!refreshedMenu) {
       throw new TelnetError("Context menu disappeared during navigation", "DESYNC", { label });
@@ -46,13 +65,32 @@ const navigateToMenuItem = async (session: TelnetSessionApi, screen: TelnetScree
 };
 
 const navigateToFileBrowserEntry = async (session: TelnetSessionApi, label: string) => {
-  let screen = await readScreen(session);
-  for (let step = 0; step < MAX_BROWSER_STEPS; step += 1) {
+  let screen = await waitForScreen(session, await readScreen(session), (candidate) => Boolean(candidate.selectedItem));
+  let currentLabel = screen.selectedItem;
+  let stalledSteps = 0;
+  for (let step = 0; step < MAX_BROWSER_STEPS; ) {
     if (screen.selectedItem && matchLabel(screen.selectedItem, label)) {
       return screen;
     }
     await session.sendKey("DOWN");
-    screen = await readScreen(session);
+    screen = await waitForScreen(session, await readScreen(session), (candidate) => {
+      if (!candidate.selectedItem) return false;
+      if (matchLabel(candidate.selectedItem, label)) return true;
+      return currentLabel ? !matchLabel(candidate.selectedItem, currentLabel) : true;
+    });
+    if (screen.selectedItem && currentLabel && matchLabel(screen.selectedItem, currentLabel)) {
+      stalledSteps += 1;
+      if (stalledSteps >= MAX_STALLED_STEPS) {
+        throw new TelnetError(`File browser navigation stalled before finding ${label}`, "TIMEOUT", {
+          label,
+          current: screen.selectedItem,
+        });
+      }
+      continue;
+    }
+    stalledSteps = 0;
+    currentLabel = screen.selectedItem;
+    step += 1;
   }
   throw new TelnetError(`File browser item not found: ${label}`, "ITEM_NOT_FOUND", { label });
 };
@@ -99,7 +137,7 @@ export const applyRemoteConfigFromPath = async (
   await openDirectoryPath(session, parentPath(remotePath));
   await navigateToFileBrowserEntry(session, targetFile);
   await session.sendKey(menuKey);
-  let screen = await readScreen(session);
+  let screen = await waitForScreen(session, await readScreen(session), (candidate) => Boolean(findTopMenu(candidate)));
   screen = await navigateToMenuItem(session, screen, LOAD_SETTINGS_LABEL);
   await session.sendKey("ENTER");
   await readScreen(session);

@@ -165,6 +165,61 @@ describe("reuTelnetWorkflow", () => {
     expect(session.sendKey).toHaveBeenCalledWith("UP");
   });
 
+  it("waits through delayed file-browser updates before reaching Temp", async () => {
+    const session = createSession([
+      createScreen({ selectedItem: "Drive A" }),
+      createScreen({ selectedItem: "Drive A" }),
+      createScreen({ selectedItem: "Temp" }),
+      createScreen({ selectedItem: "capture.reu" }),
+    ]);
+
+    await saveRemoteReuFromTemp(session, "F5");
+
+    expect(executeSpy).toHaveBeenCalledWith("saveReuMemory");
+  });
+
+  it("finds restore actions by label even when the menu order changes", async () => {
+    const session = createSession([
+      createScreen({ selectedItem: "Temp" }),
+      createScreen({ selectedItem: "capture.reu" }),
+      createScreen({ selectedItem: "capture.reu" }),
+      createScreen({
+        screenType: "action_menu",
+        menus: [
+          {
+            level: 0,
+            selectedIndex: 0,
+            bounds: { x: 0, y: 0, width: 10, height: 4 },
+            items: [
+              { label: "Preload on Startup", selected: true, enabled: true },
+              { label: "Load into REU", selected: false, enabled: true },
+            ],
+          },
+        ],
+      }),
+      createScreen({
+        screenType: "action_menu",
+        menus: [
+          {
+            level: 0,
+            selectedIndex: 1,
+            bounds: { x: 0, y: 0, width: 10, height: 4 },
+            items: [
+              { label: "Preload on Startup", selected: false, enabled: true },
+              { label: "Load into REU", selected: true, enabled: true },
+            ],
+          },
+        ],
+      }),
+      createScreen({ selectedItem: "capture.reu" }),
+    ]);
+
+    await restoreRemoteReuFromTemp(session, "F5", "capture.reu", "load-into-reu");
+
+    expect(session.sendKey).toHaveBeenCalledWith("DOWN");
+    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+  });
+
   it("throws when the context menu is not visible after opening the file menu", async () => {
     const session = createSession([
       createScreen({ selectedItem: "Temp" }),
@@ -210,7 +265,7 @@ describe("reuTelnetWorkflow", () => {
     const session = createSession(Array.from({ length: 60 }, () => createScreen({ selectedItem: "Other" })));
 
     await expect(saveRemoteReuFromTemp(session, "F5")).rejects.toMatchObject<Partial<TelnetError>>({
-      code: "ITEM_NOT_FOUND",
+      code: "TIMEOUT",
     });
   });
 

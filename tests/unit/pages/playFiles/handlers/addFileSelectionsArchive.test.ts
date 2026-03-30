@@ -8,8 +8,6 @@ const mockArchiveClient = {
   downloadBinary: vi.fn(),
 };
 
-const mockBuildArchivePlayPlan = vi.fn();
-
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
@@ -25,10 +23,6 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(() => mockArchiveClient),
-}));
-
-vi.mock("@/lib/archive/execution", () => ({
-  buildArchivePlayPlan: vi.fn((binary: { fileName: string; bytes: Uint8Array }) => mockBuildArchivePlayPlan(binary)),
 }));
 
 vi.mock("@/lib/playback/localFileBrowser", () => ({
@@ -107,6 +101,7 @@ const createMockDeps = () => {
       category: entry.path.endsWith(".d64") ? "disk" : entry.path.endsWith(".sid") ? "sid" : "prg",
       label: entry.name,
       path: entry.path,
+      archiveRef: entry.archiveRef ?? null,
       sourceId: entry.sourceId,
       sizeBytes: entry.sizeBytes,
       modifiedAt: entry.modifiedAt,
@@ -134,25 +129,9 @@ describe("addFileSelections archive source handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockArchiveClient.getEntries.mockResolvedValue([{ id: 0, path: "demo.d64", size: 174848, date: 1773676443000 }]);
-    mockArchiveClient.downloadBinary.mockImplementation(async (_resultId, _category, _entryId, fileName) => ({
-      fileName,
-      bytes: new Uint8Array([0x44, 0x36, 0x34]),
-      contentType: "application/octet-stream",
-      url: "http://commoserve.files.commodore.net/download",
-    }));
-    mockBuildArchivePlayPlan.mockImplementation((binary: { fileName: string; bytes: Uint8Array }) => ({
-      category: binary.fileName.endsWith(".d64") ? "disk" : "prg",
-      source: "local",
-      path: binary.fileName,
-      file: {
-        name: binary.fileName,
-        lastModified: 0,
-        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
-      },
-    }));
   });
 
-  it("downloads archive selections and enqueues playable runtime files", async () => {
+  it("stores archive references and defers runtime downloads until playback", async () => {
     const deps = createMockDeps();
     const handler = createAddFileSelectionsHandler(deps as any);
 
@@ -167,14 +146,21 @@ describe("addFileSelections archive source handler", () => {
     expect(deps.setPlaylist).toHaveBeenCalledOnce();
     expect(deps._playlistItems).toHaveLength(2);
     expect(mockArchiveClient.getEntries).toHaveBeenNthCalledWith(1, "123", 42);
-    expect(mockArchiveClient.downloadBinary).toHaveBeenNthCalledWith(1, "123", 42, 0, "demo.d64");
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
     const item0 = deps._playlistItems[0] as any;
     expect(item0.label).toBe("Cool Demo");
     expect(item0.request.source).toBe("commoserve");
     expect(item0.request.path).toBe("demo.d64");
-    expect(item0.request.file).toBeDefined();
+    expect(item0.request.file).toBeUndefined();
     expect(item0.category).toBe("disk");
     expect(item0.sourceId).toBe("archive-commoserve");
+    expect(item0.archiveRef).toEqual({
+      sourceId: "archive-commoserve",
+      resultId: "123",
+      category: 42,
+      entryId: 0,
+      entryPath: "demo.d64",
+    });
     const item1 = deps._playlistItems[1] as any;
     expect(item1.label).toBe("Awesome Game");
     expect(item1.request.source).toBe("commoserve");
@@ -223,30 +209,27 @@ describe("addFileSelections archive source handler", () => {
     expect(item.id).toContain("archive-custom");
   });
 
-  it("downloads the first playable archive entry when non-playable attachments are present", async () => {
+  it("stores the first playable archive entry when non-playable attachments are present", async () => {
     const deps = createMockDeps();
     const handler = createAddFileSelectionsHandler(deps as any);
     mockArchiveClient.getEntries.mockResolvedValueOnce([
       { id: 0, path: "readme.txt", size: 1200, date: 1773676442000 },
       { id: 1, path: "joyride.sid", size: 8192, date: 1773676443000 },
     ]);
-    mockBuildArchivePlayPlan.mockImplementationOnce((binary: { fileName: string; bytes: Uint8Array }) => ({
-      category: "sid",
-      source: "local",
-      path: binary.fileName,
-      file: {
-        name: binary.fileName,
-        lastModified: 0,
-        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
-      },
-    }));
 
     const result = await handler(archiveSource, [{ type: "file", name: "Joyride", path: "100/40" }]);
 
     expect(result).toBe(true);
-    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledWith("100", 40, 1, "joyride.sid");
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
     expect((deps._playlistItems[0] as any).category).toBe("sid");
     expect((deps._playlistItems[0] as any).request.path).toBe("joyride.sid");
+    expect((deps._playlistItems[0] as any).archiveRef).toEqual({
+      sourceId: "archive-commoserve",
+      resultId: "100",
+      category: 40,
+      entryId: 1,
+      entryPath: "joyride.sid",
+    });
   });
 
   it("reports an error when an archive result has no playable entries", async () => {

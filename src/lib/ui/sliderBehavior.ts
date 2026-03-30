@@ -70,6 +70,25 @@ export const createSliderAsyncQueue = (params: {
   const delay = throttleMs ?? SLIDER_MID_DRAG_THROTTLE_MS;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let pendingValue: number | null = null;
+  let lastChangedValue: number | null = null;
+  let pendingChangedValue: number | null = null;
+  let pendingChangeToken = 0;
+
+  const queueChange = (value: number) => {
+    if (!onChange) return;
+    const token = ++pendingChangeToken;
+    pendingChangedValue = value;
+    queueMicrotask(() => {
+      onChange(value);
+      lastChangedValue = value;
+      if (pendingChangeToken === token) {
+        pendingChangedValue = null;
+      }
+    });
+  };
+
+  const hasPendingOrLastChangeValue = (value: number) =>
+    Object.is(pendingChangedValue, value) || Object.is(lastChangedValue, value);
 
   const flush = () => {
     if (pendingValue === null || !onChange) {
@@ -80,9 +99,7 @@ export const createSliderAsyncQueue = (params: {
     const value = pendingValue;
     pendingValue = null;
     timer = null;
-    queueMicrotask(() => {
-      onChange(value);
-    });
+    queueChange(value);
   };
 
   return {
@@ -100,8 +117,13 @@ export const createSliderAsyncQueue = (params: {
       pendingValue = null;
       const handler = onCommit ?? onChange;
       if (!handler) return;
+      if (!onCommit && hasPendingOrLastChangeValue(value)) return;
       queueMicrotask(() => {
         handler(value);
+        if (!onCommit) {
+          lastChangedValue = value;
+          pendingChangedValue = null;
+        }
       });
     },
     cancel: () => {

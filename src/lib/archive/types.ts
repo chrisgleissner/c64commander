@@ -63,6 +63,14 @@ export type ArchiveBinary = {
   url: string;
 };
 
+export type ArchivePlaylistReference = {
+  sourceId: string;
+  resultId: string;
+  category: number;
+  entryId: number;
+  entryPath: string;
+};
+
 export type ArchiveClientConfigInput = {
   id: string;
   name: string;
