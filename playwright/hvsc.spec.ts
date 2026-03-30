@@ -300,8 +300,8 @@ test.describe("HVSC Play page", () => {
           cachedUpdateVersions: [] as number[],
           songs: initialInstalledVersion
             ? mergeSongs(
-              initialInstalledVersion >= update.version ? [...baseline.songs, ...update.songs] : [...baseline.songs],
-            )
+                initialInstalledVersion >= update.version ? [...baseline.songs, ...update.songs] : [...baseline.songs],
+              )
             : [],
         };
 
@@ -310,7 +310,7 @@ test.describe("HVSC Play page", () => {
         window.__hvscMock__ = {
           addListener: (_event: string, listener: (event: any) => void) => {
             listeners.push(listener);
-            return { remove: async () => { } };
+            return { remove: async () => {} };
           },
           getHvscStatus: async () => ({
             installedBaselineVersion: state.installedBaselineVersion,

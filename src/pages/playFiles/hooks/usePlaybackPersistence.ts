@@ -136,22 +136,22 @@ export function usePlaybackPersistence({
           file:
             entry.source === "local"
               ? resolveLocalRuntimeFile(entry.sourceId ?? "", normalizedPath) ||
-              (localEntry?.uri
-                ? buildLocalPlayFileFromUri(
-                  entry.name,
-                  normalizedPath,
-                  localEntry.uri,
-                  parseModifiedAt(localEntry.modifiedAt),
-                )
-                : undefined) ||
-              (localTreeUri
-                ? buildLocalPlayFileFromTree(
-                  entry.name,
-                  normalizedPath,
-                  localTreeUri,
-                  parseModifiedAt(localEntry?.modifiedAt),
-                )
-                : undefined)
+                (localEntry?.uri
+                  ? buildLocalPlayFileFromUri(
+                      entry.name,
+                      normalizedPath,
+                      localEntry.uri,
+                      parseModifiedAt(localEntry.modifiedAt),
+                    )
+                  : undefined) ||
+                (localTreeUri
+                  ? buildLocalPlayFileFromTree(
+                      entry.name,
+                      normalizedPath,
+                      localTreeUri,
+                      parseModifiedAt(localEntry?.modifiedAt),
+                    )
+                  : undefined)
               : entry.source === "hvsc"
                 ? buildHvscLocalPlayFile(normalizedPath, entry.name)
                 : undefined,

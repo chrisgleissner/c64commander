@@ -156,6 +156,97 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  it("rehydrates local playlist items from persisted SAF entry URIs", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const localEntriesBySourceId = new Map([
+      [
+        "local-source",
+        new Map([
+          [
+            "/Music/demo.sid",
+            {
+              name: "demo.sid",
+              uri: "content://demo.sid",
+              modifiedAt: "2026-03-29T18:00:00Z",
+              sizeBytes: 8192,
+            },
+          ],
+        ]),
+      ],
+    ]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].request.file).toMatchObject({
+        name: "demo.sid",
+        webkitRelativePath: "/Music/demo.sid",
+      });
+      expect(result.current.playlist[0].sizeBytes).toBe(8192);
+      expect(result.current.playlist[0].modifiedAt).toBe("2026-03-29T18:00:00Z");
+    });
+  });
+
+  it("rehydrates local playlist items from persisted tree URIs when SAF entry URIs are absent", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/tree-demo.sid",
+            name: "tree-demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map([
+          ["local-source", new Map([["/Music/tree-demo.sid", { name: "tree-demo.sid" }]])],
+        ]),
+        localSourceTreeUris: new Map([["local-source", "content://tree-root"]]),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].request.file).toMatchObject({
+        name: "tree-demo.sid",
+        webkitRelativePath: "/Music/tree-demo.sid",
+      });
+    });
+  });
+
   it("restores config associations from legacy playlist blobs", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
@@ -526,6 +617,185 @@ describe("usePlaybackPersistence", () => {
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].sourceId).toBe("legacy-source");
+      expect(result.current.playlist[0].request.source).toBe("local");
+    });
+  });
+
+  it("hydrates repository local tracks by reusing non-path source locators as source ids", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      "c64u_playlist_repo:v1",
+      JSON.stringify({
+        version: 1,
+        tracks: {
+          "local::/Music/repo-locator.sid": {
+            trackId: "local::/Music/repo-locator.sid",
+            sourceKind: "local",
+            sourceLocator: "locator-source",
+            category: "sid",
+            title: "repo-locator.sid",
+            author: null,
+            released: null,
+            path: "/Music/repo-locator.sid",
+            sizeBytes: null,
+            modifiedAt: null,
+            defaultDurationMs: 1000,
+            subsongCount: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        playlistItemsByPlaylistId: {
+          [playlistStorageKey]: [
+            {
+              playlistItemId: "repo-item-local-locator-1",
+              playlistId: playlistStorageKey,
+              trackId: "local::/Music/repo-locator.sid",
+              songNr: 1,
+              sortKey: "00000001",
+              durationOverrideMs: null,
+              status: "ready",
+              unavailableReason: null,
+              addedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        sessionsByPlaylistId: {},
+        randomSessionsByPlaylistId: {},
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map([
+          ["locator-source", new Map([["/Music/repo-locator.sid", { name: "repo-locator.sid" }]])],
+        ]),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].sourceId).toBe("locator-source");
+      expect(result.current.playlist[0].request.source).toBe("local");
+    });
+  });
+
+  it("leaves repository local track source ids empty when legacy track ids cannot be parsed", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      "c64u_playlist_repo:v1",
+      JSON.stringify({
+        version: 1,
+        tracks: {
+          "local:broken": {
+            trackId: "local:broken",
+            sourceKind: "local",
+            sourceLocator: "/Music/repo-broken.sid",
+            category: "sid",
+            title: "repo-broken.sid",
+            author: null,
+            released: null,
+            path: "/Music/repo-broken.sid",
+            sizeBytes: null,
+            modifiedAt: null,
+            defaultDurationMs: 1000,
+            subsongCount: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        playlistItemsByPlaylistId: {
+          [playlistStorageKey]: [
+            {
+              playlistItemId: "repo-item-local-broken-1",
+              playlistId: playlistStorageKey,
+              trackId: "local:broken",
+              songNr: 1,
+              sortKey: "00000001",
+              durationOverrideMs: null,
+              status: "ready",
+              unavailableReason: null,
+              addedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        sessionsByPlaylistId: {},
+        randomSessionsByPlaylistId: {},
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].sourceId).toBeNull();
+      expect(result.current.playlist[0].request.source).toBe("local");
+    });
+  });
+
+  it("leaves repository local track source ids empty when track ids do not use the local legacy prefix", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      "c64u_playlist_repo:v1",
+      JSON.stringify({
+        version: 1,
+        tracks: {
+          "hvsc::/Music/repo-wrong-prefix.sid": {
+            trackId: "hvsc::/Music/repo-wrong-prefix.sid",
+            sourceKind: "local",
+            sourceLocator: "/Music/repo-wrong-prefix.sid",
+            category: "sid",
+            title: "repo-wrong-prefix.sid",
+            author: null,
+            released: null,
+            path: "/Music/repo-wrong-prefix.sid",
+            sizeBytes: null,
+            modifiedAt: null,
+            defaultDurationMs: 1000,
+            subsongCount: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        playlistItemsByPlaylistId: {
+          [playlistStorageKey]: [
+            {
+              playlistItemId: "repo-item-local-wrong-prefix-1",
+              playlistId: playlistStorageKey,
+              trackId: "hvsc::/Music/repo-wrong-prefix.sid",
+              songNr: 1,
+              sortKey: "00000001",
+              durationOverrideMs: null,
+              status: "ready",
+              unavailableReason: null,
+              addedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        sessionsByPlaylistId: {},
+        randomSessionsByPlaylistId: {},
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].sourceId).toBeNull();
       expect(result.current.playlist[0].request.source).toBe("local");
     });
   });

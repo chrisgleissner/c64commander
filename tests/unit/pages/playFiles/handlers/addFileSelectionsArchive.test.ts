@@ -250,6 +250,59 @@ describe("addFileSelections archive source handler", () => {
     expect(deps.setPlaylist).not.toHaveBeenCalled();
   });
 
+  it("reports an error when the selected archive source has no runtime config", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    const deps = createMockDeps();
+    deps.archiveConfigs = {};
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Joyride", path: "100/40" }]);
+
+    expect(result).toBe(false);
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Add items failed",
+        description: "Archive source configuration unavailable for CommoServe.",
+      }),
+    );
+    expect(mockArchiveClient.getEntries).not.toHaveBeenCalled();
+  });
+
+  it("reports an error when an archive selection path is malformed", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    const deps = createMockDeps();
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Broken", path: "not-a-result" }]);
+
+    expect(result).toBe(false);
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Add items failed",
+        description: "Invalid archive selection: not-a-result",
+      }),
+    );
+    expect(mockArchiveClient.getEntries).not.toHaveBeenCalled();
+  });
+
+  it("reports an error when the playable archive entry cannot be converted into a playlist item", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    const deps = createMockDeps();
+    deps.buildPlaylistItem.mockReturnValueOnce(null);
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Joyride", path: "100/40" }]);
+
+    expect(result).toBe(false);
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Add items failed",
+        description: "Unsupported archive file demo.d64.",
+      }),
+    );
+    expect(deps.setPlaylist).not.toHaveBeenCalled();
+  });
+
   it("shows and clears the add-items overlay when archive results are added from the page surface", async () => {
     vi.useFakeTimers();
     const deps = {

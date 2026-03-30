@@ -40,6 +40,21 @@ vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
 }));
 
 describe("configTelnetWorkflow", () => {
+  it("waits for the file browser selection before opening Temp for saves", async () => {
+    const session = createSession([
+      createScreen({ selectedItem: null }),
+      createScreen({ selectedItem: "Drive A" }),
+      createScreen({ selectedItem: "Temp" }),
+      createScreen({ selectedItem: "capture.cfg" }),
+    ]);
+
+    await saveRemoteConfigFromTemp(session, "F5");
+
+    expect(session.sendKey).toHaveBeenCalledWith("HOME");
+    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(executeSpy).toHaveBeenCalledWith("saveConfigToFile");
+  });
+
   it("navigates to Temp before executing Save Config to File", async () => {
     const session = createSession([
       createScreen({ selectedItem: "Drive A" }),
@@ -117,6 +132,34 @@ describe("configTelnetWorkflow", () => {
 
     expect(session.sendKey).toHaveBeenCalledWith("HOME");
     expect(session.sendKey).toHaveBeenCalledWith("F5");
+  });
+
+  it("loads configs stored at the browser root without descending into directories", async () => {
+    const session = createSession([
+      createScreen({ selectedItem: "config.cfg" }),
+      createScreen({ selectedItem: "config.cfg" }),
+      createScreen({
+        screenType: "action_menu",
+        menus: [
+          {
+            level: 0,
+            selectedIndex: 0,
+            bounds: { x: 0, y: 0, width: 10, height: 4 },
+            items: [
+              { label: "Load Settings", selected: true, enabled: true },
+              { label: "View", selected: false, enabled: true },
+            ],
+          },
+        ],
+      }),
+      createScreen({ selectedItem: "config.cfg" }),
+    ]);
+
+    await applyRemoteConfigFromPath(session, "F5", "/config.cfg");
+
+    expect(session.sendKey).toHaveBeenCalledWith("HOME");
+    expect(session.sendKey).toHaveBeenCalledWith("F5");
+    expect(session.sendKey).not.toHaveBeenCalledWith("DOWN");
   });
 
   it("waits through delayed file-browser updates while opening nested config directories", async () => {
@@ -208,6 +251,51 @@ describe("configTelnetWorkflow", () => {
     await applyRemoteConfigFromTemp(session, "F5", "capture.cfg");
 
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
+    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+  });
+
+  it("falls back to the first visible menu and navigates upward to Load Settings", async () => {
+    const session = createSession([
+      createScreen({ selectedItem: "Drive A" }),
+      createScreen({ selectedItem: "Temp" }),
+      createScreen({ selectedItem: "capture.cfg" }),
+      createScreen({ selectedItem: "capture.cfg" }),
+      createScreen({
+        screenType: "action_menu",
+        menus: [
+          {
+            level: 1,
+            selectedIndex: 2,
+            bounds: { x: 0, y: 0, width: 12, height: 5 },
+            items: [
+              { label: "Delete", selected: false, enabled: true },
+              { label: "Load Settings", selected: false, enabled: true },
+              { label: "View", selected: true, enabled: true },
+            ],
+          },
+        ],
+      }),
+      createScreen({
+        screenType: "action_menu",
+        menus: [
+          {
+            level: 1,
+            selectedIndex: 1,
+            bounds: { x: 0, y: 0, width: 12, height: 5 },
+            items: [
+              { label: "Delete", selected: false, enabled: true },
+              { label: "Load Settings", selected: true, enabled: true },
+              { label: "View", selected: false, enabled: true },
+            ],
+          },
+        ],
+      }),
+      createScreen({ selectedItem: "capture.cfg" }),
+    ]);
+
+    await applyRemoteConfigFromTemp(session, "F5", "capture.cfg");
+
+    expect(session.sendKey).toHaveBeenCalledWith("UP");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
   });
 

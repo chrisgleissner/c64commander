@@ -119,6 +119,74 @@ describe("HvscControls", () => {
         expect(screen.getByRole("button", { name: "Ingest HVSC" }).hasAttribute("disabled")).toBe(true);
     });
 
+    it("renders cache-only success guidance before the library has been ingested", () => {
+        render(
+            <HvscControls
+                {...buildProps({
+                    hvscSummaryState: "success",
+                    hvscSummaryFilesExtracted: 12,
+                    hvscSummaryDurationMs: 5400,
+                    hvscSummaryUpdatedAt: "2026-03-29T18:00:00Z",
+                    formatHvscDuration: (value?: number | null) => `${value ?? 0}ms`,
+                    formatHvscTimestamp: (value?: string | null) => `at ${value}`,
+                })}
+            />,
+        );
+
+        expect(screen.getByText("HVSC ready")).toBeTruthy();
+        expect(screen.getByText("HVSC archives are cached. Run Ingest HVSC to build the browseable library.")).toBeTruthy();
+        expect(screen.queryByText("Browse and add HVSC songs from the shared “Add items” source chooser.")).toBeNull();
+    });
+
+    it("renders progress fallback text when download byte totals are unavailable", () => {
+        render(
+            <HvscControls
+                {...buildProps({
+                    hvscUpdating: true,
+                    hvscInProgress: true,
+                    hvscPhase: "download",
+                    hvscActionLabel: null,
+                    hvscDownloadBytes: null,
+                    hvscDownloadElapsedMs: null,
+                })}
+            />,
+        );
+
+        expect(screen.getByTestId("hvsc-progress")).toBeTruthy();
+        expect(screen.getByText("Processing HVSC…")).toBeTruthy();
+        expect(screen.getByTestId("hvsc-download-bytes").textContent).toBe("—");
+    });
+
+    it("shows reset controls for inline errors even when no summary card is visible", () => {
+        render(
+            <HvscControls
+                {...buildProps({
+                    hvscInlineError: "Temporary HVSC bridge error",
+                })}
+            />,
+        );
+
+        expect(screen.getByRole("button", { name: "Reset status" })).toBeTruthy();
+        expect(screen.queryByTestId("hvsc-summary")).toBeNull();
+        expect(screen.getByText("Temporary HVSC bridge error")).toBeTruthy();
+    });
+
+    it("omits failed-song details when a failure summary has no import failures", () => {
+        render(
+            <HvscControls
+                {...buildProps({
+                    hvscSummaryState: "failure",
+                    hvscSummaryFailureLabel: "Archive checksum mismatch",
+                    hvscIngestionFailedSongs: 0,
+                })}
+            />,
+        );
+
+        expect(screen.getByText("HVSC update failed")).toBeTruthy();
+        expect(screen.getByText("Archive checksum mismatch")).toBeTruthy();
+        expect(screen.queryByText(/songs could not be imported/i)).toBeNull();
+    });
+
     it("renders the web-specific unavailable guidance", () => {
         vi.spyOn(Capacitor, "getPlatform").mockReturnValue("web");
 

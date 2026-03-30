@@ -437,6 +437,128 @@ describe("usePlaybackController", () => {
     expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
   });
 
+  it("reports an archive playback error when playlist metadata is missing", async () => {
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-missing-ref",
+        category: "sid",
+        label: "Broken Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: null,
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow(
+      "Archive item metadata is missing. Re-add it to the playlist.",
+    );
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        title: "Archive playback unavailable",
+        description: "Archive item metadata is missing. Re-add it to the playlist.",
+      }),
+    );
+  });
+
+  it("reports an archive playback error when the source config is unavailable", async () => {
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-missing-config",
+        category: "sid",
+        label: "Configless Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: {
+          sourceId: "archive-commoserve",
+          resultId: "100",
+          category: 40,
+          entryId: 1,
+          entryPath: "joyride.sid",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow(
+      "Archive source configuration unavailable for archive-commoserve.",
+    );
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        description: "Archive source configuration unavailable for archive-commoserve.",
+      }),
+    );
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
+  });
+
+  it("reports an archive playback error when the resolved archive file is not playable", async () => {
+    mockBuildArchivePlayPlan.mockReturnValueOnce({
+      category: "sid",
+      source: "local",
+      path: "joyride.sid",
+      file: undefined,
+    });
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-unplayable",
+        category: "sid",
+        label: "Unreadable Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: {
+          sourceId: "archive-commoserve",
+          resultId: "100",
+          category: 40,
+          entryId: 1,
+          entryPath: "joyride.sid",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow(
+      "Archive entry joyride.sid did not resolve to a playable file.",
+    );
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        description: "Archive entry joyride.sid did not resolve to a playable file.",
+      }),
+    );
+  });
+
   it("refreshes playback mute state before starting playback and only then executes the play plan", async () => {
     const playlist = [createPlaylistItem()];
     const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
@@ -827,6 +949,119 @@ describe("usePlaybackController", () => {
     expect(setPlayedMs).not.toHaveBeenCalled();
     expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     expect(autoAdvanceGuardRef.current.autoFired).toBe(false);
+  });
+
+  it("ignores auto-advance callbacks once the guard has already auto-fired", async () => {
+    const playlist = [
+      createPlaylistItem(),
+      createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" }),
+    ];
+    const setPlayedMs = vi.fn();
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(2500),
+      },
+    };
+    const autoAdvanceGuardRef = {
+      current: {
+        trackInstanceId: 2,
+        dueAtMs: 10_000,
+        autoFired: true,
+        userCancelled: false,
+      },
+    };
+
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      setPlayedMs,
+      playedClockRef,
+      autoAdvanceGuardRef,
+    });
+
+    await result.current.handleNext("auto", 2);
+
+    expect(playedClockRef.current.pause).not.toHaveBeenCalled();
+    expect(setPlayedMs).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("ignores auto-advance callbacks after the user cancels auto-advance", async () => {
+    const playlist = [
+      createPlaylistItem(),
+      createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" }),
+    ];
+    const setPlayedMs = vi.fn();
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(2500),
+      },
+    };
+    const autoAdvanceGuardRef = {
+      current: {
+        trackInstanceId: 2,
+        dueAtMs: 10_000,
+        autoFired: false,
+        userCancelled: true,
+      },
+    };
+
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      setPlayedMs,
+      playedClockRef,
+      autoAdvanceGuardRef,
+    });
+
+    await result.current.handleNext("auto", 2);
+
+    expect(playedClockRef.current.pause).not.toHaveBeenCalled();
+    expect(setPlayedMs).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("ignores auto-advance callbacks when no guard is active", async () => {
+    const playlist = [
+      createPlaylistItem(),
+      createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" }),
+    ];
+    const setPlayedMs = vi.fn();
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(2500),
+      },
+    };
+    const autoAdvanceGuardRef = { current: null };
+
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      setPlayedMs,
+      playedClockRef,
+      autoAdvanceGuardRef,
+    });
+
+    await result.current.handleNext("auto", 2);
+
+    expect(playedClockRef.current.pause).not.toHaveBeenCalled();
+    expect(setPlayedMs).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 
   it("reports previous-track failures and clears playback state", async () => {

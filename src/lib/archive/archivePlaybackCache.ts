@@ -11,24 +11,24 @@ import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { ArchivePlaylistReference } from "./types";
 
 export type CachedArchivePlayback = {
-    category: PlayFileCategory;
-    path: string;
-    file: LocalPlayFile;
+  category: PlayFileCategory;
+  path: string;
+  file: LocalPlayFile;
 };
 
 const playbackCache = new Map<string, CachedArchivePlayback>();
 
 export const buildArchivePlaybackCacheKey = (reference: ArchivePlaylistReference) =>
-    [reference.sourceId, reference.resultId, String(reference.category), String(reference.entryId)].join(":");
+  [reference.sourceId, reference.resultId, String(reference.category), String(reference.entryId)].join(":");
 
 export const getCachedArchivePlayback = (reference: ArchivePlaylistReference) =>
-    playbackCache.get(buildArchivePlaybackCacheKey(reference)) ?? null;
+  playbackCache.get(buildArchivePlaybackCacheKey(reference)) ?? null;
 
 export const setCachedArchivePlayback = (reference: ArchivePlaylistReference, playback: CachedArchivePlayback) => {
-    playbackCache.set(buildArchivePlaybackCacheKey(reference), playback);
-    return playback;
+  playbackCache.set(buildArchivePlaybackCacheKey(reference), playback);
+  return playback;
 };
 
 export const clearArchivePlaybackCacheForTests = () => {
-    playbackCache.clear();
+  playbackCache.clear();
 };
