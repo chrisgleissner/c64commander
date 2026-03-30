@@ -44,6 +44,14 @@ import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 
+type HandledUiError = Error & { c64uHandled?: boolean };
+
+const markHandledUiError = (error: unknown) => {
+  if (error instanceof Error) {
+    (error as HandledUiError).c64uHandled = true;
+  }
+};
+
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
   enablement: SidEnablement;
@@ -358,6 +366,7 @@ export function usePlaybackController({
                 archivePath: item.archiveRef?.entryPath ?? item.path,
               },
             });
+            markHandledUiError(error);
             throw error;
           }
         }

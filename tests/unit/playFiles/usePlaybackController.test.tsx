@@ -510,6 +510,59 @@ describe("usePlaybackController", () => {
     expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
   });
 
+  it("marks archive resolution failures as handled so playback start shows only one user-facing error", async () => {
+    const visibleReports: Array<{ operation: string; title: string; description: string }> = [];
+    vi.mocked(reportUserError).mockImplementation((report) => {
+      const handled = (report.error as { c64uHandled?: boolean } | undefined)?.c64uHandled;
+      if (handled) {
+        return;
+      }
+      visibleReports.push({
+        operation: report.operation,
+        title: report.title,
+        description: report.description,
+      });
+      if (report.error instanceof Error) {
+        (report.error as Error & { c64uHandled?: boolean }).c64uHandled = true;
+      }
+    });
+
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-missing-ref",
+        category: "sid",
+        label: "Broken Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: null,
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await result.current.handlePlay();
+
+    expect(visibleReports).toEqual([
+      {
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        title: "Archive playback unavailable",
+        description: "Archive item metadata is missing. Re-add it to the playlist.",
+      },
+    ]);
+  });
+
   it("reports an archive playback error when the resolved archive file is not playable", async () => {
     mockBuildArchivePlayPlan.mockReturnValueOnce({
       category: "sid",

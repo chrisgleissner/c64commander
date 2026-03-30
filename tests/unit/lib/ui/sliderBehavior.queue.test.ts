@@ -98,10 +98,8 @@ describe("createSliderAsyncQueue", () => {
   it("ignores commits when neither preview nor commit handlers exist", async () => {
     const queue = createSliderAsyncQueue({});
 
-    queue.commit(3);
-
+    expect(() => queue.commit(3)).not.toThrow();
     await Promise.resolve();
-    expect(true).toBe(true);
   });
 });
 
