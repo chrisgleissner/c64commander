@@ -175,6 +175,12 @@ describe("LightingSummaryCard", () => {
     expect(interactiveWriteSpy).not.toHaveBeenCalled();
   });
 
+  it("ignores empty async color slider payloads", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag-empty"));
+    expect(interactiveWriteSpy).not.toHaveBeenCalled();
+  });
+
   it("calls interactiveWrite once when the color slider is moved", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
