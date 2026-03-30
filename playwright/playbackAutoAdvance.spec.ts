@@ -152,6 +152,15 @@ test.describe("Playback auto advance", () => {
       "data-playing",
       "true",
     );
+    expect(server.sidplayRequests.at(-1)?.url).toContain("loop-1.sid");
+
+    const stopButton = page.getByTestId("playlist-play");
+    await expect(stopButton).toHaveAttribute("aria-label", "Stop");
+    await stopButton.click();
+    await expect(stopButton).toHaveAttribute("aria-label", "Play");
+    await page.waitForTimeout(250);
+    expect(server.sidplayRequests).toHaveLength(4);
+
     await snap(page, testInfo, "auto-advance-repeat-wrap");
   });
 });
