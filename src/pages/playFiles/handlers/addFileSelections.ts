@@ -535,12 +535,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const localFile =
           source.type === "local"
             ? resolveLocalRuntimeFile(source.id, normalizedPath) ||
-              (localEntry?.uri
-                ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
-                : undefined) ||
-              (localTreeUri
-                ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
-                : undefined)
+            (localEntry?.uri
+              ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
+              : undefined) ||
+            (localTreeUri
+              ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
+              : undefined)
             : undefined;
         const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
         const playable: PlayableEntry = {

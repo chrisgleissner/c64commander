@@ -68,7 +68,7 @@ const navigateToFileBrowserEntry = async (session: TelnetSessionApi, label: stri
   let screen = await waitForScreen(session, await readScreen(session), (candidate) => Boolean(candidate.selectedItem));
   let currentLabel = screen.selectedItem;
   let stalledSteps = 0;
-  for (let step = 0; step < MAX_BROWSER_STEPS; ) {
+  for (let step = 0; step < MAX_BROWSER_STEPS;) {
     if (screen.selectedItem && matchLabel(screen.selectedItem, label)) {
       return screen;
     }
