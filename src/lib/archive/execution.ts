@@ -13,7 +13,7 @@ import { getPlayCategory } from "@/lib/playback/fileTypes";
 import { executePlayPlan, type LocalPlayFile, type PlayPlan } from "@/lib/playback/playbackRouter";
 import type { ArchiveBinary, ArchiveEntry, ArchiveSearchResult } from "./types";
 
-const FILE_TYPE_TO_EXTENSION: Record<string, string> = {
+export const FILE_TYPE_TO_EXTENSION: Record<string, string> = {
   crt: "crt",
   d64: "d64",
   d71: "d71",

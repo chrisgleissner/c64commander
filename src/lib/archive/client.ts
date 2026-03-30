@@ -45,10 +45,10 @@ const isNativeArchiveRuntime = () => {
 
 const normalizeHeaderMap = (headers?: HeadersInit): Record<string, string> => Object.fromEntries(new Headers(headers));
 
-const isUnsupportedSignalError = (error: unknown) =>
+export const isUnsupportedSignalError = (error: unknown) =>
   error instanceof Error && error.message.includes("Expected signal") && error.message.includes("AbortSignal");
 
-const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
+export const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
     return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
@@ -80,19 +80,19 @@ const runWithDeadline = async <T>(
   const externalAbortHandler =
     externalSignal != null
       ? () => {
-          if (!signal.aborted) {
-            controller.abort(
-              (externalSignal as AbortSignal & { reason?: unknown }).reason ??
-                new DOMException("Archive request aborted", "AbortError"),
-            );
-          }
+        if (!signal.aborted) {
+          controller.abort(
+            (externalSignal as AbortSignal & { reason?: unknown }).reason ??
+            new DOMException("Archive request aborted", "AbortError"),
+          );
         }
+      }
       : null;
   try {
     if (externalSignal?.aborted && !signal.aborted) {
       controller.abort(
         (externalSignal as AbortSignal & { reason?: unknown }).reason ??
-          new DOMException("Archive request aborted", "AbortError"),
+        new DOMException("Archive request aborted", "AbortError"),
       );
     } else if (externalSignal && externalAbortHandler) {
       externalSignal.addEventListener("abort", externalAbortHandler, { once: true });
@@ -115,7 +115,7 @@ const runWithDeadline = async <T>(
       signalAbortHandler = () => {
         reject(
           (signal as AbortSignal & { reason?: unknown }).reason ??
-            new DOMException("Archive request aborted", "AbortError"),
+          new DOMException("Archive request aborted", "AbortError"),
         );
       };
       signal.addEventListener("abort", signalAbortHandler, { once: true });
