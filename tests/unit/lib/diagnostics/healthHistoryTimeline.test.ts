@@ -146,4 +146,42 @@ describe("healthHistoryTimeline", () => {
       }),
     ).toBeNull();
   });
+
+  it("deduplicates entries with identical timestamps keeping the last one", () => {
+    const sharedTimestamp = new Date(NOW_MS - 30 * 60_000).toISOString();
+    const history = [
+      makeEntry(30, "Healthy"),
+      { ...makeEntry(30, "Unhealthy"), timestamp: sharedTimestamp },
+    ];
+
+    const model = buildHealthTimelineModel(history, {
+      nowMs: NOW_MS,
+      windowEndMs: NOW_MS,
+      windowDurationMs: 60 * 60 * 1000,
+    });
+
+    // After dedup only the Unhealthy entry at that timestamp remains
+    const states = model.sourceSegments.map((s) => s.state);
+    expect(states).toContain("Unhealthy");
+    const unhealthy = model.sourceSegments.find((s) => s.state === "Unhealthy");
+    expect(unhealthy?.events).toHaveLength(1);
+    expect(unhealthy?.events[0]?.state).toBe("Unhealthy");
+  });
+
+  it("sets device-unavailable root cause when overallHealth is Unavailable with no probe failures", () => {
+    const history = [makeEntry(30, "Unavailable")];
+
+    const model = buildHealthTimelineModel(history, {
+      nowMs: NOW_MS,
+      windowEndMs: NOW_MS,
+      windowDurationMs: 60 * 60 * 1000,
+    });
+
+    const unavailableSegment = model.sourceSegments.find((s) => s.state === "Unavailable");
+    expect(unavailableSegment).toBeDefined();
+    const event = unavailableSegment?.events[0];
+    expect(event?.rootCause).toBe("Device unavailable during this health check");
+    expect(event?.state).toBe("Unavailable");
+    expect(event?.errorMessage).toBeNull();
+  });
 });

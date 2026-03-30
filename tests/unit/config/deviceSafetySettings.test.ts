@@ -184,8 +184,12 @@ describe("deviceSafetySettings undefined-environment branches", () => {
   });
 
   it("resetDeviceSafetyOverrides removes all override keys and broadcasts reset", () => {
-    // Set some override keys in localStorage
-    const keys = Object.values(DEVICE_SAFETY_SETTING_KEYS);
+    // Set some override keys in localStorage (excludes DEVICE_SAFETY_MODE_KEY which is not removed)
+    const {
+      DEVICE_SAFETY_MODE_KEY: _modeKey,
+      ...overrideKeys
+    } = DEVICE_SAFETY_SETTING_KEYS;
+    const keys = Object.values(overrideKeys);
     keys.forEach((key) => localStorage.setItem(key, "42"));
 
     resetDeviceSafetyOverrides();
