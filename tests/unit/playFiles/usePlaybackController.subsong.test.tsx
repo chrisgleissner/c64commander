@@ -36,7 +36,7 @@ vi.mock("@/lib/hvsc", () => ({
 }));
 
 vi.mock("@/lib/sid/sidUtils", () => ({
-  getSidSongCount: vi.fn(() => 1),
+  getSidSongCount: vi.fn(() => 3),
   computeSidMd5: vi.fn(async () => "mock-md5"),
 }));
 
@@ -53,16 +53,18 @@ vi.mock("@/lib/config/applyConfigFileReference", () => ({
   applyConfigFileReference: vi.fn(async () => undefined),
 }));
 
-const createPlaylistItem = (id: string, durationMs: number): PlaylistItem => ({
+const createSidSubsongItem = (id: string, songNr: number): PlaylistItem => ({
   id,
   request: {
     source: "ultimate",
-    path: `/PROGRAMS/${id}.prg`,
+    path: "/MUSICIANS/Test/demo.sid",
+    songNr,
   },
-  category: "prg",
-  label: `${id}.prg`,
-  path: `/PROGRAMS/${id}.prg`,
-  durationMs,
+  category: "sid",
+  label: `demo.sid #${songNr}`,
+  path: "/MUSICIANS/Test/demo.sid",
+  durationMs: 1_000,
+  subsongCount: 3,
   sourceId: null,
   sizeBytes: null,
   modifiedAt: null,
@@ -71,7 +73,25 @@ const createPlaylistItem = (id: string, durationMs: number): PlaylistItem => ({
   unavailableReason: null,
 });
 
-const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repeatEnabled?: boolean }) =>
+const createProgramItem = (): PlaylistItem => ({
+  id: "after-subsongs",
+  request: {
+    source: "ultimate",
+    path: "/PROGRAMS/finale.prg",
+  },
+  category: "prg",
+  label: "finale.prg",
+  path: "/PROGRAMS/finale.prg",
+  durationMs: 1_000,
+  sourceId: null,
+  sizeBytes: null,
+  modifiedAt: null,
+  addedAt: new Date(0).toISOString(),
+  status: "ready",
+  unavailableReason: null,
+});
+
+const renderPlaybackHarness = (initialPlaylist: PlaylistItem[]) =>
   renderHook(() => {
     const [playlist, setPlaylist] = useState(initialPlaylist);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -101,10 +121,12 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
     } | null>(null);
     const playStartInFlightRef = useRef(false);
     const cancelAutoAdvance = vi.fn(() => {
-      autoAdvanceGuardRef.current = null;
+      if (autoAdvanceGuardRef.current) {
+        autoAdvanceGuardRef.current.userCancelled = true;
+      }
       setAutoAdvanceDueAtMs(null);
     });
-    const enqueuePlayTransition = useCallback(async (task: () => Promise<void>) => await task(), []);
+    const enqueuePlayTransition = useCallback(async (task: () => Promise<void>) => task(), []);
 
     const controller = usePlaybackController({
       playlist,
@@ -124,7 +146,7 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       setDurationMs,
       setCurrentSubsongCount,
       setTrackInstanceId,
-      repeatEnabled: options?.repeatEnabled ?? false,
+      repeatEnabled: false,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
       deviceProduct: "C64 Ultimate",
@@ -157,30 +179,27 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
 
     return {
       ...controller,
-      playlist,
       currentIndex,
-      isPlaying,
-      isPaused,
-      durationMs,
       currentSubsongCount,
+      isPlaying,
       trackInstanceId,
-      autoAdvanceDueAtMs,
-      autoAdvanceGuardRef,
       trackInstanceIdRef,
-      cancelAutoAdvance,
+      autoAdvanceGuardRef,
+      autoAdvanceDueAtMs,
     };
   });
 
-describe("usePlaybackController auto advance", () => {
+describe("usePlaybackController subsong auto advance", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("plays through a three-song playlist and stops after the final auto-advance when repeat is off", async () => {
+  it("advances through each subsong entry before moving to the next playlist item", async () => {
     const playlist = [
-      createPlaylistItem("one", 1_000),
-      createPlaylistItem("two", 1_000),
-      createPlaylistItem("three", 1_000),
+      createSidSubsongItem("subsong-1", 1),
+      createSidSubsongItem("subsong-2", 2),
+      createSidSubsongItem("subsong-3", 3),
+      createProgramItem(),
     ];
     const { result } = renderPlaybackHarness(playlist);
 
@@ -188,55 +207,51 @@ describe("usePlaybackController auto advance", () => {
       await result.current.playItem(playlist[0], { playlistIndex: 0 });
     });
     expect(result.current.currentIndex).toBe(0);
-    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.currentSubsongCount).toBe(3);
 
     await act(async () => {
       await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
     });
     expect(result.current.currentIndex).toBe(1);
-    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.currentSubsongCount).toBe(3);
 
     await act(async () => {
       await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
     });
     expect(result.current.currentIndex).toBe(2);
+    expect(result.current.currentSubsongCount).toBe(3);
+
+    await act(async () => {
+      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+    expect(result.current.currentIndex).toBe(3);
+    expect(result.current.currentSubsongCount).toBeNull();
     expect(result.current.isPlaying).toBe(true);
 
-    await act(async () => {
-      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
-    });
-
-    expect(result.current.currentIndex).toBe(2);
-    expect(result.current.isPlaying).toBe(false);
-    expect(result.current.isPaused).toBe(false);
-    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
-    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(3);
-  });
-
-  it("wraps back to the first playlist item when repeat is enabled", async () => {
-    const playlist = [
-      createPlaylistItem("one", 1_000),
-      createPlaylistItem("two", 1_000),
-      createPlaylistItem("three", 1_000),
-    ];
-    const { result } = renderPlaybackHarness(playlist, { repeatEnabled: true });
-
-    await act(async () => {
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
-    });
-    await act(async () => {
-      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
-    });
-    await act(async () => {
-      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
-    });
-    await act(async () => {
-      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
-    });
-
-    expect(result.current.currentIndex).toBe(0);
-    expect(result.current.isPlaying).toBe(true);
-    expect(result.current.trackInstanceIdRef.current).toBe(4);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(4);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({ path: "/MUSICIANS/Test/demo.sid", songNr: 1, durationMs: 1_000 }),
+      undefined,
+    );
+    expect(vi.mocked(executePlayPlan)).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({ path: "/MUSICIANS/Test/demo.sid", songNr: 2, durationMs: 1_000 }),
+      undefined,
+    );
+    expect(vi.mocked(executePlayPlan)).toHaveBeenNthCalledWith(
+      3,
+      expect.anything(),
+      expect.objectContaining({ path: "/MUSICIANS/Test/demo.sid", songNr: 3, durationMs: 1_000 }),
+      undefined,
+    );
+    expect(vi.mocked(executePlayPlan)).toHaveBeenNthCalledWith(
+      4,
+      expect.anything(),
+      expect.objectContaining({ path: "/PROGRAMS/finale.prg", durationMs: 1_000 }),
+      undefined,
+    );
   });
 });

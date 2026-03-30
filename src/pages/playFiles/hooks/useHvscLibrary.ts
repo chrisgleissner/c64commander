@@ -129,6 +129,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
   } | null>(null);
   const hvscExtractionTimerRef = useRef<number | null>(null);
   const hvscExtractionThrottleRef = useRef(0);
+  const hvscIgnoreProgressRef = useRef(false);
 
   const runHvscAction = useCallback(<T>(name: string, fn: () => Promise<T> | T) => {
     const context = createActionContext(name, "user", "HvscLibrary");
@@ -141,6 +142,21 @@ export const useHvscLibrary = (): HvscLibraryState => {
       saveHvscStatusSummary(next);
       return next;
     });
+  }, []);
+
+  const clearPendingHvscProgress = useCallback(() => {
+    hvscDownloadPendingRef.current = null;
+    if (hvscDownloadTimerRef.current !== null) {
+      window.clearTimeout(hvscDownloadTimerRef.current);
+      hvscDownloadTimerRef.current = null;
+    }
+    hvscExtractionPendingRef.current = null;
+    if (hvscExtractionTimerRef.current !== null) {
+      window.clearTimeout(hvscExtractionTimerRef.current);
+      hvscExtractionTimerRef.current = null;
+    }
+    hvscProgressThrottleRef.current = 0;
+    hvscExtractionThrottleRef.current = 0;
   }, []);
 
   // Best-effort categorization based on error messages; update if upstream errors change.
@@ -280,6 +296,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
     let removeListener: (() => Promise<void>) | null = null;
     let disposed = false;
     const registration = addHvscProgressListener((event) => {
+      if (hvscIgnoreProgressRef.current) return;
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
       const applyExtractionCounts = (payload: { processedCount?: number; totalCount?: number }) => {
@@ -502,19 +519,12 @@ export const useHvscLibrary = (): HvscLibraryState => {
       });
     return () => {
       disposed = true;
-      if (hvscDownloadTimerRef.current !== null) {
-        window.clearTimeout(hvscDownloadTimerRef.current);
-        hvscDownloadTimerRef.current = null;
-      }
-      if (hvscExtractionTimerRef.current !== null) {
-        window.clearTimeout(hvscExtractionTimerRef.current);
-        hvscExtractionTimerRef.current = null;
-      }
+      clearPendingHvscProgress();
       if (removeListener) {
         void removeListener();
       }
     };
-  }, [resolveHvscFailureCategory, updateHvscSummary]);
+  }, [clearPendingHvscProgress, resolveHvscFailureCategory, updateHvscSummary]);
 
   const loadHvscFolder = useCallback(async (path: string) => {
     try {
@@ -544,6 +554,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
       runHvscAction("HvscLibrary.handleHvscInstall", async () => {
         try {
           const startedAt = new Date().toISOString();
+          hvscIgnoreProgressRef.current = false;
+          clearPendingHvscProgress();
           setHvscActiveToken("hvsc-install");
           setHvscLoading(true);
           setHvscProgress(0);
@@ -658,7 +670,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
           refreshHvscCacheStatus();
         }
       }),
-    [refreshHvscCacheStatus, refreshHvscStatus, runHvscAction, updateHvscSummary],
+    [clearPendingHvscProgress, refreshHvscCacheStatus, refreshHvscStatus, runHvscAction, updateHvscSummary],
   );
 
   const hvscHasCache =
@@ -677,6 +689,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
         }
         try {
           const startedAt = new Date().toISOString();
+          hvscIgnoreProgressRef.current = false;
+          clearPendingHvscProgress();
           setHvscActiveToken("hvsc-ingest");
           setHvscLoading(true);
           setHvscProgress(0);
@@ -747,7 +761,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
           refreshHvscCacheStatus();
         }
       }),
-    [hvscHasCache, refreshHvscCacheStatus, runHvscAction, updateHvscSummary],
+    [clearPendingHvscProgress, hvscHasCache, refreshHvscCacheStatus, runHvscAction, updateHvscSummary],
   );
 
   const handleHvscCancel = useCallback(async () => {
@@ -755,6 +769,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
     try {
       await cancelHvscInstall(token);
       const stoppedAt = new Date().toISOString();
+      hvscIgnoreProgressRef.current = true;
+      clearPendingHvscProgress();
       setHvscLoading(false);
       setHvscProgress(null);
       setHvscStage(null);
@@ -769,6 +785,10 @@ export const useHvscLibrary = (): HvscLibraryState => {
                 ...prev.download,
                 status: "idle",
                 finishedAt: stoppedAt,
+                durationMs: null,
+                downloadedBytes: null,
+                totalBytes: null,
+                sizeBytes: null,
                 errorCategory: null,
                 errorMessage: "Cancelled",
               }
@@ -779,6 +799,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
                 ...prev.extraction,
                 status: "idle",
                 finishedAt: stoppedAt,
+                durationMs: null,
+                filesExtracted: null,
+                totalFiles: null,
                 errorCategory: null,
                 errorMessage: "Cancelled",
               }
@@ -803,9 +826,10 @@ export const useHvscLibrary = (): HvscLibraryState => {
         error,
       });
     }
-  }, [hvscActiveToken, updateHvscSummary]);
+  }, [clearPendingHvscProgress, hvscActiveToken, updateHvscSummary]);
 
   const handleHvscReset = useCallback(() => {
+    hvscIgnoreProgressRef.current = false;
     clearHvscStatusSummary();
     setHvscStatusSummary(getDefaultHvscStatusSummary());
     setHvscErrorMessage(null);
@@ -815,12 +839,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
     setHvscCurrentFile(null);
     setHvscExtractionFiles(null);
     setHvscExtractionTotal(null);
-    hvscExtractionPendingRef.current = null;
-    if (hvscExtractionTimerRef.current !== null) {
-      window.clearTimeout(hvscExtractionTimerRef.current);
-      hvscExtractionTimerRef.current = null;
-    }
-  }, []);
+    clearPendingHvscProgress();
+  }, [clearPendingHvscProgress]);
 
   const hvscRoot = useMemo(() => loadHvscRoot(), []);
   const hvscAvailable = isHvscBridgeAvailable();
