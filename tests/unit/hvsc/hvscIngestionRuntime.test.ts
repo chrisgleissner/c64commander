@@ -1236,6 +1236,106 @@ describe("hvscIngestionRuntime", () => {
     // Complete the ingestion
     await ingestionPromise.catch(() => undefined);
   });
+
+  it("installs baseline via native Android ingestion plugin when available", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+
+    const status = await installOrUpdateHvsc("token-native-baseline");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relativeArchivePath: expect.stringContaining("hvsc-baseline-5"),
+        mode: "baseline",
+        resetLibrary: true,
+      }),
+    );
+    expect(nativeProgressListenerRemove).toHaveBeenCalled();
+    expect(status).toBeDefined();
+  });
+
+  it("ingests cached baseline via native Android ingestion plugin when available", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+
+    const status = await ingestCachedHvsc("token-native-cached");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relativeArchivePath: expect.stringContaining("hvsc-baseline-5"),
+        mode: "baseline",
+        resetLibrary: true,
+      }),
+    );
+    expect(nativeProgressListenerRemove).toHaveBeenCalled();
+    expect(status).toBeDefined();
+  });
+
+  it("falls back to non-native extractor when native ingest throws 7z method unsupported error", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(
+      new Error("7z method chain [AES256+LZMA2] unsupported"),
+    );
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.("HVSC/C64Music/Demo/demo.sid", new Uint8Array([1, 2, 3]));
+    });
+
+    await installOrUpdateHvsc("token-native-fallback");
+
+    expect(extractArchiveEntries).toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("falling back"),
+      expect.objectContaining({ archiveName: expect.any(String) }),
+    );
+  });
 });
 
 // P0-E: shared ingestion helper functions have identical state contract at facade boundary

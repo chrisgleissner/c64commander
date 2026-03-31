@@ -38,7 +38,9 @@ agents/coverage-agents.xml
 playwright-report/
 playwright-report-coverage/
 test-results/
+.cov-native-fresh/
 .cov-unit/
+.cov-unit-single/
 
 # Local config
 *.local
