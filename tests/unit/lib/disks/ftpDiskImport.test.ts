@@ -149,9 +149,7 @@ describe("listFtpEntries", () => {
 
     await listFtpEntries({ host: "c64u", path: "/" });
 
-    expect(listFtpDirectoryMock).toHaveBeenCalledWith(
-      expect.objectContaining({ password: "" }),
-    );
+    expect(listFtpDirectoryMock).toHaveBeenCalledWith(expect.objectContaining({ password: "" }));
   });
 });
 

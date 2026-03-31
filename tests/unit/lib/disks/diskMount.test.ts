@@ -194,10 +194,7 @@ describe("diskMount", () => {
 
     it("falls through to all-sources loop when sourceId match yields null", async () => {
       const runtimeFile = new File(["data"], "test.d64");
-      vi.mocked(loadLocalSources).mockReturnValue([
-        { id: "src1" } as any,
-        { id: "src2" } as any,
-      ]);
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any, { id: "src2" } as any]);
       vi.mocked(getLocalSourceListingMode).mockReturnValue("tree" as any);
       vi.mocked(getLocalSourceRuntimeFile)
         .mockReturnValueOnce(null) // src1 in sourceId-targeted call
@@ -211,7 +208,6 @@ describe("diskMount", () => {
       } as any);
       expect(blob).toBe(runtimeFile);
     });
-
   });
 
   describe("mountDiskToDrive", () => {

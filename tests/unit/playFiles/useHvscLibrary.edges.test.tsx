@@ -311,19 +311,17 @@ describe("useHvscLibrary edge cases", () => {
 
   it("handleHvscIngest toast includes ingestion summary when getHvscStatus returns summary", async () => {
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
-    mocks.getHvscStatusMock
-      .mockResolvedValueOnce(createStatus())
-      .mockResolvedValueOnce(
-        createStatus({
-          installedVersion: 3,
-          ingestionSummary: {
-            totalSongs: 50,
-            ingestedSongs: 49,
-            failedSongs: 1,
-            songlengthSyntaxErrors: 2,
-          },
-        }),
-      );
+    mocks.getHvscStatusMock.mockResolvedValueOnce(createStatus()).mockResolvedValueOnce(
+      createStatus({
+        installedVersion: 3,
+        ingestionSummary: {
+          totalSongs: 50,
+          ingestedSongs: 49,
+          failedSongs: 1,
+          songlengthSyntaxErrors: 2,
+        },
+      }),
+    );
 
     const { result } = renderHook(() => useHvscLibrary());
 

@@ -9,8 +9,16 @@
 import type { FolderPickerFileResult } from "@/lib/native/folderPicker";
 import { createLocalSourceFromFileList, setLocalSourceRuntimeFiles } from "@/lib/sourceNavigation/localSourcesStore";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
+import type { SourceEntry } from "@/lib/sourceNavigation/types";
 import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import type { ConfigFileReference, LocalConfigFileReference } from "./configFileReference";
+
+type LocalEntry = {
+  uri?: string | null;
+  name: string;
+  modifiedAt?: string | null;
+  sizeBytes?: number | null;
+};
 
 export const isConfigFileName = (name: string) => name.trim().toLowerCase().endsWith(".cfg");
 
@@ -31,28 +39,56 @@ export const buildConfigReferenceFromBrowserSelection = (
   }
 
   const fileName = requireConfigFileName(selection.name);
-  if (source.type === "ultimate") {
-    return {
-      kind: "ultimate",
-      fileName,
-      path: normalizeSourcePath(selection.path),
-      modifiedAt: selection.modifiedAt ?? null,
-      sizeBytes: selection.sizeBytes ?? null,
-    };
-  }
-
-  if (source.type === "local") {
-    return {
-      kind: "local",
-      fileName,
-      path: normalizeSourcePath(selection.path),
-      sourceId: source.id,
-      modifiedAt: selection.modifiedAt ?? null,
-      sizeBytes: selection.sizeBytes ?? null,
-    };
+  if (source.type === "ultimate" || source.type === "local") {
+    return buildConfigReferenceFromSourceEntry({
+      sourceType: source.type,
+      sourceId: source.type === "local" ? source.id : null,
+      entry: {
+        type: "file",
+        name: fileName,
+        path: normalizeSourcePath(selection.path),
+        modifiedAt: selection.modifiedAt ?? null,
+        sizeBytes: selection.sizeBytes ?? null,
+      },
+    });
   }
 
   throw new Error("Only local or C64U config files can be attached.");
+};
+
+export const buildConfigReferenceFromSourceEntry = ({
+  sourceType,
+  sourceId,
+  entry,
+  localEntriesBySourceId,
+}: {
+  sourceType: "local" | "ultimate";
+  sourceId?: string | null;
+  entry: Pick<SourceEntry, "name" | "path" | "modifiedAt" | "sizeBytes">;
+  localEntriesBySourceId?: Map<string, Map<string, LocalEntry>>;
+}): ConfigFileReference => {
+  const fileName = requireConfigFileName(entry.name);
+  const normalizedPath = normalizeSourcePath(entry.path);
+  if (sourceType === "ultimate") {
+    return {
+      kind: "ultimate",
+      fileName,
+      path: normalizedPath,
+      modifiedAt: entry.modifiedAt ?? null,
+      sizeBytes: entry.sizeBytes ?? null,
+    };
+  }
+
+  const localEntry = sourceId ? localEntriesBySourceId?.get(sourceId)?.get(normalizedPath) : null;
+  return {
+    kind: "local",
+    fileName,
+    path: normalizedPath,
+    sourceId: sourceId ?? null,
+    uri: localEntry?.uri ?? null,
+    modifiedAt: localEntry?.modifiedAt ?? entry.modifiedAt ?? null,
+    sizeBytes: localEntry?.sizeBytes ?? entry.sizeBytes ?? null,
+  };
 };
 
 export const buildLocalConfigReferenceFromAndroidPicker = (

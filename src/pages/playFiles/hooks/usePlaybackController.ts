@@ -19,6 +19,7 @@ import {
 } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
+import { toast } from "@/hooks/use-toast";
 import {
   buildPlayPlan,
   executePlayPlan,
@@ -39,7 +40,12 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
-import { applyConfigFileReference } from "@/lib/config/applyConfigFileReference";
+import {
+  applyConfigFileReference,
+  ensureConfigFileReferenceAccessible,
+  isConfigReferenceUnavailableError,
+} from "@/lib/config/applyConfigFileReference";
+import { buildPlaybackConfigSignature, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
@@ -51,6 +57,9 @@ const markHandledUiError = (error: unknown) => {
     (error as HandledUiError).c64uHandled = true;
   }
 };
+
+const isHandledUiError = (error: unknown): error is HandledUiError =>
+  error instanceof Error && Boolean(error.c64uHandled);
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -103,6 +112,10 @@ interface UsePlaybackControllerProps {
   localSourceTreeUris: Map<string, string | null>;
   deviceProduct?: string | null;
   ensurePlaybackConnection: () => Promise<void>;
+  resolveUnavailableConfigDecision?: (
+    item: PlaylistItem,
+    context: { configFileName: string | null; reason: string },
+  ) => Promise<"play-without-config" | "cancel">;
   resolveSonglengthDurationMsForPath: (
     path: string,
     file: LocalPlayFile | null,
@@ -173,6 +186,7 @@ export function usePlaybackController({
   localSourceTreeUris,
   deviceProduct,
   ensurePlaybackConnection,
+  resolveUnavailableConfigDecision,
   resolveSonglengthDurationMsForPath,
   applySonglengthsToItems,
   archiveConfigs,
@@ -202,6 +216,8 @@ export function usePlaybackController({
 }: UsePlaybackControllerProps) {
   const durationFallbackMs = durationSeconds * 1000;
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
+  const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
+  const sessionDeclinedPlaybackConfigRef = useRef(new Map<string, string>());
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -443,14 +459,6 @@ export function usePlaybackController({
           });
           throw error;
         }
-        if (item.configRef) {
-          await applyConfigFileReference({
-            configRef: item.configRef,
-            deviceProduct,
-            localEntriesBySourceId,
-            localSourceTreeUris,
-          });
-        }
         const api = getC64API();
         if (isSongCategory(item.category)) {
           setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
@@ -464,7 +472,96 @@ export function usePlaybackController({
             : item.request;
         const plan = buildPlayPlan(request);
         const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
-        const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
+        const configOrigin = item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null);
+        const configOverrides = item.configOverrides ?? null;
+        const candidatePlaybackConfigSignature =
+          configOrigin !== "manual-none" && Boolean(item.configRef || configOverrides?.length)
+            ? buildPlaybackConfigSignature(item.configRef ?? null, configOverrides)
+            : null;
+        const sessionDeclinedForItem =
+          candidatePlaybackConfigSignature !== null &&
+          sessionDeclinedPlaybackConfigRef.current.get(item.id) === candidatePlaybackConfigSignature;
+        const shouldApplyPlaybackConfig =
+          !sessionDeclinedForItem &&
+          configOrigin !== "manual-none" &&
+          Boolean(item.configRef || configOverrides?.length);
+        const nextPlaybackConfigSignature = shouldApplyPlaybackConfig
+          ? buildPlaybackConfigSignature(item.configRef ?? null, configOverrides)
+          : null;
+        const applyPlaybackConfigBeforeLaunch =
+          shouldApplyPlaybackConfig && nextPlaybackConfigSignature
+            ? async () => {
+                if (lastAppliedPlaybackConfigSignatureRef.current === nextPlaybackConfigSignature) {
+                  addLog("info", "Skipping redundant playback config application", {
+                    itemId: item.id,
+                    label: item.label,
+                    configFile: item.configRef?.fileName ?? null,
+                    overrideCount: configOverrides?.length ?? 0,
+                  });
+                  return;
+                }
+                try {
+                  toast({
+                    title: item.configRef
+                      ? `Applying ${item.configRef.fileName}`
+                      : `Applying ${configOverrides?.length ?? 0} config override${configOverrides?.length === 1 ? "" : "s"}`,
+                  });
+                  await ensureConfigFileReferenceAccessible({
+                    configRef: item.configRef ?? null,
+                    localEntriesBySourceId,
+                    localSourceTreeUris,
+                  });
+                  await applyConfigFileReference({
+                    configRef: item.configRef ?? null,
+                    configOverrides,
+                    deviceProduct,
+                    localEntriesBySourceId,
+                    localSourceTreeUris,
+                  });
+                  sessionDeclinedPlaybackConfigRef.current.delete(item.id);
+                  lastAppliedPlaybackConfigSignatureRef.current = nextPlaybackConfigSignature;
+                } catch (error) {
+                  if (isConfigReferenceUnavailableError(error) && resolveUnavailableConfigDecision) {
+                    const decision = await resolveUnavailableConfigDecision(item, {
+                      configFileName: item.configRef?.fileName ?? null,
+                      reason: (error as Error).message,
+                    });
+                    if (decision === "play-without-config") {
+                      sessionDeclinedPlaybackConfigRef.current.set(item.id, nextPlaybackConfigSignature);
+                      addLog("warn", "Playback config unavailable; continuing without config", {
+                        itemId: item.id,
+                        label: item.label,
+                        configFile: item.configRef?.fileName ?? null,
+                      });
+                      return;
+                    }
+                    markHandledUiError(error);
+                    throw error;
+                  }
+                  reportUserError({
+                    operation: "PLAYBACK_CONFIG_APPLY",
+                    title: "Config application failed",
+                    description: (error as Error).message,
+                    error,
+                    context: {
+                      item: item.label,
+                      configFile: item.configRef?.fileName ?? null,
+                      configOrigin,
+                      overrideCount: configOverrides?.length ?? 0,
+                    },
+                  });
+                  markHandledUiError(error);
+                  throw error;
+                }
+              }
+            : null;
+        if (item.category === "disk") {
+          lastAppliedPlaybackConfigSignatureRef.current = null;
+        }
+        const executionOptions = {
+          ...(shouldReboot ? { rebootBeforeMount: true } : {}),
+          ...(applyPlaybackConfigBeforeLaunch ? { beforeLaunch: applyPlaybackConfigBeforeLaunch } : {}),
+        };
         const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
         addLog("info", "Playback request started", {
           itemId: item.id,
@@ -521,8 +618,10 @@ export function usePlaybackController({
     },
     [
       durationFallbackMs,
+      deviceProduct,
       enqueuePlayTransition,
       ensurePlaybackConnection,
+      resolveUnavailableConfigDecision,
       ensureUnmuted,
       localEntriesBySourceId,
       localSourceTreeUris,
@@ -566,15 +665,17 @@ export function usePlaybackController({
           playlistIndex: startIndex,
         });
       } catch (error) {
-        reportUserError({
-          operation: "PLAYBACK_START",
-          title: "Playback failed",
-          description: (error as Error).message,
-          error,
-          context: {
-            item: resolvedItems[startIndex]?.label,
-          },
-        });
+        if (!isHandledUiError(error)) {
+          reportUserError({
+            operation: "PLAYBACK_START",
+            title: "Playback failed",
+            description: (error as Error).message,
+            error,
+            context: {
+              item: resolvedItems[startIndex]?.label,
+            },
+          });
+        }
         setIsPlaying(false);
         setIsPaused(false);
         trackStartedAtRef.current = null;
@@ -613,15 +714,17 @@ export function usePlaybackController({
         cancelAutoAdvance();
         await playItem(playlist[targetIndex], { playlistIndex: targetIndex });
       } catch (error) {
-        reportUserError({
-          operation: "PLAYBACK_START",
-          title: "Playback failed",
-          description: (error as Error).message,
-          error,
-          context: {
-            item: playlist[targetIndex]?.label,
-          },
-        });
+        if (!isHandledUiError(error)) {
+          reportUserError({
+            operation: "PLAYBACK_START",
+            title: "Playback failed",
+            description: (error as Error).message,
+            error,
+            context: {
+              item: playlist[targetIndex]?.label,
+            },
+          });
+        }
       } finally {
         releaseSingleFlight(playStartInFlightRef);
         setIsPlaylistLoading(false);
@@ -682,6 +785,7 @@ export function usePlaybackController({
       setDurationMs(undefined);
       setCurrentSubsongCount(null);
       trackStartedAtRef.current = null;
+      lastAppliedPlaybackConfigSignatureRef.current = null;
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
     }),
@@ -703,6 +807,7 @@ export function usePlaybackController({
       setDurationMs,
       setCurrentSubsongCount,
       trackStartedAtRef,
+      lastAppliedPlaybackConfigSignatureRef,
       autoAdvanceGuardRef,
     ],
   );
@@ -857,17 +962,19 @@ export function usePlaybackController({
         });
         setIsPaused(false);
       } catch (error) {
-        reportUserError({
-          operation: "PLAYBACK_NEXT",
-          title: "Playback next failed",
-          description: (error as Error).message,
-          error,
-          context: {
-            currentIndex,
-            nextIndex,
-            source,
-          },
-        });
+        if (!isHandledUiError(error)) {
+          reportUserError({
+            operation: "PLAYBACK_NEXT",
+            title: "Playback next failed",
+            description: (error as Error).message,
+            error,
+            context: {
+              currentIndex,
+              nextIndex,
+              source,
+            },
+          });
+        }
         setIsPlaying(false);
         setIsPaused(false);
         trackStartedAtRef.current = null;
@@ -908,16 +1015,18 @@ export function usePlaybackController({
       });
       setIsPaused(false);
     } catch (error) {
-      reportUserError({
-        operation: "PLAYBACK_PREVIOUS",
-        title: "Playback previous failed",
-        description: (error as Error).message,
-        error,
-        context: {
-          currentIndex,
-          prevIndex,
-        },
-      });
+      if (!isHandledUiError(error)) {
+        reportUserError({
+          operation: "PLAYBACK_PREVIOUS",
+          title: "Playback previous failed",
+          description: (error as Error).message,
+          error,
+          context: {
+            currentIndex,
+            prevIndex,
+          },
+        });
+      }
       setIsPlaying(false);
       setIsPaused(false);
       trackStartedAtRef.current = null;

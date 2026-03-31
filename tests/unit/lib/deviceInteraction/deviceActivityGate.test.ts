@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   areBackgroundReadsSuspended,
   beginInteractiveWriteBurst,
@@ -19,7 +19,7 @@ import {
   subscribeDeviceActivityGate,
   waitForBackgroundReadsToResume,
   waitForMachineTransitionsToSettle,
-} from '@/lib/deviceInteraction/deviceActivityGate';
+} from "@/lib/deviceInteraction/deviceActivityGate";
 
 beforeEach(() => {
   resetDeviceActivityGate();
@@ -31,8 +31,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('deviceActivityGate – initial state', () => {
-  it('has zeroed snapshot after reset', () => {
+describe("deviceActivityGate – initial state", () => {
+  it("has zeroed snapshot after reset", () => {
     const snap = getDeviceActivitySnapshot();
     expect(snap.machineTransitionCount).toBe(0);
     expect(snap.playbackWriteCount).toBe(0);
@@ -40,28 +40,28 @@ describe('deviceActivityGate – initial state', () => {
     expect(snap.playbackWriteCooldownUntilMs).toBe(0);
   });
 
-  it('isMachineTransitionActive is false when idle', () => {
+  it("isMachineTransitionActive is false when idle", () => {
     expect(isMachineTransitionActive()).toBe(false);
   });
 
-  it('isPlaybackWriteBurstActive is false when idle', () => {
+  it("isPlaybackWriteBurstActive is false when idle", () => {
     expect(isPlaybackWriteBurstActive()).toBe(false);
   });
 
-  it('areBackgroundReadsSuspended is false when idle', () => {
+  it("areBackgroundReadsSuspended is false when idle", () => {
     expect(areBackgroundReadsSuspended()).toBe(false);
   });
 });
 
-describe('beginMachineTransition', () => {
-  it('increments machineTransitionCount and marks transition active', () => {
+describe("beginMachineTransition", () => {
+  it("increments machineTransitionCount and marks transition active", () => {
     const end = beginMachineTransition(0);
     expect(isMachineTransitionActive()).toBe(true);
     expect(getDeviceActivitySnapshot().machineTransitionCount).toBe(1);
     end();
   });
 
-  it('decrements on end and applies cooldown', () => {
+  it("decrements on end and applies cooldown", () => {
     const end = beginMachineTransition(250);
     end();
     expect(getDeviceActivitySnapshot().machineTransitionCount).toBe(0);
@@ -69,66 +69,66 @@ describe('beginMachineTransition', () => {
     expect(isMachineTransitionActive()).toBe(true);
   });
 
-  it('clears after cooldown expires', () => {
+  it("clears after cooldown expires", () => {
     const end = beginMachineTransition(250);
     end();
     vi.advanceTimersByTime(300);
     expect(isMachineTransitionActive()).toBe(false);
   });
 
-  it('calling end twice is idempotent', () => {
+  it("calling end twice is idempotent", () => {
     const end = beginMachineTransition(0);
     end();
     end(); // second call should be a no-op
     expect(getDeviceActivitySnapshot().machineTransitionCount).toBe(0);
   });
 
-  it('suspends background reads while active', () => {
+  it("suspends background reads while active", () => {
     const end = beginMachineTransition(0);
     expect(areBackgroundReadsSuspended()).toBe(true);
     end();
   });
 });
 
-describe('beginPlaybackWriteBurst', () => {
-  it('increments playbackWriteCount and marks burst active', () => {
+describe("beginPlaybackWriteBurst", () => {
+  it("increments playbackWriteCount and marks burst active", () => {
     const end = beginPlaybackWriteBurst(0);
     expect(isPlaybackWriteBurstActive()).toBe(true);
     expect(getDeviceActivitySnapshot().playbackWriteCount).toBe(1);
     end();
   });
 
-  it('decrements on end and applies cooldown', () => {
+  it("decrements on end and applies cooldown", () => {
     const end = beginPlaybackWriteBurst(150);
     end();
     expect(getDeviceActivitySnapshot().playbackWriteCount).toBe(0);
     expect(isPlaybackWriteBurstActive()).toBe(true);
   });
 
-  it('clears after cooldown expires', () => {
+  it("clears after cooldown expires", () => {
     const end = beginPlaybackWriteBurst(150);
     end();
     vi.advanceTimersByTime(200);
     expect(isPlaybackWriteBurstActive()).toBe(false);
   });
 
-  it('suspends background reads while active', () => {
+  it("suspends background reads while active", () => {
     const end = beginPlaybackWriteBurst(0);
     expect(areBackgroundReadsSuspended()).toBe(true);
     end();
   });
 });
 
-describe('beginInteractiveWriteBurst', () => {
-  it('is an alias for beginPlaybackWriteBurst', () => {
+describe("beginInteractiveWriteBurst", () => {
+  it("is an alias for beginPlaybackWriteBurst", () => {
     const end = beginInteractiveWriteBurst(0);
     expect(isPlaybackWriteBurstActive()).toBe(true);
     end();
   });
 });
 
-describe('subscribeDeviceActivityGate', () => {
-  it('notifies listener on state change', () => {
+describe("subscribeDeviceActivityGate", () => {
+  it("notifies listener on state change", () => {
     const listener = vi.fn();
     const unsub = subscribeDeviceActivityGate(listener);
     const end = beginMachineTransition(0);
@@ -137,7 +137,7 @@ describe('subscribeDeviceActivityGate', () => {
     unsub();
   });
 
-  it('stops notifying after unsubscribe', () => {
+  it("stops notifying after unsubscribe", () => {
     const listener = vi.fn();
     const unsub = subscribeDeviceActivityGate(listener);
     unsub();
@@ -146,7 +146,7 @@ describe('subscribeDeviceActivityGate', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('notifies on reset', () => {
+  it("notifies on reset", () => {
     const listener = vi.fn();
     const unsub = subscribeDeviceActivityGate(listener);
     resetDeviceActivityGate();
@@ -155,12 +155,12 @@ describe('subscribeDeviceActivityGate', () => {
   });
 });
 
-describe('waitForMachineTransitionsToSettle', () => {
-  it('resolves immediately when no transition is active', async () => {
+describe("waitForMachineTransitionsToSettle", () => {
+  it("resolves immediately when no transition is active", async () => {
     await expect(waitForMachineTransitionsToSettle()).resolves.toBeUndefined();
   });
 
-  it('resolves when active transition ends', async () => {
+  it("resolves when active transition ends", async () => {
     const end = beginMachineTransition(0);
     const promise = waitForMachineTransitionsToSettle();
     end();
@@ -168,12 +168,12 @@ describe('waitForMachineTransitionsToSettle', () => {
   });
 });
 
-describe('waitForBackgroundReadsToResume', () => {
-  it('resolves immediately when nothing is active', async () => {
+describe("waitForBackgroundReadsToResume", () => {
+  it("resolves immediately when nothing is active", async () => {
     await expect(waitForBackgroundReadsToResume()).resolves.toBeUndefined();
   });
 
-  it('resolves when playback burst ends and cooldown clears', async () => {
+  it("resolves when playback burst ends and cooldown clears", async () => {
     const end = beginPlaybackWriteBurst(0);
     const promise = waitForBackgroundReadsToResume();
     end();
@@ -181,8 +181,8 @@ describe('waitForBackgroundReadsToResume', () => {
   });
 });
 
-describe('snapshot is frozen', () => {
-  it('returns a frozen object', () => {
+describe("snapshot is frozen", () => {
+  it("returns a frozen object", () => {
     expect(Object.isFrozen(getDeviceActivitySnapshot())).toBe(true);
   });
 });

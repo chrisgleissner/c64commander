@@ -6,35 +6,35 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-vi.mock('next-themes', () => ({
-  useTheme: vi.fn(() => ({ theme: 'dark' })),
+vi.mock("next-themes", () => ({
+  useTheme: vi.fn(() => ({ theme: "dark" })),
 }));
 
-vi.mock('sonner', () => ({
+vi.mock("sonner", () => ({
   Toaster: vi.fn(({ theme, className }: { theme?: string; className?: string }) => (
     <div data-testid="sonner-toaster" data-theme={theme} className={className} />
   )),
   toast: vi.fn(),
 }));
 
-import { Toaster, toast } from '@/components/ui/sonner';
+import { Toaster, toast } from "@/components/ui/sonner";
 
-describe('sonner', () => {
-  it('renders the Toaster with the current theme', () => {
+describe("sonner", () => {
+  it("renders the Toaster with the current theme", () => {
     const { getByTestId } = render(<Toaster />);
-    expect(getByTestId('sonner-toaster')).toBeInTheDocument();
-    expect(getByTestId('sonner-toaster')).toHaveAttribute('data-theme', 'dark');
+    expect(getByTestId("sonner-toaster")).toBeInTheDocument();
+    expect(getByTestId("sonner-toaster")).toHaveAttribute("data-theme", "dark");
   });
 
-  it('passes className to the underlying Toaster', () => {
+  it("passes className to the underlying Toaster", () => {
     const { getByTestId } = render(<Toaster />);
-    expect(getByTestId('sonner-toaster')).toHaveAttribute('class', 'toaster group');
+    expect(getByTestId("sonner-toaster")).toHaveAttribute("class", "toaster group");
   });
 
-  it('exports toast function', () => {
+  it("exports toast function", () => {
     expect(toast).toBeDefined();
   });
 });

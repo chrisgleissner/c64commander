@@ -51,6 +51,7 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/config/applyConfigFileReference", () => ({
   applyConfigFileReference: vi.fn(async () => undefined),
+  ensureConfigFileReferenceAccessible: vi.fn(async () => undefined),
 }));
 
 const createPlaylistItem = (id: string, path: string): PlaylistItem => ({
@@ -190,7 +191,7 @@ describe("usePlaybackController play transition supersession", () => {
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ path: "/PROGRAMS/track-b.prg", durationMs: 1_000 }),
-      undefined,
+      expect.objectContaining({}),
     );
     expect(setCurrentIndex).toHaveBeenCalledWith(1);
     expect(setIsPlaying).toHaveBeenCalledWith(true);

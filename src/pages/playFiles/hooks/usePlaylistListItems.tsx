@@ -9,6 +9,7 @@
 import { useMemo } from "react";
 import { Folder } from "lucide-react";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
+import { describeConfigOrigin, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import type { ActionListItem, ActionListMenuItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -21,6 +22,7 @@ export type PlaylistListItemsOptions = {
   handlePlaylistSelect: (item: PlaylistItem, selected: boolean) => void;
   onAttachLocalConfig: (item: PlaylistItem) => void;
   onAttachUltimateConfig: (item: PlaylistItem) => void;
+  onOpenConfig: (item: PlaylistItem) => void;
   onRemoveConfig: (item: PlaylistItem) => void;
   startPlaylist: (items: PlaylistItem[], startIndex?: number) => Promise<void> | void;
   playlistItemDuration: (item: PlaylistItem, index: number) => number | undefined;
@@ -40,6 +42,7 @@ export const usePlaylistListItems = ({
   handlePlaylistSelect,
   onAttachLocalConfig,
   onAttachUltimateConfig,
+  onOpenConfig,
   onRemoveConfig,
   startPlaylist,
   playlistItemDuration,
@@ -72,6 +75,22 @@ export const usePlaylistListItems = ({
       const playlistIndex = playlist.findIndex((entry) => entry.id === item.id);
       const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
       const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
+      const configUiState = resolvePlaybackConfigUiState({
+        configRef: item.configRef ?? null,
+        configOrigin: item.configOrigin ?? "none",
+        configOverrides: item.configOverrides ?? null,
+        configCandidates: item.configCandidates ?? null,
+      });
+      const configStatusLabel =
+        configUiState === "edited"
+          ? "CFG*"
+          : configUiState === "resolved"
+            ? "CFG"
+            : configUiState === "candidates"
+              ? "CFG?"
+              : configUiState === "declined"
+                ? "No CFG"
+                : null;
       const menuItems: ActionListMenuItem[] = [
         { type: "label", label: "Details" },
         {
@@ -94,6 +113,35 @@ export const usePlaylistListItems = ({
           label: "Attached",
           value: item.configRef ? item.configRef.fileName : "None",
         },
+        {
+          type: "info",
+          label: "Status",
+          value:
+            configUiState === "edited"
+              ? "Edited"
+              : configUiState === "resolved"
+                ? "Resolved"
+                : configUiState === "candidates"
+                  ? "Candidates found"
+                  : configUiState === "declined"
+                    ? "Declined"
+                    : "No config",
+        },
+        {
+          type: "info",
+          label: "Origin",
+          value: describeConfigOrigin(item.configOrigin ?? "none"),
+        },
+        {
+          type: "info",
+          label: "Candidates",
+          value: String(item.configCandidates?.length ?? 0),
+        },
+        {
+          type: "info",
+          label: "Overrides",
+          value: String(item.configOverrides?.length ?? 0),
+        },
         ...(item.configRef
           ? [
               {
@@ -103,6 +151,12 @@ export const usePlaylistListItems = ({
               },
             ]
           : []),
+        {
+          type: "action",
+          label: "Review playback config",
+          onSelect: () => onOpenConfig(item),
+          disabled: isPlaylistLoading,
+        },
         {
           type: "action",
           label: item.configRef ? "Change to local .cfg" : "Attach local .cfg",
@@ -149,10 +203,10 @@ export const usePlaylistListItems = ({
             <span>{formatPlayCategory(item.category)}</span>
             <span>•</span>
             <span>{durationLabel}</span>
-            {item.configRef ? (
+            {configStatusLabel ? (
               <>
                 <span>•</span>
-                <span>CFG</span>
+                <span>{configStatusLabel}</span>
               </>
             ) : null}
             {item.status === "unavailable" ? (
@@ -169,6 +223,9 @@ export const usePlaylistListItems = ({
         menuItems,
         actionLabel: "Play",
         onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
+        secondaryActionLabel: configStatusLabel,
+        onSecondaryAction: configStatusLabel ? () => onOpenConfig(item) : undefined,
+        secondaryActionAriaLabel: configStatusLabel ? `Open config details for ${item.label}` : undefined,
         onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,
@@ -185,6 +242,7 @@ export const usePlaylistListItems = ({
     handlePlaylistSelect,
     onAttachLocalConfig,
     onAttachUltimateConfig,
+    onOpenConfig,
     onRemoveConfig,
     isPlaylistLoading,
     playlist,

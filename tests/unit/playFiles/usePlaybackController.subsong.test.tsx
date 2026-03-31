@@ -233,25 +233,25 @@ describe("usePlaybackController subsong auto advance", () => {
       1,
       expect.anything(),
       expect.objectContaining({ path: "/MUSICIANS/Test/demo.sid", songNr: 1, durationMs: 1_000 }),
-      undefined,
+      expect.objectContaining({}),
     );
     expect(vi.mocked(executePlayPlan)).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
       expect.objectContaining({ path: "/MUSICIANS/Test/demo.sid", songNr: 2, durationMs: 1_000 }),
-      undefined,
+      expect.objectContaining({}),
     );
     expect(vi.mocked(executePlayPlan)).toHaveBeenNthCalledWith(
       3,
       expect.anything(),
       expect.objectContaining({ path: "/MUSICIANS/Test/demo.sid", songNr: 3, durationMs: 1_000 }),
-      undefined,
+      expect.objectContaining({}),
     );
     expect(vi.mocked(executePlayPlan)).toHaveBeenNthCalledWith(
       4,
       expect.anything(),
       expect.objectContaining({ path: "/PROGRAMS/finale.prg", durationMs: 1_000 }),
-      undefined,
+      expect.objectContaining({}),
     );
   });
 });

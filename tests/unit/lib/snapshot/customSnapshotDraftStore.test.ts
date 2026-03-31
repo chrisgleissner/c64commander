@@ -76,10 +76,7 @@ describe("customSnapshotDraftStore", () => {
   });
 
   it("logs and falls back when all entries are invalid", () => {
-    localStorage.setItem(
-      "c64u_custom_snapshot_ranges:v1",
-      JSON.stringify([{ notStart: "x", notEnd: "y" }, 42, null]),
-    );
+    localStorage.setItem("c64u_custom_snapshot_ranges:v1", JSON.stringify([{ notStart: "x", notEnd: "y" }, 42, null]));
 
     expect(loadCustomSnapshotDrafts()).toEqual([{ start: "", end: "" }]);
     expect(addErrorLogMock).toHaveBeenCalledWith(

@@ -770,10 +770,7 @@ describe("hvscDownload", () => {
 
       const { writeCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
       await downloadArchive(makeOptions());
-      expect(writeCachedArchive).toHaveBeenCalledWith(
-        "hvsc-baseline-84.7z",
-        expect.objectContaining({ length: 2 }),
-      );
+      expect(writeCachedArchive).toHaveBeenCalledWith("hvsc-baseline-84.7z", expect.objectContaining({ length: 2 }));
     });
   });
 });

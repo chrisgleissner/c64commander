@@ -73,6 +73,13 @@ import type { SelectedItem, SourceEntry, SourceLocation } from "@/lib/sourceNavi
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
+import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
+import { resolvePlaybackConfig } from "@/lib/config/configResolution";
+import {
+  describeConfigOrigin,
+  resolvePlaybackConfigUiState,
+  resolveStoredConfigOrigin,
+} from "@/lib/config/playbackConfig";
 import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
@@ -231,6 +238,66 @@ export const HomeDiskManager = () => {
     const ultimateSource = createUltimateSourceLocation();
     return [{ label: SOURCE_LABELS.c64u, sources: [ultimateSource] }];
   }, []);
+
+  const discoverDiskPlaybackConfig = useCallback(
+    async (source: SourceLocation, entry: { path: string; name: string }) => {
+      if (source.type !== "local" && source.type !== "ultimate") {
+        return {
+          configRef: null,
+          configOrigin: resolveStoredConfigOrigin(null, null),
+          configOverrides: null,
+          configCandidates: null,
+        };
+      }
+
+      if (typeof source.listEntries !== "function") {
+        addLog("warn", "Disk playback config discovery skipped", {
+          sourceType: source.type,
+          sourceId: source.type === "local" ? source.id : null,
+          path: entry.path,
+          reason: "listEntries unavailable",
+        });
+        return {
+          configRef: null,
+          configOrigin: resolveStoredConfigOrigin(null, null),
+          configOverrides: null,
+          configCandidates: null,
+        };
+      }
+
+      try {
+        const candidates = await discoverConfigCandidates({
+          sourceType: source.type,
+          sourceId: source.type === "local" ? source.id : null,
+          sourceRootPath: source.rootPath,
+          targetFile: { name: entry.name, path: entry.path },
+          listEntries: source.listEntries,
+        });
+        const resolved = resolvePlaybackConfig({ candidates });
+        return {
+          configRef: resolved.configRef,
+          configOrigin: resolved.configOrigin,
+          configOverrides: resolved.configOverrides,
+          configCandidates: resolved.configCandidates,
+        };
+      } catch (error) {
+        addErrorLog("Disk playback config discovery failed", {
+          sourceType: source.type,
+          sourceId: source.type === "local" ? source.id : null,
+          path: entry.path,
+          fileName: entry.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return {
+          configRef: null,
+          configOrigin: resolveStoredConfigOrigin(null, null),
+          configOverrides: null,
+          configCandidates: null,
+        };
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     setSelectedDiskIds((prev) => {
@@ -896,45 +963,55 @@ export const HomeDiskManager = () => {
         );
 
         const runtimeFiles: Record<string, File> = {};
-        const disks = diskCandidates.map((entry, index) => {
-          const normalized = normalizeDiskPath(entry.path);
-          const autoGroup = groupMap.get(normalized);
-          const fallbackGroup = getLeafFolderName(normalized);
-          const groupName = autoGroup ?? fallbackGroup ?? null;
-          const localSource = source.type === "local" ? localSourcesById.get(source.id) : null;
-          let localEntry: { uri?: string | null } | null = null;
-          if (localSource && getLocalSourceListingMode(localSource) === "entries") {
-            try {
-              const entries = requireLocalSourceEntries(localSource, "HomeDiskManager.localEntry");
-              localEntry = entries.find((item) => normalizeSourcePath(item.relativePath) === normalized) ?? null;
-            } catch (error) {
-              addErrorLog("Local source entries unavailable", {
-                sourceId: localSource.id,
-                error: {
-                  name: (error as Error).name,
-                  message: (error as Error).message,
-                  stack: (error as Error).stack,
-                },
-              });
+        const disks = await Promise.all(
+          diskCandidates.map(async (entry, index) => {
+            const normalized = normalizeDiskPath(entry.path);
+            const autoGroup = groupMap.get(normalized);
+            const fallbackGroup = getLeafFolderName(normalized);
+            const groupName = autoGroup ?? fallbackGroup ?? null;
+            const localSource = source.type === "local" ? localSourcesById.get(source.id) : null;
+            let localEntry: { uri?: string | null } | null = null;
+            if (localSource && getLocalSourceListingMode(localSource) === "entries") {
+              try {
+                const entries = requireLocalSourceEntries(localSource, "HomeDiskManager.localEntry");
+                localEntry = entries.find((item) => normalizeSourcePath(item.relativePath) === normalized) ?? null;
+              } catch (error) {
+                addErrorLog("Local source entries unavailable", {
+                  sourceId: localSource.id,
+                  error: {
+                    name: (error as Error).name,
+                    message: (error as Error).message,
+                    stack: (error as Error).stack,
+                  },
+                });
+              }
             }
-          }
-          const diskEntry = createDiskEntry({
-            path: normalized,
-            location: source.type === "ultimate" ? "ultimate" : "local",
-            group: groupName,
-            sourceId: source.type === "local" ? source.id : null,
-            localUri: localEntry?.uri ?? null,
-            localTreeUri: localSource?.android?.treeUri ?? null,
-            sizeBytes: entry.sizeBytes ?? null,
-            modifiedAt: entry.modifiedAt ?? null,
-            importOrder: index,
-          });
-          if (source.type === "local") {
-            const runtime = resolveLocalRuntimeFile(source.id, normalized);
-            if (runtime) runtimeFiles[diskEntry.id] = runtime;
-          }
-          return diskEntry;
-        });
+            const playbackConfig = await discoverDiskPlaybackConfig(source, {
+              path: normalized,
+              name: entry.name,
+            });
+            const diskEntry = createDiskEntry({
+              path: normalized,
+              location: source.type === "ultimate" ? "ultimate" : "local",
+              group: groupName,
+              sourceId: source.type === "local" ? source.id : null,
+              localUri: localEntry?.uri ?? null,
+              localTreeUri: localSource?.android?.treeUri ?? null,
+              sizeBytes: entry.sizeBytes ?? null,
+              modifiedAt: entry.modifiedAt ?? null,
+              importOrder: index,
+              configRef: playbackConfig.configRef,
+              configOrigin: playbackConfig.configOrigin,
+              configOverrides: playbackConfig.configOverrides,
+              configCandidates: playbackConfig.configCandidates,
+            });
+            if (source.type === "local") {
+              const runtime = resolveLocalRuntimeFile(source.id, normalized);
+              if (runtime) runtimeFiles[diskEntry.id] = runtime;
+            }
+            return diskEntry;
+          }),
+        );
 
         const minDuration = addItemsSurface === "page" ? 800 : 300;
         await waitAtLeast(startedAt, minDuration);
@@ -1060,24 +1137,35 @@ export const HomeDiskManager = () => {
           })),
         );
         const runtimeFiles: Record<string, File> = {};
-        const disks = diskCandidates.map((entry, index) => {
-          const normalized = normalizeDiskPath(entry.path);
-          const autoGroup = groupMap.get(normalized);
-          const fallbackGroup = getLeafFolderName(normalized);
-          const groupName = autoGroup ?? fallbackGroup ?? null;
-          const diskEntry = createDiskEntry({
-            path: normalized,
-            location: "local",
-            group: groupName,
-            sourceId: source.id,
-            sizeBytes: entry.sizeBytes ?? null,
-            modifiedAt: entry.modifiedAt ?? null,
-            importOrder: index,
-          });
-          const runtime = resolveLocalRuntimeFile(source.id, normalized);
-          if (runtime) runtimeFiles[diskEntry.id] = runtime;
-          return diskEntry;
-        });
+        const sourceLocation = createLocalSourceLocation(source);
+        const disks = await Promise.all(
+          diskCandidates.map(async (entry, index) => {
+            const normalized = normalizeDiskPath(entry.path);
+            const autoGroup = groupMap.get(normalized);
+            const fallbackGroup = getLeafFolderName(normalized);
+            const groupName = autoGroup ?? fallbackGroup ?? null;
+            const playbackConfig = await discoverDiskPlaybackConfig(sourceLocation, {
+              path: normalized,
+              name: entry.name,
+            });
+            const diskEntry = createDiskEntry({
+              path: normalized,
+              location: "local",
+              group: groupName,
+              sourceId: source.id,
+              sizeBytes: entry.sizeBytes ?? null,
+              modifiedAt: entry.modifiedAt ?? null,
+              importOrder: index,
+              configRef: playbackConfig.configRef,
+              configOrigin: playbackConfig.configOrigin,
+              configOverrides: playbackConfig.configOverrides,
+              configCandidates: playbackConfig.configCandidates,
+            });
+            const runtime = resolveLocalRuntimeFile(source.id, normalized);
+            if (runtime) runtimeFiles[diskEntry.id] = runtime;
+            return diskEntry;
+          }),
+        );
         diskLibrary.addDisks(disks, runtimeFiles);
         setAddItemsProgress((prev) => ({
           ...prev,
@@ -1130,10 +1218,34 @@ export const HomeDiskManager = () => {
 
   const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
     const detailsDate = disk.modifiedAt || disk.importedAt;
+    const configUiState = resolvePlaybackConfigUiState({
+      configRef: disk.configRef ?? null,
+      configOrigin: disk.configOrigin ?? resolveStoredConfigOrigin(disk.configRef ?? null, null),
+      configOverrides: disk.configOverrides ?? null,
+      configCandidates: disk.configCandidates ?? null,
+    });
     return [
       { type: "label", label: "Details" },
       { type: "info", label: "Size", value: formatBytes(disk.sizeBytes) },
       { type: "info", label: "Date", value: formatDate(detailsDate) },
+      { type: "separator" },
+      { type: "label", label: "Config" },
+      { type: "info", label: "Attached", value: disk.configRef?.fileName ?? "None" },
+      { type: "info", label: "Origin", value: describeConfigOrigin(disk.configOrigin ?? "none") },
+      {
+        type: "info",
+        label: "Status",
+        value:
+          configUiState === "edited"
+            ? "Edited"
+            : configUiState === "resolved"
+              ? "Resolved"
+              : configUiState === "candidates"
+                ? "Candidates found"
+                : configUiState === "declined"
+                  ? "Declined"
+                  : "No config",
+      },
       { type: "separator" },
       {
         type: "action",
@@ -1191,6 +1303,22 @@ export const HomeDiskManager = () => {
           lastFolder = folderPath;
         }
         const groupColor = disk.group ? pickDiskGroupColor(disk.group) : null;
+        const configUiState = resolvePlaybackConfigUiState({
+          configRef: disk.configRef ?? null,
+          configOrigin: disk.configOrigin ?? resolveStoredConfigOrigin(disk.configRef ?? null, null),
+          configOverrides: disk.configOverrides ?? null,
+          configCandidates: disk.configCandidates ?? null,
+        });
+        const configStatusLabel =
+          configUiState === "edited"
+            ? "CFG*"
+            : configUiState === "resolved"
+              ? "CFG"
+              : configUiState === "candidates"
+                ? "CFG?"
+                : configUiState === "declined"
+                  ? "No CFG"
+                  : null;
         const groupMeta = disk.group ? (
           <span className="flex items-center gap-1 min-w-0">
             <span className={cn("h-2 w-2 rounded-full border", groupColor?.chip)} aria-hidden="true" />
@@ -1201,7 +1329,12 @@ export const HomeDiskManager = () => {
           id: disk.id,
           title: disk.name,
           filterText: `${disk.name} ${disk.path} ${disk.group ?? ""}`,
-          meta: groupMeta,
+          meta: (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              {groupMeta}
+              {configStatusLabel ? <span>{configStatusLabel}</span> : null}
+            </div>
+          ),
           icon: <LocationIcon location={disk.location} />,
           selected: selectedDiskIds.has(disk.id),
           onSelectToggle: (selected) => handleDiskSelect(disk, selected),

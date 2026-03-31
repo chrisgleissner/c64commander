@@ -11,6 +11,12 @@ import type { PlayRequest } from "@/lib/playback/playbackRouter";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { PlaySource } from "@/lib/playback/playbackRouter";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
+import type {
+  ConfigCandidate,
+  ConfigPreview,
+  ConfigResolutionOrigin,
+  ConfigValueOverride,
+} from "@/lib/config/playbackConfig";
 import type { ArchivePlaylistReference } from "@/lib/archive/types";
 
 export type PlayableEntry = {
@@ -19,6 +25,10 @@ export type PlayableEntry = {
   path: string;
   file?: LocalPlayFile;
   configRef?: ConfigFileReference | null;
+  configOrigin?: ConfigResolutionOrigin | null;
+  configOverrides?: ConfigValueOverride[] | null;
+  configCandidates?: ConfigCandidate[] | null;
+  configPreview?: ConfigPreview | null;
   archiveRef?: ArchivePlaylistReference | null;
   durationMs?: number;
   songNr?: number;
@@ -35,6 +45,10 @@ export type PlaylistItem = {
   label: string;
   path: string;
   configRef?: ConfigFileReference | null;
+  configOrigin?: ConfigResolutionOrigin | null;
+  configOverrides?: ConfigValueOverride[] | null;
+  configCandidates?: ConfigCandidate[] | null;
+  configPreview?: ConfigPreview | null;
   archiveRef?: ArchivePlaylistReference | null;
   durationMs?: number;
   subsongCount?: number;
@@ -52,6 +66,8 @@ export type StoredPlaylistState = {
     path: string;
     name: string;
     configRef?: ConfigFileReference | null;
+    configOrigin?: ConfigResolutionOrigin | null;
+    configOverrides?: ConfigValueOverride[] | null;
     archiveRef?: ArchivePlaylistReference | null;
     durationMs?: number;
     songNr?: number;

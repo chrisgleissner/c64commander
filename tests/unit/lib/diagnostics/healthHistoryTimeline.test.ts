@@ -149,10 +149,7 @@ describe("healthHistoryTimeline", () => {
 
   it("deduplicates entries with identical timestamps keeping the last one", () => {
     const sharedTimestamp = new Date(NOW_MS - 30 * 60_000).toISOString();
-    const history = [
-      makeEntry(30, "Healthy"),
-      { ...makeEntry(30, "Unhealthy"), timestamp: sharedTimestamp },
-    ];
+    const history = [makeEntry(30, "Healthy"), { ...makeEntry(30, "Unhealthy"), timestamp: sharedTimestamp }];
 
     const model = buildHealthTimelineModel(history, {
       nowMs: NOW_MS,

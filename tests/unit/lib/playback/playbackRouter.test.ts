@@ -207,4 +207,39 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
       maxAttempts: 20,
     });
   });
+
+  it("runs beforeLaunch after disk reboot and mount but before autostart", async () => {
+    vi.useFakeTimers();
+    const api = createApi({ enabled: true, type: "1541", bus_id: 8 });
+    const beforeLaunch = vi.fn(async () => undefined);
+
+    const task = executePlayPlan(
+      api,
+      buildPlayPlan({
+        source: "local",
+        path: "/games/demo.d64",
+        file: new Blob([Uint8Array.from([1, 2, 3])]),
+      }),
+      {
+        rebootBeforeMount: true,
+        diskAutostartMode: "inject",
+        beforeLaunch,
+      },
+    );
+
+    await vi.runAllTimersAsync();
+    await task;
+
+    expect(api.machineReboot).toHaveBeenCalledTimes(1);
+    expect(api.mountDriveUpload).toHaveBeenCalledTimes(1);
+    expect(beforeLaunch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
+    expect(api.machineReboot.mock.invocationCallOrder[0]).toBeLessThan(beforeLaunch.mock.invocationCallOrder[0]);
+    expect(api.mountDriveUpload.mock.invocationCallOrder[0]).toBeLessThan(beforeLaunch.mock.invocationCallOrder[0]);
+    expect(beforeLaunch.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(injectAutostart).mock.invocationCallOrder[0],
+    );
+
+    vi.useRealTimers();
+  });
 });
