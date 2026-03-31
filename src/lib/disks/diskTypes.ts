@@ -7,6 +7,8 @@
  */
 
 import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
+import type { ConfigFileReference } from "@/lib/config/configFileReference";
+import type { ConfigCandidate, ConfigResolutionOrigin, ConfigValueOverride } from "@/lib/config/playbackConfig";
 
 export type DiskLocation = "local" | "ultimate";
 
@@ -23,6 +25,10 @@ export type DiskEntry = {
   modifiedAt?: string | null;
   importedAt: string;
   importOrder?: number | null;
+  configRef?: ConfigFileReference | null;
+  configOrigin?: ConfigResolutionOrigin | null;
+  configOverrides?: ConfigValueOverride[] | null;
+  configCandidates?: ConfigCandidate[] | null;
 };
 
 export type DiskLocationLabel = "Local" | "C64U";
@@ -72,6 +78,10 @@ export const createDiskEntry = (params: {
   sizeBytes?: number | null;
   modifiedAt?: string | null;
   importOrder?: number | null;
+  configRef?: ConfigFileReference | null;
+  configOrigin?: ConfigResolutionOrigin | null;
+  configOverrides?: ConfigValueOverride[] | null;
+  configCandidates?: ConfigCandidate[] | null;
 }): DiskEntry => {
   const path = normalizeDiskPath(params.path);
   return {
@@ -87,6 +97,10 @@ export const createDiskEntry = (params: {
     modifiedAt: params.modifiedAt ?? null,
     importedAt: new Date().toISOString(),
     importOrder: params.importOrder ?? null,
+    configRef: params.configRef ?? null,
+    configOrigin: params.configOrigin ?? null,
+    configOverrides: params.configOverrides ?? null,
+    configCandidates: params.configCandidates ?? null,
   };
 };
 

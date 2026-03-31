@@ -183,6 +183,19 @@ describe("deviceSafetySettings undefined-environment branches", () => {
     resetDeviceSafetyOverrides();
   });
 
+  it("resetDeviceSafetyOverrides removes all override keys and broadcasts reset", () => {
+    // Set some override keys in localStorage (excludes DEVICE_SAFETY_MODE_KEY which is not removed)
+    const { DEVICE_SAFETY_MODE_KEY: _modeKey, ...overrideKeys } = DEVICE_SAFETY_SETTING_KEYS;
+    const keys = Object.values(overrideKeys);
+    keys.forEach((key) => localStorage.setItem(key, "42"));
+
+    resetDeviceSafetyOverrides();
+
+    keys.forEach((key) => {
+      expect(localStorage.getItem(key)).toBeNull();
+    });
+  });
+
   it("saveAllowUserOverrideCircuit stores false as 0 (line 230 FALSE)", () => {
     saveAllowUserOverrideCircuit(false);
     expect(localStorage.getItem(DEVICE_SAFETY_SETTING_KEYS.ALLOW_USER_OVERRIDE_CIRCUIT_KEY)).toBe("0");

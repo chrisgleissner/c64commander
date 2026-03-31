@@ -7,6 +7,8 @@
  */
 
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
+import type { ConfigResolutionOrigin, ConfigValueOverride } from "@/lib/config/playbackConfig";
+import type { ArchivePlaylistReference } from "@/lib/archive/types";
 
 export type SourceKind = "local" | "ultimate" | "hvsc" | "commoserve";
 
@@ -21,6 +23,7 @@ export type TrackRecord = {
   released?: string | null;
   path: string;
   configRef?: ConfigFileReference | null;
+  archiveRef?: ArchivePlaylistReference | null;
   sizeBytes?: number | null;
   modifiedAt?: string | null;
   defaultDurationMs?: number | null;
@@ -33,6 +36,9 @@ export type PlaylistItemRecord = {
   playlistItemId: string;
   playlistId: string;
   trackId: string;
+  configRef?: ConfigFileReference | null;
+  configOrigin?: ConfigResolutionOrigin | null;
+  configOverrides?: ConfigValueOverride[] | null;
   songNr: number;
   sortKey: string;
   durationOverrideMs?: number | null;

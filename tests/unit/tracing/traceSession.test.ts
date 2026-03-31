@@ -49,6 +49,7 @@ import {
   recordFtpOperation,
   recordRestRequest,
   recordRestResponse,
+  recordTelnetOperation,
   recordTraceError,
   replaceTraceEvents,
   resetTraceSession,
@@ -1008,5 +1009,60 @@ describe("traceSession", () => {
     const countBefore = getTraceEvents().length;
     recordActionStart(action);
     expect(getTraceEvents().length).toBe(countBefore);
+  });
+
+  it("records FTP operation latency sample when durationMs is finite", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+    recordFtpOperation(action, {
+      operation: "list",
+      path: "/dir",
+      result: "success",
+      error: null,
+      durationMs: 75,
+    });
+    const events = getTraceEvents();
+    expect(events.some((e) => e.type === "ftp-operation")).toBe(true);
+  });
+
+  it("records telnet operation and latency sample when durationMs is finite", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+    recordTelnetOperation(action, {
+      actionId: "action-mount",
+      actionLabel: "Mount disk",
+      menuPath: ["F5", "Mount"],
+      durationMs: 120,
+      result: "success",
+      error: null,
+    });
+    const events = getTraceEvents();
+    expect(
+      events.some(
+        (e) => e.type === "telnet-operation" && (e.data as Record<string, unknown>).actionId === "action-mount",
+      ),
+    ).toBe(true);
+  });
+
+  it("suppresses user-cancellation error when diagnostics suppression is active", () => {
+    shouldSuppressMock.mockReturnValue(true);
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+    recordTraceError(action, new Error("cancelled"), {
+      failureClass: "user-cancellation",
+      category: "cancelled",
+      isExpected: true,
+      errorType: null,
+    });
+    expect(getTraceEvents().some((e) => e.type === "error")).toBe(false);
   });
 });

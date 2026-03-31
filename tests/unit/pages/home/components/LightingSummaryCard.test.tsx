@@ -51,22 +51,12 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 vi.mock("@/components/ui/slider", () => ({
-  Slider: ({
-    value,
-    onValueChange,
-    onValueChangeAsync,
-    onValueCommit,
-    onValueCommitAsync,
-    disabled,
-    "data-testid": testId,
-  }: any) => (
+  Slider: ({ value, onValueChange, onValueChangeAsync, disabled, "data-testid": testId }: any) => (
     <div data-testid={testId} data-disabled={String(disabled)} data-value={JSON.stringify(value)}>
       <button
         onClick={() => {
           onValueChange?.([5]);
-          onValueCommit?.([5]);
           onValueChangeAsync?.(5);
-          onValueCommitAsync?.(5);
         }}
         data-testid={`${testId}-drag`}
       >
@@ -75,9 +65,7 @@ vi.mock("@/components/ui/slider", () => ({
       <button
         onClick={() => {
           onValueChange?.([]);
-          onValueCommit?.([]);
           onValueChangeAsync?.(undefined);
-          onValueCommitAsync?.(undefined);
         }}
         data-testid={`${testId}-drag-empty`}
       >
@@ -176,16 +164,28 @@ describe("LightingSummaryCard", () => {
   it("calls interactiveWrite when intensity slider is moved", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag"));
-    // onValueChangeAsync and onValueCommitAsync trigger interactiveWrite
-    expect(interactiveWriteSpy).toHaveBeenCalled();
+    expect(interactiveWriteSpy).toHaveBeenCalledTimes(1);
+    expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Strip Intensity": 5 });
     expect(updateConfigValueSpy).not.toHaveBeenCalled();
   });
 
-  it("passes through NaN when slider callbacks report no concrete value", () => {
+  it("ignores empty async slider payloads", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag-empty"));
-    const payload = interactiveWriteSpy.mock.calls.at(-1)?.[0] as Record<string, number>;
-    expect(Number.isNaN(payload["Strip Intensity"])).toBe(true);
+    expect(interactiveWriteSpy).not.toHaveBeenCalled();
+  });
+
+  it("ignores empty async color slider payloads", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag-empty"));
+    expect(interactiveWriteSpy).not.toHaveBeenCalled();
+  });
+
+  it("calls interactiveWrite once when the color slider is moved", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+    expect(interactiveWriteSpy).toHaveBeenCalledTimes(1);
+    expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Fixed Color": expect.any(String) });
   });
 
   it("shows intensity value from resolved config", () => {

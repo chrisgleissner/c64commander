@@ -1236,6 +1236,203 @@ describe("hvscIngestionRuntime", () => {
     // Complete the ingestion
     await ingestionPromise.catch(() => undefined);
   });
+
+  it("installs baseline via native Android ingestion plugin when available", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    nativeHvscPlugin.addListener.mockImplementationOnce(
+      async (_event: string, callback: (event: Record<string, unknown>) => void) => {
+        callback({
+          stage: "archive_extraction",
+          message: "Extracting archive…",
+          currentFile: "test.sid",
+          processedCount: 50,
+          totalCount: 100,
+          percent: 50,
+          songsUpserted: 50,
+          songsDeleted: 0,
+        });
+        return { remove: nativeProgressListenerRemove };
+      },
+    );
+
+    const status = await installOrUpdateHvsc("token-native-baseline");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relativeArchivePath: expect.stringContaining("hvsc-baseline-5"),
+        mode: "baseline",
+        resetLibrary: true,
+      }),
+    );
+    expect(nativeProgressListenerRemove).toHaveBeenCalled();
+    expect(status).toBeDefined();
+  });
+
+  it("ingests cached baseline via native Android ingestion plugin when available", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+
+    const status = await ingestCachedHvsc("token-native-cached");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relativeArchivePath: expect.stringContaining("hvsc-baseline-5"),
+        mode: "baseline",
+        resetLibrary: true,
+      }),
+    );
+    expect(nativeProgressListenerRemove).toHaveBeenCalled();
+    expect(status).toBeDefined();
+  });
+
+  it("falls back to non-native extractor when native ingest throws 7z method unsupported error", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(new Error("7z method chain [AES256+LZMA2] unsupported"));
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.("HVSC/C64Music/Demo/demo.sid", new Uint8Array([1, 2, 3]));
+    });
+
+    await installOrUpdateHvsc("token-native-fallback");
+
+    expect(extractArchiveEntries).toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("falling back"),
+      expect.objectContaining({ archiveName: expect.any(String) }),
+    );
+  });
+
+  it("applies native update ingestion and marks the update as applied", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 6,
+      installedBaselineVersion: 5,
+    } as any);
+
+    const status = await installOrUpdateHvsc("token-native-update");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relativeArchivePath: expect.stringContaining("hvsc-update-6"),
+        mode: "update",
+        resetLibrary: false,
+      }),
+    );
+    expect(status).toBeDefined();
+  });
+
+  it("native ingest with failed songs calls applyIngestionFailureAndThrow and throws", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    nativeHvscPlugin.ingestHvsc.mockResolvedValueOnce({
+      totalEntries: 100,
+      songsIngested: 98,
+      songsDeleted: 0,
+      failedSongs: 2,
+      failedPaths: ["bad1.sid", "bad2.sid"],
+      songlengthFilesWritten: 0,
+      metadataRows: 100,
+      metadataUpserts: 98,
+      metadataDeletes: 0,
+      archiveBytes: 10,
+    });
+
+    await expect(installOrUpdateHvsc("token-native-failed-songs")).rejects.toThrow(/2 of 100/);
+    expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ingestionState: "error",
+        ingestionError: expect.stringMatching(/2 of 100/),
+      }),
+    );
+  });
+
+  it("skips already-applied update plans during installOrUpdateHvsc", async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(isUpdateApplied).mockReturnValue(true);
+
+    const status = await installOrUpdateHvsc("token-skip-applied-update");
+
+    expect(status.installedVersion).toBe(5);
+    expect(nativeHvscPlugin.ingestHvsc).not.toHaveBeenCalled();
+    expect(vi.mocked(extractArchiveEntries)).not.toHaveBeenCalled();
+  });
 });
 
 // P0-E: shared ingestion helper functions have identical state contract at facade boundary

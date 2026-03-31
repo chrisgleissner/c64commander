@@ -3,11 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
-import { applyConfigFileReference } from "@/lib/config/applyConfigFileReference";
+import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
+
+const mockArchiveClient = {
+  downloadBinary: vi.fn(),
+};
+
+const mockBuildArchivePlayPlan = vi.fn();
+
+vi.mock("@/lib/archive/client", () => ({
+  createArchiveClient: vi.fn(() => mockArchiveClient),
+}));
+
+vi.mock("@/lib/archive/execution", () => ({
+  buildArchivePlayPlan: vi.fn((binary) => mockBuildArchivePlayPlan(binary)),
+}));
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
@@ -15,7 +30,11 @@ vi.mock("@/lib/c64api", () => ({
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
   buildPlayPlan: vi.fn((request) => request),
-  executePlayPlan: vi.fn(async () => undefined),
+  executePlayPlan: vi.fn(async (_api, _plan, options) => {
+    if (options?.beforeLaunch) {
+      await options.beforeLaunch();
+    }
+  }),
   tryFetchUltimateSidBlob: vi.fn(async () => null),
 }));
 
@@ -39,6 +58,10 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/config/applyConfigFileReference", () => ({
   applyConfigFileReference: vi.fn(async () => undefined),
+  ensureConfigFileReferenceAccessible: vi.fn(async () => undefined),
+  isConfigReferenceUnavailableError: vi.fn((error: unknown) =>
+    Boolean((error as Error & { c64uConfigUnavailable?: boolean })?.c64uConfigUnavailable),
+  ),
 }));
 
 const createPlaylistItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem => ({
@@ -107,6 +130,8 @@ const renderPlaybackController = (
     enqueuePlayTransition?: ReturnType<typeof vi.fn>;
     resolveSonglengthDurationMsForPath?: ReturnType<typeof vi.fn>;
     snapshotToUpdates?: ReturnType<typeof vi.fn>;
+    archiveConfigs?: Record<string, { id: string; name: string; baseUrl: string; enabled: boolean }>;
+    resolveUnavailableConfigDecision?: ReturnType<typeof vi.fn>;
   },
 ) =>
   renderHook(() =>
@@ -132,9 +157,11 @@ const renderPlaybackController = (
       localSourceTreeUris: new Map(),
       deviceProduct: "C64 Ultimate",
       ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
+      resolveUnavailableConfigDecision: options?.resolveUnavailableConfigDecision,
       resolveSonglengthDurationMsForPath:
         options?.resolveSonglengthDurationMsForPath ?? vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: options?.applySonglengthsToItems ?? vi.fn().mockImplementation(async (items) => items),
+      archiveConfigs: options?.archiveConfigs,
       restoreVolumeOverrides: options?.restoreVolumeOverrides ?? vi.fn().mockResolvedValue(undefined),
       applyAudioMixerUpdates: options?.applyAudioMixerUpdates ?? vi.fn().mockResolvedValue(undefined),
       buildEnabledSidMuteUpdates: options?.buildEnabledSidMuteUpdates ?? vi.fn().mockReturnValue({}),
@@ -176,6 +203,23 @@ const renderPlaybackController = (
 describe("usePlaybackController", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearArchivePlaybackCacheForTests();
+    mockArchiveClient.downloadBinary.mockResolvedValue({
+      fileName: "joyride.sid",
+      bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve/files/joyride.sid",
+    });
+    mockBuildArchivePlayPlan.mockImplementation((binary) => ({
+      category: "sid",
+      source: "local",
+      path: binary.fileName,
+      file: {
+        name: binary.fileName,
+        lastModified: 0,
+        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
+      },
+    }));
   });
 
   it("applies fallback duration for non-song playlist rows before playback starts", () => {
@@ -261,7 +305,7 @@ describe("usePlaybackController", () => {
         songNr: 2,
         durationMs: 12_000,
       }),
-      undefined,
+      expect.objectContaining({}),
     );
   });
 
@@ -307,6 +351,383 @@ describe("usePlaybackController", () => {
     );
   });
 
+  it("downloads CommoServe playlist items lazily when playback starts", async () => {
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-1",
+        category: "sid",
+        label: "Joyride",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: {
+          sourceId: "archive-commoserve",
+          resultId: "100",
+          category: 40,
+          entryId: 1,
+          entryPath: "joyride.sid",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledWith("100", 40, 1, "joyride.sid");
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: "commoserve",
+        path: "joyride.sid",
+        file: expect.objectContaining({ name: "joyride.sid" }),
+      }),
+      expect.objectContaining({}),
+    );
+  });
+
+  it("reuses cached CommoServe runtime files across playback attempts", async () => {
+    const archiveRef = {
+      sourceId: "archive-commoserve",
+      resultId: "100",
+      category: 40,
+      entryId: 1,
+      entryPath: "joyride.sid",
+    };
+    const firstItem = createPlaylistItem({
+      id: "archive-item-1",
+      category: "sid",
+      label: "Joyride",
+      path: "joyride.sid",
+      request: {
+        source: "commoserve",
+        path: "joyride.sid",
+      },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const secondItem = createPlaylistItem({
+      id: "archive-item-2",
+      category: "sid",
+      label: "Joyride Again",
+      path: "joyride.sid",
+      request: {
+        source: "commoserve",
+        path: "joyride.sid",
+      },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const archiveConfigs = {
+      "archive-commoserve": {
+        id: "archive-commoserve",
+        name: "CommoServe",
+        baseUrl: "http://commoserve.files.commodore.net",
+        enabled: true,
+      },
+    };
+    const { result } = renderPlaybackController([firstItem, secondItem], { archiveConfigs });
+
+    await result.current.playItem(firstItem, { playlistIndex: 0 });
+    await result.current.playItem(secondItem, { playlistIndex: 1 });
+
+    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes extensionless archive entry path on item and request when downloading", async () => {
+    mockArchiveClient.downloadBinary.mockResolvedValueOnce({
+      fileName: "joyride",
+      bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve/files/joyride",
+    });
+    mockBuildArchivePlayPlan.mockReturnValueOnce({
+      category: "sid",
+      source: "local",
+      path: "joyride.sid",
+      file: { name: "joyride.sid", lastModified: 0, arrayBuffer: vi.fn(async () => new ArrayBuffer(4)) },
+    });
+    const item = createPlaylistItem({
+      id: "archive-extensionless",
+      category: "sid",
+      label: "Joyride",
+      path: "joyride",
+      request: { source: "commoserve", path: "joyride" },
+      sourceId: "archive-commoserve",
+      archiveRef: {
+        sourceId: "archive-commoserve",
+        resultId: "100",
+        category: 40,
+        entryId: 1,
+        entryPath: "joyride",
+      },
+    });
+    const { result } = renderPlaybackController([item], {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await result.current.playItem(item, { playlistIndex: 0 });
+
+    expect(item.request.path).toBe("joyride.sid");
+    expect(item.path).toBe("joyride.sid");
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ path: "joyride.sid" }),
+      expect.objectContaining({}),
+    );
+  });
+
+  it("normalizes extensionless archive entry path on item and request on cache hit", async () => {
+    mockArchiveClient.downloadBinary.mockResolvedValueOnce({
+      fileName: "joyride",
+      bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve/files/joyride",
+    });
+    mockBuildArchivePlayPlan.mockReturnValueOnce({
+      category: "sid",
+      source: "local",
+      path: "joyride.sid",
+      file: { name: "joyride.sid", lastModified: 0, arrayBuffer: vi.fn(async () => new ArrayBuffer(4)) },
+    });
+    const archiveRef = {
+      sourceId: "archive-commoserve",
+      resultId: "100",
+      category: 40,
+      entryId: 1,
+      entryPath: "joyride",
+    };
+    const archiveConfigs = {
+      "archive-commoserve": {
+        id: "archive-commoserve",
+        name: "CommoServe",
+        baseUrl: "http://commoserve.files.commodore.net",
+        enabled: true,
+      },
+    };
+    const firstItem = createPlaylistItem({
+      id: "archive-ext-1",
+      category: "sid",
+      label: "Joyride",
+      path: "joyride",
+      request: { source: "commoserve", path: "joyride" },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const secondItem = createPlaylistItem({
+      id: "archive-ext-2",
+      category: "sid",
+      label: "Joyride Again",
+      path: "joyride",
+      request: { source: "commoserve", path: "joyride" },
+      sourceId: "archive-commoserve",
+      archiveRef,
+    });
+    const { result } = renderPlaybackController([firstItem, secondItem], { archiveConfigs });
+
+    await result.current.playItem(firstItem, { playlistIndex: 0 });
+    await result.current.playItem(secondItem, { playlistIndex: 1 });
+
+    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
+    expect(secondItem.request.path).toBe("joyride.sid");
+    expect(secondItem.path).toBe("joyride.sid");
+  });
+
+  it("reports an archive playback error when playlist metadata is missing", async () => {
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-missing-ref",
+        category: "sid",
+        label: "Broken Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: null,
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow(
+      "Archive item metadata is missing. Re-add it to the playlist.",
+    );
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        title: "Archive playback unavailable",
+        description: "Archive item metadata is missing. Re-add it to the playlist.",
+      }),
+    );
+  });
+
+  it("reports an archive playback error when the source config is unavailable", async () => {
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-missing-config",
+        category: "sid",
+        label: "Configless Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: {
+          sourceId: "archive-commoserve",
+          resultId: "100",
+          category: 40,
+          entryId: 1,
+          entryPath: "joyride.sid",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow(
+      "Archive source configuration unavailable for archive-commoserve.",
+    );
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        description: "Archive source configuration unavailable for archive-commoserve.",
+      }),
+    );
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
+  });
+
+  it("marks archive resolution failures as handled so playback start shows only one user-facing error", async () => {
+    const visibleReports: Array<{ operation: string; title: string; description: string }> = [];
+    vi.mocked(reportUserError).mockImplementation((report) => {
+      const handled = (report.error as { c64uHandled?: boolean } | undefined)?.c64uHandled;
+      if (handled) {
+        return;
+      }
+      visibleReports.push({
+        operation: report.operation,
+        title: report.title,
+        description: report.description,
+      });
+      if (report.error instanceof Error) {
+        (report.error as Error & { c64uHandled?: boolean }).c64uHandled = true;
+      }
+    });
+
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-missing-ref",
+        category: "sid",
+        label: "Broken Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: null,
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await result.current.handlePlay();
+
+    expect(visibleReports).toEqual([
+      {
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        title: "Archive playback unavailable",
+        description: "Archive item metadata is missing. Re-add it to the playlist.",
+      },
+    ]);
+  });
+
+  it("reports an archive playback error when the resolved archive file is not playable", async () => {
+    mockBuildArchivePlayPlan.mockReturnValueOnce({
+      category: "sid",
+      source: "local",
+      path: "joyride.sid",
+      file: undefined,
+    });
+    const playlist = [
+      createPlaylistItem({
+        id: "archive-item-unplayable",
+        category: "sid",
+        label: "Unreadable Archive Row",
+        path: "joyride.sid",
+        request: {
+          source: "commoserve",
+          path: "joyride.sid",
+        },
+        sourceId: "archive-commoserve",
+        archiveRef: {
+          sourceId: "archive-commoserve",
+          resultId: "100",
+          category: 40,
+          entryId: 1,
+          entryPath: "joyride.sid",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow(
+      "Archive entry joyride.sid did not resolve to a playable file.",
+    );
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_ARCHIVE_RESOLVE",
+        description: "Archive entry joyride.sid did not resolve to a playable file.",
+      }),
+    );
+  });
+
   it("refreshes playback mute state before starting playback and only then executes the play plan", async () => {
     const playlist = [createPlaylistItem()];
     const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
@@ -327,7 +748,7 @@ describe("usePlaybackController", () => {
     );
   });
 
-  it("applies an associated config before executing the play plan", async () => {
+  it("passes playback config through the playback beforeLaunch phase", async () => {
     const playlist = [
       createPlaylistItem({
         configRef: {
@@ -349,15 +770,22 @@ describe("usePlaybackController", () => {
         deviceProduct: "C64 Ultimate",
       }),
     );
-    expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(applyConfigFileReference).mock.invocationCallOrder[0],
+    expect(vi.mocked(ensureConfigFileReferenceAccessible)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configRef: playlist[0].configRef,
+      }),
     );
-    expect(vi.mocked(applyConfigFileReference).mock.invocationCallOrder[0]).toBeLessThan(
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ path: "/PROGRAMS/demo.prg" }),
+      expect.objectContaining({ beforeLaunch: expect.any(Function) }),
+    );
+    expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(executePlayPlan).mock.invocationCallOrder[0],
     );
   });
 
-  it("fails playback start when applying the associated config fails", async () => {
+  it("fails playback start when the beforeLaunch playback config application fails", async () => {
     vi.mocked(applyConfigFileReference).mockRejectedValueOnce(new Error("config apply failed"));
     const playlist = [
       createPlaylistItem({
@@ -371,7 +799,46 @@ describe("usePlaybackController", () => {
     const { result } = renderPlaybackController(playlist);
 
     await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow("config apply failed");
-    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_CONFIG_APPLY",
+        title: "Config application failed",
+        description: "config apply failed",
+      }),
+    );
+  });
+
+  it("allows playback to continue without config when the config file is unavailable and the user declines it for the session", async () => {
+    const unavailableError = Object.assign(new Error("Config file demo.cfg is unavailable."), {
+      c64uConfigUnavailable: true,
+    });
+    vi.mocked(ensureConfigFileReferenceAccessible).mockRejectedValueOnce(unavailableError);
+    const resolveUnavailableConfigDecision = vi.fn().mockResolvedValue("play-without-config");
+    const playlist = [
+      createPlaylistItem({
+        configRef: {
+          kind: "ultimate",
+          fileName: "demo.cfg",
+          path: "/USB1/test-data/snapshots/demo.cfg",
+        },
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist, { resolveUnavailableConfigDecision });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(resolveUnavailableConfigDecision).toHaveBeenCalledWith(
+      playlist[0],
+      expect.objectContaining({
+        configFileName: "demo.cfg",
+      }),
+    );
+    expect(vi.mocked(applyConfigFileReference)).not.toHaveBeenCalled();
+    expect(vi.mocked(reportUserError)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "PLAYBACK_CONFIG_APPLY" }),
+    );
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
   });
 
   it("fails playback start when unmuting before playback start fails", async () => {
@@ -697,6 +1164,119 @@ describe("usePlaybackController", () => {
     expect(setPlayedMs).not.toHaveBeenCalled();
     expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     expect(autoAdvanceGuardRef.current.autoFired).toBe(false);
+  });
+
+  it("ignores auto-advance callbacks once the guard has already auto-fired", async () => {
+    const playlist = [
+      createPlaylistItem(),
+      createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" }),
+    ];
+    const setPlayedMs = vi.fn();
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(2500),
+      },
+    };
+    const autoAdvanceGuardRef = {
+      current: {
+        trackInstanceId: 2,
+        dueAtMs: 10_000,
+        autoFired: true,
+        userCancelled: false,
+      },
+    };
+
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      setPlayedMs,
+      playedClockRef,
+      autoAdvanceGuardRef,
+    });
+
+    await result.current.handleNext("auto", 2);
+
+    expect(playedClockRef.current.pause).not.toHaveBeenCalled();
+    expect(setPlayedMs).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("ignores auto-advance callbacks after the user cancels auto-advance", async () => {
+    const playlist = [
+      createPlaylistItem(),
+      createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" }),
+    ];
+    const setPlayedMs = vi.fn();
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(2500),
+      },
+    };
+    const autoAdvanceGuardRef = {
+      current: {
+        trackInstanceId: 2,
+        dueAtMs: 10_000,
+        autoFired: false,
+        userCancelled: true,
+      },
+    };
+
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      setPlayedMs,
+      playedClockRef,
+      autoAdvanceGuardRef,
+    });
+
+    await result.current.handleNext("auto", 2);
+
+    expect(playedClockRef.current.pause).not.toHaveBeenCalled();
+    expect(setPlayedMs).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("ignores auto-advance callbacks when no guard is active", async () => {
+    const playlist = [
+      createPlaylistItem(),
+      createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" }),
+    ];
+    const setPlayedMs = vi.fn();
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(2500),
+      },
+    };
+    const autoAdvanceGuardRef = { current: null };
+
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      setPlayedMs,
+      playedClockRef,
+      autoAdvanceGuardRef,
+    });
+
+    await result.current.handleNext("auto", 2);
+
+    expect(playedClockRef.current.pause).not.toHaveBeenCalled();
+    expect(setPlayedMs).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 
   it("reports previous-track failures and clears playback state", async () => {

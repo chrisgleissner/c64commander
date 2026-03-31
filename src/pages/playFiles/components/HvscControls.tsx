@@ -68,6 +68,7 @@ export const HvscControls = ({
   onCancel,
   onReset,
 }: HvscControlsProps) => {
+  const hvscLibraryReady = hvscInstalled || hvscIngestionTotalSongs > 0;
   const phaseLabel = (() => {
     switch (hvscPhase) {
       case "download":
@@ -97,7 +98,7 @@ export const HvscControls = ({
           <p className="text-xs text-muted-foreground">
             {hvscInstalled
               ? `Installed version ${hvscInstalledVersion ?? "—"}`
-              : "Download HVSC to browse the SID collection."}
+              : "Download HVSC to cache the archive set, then ingest it to browse songs."}
           </p>
           <p className="text-[11px] text-muted-foreground">Status: {phaseLabel}</p>
         </div>
@@ -145,14 +146,20 @@ export const HvscControls = ({
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs" data-testid="hvsc-summary">
           {hvscSummaryState === "success" ? (
             <div className="space-y-1">
-              <p className="text-sm font-medium">HVSC downloaded successfully</p>
-              <p>
-                Ingested {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.
-              </p>
-              {hvscSonglengthSyntaxErrors > 0 && (
-                <p className="text-amber-700 dark:text-amber-400">
-                  {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
-                </p>
+              <p className="text-sm font-medium">HVSC ready</p>
+              {hvscLibraryReady ? (
+                <>
+                  <p>
+                    Indexed {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.
+                  </p>
+                  {hvscSonglengthSyntaxErrors > 0 && (
+                    <p className="text-amber-700 dark:text-amber-400">
+                      {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p>HVSC archives are cached. Run Ingest HVSC to build the browseable library.</p>
               )}
               <p>Files extracted: {hvscSummaryFilesExtracted ?? "—"}</p>
               <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
@@ -160,7 +167,7 @@ export const HvscControls = ({
             </div>
           ) : (
             <div className="space-y-1">
-              <p className="text-sm font-medium">HVSC download failed</p>
+              <p className="text-sm font-medium">HVSC update failed</p>
               <p>{hvscSummaryFailureLabel}</p>
               {hvscIngestionFailedSongs > 0 && (
                 <p>{hvscIngestionFailedSongs} songs could not be imported. Check diagnostics logs for details.</p>
@@ -178,7 +185,7 @@ export const HvscControls = ({
         </p>
       )}
       {hvscAvailable && !hvscInstalled && !hvscUpdating && !hvscCanIngest && (
-        <p className="text-xs text-muted-foreground">Download HVSC to cache the archives before ingesting.</p>
+        <p className="text-xs text-muted-foreground">Download HVSC to cache the archive set before ingesting it.</p>
       )}
 
       {(hvscPhase === "download" || hvscPhase === "extract" || hvscPhase === "index") && (

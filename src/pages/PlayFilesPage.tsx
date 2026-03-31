@@ -10,7 +10,18 @@ import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
 import {
   AddItemsProgressOverlay,
   type AddItemsProgressState,
@@ -88,6 +99,9 @@ import {
   buildLocalConfigReferenceFromAndroidPicker,
   buildLocalConfigReferenceFromWebFile,
 } from "@/lib/config/configFileReferenceSelection";
+import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
+import { resolvePlaybackConfig } from "@/lib/config/configResolution";
+import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { syncPlaybackDecisionFromTrace } from "@/lib/diagnostics/decisionState";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
@@ -121,6 +135,20 @@ export default function PlayFilesPage() {
   type ConfigPickerState =
     | { itemId: string; sourceType: "ultimate" }
     | { itemId: string; sourceType: "local"; sourceId: string };
+
+  type PendingConfigChangeState = {
+    itemId: string;
+    configRef: PlaylistItem["configRef"];
+    origin?: PlaylistItem["configOrigin"];
+    candidates?: PlaylistItem["configCandidates"];
+  };
+
+  type UnavailableConfigPromptState = {
+    item: PlaylistItem;
+    configFileName: string | null;
+    reason: string;
+    resolve: (choice: "play-without-config" | "cancel") => void;
+  };
 
   const navigate = useNavigate();
   const { status } = useC64Connection();
@@ -245,6 +273,9 @@ export default function PlayFilesPage() {
   const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
   const backgroundExecutionActiveRef = useRef(false);
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
+  const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);
+  const [pendingConfigChange, setPendingConfigChange] = useState<PendingConfigChangeState | null>(null);
+  const [unavailableConfigPrompt, setUnavailableConfigPrompt] = useState<UnavailableConfigPromptState | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -273,6 +304,27 @@ export default function PlayFilesPage() {
       throw new Error("Device not connected. Check connection settings.");
     }
   }, [status.isConnected]);
+
+  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
+    const configs: Record<string, ArchiveClientConfigInput> = {};
+    if (commoserveEnabled) {
+      configs[archiveConfig.id] = archiveConfig;
+    }
+    return configs;
+  }, [archiveConfig, commoserveEnabled]);
+
+  const resolveUnavailableConfigDecision = useCallback(
+    (item: PlaylistItem, context: { configFileName: string | null; reason: string }) =>
+      new Promise<"play-without-config" | "cancel">((resolve) => {
+        setUnavailableConfigPrompt({
+          item,
+          configFileName: context.configFileName,
+          reason: context.reason,
+          resolve,
+        });
+      }),
+    [],
+  );
 
   const {
     playItem,
@@ -308,6 +360,7 @@ export default function PlayFilesPage() {
     ensurePlaybackConnection,
     resolveSonglengthDurationMsForPath,
     applySonglengthsToItems,
+    archiveConfigs,
     restoreVolumeOverrides,
     applyAudioMixerUpdates,
     buildEnabledSidMuteUpdates,
@@ -330,6 +383,7 @@ export default function PlayFilesPage() {
     setAutoAdvanceDueAtMs,
     resumingFromPauseRef,
     ensureUnmuted,
+    resolveUnavailableConfigDecision,
   });
 
   useEffect(() => {
@@ -471,14 +525,6 @@ export default function PlayFilesPage() {
     return groups;
   }, [archiveConfig, commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
 
-  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
-    const configs: Record<string, ArchiveClientConfigInput> = {};
-    if (commoserveEnabled) {
-      configs[archiveConfig.id] = archiveConfig;
-    }
-    return configs;
-  }, [archiveConfig, commoserveEnabled]);
-
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {
       if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
@@ -487,9 +533,83 @@ export default function PlayFilesPage() {
     [addSourceFromFiles],
   );
 
-  const updatePlaylistItemConfigRef = useCallback((itemId: string, configRef: PlaylistItem["configRef"]) => {
-    setPlaylist((prev) => prev.map((item) => (item.id === itemId ? { ...item, configRef } : item)));
+  const updatePlaylistItemConfigRef = useCallback(
+    (
+      itemId: string,
+      configRef: PlaylistItem["configRef"],
+      options?: {
+        origin?: PlaylistItem["configOrigin"];
+        overrides?: PlaylistItem["configOverrides"];
+        candidates?: PlaylistItem["configCandidates"];
+      },
+    ) => {
+      setPlaylist((prev) =>
+        prev.map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                configRef,
+                configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
+                configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
+                configCandidates: options?.candidates ?? item.configCandidates ?? null,
+              }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
+
+  const updatePlaylistItemOverrides = useCallback((item: PlaylistItem, overrides: PlaylistItem["configOverrides"]) => {
+    setPlaylist((prev) =>
+      prev.map((entry) =>
+        entry.id === item.id
+          ? {
+              ...entry,
+              configOverrides: overrides,
+              configOrigin: overrides?.length
+                ? "manual"
+                : entry.configRef
+                  ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
+                  : entry.configOrigin === "manual-none"
+                    ? "manual-none"
+                    : "none",
+            }
+          : entry,
+      ),
+    );
   }, []);
+
+  const requestPlaylistItemConfigRefUpdate = useCallback(
+    (
+      itemId: string,
+      configRef: PlaylistItem["configRef"],
+      options?: {
+        origin?: PlaylistItem["configOrigin"];
+        candidates?: PlaylistItem["configCandidates"];
+      },
+    ) => {
+      const currentItem = playlist.find((item) => item.id === itemId);
+      if (!currentItem) return;
+      const baseConfigChanged = !areConfigReferencesEqual(currentItem.configRef ?? null, configRef ?? null);
+      const hasOverrides = Boolean(currentItem.configOverrides?.length);
+      if (configRef && baseConfigChanged && hasOverrides) {
+        setPendingConfigChange({
+          itemId,
+          configRef,
+          origin: options?.origin,
+          candidates: options?.candidates,
+        });
+        return;
+      }
+      updatePlaylistItemConfigRef(itemId, configRef, {
+        origin: options?.origin,
+        candidates: options?.candidates,
+        overrides: baseConfigChanged ? null : (currentItem.configOverrides ?? null),
+      });
+    },
+    [playlist, updatePlaylistItemConfigRef],
+  );
 
   const resolveConfigBrowserSourceId = useCallback(
     (item: PlaylistItem) => {
@@ -527,7 +647,9 @@ export default function PlayFilesPage() {
             extensions: ["cfg"],
             mimeTypes: ["text/plain", "application/octet-stream"],
           });
-          updatePlaylistItemConfigRef(item.id, buildLocalConfigReferenceFromAndroidPicker(result));
+          requestPlaylistItemConfigRefUpdate(item.id, buildLocalConfigReferenceFromAndroidPicker(result), {
+            origin: "manual",
+          });
         } catch (error) {
           reportUserError({
             operation: "PLAYLIST_CONFIG_PICK",
@@ -542,14 +664,89 @@ export default function PlayFilesPage() {
       pendingLocalConfigItemIdRef.current = item.id;
       localConfigInputRef.current?.click();
     },
-    [isAndroid, resolveConfigBrowserSourceId, updatePlaylistItemConfigRef],
+    [isAndroid, requestPlaylistItemConfigRefUpdate, resolveConfigBrowserSourceId],
   );
 
   const handleRemoveConfig = useCallback(
     (item: PlaylistItem) => {
-      updatePlaylistItemConfigRef(item.id, null);
+      updatePlaylistItemConfigRef(item.id, null, {
+        origin: "manual-none",
+        overrides: null,
+        candidates: item.configCandidates ?? null,
+      });
     },
     [updatePlaylistItemConfigRef],
+  );
+
+  const activeConfigItem = useMemo(
+    () => (activeConfigItemId ? (playlist.find((item) => item.id === activeConfigItemId) ?? null) : null),
+    [activeConfigItemId, playlist],
+  );
+
+  const resolveDiscoverySource = useCallback(
+    (item: PlaylistItem): SourceLocation | null => {
+      if (item.request.source === "ultimate") {
+        return createUltimateSourceLocation();
+      }
+      if (item.request.source === "local" && item.sourceId) {
+        const source = localSources.find((entry) => entry.id === item.sourceId);
+        return source ? createLocalSourceLocation(source) : null;
+      }
+      return null;
+    },
+    [localSources],
+  );
+
+  const handleChooseConfigCandidate = useCallback(
+    (item: PlaylistItem, candidate: ConfigCandidate) => {
+      requestPlaylistItemConfigRefUpdate(item.id, candidate.ref, {
+        origin: "manual",
+        candidates: item.configCandidates ?? null,
+      });
+    },
+    [requestPlaylistItemConfigRefUpdate],
+  );
+
+  const handleRediscoverConfig = useCallback(
+    async (item: PlaylistItem) => {
+      const source = resolveDiscoverySource(item);
+      if (!source || (source.type !== "local" && source.type !== "ultimate")) {
+        toast({ title: "Playback config re-discovery unavailable" });
+        return;
+      }
+
+      try {
+        const candidates = await discoverConfigCandidates({
+          sourceType: source.type,
+          sourceId: source.type === "local" ? source.id : null,
+          sourceRootPath: source.rootPath,
+          targetFile: { name: item.label, path: item.path },
+          listEntries: source.listEntries,
+          localEntriesBySourceId,
+        });
+        const resolved = resolvePlaybackConfig({ candidates });
+        requestPlaylistItemConfigRefUpdate(item.id, resolved.configRef, {
+          origin: resolved.configOrigin,
+          candidates: resolved.configCandidates,
+        });
+        toast({
+          title: resolved.configRef ? `Resolved ${resolved.configRef.fileName}` : "Playback config candidates updated",
+        });
+      } catch (error) {
+        reportUserError({
+          operation: "PLAYLIST_CONFIG_REDISCOVER",
+          title: "Config discovery failed",
+          description: (error as Error).message,
+          error,
+          context: {
+            item: item.label,
+            source: item.request.source,
+            path: item.path,
+          },
+        });
+      }
+    },
+    [localEntriesBySourceId, requestPlaylistItemConfigRefUpdate, resolveDiscoverySource],
   );
 
   const configPickerTarget = useMemo(
@@ -582,9 +779,10 @@ export default function PlayFilesPage() {
       }
 
       try {
-        updatePlaylistItemConfigRef(
+        requestPlaylistItemConfigRefUpdate(
           configPickerState.itemId,
           buildConfigReferenceFromBrowserSelection(source, selections[0]),
+          { origin: "manual" },
         );
         return true;
       } catch (error) {
@@ -597,7 +795,7 @@ export default function PlayFilesPage() {
         return false;
       }
     },
-    [configPickerState, updatePlaylistItemConfigRef],
+    [configPickerState, requestPlaylistItemConfigRefUpdate],
   );
 
   const handleLocalConfigInput = useCallback(
@@ -607,7 +805,9 @@ export default function PlayFilesPage() {
       if (!itemId || !files?.length) return;
 
       try {
-        updatePlaylistItemConfigRef(itemId, buildLocalConfigReferenceFromWebFile(files[0]));
+        requestPlaylistItemConfigRefUpdate(itemId, buildLocalConfigReferenceFromWebFile(files[0]), {
+          origin: "manual",
+        });
       } catch (error) {
         reportUserError({
           operation: "PLAYLIST_CONFIG_PICK",
@@ -617,7 +817,7 @@ export default function PlayFilesPage() {
         });
       }
     },
-    [updatePlaylistItemConfigRef],
+    [requestPlaylistItemConfigRefUpdate],
   );
 
   const buildPlaylistItem = useCallback(
@@ -641,6 +841,11 @@ export default function PlayFilesPage() {
         label: entry.name,
         path: entry.path,
         configRef: entry.configRef ?? null,
+        configOrigin: entry.configOrigin ?? resolveStoredConfigOrigin(entry.configRef ?? null, null),
+        configOverrides: entry.configOverrides ?? null,
+        configCandidates: entry.configCandidates ?? null,
+        configPreview: entry.configPreview ?? null,
+        archiveRef: entry.archiveRef ?? null,
         durationMs: entry.durationMs,
         subsongCount: entry.subsongCount,
         sourceId: resolvedSourceId,
@@ -1047,6 +1252,9 @@ export default function PlayFilesPage() {
         playlistItemId: item.id,
         playlistId,
         trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+        configRef: item.configRef ?? null,
+        configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
+        configOverrides: item.configOverrides ?? null,
         songNr: item.request.songNr ?? 1,
         sortKey: String(index).padStart(8, "0"),
         durationOverrideMs: item.durationMs ?? null,
@@ -1123,6 +1331,7 @@ export default function PlayFilesPage() {
     handlePlaylistSelect,
     onAttachLocalConfig: (item) => void handleAttachLocalConfig(item),
     onAttachUltimateConfig: handleAttachUltimateConfig,
+    onOpenConfig: (item) => setActiveConfigItemId(item.id),
     onRemoveConfig: handleRemoveConfig,
     startPlaylist,
     playlistItemDuration,
@@ -1393,6 +1602,106 @@ export default function PlayFilesPage() {
             filterEntry={(entry) => entry.type === "file" && entry.name.toLowerCase().endsWith(".cfg")}
             allowFolderSelection={false}
           />
+
+          <PlaybackConfigSheet
+            item={activeConfigItem}
+            open={Boolean(activeConfigItem)}
+            canRediscover={Boolean(
+              activeConfigItem &&
+              resolveDiscoverySource(activeConfigItem) &&
+              (activeConfigItem.request.source === "local" || activeConfigItem.request.source === "ultimate"),
+            )}
+            onOpenChange={(open) => {
+              if (!open) {
+                setActiveConfigItemId(null);
+              }
+            }}
+            onAttachLocalConfig={(item) => void handleAttachLocalConfig(item)}
+            onAttachUltimateConfig={handleAttachUltimateConfig}
+            onChooseCandidate={handleChooseConfigCandidate}
+            onRemoveConfig={handleRemoveConfig}
+            onRediscover={(item) => void handleRediscoverConfig(item)}
+            onUpdateOverrides={updatePlaylistItemOverrides}
+          />
+
+          <AlertDialog
+            open={Boolean(pendingConfigChange)}
+            onOpenChange={(open) => {
+              if (!open && pendingConfigChange) {
+                setPendingConfigChange(null);
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear custom edits?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Changing the config file will clear this item&apos;s custom value edits. Continue only if you want to
+                  replace the current base config.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (!pendingConfigChange) return;
+                    updatePlaylistItemConfigRef(pendingConfigChange.itemId, pendingConfigChange.configRef, {
+                      origin: pendingConfigChange.origin,
+                      candidates: pendingConfigChange.candidates,
+                      overrides: null,
+                    });
+                    setPendingConfigChange(null);
+                  }}
+                >
+                  Continue
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog
+            open={Boolean(unavailableConfigPrompt)}
+            onOpenChange={(open) => {
+              if (!open && unavailableConfigPrompt) {
+                unavailableConfigPrompt.resolve("cancel");
+                setUnavailableConfigPrompt(null);
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Config unavailable</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {unavailableConfigPrompt
+                    ? `${unavailableConfigPrompt.configFileName ?? "The selected config"} is unavailable for ${unavailableConfigPrompt.item.label}. Play without config, or cancel?`
+                    : "The selected config is unavailable."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {unavailableConfigPrompt ? (
+                <div className="text-sm text-muted-foreground">{unavailableConfigPrompt.reason}</div>
+              ) : null}
+              <AlertDialogFooter>
+                <AlertDialogCancel
+                  onClick={() => {
+                    if (!unavailableConfigPrompt) return;
+                    unavailableConfigPrompt.resolve("cancel");
+                    setUnavailableConfigPrompt(null);
+                  }}
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (!unavailableConfigPrompt) return;
+                    unavailableConfigPrompt.resolve("play-without-config");
+                    setUnavailableConfigPrompt(null);
+                  }}
+                >
+                  Play without config
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {!browserOpen ? (
             <AddItemsProgressOverlay

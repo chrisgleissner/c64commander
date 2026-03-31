@@ -84,4 +84,12 @@ describe("sliderPopupStateMachine", () => {
     const delay = resolveSliderPopupCloseDelayMs(100, 120, 200, 300, 500);
     expect(delay).toBe(420);
   });
+
+  it("stays in VisibleIdle when interaction-end fires while already idle", () => {
+    expect(reduceSliderPopupState("VisibleIdle", "interaction-end")).toBe("VisibleIdle");
+  });
+
+  it("stays in VisibleActive when an unrecognized event fires in VisibleActive", () => {
+    expect(reduceSliderPopupState("VisibleActive", "unknown-event" as never)).toBe("VisibleActive");
+  });
 });

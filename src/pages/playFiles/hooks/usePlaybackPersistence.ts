@@ -24,6 +24,7 @@ import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { addErrorLog } from "@/lib/logging";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
+import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 
 interface UsePlaybackPersistenceProps {
   playlist: PlaylistItem[];
@@ -128,6 +129,9 @@ export function usePlaybackPersistence({
           name: entry.name,
           path: entry.path,
           configRef: entry.configRef ?? null,
+          configOrigin: resolveStoredConfigOrigin(entry.configRef ?? null, entry.configOrigin ?? null),
+          configOverrides: entry.configOverrides ?? null,
+          archiveRef: entry.archiveRef ?? null,
           durationMs: entry.durationMs,
           songNr: entry.songNr,
           subsongCount: entry.subsongCount,
@@ -190,7 +194,7 @@ export function usePlaybackPersistence({
       author: null,
       released: null,
       path: normalizeSourcePath(item.path),
-      configRef: item.configRef ?? null,
+      archiveRef: item.archiveRef ?? null,
       sizeBytes: item.sizeBytes ?? null,
       modifiedAt: item.modifiedAt ?? null,
       defaultDurationMs: item.durationMs ?? null,
@@ -202,6 +206,9 @@ export function usePlaybackPersistence({
       playlistItemId: item.id,
       playlistId,
       trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+      configRef: item.configRef ?? null,
+      configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
+      configOverrides: item.configOverrides ?? null,
       songNr: item.request.songNr ?? 1,
       sortKey: String(index).padStart(8, "0"),
       durationOverrideMs: item.durationMs ?? null,
@@ -237,7 +244,13 @@ export function usePlaybackPersistence({
             source: track.sourceKind,
             path: track.path,
             name: track.title,
-            configRef: track.configRef ?? null,
+            configRef: playlistItem.configRef ?? track.configRef ?? null,
+            configOrigin: resolveStoredConfigOrigin(
+              playlistItem.configRef ?? track.configRef ?? null,
+              playlistItem.configOrigin ?? null,
+            ),
+            configOverrides: playlistItem.configOverrides ?? null,
+            archiveRef: track.archiveRef ?? null,
             durationMs: track.defaultDurationMs ?? undefined,
             songNr: playlistItem.songNr,
             subsongCount: track.subsongCount ?? undefined,
@@ -430,6 +443,9 @@ export function usePlaybackPersistence({
         path: item.path,
         name: item.label,
         configRef: item.configRef ?? null,
+        configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
+        configOverrides: item.configOverrides ?? null,
+        archiveRef: item.archiveRef ?? null,
         durationMs: item.durationMs,
         songNr: item.request.songNr,
         subsongCount: item.subsongCount,

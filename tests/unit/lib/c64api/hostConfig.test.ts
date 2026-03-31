@@ -130,4 +130,12 @@ describe("hostConfig", () => {
       expect.objectContaining({ storedHost: "stored-box.local" }),
     );
   });
+
+  it("returns port from URL when an explicit port is present", () => {
+    expect(getDeviceHostHttpPort(undefined, "http://c64u:9090")).toBe(9090);
+  });
+
+  it("returns 443 for HTTPS URLs without an explicit port", () => {
+    expect(getDeviceHostHttpPort(undefined, "https://c64u")).toBe(443);
+  });
 });

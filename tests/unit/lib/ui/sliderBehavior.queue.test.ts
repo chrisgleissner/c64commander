@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { createSliderAsyncQueue, resolveMidpointSnap, shouldTriggerMidpointHaptic } from "@/lib/ui/sliderBehavior";
+import {
+  createSliderAsyncQueue,
+  resolveMidpointPercent,
+  resolveMidpointSnap,
+  shouldTriggerMidpointHaptic,
+} from "@/lib/ui/sliderBehavior";
 
 describe("createSliderAsyncQueue", () => {
   it("coalesces changes and emits the latest value", async () => {
@@ -51,6 +56,51 @@ describe("createSliderAsyncQueue", () => {
 
     vi.useRealTimers();
   });
+
+  it("skips an unchanged commit when it falls back to the preview handler", async () => {
+    vi.useFakeTimers();
+    const changes: number[] = [];
+    const queue = createSliderAsyncQueue({
+      onChange: (value) => changes.push(value),
+      throttleMs: 50,
+    });
+
+    queue.schedule(5);
+    vi.advanceTimersByTime(50);
+    await Promise.resolve();
+
+    queue.commit(5);
+    await Promise.resolve();
+
+    expect(changes).toEqual([5]);
+
+    vi.useRealTimers();
+  });
+
+  it("cancels a pending preview before it flushes", async () => {
+    vi.useFakeTimers();
+    const changes: number[] = [];
+    const queue = createSliderAsyncQueue({
+      onChange: (value) => changes.push(value),
+      throttleMs: 50,
+    });
+
+    queue.schedule(9);
+    queue.cancel();
+    vi.advanceTimersByTime(50);
+    await Promise.resolve();
+
+    expect(changes).toEqual([]);
+
+    vi.useRealTimers();
+  });
+
+  it("ignores commits when neither preview nor commit handlers exist", async () => {
+    const queue = createSliderAsyncQueue({});
+
+    expect(() => queue.commit(3)).not.toThrow();
+    await Promise.resolve();
+  });
 });
 
 describe("resolveMidpointSnap", () => {
@@ -83,6 +133,35 @@ describe("resolveMidpointSnap", () => {
       }),
     ).toBe(60);
   });
+
+  it("returns the original value when the range or snap window is invalid", () => {
+    expect(
+      resolveMidpointSnap({
+        value: 12,
+        min: 5,
+        max: 5,
+        midpoint: 5,
+      }),
+    ).toBe(12);
+
+    expect(
+      resolveMidpointSnap({
+        value: 7,
+        min: 0,
+        max: 10,
+        midpoint: 5,
+        snapRange: 0,
+      }),
+    ).toBe(7);
+  });
+});
+
+describe("resolveMidpointPercent", () => {
+  it("clamps invalid ranges to zero and normalizes valid ranges", () => {
+    expect(resolveMidpointPercent(5, 10, 10)).toBe(0);
+    expect(resolveMidpointPercent(5, 0, 10)).toBe(50);
+    expect(resolveMidpointPercent(15, 0, 10)).toBe(100);
+  });
 });
 
 describe("shouldTriggerMidpointHaptic", () => {
@@ -91,6 +170,29 @@ describe("shouldTriggerMidpointHaptic", () => {
     expect(shouldTriggerMidpointHaptic({ ...base, previous: 2, next: 5 })).toBe(true);
     expect(shouldTriggerMidpointHaptic({ ...base, previous: 6, next: 5 })).toBe(true);
     expect(shouldTriggerMidpointHaptic({ ...base, previous: 1, next: 2 })).toBe(false);
+  });
+
+  it("respects the trigger interval and first-value midpoint snaps", () => {
+    expect(
+      shouldTriggerMidpointHaptic({
+        previous: null,
+        next: 5,
+        midpoint: 5,
+        nowMs: 1000,
+        lastTriggerMs: null,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldTriggerMidpointHaptic({
+        previous: 4,
+        next: 5,
+        midpoint: 5,
+        nowMs: 1000,
+        lastTriggerMs: 900,
+        minIntervalMs: 200,
+      }),
+    ).toBe(false);
   });
 });
 

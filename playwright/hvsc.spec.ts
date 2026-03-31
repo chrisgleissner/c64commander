@@ -743,7 +743,7 @@ test.describe("HVSC Play page", () => {
     await snap(page, testInfo, "hvsc-runtime-open");
 
     await page.getByRole("button", { name: "Download HVSC" }).click();
-    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC downloaded successfully");
+    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     await expectActionTraceSequence(page, testInfo, "HvscLibrary.handleHvscInstall");
 
     const markerExists = await page.evaluate(
@@ -766,7 +766,7 @@ test.describe("HVSC Play page", () => {
     expect(markerExists).toBe(true);
 
     await page.getByRole("button", { name: "Ingest HVSC" }).click();
-    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC downloaded successfully");
+    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     await expectActionTraceSequence(page, testInfo, "HvscLibrary.handleHvscIngest");
 
     await addHvscDemoTrackToPlaylist(page);
@@ -861,7 +861,7 @@ test.describe("HVSC Play page", () => {
     await snap(page, testInfo, "play-connected");
 
     await page.getByRole("button", { name: "Download HVSC" }).click();
-    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC downloaded successfully");
+    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     await snap(page, testInfo, "hvsc-download-attempted");
   });
 
@@ -873,7 +873,7 @@ test.describe("HVSC Play page", () => {
     });
     await page.goto("/play");
     await page.getByRole("button", { name: "Download HVSC" }).click();
-    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC downloaded successfully");
+    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     await snap(page, testInfo, "hvsc-download-progress");
   });
 

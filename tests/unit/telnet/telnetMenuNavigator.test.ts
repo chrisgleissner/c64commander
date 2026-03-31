@@ -338,4 +338,250 @@ describe("createMenuNavigator", () => {
       expect((fakeSession.readScreen as ReturnType<typeof vi.fn>).mock.calls.length).toBe(4);
     });
   });
+
+  describe("cursor desync during navigation", () => {
+    const makeMenuScreen = (
+      items: Array<{ label: string; selected: boolean }>,
+      selectedIndex: number,
+      subItems?: Array<{ label: string; selected: boolean }>,
+    ): TelnetScreen => ({
+      width: 60,
+      height: 24,
+      cells: [],
+      menus: [
+        {
+          level: 0,
+          items: items.map((i) => ({ ...i, enabled: true })),
+          selectedIndex,
+          bounds: { x: 0, y: 0, width: 20, height: 10 },
+        },
+        ...(subItems
+          ? [
+              {
+                level: 1,
+                items: subItems.map((i) => ({ ...i, enabled: true })),
+                selectedIndex: 0,
+                bounds: { x: 20, y: 0, width: 20, height: 5 },
+              },
+            ]
+          : []),
+      ],
+      form: null,
+      selectedItem: items.find((i) => i.selected)?.label ?? null,
+      titleLine: "",
+      screenType: "action_menu",
+    });
+
+    const makeEmptyScreen = (): TelnetScreen => ({
+      width: 60,
+      height: 24,
+      cells: [],
+      menus: [],
+      form: null,
+      selectedItem: null,
+      titleLine: "",
+      screenType: "file_browser",
+    });
+
+    const topItems = [
+      { label: "Power & Reset", selected: true },
+      { label: "Software IEC", selected: false },
+    ];
+    const subItems = [{ label: "Reset C64", selected: true }];
+
+    it("retries DOWN and succeeds when cursor didn't advance on first key", async () => {
+      // Navigate to "Software IEC" (index 1) — first DOWN doesn't move cursor, retry does
+      const menuAt0 = makeMenuScreen(topItems, 0);
+      const menuAt0AfterBadDown = makeMenuScreen(topItems, 0); // cursor stuck
+      const menuAt1 = makeMenuScreen(
+        [
+          { label: "Power & Reset", selected: false },
+          { label: "Software IEC", selected: true },
+        ],
+        1,
+        subItems,
+      );
+      const menuAt1WithSub = makeMenuScreen(
+        [
+          { label: "Power & Reset", selected: false },
+          { label: "Software IEC", selected: true },
+        ],
+        1,
+        subItems,
+      );
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount === 1) return Promise.resolve(menuAt0); // F5 → menu visible
+          if (readCount === 2) return Promise.resolve(menuAt0AfterBadDown); // DOWN → stuck at 0
+          if (readCount === 3) return Promise.resolve(menuAt1); // retry DOWN → moves to 1
+          if (readCount === 4) return Promise.resolve(menuAt1WithSub); // RIGHT → submenu
+          return Promise.resolve(makeEmptyScreen()); // ENTER → done
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await nav.navigate(["Software IEC", "Reset C64"], "F5");
+      // Verify retry happened: DOWN called at least twice
+      const downCalls = (fakeSession.sendKey as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (c: string[]) => c[0] === "DOWN",
+      );
+      expect(downCalls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("throws DESYNC when cursor remains stuck after retry", async () => {
+      const menuAt0 = makeMenuScreen(topItems, 0);
+
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          // Always returns cursor at index 0 — never advances
+          return Promise.resolve(menuAt0);
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await expect(nav.navigate(["Software IEC", "Reset C64"], "F5")).rejects.toThrow(TelnetError);
+    });
+
+    it("throws DESYNC when menu disappears during DOWN navigation", async () => {
+      const menuAt0 = makeMenuScreen(topItems, 0);
+      const emptyScreen = makeEmptyScreen();
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount === 1) return Promise.resolve(menuAt0); // F5 → menu
+          return Promise.resolve(emptyScreen); // all subsequent reads → no menu at all
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await expect(nav.navigate(["Software IEC", "Reset C64"], "F5")).rejects.toThrow(TelnetError);
+    });
+
+    it("throws DESYNC when final selected item label does not match target after navigation", async () => {
+      // Navigate to "Software IEC" — after moving down, selectedItem is a different label
+      const menuAt0 = makeMenuScreen(topItems, 0);
+      const menuWithWrongLabel = makeMenuScreen(
+        [
+          { label: "Power & Reset", selected: false },
+          { label: "Unexpected Label", selected: true }, // wrong label at index 1
+        ],
+        1,
+      );
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount === 1) return Promise.resolve(menuAt0);
+          return Promise.resolve(menuWithWrongLabel);
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await expect(nav.navigate(["Software IEC", "Reset C64"], "F5")).rejects.toThrow(TelnetError);
+    });
+  });
+
+  describe("timeout and submenu edge cases", () => {
+    const makeMenuScreen = (
+      items: Array<{ label: string; selected: boolean }>,
+      selectedIndex: number,
+      subItems?: Array<{ label: string; selected: boolean }>,
+    ): TelnetScreen => ({
+      width: 60,
+      height: 24,
+      cells: [],
+      menus: [
+        {
+          level: 0,
+          items: items.map((i) => ({ ...i, enabled: true })),
+          selectedIndex,
+          bounds: { x: 0, y: 0, width: 20, height: 10 },
+        },
+        ...(subItems
+          ? [
+              {
+                level: 1,
+                items: subItems.map((i) => ({ ...i, enabled: true })),
+                selectedIndex: 0,
+                bounds: { x: 20, y: 0, width: 20, height: 5 },
+              },
+            ]
+          : []),
+      ],
+      form: null,
+      selectedItem: items.find((i) => i.selected)?.label ?? null,
+      titleLine: "",
+      screenType: "action_menu",
+    });
+
+    it("throws TIMEOUT when checkTimeout fires before navigation completes", async () => {
+      const menuWithItem = makeMenuScreen([{ label: "Power & Reset", selected: true }], 0);
+
+      const dateSpy = vi.spyOn(Date, "now");
+      let callCount = 0;
+      dateSpy.mockImplementation(() => {
+        callCount++;
+        // First call records startTime; second call makes timeout fire
+        return callCount === 1 ? 0 : 100_000;
+      });
+
+      try {
+        const fakeSession: TelnetSessionApi = {
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+          isConnected: vi.fn(() => true),
+          sendKey: vi.fn(),
+          sendRaw: vi.fn(),
+          readScreen: vi.fn(() => Promise.resolve(menuWithItem)),
+        };
+        const nav = createMenuNavigator(fakeSession);
+        await expect(nav.navigate(["Power & Reset", "Reset C64"], "F5")).rejects.toThrow("timed out");
+      } finally {
+        dateSpy.mockRestore();
+      }
+    });
+
+    it("throws MENU_NOT_FOUND when submenu not visible after entering category", async () => {
+      const topItems = [{ label: "Power & Reset", selected: true }];
+      const menuScreen = makeMenuScreen(topItems, 0); // no subItems → no level-1 menu
+
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => Promise.resolve(menuScreen)),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await expect(nav.navigate(["Power & Reset", "Reset C64"], "F5")).rejects.toThrow(TelnetError);
+    });
+  });
 });

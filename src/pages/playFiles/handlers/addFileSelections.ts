@@ -9,7 +9,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "@/hooks/use-toast";
 import { createArchiveClient } from "@/lib/archive/client";
-import { buildArchivePlayPlan } from "@/lib/archive/execution";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
@@ -25,8 +24,11 @@ import type { AddItemsProgressState } from "@/components/itemSelection/AddItemsP
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import type { SonglengthsFileEntry } from "@/pages/playFiles/hooks/useSonglengths";
+import type { SonglengthResolutionOptions } from "@/pages/playFiles/songlengthsResolution";
 import { isSonglengthsFileName } from "@/lib/sid/songlengthsDiscovery";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
+import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
+import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 
 export type AddFileSelectionsDeps = {
@@ -63,6 +65,7 @@ export type AddFileSelectionsDeps = {
   applySonglengthsToItems: (
     items: PlaylistItem[],
     songlengthsOverrides?: SonglengthsFileEntry[],
+    options?: SonglengthResolutionOptions,
   ) => Promise<PlaylistItem[]>;
   mergeSonglengthsFiles: (entries: SonglengthsFileEntry[]) => void;
   collectSonglengthsCandidates: (paths: string[]) => string[];
@@ -221,15 +224,19 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             throw new Error(`No playable archive file found for ${selection.name}.`);
           }
 
-          const binary = await archiveClient.downloadBinary(resultId, category, playableEntry.id, playableEntry.path);
-          const playPlan = buildArchivePlayPlan(binary);
           const item = buildPlaylistItem(
             {
               source: "commoserve",
               name: selection.name,
-              path: playPlan.path,
-              file: playPlan.file,
+              path: playableEntry.path,
               sourceId: source.id,
+              archiveRef: {
+                sourceId: source.id,
+                resultId,
+                category,
+                entryId: playableEntry.id,
+                entryPath: playableEntry.path,
+              },
               sizeBytes: playableEntry.size ?? null,
               modifiedAt: playableEntry.date ? new Date(playableEntry.date).toISOString() : null,
             },
@@ -318,7 +325,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
       }
 
-      const stripExtension = (name: string) => name.replace(/\.[^.]+$/, "");
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       selectedFiles.forEach((file) => {
         const parent = getParentPath(file.path);
@@ -337,38 +343,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         });
         return [...merged.values()];
       };
-      const resolveConfigRef = (file: SourceEntry): ConfigFileReference | null => {
-        if (source.type !== "local" && source.type !== "ultimate") return null;
-        const parentPath = getParentPath(file.path);
-        const baseName = stripExtension(file.name).toLowerCase();
-        const sibling = getDirectoryEntries(parentPath).find(
-          (entry) =>
-            entry.type === "file" &&
-            entry.name.toLowerCase().endsWith(".cfg") &&
-            stripExtension(entry.name).toLowerCase() === baseName,
-        );
-        if (!sibling) return null;
-        const normalizedConfigPath = normalizeSourcePath(sibling.path);
-        if (source.type === "ultimate") {
-          return {
-            kind: "ultimate",
-            fileName: sibling.name,
-            path: normalizedConfigPath,
-            modifiedAt: sibling.modifiedAt ?? null,
-            sizeBytes: sibling.sizeBytes ?? null,
-          };
-        }
-        const localConfigEntry = localEntriesBySourceId.get(source.id)?.get(normalizedConfigPath);
-        return {
-          kind: "local",
-          fileName: sibling.name,
-          path: normalizedConfigPath,
-          sourceId: source.id,
-          uri: localConfigEntry?.uri ?? null,
-          modifiedAt: localConfigEntry?.modifiedAt ?? sibling.modifiedAt ?? null,
-          sizeBytes: localConfigEntry?.sizeBytes ?? sibling.sizeBytes ?? null,
-        };
-      };
+      const prefetchedConfigEntriesByPath = new Map(
+        [...selectedFilesByParent.keys()].map((path) => [normalizeSourcePath(path), getDirectoryEntries(path)]),
+      );
 
       const playlistItems: PlaylistItem[] = [];
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
@@ -520,8 +497,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           });
         }
       }
-      selectedFiles.forEach((file) => {
-        if (!getPlayCategory(file.path)) return;
+      for (const file of selectedFiles) {
+        if (!getPlayCategory(file.path)) continue;
         const normalizedPath = normalizeSourcePath(file.path);
         const localEntry = source.type === "local" ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
         const entryModified = localEntry?.modifiedAt
@@ -538,11 +515,33 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 : undefined)
             : undefined;
         const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
+        const playbackConfig =
+          source.type === "local" || source.type === "ultimate"
+            ? resolvePlaybackConfig({
+                candidates: await discoverConfigCandidates({
+                  sourceType: source.type,
+                  sourceId: source.type === "local" ? source.id : null,
+                  sourceRootPath: source.rootPath,
+                  targetFile: file,
+                  listEntries: source.listEntries,
+                  prefetchedEntriesByPath: prefetchedConfigEntriesByPath,
+                  localEntriesBySourceId,
+                }),
+              })
+            : {
+                configRef: null as ConfigFileReference | null,
+                configOrigin: "none" as const,
+                configCandidates: [],
+                configOverrides: null,
+              };
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
           name: file.name,
           path: normalizedPath,
-          configRef: resolveConfigRef(file),
+          configRef: playbackConfig.configRef,
+          configOrigin: playbackConfig.configOrigin,
+          configOverrides: playbackConfig.configOverrides,
+          configCandidates: playbackConfig.configCandidates,
           durationMs: file.durationMs,
           songNr: file.songNr,
           subsongCount: file.subsongCount,
@@ -553,7 +552,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         };
         const item = buildPlaylistItem(playable);
         if (item) playlistItems.push(item);
-      });
+      }
 
       if (!playlistItems.length) {
         const reason = selectedFiles.length === 0 ? "no-files-found" : "unsupported-files";

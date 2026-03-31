@@ -177,6 +177,37 @@ describe("diskMount", () => {
       } as any);
       expect(blob).toBeInstanceOf(Blob);
     });
+
+    it("skips sourceId-targeted lookup and iterates all sources when sourceId not found", async () => {
+      const runtimeFile = new File(["data"], "test.d64");
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any]);
+      vi.mocked(getLocalSourceRuntimeFile).mockReturnValue(runtimeFile as any);
+
+      const blob = await resolveLocalDiskBlob({
+        path: "/test.d64",
+        location: "local",
+        sourceId: "nonexistent",
+      } as any);
+      // Falls through to all-sources loop, picks up src1
+      expect(blob).toBe(runtimeFile);
+    });
+
+    it("falls through to all-sources loop when sourceId match yields null", async () => {
+      const runtimeFile = new File(["data"], "test.d64");
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any, { id: "src2" } as any]);
+      vi.mocked(getLocalSourceListingMode).mockReturnValue("tree" as any);
+      vi.mocked(getLocalSourceRuntimeFile)
+        .mockReturnValueOnce(null) // src1 in sourceId-targeted call
+        .mockReturnValueOnce(null) // src1 in all-sources loop
+        .mockReturnValueOnce(runtimeFile as any); // src2 in all-sources loop
+
+      const blob = await resolveLocalDiskBlob({
+        path: "/test.d64",
+        location: "local",
+        sourceId: "src1",
+      } as any);
+      expect(blob).toBe(runtimeFile);
+    });
   });
 
   describe("mountDiskToDrive", () => {

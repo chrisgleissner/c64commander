@@ -345,4 +345,13 @@ describe("fileValidation", () => {
     expect(toast).not.toHaveBeenCalled();
     expect(addErrorLog).not.toHaveBeenCalled();
   });
+
+  it("rejects d81 disk images whose byte count yields an invalid block count", () => {
+    // 822400 / 256 = 3212, which is not in VALID_D81_BLOCK_COUNTS {3200, 3210}
+    expect(validateFileBytes(new Uint8Array(822400), "d81")).toMatchObject({
+      ok: false,
+      code: "INVALID_BLOCK_COUNT",
+      detectedType: "d81",
+    });
+  });
 });

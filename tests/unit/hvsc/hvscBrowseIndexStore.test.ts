@@ -555,3 +555,15 @@ describe("verifyHvscBrowseIndexIntegrity determinism (P0-B)", () => {
     paths2.forEach((p) => expect(typeof p).toBe("string"));
   });
 });
+
+describe("listFolderFromBrowseIndex missing folder fallback", () => {
+  it("returns empty row when folder path does not exist in snapshot", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+    const result = listFolderFromBrowseIndex(snapshot, "/NONEXISTENT", "", 0, 50);
+    expect(result.path).toBe("/NONEXISTENT");
+    expect(result.folders).toEqual([]);
+    expect(result.songs).toEqual([]);
+    expect(result.totalFolders).toBe(0);
+    expect(result.totalSongs).toBe(0);
+  });
+});

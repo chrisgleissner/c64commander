@@ -154,4 +154,28 @@ describe("SecureStorageWeb", () => {
 
     await expect(storage.clearPassword()).rejects.toThrow("Secure storage request failed: HTTP 503");
   });
+
+  it("returns hasOverride false when override object has no password field", async () => {
+    vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
+    vi.stubEnv("VITE_WEB_PLATFORM", "1");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    (
+      window as Window & {
+        __c64uSecureStorageOverride?: Record<string, unknown>;
+      }
+    ).__c64uSecureStorageOverride = {};
+
+    const storage = new SecureStorageWeb();
+    // Override without "password" key → readOverride returns hasOverride:false → falls through to HTTP
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ value: "from-api" }),
+    });
+
+    await expect(storage.getPassword()).resolves.toEqual({ value: "from-api" });
+    expect(fetchMock).toHaveBeenCalled();
+
+    delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+  });
 });

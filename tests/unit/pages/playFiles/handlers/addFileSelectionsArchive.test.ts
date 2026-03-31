@@ -8,8 +8,6 @@ const mockArchiveClient = {
   downloadBinary: vi.fn(),
 };
 
-const mockBuildArchivePlayPlan = vi.fn();
-
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
@@ -25,10 +23,6 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(() => mockArchiveClient),
-}));
-
-vi.mock("@/lib/archive/execution", () => ({
-  buildArchivePlayPlan: vi.fn((binary: { fileName: string; bytes: Uint8Array }) => mockBuildArchivePlayPlan(binary)),
 }));
 
 vi.mock("@/lib/playback/localFileBrowser", () => ({
@@ -107,6 +101,7 @@ const createMockDeps = () => {
       category: entry.path.endsWith(".d64") ? "disk" : entry.path.endsWith(".sid") ? "sid" : "prg",
       label: entry.name,
       path: entry.path,
+      archiveRef: entry.archiveRef ?? null,
       sourceId: entry.sourceId,
       sizeBytes: entry.sizeBytes,
       modifiedAt: entry.modifiedAt,
@@ -134,25 +129,9 @@ describe("addFileSelections archive source handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockArchiveClient.getEntries.mockResolvedValue([{ id: 0, path: "demo.d64", size: 174848, date: 1773676443000 }]);
-    mockArchiveClient.downloadBinary.mockImplementation(async (_resultId, _category, _entryId, fileName) => ({
-      fileName,
-      bytes: new Uint8Array([0x44, 0x36, 0x34]),
-      contentType: "application/octet-stream",
-      url: "http://commoserve.files.commodore.net/download",
-    }));
-    mockBuildArchivePlayPlan.mockImplementation((binary: { fileName: string; bytes: Uint8Array }) => ({
-      category: binary.fileName.endsWith(".d64") ? "disk" : "prg",
-      source: "local",
-      path: binary.fileName,
-      file: {
-        name: binary.fileName,
-        lastModified: 0,
-        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
-      },
-    }));
   });
 
-  it("downloads archive selections and enqueues playable runtime files", async () => {
+  it("stores archive references and defers runtime downloads until playback", async () => {
     const deps = createMockDeps();
     const handler = createAddFileSelectionsHandler(deps as any);
 
@@ -167,14 +146,21 @@ describe("addFileSelections archive source handler", () => {
     expect(deps.setPlaylist).toHaveBeenCalledOnce();
     expect(deps._playlistItems).toHaveLength(2);
     expect(mockArchiveClient.getEntries).toHaveBeenNthCalledWith(1, "123", 42);
-    expect(mockArchiveClient.downloadBinary).toHaveBeenNthCalledWith(1, "123", 42, 0, "demo.d64");
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
     const item0 = deps._playlistItems[0] as any;
     expect(item0.label).toBe("Cool Demo");
     expect(item0.request.source).toBe("commoserve");
     expect(item0.request.path).toBe("demo.d64");
-    expect(item0.request.file).toBeDefined();
+    expect(item0.request.file).toBeUndefined();
     expect(item0.category).toBe("disk");
     expect(item0.sourceId).toBe("archive-commoserve");
+    expect(item0.archiveRef).toEqual({
+      sourceId: "archive-commoserve",
+      resultId: "123",
+      category: 42,
+      entryId: 0,
+      entryPath: "demo.d64",
+    });
     const item1 = deps._playlistItems[1] as any;
     expect(item1.label).toBe("Awesome Game");
     expect(item1.request.source).toBe("commoserve");
@@ -223,30 +209,27 @@ describe("addFileSelections archive source handler", () => {
     expect(item.id).toContain("archive-custom");
   });
 
-  it("downloads the first playable archive entry when non-playable attachments are present", async () => {
+  it("stores the first playable archive entry when non-playable attachments are present", async () => {
     const deps = createMockDeps();
     const handler = createAddFileSelectionsHandler(deps as any);
     mockArchiveClient.getEntries.mockResolvedValueOnce([
       { id: 0, path: "readme.txt", size: 1200, date: 1773676442000 },
       { id: 1, path: "joyride.sid", size: 8192, date: 1773676443000 },
     ]);
-    mockBuildArchivePlayPlan.mockImplementationOnce((binary: { fileName: string; bytes: Uint8Array }) => ({
-      category: "sid",
-      source: "local",
-      path: binary.fileName,
-      file: {
-        name: binary.fileName,
-        lastModified: 0,
-        arrayBuffer: vi.fn(async () => binary.bytes.buffer.slice(0)),
-      },
-    }));
 
     const result = await handler(archiveSource, [{ type: "file", name: "Joyride", path: "100/40" }]);
 
     expect(result).toBe(true);
-    expect(mockArchiveClient.downloadBinary).toHaveBeenCalledWith("100", 40, 1, "joyride.sid");
+    expect(mockArchiveClient.downloadBinary).not.toHaveBeenCalled();
     expect((deps._playlistItems[0] as any).category).toBe("sid");
     expect((deps._playlistItems[0] as any).request.path).toBe("joyride.sid");
+    expect((deps._playlistItems[0] as any).archiveRef).toEqual({
+      sourceId: "archive-commoserve",
+      resultId: "100",
+      category: 40,
+      entryId: 1,
+      entryPath: "joyride.sid",
+    });
   });
 
   it("reports an error when an archive result has no playable entries", async () => {
@@ -262,6 +245,59 @@ describe("addFileSelections archive source handler", () => {
       expect.objectContaining({
         title: "Add items failed",
         description: "No playable archive file found for Readme Pack.",
+      }),
+    );
+    expect(deps.setPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("reports an error when the selected archive source has no runtime config", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    const deps = createMockDeps();
+    deps.archiveConfigs = {};
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Joyride", path: "100/40" }]);
+
+    expect(result).toBe(false);
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Add items failed",
+        description: "Archive source configuration unavailable for CommoServe.",
+      }),
+    );
+    expect(mockArchiveClient.getEntries).not.toHaveBeenCalled();
+  });
+
+  it("reports an error when an archive selection path is malformed", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    const deps = createMockDeps();
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Broken", path: "not-a-result" }]);
+
+    expect(result).toBe(false);
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Add items failed",
+        description: "Invalid archive selection: not-a-result",
+      }),
+    );
+    expect(mockArchiveClient.getEntries).not.toHaveBeenCalled();
+  });
+
+  it("reports an error when the playable archive entry cannot be converted into a playlist item", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    const deps = createMockDeps();
+    deps.buildPlaylistItem.mockReturnValueOnce(null);
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(archiveSource, [{ type: "file", name: "Joyride", path: "100/40" }]);
+
+    expect(result).toBe(false);
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Add items failed",
+        description: "Unsupported archive file demo.d64.",
       }),
     );
     expect(deps.setPlaylist).not.toHaveBeenCalled();
@@ -711,5 +747,252 @@ describe("addFileSelections archive source handler", () => {
         }),
       }),
     );
+  });
+
+  it("recursively collects files from nested local directories via collectRecursive", async () => {
+    vi.useFakeTimers();
+    const localSource: SourceLocation = {
+      ...createLocalSource(async (path) => {
+        if (path === "/root") {
+          return [
+            { type: "dir" as const, name: "sub", path: "/root/sub" },
+            { type: "file" as const, name: "a.sid", path: "/root/a.sid", sizeBytes: null, modifiedAt: null },
+          ];
+        }
+        if (path === "/root/sub") {
+          return [{ type: "file" as const, name: "b.sid", path: "/root/sub/b.sid", sizeBytes: null, modifiedAt: null }];
+        }
+        return [];
+      }),
+      listFilesRecursive: vi.fn(async () => []),
+    };
+    const deps = createMockDeps();
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [{ type: "dir" as const, name: "root", path: "/root" }]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(deps._playlistItems).toHaveLength(2);
+    vi.useRealTimers();
+  });
+
+  it("adds hvsc directory selection by calling listFilesRecursive and updating progress", async () => {
+    vi.useFakeTimers();
+    const hvscSource: SourceLocation = {
+      ...createHvscSource(async () => []),
+      listFilesRecursive: vi.fn(async () => [
+        {
+          type: "file" as const,
+          name: "tune.sid",
+          path: "/HVSC/DEMOS/tune.sid",
+          sizeBytes: null,
+          modifiedAt: null,
+        },
+      ]),
+    };
+    const deps = createMockDeps();
+    deps.buildHvscLocalPlayFile = vi.fn(() => ({}) as any);
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(hvscSource, [{ type: "dir" as const, name: "DEMOS", path: "/HVSC/DEMOS" }]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect((hvscSource as any).listFilesRecursive).toHaveBeenCalledWith("/HVSC/DEMOS");
+    expect(deps._playlistItems).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it("discovers songlengths files via treeUri when candidate paths are found", async () => {
+    vi.useFakeTimers();
+    const { isSonglengthsFileName: mockIsSonglengths } = await import("@/lib/sid/songlengthsDiscovery");
+    const { buildLocalPlayFileFromTree: mockBuildFromTree } = await import("@/lib/playback/fileLibraryUtils");
+    vi.mocked(mockIsSonglengths).mockImplementation((name: string) => name.toLowerCase().includes("songlengths"));
+    vi.mocked(mockBuildFromTree).mockReturnValue({
+      name: "songlengths.md5",
+      lastModified: 0,
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(0)),
+    } as any);
+
+    const localSource: SourceLocation = {
+      ...createLocalSource(async () => [
+        {
+          type: "file" as const,
+          name: "SONGLENGTHS.MD5",
+          path: "/demo/SONGLENGTHS.MD5",
+          sizeBytes: null,
+          modifiedAt: "2024-01-01T00:00:00.000Z",
+        },
+      ]),
+      listFilesRecursive: vi.fn(async (dirPath: string) => {
+        if (dirPath === "/demo/sub") {
+          return [
+            {
+              type: "file" as const,
+              name: "SONGLENGTHS.MD5",
+              path: "/demo/sub/SONGLENGTHS.MD5",
+              sizeBytes: null,
+              modifiedAt: "2024-01-01T00:00:00.000Z",
+            },
+          ];
+        }
+        return [];
+      }),
+    };
+    const deps = {
+      ...createMockDeps(),
+      localSourceTreeUris: new Map([["local-test", "content://tree/abc"]]),
+      collectSonglengthsCandidates: vi.fn(() => ["/demo/songlengths.md5"]),
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [
+      {
+        type: "file" as const,
+        name: "tune.sid",
+        path: "/demo/tune.sid",
+        sizeBytes: 4096,
+        modifiedAt: "2024-01-01T00:00:00.000Z",
+      },
+      { type: "dir" as const, name: "sub", path: "/demo/sub" },
+    ]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(deps.mergeSonglengthsFiles).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ path: expect.stringContaining("SONGLENGTHS") })]),
+    );
+    vi.useRealTimers();
+  });
+
+  it("discovers songlengths files via entriesMap when treeUri is absent", async () => {
+    vi.useFakeTimers();
+    const { isSonglengthsFileName: mockIsSonglengths } = await import("@/lib/sid/songlengthsDiscovery");
+    const { buildLocalPlayFileFromUri: mockBuildFromUri } = await import("@/lib/playback/fileLibraryUtils");
+    vi.mocked(mockIsSonglengths).mockImplementation((name: string) => name.toLowerCase().includes("songlengths"));
+    vi.mocked(mockBuildFromUri).mockReturnValue({
+      name: "songlengths.md5",
+      lastModified: 0,
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(0)),
+    } as any);
+
+    const localSource = createLocalSource(async () => []);
+    const deps = {
+      ...createMockDeps(),
+      localSourceTreeUris: new Map<string, string>(),
+      localEntriesBySourceId: new Map<
+        string,
+        Map<string, { uri?: string | null; name: string; modifiedAt?: string | null; sizeBytes?: number | null }>
+      >([
+        [
+          "local-test",
+          new Map([
+            [
+              "/demo/songlengths.md5",
+              { uri: "content://abc/file", name: "SONGLENGTHS.MD5", modifiedAt: "2024-01-01T00:00:00.000Z" },
+            ],
+          ]),
+        ],
+      ]),
+      collectSonglengthsCandidates: vi.fn(() => ["/demo/songlengths.md5"]),
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [
+      {
+        type: "file" as const,
+        name: "tune.sid",
+        path: "/demo/tune.sid",
+        sizeBytes: 4096,
+        modifiedAt: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(deps.mergeSonglengthsFiles).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("invokes setAddItemsProgress callbacks during a successful local add operation", async () => {
+    vi.useFakeTimers();
+    const callbackInvocations: Array<unknown> = [];
+    const localSource = createLocalSource(async () => [
+      { type: "file" as const, name: "tune.sid", path: "/tune.sid", sizeBytes: 1024, modifiedAt: null },
+    ]);
+    const deps = {
+      ...createMockDeps(),
+      addItemsStartedAtRef: { current: Date.now() },
+      setAddItemsProgress: vi.fn((updater: unknown) => {
+        if (typeof updater === "function") {
+          callbackInvocations.push((updater as (prev: unknown) => unknown)({ status: "idle", count: 0, elapsedMs: 0 }));
+        }
+      }),
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [
+      { type: "file" as const, name: "tune.sid", path: "/tune.sid", sizeBytes: 1024, modifiedAt: null },
+    ]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(callbackInvocations.length).toBeGreaterThan(0);
+    vi.useRealTimers();
+  });
+
+  it("invokes setAddItemsProgress error callback body when the add operation throws", async () => {
+    vi.useFakeTimers();
+    const callbackInvocations: Array<unknown> = [];
+    mockArchiveClient.getEntries.mockRejectedValueOnce(new Error("network failure"));
+    const deps = {
+      ...createMockDeps(),
+      addItemsStartedAtRef: { current: Date.now() },
+      setAddItemsProgress: vi.fn((updater: unknown) => {
+        if (typeof updater === "function") {
+          callbackInvocations.push((updater as (prev: unknown) => unknown)({ status: "idle", count: 0, elapsedMs: 0 }));
+        }
+      }),
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(archiveSource, [{ type: "file" as const, name: "Demo", path: "100/40" }]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(false);
+    expect(callbackInvocations.some((c) => (c as Record<string, unknown>).status === "error")).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("runs overlay cleanup in finally when overlay is active for a local source", async () => {
+    vi.useFakeTimers();
+    const localSource = createLocalSource(async () => [
+      { type: "file" as const, name: "tune.sid", path: "/tune.sid", sizeBytes: 1024, modifiedAt: null },
+    ]);
+    const deps = {
+      ...createMockDeps(),
+      browserOpen: false,
+      addItemsOverlayActiveRef: { current: true },
+      addItemsOverlayStartedAtRef: { current: Date.now() - 1200 },
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [
+      { type: "file" as const, name: "tune.sid", path: "/tune.sid", sizeBytes: 1024, modifiedAt: null },
+    ]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(true);
+    expect(deps.setShowAddItemsOverlay).toHaveBeenCalledWith(false);
+    expect(deps.addItemsOverlayActiveRef.current).toBe(false);
+    vi.useRealTimers();
   });
 });

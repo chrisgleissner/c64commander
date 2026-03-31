@@ -204,3 +204,14 @@ describe("snapshotEntryToBytes", () => {
     expect(restored).toEqual(original);
   });
 });
+
+describe("writeSnapshotStore error handling", () => {
+  it("throws and logs when localStorage.setItem fails", () => {
+    const setItemSpy = vi.spyOn(localStorageMock, "setItem").mockImplementationOnce(() => {
+      throw new DOMException("QuotaExceededError");
+    });
+
+    expect(() => saveSnapshotToStore(makeEntry("quota-err"))).toThrow("Failed to save snapshot:");
+    setItemSpy.mockRestore();
+  });
+});

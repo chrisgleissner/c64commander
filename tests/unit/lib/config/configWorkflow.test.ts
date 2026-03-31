@@ -165,4 +165,42 @@ describe("configWorkflow", () => {
       }),
     );
   });
+
+  it("selects the more recently modified file when multiple changed cfg files appear in /Temp", () => {
+    // Exercises the sort comparator (lines 155-158) whose body only runs with multiple candidates
+    const file = detectUpdatedTempConfigFile(
+      [],
+      [
+        { name: "older.cfg", path: "/Temp/older.cfg", modifiedAt: "2026-03-29T09:00:00Z", size: 10 },
+        { name: "newer.cfg", path: "/Temp/newer.cfg", modifiedAt: "2026-03-29T10:00:00Z", size: 10 },
+      ],
+    );
+    expect(file?.name).toBe("newer.cfg");
+  });
+
+  it("fails cleanly when applyLocalSnapshot throws during upload", async () => {
+    const workflow = createConfigWorkflow({
+      writeRemoteFile: vi.fn().mockRejectedValue(new Error("upload error")),
+    });
+
+    await expect(workflow.applyLocalSnapshot("config.cfg", new Uint8Array([1, 2, 3]))).rejects.toThrow("upload error");
+
+    expect(addErrorLogSpy).toHaveBeenCalledWith(
+      "Config workflow failed",
+      expect.objectContaining({ operation: "apply-local", status: "error" }),
+    );
+  });
+
+  it("fails cleanly when applyRemoteSnapshot throws during apply", async () => {
+    const workflow = createConfigWorkflow({
+      runApplyRemoteConfigByPath: vi.fn().mockRejectedValue(new Error("apply error")),
+    });
+
+    await expect(workflow.applyRemoteSnapshot("/USB1/snapshots/config.cfg")).rejects.toThrow("apply error");
+
+    expect(addErrorLogSpy).toHaveBeenCalledWith(
+      "Config workflow failed",
+      expect.objectContaining({ operation: "apply-remote", status: "error" }),
+    );
+  });
 });

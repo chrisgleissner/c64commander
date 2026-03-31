@@ -243,6 +243,7 @@ export type PlayExecutionOptions = {
   resetBeforeMount?: boolean;
   rebootBeforeMount?: boolean;
   diskAutostartMode?: DiskAutostartMode;
+  beforeLaunch?: (() => Promise<void>) | null;
 };
 
 export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: PlayExecutionOptions = {}) => {
@@ -252,10 +253,14 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
   const resetBeforeMount = options.resetBeforeMount ?? true;
   const resetDelayMs = 500;
   const diskAutostartMode = options.diskAutostartMode ?? loadDiskAutostartMode();
+  const beforeLaunch = options.beforeLaunch ?? null;
 
   try {
     switch (plan.category) {
       case "sid": {
+        if (beforeLaunch) {
+          await beforeLaunch();
+        }
         if (plan.source === "ultimate") {
           const hasSonglengthData = typeof plan.durationMs === "number" && plan.durationMs > 0;
           if (!hasSonglengthData) {
@@ -332,6 +337,9 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         return;
       }
       case "mod": {
+        if (beforeLaunch) {
+          await beforeLaunch();
+        }
         if (plan.source === "ultimate") {
           await api.playMod(plan.path);
           return;
@@ -342,6 +350,9 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         return;
       }
       case "prg": {
+        if (beforeLaunch) {
+          await beforeLaunch();
+        }
         if (plan.source === "ultimate") {
           if (loadMode === "load") {
             await api.loadPrg(plan.path);
@@ -360,6 +371,9 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         return;
       }
       case "crt": {
+        if (beforeLaunch) {
+          await beforeLaunch();
+        }
         if (plan.source === "ultimate") {
           await api.runCartridge(plan.path);
           return;
@@ -398,6 +412,10 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             location: "local",
           });
           await mountDiskToDrive(api, drive, diskEntry);
+        }
+
+        if (beforeLaunch) {
+          await beforeLaunch();
         }
 
         const diskType = getFileExtension(plan.path);

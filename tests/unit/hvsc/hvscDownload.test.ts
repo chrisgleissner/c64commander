@@ -726,5 +726,51 @@ describe("hvscDownload", () => {
       const result = await downloadArchive(makeOptions());
       expect(result).toBeNull();
     });
+
+    it("streams download without Content-Length using dynamic growing buffer", async () => {
+      const chunks = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
+      let index = 0;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => null },
+        body: {
+          getReader: () => ({
+            read: async () => {
+              if (index >= chunks.length) return { done: true, value: undefined };
+              const value = chunks[index];
+              index += 1;
+              return { done: false, value };
+            },
+          }),
+        },
+      });
+
+      const { writeCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      const result = await downloadArchive(makeOptions());
+      expect(writeCachedArchive).toHaveBeenCalledWith("hvsc-baseline-84.7z", expect.any(Uint8Array));
+      expect(result).toBeNull();
+    });
+
+    it("streams download with null chunk value skipped in dynamic buffer mode", async () => {
+      let callCount = 0;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => null },
+        body: {
+          getReader: () => ({
+            read: async () => {
+              callCount += 1;
+              if (callCount === 1) return { done: false, value: null };
+              if (callCount === 2) return { done: false, value: new Uint8Array([7, 8]) };
+              return { done: true, value: undefined };
+            },
+          }),
+        },
+      });
+
+      const { writeCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      await downloadArchive(makeOptions());
+      expect(writeCachedArchive).toHaveBeenCalledWith("hvsc-baseline-84.7z", expect.objectContaining({ length: 2 }));
+    });
   });
 });

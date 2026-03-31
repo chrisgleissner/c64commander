@@ -100,6 +100,7 @@ describe("useSourceNavigator", () => {
     });
 
     await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(result.current.path).toMatch(/^\/root\/?$/));
 
     act(() => {
       result.current.refresh();

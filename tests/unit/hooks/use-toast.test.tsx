@@ -91,4 +91,50 @@ describe("useToast", () => {
 
     expect(result.current.toasts[0].open).toBe(false);
   });
+
+  it("removes all toasts when REMOVE_TOAST is dispatched without a toastId", () => {
+    const state = {
+      toasts: [
+        { id: "1", title: "One", open: false },
+        { id: "2", title: "Two", open: false },
+      ],
+    };
+    const cleared = reducer(state, { type: "REMOVE_TOAST" });
+    expect(cleared.toasts).toHaveLength(0);
+  });
+
+  it("auto-removes a toast after the remove delay elapses", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.toast({ title: "Auto-remove" });
+    });
+
+    expect(result.current.toasts).toHaveLength(1);
+    const toastId = result.current.toasts[0].id;
+
+    act(() => {
+      result.current.dismiss(toastId);
+      vi.runAllTimers();
+    });
+
+    expect(result.current.toasts).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it("closing via onOpenChange dismisses the toast", () => {
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.toast({ title: "Closeable" });
+    });
+
+    const onOpenChange = result.current.toasts[0].onOpenChange!;
+    act(() => {
+      onOpenChange(false);
+    });
+
+    expect(result.current.toasts[0].open).toBe(false);
+  });
 });

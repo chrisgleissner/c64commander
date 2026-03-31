@@ -45,10 +45,10 @@ const isNativeArchiveRuntime = () => {
 
 const normalizeHeaderMap = (headers?: HeadersInit): Record<string, string> => Object.fromEntries(new Headers(headers));
 
-const isUnsupportedSignalError = (error: unknown) =>
+export const isUnsupportedSignalError = (error: unknown) =>
   error instanceof Error && error.message.includes("Expected signal") && error.message.includes("AbortSignal");
 
-const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
+export const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
     return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);

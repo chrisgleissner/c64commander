@@ -34,6 +34,8 @@ const formatLightingPatternLabel = (value: string) => {
   return formatSelectOptionLabel(value);
 };
 
+const parseSliderValue = (value: number) => (Number.isFinite(value) ? value : null);
+
 type LightingSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
@@ -162,6 +164,22 @@ export function LightingSummaryCard({
       successMessage,
       options,
     );
+  };
+
+  const handleFixedColorPreview = (nextValue: number) => {
+    const parsed = parseSliderValue(nextValue);
+    if (parsed === null) return;
+    const nextIndex = clampToRange(parsed, 0, fixedColorSliderMax);
+    onManualLightingChange?.();
+    interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
+  };
+
+  const handleIntensityPreview = (nextValue: number) => {
+    const parsed = parseSliderValue(nextValue);
+    if (parsed === null) return;
+    const clamped = clampToRange(parsed, intensityMin, intensityMax);
+    onManualLightingChange?.();
+    interactiveWrite({ "Strip Intensity": Math.round(clamped) });
   };
 
   return (
@@ -305,16 +323,7 @@ export function LightingSummaryCard({
             const nextIndex = clampToRange(values[0] ?? 0, 0, fixedColorSliderMax);
             setFixedColorDraftIndex(nextIndex);
           }}
-          onValueChangeAsync={(nextValue) => {
-            const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
-            onManualLightingChange?.();
-            interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
-          }}
-          onValueCommitAsync={(nextValue) => {
-            const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
-            onManualLightingChange?.();
-            interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
-          }}
+          onValueChangeAsync={handleFixedColorPreview}
           disabled={fixedColorSliderDisabled}
           valueFormatter={(value) => formatSelectOptionLabel(resolveFixedColorOption(value))}
           trackClassName={fixedColorGradient ? "bg-transparent" : undefined}
@@ -339,16 +348,7 @@ export function LightingSummaryCard({
             const nextValue = clampToRange(values[0] ?? intensityMin, intensityMin, intensityMax);
             setIntensityDraft(nextValue);
           }}
-          onValueChangeAsync={(nextValue) => {
-            const clamped = clampToRange(nextValue, intensityMin, intensityMax);
-            onManualLightingChange?.();
-            interactiveWrite({ "Strip Intensity": Math.round(clamped) });
-          }}
-          onValueCommitAsync={(nextValue) => {
-            const clamped = clampToRange(nextValue, intensityMin, intensityMax);
-            onManualLightingChange?.();
-            interactiveWrite({ "Strip Intensity": Math.round(clamped) });
-          }}
+          onValueChangeAsync={handleIntensityPreview}
           disabled={!isActive || isPending("Strip Intensity")}
           data-testid={`${testIdPrefix}-intensity-slider`}
         />

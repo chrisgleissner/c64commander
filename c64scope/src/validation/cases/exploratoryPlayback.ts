@@ -205,15 +205,7 @@ async function runHvscLifecycle(
     const observed =
       (await waitForUiTextContaining(
         serial,
-        [
-          "HVSC downloaded successfully",
-          "Ready",
-          "Downloading",
-          "Extracting",
-          "Indexing",
-          "Cancelled",
-          "HVSC download failed",
-        ],
+        ["HVSC ready", "Ready", "Downloading", "Extracting", "Indexing", "Cancelled", "HVSC update failed"],
         1,
         1,
       )) ?? "";
@@ -228,7 +220,7 @@ async function runHvscLifecycle(
       stallCount += 1;
     }
 
-    if (/ready|downloaded successfully/i.test(observed)) {
+    if (/ready/i.test(observed)) {
       return { actionLabel, sawDownloadPhase, terminalLabel: observed };
     }
     if (/failed|cancelled/i.test(observed)) {

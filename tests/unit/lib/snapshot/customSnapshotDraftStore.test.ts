@@ -57,4 +57,31 @@ describe("customSnapshotDraftStore", () => {
       { start: "0A00", end: "0BFF" },
     ]);
   });
+
+  it("saves defaults when passed an empty array", () => {
+    saveCustomSnapshotDrafts([]);
+
+    const stored = JSON.parse(localStorage.getItem("c64u_custom_snapshot_ranges:v1") ?? "null");
+    expect(stored).toEqual([{ start: "", end: "" }]);
+  });
+
+  it("logs and falls back when storage contains non-array JSON", () => {
+    localStorage.setItem("c64u_custom_snapshot_ranges:v1", JSON.stringify({ start: "0000", end: "FFFF" }));
+
+    expect(loadCustomSnapshotDrafts()).toEqual([{ start: "", end: "" }]);
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      "Invalid custom snapshot draft payload",
+      expect.objectContaining({ payloadType: "object" }),
+    );
+  });
+
+  it("logs and falls back when all entries are invalid", () => {
+    localStorage.setItem("c64u_custom_snapshot_ranges:v1", JSON.stringify([{ notStart: "x", notEnd: "y" }, 42, null]));
+
+    expect(loadCustomSnapshotDrafts()).toEqual([{ start: "", end: "" }]);
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      "Custom snapshot draft payload contained no valid ranges",
+      expect.objectContaining({ rangeCount: 3 }),
+    );
+  });
 });
