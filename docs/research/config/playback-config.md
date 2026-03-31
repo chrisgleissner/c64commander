@@ -32,7 +32,7 @@ C64 Commander already has a foundation for per-item configuration:
 
 | ID  | Requirement                                                                               |
 | --- | ----------------------------------------------------------------------------------------- |
-| R1  | Discover relevant configuration files for playable items                    |
+| R1  | Discover relevant configuration files for playable items                                  |
 | R2  | Apply configuration only immediately before playback, never during unrelated operations   |
 | R3  | Provide full transparency into which configuration was selected, why, and what it changes |
 | R4  | Allow manual override that always takes precedence over automatic behavior                |
