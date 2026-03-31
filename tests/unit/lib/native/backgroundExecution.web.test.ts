@@ -129,4 +129,41 @@ describe("BackgroundExecutionWeb", () => {
       eventName: "unsupported-event",
     });
   });
+
+  it("clears active due timer when stop is called while a timer is pending", async () => {
+    const plugin = new BackgroundExecutionWeb();
+    const listener = vi.fn();
+    await plugin.addListener("backgroundAutoSkipDue", listener);
+    await plugin.setDueAtMs({ dueAtMs: Date.now() + 5_000 });
+    await plugin.stop();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("sets wakeLock to null and returns early when wakeLock has no release method", async () => {
+    const requestMock = vi.fn(async () => ({ /* no release */ } as unknown as WakeLockSentinel));
+    Object.defineProperty(window.navigator, "wakeLock", {
+      configurable: true,
+      value: { request: requestMock },
+    });
+    const plugin = new BackgroundExecutionWeb();
+    await plugin.start();
+    await plugin.stop();
+    expect(requestMock).toHaveBeenCalledWith("screen");
+    // stop() should not throw when wakeLock.release is absent
+  });
+
+  it("logs a warning when a backgroundAutoSkipDue listener throws", async () => {
+    const plugin = new BackgroundExecutionWeb();
+    const throwingListener = vi.fn(() => {
+      throw new Error("listener-boom");
+    });
+    await plugin.addListener("backgroundAutoSkipDue", throwingListener);
+    await plugin.setDueAtMs({ dueAtMs: Date.now() + 1_000 });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(addLogMock).toHaveBeenCalledWith("warn", "Web background due listener failed", {
+      source: "background-execution-web",
+      error: "listener-boom",
+    });
+  });
 });

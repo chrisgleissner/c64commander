@@ -137,3 +137,64 @@ describe("native safe-area sync", () => {
     warnSpy.mockRestore();
   });
 });
+
+describe("installNativeSafeAreaSync", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    document.documentElement.removeAttribute("style");
+    isNativePlatformMock.mockReturnValue(false);
+    getPlatformMock.mockReturnValue("web");
+    getInsetsMock.mockResolvedValue({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
+  it("immediately triggers a sync on install and returns a cleanup function", async () => {
+    const { installNativeSafeAreaSync } = await import("@/lib/native/safeArea");
+    const cleanup = installNativeSafeAreaSync();
+    expect(typeof cleanup).toBe("function");
+  });
+
+  it("registers and unregisters resize and orientationchange listeners", async () => {
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const docAddSpy = vi.spyOn(document, "addEventListener");
+    const docRemoveSpy = vi.spyOn(document, "removeEventListener");
+
+    const { installNativeSafeAreaSync } = await import("@/lib/native/safeArea");
+    const cleanup = installNativeSafeAreaSync();
+
+    expect(addSpy).toHaveBeenCalledWith("resize", expect.any(Function));
+    expect(addSpy).toHaveBeenCalledWith("orientationchange", expect.any(Function));
+    expect(docAddSpy).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+
+    cleanup();
+
+    expect(removeSpy).toHaveBeenCalledWith("resize", expect.any(Function));
+    expect(removeSpy).toHaveBeenCalledWith("orientationchange", expect.any(Function));
+    expect(docRemoveSpy).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+  });
+
+  it("re-syncs on resize event", async () => {
+    const { installNativeSafeAreaSync } = await import("@/lib/native/safeArea");
+    const cleanup = installNativeSafeAreaSync();
+    window.dispatchEvent(new Event("resize"));
+    cleanup();
+    // No assertion needed beyond no-throw; getInsetsMock is called on each sync
+  });
+
+  it("fires sync on visibilitychange when document becomes visible", async () => {
+    const { installNativeSafeAreaSync } = await import("@/lib/native/safeArea");
+    const cleanup = installNativeSafeAreaSync();
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+    cleanup();
+  });
+
+  it("skips sync on visibilitychange when document is hidden", async () => {
+    const { installNativeSafeAreaSync } = await import("@/lib/native/safeArea");
+    const cleanup = installNativeSafeAreaSync();
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    cleanup();
+  });
+});

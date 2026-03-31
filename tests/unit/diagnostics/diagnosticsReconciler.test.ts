@@ -22,6 +22,7 @@ import {
   resetDecisionStateSnapshot,
   setPlaybackDecisionState,
 } from "@/lib/diagnostics/decisionState";
+import * as decisionState from "@/lib/diagnostics/decisionState";
 import {
   runConfigReconciler,
   runDiagnosticsReconciler,
@@ -183,6 +184,18 @@ describe("diagnosticsReconciler", () => {
     await expect(runRepair(queryClient, "/diagnostics", "manual repair")).rejects.toThrow("repair failed");
     expect(getDecisionStateSnapshot()).toMatchObject({
       lastRepairResult: "failure",
+    });
+  });
+
+  it("records a playback failure and rethrows when degradePlaybackConfidence throws", async () => {
+    vi.spyOn(decisionState, "degradePlaybackConfidence").mockImplementationOnce(() => {
+      throw new Error("confidence degradation failed");
+    });
+
+    await expect(runPlaybackReconciler("error test")).rejects.toThrow("confidence degradation failed");
+    expect(getDecisionStateSnapshot().reconcilers.playback).toMatchObject({
+      result: "failure",
+      detail: "confidence degradation failed",
     });
   });
 });

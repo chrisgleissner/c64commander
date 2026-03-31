@@ -113,4 +113,49 @@ describe("configSnapshotStorage", () => {
 
     await expect(pickConfigSnapshotFile()).rejects.toThrow("Select a .cfg file.");
   });
+
+  it("throws when persistConfigSnapshotFile is called on a non-native platform", async () => {
+    // isNativePlatformMock returns false (default from beforeEach)
+    await expect(persistConfigSnapshotFile("backup", new Uint8Array([1, 2]))).rejects.toThrow(
+      "Config snapshots are only supported on native builds.",
+    );
+  });
+
+  it("throws when pickConfigSnapshotFile is called on a non-Android platform", async () => {
+    // getPlatformMock returns "web" (default from beforeEach), so isAndroidNative() = false
+    await expect(pickConfigSnapshotFile()).rejects.toThrow(
+      "Config snapshots are only supported on native builds.",
+    );
+  });
+
+  it("throws when pickConfigSnapshotFile returns no URI or no persisted permission", async () => {
+    getPlatformMock.mockReturnValue("android");
+    isNativePlatformMock.mockReturnValue(true);
+    pickFileMock.mockResolvedValue({ uri: null, permissionPersisted: true, name: "config.cfg" });
+
+    await expect(pickConfigSnapshotFile()).rejects.toThrow("Config file access was not granted.");
+
+    pickFileMock.mockResolvedValue({ uri: "content://file", permissionPersisted: false, name: "config.cfg" });
+    await expect(pickConfigSnapshotFile()).rejects.toThrow("Config file access was not granted.");
+  });
+
+  it("returns parsed bytes when pickConfigSnapshotFile succeeds", async () => {
+    getPlatformMock.mockReturnValue("android");
+    isNativePlatformMock.mockReturnValue(true);
+    pickFileMock.mockResolvedValue({
+      uri: "content://picked/valid.cfg",
+      permissionPersisted: true,
+      name: "my-config.cfg",
+      sizeBytes: 3,
+      modifiedAt: "2026-01-01T00:00:00Z",
+    });
+    // btoa([1,2,3]) = 'AQID'
+    readFileMock.mockResolvedValue({ data: btoa(String.fromCharCode(1, 2, 3)) });
+
+    const result = await pickConfigSnapshotFile();
+
+    expect(result.name).toBe("my-config.cfg");
+    expect(result.sizeBytes).toBe(3);
+    expect(result.bytes).toBeInstanceOf(Uint8Array);
+  });
 });
