@@ -7,26 +7,26 @@
  */
 
 // jsdom environment — covers document.hidden branches in buildLogContext
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const addLog = vi.fn();
 const getActiveAction = vi.fn(() => null);
 const getPlaybackTraceSnapshot = vi.fn(() => null);
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: (...args: unknown[]) => addLog(...args),
   addErrorLog: vi.fn(),
 }));
 
-vi.mock('@/lib/tracing/actionTrace', () => ({
+vi.mock("@/lib/tracing/actionTrace", () => ({
   getActiveAction: () => getActiveAction(),
 }));
 
-vi.mock('@/pages/playFiles/playbackTraceStore', () => ({
+vi.mock("@/pages/playFiles/playbackTraceStore", () => ({
   getPlaybackTraceSnapshot: () => getPlaybackTraceSnapshot(),
 }));
 
-describe('logger lifecycle state (jsdom)', () => {
+describe("logger lifecycle state (jsdom)", () => {
   beforeEach(() => {
     vi.resetModules();
     addLog.mockReset();
@@ -35,43 +35,43 @@ describe('logger lifecycle state (jsdom)', () => {
   });
 
   afterEach(() => {
-    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
   });
 
-  it('records lifecycleState as background when document.hidden is true', async () => {
-    const spyInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+  it("records lifecycleState as background when document.hidden is true", async () => {
+    const spyInfo = vi.spyOn(console, "info").mockImplementation(() => undefined);
     getPlaybackTraceSnapshot.mockReturnValue({
-      sourceKind: 'hvsc',
-      localAccessMode: 'file',
-      trackInstanceId: 'track-bg',
-      playlistItemId: 'item-bg',
+      sourceKind: "hvsc",
+      localAccessMode: "file",
+      trackInstanceId: "track-bg",
+      playlistItemId: "item-bg",
     });
-    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
 
-    const { logger } = await import('@/lib/diagnostics/logger');
-    logger.info('bg-test');
+    const { logger } = await import("@/lib/diagnostics/logger");
+    logger.info("bg-test");
 
     const logged = addLog.mock.calls[0][2];
-    expect(logged.lifecycleState).toBe('background');
+    expect(logged.lifecycleState).toBe("background");
     spyInfo.mockRestore();
   });
 
-  it('records lifecycleState as foreground when document is visible and focused', async () => {
-    const spyInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+  it("records lifecycleState as foreground when document is visible and focused", async () => {
+    const spyInfo = vi.spyOn(console, "info").mockImplementation(() => undefined);
     getPlaybackTraceSnapshot.mockReturnValue({
-      sourceKind: 'hvsc',
-      localAccessMode: 'file',
-      trackInstanceId: 'track-fg',
-      playlistItemId: 'item-fg',
+      sourceKind: "hvsc",
+      localAccessMode: "file",
+      trackInstanceId: "track-fg",
+      playlistItemId: "item-fg",
     });
-    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
 
-    const { logger } = await import('@/lib/diagnostics/logger');
-    logger.info('fg-test');
+    const { logger } = await import("@/lib/diagnostics/logger");
+    logger.info("fg-test");
 
     const logged = addLog.mock.calls[0][2];
-    expect(logged.lifecycleState).toBe('foreground');
+    expect(logged.lifecycleState).toBe("foreground");
     spyInfo.mockRestore();
   });
 });

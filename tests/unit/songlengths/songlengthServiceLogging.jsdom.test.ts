@@ -8,64 +8,64 @@
 
 // jsdom environment so typeof window !== "undefined", allowing the catch fallback
 // in safeAddLog / safeAddErrorLog to emit console.warn instead of returning early.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const addLogMock = vi.fn();
 const addErrorLogMock = vi.fn();
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: (...args: unknown[]) => addLogMock(...args),
   addErrorLog: (...args: unknown[]) => addErrorLogMock(...args),
 }));
 
-describe('SongLengthServiceFacade logging fallback (jsdom)', () => {
+describe("SongLengthServiceFacade logging fallback (jsdom)", () => {
   beforeEach(() => {
     vi.resetModules();
     addLogMock.mockReset();
     addErrorLogMock.mockReset();
   });
 
-  it('falls back to console.warn when addLog throws during a service call', async () => {
+  it("falls back to console.warn when addLog throws during a service call", async () => {
     addLogMock.mockImplementation(() => {
-      throw new Error('log-exploded');
+      throw new Error("log-exploded");
     });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    const { SongLengthServiceFacade, InMemoryTextBackend } = await import('@/lib/songlengths');
-    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test' });
-    await service.loadOnColdStart(null, async () => [], 'test-label');
+    const { SongLengthServiceFacade, InMemoryTextBackend } = await import("@/lib/songlengths");
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: "test" });
+    await service.loadOnColdStart(null, async () => [], "test-label");
 
     expect(warnSpy).toHaveBeenCalledWith(
-      'SongLengthServiceFacade logging failed',
-      expect.objectContaining({ error: 'log-exploded' }),
+      "SongLengthServiceFacade logging failed",
+      expect.objectContaining({ error: "log-exploded" }),
     );
     warnSpy.mockRestore();
   });
 
-  it('falls back to console.warn when addErrorLog throws during a service call', async () => {
+  it("falls back to console.warn when addErrorLog throws during a service call", async () => {
     addLogMock.mockImplementation(() => {
-      throw new Error('log-exploded');
+      throw new Error("log-exploded");
     });
     addErrorLogMock.mockImplementation(() => {
-      throw new Error('errlog-exploded');
+      throw new Error("errlog-exploded");
     });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    const { SongLengthServiceFacade, InMemoryTextBackend } = await import('@/lib/songlengths');
-    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test' });
+    const { SongLengthServiceFacade, InMemoryTextBackend } = await import("@/lib/songlengths");
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: "test" });
 
     // loadOnColdStart with a throwing loader triggers addErrorLog path
     await service.loadOnColdStart(
       null,
       async () => {
-        throw new Error('source-failed');
+        throw new Error("source-failed");
       },
-      'test-label',
+      "test-label",
     );
 
     expect(warnSpy).toHaveBeenCalledWith(
-      'SongLengthServiceFacade error logging failed',
-      expect.objectContaining({ error: 'errlog-exploded' }),
+      "SongLengthServiceFacade error logging failed",
+      expect.objectContaining({ error: "errlog-exploded" }),
     );
     warnSpy.mockRestore();
   });

@@ -183,9 +183,7 @@ describe("configWorkflow", () => {
       writeRemoteFile: vi.fn().mockRejectedValue(new Error("upload error")),
     });
 
-    await expect(workflow.applyLocalSnapshot("config.cfg", new Uint8Array([1, 2, 3]))).rejects.toThrow(
-      "upload error",
-    );
+    await expect(workflow.applyLocalSnapshot("config.cfg", new Uint8Array([1, 2, 3]))).rejects.toThrow("upload error");
 
     expect(addErrorLogSpy).toHaveBeenCalledWith(
       "Config workflow failed",

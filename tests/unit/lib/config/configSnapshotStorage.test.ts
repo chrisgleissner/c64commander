@@ -123,9 +123,7 @@ describe("configSnapshotStorage", () => {
 
   it("throws when pickConfigSnapshotFile is called on a non-Android platform", async () => {
     // getPlatformMock returns "web" (default from beforeEach), so isAndroidNative() = false
-    await expect(pickConfigSnapshotFile()).rejects.toThrow(
-      "Config snapshots are only supported on native builds.",
-    );
+    await expect(pickConfigSnapshotFile()).rejects.toThrow("Config snapshots are only supported on native builds.");
   });
 
   it("throws when pickConfigSnapshotFile returns no URI or no persisted permission", async () => {
