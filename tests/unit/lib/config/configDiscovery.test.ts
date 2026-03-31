@@ -7,12 +7,12 @@ describe("discoverConfigCandidates", () => {
   it("scans a non-slash source root as the final parent-directory candidate location", async () => {
     const listEntries = vi.fn(async (path: string): Promise<SourceEntry[]> => {
       switch (path) {
-        case "/Downloads/Games":
+        case "/Downloads/Games/":
           return [
             { type: "file", name: "Nested.sid", path: "/Downloads/Games/Nested.sid" },
             { type: "file", name: "Nested.cfg", path: "/Downloads/Games/Nested.cfg" },
           ];
-        case "/Downloads":
+        case "/Downloads/":
           return [{ type: "file", name: "Root.cfg", path: "/Downloads/Root.cfg" }];
         default:
           return [];
