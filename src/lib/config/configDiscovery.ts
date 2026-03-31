@@ -43,7 +43,9 @@ const buildCandidate = (
 const shouldContinueAscending = (currentParent: string, rootPath: string) => {
   const normalizedCurrent = normalizeSourcePath(currentParent);
   const normalizedRoot = normalizeSourcePath(rootPath || "/");
-  if (normalizedCurrent === normalizedRoot) return false;
+  if (normalizedCurrent === normalizedRoot) {
+    return normalizedRoot !== "/";
+  }
   return normalizedCurrent.startsWith(normalizedRoot);
 };
 

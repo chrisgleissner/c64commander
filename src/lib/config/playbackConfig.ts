@@ -188,6 +188,12 @@ export const buildPlaybackConfigSignature = (
   configRef: ConfigFileReference | null | undefined,
   overrides: ConfigValueOverride[] | null | undefined,
 ) => {
+  const normalizedOverrides = [...(overrides ?? [])].sort((left, right) => {
+    const categoryComparison = left.category.localeCompare(right.category);
+    if (categoryComparison !== 0) return categoryComparison;
+    return left.item.localeCompare(right.item);
+  });
+
   return JSON.stringify({
     configRef: configRef
       ? {
@@ -195,7 +201,7 @@ export const buildPlaybackConfigSignature = (
           fileName: configRef.fileName,
         }
       : null,
-    overrides: (overrides ?? []).map((override) => ({
+    overrides: normalizedOverrides.map((override) => ({
       category: override.category,
       item: override.item,
       value: override.value,
