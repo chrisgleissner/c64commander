@@ -113,6 +113,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     selection.sizeBytes != null ||
     typeof selection.modifiedAt === "string";
 
+  const PLAYLIST_APPEND_BATCH_SIZE = 250;
+
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
     addItemsStartedAtRef.current = startedAt;
@@ -214,7 +216,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
 
         const archiveClient = createArchiveClient(archiveConfig);
-        const playlistItems: PlaylistItem[] = [];
+        let appendedArchiveItems = 0;
+        let pendingArchiveBatch: PlaylistItem[] = [];
+
+        const flushArchiveBatch = async () => {
+          if (!pendingArchiveBatch.length) return;
+          const resolvedItems = await applySonglengthsToItems(pendingArchiveBatch);
+          appendedArchiveItems += resolvedItems.length;
+          setPlaylist((prev) => [...prev, ...resolvedItems]);
+          pendingArchiveBatch = [];
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        };
 
         for (const selection of selections) {
           const { resultId, category } = parseArchiveSelectionPath(selection.path);
@@ -246,18 +258,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           if (!item) {
             throw new Error(`Unsupported archive file ${playableEntry.path}.`);
           }
-          playlistItems.push(item);
+          pendingArchiveBatch.push(item);
+          if (pendingArchiveBatch.length >= PLAYLIST_APPEND_BATCH_SIZE) {
+            await flushArchiveBatch();
+          }
         }
 
-        setPlaylist((prev) => [...prev, ...playlistItems]);
+        await flushArchiveBatch();
         toast({
           title: "Items added",
-          description: `${playlistItems.length} archive result(s) added to playlist.`,
+          description: `${appendedArchiveItems} archive result(s) added to playlist.`,
         });
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "done",
-          count: playlistItems.length,
+          count: appendedArchiveItems,
           message: "Added to playlist",
         }));
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -347,7 +362,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         [...selectedFilesByParent.keys()].map((path) => [normalizeSourcePath(path), getDirectoryEntries(path)]),
       );
 
-      const playlistItems: PlaylistItem[] = [];
+      let appendedPlaylistItems = 0;
+      let discoveredPlayableItems = 0;
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
       if (source.type === "local") {
         const treeUri = localSourceTreeUris.get(source.id);
@@ -497,6 +513,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           });
         }
       }
+      const appendPlaylistBatch = async (batch: PlaylistItem[]) => {
+        if (!batch.length) return;
+        const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
+          allowMd5Fallback: false,
+        });
+        appendedPlaylistItems += resolvedItems.length;
+        setPlaylist((prev) => [...prev, ...resolvedItems]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      };
+
+      let pendingPlaylistBatch: PlaylistItem[] = [];
       for (const file of selectedFiles) {
         if (!getPlayCategory(file.path)) continue;
         const normalizedPath = normalizeSourcePath(file.path);
@@ -551,10 +578,22 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
         };
         const item = buildPlaylistItem(playable);
-        if (item) playlistItems.push(item);
+        if (!item) continue;
+        pendingPlaylistBatch.push(item);
+        discoveredPlayableItems += 1;
+        if (pendingPlaylistBatch.length >= PLAYLIST_APPEND_BATCH_SIZE) {
+          const batch = pendingPlaylistBatch;
+          pendingPlaylistBatch = [];
+          await appendPlaylistBatch(batch);
+        }
       }
 
-      if (!playlistItems.length) {
+      if (pendingPlaylistBatch.length) {
+        await appendPlaylistBatch(pendingPlaylistBatch);
+        pendingPlaylistBatch = [];
+      }
+
+      if (!discoveredPlayableItems) {
         const reason = selectedFiles.length === 0 ? "no-files-found" : "unsupported-files";
         addLog("debug", "No supported files after scan", {
           sourceId: source.id,
@@ -585,22 +624,18 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       if (elapsed < minDuration) {
         await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
       }
-      const resolvedItems = await applySonglengthsToItems(playlistItems, discoveredSonglengths, {
-        allowMd5Fallback: false,
-      });
-      setPlaylist((prev) => [...prev, ...resolvedItems]);
       if (localTreeUri) {
         addLog("debug", "SAF scan complete", {
           sourceId: source.id,
           treeUri: redactTreeUri(localTreeUri),
           totalFiles: selectedFiles.length,
-          supportedFiles: playlistItems.length,
+          supportedFiles: appendedPlaylistItems,
           elapsedMs: Date.now() - startedAt,
         });
       }
       toast({
         title: "Items added",
-        description: `${playlistItems.length} file(s) added to playlist.`,
+        description: `${appendedPlaylistItems} file(s) added to playlist.`,
       });
       setAddItemsProgress((prev) => ({
         ...prev,

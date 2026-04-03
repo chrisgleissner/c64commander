@@ -133,9 +133,12 @@ export const applyCancelledIngestionState = (
         ? {
             ...summary.download,
             status: "idle",
+            archiveName: archiveName ?? summary.download.archiveName ?? null,
+            lastStage: "cancelled",
             finishedAt: now,
             errorCategory: null,
             errorMessage: message,
+            recoveryHint: "Retry the HVSC install or ingest to restart from the last complete archive state.",
           }
         : summary.download,
     extraction:
@@ -143,9 +146,12 @@ export const applyCancelledIngestionState = (
         ? {
             ...summary.extraction,
             status: "idle",
+            archiveName: archiveName ?? summary.extraction.archiveName ?? summary.download.archiveName ?? null,
+            lastStage: "cancelled",
             finishedAt: now,
             errorCategory: null,
             errorMessage: message,
+            recoveryHint: "Retry the HVSC install or ingest to restart from the last complete archive state.",
           }
         : summary.extraction,
     lastUpdatedAt: now,
@@ -181,9 +187,11 @@ export const recoverStaleIngestionState = (): boolean => {
           ? {
               ...summary.download,
               status: "failure",
+              lastStage: "recovered-interrupted",
               finishedAt: now,
               errorMessage: "Interrupted by app restart",
               errorCategory: "unknown",
+              recoveryHint: "Retry the HVSC install or ingest. Partial progress was not promoted to ready state.",
             }
           : summary.download,
       extraction:
@@ -191,9 +199,11 @@ export const recoverStaleIngestionState = (): boolean => {
           ? {
               ...summary.extraction,
               status: "failure",
+              lastStage: "recovered-interrupted",
               finishedAt: now,
               errorMessage: "Interrupted by app restart",
               errorCategory: "unknown",
+              recoveryHint: "Retry the HVSC install or ingest. Partial progress was not promoted to ready state.",
             }
           : summary.extraction,
       lastUpdatedAt: now,

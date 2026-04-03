@@ -3,6 +3,7 @@ apply plugin: 'kotlin-android'
 apply plugin: 'jacoco'
 
 import groovy.json.JsonSlurper
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 def keystoreProps = new Properties()
 def keyPropsFile = rootProject.file("key.properties")
@@ -301,6 +302,14 @@ tasks.register('jacocoTestCoverageVerification', JacocoCoverageVerification) {
             }
         }
     }
+}
+
+tasks.withType(Test).configureEach {
+    // Robolectric 4.11.x does not run reliably on the host JDK 25 runtime used in this environment.
+    // Keep Android compilation on Java 17, but execute JVM unit tests with a supported Java 21 launcher.
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    })
 }
 
 apply from: 'capacitor.build.gradle'

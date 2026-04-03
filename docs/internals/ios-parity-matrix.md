@@ -15,13 +15,13 @@
 
 ## Infrastructure Parity
 
-| Area                | Android                             | iOS                              | Status     |
-| ------------------- | ----------------------------------- | -------------------------------- | ---------- |
-| Native unit tests   | 13 JVM test classes (82 tests)      | 0 XCTest classes                 | **Gap**    |
-| CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**    |
-| Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**    |
-| Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity** |
-| HVSC module         | Shared TypeScript (no native code)  | Same shared TypeScript           | **Parity** |
+| Area                | Android                             | iOS                              | Status      |
+| ------------------- | ----------------------------------- | -------------------------------- | ----------- |
+| Native unit tests   | 13 JVM test classes (82 tests)      | 0 XCTest classes                 | **Gap**     |
+| CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**     |
+| Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**     |
+| Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity**  |
+| HVSC module         | Android native plugin + TS runtime  | iOS native plugin + TS runtime   | **Partial** |
 
 ## Accepted Gaps
 

@@ -53,20 +53,28 @@ describe("hvscStatusStore", () => {
       const summary: HvscStatusSummary = {
         download: {
           status: "success",
+          ingestionId: "ingestion-1",
+          archiveName: "hvsc-baseline-84.7z",
+          lastStage: "download",
           startedAt: "now",
           finishedAt: "later",
           durationMs: 1234,
           sizeBytes: 987,
           downloadedBytes: 456,
           totalBytes: 1024,
+          recoveryHint: null,
         },
         extraction: {
           status: "success",
+          ingestionId: "ingestion-1",
+          archiveName: "hvsc-baseline-84.7z",
+          lastStage: "complete",
           startedAt: "now",
           finishedAt: "later",
           durationMs: 5678,
           filesExtracted: 42,
           totalFiles: 120,
+          recoveryHint: null,
         },
         lastUpdatedAt: "later",
       };
@@ -90,6 +98,7 @@ describe("hvscStatusStore", () => {
       const stored = JSON.parse(localStorage.getItem("c64u_hvsc_status:v1") ?? "{}");
       expect(stored.download?.downloadedBytes).toBe(10);
       expect(result.download.downloadedBytes).toBe(10);
+      expect(result.download.ingestionId).toBe("test");
     });
 
     it("ignores updates when storage is corrupted", () => {
@@ -125,6 +134,7 @@ describe("hvscStatusStore", () => {
         percent: 25,
       });
       expect(summary.download.status).toBe("in-progress");
+      expect(summary.download.ingestionId).toBe("test");
       expect(summary.download.downloadedBytes).toBe(512);
       expect(summary.download.totalBytes).toBe(2048);
     });
@@ -157,6 +167,7 @@ describe("hvscStatusStore", () => {
       const event = {
         stage: "download",
         message: "Downloaded",
+        archiveName: "hvsc-baseline-84.7z",
         downloadedBytes: 100,
         totalBytes: 100,
         percent: 100,
@@ -165,9 +176,29 @@ describe("hvscStatusStore", () => {
 
       const next = applyHvscProgressEventToSummary(base, event, null);
       expect(next.download.status).toBe("success");
+      expect(next.download.archiveName).toBe("hvsc-baseline-84.7z");
       expect(next.download.finishedAt).toBeTruthy();
       expect(next.download.durationMs).toBe(1234);
       expect(next.download.totalBytes).toBe(100);
+    });
+
+    it("records recovery hints on extraction failures", () => {
+      const initial = getDefaultHvscStatusSummary();
+      const next = applyHvscProgressEventToSummary(
+        initial,
+        {
+          ingestionId: "ingestion-2",
+          stage: "error",
+          message: "corrupt archive",
+          archiveName: "hvsc-update-85.7z",
+          errorCause: "corrupt archive",
+        },
+        "archive_validation",
+      );
+
+      expect(next.extraction.status).toBe("failure");
+      expect(next.extraction.archiveName).toBe("hvsc-update-85.7z");
+      expect(next.extraction.recoveryHint).toContain("Delete the cached archive");
     });
 
     it("ignores non-complete events", () => {

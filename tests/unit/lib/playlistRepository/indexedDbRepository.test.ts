@@ -322,7 +322,7 @@ describe("indexedDB playlist repository", () => {
     expect(await repository.getPlaylistItems("playlist-default")).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
       "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
-      expect.objectContaining({ expectedVersion: 2, foundVersion: 999 }),
+      expect.objectContaining({ expectedVersion: 3, foundVersion: 999 }),
     );
     expect(localStorage.getItem("c64u_playlist_repo:indexeddb:recovery")).toContain("incompatible-schema");
   });

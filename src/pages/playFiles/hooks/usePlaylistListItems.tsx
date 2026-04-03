@@ -55,6 +55,7 @@ export const usePlaylistListItems = ({
 }: PlaylistListItemsOptions) =>
   useMemo(() => {
     const items: ActionListItem[] = [];
+    const playlistIndexById = new Map(playlist.map((entry, index) => [entry.id, index]));
     let lastFolder: string | null = null;
     filteredPlaylist.forEach((item) => {
       const folderPath = getParentPath(item.path);
@@ -72,7 +73,7 @@ export const usePlaylistListItems = ({
         });
         lastFolder = folderPath;
       }
-      const playlistIndex = playlist.findIndex((entry) => entry.id === item.id);
+      const playlistIndex = playlistIndexById.get(item.id) ?? -1;
       const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
       const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
       const configUiState = resolvePlaybackConfigUiState({

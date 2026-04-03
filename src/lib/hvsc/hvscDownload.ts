@@ -289,7 +289,26 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
       });
       if (stat.type === "file" || stat.type === "directory") {
         const marker = await readCachedArchiveMarker(name);
-        if (marker) return name;
+        const statSize = stat.size ?? null;
+        const hasSizeMismatch =
+          typeof marker?.sizeBytes === "number" &&
+          marker.sizeBytes > 0 &&
+          statSize !== null &&
+          statSize !== marker.sizeBytes;
+        const violatesExpectedSize =
+          typeof marker?.expectedSizeBytes === "number" &&
+          marker.expectedSizeBytes > 0 &&
+          statSize !== null &&
+          statSize < marker.expectedSizeBytes * 0.99;
+        if (marker && !hasSizeMismatch && !violatesExpectedSize) return name;
+        if (marker && (hasSizeMismatch || violatesExpectedSize)) {
+          addLog("warn", "HVSC cached archive marker validation failed", {
+            name,
+            statSize,
+            markerSizeBytes: marker.sizeBytes ?? null,
+            markerExpectedSizeBytes: marker.expectedSizeBytes ?? null,
+          });
+        }
         await deleteCachedArchive(name);
       }
     } catch (error) {
@@ -334,6 +353,10 @@ export const getCacheStatusInternal = async () => {
 };
 
 // ── Archive read-back ────────────────────────────────────────────
+
+const buildNonNativeLargeArchiveError = (archiveName: string, sizeBytes: number) =>
+  `HVSC non-native archive handling is limited to ${MAX_BRIDGE_READ_BYTES} bytes. ` +
+  `${archiveName} is ${sizeBytes} bytes and requires the native ingestion plugin on this platform.`;
 
 export const readArchiveBuffer = async (archivePath: string) => {
   const heapBefore = readHeapUsageBytes();
@@ -392,7 +415,7 @@ export const readArchiveBuffer = async (archivePath: string) => {
       });
       return decoded;
     }
-    throw new Error(`HVSC bridge read blocked for large archive (${statSize} bytes): ${archivePath}`);
+    throw new Error(buildNonNativeLargeArchiveError(archivePath, statSize));
   }
   const archiveData = await Filesystem.readFile({
     directory: Directory.Data,
@@ -440,6 +463,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
   const retainInMemoryBuffer = options.retainInMemoryBuffer ?? false;
   const ensureNotCancelled = () => ensureNotCancelledWith(cancelTokens, cancelToken);
   let inMemoryBuffer: Uint8Array | null = null;
+  let expectedSizeBytes: number | null = null;
 
   ensureNotCancelled();
   emitProgress({
@@ -452,6 +476,10 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
   addLog("info", "HVSC download started", { archiveName, url: downloadUrl });
   const downloadHeapBefore = readHeapUsageBytes();
   const totalBytesHint = await fetchContentLength(downloadUrl);
+  expectedSizeBytes = totalBytesHint;
+  if (!shouldUseNativeDownload() && totalBytesHint !== null && totalBytesHint > MAX_BRIDGE_READ_BYTES) {
+    throw new Error(buildNonNativeLargeArchiveError(archiveName, totalBytesHint));
+  }
 
   if (shouldUseNativeDownload()) {
     const cacheDir = getHvscCacheDir();
@@ -488,6 +516,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
         path: `${cacheDir}/${archivePath}`,
         progress: (status) => {
           totalBytes = status.total ?? totalBytes;
+          expectedSizeBytes = status.total ?? expectedSizeBytes;
           const loaded = status.loaded ?? 0;
           if (loaded >= lastReported) {
             lastReported = loaded;
@@ -537,6 +566,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       throw new Error(`Download failed: ${response.status} ${response.statusText}`);
     }
     const totalBytes = parseContentLength(response.headers.get("content-length")) ?? totalBytesHint;
+    expectedSizeBytes = totalBytes;
     if (!response.body) {
       const buffer = new Uint8Array(await response.arrayBuffer());
       if (totalBytes && buffer.byteLength !== totalBytes) {
@@ -599,6 +629,8 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       version: plan.version,
       type: plan.type,
       sizeBytes: stat.size,
+      expectedSizeBytes,
+      sourceUrl: downloadUrl,
       completedAt: new Date().toISOString(),
     });
     emitProgress({
@@ -618,6 +650,8 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       version: plan.version,
       type: plan.type,
       sizeBytes: null,
+      expectedSizeBytes,
+      sourceUrl: downloadUrl,
       completedAt: new Date().toISOString(),
     });
   }

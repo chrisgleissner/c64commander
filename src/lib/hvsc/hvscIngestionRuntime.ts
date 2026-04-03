@@ -106,17 +106,28 @@ const canUseNonNativeHvscIngestion = () => {
   return import.meta.env.VITE_ENABLE_NON_NATIVE_HVSC_INGESTION === "1";
 };
 
+export const NON_NATIVE_HVSC_INGESTION_UNSUPPORTED_MESSAGE =
+  "HVSC full-archive ingestion requires the native ingestion plugin on this platform. " +
+  "Enable VITE_ENABLE_NON_NATIVE_HVSC_INGESTION=1 only for controlled testing.";
+
 const resolveHvscIngestionMode = () => {
   if (canUseNativeHvscIngestion()) {
     return "native" as const;
   }
-  if (!canUseNonNativeHvscIngestion()) {
-    addLog("warn", "HVSC native ingestion plugin unavailable; falling back to non-native ingestion path", {
+  if (canUseNonNativeHvscIngestion()) {
+    addLog("warn", "HVSC native ingestion plugin unavailable; using non-native ingestion path", {
       nativeAvailable: false,
-      overrideEnabled: false,
+      overrideEnabled: import.meta.env.VITE_ENABLE_NON_NATIVE_HVSC_INGESTION === "1",
+      mode: import.meta.env.MODE,
     });
+    return "non-native" as const;
   }
-  return "non-native" as const;
+  addLog("error", "HVSC native ingestion plugin unavailable on unsupported platform", {
+    nativeAvailable: false,
+    overrideEnabled: false,
+    mode: import.meta.env.MODE,
+  });
+  throw new Error(NON_NATIVE_HVSC_INGESTION_UNSUPPORTED_MESSAGE);
 };
 
 const isUnsupportedNativeSevenZipMethodError = (error: unknown) => {

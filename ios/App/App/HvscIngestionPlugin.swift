@@ -23,11 +23,10 @@ import SWCompression
 ///   SQLite index used by the HVSC browse view.
 /// - `cancelIngestion`, `getIngestionStats`: lifecycle helpers.
 ///
-/// The JS layer (`hvscIngestionRuntime.ts`) gates the native ingestion path on
-/// `Capacitor.getPlatform() === "android"`, so on iOS `ingestHvsc` is not called from the
-/// production ingestion flow. However providing a correct native implementation avoids silent
-/// failures if that gate is relaxed in the future, and ensures `readArchiveChunk` works
-/// correctly so the non-native JS ingestion path can assemble the archive buffer.
+/// The JS layer (`hvscIngestionRuntime.ts`) now selects the native ingestion path whenever the
+/// `HvscIngestion` plugin is available on a native platform, so `ingestHvsc` is part of the
+/// active iOS production path. `readArchiveChunk` remains available for recovery and non-native
+/// fallback flows.
 @objc(HvscIngestionPlugin)
 public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
 
@@ -118,8 +117,9 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
 
     /// Full native ingestion: extract the 7z archive and write metadata to SQLite.
     ///
-    /// On iOS the JS ingestion gate redirects to the non-native (7z-wasm) path, so this method
-    /// is provided for completeness and future use.
+    /// The JS runtime now selects this native path whenever the `HvscIngestion` plugin is
+    /// available on a native iOS build. The remaining gap is validation and memory scaling,
+    /// not runtime reachability.
     @objc public func ingestHvsc(_ call: CAPPluginCall) {
         guard let relativeArchivePath = call.getString("relativeArchivePath"),
               !relativeArchivePath.isEmpty else {
