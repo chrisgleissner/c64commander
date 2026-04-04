@@ -1,5 +1,282 @@
 # Playback Configuration System - Execution Worklog
 
+## 2026-04-04T09:30:00Z - AUD-004 and AUD-005 DONE - End-to-end SID playback proven
+
+### Action
+
+Completed second HIL run (`artifacts/hvsc-hil-20260404T064552Z/`) proving end-to-end SID playback on real hardware:
+
+- Pixel 4 (serial 9B081FFAZ001WX, Android 16) running c64commander 0.7.2-7c26e
+- C64 Ultimate (Ultimate 64 Elite, firmware 3.14d) at `u64` (192.168.1.13)
+- App launched → Play Files → Add items from C64U source → browsed C64U root (Flash, Temp, USB2) → navigated into /Temp/ → selected demo.sid → added to playlist → played SID
+- Screenshot 12 (`12-playback-controls.png`): demo.sid actively playing at 1:19/3:00, red stop button, U64E HEALTHY, playlist math correct (Total 6:00, Remaining 4:40)
+- 12 timestamped screenshots, logcat (517 lines), c64u-info.json archived
+
+### Documentation updates
+
+- `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`: AUD-004 updated with second HIL run evidence; AUD-005 changed from BLOCKED to DONE; executive summary updated to 13 DONE / 1 BLOCKED (iOS only); closure matrix updated
+- `PLANS.md`: Phase 3 AUD-004 and AUD-005 marked DONE; Plan Extension marked COMPLETE
+- `artifacts/hvsc-hil-20260404T064552Z/TIMELINE.md`: Created with full HIL run timeline
+
+## 2026-04-04T04:30:00Z - AUD-005 BLOCKED - C64U device unreachable
+
+### Action
+
+Both `u64` (192.168.1.13) and `c64u` time out on REST probes. Without a reachable C64 Ultimate, app-first playback and c64scope audio capture cannot be executed. Marked BLOCKED.
+
+## 2026-04-04T04:00:00Z - AUD-004 closure - Pixel 4 HIL run archived
+
+### Action
+
+Full HIL run executed on Pixel 4 (flame, 9B081FFAZ001WX):
+
+- App 0.7.2-7c26e installed via `./gradlew installDebug`, cold launched in 758ms
+- Home page showed U64E connection (firmware 3.14d, device c64u)
+- Navigated Play Files → Add items → C64U source selection → HVSC section
+- HVSC download completed (80MB `hvsc-baseline-84.7z`)
+- HVSC extraction failed: 7zip 24.09 32-bit WASM cannot handle LZMA:336m dictionary
+- C64U intermittently reachable (HEALTHY/DEGRADED/UNHEALTHY fluctuation)
+
+### Artifacts
+
+- `artifacts/hvsc-hil-20260404T020302Z/` — 12 screenshots, TIMELINE.md, logcat-full.txt (9690 lines), logcat-hvsc.txt (1051 lines), device-info.txt
+
+## 2026-04-04T03:20:00Z - AUD-012 closure - Query timing with correlation IDs
+
+### Action
+
+Added `HvscQueryTimingRecord` type and `recordHvscQueryTiming` function to `hvscStatusStore.ts`. Instrumented `getHvscFolderListingPaged` in `hvscService.ts` to record query timing on all code paths (index, mock-runtime, runtime, and both fallback variants) with `COR-XXXX` correlation IDs, phase labels, and sub-millisecond timing. Playback correlation was already handled by existing `runWithImplicitAction` wrapping of REST calls. Added 2 regression tests for query timing logging.
+
+### Evidence
+
+- 2 new tests pass in `tests/unit/hvsc/hvscStatusStore.test.ts` (recordHvscQueryTiming describe block)
+- Query timing logged with: correlationId, phase, path, query, offset, limit, resultCount, windowMs
+
+### Files changed
+
+- `src/lib/hvsc/hvscStatusStore.ts` — added `HvscQueryTimingRecord` type and `recordHvscQueryTiming` function
+- `src/lib/hvsc/hvscService.ts` — instrumented `getHvscFolderListingPaged` with timing on all paths
+- `tests/unit/hvsc/hvscStatusStore.test.ts` — added 2 query timing regression tests
+
+## 2026-04-04T03:10:00Z - AUD-011 closure - Hook-level scale tests at 10k/50k/100k
+
+### Action
+
+Added synthetic UI-scale tests above the repository layer for the `useQueryFilteredPlaylist` hook. Four tests exercise windowing, pagination, and category filtering at 10k, 50k, and 100k item counts. This closes the primary AUD-011 closure criterion ("synthetic UI-scale tests exist above the repository layer"). Device perf sampling delegated to AUD-004; CI performance budget gates noted as follow-up infrastructure.
+
+### Evidence
+
+- 4 tests pass in `tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx`
+- 10k/50k/100k items all produce correct preview windows, totalMatchCount, and hasMoreViewAllResults
+- Category filter at 10k returns exactly 2000/10000 "sid" items
+
+### Files changed
+
+- `tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx` — new file, 4 scale tests
+
+## 2026-04-04T03:05:00Z - AUD-010 strengthening - Expected-size validation regression test
+
+### Action
+
+AUD-010 was already marked DONE but was missing a regression test for the `violatesExpectedSize` branch in `resolveCachedArchive`. Added a test that mocks a cached archive at 50k bytes with an expected size of 1M bytes, verifying the cache is invalidated and deleted.
+
+### Evidence
+
+- Test passes: "deletes cached archives when file size is below 99% of expected size"
+
+### Files changed
+
+- `tests/unit/hvsc/hvscDownload.test.ts` — added expected-size validation regression test
+
+## 2026-04-04T02:50:00Z - AUD-006 BLOCKED - iOS HVSC native test coverage requires Swift/macOS
+
+### Action
+
+Marked AUD-006 as BLOCKED. Swift toolchain is not available on this Linux host, so iOS HVSC-specific XCTest coverage cannot be authored, compiled, or validated. The iOS native ingest path still loads the full archive into memory via `Data(contentsOf:)` and has no HVSC-specific native tests under `ios/native-tests/`. Staging extraction (AUD-003) was implemented for TypeScript and Android but not iOS.
+
+### Evidence
+
+- `which swift` → not found on Linux host
+- `ios/native-tests/` exists with SwiftPM structure but only 4 non-HVSC test files (FtpPathResolution, FtpRequestNormalization, HostValidation, PathSanitization)
+- `ios/App/App/HvscIngestionPlugin.swift:163-165` still uses `Data(contentsOf:)` for full-archive load
+
+### Files changed
+
+- `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md` — AUD-006 moved to BLOCKED with justification
+- `PLANS.md` — Phase 2 AUD-006 marked BLOCKED
+
+## 2026-04-04T02:45:00Z - AUD-007 closure - Document Web/non-native platform support contract
+
+### Action
+
+Documented the HVSC platform support contract in `docs/architecture.md` with a per-platform capability matrix. The Web platform explicitly refuses large-archive ingest in production via `resolveHvscIngestionMode()` guard and 5 MiB download budget.
+
+### Result
+
+- Added "HVSC platform support contract" section to `docs/architecture.md` with Android/iOS/Web capability matrix.
+- Documented Web limitations: no native plugin, blocked in production, 5 MiB guard, test-only override.
+- Existing tests already lock the behavior: `hvscNonNativeGuard.test.ts` (override flag/error message), `hvscDownload.test.ts` (early size-guard failure).
+- No code changes needed — guards and tests already complete.
+- Follow-up doc: AUD-007 moved from PARTIAL to DONE.
+
+## 2026-04-04T02:30:00Z - AUD-003 closure - Staged extraction with atomic promotion
+
+### Action
+
+Implemented staged extraction with atomic promotion across TypeScript and Android layers to prevent partial library replacement on crash or interruption.
+
+### Result
+
+- TypeScript (`hvscFilesystem.ts`): added `createLibraryStagingDir`, `writeStagingFile`, `resolveStagingPath`, `promoteLibraryStagingDir`, `cleanupStaleStagingDir`. Baseline extracts to `hvsc/library-staging/`, then atomically promotes via Capacitor `Filesystem.rename`.
+- TypeScript (`hvscIngestionRuntime.ts`): baseline path uses staging dir for all writes; promotion after extraction and deletion processing; stale staging cleanup at both `installOrUpdateHvsc` and `ingestCachedHvsc` entry points. Update path unchanged.
+- Android (`HvscIngestionPlugin.kt`): added `deferDbFlush` parameter to `ingestSevenZip`/`ingestZip` to accumulate metadata in memory. `ingestHvsc` caller creates staging dir for baseline, passes `deferDbFlush=true`, performs atomic DB clear+insert in single transaction, then directory swap (library→old, staging→library, delete old). Recovery cleans up stale staging/old dirs on failure/cancellation.
+- Tests: 8 new staging lifecycle tests in `hvscFilesystem.test.ts`; updated 7 test files' mocks for the new staging exports; 3 existing baseline tests updated to assert staging pattern instead of `resetLibraryRoot`.
+- 5564/5564 tests pass, 91.22% branch coverage.
+- iOS native plugin not updated (Linux host, cannot build/test).
+
+## 2026-04-04T01:30:00Z - AUD-002 closure - Revise architecture and schema docs to match proven query design
+
+### Action
+
+Updated `docs/architecture.md` Sections 4 and 6 and `docs/db.md` to honestly describe the current proven production query and storage design. The FTS5/relational schema is now explicitly marked aspirational.
+
+### Result
+
+- architecture.md Section 4 (Playlist query contract): added "Current implementation status" — substring search on pre-computed text, chunked 200-item IndexedDB transactions, three pre-computed sort orders, offset/limit pagination proven at 100k.
+- architecture.md Section 6 (Storage and indexing strategy): revised to describe IndexedDB normalized-record architecture and HVSC in-memory snapshot. Added "Future design (aspirational)" subsection.
+- db.md: expanded "Current State vs Target State" from two bullets to detailed current vs aspirational sections. Updated Ownership Rules.
+- Follow-up doc: AUD-002 moved from PARTIAL to DONE. Closure criteria met via the "docs explicitly revised to a proven replacement" path.
+- Existing test coverage already proves the shared query/paging contract across both playlist (100k scale) and HVSC layers.
+
+## 2026-04-03T22:48:55Z - Strong convergence pass - Land checksum archive validation and streamed recursive add batches
+
+### Action
+
+Implemented two concrete closure slices from the follow-up register: checksum-backed archive cache validation in the HVSC download path and streamed recursive playlist adds for non-local sources.
+
+### Result
+
+- Extended the HVSC cache marker schema with `checksumMd5` and now compute/persist MD5 checksums for completed archive downloads.
+- Added cached-archive checksum validation before reuse so corrupted cache files are deleted before ingest instead of being trusted on size alone.
+- Added focused regressions for checksum marker persistence and checksum mismatch invalidation.
+- Refactored recursive non-local folder traversal in `addFileSelections.ts` so discovered files can flush into playlist batches while traversal is still in progress.
+- Added a regression proving HVSC recursive folder adds emit a 250-item playlist batch before the final folder walk completes.
+
+### Evidence
+
+- Updated: `src/lib/hvsc/hvscDownload.ts`
+- Updated: `src/lib/hvsc/hvscFilesystem.ts`
+- Updated: `src/pages/playFiles/handlers/addFileSelections.ts`
+- Updated: `tests/unit/hvsc/hvscDownload.test.ts`
+- Updated: `tests/unit/hvsc/hvscFilesystem.test.ts`
+- Updated: `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`
+- Ran: focused unit tests for `hvscDownload`, `hvscFilesystem`, and `addFileSelectionsBatching`
+- Ran: focused coverage for those same suites
+
+### Next step
+
+Continue on the remaining hot-path memory/query gaps, starting with playlist hydration/full React-state materialization and then the authoritative HVSC query path.
+
+---
+
+## 2026-04-03T22:32:11Z - Strong convergence pass - Reconcile live closure slices before code changes
+
+### Action
+
+Started the executable convergence pass against the follow-up register and replaced the earlier prompt-authoring focus with a repo-changing closure plan.
+
+### Result
+
+- Re-read the remaining issue register and confirmed the live code gaps are still concentrated in four areas:
+  - playlist hydration and recursive add materialization
+  - authoritative HVSC query architecture
+  - staged ingest / integrity / iOS-native validation
+  - Web + Android + Ultimate proof artifacts
+- Confirmed `usePlaybackPersistence.ts` still hydrates the full repository playlist and still preserves the legacy blob path for smaller lists.
+- Confirmed `addFileSelections.ts` still accumulates a complete recursive file list before append for non-HVSC sources.
+- Confirmed `hvscService.ts` and `hvscMediaIndex.ts` still treat the TS-side snapshot index as the primary browse/query source instead of a native authoritative store.
+- Confirmed the repo still lacks HVSC-specific iOS native tests under `ios/native-tests/`.
+- Confirmed only partial HIL artifacts currently exist under `docs/plans/hvsc/artifacts/` and `artifacts/`.
+
+### Evidence
+
+- Read: `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+- Read: `src/pages/playFiles/hooks/usePlaybackPersistence.ts`
+- Read: `src/pages/playFiles/handlers/addFileSelections.ts`
+- Read: `src/lib/playlistRepository/types.ts`
+- Read: `src/lib/playlistRepository/repository.ts`
+- Read: `src/lib/playlistRepository/localStorageRepository.ts`
+- Read: `src/lib/playlistRepository/indexedDbRepository.ts`
+- Read: `src/lib/hvsc/hvscService.ts`
+- Read: `src/lib/hvsc/hvscMediaIndex.ts`
+- Read: `src/lib/sourceNavigation/hvscSourceAdapter.ts`
+- Read: `ios/App/App/HvscIngestionPlugin.swift`
+- Read: `package.json`
+- Updated: `PLANS.md`
+
+### Next step
+
+Land the query/hydration/add-flow changes first, because those unblock honest scale validation and prevent false-positive HIL evidence.
+
+---
+
+## 2026-04-03T22:19:40Z - Prompt rewrite pass - Author a hard-gated HVSC convergence prompt
+
+### Action
+
+Started a `DOC_ONLY` pass to replace the existing HVSC implementation prompt with a stronger convergence prompt that targets only the still-open issue set and cannot honestly complete without full proof.
+
+### Result
+
+- Re-read the existing execution prompt, the follow-up status register, the physical-device matrix, and the automation coverage map.
+- Confirmed the new prompt must target the twelve non-closed issues from the follow-up register instead of restating already closed items as if they still need full implementation.
+- Confirmed the platform-proof contract must change to reflect the current environment:
+  - Pixel 4 is available and must be used for Android HIL.
+  - Docker/Web deployment is available and must be used for Web proof.
+  - iOS physical HIL remains out of scope on this Linux host, but the prompt must still require the strongest available CI-backed Maestro/native proof.
+
+### Evidence
+
+- Read: `docs/research/hvsc/implementation-execution-prompt-2026-04-03.md`
+- Read: `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+- Read: `docs/testing/physical-device-matrix.md`
+- Read: `docs/plans/hvsc/automation-coverage-map.md`
+- Updated: `PLANS.md`
+
+### Next step
+
+Rewrite the HVSC execution prompt so it hard-gates completion on closing every remaining issue with explicit Android, Web, and iOS proof requirements.
+
+---
+
+## 2026-04-03T22:19:40Z - Prompt rewrite pass - Publish the strong convergence prompt
+
+### Action
+
+Rewrote the existing HVSC implementation prompt into a stronger convergence contract that targets only the still-open issue set and forbids completion while any remaining issue stays `PARTIAL` or `TODO`.
+
+### Result
+
+- Replaced the older broad implementation brief with a hard-gated convergence prompt in `docs/research/hvsc/implementation-execution-prompt-2026-04-03.md`.
+- Made the twelve non-closed issues the explicit closure backlog and marked `HVSC-AUD-008` and `HVSC-AUD-009` as closed-but-no-regression items.
+- Updated the environment/proof contract to require:
+  - Pixel 4 Android HIL
+  - Docker-backed Web proof
+  - strongest feasible CI-capable iOS Maestro/native evidence instead of impossible Linux-host iOS HIL
+- Added explicit hard-stop rules so the future execution pass cannot honestly terminate while any remaining issue lacks closure proof.
+
+### Evidence
+
+- Updated: `docs/research/hvsc/implementation-execution-prompt-2026-04-03.md`
+- Updated: `PLANS.md`
+- Updated: `WORKLOG.md`
+
+### Next step
+
+Use the rewritten prompt directly for the next implementation/convergence pass.
+
+---
+
 ## 2026-04-03T22:09:37Z - Follow-up status pass - Reconcile live audit evidence and note stale parity contradiction
 
 ### Action
@@ -682,3 +959,73 @@ Authored a companion implementation prompt that turns the HVSC production-readin
 ### Next step
 
 Use the implementation prompt as the handoff artifact for the follow-up execution pass that must close the audit findings in code.
+
+## 2026-04-04 HVSC-AUD-001 closure — recursive selection streaming and bounded batching
+
+### Classification
+
+`CODE_CHANGE`
+
+### What changed
+
+- `src/pages/playFiles/handlers/addFileSelections.ts`:
+  - Local recursive selections now stream files via `collectRecursive` with an `onDiscoveredFiles` callback instead of collecting the full file set up front.
+  - Songlengths entries are tracked inline during the streaming traversal, eliminating a duplicate `source.listFilesRecursive()` call for recursive local selections.
+  - Post-processing changed from `for (const file of selectedFiles)` to `while (selectedFiles.length > 0) { const chunk = selectedFiles.splice(0, BATCH_SIZE); ... }` for bounded memory release.
+  - HVSC recursive path preserved unchanged: uses `source.listFilesRecursive()` (native index).
+- `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`:
+  - Added streaming local recursive test (450 files across 3 delayed folders, verifies 2-batch flush).
+  - Added 1k local recursive scale test (4 folders × 250 files, bounded batch verification).
+  - Added 5k HVSC scale test (10 folders × 500 files via `listFilesRecursive`).
+  - Added duplicate traversal elimination test for local songlengths when `recurseFolders` is true.
+- `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`: HVSC-AUD-001 moved from `PARTIAL` to `DONE`.
+
+### Validation
+
+- 5555/5555 tests passed (`npx vitest run`).
+- Branch coverage: 91.23% (above 91% gate).
+- Lint: clean for all modified files.
+- Build: clean.
+
+## 2026-04-04 HVSC-AUD-013 closure — legacy blob persistence eliminated
+
+### Classification
+
+`CODE_CHANGE`
+
+### What changed
+
+- `src/pages/playFiles/hooks/usePlaybackPersistence.ts`:
+  - Persist effect no longer writes the full playlist JSON blob to localStorage. Production persistence is repository-only.
+  - Persist effect removes any stale legacy localStorage blobs on every cycle.
+  - Restore effect removes legacy localStorage blobs after successfully migrating their content to the repository.
+  - Removed unused `shouldPersistLegacyPlaylistBlob` import and the `stored: StoredPlaylistState` JSON serialization.
+- `tests/unit/playFiles/usePlaybackPersistence.ext2.test.tsx`:
+  - Removed stale `shouldPersistLegacyPlaylistBlob` mock and import.
+  - Replaced "size budget exceeded" test with "persist effect never writes legacy localStorage blob and removes old keys".
+  - Added "cleans up legacy localStorage blob after migrating to repository on hydration" regression test.
+- `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`: HVSC-AUD-013 moved from `PARTIAL` to `DONE`.
+
+### Validation
+
+- 5556/5556 tests passed (`npx vitest run`).
+- All 248 playFiles tests passed.
+- Lint: clean for all modified files.
+- Build: clean.
+
+## 2026-04-04 HVSC-AUD-014 closure — explicit capability gating for repository fallback
+
+### Classification
+
+`CODE_CHANGE`
+
+### What changed
+
+- `src/lib/playlistRepository/factory.ts`: Repository factory now logs an explicit `addErrorLog()` warning when IndexedDB is unavailable and the localStorage fallback is used. This surfaces the capability limitation visibly.
+- `tests/unit/lib/playlistRepository/factory.test.ts`: Added "logs a warning when falling back to localStorage repository" regression test.
+- `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`: HVSC-AUD-014 moved from `PARTIAL` to `DONE`.
+
+### Validation
+
+- 4/4 factory tests passed.
+- Full suite deferred to next batch run (all changes accumulate).

@@ -4,6 +4,10 @@ vi.mock("@/lib/native/platform", () => ({
   isNativePlatform: vi.fn(),
 }));
 
+vi.mock("@/lib/logging", () => ({
+  addErrorLog: vi.fn(),
+}));
+
 vi.mock("@/lib/playlistRepository/localStorageRepository", () => {
   const localRepository = { id: "local" };
   return {
@@ -19,6 +23,7 @@ vi.mock("@/lib/playlistRepository/indexedDbRepository", () => {
 });
 
 import { isNativePlatform } from "@/lib/native/platform";
+import { addErrorLog } from "@/lib/logging";
 import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository/indexedDbRepository";
 import { getLocalStoragePlaylistDataRepository } from "@/lib/playlistRepository/localStorageRepository";
 import { getPlaylistDataRepository, resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository/factory";
@@ -82,5 +87,21 @@ describe("playlist repository factory", () => {
     const third = getPlaylistDataRepository();
     expect(third).toEqual({ id: "indexeddb" });
     expect(getIndexedDbPlaylistDataRepository).toHaveBeenCalledTimes(2);
+  });
+
+  it("logs a warning when falling back to localStorage repository", () => {
+    vi.mocked(isNativePlatform).mockReturnValue(false);
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+
+    getPlaylistDataRepository();
+
+    expect(addErrorLog).toHaveBeenCalledWith(
+      expect.stringContaining("IndexedDB is unavailable"),
+      expect.any(Object),
+    );
   });
 });

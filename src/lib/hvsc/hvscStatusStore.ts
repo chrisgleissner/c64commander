@@ -169,10 +169,10 @@ export const applyHvscProgressEventToSummary = (
       download:
         summary.download.status === "in-progress"
           ? {
-              ...summary.download,
-              status: "success",
-              finishedAt: summary.download.finishedAt ?? now,
-            }
+            ...summary.download,
+            status: "success",
+            finishedAt: summary.download.finishedAt ?? now,
+          }
           : summary.download,
       extraction: {
         ...summary.extraction,
@@ -261,4 +261,29 @@ export const updateHvscStatusSummaryFromEvent = (event: HvscProgressEvent, lastS
   const next = applyHvscProgressEventToSummary(current, event, lastStage);
   saveHvscStatusSummary(next);
   return next;
+};
+
+export type HvscQueryTimingRecord = {
+  correlationId: string;
+  phase: string;
+  path: string;
+  query: string;
+  offset: number;
+  limit: number;
+  resultCount: number;
+  windowMs: number;
+  timestamp: string;
+};
+
+export const recordHvscQueryTiming = (record: HvscQueryTimingRecord) => {
+  addLog("info", "HVSC query timing", {
+    correlationId: record.correlationId,
+    phase: record.phase,
+    path: record.path,
+    query: record.query,
+    offset: record.offset,
+    limit: record.limit,
+    resultCount: record.resultCount,
+    windowMs: record.windowMs,
+  });
 };

@@ -10,8 +10,24 @@ This document defines the persistent relational schema owned by C64 Commander fo
 
 ## Current State vs Target State
 
-- Current runtime state (today): playlist/query/session persistence runs through TypeScript repository interfaces with IndexedDB (durable) and localStorage fallback adapters.
-- Target runtime state (planned): app-owned relational tables with explicit migration management and FTS-backed querying as defined below.
+### Current production design (proven)
+
+Playlist and query persistence runs through TypeScript repository interfaces with IndexedDB as the production storage engine. The IndexedDB repository (`c64u-playlist-repository` v1) stores normalized records:
+
+- **Tracks**: keyed by `track:{trackId}` with canonical metadata (title, author, released, path, source locator, category, SID header fields).
+- **Playlist items**: keyed by `playlist-item:{playlistId}:{itemId}` with sort keys, song number, duration overrides, and status.
+- **Sort orders**: pre-computed permutations (playlist-position, title, path) stored as `playlist-order:{playlistId}`.
+- **Sessions**: playback state stored as `session:{playlistId}` and `random-session:{playlistId}`.
+
+Query capabilities: substring text search on concatenated metadata fields, offset/limit pagination, category filtering, deterministic sort via pre-computed orders. Tested at 100k-item scale.
+
+HVSC browse uses an in-memory JSON snapshot (`HvscBrowseIndexSnapshot`) rebuilt from the native HVSC index. Browse queries filter the snapshot with substring matching and offset/limit pagination. The HVSC index is written during ingestion and is the authoritative source.
+
+A localStorage fallback adapter exists for environments without IndexedDB. It uses trigram-indexed search. In practice this path is effectively dead code (see AUD-014).
+
+### Target design (aspirational)
+
+App-owned relational tables with explicit migration management and FTS5-backed querying as defined in the schema below. This is the target for scaling beyond the current proven bounds (cursor/keyset paging, full-text search with ranking, SID metadata facet queries).
 
 ## Conventions
 
@@ -253,6 +269,7 @@ Notes:
 
 ## Ownership Rules
 
-- Only app migrations may create/drop/alter app-owned tables.
-- Repository implementations must treat this document as the schema contract.
+- The schema below defines the target relational design. The current production runtime uses IndexedDB repository interfaces (see "Current production design" above).
+- Only app migrations may create/drop/alter app-owned tables when the relational target is implemented.
+- Repository implementations must treat this document as the schema contract for the target design.
 - Any schema change must update this file and [PLANS.md](../PLANS.md) tasks.

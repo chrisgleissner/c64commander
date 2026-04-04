@@ -33,6 +33,10 @@ import {
   resetSonglengthsCache,
   writeLibraryFile,
   readCachedArchiveMarker,
+  createLibraryStagingDir,
+  writeStagingFile,
+  promoteLibraryStagingDir,
+  cleanupStaleStagingDir,
 } from "@/lib/hvsc/hvscFilesystem";
 import { extractArchiveEntries } from "@/lib/hvsc/hvscArchiveExtraction";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -102,6 +106,10 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
     type: "baseline",
   })),
   writeCachedArchiveMarker: vi.fn(),
+  createLibraryStagingDir: vi.fn(async () => undefined),
+  writeStagingFile: vi.fn(),
+  promoteLibraryStagingDir: vi.fn(async () => undefined),
+  cleanupStaleStagingDir: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscStateStore", () => ({
@@ -329,8 +337,10 @@ describe("hvscIngestionRuntime", () => {
 
     await installOrUpdateHvsc("token-install");
 
-    expect(resetLibraryRoot).toHaveBeenCalled();
-    expect(writeLibraryFile).toHaveBeenCalled();
+    expect(createLibraryStagingDir).toHaveBeenCalled();
+    expect(writeStagingFile).toHaveBeenCalled();
+    expect(promoteLibraryStagingDir).toHaveBeenCalled();
+    expect(resetLibraryRoot).not.toHaveBeenCalled();
     expect(deleteLibraryFile).toHaveBeenCalledWith("/demo.sid");
     expect(resetSonglengthsCache).toHaveBeenCalled();
     const transitions = vi
@@ -363,7 +373,7 @@ describe("hvscIngestionRuntime", () => {
       await onEntry?.("HVSC/C64Music/Demo/ok.sid", new Uint8Array([1, 2, 3]));
       await onEntry?.("HVSC/C64Music/Demo/fail.sid", new Uint8Array([4, 5, 6]));
     });
-    vi.mocked(writeLibraryFile).mockImplementation(async (path: string) => {
+    vi.mocked(writeStagingFile).mockImplementation(async (path: string) => {
       if (path.toLowerCase().endsWith("/demo/fail.sid")) {
         throw new Error("disk full");
       }

@@ -41,6 +41,10 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   deleteCachedArchive: vi.fn(async () => undefined),
   writeCachedArchiveMarker: vi.fn(async () => undefined),
   readCachedArchiveMarker: vi.fn(async () => null),
+  createLibraryStagingDir: vi.fn(async () => undefined),
+  writeStagingFile: vi.fn(),
+  promoteLibraryStagingDir: vi.fn(async () => undefined),
+  cleanupStaleStagingDir: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -72,6 +76,7 @@ import {
   readArchiveBuffer,
   resolveCachedArchive,
   getCacheStatusInternal,
+  computeArchiveChecksumMd5,
 } from "@/lib/hvsc/hvscDownload";
 import { Filesystem } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
@@ -549,6 +554,45 @@ describe("hvscDownload", () => {
       expect(result).toBeNull();
       expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
     });
+
+    it("deletes cached archives when the marker checksum no longer matches the file bytes", async () => {
+      vi.mocked(Filesystem.stat).mockResolvedValue({
+        type: "file",
+        size: 3,
+      } as any);
+      vi.mocked(Filesystem.readFile).mockResolvedValue({
+        data: Buffer.from(new Uint8Array([1, 2, 3])).toString("base64"),
+      } as any);
+      const { readCachedArchiveMarker, deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+        version: 84,
+        sizeBytes: 3,
+        checksumMd5: "wrong-checksum",
+      } as any);
+
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(result).toBeNull();
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
+    });
+
+    it("deletes cached archives when file size is below 99% of expected size", async () => {
+      vi.mocked(Filesystem.stat).mockResolvedValue({
+        type: "file",
+        size: 50000,
+      } as any);
+      const { readCachedArchiveMarker, deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+        version: 84,
+        sizeBytes: 50000,
+        expectedSizeBytes: 1000000,
+      } as any);
+
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(result).toBeNull();
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
+    });
   });
 
   describe("getCacheStatusInternal", () => {
@@ -603,6 +647,7 @@ describe("hvscDownload", () => {
     it("streams download progress and writes archive", async () => {
       const chunks = [new Uint8Array([1, 2]), new Uint8Array([3, 4]), new Uint8Array([5, 6])];
       let index = 0;
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 6 } as any);
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
         headers: { get: () => "6" },
@@ -629,6 +674,7 @@ describe("hvscDownload", () => {
           version: 84,
           type: "baseline",
           expectedSizeBytes: 6,
+          checksumMd5: computeArchiveChecksumMd5(new Uint8Array([1, 2, 3, 4, 5, 6])),
           sourceUrl: "https://example.com/hvsc.7z",
         }),
       );

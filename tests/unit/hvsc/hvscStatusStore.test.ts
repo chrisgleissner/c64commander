@@ -15,6 +15,7 @@ import {
   loadHvscStatusSummary,
   saveHvscStatusSummary,
   updateHvscStatusSummaryFromEvent,
+  recordHvscQueryTiming,
   type HvscStatusSummary,
 } from "@/lib/hvsc/hvscStatusStore";
 import { addLog } from "@/lib/logging";
@@ -414,6 +415,58 @@ describe("hvscStatusStore", () => {
         "archive_extraction",
       );
       expect(result.extraction.errorMessage).toBe("Fallback message used");
+    });
+  });
+
+  describe("recordHvscQueryTiming", () => {
+    it("logs query timing with correlation ID and structured fields", () => {
+      recordHvscQueryTiming({
+        correlationId: "COR-0042",
+        phase: "index",
+        path: "/MUSICIANS/Hubbard_Rob",
+        query: "",
+        offset: 0,
+        limit: 200,
+        resultCount: 47,
+        windowMs: 3.14,
+        timestamp: "2026-04-04T03:00:00.000Z",
+      });
+
+      expect(addLog).toHaveBeenCalledWith("info", "HVSC query timing", {
+        correlationId: "COR-0042",
+        phase: "index",
+        path: "/MUSICIANS/Hubbard_Rob",
+        query: "",
+        offset: 0,
+        limit: 200,
+        resultCount: 47,
+        windowMs: 3.14,
+      });
+    });
+
+    it("logs query timing with search query and non-zero offset", () => {
+      recordHvscQueryTiming({
+        correlationId: "COR-0099",
+        phase: "runtime",
+        path: "/MUSICIANS",
+        query: "commando",
+        offset: 200,
+        limit: 100,
+        resultCount: 3,
+        windowMs: 12.5,
+        timestamp: "2026-04-04T03:00:01.000Z",
+      });
+
+      expect(addLog).toHaveBeenCalledWith("info", "HVSC query timing", {
+        correlationId: "COR-0099",
+        phase: "runtime",
+        path: "/MUSICIANS",
+        query: "commando",
+        offset: 200,
+        limit: 100,
+        resultCount: 3,
+        windowMs: 12.5,
+      });
     });
   });
 });

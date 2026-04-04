@@ -57,7 +57,7 @@ flowchart TD
 
 | Concern                | Current implementation                                                                                                                          |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| C64U control plane     | REST API via `src/lib/c64api.ts`, documented in `docs/c64/c64u-openapi.yaml` and `docs/c64/c64u-rest-api.md`                                      |
+| C64U control plane     | REST API via `src/lib/c64api.ts`, documented in `docs/c64/c64u-openapi.yaml` and `docs/c64/c64u-rest-api.md`                                    |
 | C64U file access       | FTP via `src/lib/ftp/ftpClient.ts` and `src/lib/native/ftpClient.ts`; Android native implementation in `FtpClientPlugin.kt`                     |
 | HVSC acquisition       | Release discovery and download via `src/lib/hvsc/hvscReleaseService.ts`; extraction/indexing in `src/lib/hvsc/`                                 |
 | Local app state        | localStorage/sessionStorage-backed stores plus repository abstractions under `src/lib/playlistRepository/`, `src/lib/disks/`, and config stores |
@@ -184,9 +184,9 @@ Playlist rendering must be query-driven, not full-array filtering in React memor
 
 Required query capabilities:
 
-- text search across normalized fields (title, author, released, path, tags, SID metadata facets)
-- deterministic ordering (playlist position by default)
-- paging/windowing (`limit` + cursor/offset)
+- text search across normalized fields (title, author, released, path, source locator, category)
+- deterministic ordering (playlist position by default; title and path as alternatives)
+- paging/windowing (`limit` + `offset`)
 - total match count for current filter
 
 Performance rules:
@@ -194,6 +194,18 @@ Performance rules:
 - No O(n) full-list filter on each keypress for large playlists.
 - No O(n^2) row derivation in list mapping.
 - Virtualized rendering for visible window only.
+
+#### Current implementation status
+
+The production query engine satisfies the above contract through the IndexedDB playlist repository:
+
+- **Search**: substring matching on a pre-computed search-text field (concatenation of title, author, released, path, source locator, category). Runs in chunked 200-item batches within IndexedDB transactions, not as a single in-memory array filter.
+- **Sort orders**: three pre-computed sort permutations (`playlist-position`, `title`, `path`) stored alongside playlist items, enabling deterministic ordering without runtime sort.
+- **Pagination**: offset/limit with total match count. Cursor/keyset paging is a future enhancement; offset paging is proven at 100k-item scale.
+- **Category filter**: exact-match filtering on track category (e.g., `song`, `mod`).
+- **Tested at scale**: 100k playlist query windows, deterministic paging, clamped edge cases.
+
+Full-text search (FTS5/trigram) and cursor/keyset paging remain aspirational improvements documented in [db.md](db.md). The current substring + chunked-scan approach is the proven production design.
 
 ### 5. Layered architecture (UX -> DB)
 
@@ -210,15 +222,40 @@ Performance rules:
 
 For large collections/playlists (100k target):
 
-- Persistent metadata/query store must be DB-backed (SQLite on native; compatible web fallback).
-- Full-text search index is required for instant text filtering.
-- Playlist membership and track metadata are stored separately.
-- Large playlists must not be persisted as full JSON blobs in localStorage.
-- Physical table/schema definitions are specified in [db.md](db.md) and are authoritative for repository implementations.
+- Persistent metadata/query store uses IndexedDB with normalized records (tracks, playlist items, sessions, sort orders stored as separate keyed entries).
+- Text search uses pre-computed substring matching on concatenated metadata fields, executed in chunked 200-item IndexedDB transactions.
+- Playlist membership and track metadata are stored separately with batch upsert (500-track chunks).
+- Large playlists are never persisted as full JSON blobs in localStorage.
+- Pre-computed sort permutations (playlist-position, title, path) are stored alongside playlist data to avoid runtime sorting.
 
-TypeScript remains the business-logic source of truth via repository interfaces; DB choice is an implementation detail behind adapters.
+HVSC browse uses an in-memory JSON snapshot rebuilt from the native HVSC index (SQLite on Android; TypeScript-ingested on Web/iOS). Browse queries filter and paginate the snapshot with substring matching and offset/limit. The HVSC index itself is authoritative storage written during ingestion.
+
+TypeScript remains the business-logic source of truth via repository interfaces; storage engine choice is an implementation detail behind adapters.
+
+#### Future design (aspirational)
+
+[db.md](db.md) defines a full relational schema with SQLite FTS5 for instant text filtering, cursor/keyset paging, and SID metadata facet search. This is the target design for scaling beyond the current proven bounds. The current IndexedDB + in-memory architecture is the production baseline.
 
 ## Crash reporting
 
 - **Android production crashes** are surfaced via **Google Play Console** (Android Vitals) once distributed through Play.
 - **In-app diagnostics** are available in Settings, allowing users to share logs via email without sending automatic crash traces to external services.
+
+## HVSC platform support contract
+
+| Capability           | Android              | iOS                | Web                   |
+| -------------------- | -------------------- | ------------------ | --------------------- |
+| Native HVSC plugin   | Yes                  | Yes                | No                    |
+| Large-archive ingest | Native (streaming)   | Native (streaming) | Blocked (5 MiB limit) |
+| HVSC metadata DB     | SQLite               | SQLite             | In-memory             |
+| Baseline recovery    | Staged + atomic swap | Staged (planned)   | N/A (no large ingest) |
+
+### Web platform limitations
+
+Web has no native HVSC ingestion plugin. The non-native (JavaScript) extraction path is:
+
+- **Blocked in production** — `resolveHvscIngestionMode()` throws `NON_NATIVE_HVSC_INGESTION_UNSUPPORTED_MESSAGE` unless explicitly overridden via `VITE_ENABLE_NON_NATIVE_HVSC_INGESTION=1`.
+- **Size-guarded** — `MAX_BRIDGE_READ_BYTES` (5 MiB) is enforced at download pre-flight and file read-back. Archives exceeding this limit are rejected before any I/O.
+- **Test-only override** — the override flag is available only for controlled testing and dev mode. It is not exposed in production builds.
+
+This is an intentional design decision. The HVSC full-archive baseline (~50 MB compressed, ~60k songs) exceeds what browser-based JavaScript extraction can handle reliably within the target memory/time envelope. Native platforms handle this via streaming extraction with native SQLite metadata writes.

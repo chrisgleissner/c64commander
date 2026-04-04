@@ -1,290 +1,339 @@
-# HVSC Implementation Execution Prompt
+# HVSC Strong Convergence Execution Prompt
 
-Use this prompt for the follow-up execution pass that must implement the findings in [production-readiness-audit-2026-04-03.md](/home/chris/dev/c64/c64commander/docs/research/hvsc/production-readiness-audit-2026-04-03.md).
+Use this prompt for the next implementation pass that must close the remaining HVSC production-readiness gaps in the current codebase.
 
 ## Prompt
 
-You are a senior Capacitor mobile engineer and cross-platform performance implementer for the C64 Commander application.
+ROLE
 
-This is an IMPLEMENTATION and CONVERGENCE task.
+You are a senior Capacitor mobile engineer, cross-platform storage/query implementer, performance engineer, and production-readiness closer for the C64 Commander application.
 
-Your job is to take the audited findings in `docs/research/hvsc/production-readiness-audit-2026-04-03.md` and drive the codebase to a genuinely production-ready state for the full HVSC flow across Android, iOS, and Web.
+This is a CONVERGENCE task.
+It is not a fresh research pass.
+It is not a partial implementation pass.
+It is not a status-only pass.
 
-This is not a fresh research pass.
-The audit document is the authoritative discovery baseline.
-Use it as the implementation contract unless direct source evidence proves it stale or incorrect.
+OBJECTIVE
 
-You must implement all feasible aspects of the audit, with special focus on the critical and high-severity items, and you must keep going until the repo reaches a converged state with strong validation evidence.
+Use the current follow-up register and live codebase to drive every remaining HVSC production-readiness issue to verified closure.
 
-The required production target is:
+You may not end this task with any remaining issue still at `PARTIAL` or `TODO`.
 
-- full HVSC archive download
-- correct `.7z` decompression
-- durable ingestion into the authoritative query store
-- selection of some or all of roughly 60,000 songs
-- playlists up to 100,000 items
-- truly lazy render/materialization and fast filtering/search
-- playback against a real Commodore 64 Ultimate
-- support on Android, iOS, and Web
+The only acceptable end states are:
 
-Assume the maximum target runtime envelope on all platforms is:
+- every remaining issue is fixed and can be marked `DONE` with source-backed proof, or
+- an issue is newly proven `BLOCKED` by a concrete external constraint that cannot be removed inside the repo, with fresh evidence captured in artifacts and documentation
 
-- `512 MiB RAM`
-- `2 CPU cores @ 2 GHz`
+Anything else means the task is not complete.
 
-You must optimize and validate against that budget.
-
-## Authoritative Inputs
+AUTHORITATIVE INPUTS
 
 Read and follow, in this order:
 
 1. `.github/copilot-instructions.md`
 2. `AGENTS.md`
 3. `docs/research/hvsc/production-readiness-audit-2026-04-03.md`
-4. any code/docs directly referenced by the audit while implementing
+4. `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+5. `docs/testing/physical-device-matrix.md`
+6. `docs/plans/hvsc/automation-coverage-map.md`
+7. `PLANS.md`
+8. `WORKLOG.md`
+9. current code and tests
+10. any docs/scripts/artifacts directly referenced by the files above
 
-Treat the audit issue register, implementation plan, and test-plan sections as the starting execution backlog.
+The follow-up status document is the current closure baseline.
+Treat it as the authoritative issue register for this pass.
 
-## Mandatory Working Rules
+CURRENT ISSUE SET TO CLOSE
 
-1. You must create and maintain `PLANS.md` as the authoritative execution plan for this implementation pass.
-2. You must append timestamped entries to `WORKLOG.md` throughout the task.
-3. After updating `PLANS.md`, you must immediately begin implementation and continue autonomously.
-4. Do not stop at partial fixes or isolated refactors. Converge the end-to-end system.
-5. Do not redo discovery unless you find concrete evidence that the audit is stale.
-6. If audit conclusions are stale, record the contradiction in `WORKLOG.md`, update `PLANS.md`, and then adapt implementation accordingly.
-7. Preserve user changes and unrelated worktree changes.
-8. Never silently swallow exceptions.
-9. Every bug fix must add or update regression coverage.
-10. Any claim of readiness must be backed by code, tests, logs, traces, measurements, or real-device evidence.
+The following issues are not yet closed and must be driven to `DONE` or a newly proven `BLOCKED` state:
 
-## Primary Implementation Goals
+- `HVSC-AUD-001`
+- `HVSC-AUD-002`
+- `HVSC-AUD-003`
+- `HVSC-AUD-004`
+- `HVSC-AUD-005`
+- `HVSC-AUD-006`
+- `HVSC-AUD-007`
+- `HVSC-AUD-010`
+- `HVSC-AUD-011`
+- `HVSC-AUD-012`
+- `HVSC-AUD-013`
+- `HVSC-AUD-014`
 
-You must close the following issue clusters from the audit:
+The following issues are already closed and must not regress:
 
-### Storage, query, and playlist scale
+- `HVSC-AUD-008`
+- `HVSC-AUD-009`
+
+EXECUTION ENVIRONMENT FACTS
+
+These environment facts are authoritative for this pass:
+
+- Android Pixel 4 is accessible and must be used for Android HIL validation.
+- Web deployment via Docker is available and must be used for Web proof, not just mocked browser paths.
+- iOS physical HIL is out of scope from this Linux host.
+- iOS still remains in scope for production readiness and must be proven as far as possible through CI-capable evidence:
+  - Maestro flows that run on CI
+  - iOS simulator/native test coverage where available
+  - any required source-level/native test additions needed to close the remaining iOS issue(s)
+
+Do not treat “no local iOS HIL” as permission to leave the iOS issue partially solved.
+Use the strongest available repo-native CI/simulator/Maestro proof and add missing native coverage where required.
+
+MANDATORY WORKING RULES
+
+1. Maintain `PLANS.md` as the authoritative execution plan throughout the pass.
+2. Append timestamped entries to `WORKLOG.md` continuously.
+3. Start implementation immediately after updating `PLANS.md`; do not stop at planning.
+4. Preserve unrelated user or concurrent worktree changes.
+5. Never silently swallow exceptions.
+6. Every bug fix must add or update precise regression coverage.
+7. Every performance/scalability fix must add or update a scale-oriented proof layer above pure repository correctness when the issue demands it.
+8. Every closure claim must be backed by current code, tests, metrics, logs, screenshots, traces, or hardware artifacts.
+9. If a prior audit or follow-up statement is stale, record the contradiction in `WORKLOG.md` and update the status document explicitly. Do not silently drift past it.
+10. You must update `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md` during the pass so the issue register reflects the final outcome.
+
+HARD TERMINATION RULE
+
+You are not allowed to declare completion while any of the following is true:
+
+1. Any remaining issue is still honestly `PARTIAL` or `TODO`.
+2. Android Pixel 4 HIL evidence is missing for the flows required by `HVSC-AUD-004` and `HVSC-AUD-005`.
+3. Web proof still relies only on mocked Playwright coverage instead of a real Docker-backed runtime path.
+4. `HVSC-AUD-006` still lacks the strongest feasible iOS proof available from the repo and CI-capable lanes.
+5. UI/device scale proof is still absent for issues that explicitly require it.
+6. The follow-up status document has not been updated to reflect the new final state.
+
+If any one of those remains true, keep working.
+
+STRICT CLOSURE PRINCIPLES
+
+- A repository/storage improvement does not close a Play-page or UI-scale issue unless the real UI path is fixed and validated.
+- A code change does not close a hardware-validation issue unless the required device artifacts exist.
+- A guardrail or error message does not close a platform-capability issue if the production path is still missing.
+- Better diagnostics do not close transactional ingest semantics unless recovery behavior itself is fixed.
+- A mocked web path does not close the Web production-path issue.
+- “iOS HIL unavailable here” does not close the iOS issue; it only narrows the type of proof you must collect.
+
+PRIMARY OUTCOME REQUIREMENTS
+
+By the end of the pass, the codebase must satisfy all of the following, or the task must continue:
+
+1. HVSC browse/filter/search and large-playlist query paths use an authoritative indexed query architecture on all supported platforms.
+2. Playlist render/filter/persistence/hydration behavior is truly windowed and bounded for 100k items.
+3. No ordinary playback/session/query mutation rewrites or rehydrates the full playlist dataset.
+4. Recursive/add flows do not eagerly retain the entire discovered file set in the hot path.
+5. Ingest semantics are staged, transactional enough, or otherwise deterministically recoverable with explicit tested guarantees.
+6. Web is proven as a real production-capable HVSC path through Docker-backed execution, not just mocked tests.
+7. iOS is proven as strongly as this environment allows through CI-capable Maestro/native/simulator evidence and required native test additions.
+8. Android Pixel 4 proof exists for the required HVSC ingest/browse/add/play path.
+9. Real Ultimate playback proof exists with streamed-audio evidence meeting the repo’s stated oracle.
+10. The final follow-up status document can honestly mark every issue `DONE` or `BLOCKED`, with no residual `PARTIAL`/`TODO`.
+
+REQUIRED EXECUTION MODEL
+
+Work in phases and keep `PLANS.md` accurate.
+
+### Phase 1 - Convert The Follow-up Register Into A Closure Plan
+
+- Reconcile every non-closed issue against the current codebase.
+- Group the issues into execution slices with explicit dependencies.
+- Identify which issues can only close after Android/Web/iOS proof is collected.
+- Define the artifact set required for each issue to become `DONE`.
+
+Exit criteria:
+
+- `PLANS.md` maps every non-closed issue to a concrete implementation slice and validation plan.
+- No remaining issue is left as an abstract backlog item.
+
+### Phase 2 - Converge Storage, Query, Hydration, And List Materialization
+
+This phase must close:
 
 - `HVSC-AUD-001`
 - `HVSC-AUD-002`
 - `HVSC-AUD-013`
 - `HVSC-AUD-014`
 
-This means the runtime must no longer depend on full-array playlist state, full-snapshot persistence, offset-scanned JS query indexes, or `localStorage` as a claimed large-playlist production path.
+Required outcomes:
 
-You must deliver a real large-scale storage and query architecture that is viable within the target memory/CPU envelope on Android, iOS, and Web.
+- authoritative indexed query contract for playlist and HVSC browse/search
+- no full-playlist hot-path hydration
+- no JS snapshot/query-index production path for large-playlist claims
+- bounded recursive/add behavior
+- explicit capability gating for unsupported storage/runtime fallbacks
 
-### Ingest durability and platform capability
+Exit criteria:
+
+- the affected issues can honestly be reclassified to `DONE` or a proven `BLOCKED`
+- new scale-oriented tests exist above the repository layer
+
+### Phase 3 - Converge Ingest Durability, Platform Contracts, And Observability
+
+This phase must close:
 
 - `HVSC-AUD-003`
 - `HVSC-AUD-006`
 - `HVSC-AUD-007`
 - `HVSC-AUD-010`
+- `HVSC-AUD-012`
 
-This means:
+Required outcomes:
 
-- transactional or staged ingest semantics
-- resumable or explicitly recoverable behavior
-- no false-success states after partial ingest
-- a Web path that is truly production-capable for full HVSC ingest and playback
-- iOS behavior that is not fatally memory-heavy for the target workload
+- staged or otherwise deterministically recoverable ingest semantics
+- explicit archive integrity policy
+- explicit Web/non-native support contract with enforced behavior
+- strongest feasible iOS native/CI evidence for ingest correctness and memory behavior
+- cross-stage diagnostics sufficient for production support and HIL triage
 
-### Hardware and validation convergence
+Exit criteria:
+
+- the affected issues can honestly be reclassified to `DONE` or a proven `BLOCKED`
+- the new behavior is covered by regression and diagnostics tests
+
+### Phase 4 - Close UI Scale And Real-Device Proof
+
+This phase must close:
 
 - `HVSC-AUD-004`
 - `HVSC-AUD-005`
-- `HVSC-AUD-008`
 - `HVSC-AUD-011`
-- `HVSC-AUD-012`
 
-This means:
+Required outcomes:
 
-- restore trustworthy Android native test execution
-- add missing scale/perf coverage above the repository layer
-- add enough diagnostics to debug failures in production
-- attempt real-device Pixel 4 validation through ADB
-- attempt real playback proof against the real C64 Ultimate
-
-### Documentation and parity cleanup
-
-- `HVSC-AUD-009`
-
-## Non-Negotiable Outcome Requirements
-
-By the end of the implementation pass, the codebase should satisfy all of the following unless an external blocker is proven and documented:
-
-1. HVSC ingest uses an authoritative query/store architecture appropriate for each platform.
-2. Playlist browse/filter/search/render paths are truly lazy and bounded for 100k items.
-3. No ordinary playback state mutation rewrites or rehydrates the full playlist dataset.
-4. Deep filtering/searching does not rely on full-array JS scans in the hot path.
-5. The Web implementation is a real production path, not a mocked/demo-only path.
-6. Large-file ingest behavior is consistent with the `512 MiB RAM` / `2 CPU cores @ 2 GHz` envelope.
-7. Ingest failure, interruption, and recovery semantics are explicit and test-covered.
-8. The Android native HVSC test lane is green in the supported local/CI environment.
-9. Real-device validation is attempted and evidenced.
-10. Docs and internal comments match the implemented reality.
-
-## Required Execution Method
-
-Work in phases. Keep `PLANS.md` accurate as you move.
-
-### Phase 1 - Reconcile the audit into an implementation plan
-
-- Read the audit and convert issue IDs into concrete implementation slices.
-- Identify dependencies and order of operations.
-- Decide which storage/query changes must happen before UI/list work.
-- Decide which tests must be introduced before large refactors.
+- Android Pixel 4 app-first HVSC run with archived artifacts
+- real Ultimate playback proof with audio oracle evidence
+- UI/device scale proof for the relevant large-list actions
+- Web runtime proof on Docker-backed deployment for the HVSC path
 
 Exit criteria:
 
-- `PLANS.md` contains a real multi-phase implementation plan.
-- The plan maps issue IDs to code areas and validation steps.
+- the affected issues can honestly be reclassified to `DONE` or a proven `BLOCKED`
+- artifacts exist on disk and are referenced in the updated follow-up status document
 
-### Phase 2 - Build the authoritative storage/query foundation
+### Phase 5 - Final Closure Reconciliation
 
-- Replace the current snapshot-style playlist/query architecture with a normalized, incremental, query-driven design.
-- Remove or demote non-viable large-playlist fallbacks.
-- Ensure Android, iOS, and Web all have equivalent query semantics.
-- Prefer indexed storage primitives, SQLite/FTS where appropriate, or equivalent browser-safe indexed querying where SQLite is not available.
-- Introduce cursor/keyset semantics where needed.
-
-Exit criteria:
-
-- No full-snapshot repository rewrites in the hot path.
-- Querying, paging, filtering, and sorting are driven by the authoritative store.
-
-### Phase 3 - Fix ingest durability and large-archive behavior
-
-- Implement staged or atomic ingest semantics.
-- Ensure cancellation and interruption cannot leave misleading success state.
-- Make Web and iOS large-archive handling viable under the target envelope.
-- Add integrity/recovery behavior where missing.
+- Update `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`.
+- Reassess every issue ID from `HVSC-AUD-001` through `HVSC-AUD-014`.
+- Do not leave any issue in `PARTIAL` or `TODO`.
+- If an issue is `BLOCKED`, include the exact fresh blocker evidence and explain why the repo-side work is otherwise complete.
 
 Exit criteria:
 
-- Ingest is crash-safe or explicitly recoverable.
-- Platform-specific large-archive behavior is enforced and tested.
+- the follow-up register shows only `DONE` and, if unavoidable, freshly justified `BLOCKED`
+- the final completion summary can name the artifact/evidence set for each previously open issue
 
-### Phase 4 - Converge the Play page and large-playlist UX path
+MANDATORY VALIDATION BAR
 
-- Eliminate full-array render, filter, selection, and persistence traps.
-- Replace eager recursive add flows with chunked, bounded, cancelable behavior.
-- Ensure lazy materialization is real, not cosmetic virtualization over fully-built arrays.
-- Keep the UI responsive at target scale.
+You must run the smallest honest validation that closes each issue, but you must not under-test. Required proof layers include:
 
-Exit criteria:
+### Code And Unit Layers
 
-- 100k-item playlist operations use bounded windows and incremental state.
-- Filtering and scroll behavior are performant under the target budget.
+- repository/query contract tests
+- hydration/session regression tests
+- recursive-selection/add-flow scale regressions
+- ingest interruption/recovery tests
+- archive integrity/recovery tests
+- diagnostics payload/correlation tests
+- iOS native/simulator tests where needed to close `HVSC-AUD-006`
 
-### Phase 5 - Strengthen diagnostics and failure transparency
+### UI And Integration Layers
 
-- Add enough observability to distinguish download vs extraction vs ingest vs query vs render vs playback failures.
-- Add correlation between selected track, playlist item, and playback request.
-- Make user-visible errors accurate and recoverable.
+- Play-page windowing/filter/render tests at meaningful scales
+- HVSC browse/import/playback integration tests
+- Web runtime validation against Docker deployment
+- Maestro flows where native app behavior must be proven beyond pure unit tests
 
-Exit criteria:
+### Performance And Scale Layers
 
-- Support/engineering can diagnose failures without guesswork.
+- 10k/50k/100k playlist-scale assertions where appropriate
+- measured latency or bounded-allocation proof for the fixed hot paths
+- device-level scale evidence on the Pixel 4 for the relevant flows
 
-### Phase 6 - Validate aggressively
+### Android HIL Requirements
 
-- Run the required unit, integration, Playwright, and Android-native tests.
-- Run coverage if the repo instructions require it for the touched code.
-- Attempt Pixel 4 validation through ADB.
-- Attempt real C64 Ultimate playback validation using the repo’s physical-device guidance.
-- Capture timings, logs, and artifacts.
+You must use the Pixel 4 and collect fresh evidence for:
 
-Exit criteria:
+- app install and launch
+- HVSC download or cache reuse
+- HVSC ingest completion
+- HVSC browse/filter/add
+- playlist persistence if relevant
+- playback initiation
+- logcat capture
+- screenshots/timeline evidence
 
-- Strong automated validation is green.
-- Real-device attempts are evidenced.
+### Ultimate Playback Requirements
 
-### Phase 7 - Update docs and close the loop
+You must follow `docs/testing/physical-device-matrix.md` and `docs/plans/hvsc/automation-coverage-map.md`.
 
-- Update the audit document only where implementation reality has changed.
-- Update stale parity docs/comments.
-- Record what is now solved, what remains blocked, and why.
+Playback cannot be claimed closed without:
 
-Exit criteria:
+- app-first track selection evidence
+- current-track UI evidence
+- selected-track correlation evidence
+- `c64scope` audio analysis or equivalent repo-defined oracle artifact
+- `packetCount > 0`
+- `RMS >= 0.005`
 
-- Docs reflect shipped behavior.
-- `PLANS.md` and `WORKLOG.md` reflect the actual work performed.
+### Web Requirements
 
-## Required Validation Bar
+You must prove the Web path through a real Docker-backed deployment, not only through mocked Playwright runs.
 
-Use the smallest honest validation set that covers the changed layers, but do not under-test.
+At minimum, the proof must cover:
 
-At minimum, add or update tests for:
+- startup/access to the deployed app
+- HVSC path entry
+- the relevant ingest/browse/filter/add/play path that corresponds to the issues being closed
+- any platform limits or explicit capability gating if a fully equivalent path is still impossible
 
-- normalized repository behavior
-- cursor/keyset or windowed query behavior
-- large playlist persistence/hydration behavior
-- large recursive HVSC selection behavior
-- Web large-archive/full-HVSC behavior
-- iOS large-archive behavior where feasible
-- Android native plugin regressions
-- Play page render/filter behavior at 10k/50k/100k scales
-- ingest interruption and recovery
-- playback request correlation and diagnostics
+### iOS Requirements
 
-You must add performance-oriented validation where practical.
-A repository test alone is not sufficient proof for UI-scale behavior.
+iOS physical HIL is not available from this Linux host, but `HVSC-AUD-006` still must be closed with the strongest possible proof.
 
-## Real-Device Requirements
+You must therefore:
 
-You must treat hardware validation as first-class.
+- add or update iOS-native or simulator-capable HVSC tests where needed
+- use CI-capable Maestro flows for iOS wherever they can prove the app path
+- update CI-facing docs/config/tests as needed so the iOS proof lane is real and repeatable
+- document exactly what iOS evidence was used to justify closure
 
-### Android Pixel 4
+You may not leave `HVSC-AUD-006` open merely because local physical iOS execution is unavailable.
 
-- Verify `adb devices -l`
-- Build/install if the device is reachable
-- Capture logcat during relevant flows
-- Attempt:
-  - HVSC download
-  - HVSC ingest
-  - HVSC browse/filter
-  - large playlist actions
-  - playback initiation
+REQUIRED OUTPUT ARTIFACTS
 
-If ADB is still blocked, document the blocker with fresh evidence and continue everything else.
+During and after the pass, you must maintain:
 
-### Commodore 64 Ultimate
+1. `PLANS.md`
+2. `WORKLOG.md`
+3. `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+4. any new or updated tests
+5. any required HIL/Web/CI artifacts under the appropriate repo locations
 
-- Follow the repo’s expected physical-device workflow
-- Validate the real playback path as far as safely possible
-- Do not claim success without direct evidence
-- If streamed-audio proof is required and not achieved, capture the exact blocker
+FINAL COMPLETION TEST
 
-## Convergence Rules
+You may declare the task complete only if all of the following are true:
 
-- Do not stop after fixing only one layer if the end-to-end path is still broken.
-- Do not keep legacy architecture alive just to avoid migration work if it blocks the audit goals.
-- Do not accept “works in tests” if the real runtime path still violates the target memory/CPU budget.
-- Do not claim completion while critical issues remain open without a proven external blocker.
-- When a change reveals a new blocker, update `PLANS.md`, log it in `WORKLOG.md`, and continue.
+1. Every previously non-closed issue is now `DONE` or a freshly justified `BLOCKED`.
+2. The updated follow-up document contains no `PARTIAL` or `TODO` statuses.
+3. Android Pixel 4 proof exists for the required HVSC app path.
+4. Web Docker-backed proof exists for the required Web path.
+5. Real Ultimate playback proof exists with the repo’s audio oracle.
+6. iOS has been proven as strongly as possible via CI-capable Maestro/native evidence and no longer remains an unresolved repo-side gap.
+7. All code/test/doc changes needed for closure are committed in the worktree.
 
-## Deliverables
+If any of those is false, continue working.
 
-You must produce all of the following:
+FINAL RESPONSE REQUIREMENTS
 
-1. Updated `PLANS.md`
-2. Updated `WORKLOG.md`
-3. Production code changes implementing the required behavior
-4. Updated tests
-5. Any required doc updates
-6. Validation evidence in the final report
+When the task is finally complete, the response must include:
 
-## Final Response Requirements
+- final status of every issue ID
+- explicit list of newly closed issues
+- any issue marked `BLOCKED` with exact blocker evidence
+- commands/tests/HIL runs executed
+- artifact locations for Android, Web, Ultimate playback, and iOS proof
+- whether the HVSC system is now honestly production-ready
 
-When you finish, provide a concise implementation summary with:
-
-- what was implemented
-- which audit issues were fully closed
-- which issues remain open and why
-- what tests were run
-- what real-device validation was completed
-- the current readiness judgment
-
-Do not claim production readiness unless the evidence truly supports it.
-Do not convert this back into a research-only task.
-Implement, validate, converge, and finish.
+Do not claim convergence if even one remaining issue still lacks closure proof.

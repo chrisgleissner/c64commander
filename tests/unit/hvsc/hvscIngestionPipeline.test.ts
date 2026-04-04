@@ -20,6 +20,10 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   deleteLibraryFile: vi.fn(async () => undefined),
   resetLibraryRoot: vi.fn(async () => undefined),
   resetSonglengthsCache: vi.fn(),
+  createLibraryStagingDir: vi.fn(async () => undefined),
+  writeStagingFile: vi.fn(),
+  promoteLibraryStagingDir: vi.fn(async () => undefined),
+  cleanupStaleStagingDir: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscStateStore", () => ({
@@ -44,6 +48,8 @@ import {
   deleteLibraryFile,
   resetLibraryRoot,
   resetSonglengthsCache,
+  createLibraryStagingDir,
+  promoteLibraryStagingDir,
 } from "@/lib/hvsc/hvscFilesystem";
 import { markUpdateApplied, updateHvscState } from "@/lib/hvsc/hvscStateStore";
 import { reloadHvscSonglengthsOnConfigChange } from "@/lib/hvsc/hvscSongLengthService";
@@ -126,7 +132,7 @@ describe("hvscIngestionPipeline", () => {
     expect(calls).toContain("/fix/MUSICIANS/B/Bjerregaard_Johannes/Cute_Tune.sid");
   }, 60000);
 
-  it("resets library root for baseline plans", async () => {
+  it("uses staging for baseline plans", async () => {
     const buffer = await loadHvscUpdateMockArchiveBuffer();
     const options = makeOptions({
       plan: { type: "baseline", version: 84 },
@@ -136,7 +142,9 @@ describe("hvscIngestionPipeline", () => {
     });
     await ingestArchiveBuffer(options);
 
-    expect(resetLibraryRoot).toHaveBeenCalled();
+    expect(createLibraryStagingDir).toHaveBeenCalled();
+    expect(promoteLibraryStagingDir).toHaveBeenCalled();
+    expect(resetLibraryRoot).not.toHaveBeenCalled();
     expect(updateHvscState).toHaveBeenCalledWith(
       expect.objectContaining({
         installedBaselineVersion: 84,

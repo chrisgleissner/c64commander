@@ -9,7 +9,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey, isSongCategory, parseModifiedAt } from "../playFilesUtils";
-import { shouldPersistLegacyPlaylistBlob } from "./playbackPersistenceBudget";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
@@ -143,22 +142,22 @@ export function usePlaybackPersistence({
           file:
             entry.source === "local"
               ? resolveLocalRuntimeFile(entry.sourceId ?? "", normalizedPath) ||
-                (localEntry?.uri
-                  ? buildLocalPlayFileFromUri(
-                      entry.name,
-                      normalizedPath,
-                      localEntry.uri,
-                      parseModifiedAt(localEntry.modifiedAt),
-                    )
-                  : undefined) ||
-                (localTreeUri
-                  ? buildLocalPlayFileFromTree(
-                      entry.name,
-                      normalizedPath,
-                      localTreeUri,
-                      parseModifiedAt(localEntry?.modifiedAt),
-                    )
-                  : undefined)
+              (localEntry?.uri
+                ? buildLocalPlayFileFromUri(
+                  entry.name,
+                  normalizedPath,
+                  localEntry.uri,
+                  parseModifiedAt(localEntry.modifiedAt),
+                )
+                : undefined) ||
+              (localTreeUri
+                ? buildLocalPlayFileFromTree(
+                  entry.name,
+                  normalizedPath,
+                  localTreeUri,
+                  parseModifiedAt(localEntry?.modifiedAt),
+                )
+                : undefined)
               : entry.source === "hvsc"
                 ? buildHvscLocalPlayFile(normalizedPath, entry.name)
                 : undefined,
@@ -354,6 +353,10 @@ export function usePlaybackPersistence({
           const serialized = serializePlaylistToRepository(restored.items, playlistStorageKey);
           await persistSerializedPlaylist(serialized);
         }
+        // Clean up legacy localStorage blobs after migration to repository
+        for (const { key } of candidates) {
+          localStorage.removeItem(key);
+        }
       } catch (error) {
         addErrorLog("Failed to hydrate stored playlist", {
           playlistStorageKey,
@@ -439,47 +442,12 @@ export function usePlaybackPersistence({
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
     if (!hasCompletedInitialRestore) return;
-    const stored: StoredPlaylistState = {
-      items: playlist.map((item) => ({
-        source: item.request.source,
-        path: item.path,
-        name: item.label,
-        configRef: item.configRef ?? null,
-        configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
-        configOverrides: item.configOverrides ?? null,
-        archiveRef: item.archiveRef ?? null,
-        durationMs: item.durationMs,
-        songNr: item.request.songNr,
-        subsongCount: item.subsongCount,
-        sourceId: item.sourceId ?? null,
-        sizeBytes: item.sizeBytes ?? null,
-        modifiedAt: item.modifiedAt ?? null,
-        addedAt: item.addedAt ?? null,
-        status: item.status ?? "ready",
-        unavailableReason: item.unavailableReason ?? null,
-      })),
-      currentIndex,
-    };
     try {
-      const payload = JSON.stringify(stored);
-      const payloadBytes = new TextEncoder().encode(payload).byteLength;
-      const shouldPersistLegacy = shouldPersistLegacyPlaylistBlob(playlist, payloadBytes);
-      if (shouldPersistLegacy) {
-        localStorage.setItem(playlistStorageKey, payload);
-        const defaultKey = buildPlaylistStorageKey("default");
-        if (playlistStorageKey !== defaultKey) {
-          localStorage.setItem(defaultKey, payload);
-        }
-      } else {
-        addErrorLog("Skipping legacy playlist blob persistence due to size budget", {
-          playlistStorageKey,
-          playlistItems: playlist.length,
-          payloadBytes,
-        });
-        localStorage.removeItem(playlistStorageKey);
-        const defaultKey = buildPlaylistStorageKey("default");
-        localStorage.removeItem(defaultKey);
-      }
+      // Clean up any legacy localStorage blobs — production persistence is repository-only
+      localStorage.removeItem(playlistStorageKey);
+      const defaultKey = buildPlaylistStorageKey("default");
+      localStorage.removeItem(defaultKey);
+
       const serialized = serializePlaylistToRepository(playlist, playlistStorageKey);
       void persistSerializedPlaylist(serialized).catch((error) => {
         addErrorLog("Failed to persist playlist repository state", {

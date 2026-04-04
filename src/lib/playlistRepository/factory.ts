@@ -7,6 +7,7 @@
  */
 
 import { isNativePlatform } from "@/lib/native/platform";
+import { addErrorLog } from "@/lib/logging";
 import type { PlaylistDataRepository } from "./repository";
 import { getIndexedDbPlaylistDataRepository } from "./indexedDbRepository";
 import { getLocalStoragePlaylistDataRepository } from "./localStorageRepository";
@@ -25,6 +26,11 @@ export const getPlaylistDataRepository = (): PlaylistDataRepository => {
     return repository;
   }
 
+  addErrorLog(
+    "IndexedDB is unavailable — falling back to localStorage repository. " +
+    "Large playlists will not perform well in this environment.",
+    {},
+  );
   repository = getLocalStoragePlaylistDataRepository();
   return repository;
 };

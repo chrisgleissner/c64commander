@@ -320,6 +320,7 @@ open class HvscIngestionPlugin : Plugin() {
           val metadataRows: Long,
           val metadataUpserts: Int,
           val metadataDeletes: Int,
+          val deferredUpserts: List<SongUpsertRow> = emptyList(),
   )
 
   private suspend fun ingestSevenZip(
@@ -330,6 +331,7 @@ open class HvscIngestionPlugin : Plugin() {
           progressEvery: Int,
           dbBatchSize: Int,
           debugHeapLogging: Boolean,
+          deferDbFlush: Boolean = false,
   ): IngestionResult {
     var processedEntries = 0
     var songsIngested = 0
@@ -422,7 +424,7 @@ open class HvscIngestionPlugin : Plugin() {
                                   startSong = sidHeader?.startSong,
                           ),
                   )
-                  if (pendingUpserts.size >= dbBatchSize) {
+                  if (!deferDbFlush && pendingUpserts.size >= dbBatchSize) {
                     metadataUpserts += flushSongBatch(db, pendingUpserts)
                   }
                 }
@@ -470,7 +472,9 @@ open class HvscIngestionPlugin : Plugin() {
       }
     }
 
-    metadataUpserts += flushSongBatch(db, pendingUpserts)
+    if (!deferDbFlush) {
+      metadataUpserts += flushSongBatch(db, pendingUpserts)
+    }
 
     val deletedVirtualPaths = mutableListOf<String>()
     pendingDeletions.forEach { deletionPath ->
@@ -490,8 +494,8 @@ open class HvscIngestionPlugin : Plugin() {
         }
       }
     }
-    val metadataDeletes = applyDeletionRows(db, deletedVirtualPaths)
-    val metadataRows = getSongIndexCount(db)
+    val metadataDeletes = if (!deferDbFlush) applyDeletionRows(db, deletedVirtualPaths) else 0
+    val metadataRows = if (!deferDbFlush) getSongIndexCount(db) else pendingUpserts.size.toLong()
 
     return IngestionResult(
             totalEntries = processedEntries,
@@ -503,6 +507,7 @@ open class HvscIngestionPlugin : Plugin() {
             metadataRows = metadataRows,
             metadataUpserts = metadataUpserts,
             metadataDeletes = metadataDeletes,
+            deferredUpserts = if (deferDbFlush) pendingUpserts.toList() else emptyList(),
     )
   }
 
@@ -514,6 +519,7 @@ open class HvscIngestionPlugin : Plugin() {
           progressEvery: Int,
           dbBatchSize: Int,
           debugHeapLogging: Boolean,
+          deferDbFlush: Boolean = false,
   ): IngestionResult {
     var processedEntries = 0
     var songsIngested = 0
@@ -580,7 +586,7 @@ open class HvscIngestionPlugin : Plugin() {
                                   startSong = sidHeader?.startSong,
                           ),
                   )
-                  if (pendingUpserts.size >= dbBatchSize) {
+                  if (!deferDbFlush && pendingUpserts.size >= dbBatchSize) {
                     metadataUpserts += flushSongBatch(db, pendingUpserts)
                   }
                 }
@@ -628,7 +634,9 @@ open class HvscIngestionPlugin : Plugin() {
       }
     }
 
-    metadataUpserts += flushSongBatch(db, pendingUpserts)
+    if (!deferDbFlush) {
+      metadataUpserts += flushSongBatch(db, pendingUpserts)
+    }
 
     val deletedVirtualPaths = mutableListOf<String>()
     pendingDeletions.forEach { deletionPath ->
@@ -648,8 +656,8 @@ open class HvscIngestionPlugin : Plugin() {
         }
       }
     }
-    val metadataDeletes = applyDeletionRows(db, deletedVirtualPaths)
-    val metadataRows = getSongIndexCount(db)
+    val metadataDeletes = if (!deferDbFlush) applyDeletionRows(db, deletedVirtualPaths) else 0
+    val metadataRows = if (!deferDbFlush) getSongIndexCount(db) else pendingUpserts.size.toLong()
 
     return IngestionResult(
             totalEntries = processedEntries,
@@ -661,6 +669,7 @@ open class HvscIngestionPlugin : Plugin() {
             metadataRows = metadataRows,
             metadataUpserts = metadataUpserts,
             metadataDeletes = metadataDeletes,
+            deferredUpserts = if (deferDbFlush) pendingUpserts.toList() else emptyList(),
     )
   }
 
@@ -692,31 +701,35 @@ open class HvscIngestionPlugin : Plugin() {
             scope.launch {
               var dbHelper: HvscMetadataDbHelper? = null
               var db: SQLiteDatabase? = null
+              val filesDir = context.filesDir
+              val stagingRoot = File(filesDir, "hvsc/library-staging")
+              val oldRoot = File(filesDir, "hvsc/library-old")
               try {
                 val archiveFile = resolveArchiveFile(relativeArchivePath)
                 if (archiveFile.length() <= 0L) {
                   throw IllegalStateException("HVSC archive is empty: ${archiveFile.absolutePath}")
                 }
 
-                val filesDir = context.filesDir
                 val libraryRoot = File(filesDir, "hvsc/library")
                 dbHelper = HvscMetadataDbHelper(this@HvscIngestionPlugin)
                 db = dbHelper.writableDatabase
-                if (resetLibrary && libraryRoot.exists()) {
-                  libraryRoot.deleteRecursively()
-                }
-                if (!libraryRoot.exists() && !libraryRoot.mkdirs()) {
-                  throw IllegalStateException(
-                          "Failed to create HVSC library directory: ${libraryRoot.absolutePath}"
-                  )
-                }
+
+                // Clean up stale staging artifacts from a previous interrupted ingest
+                if (stagingRoot.exists()) stagingRoot.deleteRecursively()
+                if (oldRoot.exists()) oldRoot.deleteRecursively()
+
+                val extractionRoot = if (resetLibrary) stagingRoot else libraryRoot
                 if (resetLibrary) {
-                  db.beginTransaction()
-                  try {
-                    db.delete("hvsc_song_index", null, null)
-                    db.setTransactionSuccessful()
-                  } finally {
-                    db.endTransaction()
+                  if (!stagingRoot.mkdirs()) {
+                    throw IllegalStateException(
+                            "Failed to create HVSC staging directory: ${stagingRoot.absolutePath}"
+                    )
+                  }
+                } else {
+                  if (!libraryRoot.exists() && !libraryRoot.mkdirs()) {
+                    throw IllegalStateException(
+                            "Failed to create HVSC library directory: ${libraryRoot.absolutePath}"
+                    )
                   }
                 }
 
@@ -736,22 +749,24 @@ open class HvscIngestionPlugin : Plugin() {
                           lowered.endsWith(".7z") ->
                                   ingestSevenZip(
                                           archiveFile,
-                                          libraryRoot,
+                                          extractionRoot,
                                           db,
                                           mode,
                                           progressEvery.coerceAtLeast(1),
                                           dbBatchSize.coerceAtLeast(1),
                                           debugHeapLogging,
+                                          deferDbFlush = resetLibrary,
                                   )
                           lowered.endsWith(".zip") ->
                                   ingestZip(
                                           archiveFile,
-                                          libraryRoot,
+                                          extractionRoot,
                                           db,
                                           mode,
                                           progressEvery.coerceAtLeast(1),
                                           dbBatchSize.coerceAtLeast(1),
                                           debugHeapLogging,
+                                          deferDbFlush = resetLibrary,
                                   )
                           else ->
                                   throw IllegalStateException(
@@ -760,9 +775,57 @@ open class HvscIngestionPlugin : Plugin() {
                         }
 
                 if (result.metadataRows < minExpectedRows.toLong()) {
+                  // Clean up staging if validation fails
+                  if (resetLibrary && stagingRoot.exists()) stagingRoot.deleteRecursively()
                   throw IllegalStateException(
                           "HVSC metadata row count below threshold: ${result.metadataRows} < $minExpectedRows"
                   )
+                }
+
+                // Atomic promotion: DB swap + directory swap for baseline ingests
+                if (resetLibrary) {
+                  val updatedAt = System.currentTimeMillis()
+                  db.beginTransaction()
+                  try {
+                    db.delete("hvsc_song_index", null, null)
+                    for (row in result.deferredUpserts) {
+                      val cv =
+                              ContentValues().apply {
+                                put("virtual_path", row.virtualPath)
+                                put("file_name", row.fileName)
+                                if (row.songs != null) put("songs", row.songs) else putNull("songs")
+                                if (row.startSong != null) put("start_song", row.startSong)
+                                else putNull("start_song")
+                                put("updated_at_ms", updatedAt)
+                              }
+                      db.insertWithOnConflict(
+                              "hvsc_song_index",
+                              null,
+                              cv,
+                              SQLiteDatabase.CONFLICT_REPLACE
+                      )
+                    }
+                    db.setTransactionSuccessful()
+                  } finally {
+                    db.endTransaction()
+                  }
+
+                  // Directory swap: staging → library (atomically visible)
+                  if (libraryRoot.exists()) {
+                    if (!libraryRoot.renameTo(oldRoot)) {
+                      throw IllegalStateException(
+                              "Failed to rename library to old: ${libraryRoot.absolutePath}"
+                      )
+                    }
+                  }
+                  if (!stagingRoot.renameTo(libraryRoot)) {
+                    // Attempt to recover: rename old back to library
+                    if (oldRoot.exists()) oldRoot.renameTo(libraryRoot)
+                    throw IllegalStateException(
+                            "Failed to promote staging directory: ${stagingRoot.absolutePath}"
+                    )
+                  }
+                  if (oldRoot.exists()) oldRoot.deleteRecursively()
                 }
 
                 val payload = JSObject()
@@ -791,6 +854,15 @@ open class HvscIngestionPlugin : Plugin() {
 
                 withContext(Dispatchers.Main) { call.resolve(payload) }
               } catch (cancelled: CancellationException) {
+                // Clean up staging artifacts on cancellation
+                if (resetLibrary) {
+                  try {
+                    stagingRoot.deleteRecursively()
+                  } catch (_: Exception) {}
+                  try {
+                    oldRoot.deleteRecursively()
+                  } catch (_: Exception) {}
+                }
                 AppLogger.warn(
                         pluginContextOrNull(),
                         logTag,
@@ -801,6 +873,15 @@ open class HvscIngestionPlugin : Plugin() {
                 )
                 withContext(Dispatchers.Main) { call.reject("HVSC ingestion cancelled", cancelled) }
               } catch (error: Exception) {
+                // Clean up staging artifacts on failure
+                if (resetLibrary) {
+                  try {
+                    stagingRoot.deleteRecursively()
+                  } catch (_: Exception) {}
+                  try {
+                    oldRoot.deleteRecursively()
+                  } catch (_: Exception) {}
+                }
                 AppLogger.error(
                         pluginContextOrNull(),
                         logTag,
@@ -845,14 +926,14 @@ open class HvscIngestionPlugin : Plugin() {
     // Use call.data directly to distinguish absent field (null) from zero value (0L).
     // call.getLong() returns null for both absent and zero on some Capacitor versions.
     val offsetBytes: Long? =
-      if (call.data.has("offsetBytes")) call.data.getLong("offsetBytes") else null
+            if (call.data.has("offsetBytes")) call.data.getLong("offsetBytes") else null
     val requestedLength = call.getInt("lengthBytes") ?: 0
 
     AppLogger.debug(
-      pluginContextOrNull(),
-      logTag,
-      "readArchiveChunk: offsetBytes=${offsetBytes} lengthBytes=${requestedLength} path=${relativeArchivePath}",
-      "HvscIngestionPlugin",
+            pluginContextOrNull(),
+            logTag,
+            "readArchiveChunk: offsetBytes=${offsetBytes} lengthBytes=${requestedLength} path=${relativeArchivePath}",
+            "HvscIngestionPlugin",
     )
 
     if (relativeArchivePath.isNullOrBlank()) {

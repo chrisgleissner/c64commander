@@ -21,6 +21,11 @@ import {
   writeCachedArchiveMarker,
   writeCachedArchive,
   writeLibraryFile,
+  createLibraryStagingDir,
+  writeStagingFile,
+  resolveStagingPath,
+  promoteLibraryStagingDir,
+  cleanupStaleStagingDir,
 } from "@/lib/hvsc/hvscFilesystem";
 import * as logging from "@/lib/logging";
 
@@ -108,6 +113,24 @@ vi.mock("@capacitor/filesystem", () => ({
         }
       }
     }),
+    rename: vi.fn(async ({ from, to }: { from: string; to: string }) => {
+      const normalizedFrom = normalizePath(from);
+      const normalizedTo = normalizePath(to);
+      const fromEntry = files.get(normalizedFrom);
+      if (!fromEntry) {
+        throw new Error(`Rename source not found: ${normalizedFrom}`);
+      }
+      // Move all entries under the source prefix to the destination
+      const toMove: [string, Entry][] = [];
+      for (const [key, entry] of files) {
+        if (key === normalizedFrom || key.startsWith(`${normalizedFrom}/`)) {
+          const newKey = normalizedTo + key.slice(normalizedFrom.length);
+          toMove.push([key, { ...entry }]);
+          files.delete(key);
+          files.set(newKey, entry);
+        }
+      }
+    }),
   },
 }));
 
@@ -186,6 +209,7 @@ describe("hvscFilesystem", () => {
       type: "baseline",
       sizeBytes: 1024,
       expectedSizeBytes: 2048,
+      checksumMd5: "abc123",
       sourceUrl: "https://example.com/hvsc-baseline-85.7z",
       completedAt: new Date("2024-01-01T00:00:00Z").toISOString(),
     });
@@ -195,6 +219,7 @@ describe("hvscFilesystem", () => {
     expect(marker?.type).toBe("baseline");
     expect(marker?.sizeBytes).toBe(1024);
     expect(marker?.expectedSizeBytes).toBe(2048);
+    expect(marker?.checksumMd5).toBe("abc123");
     expect(marker?.sourceUrl).toBe("https://example.com/hvsc-baseline-85.7z");
   });
 
@@ -301,5 +326,90 @@ describe("hvscFilesystem", () => {
     expect(song?.fileName).toBe("NoLen.sid");
     expect(song?.durationSeconds).toBeNull();
     expect(song?.subsongCount).toBeNull();
+  });
+
+  describe("staging", () => {
+    it("createLibraryStagingDir creates staging directory and removes stale one", async () => {
+      setFile("hvsc/library-staging/stale.sid", toBase64Bytes(new Uint8Array([1])));
+
+      await createLibraryStagingDir();
+
+      expect(files.has("hvsc/library-staging/stale.sid")).toBe(false);
+      expect(files.has("hvsc/library-staging")).toBe(true);
+    });
+
+    it("resolveStagingPath maps virtual paths to staging directory", () => {
+      expect(resolveStagingPath("/DEMOS/0-9/Test.sid")).toBe(
+        "hvsc/library-staging/DEMOS/0-9/Test.sid",
+      );
+      expect(resolveStagingPath("/")).toBe("hvsc/library-staging");
+    });
+
+    it("writeStagingFile writes to the staging directory", async () => {
+      await createLibraryStagingDir();
+      await writeStagingFile("/DEMOS/0-9/Test.sid", new Uint8Array([7, 8]));
+
+      const stored = files.get("hvsc/library-staging/DEMOS/0-9/Test.sid");
+      expect(stored?.type).toBe("file");
+    });
+
+    it("promoteLibraryStagingDir swaps staging to library atomically", async () => {
+      // Set up existing library with old content
+      setFile("hvsc/library/OLD/Old.sid", toBase64Bytes(new Uint8Array([1])));
+
+      // Set up staging with new content
+      ensureDir("hvsc/library-staging");
+      setFile(
+        "hvsc/library-staging/NEW/New.sid",
+        toBase64Bytes(new Uint8Array([2])),
+      );
+
+      await promoteLibraryStagingDir();
+
+      // Old library content should be gone
+      expect(files.has("hvsc/library/OLD/Old.sid")).toBe(false);
+      // New content should be under library now
+      expect(files.has("hvsc/library/NEW/New.sid")).toBe(true);
+      // Staging and old dirs should be cleaned up
+      expect(files.has("hvsc/library-staging")).toBe(false);
+      expect(files.has("hvsc/library-old")).toBe(false);
+    });
+
+    it("promoteLibraryStagingDir works on first install with no existing library", async () => {
+      // No existing library — only staging exists
+      ensureDir("hvsc/library-staging");
+      setFile(
+        "hvsc/library-staging/FIRST/Song.sid",
+        toBase64Bytes(new Uint8Array([3])),
+      );
+
+      await promoteLibraryStagingDir();
+
+      expect(files.has("hvsc/library/FIRST/Song.sid")).toBe(true);
+      expect(files.has("hvsc/library-staging")).toBe(false);
+    });
+
+    it("cleanupStaleStagingDir removes both staging and old directories", async () => {
+      ensureDir("hvsc/library-staging/leftover");
+      setFile(
+        "hvsc/library-staging/leftover/stale.sid",
+        toBase64Bytes(new Uint8Array([1])),
+      );
+      ensureDir("hvsc/library-old/leftover");
+      setFile(
+        "hvsc/library-old/leftover/stale.sid",
+        toBase64Bytes(new Uint8Array([2])),
+      );
+
+      await cleanupStaleStagingDir();
+
+      expect(files.has("hvsc/library-staging")).toBe(false);
+      expect(files.has("hvsc/library-old")).toBe(false);
+    });
+
+    it("cleanupStaleStagingDir is safe when no staging dirs exist", async () => {
+      // Should not throw even when neither directory exists
+      await expect(cleanupStaleStagingDir()).resolves.toBeUndefined();
+    });
   });
 });
