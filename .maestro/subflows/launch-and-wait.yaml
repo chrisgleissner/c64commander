@@ -36,16 +36,13 @@ tags:
       - tapOn:
           text: "Allow only while using the app"
           optional: true
-      - waitForAnimationToEnd
-      # Initial iOS launch does not always expose the Home tab label reliably.
-      # Anchor on the home page content before returning control to callers.
       - tapOn:
-          text: "Home"
+          text: "Don't show again"
           optional: true
       - tapOn:
-          point: "8%,95%"
+          text: "OK"
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "C64 Commander"
+          visible: "Home"
           timeout: ${LONG_TIMEOUT}

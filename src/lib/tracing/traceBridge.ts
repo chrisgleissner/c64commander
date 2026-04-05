@@ -7,6 +7,7 @@
  */
 
 import { resetActionTrace } from "@/lib/tracing/actionTrace";
+import { collectHvscPerfTimings, resetHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import {
   clearTraceEvents,
   exportTraceZip,
@@ -21,7 +22,9 @@ import { resetTraceIds } from "@/lib/tracing/traceIds";
 export type TraceBridge = {
   clearTraces: () => void;
   getTraces: () => ReturnType<typeof getTraceEvents>;
+  getHvscPerfTimings: () => ReturnType<typeof collectHvscPerfTimings>;
   exportTraces: () => Uint8Array;
+  resetHvscPerfTimings: () => void;
   resetTraceIds: (eventStart?: number, correlationStart?: number) => void;
   resetTraceSession: (eventStart?: number, correlationStart?: number) => void;
   persistTracesToSession: () => void;
@@ -72,7 +75,9 @@ export const registerTraceBridge = () => {
       clearTraceEvents();
     },
     getTraces: () => getTraceEvents(),
+    getHvscPerfTimings: () => collectHvscPerfTimings(),
     exportTraces: () => exportTraceZip(),
+    resetHvscPerfTimings: () => resetHvscPerfTimings(),
     resetTraceIds: (eventStart = 0, correlationStart = 0) => resetTraceIds(eventStart, correlationStart),
     resetTraceSession: (eventStart = 0, correlationStart = 0) => {
       resetActionTrace();

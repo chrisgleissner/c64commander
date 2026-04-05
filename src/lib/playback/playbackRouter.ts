@@ -15,6 +15,7 @@ import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { AUTOSTART_SEQUENCE, buildAutostartSequence, injectAutostart } from "./autostart";
 import {
   formatPlayCategory,
@@ -34,11 +35,11 @@ export type PlaySource = "local" | "ultimate" | "hvsc" | "commoserve";
 export type LocalPlayFile =
   | File
   | {
-      name: string;
-      webkitRelativePath?: string;
-      lastModified: number;
-      arrayBuffer: () => Promise<ArrayBuffer>;
-    };
+    name: string;
+    webkitRelativePath?: string;
+    lastModified: number;
+    arrayBuffer: () => Promise<ArrayBuffer>;
+  };
 
 export type PlayRequest = {
   source: PlaySource;
@@ -160,6 +161,21 @@ const emitDurationPropagationEvent = (payload: {
   }
 };
 
+const recordPlaybackBenchmarkSnapshot = (plan: PlayPlan, mode: string) => {
+  void recordSmokeBenchmarkSnapshot({
+    scenario: "playback-start",
+    state: "complete",
+    metadata: {
+      category: plan.category,
+      source: plan.source,
+      path: plan.path,
+      songNr: plan.songNr ?? null,
+      durationMs: plan.durationMs ?? null,
+      mode,
+    },
+  });
+};
+
 export const tryFetchUltimateSidBlob = async (path: string) => {
   const normalizedPath = normalizeUltimatePath(path);
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
@@ -271,6 +287,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
               path: plan.path,
             });
             await api.playSid(plan.path, plan.songNr);
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct");
             return;
           }
 
@@ -285,6 +302,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
               type: "application/octet-stream",
             });
             await api.playSidUpload(ftpBlob, plan.songNr, sslBlob, { filename: plan.path });
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-ssl-upload");
             return;
           } catch (error) {
             propagationFailure = error as Error;
@@ -311,6 +329,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
 
           try {
             await api.playSid(plan.path, plan.songNr);
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct-fallback");
             return;
           } catch (fallbackError) {
             const err = fallbackError as Error;
@@ -330,10 +349,11 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         const sslBlob =
           plan.durationMs && plan.durationMs > 0
             ? new Blob([createSslPayload(plan.durationMs)], {
-                type: "application/octet-stream",
-              })
+              type: "application/octet-stream",
+            })
             : undefined;
         await api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path });
+        recordPlaybackBenchmarkSnapshot(plan, "local-upload");
         return;
       }
       case "mod": {

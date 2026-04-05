@@ -1,0 +1,106 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Retry connection"
+          optional: true
+      - tapOn:
+          text: "Save & Retry"
+          optional: true
+      - tapOn:
+          text: "Done"
+          optional: true
+      - tapOn:
+          point: "25%,90%"
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Playlist"
+          timeout: ${TIMEOUT}
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          start: 50%, 82%
+          end: 50%, 24%
+          duration: 900
+          waitToSettleTimeoutMs: 500
+      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "hvsc-download"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "hvsc-download"
+- extendedWaitUntil:
+    visible: "HVSC ready"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "HVSC ready"
+- scrollUntilVisible:
+    element:
+      id: "add-items-to-playlist"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "add-items-to-playlist"
+- extendedWaitUntil:
+    visible: "Choose source"
+    timeout: ${TIMEOUT}
+- retry:
+    maxRetries: 6
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "HVSC"
+          direction: DOWN
+          timeout: ${TIMEOUT}
+      - tapOn:
+          id: "import-option-hvsc"
+          optional: true
+      - tapOn:
+          text: "Add file / folder from HVSC"
+          optional: true
+      - tapOn:
+          text: "HVSC"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Select items"
+          timeout: ${TIMEOUT}
+- extendedWaitUntil:
+    visible: "Open DEMOS"
+    timeout: ${TIMEOUT}
+- tapOn: "Open DEMOS"
+- tapOn:
+    text: "Filter folders…"
+    optional: true
+- inputText: "0-9"
+- extendedWaitUntil:
+    visible: "Open 0-9"
+    timeout: ${TIMEOUT}
+- tapOn: "Open 0-9"
+- extendedWaitUntil:
+    visible: "Select 10_Orbyte.sid"
+    timeout: ${TIMEOUT}
+- tapOn: "Select 10_Orbyte.sid"
+- tapOn:
+    id: "add-items-confirm"
+- extendedWaitUntil:
+    visible: "10_Orbyte.sid"
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "playlist-play"
+- extendedWaitUntil:
+    visible: "Pause"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "10_Orbyte.sid"

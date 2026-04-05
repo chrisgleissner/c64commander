@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   installOrUpdateHvscMock: vi.fn(),
   isHvscBridgeAvailableMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
+  recordSmokeBenchmarkSnapshotMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -62,6 +63,10 @@ vi.mock("@/lib/hvsc", () => ({
   installOrUpdateHvsc: (...args: unknown[]) => mocks.installOrUpdateHvscMock(...args),
   isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
   recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
+}));
+
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  recordSmokeBenchmarkSnapshot: (...args: unknown[]) => mocks.recordSmokeBenchmarkSnapshotMock(...args),
 }));
 
 type SummaryStatus = "idle" | "in-progress" | "success" | "failure";
@@ -141,6 +146,7 @@ describe("useHvscLibrary", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.recordSmokeBenchmarkSnapshotMock.mockReset();
   });
 
   it("removes a pending progress listener after unmount when registration resolves late", async () => {
@@ -258,6 +264,9 @@ describe("useHvscLibrary", () => {
 
     expect(mocks.installOrUpdateHvscMock).not.toHaveBeenCalled();
     expect(mocks.toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "HVSC up to date" }));
+    expect(mocks.recordSmokeBenchmarkSnapshotMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scenario: "install", state: "up-to-date" }),
+    );
     expect(result.current.hvscSummaryState).toBe("success");
     expect(result.current.hvscPhase).toBe("ready");
   });
@@ -287,6 +296,9 @@ describe("useHvscLibrary", () => {
         title: "HVSC ready",
         description: expect.stringContaining("Ingested 98 of 100 songs"),
       }),
+    );
+    expect(mocks.recordSmokeBenchmarkSnapshotMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scenario: "install", state: "complete" }),
     );
     expect(result.current.hvscIngestionTotalSongs).toBe(100);
     expect(result.current.hvscIngestionFailedSongs).toBe(2);
@@ -348,6 +360,9 @@ describe("useHvscLibrary", () => {
 
     expect(mocks.ingestCachedHvscMock).toHaveBeenCalledWith("hvsc-ingest");
     expect(mocks.toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "HVSC ready" }));
+    expect(mocks.recordSmokeBenchmarkSnapshotMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scenario: "ingest", state: "complete" }),
+    );
   });
 
   it("cancels in-progress work and tolerates status refresh failures afterwards", async () => {

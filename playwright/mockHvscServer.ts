@@ -28,7 +28,30 @@ export interface MockHvscServer {
   close: () => Promise<void>;
   baseline: HvscFixture;
   update: HvscFixture;
+  clearRequestLog: () => void;
+  getRequestLog: () => MockHvscRequestLogEntry[];
 }
+
+export type MockHvscRequestLogEntry = {
+  method: string;
+  path: string;
+  statusCode: number;
+  bytesSent: number;
+  contentLength: number;
+  durationMs: number;
+  startedAt: string;
+  endedAt: string;
+};
+
+export type MockHvscServerOptions = {
+  baselineFixtureName?: string;
+  updateFixtureName?: string;
+  baselineArchivePath?: string;
+  updateArchivePath?: string;
+  bytesPerSecond?: number;
+  chunkSizeBytes?: number;
+  logRequests?: boolean;
+};
 
 const readFixture = <T>(name: string): T => {
   const filePath = path.resolve("playwright/fixtures/hvsc", name);
@@ -42,9 +65,15 @@ const readFixture = <T>(name: string): T => {
   } as T;
 };
 
-export function createMockHvscServer(): Promise<MockHvscServer> {
-  const baseline = readFixture<HvscFixture>("baseline.json");
-  const update = readFixture<HvscFixture>("update.json");
+const readArchiveBuffer = (archivePath: string | undefined, fallbackFactory: () => Buffer) => {
+  if (!archivePath) return fallbackFactory();
+  return fs.readFileSync(path.resolve(archivePath));
+};
+
+const buildVersionedArchiveName = (prefix: "HVSC" | "HVSC_Update", version: number) =>
+  prefix === "HVSC" ? `HVSC_${version}-all-of-them.7z` : `HVSC_Update_${version}.7z`;
+
+const buildArchiveBody = (fixture: HvscFixture) => {
   const formatDuration = (seconds?: number) => {
     const total = Math.max(0, seconds ?? 0);
     const minutes = Math.floor(total / 60);
@@ -69,86 +98,164 @@ export function createMockHvscServer(): Promise<MockHvscServer> {
     files["C64Music/DOCUMENTS/Songlengths.txt"] = strToU8(songlengths);
     return Buffer.from(zipSync(files));
   };
-  const baselineArchive = buildArchive(baseline);
-  const updateArchive = buildArchive(update);
+  return buildArchive(fixture);
+};
+
+const writeArchiveResponse = async (
+  res: http.ServerResponse,
+  body: Buffer,
+  options: { bytesPerSecond?: number; chunkSizeBytes?: number },
+) => {
+  const bytesPerSecond = options.bytesPerSecond ?? 0;
+  if (!bytesPerSecond || bytesPerSecond <= 0 || body.byteLength === 0) {
+    res.end(body);
+    return body.byteLength;
+  }
+
+  const chunkSize = Math.max(1024, (options.chunkSizeBytes ?? Math.floor(bytesPerSecond / 10)) || 1024);
+  const intervalMs = Math.max(10, Math.floor((chunkSize / bytesPerSecond) * 1000));
+
+  return await new Promise<number>((resolve) => {
+    let offset = 0;
+    const timer = setInterval(() => {
+      if (offset >= body.byteLength) {
+        clearInterval(timer);
+        res.end();
+        resolve(body.byteLength);
+        return;
+      }
+      const nextOffset = Math.min(body.byteLength, offset + chunkSize);
+      res.write(body.subarray(offset, nextOffset));
+      offset = nextOffset;
+      if (offset >= body.byteLength) {
+        clearInterval(timer);
+        res.end();
+        resolve(body.byteLength);
+      }
+    }, intervalMs);
+  });
+};
+
+export function createMockHvscServer(options: MockHvscServerOptions = {}): Promise<MockHvscServer> {
+  const baseline = readFixture<HvscFixture>(options.baselineFixtureName ?? "baseline.json");
+  const update = readFixture<HvscFixture>(options.updateFixtureName ?? "update.json");
+  const baselineArchive = readArchiveBuffer(options.baselineArchivePath, () => buildArchiveBody(baseline));
+  const updateArchive = readArchiveBuffer(options.updateArchivePath, () => buildArchiveBody(update));
+  const requestLog: MockHvscRequestLogEntry[] = [];
+  const logRequest = (entry: MockHvscRequestLogEntry) => {
+    requestLog.push(entry);
+    if (options.logRequests) {
+      process.stdout.write(
+        `[mock-hvsc] ${entry.method} ${entry.path} ${entry.statusCode} ${entry.bytesSent}B ${entry.durationMs.toFixed(1)}ms\n`,
+      );
+    }
+  };
 
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
     "Access-Control-Allow-Headers": "*",
   };
 
-  const server = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, corsHeaders);
-      res.end();
-      return;
-    }
-    const url = req.url ?? "/";
-    if (url === "/" || url === "/hvsc" || url === "/hvsc/") {
-      const html = `
-        <html>
-          <a href="HVSC_${baseline.version}-all-of-them.7z">HVSC_${baseline.version}-all-of-them.7z</a>
-          <a href="HVSC_Update_${update.version}.7z">HVSC_Update_${update.version}.7z</a>
-        </html>
-      `;
-      res.writeHead(200, { "Content-Type": "text/html", ...corsHeaders });
-      res.end(html);
-      return;
-    }
-    if (url.startsWith(`/hvsc/HVSC_${baseline.version}-all-of-them.7z`)) {
-      res.writeHead(200, {
-        "Content-Type": "application/x-7z-compressed",
-        ...corsHeaders,
-      });
-      res.end(baselineArchive);
-      return;
-    }
-    if (url.startsWith(`/hvsc/HVSC_Update_${update.version}.7z`)) {
-      res.writeHead(200, {
-        "Content-Type": "application/x-7z-compressed",
-        ...corsHeaders,
-      });
-      res.end(updateArchive);
-      return;
-    }
-    if (url.startsWith("/hvsc/archive/baseline")) {
-      res.writeHead(200, {
-        "Content-Type": "application/x-7z-compressed",
-        ...corsHeaders,
-      });
-      res.end(baselineArchive);
-      return;
-    }
-    if (url.startsWith("/hvsc/archive/update")) {
-      res.writeHead(200, {
-        "Content-Type": "application/x-7z-compressed",
-        ...corsHeaders,
-      });
-      res.end(updateArchive);
-      return;
-    }
-    if (url.startsWith("/hvsc/fixtures/baseline.json")) {
-      res.writeHead(200, {
-        "Content-Type": "application/json",
-        ...corsHeaders,
-      });
-      res.end(JSON.stringify(baseline));
-      return;
-    }
-    if (url.startsWith("/hvsc/fixtures/update.json")) {
-      res.writeHead(200, {
-        "Content-Type": "application/json",
-        ...corsHeaders,
-      });
-      res.end(JSON.stringify(update));
-      return;
-    }
-    res.writeHead(404, {
-      "Content-Type": "application/json",
+  const sendJson = (res: http.ServerResponse, statusCode: number, body: unknown) => {
+    res.writeHead(statusCode, { "Content-Type": "application/json", ...corsHeaders });
+    res.end(JSON.stringify(body));
+  };
+
+  const sendBuffer = async (
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    statusCode: number,
+    buffer: Buffer,
+    contentType: string,
+  ) => {
+    res.writeHead(statusCode, {
+      "Content-Type": contentType,
+      "Content-Length": String(buffer.byteLength),
       ...corsHeaders,
     });
-    res.end(JSON.stringify({ error: "Not found" }));
+    if (req.method === "HEAD") {
+      res.end();
+      return 0;
+    }
+    return await writeArchiveResponse(res, buffer, {
+      bytesPerSecond: options.bytesPerSecond,
+      chunkSizeBytes: options.chunkSizeBytes,
+    });
+  };
+
+  const server = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    const startedAtMs = performance.now();
+    const startedAt = new Date().toISOString();
+    const url = req.url ?? "/";
+    let statusCode = 500;
+    let bytesSent = 0;
+    let contentLength = 0;
+
+    if (req.method === "OPTIONS") {
+      statusCode = 204;
+      res.writeHead(204, corsHeaders);
+      res.end();
+    } else if (url === "/" || url === "/hvsc" || url === "/hvsc/") {
+      statusCode = 200;
+      const baselineArchiveName = buildVersionedArchiveName("HVSC", baseline.version);
+      const updateArchiveName = buildVersionedArchiveName("HVSC_Update", update.version);
+      const html = `
+        <html>
+          <a href="${baselineArchiveName}">${baselineArchiveName}</a>
+          <a href="${updateArchiveName}">${updateArchiveName}</a>
+        </html>
+      `;
+      res.writeHead(200, {
+        "Content-Type": "text/html",
+        "Content-Length": String(Buffer.byteLength(html)),
+        ...corsHeaders,
+      });
+      if (req.method === "HEAD") {
+        res.end();
+      } else {
+        res.end(html);
+        bytesSent = Buffer.byteLength(html);
+      }
+      contentLength = Buffer.byteLength(html);
+    } else if (url.startsWith(`/hvsc/${buildVersionedArchiveName("HVSC", baseline.version)}`)) {
+      statusCode = 200;
+      bytesSent = await sendBuffer(req, res, 200, baselineArchive, "application/x-7z-compressed");
+      contentLength = baselineArchive.byteLength;
+    } else if (url.startsWith(`/hvsc/${buildVersionedArchiveName("HVSC_Update", update.version)}`)) {
+      statusCode = 200;
+      bytesSent = await sendBuffer(req, res, 200, updateArchive, "application/x-7z-compressed");
+      contentLength = updateArchive.byteLength;
+    } else if (url.startsWith("/hvsc/archive/baseline")) {
+      statusCode = 200;
+      bytesSent = await sendBuffer(req, res, 200, baselineArchive, "application/x-7z-compressed");
+      contentLength = baselineArchive.byteLength;
+    } else if (url.startsWith("/hvsc/archive/update")) {
+      statusCode = 200;
+      bytesSent = await sendBuffer(req, res, 200, updateArchive, "application/x-7z-compressed");
+      contentLength = updateArchive.byteLength;
+    } else if (url.startsWith("/hvsc/fixtures/baseline.json")) {
+      statusCode = 200;
+      sendJson(res, 200, baseline);
+    } else if (url.startsWith("/hvsc/fixtures/update.json")) {
+      statusCode = 200;
+      sendJson(res, 200, update);
+    } else {
+      statusCode = 404;
+      sendJson(res, 404, { error: "Not found" });
+    }
+
+    const endedAt = new Date().toISOString();
+    logRequest({
+      method: req.method ?? "GET",
+      path: url,
+      statusCode,
+      bytesSent,
+      contentLength,
+      durationMs: Number((performance.now() - startedAtMs).toFixed(3)),
+      startedAt,
+      endedAt,
+    });
   });
 
   return new Promise((resolve) => {
@@ -160,6 +267,10 @@ export function createMockHvscServer(): Promise<MockHvscServer> {
         baseUrl,
         baseline,
         update,
+        clearRequestLog: () => {
+          requestLog.splice(0, requestLog.length);
+        },
+        getRequestLog: () => requestLog.map((entry) => ({ ...entry })),
         close: () => new Promise((resClose) => server.close(() => resClose())),
       });
     });

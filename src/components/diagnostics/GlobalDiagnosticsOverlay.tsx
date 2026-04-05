@@ -19,6 +19,7 @@ import {
 } from "@/lib/diagnostics/healthCheckState";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
+import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
 import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -243,6 +244,7 @@ export const GlobalDiagnosticsOverlay = () => {
         healthSnapshot: healthState,
         lastHealthCheckResult: healthCheckState.latestResult,
         healthHistory: getHealthHistorySnapshot(),
+        hvscPerfTimings: collectHvscPerfTimings(),
         latencySamples: getAllLatencySamples(),
         recoveryEvidence: getRecoveryEvidence(),
       },

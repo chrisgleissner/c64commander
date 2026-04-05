@@ -3,12 +3,20 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_ID="uk.gleissner.c64commander"
+APP_MAIN_ACTIVITY="$APP_ID/.MainActivity"
 DEFAULT_APK="$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
-OUTPUT_DIR="$ROOT_DIR/test-results/maestro"
-DEBUG_DIR="$OUTPUT_DIR/debug"
-REPORT_PATH="$OUTPUT_DIR/maestro-report.xml"
+DEFAULT_OUTPUT_DIR="$ROOT_DIR/test-results/maestro"
+OUTPUT_DIR="${OUTPUT_DIR:-$DEFAULT_OUTPUT_DIR}"
+DEBUG_DIR=""
+REPORT_PATH="${REPORT_PATH:-}"
 CONFIG_PATH="$ROOT_DIR/.maestro/config.yaml"
 BOOT_TIMEOUT_SECS=${BOOT_TIMEOUT_SECS:-180}
+AUTOMATION_READY_TIMEOUT_SECS=${AUTOMATION_READY_TIMEOUT_SECS:-20}
+POWER_STAYON_ENABLED=0
+DEFAULT_LONG_TIMEOUT_MS=${DEFAULT_LONG_TIMEOUT_MS:-20000}
+HVSC_PERF_LONG_TIMEOUT_MS=${HVSC_PERF_LONG_TIMEOUT_MS:-180000}
+DEFAULT_TIMEOUT_MS=${DEFAULT_TIMEOUT_MS:-15000}
+DEFAULT_SHORT_TIMEOUT_MS=${DEFAULT_SHORT_TIMEOUT_MS:-5000}
 
 MODE=""
 TAG_FILTERS=""
@@ -16,6 +24,8 @@ DEVICE_ID=""
 APK_PATH="$DEFAULT_APK"
 C64U_TARGET="${C64U_TARGET:-mock}"
 C64U_HOST="${C64U_HOST:-C64U}"
+HVSC_BASE_URL="${HVSC_BASE_URL:-}"
+BENCHMARK_RUN_ID="${BENCHMARK_RUN_ID:-}"
 
 usage() {
   cat <<EOF
@@ -26,8 +36,11 @@ Options:
   --tags <list>            Comma-separated tags; supports +include/-exclude
   --device-id <serial>     adb device/emulator id
   --apk-path <path>        APK path to install (default: $DEFAULT_APK)
+  --output-dir <path>      Output directory for Maestro artifacts (default: $DEFAULT_OUTPUT_DIR)
   --c64u-target <mock|real> Target for smoke config (default: ${C64U_TARGET})
   --c64u-host <hostname>   Hostname/IP for real target (default: ${C64U_HOST})
+  --hvsc-base-url <url>    Override HVSC release base URL for smoke mode
+  --benchmark-run-id <id>  Benchmark run id written into smoke snapshots
   -h, --help               Show this help
 EOF
 }
@@ -90,6 +103,60 @@ wait_for_boot() {
   return 1
 }
 
+cleanup_device_state() {
+  if [[ "$POWER_STAYON_ENABLED" == "1" && -n "$DEVICE_ID" ]]; then
+    adb -s "$DEVICE_ID" shell "svc power stayon false" >/dev/null 2>&1 || true
+  fi
+}
+
+get_current_focus_window() {
+  local focus
+  focus=$(adb -s "$1" shell "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'" 2>/dev/null | tr -d '\r' || true)
+  printf '%s' "$focus"
+}
+
+is_keyguard_showing() {
+  local status
+  status=$(adb -s "$1" shell "dumpsys window policy | grep -E 'isStatusBarKeyguard|mShowingLockscreen|mDreamingLockscreen'" 2>/dev/null | tr -d '\r' || true)
+  [[ "${status,,}" == *"=true"* ]]
+}
+
+unlock_device() {
+  local serial="$1"
+  adb -s "$serial" shell "svc power stayon usb" >/dev/null 2>&1 || true
+  POWER_STAYON_ENABLED=1
+  adb -s "$serial" shell input keyevent 224 >/dev/null 2>&1 || true
+  adb -s "$serial" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+  adb -s "$serial" shell input keyevent 82 >/dev/null 2>&1 || true
+  adb -s "$serial" shell input keyevent 4 >/dev/null 2>&1 || true
+}
+
+ensure_device_ready_for_automation() {
+  local serial="$1"
+  local deadline=$(( $(date +%s) + AUTOMATION_READY_TIMEOUT_SECS ))
+  local focus=""
+  while [[ $(date +%s) -lt $deadline ]]; do
+    unlock_device "$serial"
+    adb -s "$serial" shell am start -W -n "$APP_MAIN_ACTIVITY" >/dev/null 2>&1 || true
+    sleep 1
+    focus=$(get_current_focus_window "$serial")
+    if ! is_keyguard_showing "$serial" && [[ "$focus" == *"$APP_ID"* ]]; then
+      return 0
+    fi
+  done
+  echo "Device preflight failed: app not focused or keyguard still active (focus=${focus:-unknown})" >&2
+  return 1
+}
+
+select_long_timeout_ms() {
+  local tag_source="$1"
+  if [[ "$tag_source" == *"hvsc-perf"* ]]; then
+    printf '%s' "$HVSC_PERF_LONG_TIMEOUT_MS"
+    return
+  fi
+  printf '%s' "$DEFAULT_LONG_TIMEOUT_MS"
+}
+
 resolve_apk_path() {
   if [[ -f "$APK_PATH" ]]; then
     return 0
@@ -121,8 +188,8 @@ install_apk() {
   log "Installing APK: $APK_PATH"
   local install_log="$OUTPUT_DIR/adb-install.log"
   if ! adb -s "$DEVICE_ID" install -r "$APK_PATH" >"$install_log" 2>&1; then
-    if grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE" "$install_log"; then
-      log "APK signature mismatch; uninstalling existing package $APP_ID"
+    if grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE\|INSTALL_FAILED_VERSION_DOWNGRADE" "$install_log"; then
+      log "APK install requires uninstalling existing package $APP_ID"
       adb -s "$DEVICE_ID" uninstall "$APP_ID" >/dev/null 2>&1 || true
       adb -s "$DEVICE_ID" install "$APK_PATH" >>"$install_log" 2>&1 || {
         echo "APK install failed after uninstall" >&2
@@ -173,7 +240,7 @@ ensure_hvsc_library() {
 
 write_smoke_config() {
   local payload
-  payload=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:target==='real',debugLogging:true,featureFlags:{hvsc_enabled:true}};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
+  payload=$(node -e "const target=process.argv[1];const host=process.argv[2];const hvscBaseUrl=process.argv[3];const benchmarkRunId=process.argv[4];const payload={target,readOnly:target==='real',debugLogging:true,featureFlags:{hvsc_enabled:true}};if(target==='real'&&host){payload.host=host;}if(hvscBaseUrl){payload.hvscBaseUrl=hvscBaseUrl;}if(benchmarkRunId){payload.benchmarkRunId=benchmarkRunId;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST" "$HVSC_BASE_URL" "$BENCHMARK_RUN_ID")
   adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c64u-smoke.json'" <<<"$payload" || true
 }
 
@@ -236,12 +303,24 @@ while [[ $# -gt 0 ]]; do
       APK_PATH="$2"
       shift 2
       ;;
+    --output-dir)
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
     --c64u-target)
       C64U_TARGET="$2"
       shift 2
       ;;
     --c64u-host)
       C64U_HOST="$2"
+      shift 2
+      ;;
+    --hvsc-base-url)
+      HVSC_BASE_URL="$2"
+      shift 2
+      ;;
+    --benchmark-run-id)
+      BENCHMARK_RUN_ID="$2"
       shift 2
       ;;
     -h|--help)
@@ -281,9 +360,16 @@ if ! resolve_apk_path; then
   exit 1
 fi
 
+DEBUG_DIR="$OUTPUT_DIR/debug"
+if [[ -z "$REPORT_PATH" ]]; then
+  REPORT_PATH="$OUTPUT_DIR/maestro-report.xml"
+fi
+
 mkdir -p "$OUTPUT_DIR" "$DEBUG_DIR"
 
 pick_device
+
+trap cleanup_device_state EXIT
 
 adb -s "$DEVICE_ID" forward --remove-all >/dev/null 2>&1 || true
 
@@ -308,8 +394,9 @@ write_smoke_config
 
 ensure_hvsc_library "$DEVICE_ID"
 
+ensure_device_ready_for_automation "$DEVICE_ID"
+
 MAESTRO_ARGS=("$ROOT_DIR/.maestro" --udid "$DEVICE_ID" --format JUNIT --output "$REPORT_PATH" --test-output-dir "$OUTPUT_DIR" --debug-output "$DEBUG_DIR")
-MAESTRO_ARGS+=(-e LONG_TIMEOUT=20000 -e TIMEOUT=15000 -e SHORT_TIMEOUT=5000)
 
 TEMP_CONFIG=""
 TAG_INCLUDE=""
@@ -351,6 +438,9 @@ fi
 if [[ -n "$TAG_EXCLUDE" ]]; then
   MAESTRO_ARGS+=(--exclude-tags "$TAG_EXCLUDE")
 fi
+
+LONG_TIMEOUT_MS=$(select_long_timeout_ms "${TAG_INCLUDE:-$TAG_FILTERS}")
+MAESTRO_ARGS+=(-e LONG_TIMEOUT="$LONG_TIMEOUT_MS" -e TIMEOUT="$DEFAULT_TIMEOUT_MS" -e SHORT_TIMEOUT="$DEFAULT_SHORT_TIMEOUT_MS")
 
 log "Running Maestro tests (mode=$MODE, device=$DEVICE_ID)"
 set +e

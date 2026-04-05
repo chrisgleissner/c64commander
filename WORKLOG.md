@@ -1,3 +1,106 @@
+# HVSC Performance Worklog
+
+## [2026-04-05 07:50] Phase 0 environment and infrastructure gap scan
+
+Started the HVSC performance convergence pass and recorded the execution prerequisites before code changes.
+
+Measured environment facts:
+
+- Cache directory `/home/chris/.cache/c64commander/hvsc` contains:
+  - `HVSC_84-all-of-them.7z`
+  - `HVSC_Update_84.7z`
+- Real hardware probe:
+  - `http://u64/v1/info` responded successfully with `Ultimate 64 Elite`, firmware `3.14d`
+- Device tooling reported:
+  - Android device `9B081FFAZ001WX`
+  - model `Pixel 4`
+  - platform `android`
+  - version `16`
+
+Measured repository gaps:
+
+- no source-level `hvsc:perf:*` timing implementation in `src/lib/hvsc/**`
+- no `test:bench`, `test:perf`, or `test:perf:nightly` scripts in `package.json`
+- no `playwright/perf/` directory
+- no `test/benchmarks/` directory
+- no `perf-benchmark-quick` job in `.github/workflows/android.yaml`
+- no `.github/workflows/perf-nightly.yaml`
+
+Decision:
+
+- The first implementation cycle will build the measurement foundation instead of attempting an optimization guess.
+- Immediate scope: HVSC perf ring buffer, diagnostics/trace export integration, first source-level instrumentation points, and a benchmark-capable mock server mode.
+
+## [2026-04-05 08:10] Phase 0 measurement foundation implemented
+
+Implemented the first benchmark-grade measurement layer for the HVSC workflow.
+
+What changed:
+
+- Added `src/lib/hvsc/hvscPerformance.ts` with an exportable ring buffer, scope helpers, and `performance.mark()` / `performance.measure()` integration.
+- Exposed HVSC perf timings through `src/lib/tracing/traceBridge.ts` and included them in diagnostics exports from `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`.
+- Instrumented first high-value runtime phases:
+  - `browse:load-snapshot`
+  - `browse:query`
+  - `playback:load-sid`
+  - `download`
+  - `download:checksum`
+  - `ingest:extract`
+  - `ingest:songlengths`
+  - `ingest:index-build`
+- Extended `playwright/mockHvscServer.ts` to support disk-backed archives, throttled transfer, `HEAD`, and request timing logs.
+- Added focused regression coverage for the new timing and mock-server behavior.
+- Added the first secondary-web perf harness and CI entry points:
+  - `playwright/hvscPerf.spec.ts`
+  - `scripts/hvsc/collect-web-perf.mjs`
+  - `scripts/hvsc/assert-web-perf-budgets.mjs`
+  - `package.json` perf scripts
+  - `.github/workflows/android.yaml` quick perf job
+  - `.github/workflows/perf-nightly.yaml`
+
+Decision:
+
+- Keep this cycle. It does not close any target budget yet, but it replaces the earlier instrumentation gap with runnable capture paths and exportable evidence.
+
+## [2026-04-05 08:22] Validation complete and first secondary web quick baseline captured
+
+Validated the new measurement foundation and recorded the first quick-run baseline on the secondary web lane.
+
+Validation run summary:
+
+- `npm run lint`: passed for the changed code; only pre-existing warnings remained under `c64scope/coverage/*.js`
+- `npm run build`: passed after repairing syntax/helper regressions introduced while instrumenting `src/lib/hvsc/hvscDownload.ts` and `playwright/mockHvscServer.ts`
+- `npm run test:coverage`: completed with the normal coverage report output
+- `npm run test:perf:quick`: passed after fixing the Playwright project selection, enabling `PLAYWRIGHT_DEVICES=web`, and switching the perf spec to the existing HVSC source-selection helper
+- `npm run test:perf:assert:web`: passed after correcting the default summary path; result is observation-only because no web perf budget environment variables are configured
+
+Measured artifact:
+
+- Summary file: `/home/chris/dev/c64/c64commander/ci-artifacts/hvsc-performance/web-secondary-quick.json`
+- Scenario: `web-browse-playback-secondary`
+- Mode: `fixture-secondary-web`
+- Loops: `3`
+- Throttle: `5242880 B/s` (5 MiB/s)
+
+Measured p95 values from the quick lane:
+
+- `browseLoadSnapshotMs`: `3.6 ms`
+- `browseInitialQueryMs`: `118.1 ms`
+- `browseSearchQueryMs`: `13.2 ms`
+- `playbackLoadSidMs`: `0.2 ms`
+
+Interpretation:
+
+- The secondary web browse/playback lane is working and exporting timings correctly.
+- This is not yet evidence for `T1`-`T6` because it does not measure real-device install, ingest, large-playlist filter, or end-to-end playback start.
+
+Decision:
+
+- Keep the new perf infrastructure and quick lane.
+- Next step is real Pixel 4 + real U64 baseline capture with Maestro + Perfetto rather than additional secondary web plumbing.
+
+---
+
 # Playback Configuration System - Execution Worklog
 
 ## 2026-04-04T10:05:00Z - HVSC decompression convergence pass started

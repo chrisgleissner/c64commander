@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
@@ -265,22 +266,22 @@ export const useHvscLibrary = (): HvscLibraryState => {
       download:
         prev.download.status === "in-progress"
           ? {
-              ...prev.download,
-              status: "failure",
-              finishedAt: now,
-              errorCategory: prev.download.errorCategory ?? "unknown",
-              errorMessage: prev.download.errorMessage ?? "Interrupted",
-            }
+            ...prev.download,
+            status: "failure",
+            finishedAt: now,
+            errorCategory: prev.download.errorCategory ?? "unknown",
+            errorMessage: prev.download.errorMessage ?? "Interrupted",
+          }
           : prev.download,
       extraction:
         prev.extraction.status === "in-progress"
           ? {
-              ...prev.extraction,
-              status: "failure",
-              finishedAt: now,
-              errorCategory: prev.extraction.errorCategory ?? "unknown",
-              errorMessage: prev.extraction.errorMessage ?? "Interrupted",
-            }
+            ...prev.extraction,
+            status: "failure",
+            finishedAt: now,
+            errorCategory: prev.extraction.errorCategory ?? "unknown",
+            errorMessage: prev.extraction.errorMessage ?? "Interrupted",
+          }
           : prev.extraction,
       lastUpdatedAt: now,
     }));
@@ -433,10 +434,10 @@ export const useHvscLibrary = (): HvscLibraryState => {
             download:
               prev.download.status === "in-progress"
                 ? {
-                    ...prev.download,
-                    status: "success",
-                    finishedAt: prev.download.finishedAt ?? now,
-                  }
+                  ...prev.download,
+                  status: "success",
+                  finishedAt: prev.download.finishedAt ?? now,
+                }
                 : prev.download,
             extraction: {
               ...prev.extraction,
@@ -609,6 +610,16 @@ export const useHvscLibrary = (): HvscLibraryState => {
               },
               lastUpdatedAt: finishedAt,
             }));
+            void recordSmokeBenchmarkSnapshot({
+              scenario: "install",
+              state: "up-to-date",
+              metadata: {
+                installedVersion: status.installedVersion,
+                ingestionState: status.ingestionState,
+                totalSongs: status.ingestionSummary?.totalSongs ?? null,
+                ingestedSongs: status.ingestionSummary?.ingestedSongs ?? null,
+              },
+            });
             refreshHvscStatus();
             return;
           }
@@ -635,6 +646,17 @@ export const useHvscLibrary = (): HvscLibraryState => {
             },
             lastUpdatedAt: finishedAt,
           }));
+          void recordSmokeBenchmarkSnapshot({
+            scenario: "install",
+            state: "complete",
+            metadata: {
+              installedVersion: status.installedVersion,
+              ingestionState: status.ingestionState,
+              totalSongs: status.ingestionSummary?.totalSongs ?? null,
+              ingestedSongs: status.ingestionSummary?.ingestedSongs ?? null,
+              songlengthSyntaxErrors: status.ingestionSummary?.songlengthSyntaxErrors ?? null,
+            },
+          });
           toast({
             title: "HVSC ready",
             description: status.ingestionSummary
@@ -726,6 +748,17 @@ export const useHvscLibrary = (): HvscLibraryState => {
             },
             lastUpdatedAt: finishedAt,
           }));
+          void recordSmokeBenchmarkSnapshot({
+            scenario: "ingest",
+            state: "complete",
+            metadata: {
+              installedVersion: status.installedVersion,
+              ingestionState: status.ingestionState,
+              totalSongs: status.ingestionSummary?.totalSongs ?? null,
+              ingestedSongs: status.ingestionSummary?.ingestedSongs ?? null,
+              songlengthSyntaxErrors: status.ingestionSummary?.songlengthSyntaxErrors ?? null,
+            },
+          });
           toast({
             title: "HVSC ready",
             description: status.ingestionSummary
@@ -782,29 +815,29 @@ export const useHvscLibrary = (): HvscLibraryState => {
         download:
           prev.download.status === "in-progress"
             ? {
-                ...prev.download,
-                status: "idle",
-                finishedAt: stoppedAt,
-                durationMs: null,
-                downloadedBytes: null,
-                totalBytes: null,
-                sizeBytes: null,
-                errorCategory: null,
-                errorMessage: "Cancelled",
-              }
+              ...prev.download,
+              status: "idle",
+              finishedAt: stoppedAt,
+              durationMs: null,
+              downloadedBytes: null,
+              totalBytes: null,
+              sizeBytes: null,
+              errorCategory: null,
+              errorMessage: "Cancelled",
+            }
             : prev.download,
         extraction:
           prev.extraction.status === "in-progress"
             ? {
-                ...prev.extraction,
-                status: "idle",
-                finishedAt: stoppedAt,
-                durationMs: null,
-                filesExtracted: null,
-                totalFiles: null,
-                errorCategory: null,
-                errorMessage: "Cancelled",
-              }
+              ...prev.extraction,
+              status: "idle",
+              finishedAt: stoppedAt,
+              durationMs: null,
+              filesExtracted: null,
+              totalFiles: null,
+              errorCategory: null,
+              errorMessage: "Cancelled",
+            }
             : prev.extraction,
         lastUpdatedAt: stoppedAt,
       }));

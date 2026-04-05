@@ -11,6 +11,7 @@ import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
 import { resolveLibraryPath } from "./hvscFilesystem";
+import { runWithHvscPerfScope } from "./hvscPerformance";
 
 const STORAGE_PATH = "hvsc/index/hvsc-browse-index-v1.json";
 const STORAGE_KEY = "c64u_hvsc_browse_index:v1";
@@ -293,12 +294,20 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
 };
 
 export const loadHvscBrowseIndexSnapshot = async () => {
-  if (typeof window !== "undefined") {
-    const filesystemSnapshot = await readFilesystemSnapshot();
-    if (filesystemSnapshot) return filesystemSnapshot;
-    return readLocalStorageSnapshot();
-  }
-  return readLocalStorageSnapshot();
+  return runWithHvscPerfScope(
+    "browse:load-snapshot",
+    async () => {
+      if (typeof window !== "undefined") {
+        const filesystemSnapshot = await readFilesystemSnapshot();
+        if (filesystemSnapshot) return filesystemSnapshot;
+        return readLocalStorageSnapshot();
+      }
+      return readLocalStorageSnapshot();
+    },
+    {
+      platform: typeof window !== "undefined" ? "browser" : "node",
+    },
+  );
 };
 
 export const saveHvscBrowseIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {

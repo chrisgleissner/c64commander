@@ -119,6 +119,47 @@ jobs:
             coverage/lcov.info
             coverage/coverage-final.json
 
+  perf-benchmark-quick:
+    name: Perf | Quick HVSC secondary web benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Collect quick HVSC perf summary
+        run: npm run test:perf:quick
+
+      - name: Apply optional perf budgets
+        run: npm run test:perf:assert:web
+
+      - name: Upload perf artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hvsc-perf-quick
+          path: ci-artifacts/hvsc-performance/**
+
   web-screenshots:
     name: Web | Screenshots
     runs-on: ubuntu-latest

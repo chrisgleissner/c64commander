@@ -41,6 +41,15 @@ vi.mock("@/lib/tracing/traceSession", () => ({
 const { resetTraceIds } = vi.hoisted(() => ({ resetTraceIds: vi.fn() }));
 vi.mock("@/lib/tracing/traceIds", () => ({ resetTraceIds }));
 
+const { collectHvscPerfTimings, resetHvscPerfTimings } = vi.hoisted(() => ({
+  collectHvscPerfTimings: vi.fn(() => [{ id: "hvsc-perf-000001" }]),
+  resetHvscPerfTimings: vi.fn(),
+}));
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  collectHvscPerfTimings,
+  resetHvscPerfTimings,
+}));
+
 import { registerTraceBridge } from "@/lib/tracing/traceBridge";
 
 describe("traceBridge", () => {
@@ -75,6 +84,18 @@ describe("traceBridge", () => {
     expect(bridge.getTraces()).toEqual([{ id: 1 }]);
   });
 
+  it("returns HVSC perf timings via bridge.getHvscPerfTimings", () => {
+    collectHvscPerfTimings.mockReturnValue([{ id: "hvsc-perf-000042" }]);
+    registerTraceBridge();
+    const bridge = (
+      window as Window & {
+        __c64uTracing?: { getHvscPerfTimings: () => Array<{ id: string }> };
+      }
+    ).__c64uTracing!;
+
+    expect(bridge.getHvscPerfTimings()).toEqual([{ id: "hvsc-perf-000042" }]);
+  });
+
   it("exports traces via bridge.exportTraces", () => {
     exportTraceZip.mockReturnValue(new Uint8Array([9, 8, 7]));
     registerTraceBridge();
@@ -100,6 +121,18 @@ describe("traceBridge", () => {
     bridge.resetTraceIds(100, 200);
 
     expect(resetTraceIds).toHaveBeenCalledWith(100, 200);
+  });
+
+  it("resets HVSC perf timings via bridge.resetHvscPerfTimings", () => {
+    registerTraceBridge();
+    const bridge = (
+      window as Window & {
+        __c64uTracing?: { resetHvscPerfTimings: () => void };
+      }
+    ).__c64uTracing!;
+
+    bridge.resetHvscPerfTimings();
+    expect(resetHvscPerfTimings).toHaveBeenCalledTimes(1);
   });
 
   it("resets trace session with defaults via bridge.resetTraceSession", () => {

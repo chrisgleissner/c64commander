@@ -37,6 +37,7 @@ vi.mock("@capacitor/core", () => ({
     isNativePlatform: vi.fn(),
     isPluginAvailable: vi.fn(),
   },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
@@ -85,7 +86,7 @@ describe("hvscService", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       CustomEvent: class CustomEvent {
-        constructor(public type: string) {}
+        constructor(public type: string) { }
       },
       ...overrides,
     });

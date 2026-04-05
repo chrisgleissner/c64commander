@@ -20,6 +20,7 @@ import {
 } from "./hvscFilesystem";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 
 const HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES = 512 * 1024;
 
@@ -549,205 +550,237 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
   let inMemoryBuffer: Uint8Array | null = null;
   let expectedSizeBytes: number | null = null;
   let downloadedBufferForMarker: Uint8Array | null = null;
-
-  ensureNotCancelled();
-  emitProgress({
-    stage: "download",
-    message: `Downloading ${archiveName}…`,
+  const downloadPerfScope = beginHvscPerfScope("download", {
     archiveName,
-    percent: 0,
+    archivePath,
+    archiveType: plan.type,
+    archiveVersion: plan.version,
+    downloadUrl,
   });
-  await deleteCachedArchive(archivePath);
-  addLog("info", "HVSC download started", { archiveName, url: downloadUrl });
-  const downloadHeapBefore = readHeapUsageBytes();
-  const totalBytesHint = await fetchContentLength(downloadUrl);
-  expectedSizeBytes = totalBytesHint;
-  if (!shouldUseNativeDownload() && totalBytesHint !== null && totalBytesHint > MAX_BRIDGE_READ_BYTES) {
-    throw new Error(buildNonNativeLargeArchiveError(archiveName, totalBytesHint));
-  }
+  let downloadError: Error | null = null;
 
-  if (shouldUseNativeDownload()) {
-    const cacheDir = getHvscCacheDir();
-    let lastReported = 0;
-    let pollingTimer: ReturnType<typeof setInterval> | null = null;
-    let totalBytes = totalBytesHint ?? null;
-    let pollErrorLogged = false;
-    const pollSize = async () => {
+  try {
+    ensureNotCancelled();
+    emitProgress({
+      stage: "download",
+      message: `Downloading ${archiveName}…`,
+      archiveName,
+      percent: 0,
+    });
+    await deleteCachedArchive(archivePath);
+    addLog("info", "HVSC download started", { archiveName, url: downloadUrl });
+    const downloadHeapBefore = readHeapUsageBytes();
+    const totalBytesHint = await fetchContentLength(downloadUrl);
+    expectedSizeBytes = totalBytesHint;
+    if (!shouldUseNativeDownload() && totalBytesHint !== null && totalBytesHint > MAX_BRIDGE_READ_BYTES) {
+      throw new Error(buildNonNativeLargeArchiveError(archiveName, totalBytesHint));
+    }
+
+    if (shouldUseNativeDownload()) {
+      const cacheDir = getHvscCacheDir();
+      let lastReported = 0;
+      let pollingTimer: ReturnType<typeof setInterval> | null = null;
+      let totalBytes = totalBytesHint ?? null;
+      let pollErrorLogged = false;
+      const pollSize = async () => {
+        try {
+          const stat = await Filesystem.stat({
+            directory: Directory.Data,
+            path: `${cacheDir}/${archivePath}`,
+          });
+          const size = stat.size ?? 0;
+          if (size > lastReported) {
+            lastReported = size;
+            emitDownloadProgress(emitProgress, archiveName, size, totalBytes);
+          }
+        } catch (error) {
+          if (!pollErrorLogged) {
+            pollErrorLogged = true;
+            addLog("warn", "HVSC download progress stat failed", {
+              archivePath,
+              error: (error as Error).message,
+            });
+          }
+        }
+      };
       try {
-        const stat = await Filesystem.stat({
+        pollingTimer = setInterval(pollSize, 400);
+        await Filesystem.downloadFile({
+          url: downloadUrl,
+          directory: Directory.Data,
+          path: `${cacheDir}/${archivePath}`,
+          progress: (status) => {
+            totalBytes = status.total ?? totalBytes;
+            expectedSizeBytes = status.total ?? expectedSizeBytes;
+            const loaded = status.loaded ?? 0;
+            if (loaded >= lastReported) {
+              lastReported = loaded;
+              emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes);
+            }
+          },
+        });
+        ensureNotCancelled();
+      } catch (error) {
+        await deleteCachedArchive(archivePath);
+        if (!isExistsError(error)) throw error;
+        ensureNotCancelled();
+        const response = await fetch(downloadUrl, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+        }
+        const buffer = new Uint8Array(await response.arrayBuffer());
+        await writeCachedArchive(archivePath, buffer);
+        emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
+        downloadedBufferForMarker = buffer;
+        inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
+      } finally {
+        if (pollingTimer) clearInterval(pollingTimer);
+      }
+      let nativeDownloadedSize: number | null = null;
+      try {
+        const postStat = await Filesystem.stat({
           directory: Directory.Data,
           path: `${cacheDir}/${archivePath}`,
         });
-        const size = stat.size ?? 0;
-        if (size > lastReported) {
-          lastReported = size;
-          emitDownloadProgress(emitProgress, archiveName, size, totalBytes);
-        }
-      } catch (error) {
-        if (!pollErrorLogged) {
-          pollErrorLogged = true;
-          addLog("warn", "HVSC download progress stat failed", {
-            archivePath,
-            error: (error as Error).message,
-          });
-        }
+        nativeDownloadedSize = postStat.size ?? null;
+      } catch (statError) {
+        addLog("warn", "Failed to stat native download for size validation", {
+          archivePath,
+          error: (statError as Error).message,
+        });
       }
-    };
-    try {
-      pollingTimer = setInterval(pollSize, 400);
-      await Filesystem.downloadFile({
-        url: downloadUrl,
-        directory: Directory.Data,
-        path: `${cacheDir}/${archivePath}`,
-        progress: (status) => {
-          totalBytes = status.total ?? totalBytes;
-          expectedSizeBytes = status.total ?? expectedSizeBytes;
-          const loaded = status.loaded ?? 0;
-          if (loaded >= lastReported) {
-            lastReported = loaded;
-            emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes);
-          }
-        },
-      });
-      ensureNotCancelled();
-    } catch (error) {
-      await deleteCachedArchive(archivePath);
-      if (!isExistsError(error)) throw error;
+      if (totalBytesHint && nativeDownloadedSize !== null && nativeDownloadedSize < totalBytesHint * 0.99) {
+        await deleteCachedArchive(archivePath);
+        throw new Error(
+          `HVSC archive is corrupt or truncated: native download for "${archiveName}" wrote ${nativeDownloadedSize} bytes, expected ~${totalBytesHint}. Please re-download.`,
+        );
+      }
+    } else {
       ensureNotCancelled();
       const response = await fetch(downloadUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status} ${response.statusText}`);
       }
-      const buffer = new Uint8Array(await response.arrayBuffer());
-      await writeCachedArchive(archivePath, buffer);
-      emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
-      downloadedBufferForMarker = buffer;
-      inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
-    } finally {
-      if (pollingTimer) clearInterval(pollingTimer);
+      const totalBytes = parseContentLength(response.headers.get("content-length")) ?? totalBytesHint;
+      expectedSizeBytes = totalBytes;
+      if (!response.body) {
+        const buffer = new Uint8Array(await response.arrayBuffer());
+        if (totalBytes && buffer.byteLength !== totalBytes) {
+          throw new Error(`Download size mismatch: expected ${totalBytes}, got ${buffer.byteLength}`);
+        }
+        await writeCachedArchive(archivePath, buffer);
+        emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
+        downloadedBufferForMarker = buffer;
+        inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
+      } else {
+        const reader = response.body.getReader();
+        let buffer: Uint8Array;
+        try {
+          buffer = await streamToBuffer(reader, totalBytes, ensureNotCancelled, (loadedBytes) =>
+            emitDownloadProgress(emitProgress, archiveName, loadedBytes, totalBytes ?? null),
+          );
+        } catch (error) {
+          try {
+            await reader.cancel();
+          } catch (cancelError) {
+            addLog("warn", "Failed to cancel HVSC download reader after stream error", {
+              archiveName,
+              error: (cancelError as Error).message,
+            });
+          }
+          throw error;
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch (releaseError) {
+            addLog("warn", "Failed to release HVSC download reader lock", {
+              archiveName,
+              error: (releaseError as Error).message,
+            });
+          }
+        }
+        await writeCachedArchive(archivePath, buffer);
+        emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, totalBytes ?? buffer.byteLength);
+        downloadedBufferForMarker = buffer;
+        inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
+      }
     }
-    let nativeDownloadedSize: number | null = null;
+
+    const downloadHeapAfter = readHeapUsageBytes();
+    addLog("info", "HVSC download memory profile", {
+      archiveName,
+      heapBefore: downloadHeapBefore,
+      heapAfter: downloadHeapAfter,
+      heapDelta:
+        downloadHeapBefore !== null && downloadHeapAfter !== null ? downloadHeapAfter - downloadHeapBefore : null,
+    });
+    addLog("info", "HVSC download completed", { archiveName });
+
+    const checksumPerfScope = beginHvscPerfScope("download:checksum", {
+      archiveName,
+      archivePath,
+    });
+    let checksumError: Error | null = null;
+    const cacheDir = getHvscCacheDir();
     try {
-      const postStat = await Filesystem.stat({
+      const stat = await Filesystem.stat({
         directory: Directory.Data,
         path: `${cacheDir}/${archivePath}`,
       });
-      nativeDownloadedSize = postStat.size ?? null;
-    } catch (statError) {
-      addLog("warn", "Failed to stat native download for size validation", {
-        archivePath,
-        error: (statError as Error).message,
+      const checksumMd5 = downloadedBufferForMarker
+        ? computeArchiveChecksumMd5(downloadedBufferForMarker)
+        : await computeCachedArchiveChecksumMd5(archivePath, stat.size ?? null);
+      await writeCachedArchiveMarker(archivePath, {
+        version: plan.version,
+        type: plan.type,
+        sizeBytes: stat.size,
+        expectedSizeBytes,
+        checksumMd5,
+        sourceUrl: downloadUrl,
+        completedAt: new Date().toISOString(),
       });
-    }
-    if (totalBytesHint && nativeDownloadedSize !== null && nativeDownloadedSize < totalBytesHint * 0.99) {
-      await deleteCachedArchive(archivePath);
-      throw new Error(
-        `HVSC archive is corrupt or truncated: native download for "${archiveName}" wrote ${nativeDownloadedSize} bytes, expected ~${totalBytesHint}. Please re-download.`,
+      emitProgress({
+        stage: "download",
+        message: `Downloaded ${archiveName}`,
+        archiveName,
+        downloadedBytes: stat.size,
+        totalBytes: stat.size,
+        percent: 100,
+      });
+    } catch (error) {
+      checksumError = error as Error;
+      addLog("warn", "Failed to write HVSC cache marker", {
+        archivePath,
+        error: (error as Error).message,
+      });
+      await writeCachedArchiveMarker(archivePath, {
+        version: plan.version,
+        type: plan.type,
+        sizeBytes: null,
+        expectedSizeBytes,
+        checksumMd5: null,
+        sourceUrl: downloadUrl,
+        completedAt: new Date().toISOString(),
+      });
+    } finally {
+      endHvscPerfScope(
+        checksumPerfScope,
+        checksumError
+          ? { outcome: "error", errorMessage: checksumError.message }
+          : { outcome: "success", expectedSizeBytes },
       );
     }
-  } else {
-    ensureNotCancelled();
-    const response = await fetch(downloadUrl, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-    }
-    const totalBytes = parseContentLength(response.headers.get("content-length")) ?? totalBytesHint;
-    expectedSizeBytes = totalBytes;
-    if (!response.body) {
-      const buffer = new Uint8Array(await response.arrayBuffer());
-      if (totalBytes && buffer.byteLength !== totalBytes) {
-        throw new Error(`Download size mismatch: expected ${totalBytes}, got ${buffer.byteLength}`);
-      }
-      await writeCachedArchive(archivePath, buffer);
-      emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
-      downloadedBufferForMarker = buffer;
-      inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
-    } else {
-      const reader = response.body.getReader();
-      let buffer: Uint8Array;
-      try {
-        buffer = await streamToBuffer(reader, totalBytes, ensureNotCancelled, (loadedBytes) =>
-          emitDownloadProgress(emitProgress, archiveName, loadedBytes, totalBytes ?? null),
-        );
-      } catch (error) {
-        try {
-          await reader.cancel();
-        } catch (cancelError) {
-          addLog("warn", "Failed to cancel HVSC download reader after stream error", {
-            archiveName,
-            error: (cancelError as Error).message,
-          });
-        }
-        throw error;
-      } finally {
-        try {
-          reader.releaseLock();
-        } catch (releaseError) {
-          addLog("warn", "Failed to release HVSC download reader lock", {
-            archiveName,
-            error: (releaseError as Error).message,
-          });
-        }
-      }
-      await writeCachedArchive(archivePath, buffer);
-      emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, totalBytes ?? buffer.byteLength);
-      downloadedBufferForMarker = buffer;
-      inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
-    }
-  }
 
-  const downloadHeapAfter = readHeapUsageBytes();
-  addLog("info", "HVSC download memory profile", {
-    archiveName,
-    heapBefore: downloadHeapBefore,
-    heapAfter: downloadHeapAfter,
-    heapDelta:
-      downloadHeapBefore !== null && downloadHeapAfter !== null ? downloadHeapAfter - downloadHeapBefore : null,
-  });
-
-  addLog("info", "HVSC download completed", { archiveName });
-
-  const cacheDir = getHvscCacheDir();
-  try {
-    const stat = await Filesystem.stat({
-      directory: Directory.Data,
-      path: `${cacheDir}/${archivePath}`,
-    });
-    const checksumMd5 = downloadedBufferForMarker
-      ? computeArchiveChecksumMd5(downloadedBufferForMarker)
-      : await computeCachedArchiveChecksumMd5(archivePath, stat.size ?? null);
-    await writeCachedArchiveMarker(archivePath, {
-      version: plan.version,
-      type: plan.type,
-      sizeBytes: stat.size,
-      expectedSizeBytes,
-      checksumMd5,
-      sourceUrl: downloadUrl,
-      completedAt: new Date().toISOString(),
-    });
-    emitProgress({
-      stage: "download",
-      message: `Downloaded ${archiveName}`,
-      archiveName,
-      downloadedBytes: stat.size,
-      totalBytes: stat.size,
-      percent: 100,
-    });
+    return inMemoryBuffer;
   } catch (error) {
-    addLog("warn", "Failed to write HVSC cache marker", {
-      archivePath,
-      error: (error as Error).message,
-    });
-    await writeCachedArchiveMarker(archivePath, {
-      version: plan.version,
-      type: plan.type,
-      sizeBytes: null,
-      expectedSizeBytes,
-      checksumMd5: null,
-      sourceUrl: downloadUrl,
-      completedAt: new Date().toISOString(),
-    });
+    downloadError = error as Error;
+    throw error;
+  } finally {
+    endHvscPerfScope(
+      downloadPerfScope,
+      downloadError
+        ? { outcome: "error", errorMessage: downloadError.message, expectedSizeBytes }
+        : { outcome: "success", expectedSizeBytes },
+    );
   }
-
-  return inMemoryBuffer;
 };

@@ -21,7 +21,9 @@ import { createHvscMediaIndex } from "./hvscMediaIndex";
 import { loadHvscRoot } from "./hvscRootLocator";
 import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "./hvscBrowseIndexStore";
+import { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } from "./hvscPerformance";
 import { nextCorrelationId } from "@/lib/tracing/traceIds";
 import { recordHvscQueryTiming } from "./hvscStatusStore";
 import {
@@ -222,8 +224,28 @@ export const getHvscFolderListingPaged = async (options: {
   const limit = Math.max(1, Math.floor(options.limit ?? 200));
   const correlationId = nextCorrelationId();
   const queryStartMs = performance.now();
+  const queryPerfScope = beginHvscPerfScope("browse:query", {
+    correlationId,
+    path,
+    query,
+    offset,
+    limit,
+  });
 
-  const recordTiming = (page: HvscFolderListingPage, phase: string) => {
+  const finalizePage = (page: HvscFolderListingPage, phase: string) => {
+    const resultCount = page.songs.length + page.folders.length;
+    const windowMs = Math.round((performance.now() - queryStartMs) * 100) / 100;
+    endHvscPerfScope(queryPerfScope, {
+      phase,
+      correlationId,
+      path,
+      query,
+      offset,
+      limit,
+      resultCount,
+      totalSongs: page.totalSongs,
+      totalFolders: page.totalFolders,
+    });
     recordHvscQueryTiming({
       correlationId,
       phase,
@@ -231,10 +253,26 @@ export const getHvscFolderListingPaged = async (options: {
       query,
       offset,
       limit,
-      resultCount: page.songs.length + page.folders.length,
-      windowMs: Math.round((performance.now() - queryStartMs) * 100) / 100,
+      resultCount,
+      windowMs,
       timestamp: new Date().toISOString(),
     });
+    void recordSmokeBenchmarkSnapshot({
+      scenario: "browse-query",
+      state: phase,
+      metadata: {
+        correlationId,
+        path,
+        query,
+        offset,
+        limit,
+        resultCount,
+        totalSongs: page.totalSongs,
+        totalFolders: page.totalFolders,
+        windowMs,
+      },
+    });
+    return page;
   };
 
   try {
@@ -246,20 +284,17 @@ export const getHvscFolderListingPaged = async (options: {
       limit,
     });
     if (page.totalFolders > 0 || page.totalSongs > 0 || !isHvscBridgeAvailable()) {
-      recordTiming(page, "index");
-      return page;
+      return finalizePage(page, "index");
     }
     const mock = getMockBridge();
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
       const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-      recordTiming(result, "mock-runtime");
-      return result;
+      return finalizePage(result, "mock-runtime");
     }
     const runtimeListing = await getRuntimeFolderListing(path);
     const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-    recordTiming(result, "runtime");
-    return result;
+    return finalizePage(result, "runtime");
   } catch (error) {
     const err = error as Error;
     addLog("info", "HVSC paged folder listing failed; falling back to runtime", {
@@ -278,13 +313,11 @@ export const getHvscFolderListingPaged = async (options: {
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
       const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-      recordTiming(result, "mock-runtime-fallback");
-      return result;
+      return finalizePage(result, "mock-runtime-fallback");
     }
     const runtimeListing = await getRuntimeFolderListing(path);
     const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-    recordTiming(result, "runtime-fallback");
-    return result;
+    return finalizePage(result, "runtime-fallback");
   }
 };
 
@@ -302,9 +335,18 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
 };
 
 export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {
-  const mock = getMockBridge();
-  if (mock?.getHvscSong) return mock.getHvscSong(options);
-  return getRuntimeSong(options);
+  return runWithHvscPerfScope(
+    "playback:load-sid",
+    async () => {
+      const mock = getMockBridge();
+      if (mock?.getHvscSong) return mock.getHvscSong(options);
+      return getRuntimeSong(options);
+    },
+    {
+      id: options.id ?? null,
+      virtualPath: options.virtualPath ?? null,
+    },
+  );
 };
 
 export const getHvscDurationByMd5Seconds = async (md5: string) => {

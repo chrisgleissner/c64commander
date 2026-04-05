@@ -78,6 +78,7 @@ import {
   type HvscProgressListenerHandle,
 } from "./hvscIngestionRuntimeSupport";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
+import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 const runtimeState = getHvscIngestionRuntimeState();
 
 export { isIngestionRuntimeActive, recoverStaleIngestionState } from "./hvscIngestionRuntimeSupport";
@@ -328,117 +329,140 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     });
   }
 
-  await extractArchiveEntries({
+  const extractPerfScope = beginHvscPerfScope("ingest:extract", {
     archiveName,
-    buffer: archiveBuffer,
-    onEnumerate: (total) => {
-      emitProgress({
-        stage: "sid_enumeration",
-        message: `Discovered ${total} files`,
-        archiveName,
-        processedCount: 0,
-        totalCount: total,
-      });
-    },
-    onProgress: (processed, total) => {
-      emitProgress({
-        stage: "archive_extraction",
-        message: `Extracting ${archiveName}…`,
-        archiveName,
-        processedCount: processed,
-        totalCount: total,
-        percent: total ? Math.round((processed / total) * 100) : undefined,
-      });
-    },
-    onEntry: async (path, data) => {
-      ensureNotCancelledLocal();
-      const normalized = normalizeEntryName(path);
-      if (isDeletionList(normalized)) {
-        const text = new TextDecoder().decode(data);
-        deletions.push(...parseDeletionList(text));
-        return;
-      }
-
-      const lowered = normalized.toLowerCase();
-      if (lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt")) {
-        const targetPath =
-          plan.type === "baseline" ? normalizeLibraryPath(normalized) : normalizeUpdateLibraryPath(normalized);
-        if (targetPath) {
-          await (plan.type === "baseline" ? writeStagingFile : writeLibraryFile)(targetPath, data);
-          emitProgress({
-            stage: "songlengths",
-            message: `Loaded ${targetPath.split("/").pop()}`,
-            archiveName,
-          });
+    archiveType: plan.type,
+    archiveVersion: plan.version,
+    mode: "non-native",
+  });
+  let extractPerfError: Error | null = null;
+  try {
+    await extractArchiveEntries({
+      archiveName,
+      buffer: archiveBuffer,
+      onEnumerate: (total) => {
+        emitProgress({
+          stage: "sid_enumeration",
+          message: `Discovered ${total} files`,
+          archiveName,
+          processedCount: 0,
+          totalCount: total,
+        });
+      },
+      onProgress: (processed, total) => {
+        emitProgress({
+          stage: "archive_extraction",
+          message: `Extracting ${archiveName}…`,
+          archiveName,
+          processedCount: processed,
+          totalCount: total,
+          percent: total ? Math.round((processed / total) * 100) : undefined,
+        });
+      },
+      onEntry: async (path, data) => {
+        ensureNotCancelledLocal();
+        const normalized = normalizeEntryName(path);
+        if (isDeletionList(normalized)) {
+          const text = new TextDecoder().decode(data);
+          deletions.push(...parseDeletionList(text));
+          return;
         }
-        return;
-      }
 
-      const virtualPath =
-        plan.type === "baseline" ? normalizeVirtualPath(normalized) : normalizeUpdateVirtualPath(normalized);
-      if (!virtualPath) return;
-      ingestionSummary.totalSongs += 1;
-      try {
-        let sidMetadata = null;
-        let trackSubsongs = null;
+        const lowered = normalized.toLowerCase();
+        if (lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt")) {
+          const targetPath =
+            plan.type === "baseline" ? normalizeLibraryPath(normalized) : normalizeUpdateLibraryPath(normalized);
+          if (targetPath) {
+            await (plan.type === "baseline" ? writeStagingFile : writeLibraryFile)(targetPath, data);
+            emitProgress({
+              stage: "songlengths",
+              message: `Loaded ${targetPath.split("/").pop()}`,
+              archiveName,
+            });
+          }
+          return;
+        }
+
+        const virtualPath =
+          plan.type === "baseline" ? normalizeVirtualPath(normalized) : normalizeUpdateVirtualPath(normalized);
+        if (!virtualPath) return;
+        ingestionSummary.totalSongs += 1;
         try {
-          sidMetadata = parseSidHeaderMetadata(data);
-          trackSubsongs = buildSidTrackSubsongs(sidMetadata.songs, sidMetadata.startSong);
-        } catch (parseError) {
-          const failure = classifyError(parseError);
-          addLog("warn", "HVSC SID metadata parse failed; continuing ingest", {
+          let sidMetadata = null;
+          let trackSubsongs = null;
+          try {
+            sidMetadata = parseSidHeaderMetadata(data);
+            trackSubsongs = buildSidTrackSubsongs(sidMetadata.songs, sidMetadata.startSong);
+          } catch (parseError) {
+            const failure = classifyError(parseError);
+            addLog("warn", "HVSC SID metadata parse failed; continuing ingest", {
+              virtualPath,
+              archiveName,
+              errorCategory: failure.category,
+              errorExpected: failure.isExpected,
+              error: (parseError as Error).message,
+            });
+          }
+          await (plan.type === "baseline" ? writeStagingFile : writeLibraryFile)(virtualPath, data);
+          browseIndex.upsertSong({
             virtualPath,
+            fileName: virtualPath.split("/").pop() ?? virtualPath,
+            sidMetadata,
+            trackSubsongs,
+          });
+          ingestionSummary.ingestedSongs += 1;
+          emitProgress({
+            stage: "sid_metadata_parsing",
+            message: `Parsed ${virtualPath}`,
             archiveName,
+            currentFile: virtualPath,
+            totalSongs: ingestionSummary.totalSongs,
+            ingestedSongs: ingestionSummary.ingestedSongs,
+            failedSongs: ingestionSummary.failedSongs,
+          });
+        } catch (error) {
+          const failure = classifyError(error);
+          ingestionSummary.failedSongs += 1;
+          ingestionSummary.failedPaths.push(virtualPath);
+          addErrorLog("HVSC song ingest failed", {
+            archiveName,
+            virtualPath,
             errorCategory: failure.category,
             errorExpected: failure.isExpected,
-            error: (parseError as Error).message,
+            operation: "writeLibraryFile",
+            error: {
+              name: (error as Error).name,
+              message: (error as Error).message,
+              stack: (error as Error).stack,
+            },
+          });
+          emitProgress({
+            stage: "sid_metadata_parsing",
+            message: `Failed ${virtualPath}`,
+            archiveName,
+            currentFile: virtualPath,
+            totalSongs: ingestionSummary.totalSongs,
+            ingestedSongs: ingestionSummary.ingestedSongs,
+            failedSongs: ingestionSummary.failedSongs,
           });
         }
-        await (plan.type === "baseline" ? writeStagingFile : writeLibraryFile)(virtualPath, data);
-        browseIndex.upsertSong({
-          virtualPath,
-          fileName: virtualPath.split("/").pop() ?? virtualPath,
-          sidMetadata,
-          trackSubsongs,
-        });
-        ingestionSummary.ingestedSongs += 1;
-        emitProgress({
-          stage: "sid_metadata_parsing",
-          message: `Parsed ${virtualPath}`,
-          archiveName,
-          currentFile: virtualPath,
-          totalSongs: ingestionSummary.totalSongs,
-          ingestedSongs: ingestionSummary.ingestedSongs,
-          failedSongs: ingestionSummary.failedSongs,
-        });
-      } catch (error) {
-        const failure = classifyError(error);
-        ingestionSummary.failedSongs += 1;
-        ingestionSummary.failedPaths.push(virtualPath);
-        addErrorLog("HVSC song ingest failed", {
-          archiveName,
-          virtualPath,
-          errorCategory: failure.category,
-          errorExpected: failure.isExpected,
-          operation: "writeLibraryFile",
-          error: {
-            name: (error as Error).name,
-            message: (error as Error).message,
-            stack: (error as Error).stack,
+      },
+    });
+  } catch (error) {
+    extractPerfError = error as Error;
+    throw error;
+  } finally {
+    endHvscPerfScope(
+      extractPerfScope,
+      extractPerfError
+        ? { outcome: "error", errorMessage: extractPerfError.message, totalSongs: ingestionSummary.totalSongs }
+        : {
+            outcome: "success",
+            totalSongs: ingestionSummary.totalSongs,
+            ingestedSongs: ingestionSummary.ingestedSongs,
           },
-        });
-        emitProgress({
-          stage: "sid_metadata_parsing",
-          message: `Failed ${virtualPath}`,
-          archiveName,
-          currentFile: virtualPath,
-          totalSongs: ingestionSummary.totalSongs,
-          ingestedSongs: ingestionSummary.ingestedSongs,
-          failedSongs: ingestionSummary.failedSongs,
-        });
-      }
-    },
-  });
+    );
+  }
   pipeline.transition("EXTRACTED");
 
   pipeline.transition("INGESTING", { deletionCount: deletions.length });
@@ -481,9 +505,16 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   }
 
   resetSonglengthsCache();
+  const songlengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
+    archiveName,
+    archiveType: plan.type,
+    archiveVersion: plan.version,
+  });
+  let songlengthsPerfError: Error | null = null;
   try {
     await reloadHvscSonglengthsOnConfigChange();
   } catch (error) {
+    songlengthsPerfError = error as Error;
     const failure = classifyError(error);
     addErrorLog("HVSC songlengths reload failed after ingestion", {
       archiveName,
@@ -496,6 +527,11 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
       },
     });
     throw error;
+  } finally {
+    endHvscPerfScope(
+      songlengthsPerfScope,
+      songlengthsPerfError ? { outcome: "error", errorMessage: songlengthsPerfError.message } : { outcome: "success" },
+    );
   }
   ingestionSummary.songlengthSyntaxErrors = getHvscSonglengthsStats().backendStats.rejectedLines;
 
@@ -509,7 +545,23 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     });
   }
 
-  await browseIndex.finalize();
+  const indexBuildPerfScope = beginHvscPerfScope("ingest:index-build", {
+    archiveName,
+    archiveType: plan.type,
+    archiveVersion: plan.version,
+  });
+  let indexBuildPerfError: Error | null = null;
+  try {
+    await browseIndex.finalize();
+  } catch (error) {
+    indexBuildPerfError = error as Error;
+    throw error;
+  } finally {
+    endHvscPerfScope(
+      indexBuildPerfScope,
+      indexBuildPerfError ? { outcome: "error", errorMessage: indexBuildPerfError.message } : { outcome: "success" },
+    );
+  }
 
   applyIngestionSuccess({
     plan,
@@ -582,6 +634,13 @@ const ingestArchivePathNative = async (options: {
   try {
     ensureNotCancelled(cancelToken);
     let result;
+    const nativeExtractPerfScope = beginHvscPerfScope("ingest:extract", {
+      archiveName,
+      archiveType: plan.type,
+      archiveVersion: plan.version,
+      mode: "native",
+    });
+    let nativeExtractPerfError: Error | null = null;
     try {
       result = await HvscIngestion.ingestHvsc({
         relativeArchivePath,
@@ -593,6 +652,7 @@ const ingestArchivePathNative = async (options: {
         debugHeapLogging: import.meta.env.DEV,
       });
     } catch (error) {
+      nativeExtractPerfError = error as Error;
       if (!isUnsupportedNativeSevenZipMethodError(error)) {
         if (isCorruptedArchiveError(error)) {
           throw new Error(
@@ -624,6 +684,13 @@ const ingestArchivePathNative = async (options: {
         baselineInstalled,
         extractionStarted: true,
       });
+    } finally {
+      endHvscPerfScope(
+        nativeExtractPerfScope,
+        nativeExtractPerfError
+          ? { outcome: "error", errorMessage: nativeExtractPerfError.message }
+          : { outcome: "success" },
+      );
     }
     ensureNotCancelled(cancelToken);
 
@@ -631,7 +698,26 @@ const ingestArchivePathNative = async (options: {
     pipeline.transition("INGESTING", { deletionCount: result.songsDeleted });
 
     resetSonglengthsCache();
-    await reloadHvscSonglengthsOnConfigChange();
+    const nativeSonglengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
+      archiveName,
+      archiveType: plan.type,
+      archiveVersion: plan.version,
+      mode: "native",
+    });
+    let nativeSonglengthsPerfError: Error | null = null;
+    try {
+      await reloadHvscSonglengthsOnConfigChange();
+    } catch (error) {
+      nativeSonglengthsPerfError = error as Error;
+      throw error;
+    } finally {
+      endHvscPerfScope(
+        nativeSonglengthsPerfScope,
+        nativeSonglengthsPerfError
+          ? { outcome: "error", errorMessage: nativeSonglengthsPerfError.message }
+          : { outcome: "success" },
+      );
+    }
     await clearHvscBrowseIndexSnapshot();
 
     if (result.failedSongs > 0) {

@@ -13,11 +13,12 @@ vi.mock("@capacitor/core", () => ({
     isNativePlatform: vi.fn(() => false),
     isPluginAvailable: vi.fn(() => false),
   },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
   addHvscProgressListener: vi.fn(async (listener: any) => ({
-    remove: async () => {},
+    remove: async () => { },
   })),
   cancelHvscInstall: vi.fn(async () => undefined),
   checkForHvscUpdates: vi.fn(async () => ({
@@ -112,9 +113,31 @@ vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
   })),
 }));
 
+const { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } = vi.hoisted(() => ({
+  beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
+    scope,
+    name: `hvsc:perf:${scope}`,
+    startMarkName: `hvsc:perf:${scope}:start`,
+    startedAt: "2026-04-05T07:50:46.000Z",
+    startedAtMs: 0,
+    metadata: metadata ?? null,
+  })),
+  endHvscPerfScope: vi.fn(),
+  runWithHvscPerfScope: vi.fn(async (_scope: string, run: () => unknown) => await run()),
+}));
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  beginHvscPerfScope,
+  endHvscPerfScope,
+  runWithHvscPerfScope,
+}));
+
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
+}));
+
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  recordSmokeBenchmarkSnapshot: vi.fn(),
 }));
 
 import { Capacitor } from "@capacitor/core";
@@ -141,6 +164,7 @@ import {
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 
 describe("hvscService", () => {
   beforeEach(() => {
@@ -207,6 +231,11 @@ describe("hvscService", () => {
     it("getHvscSong delegates to runtime", async () => {
       const song = await getHvscSong({ virtualPath: "/test.sid" });
       expect(song.fileName).toBe("test.sid");
+      expect(runWithHvscPerfScope).toHaveBeenCalledWith(
+        "playback:load-sid",
+        expect.any(Function),
+        expect.objectContaining({ virtualPath: "/test.sid" }),
+      );
     });
 
     it("getHvscDurationByMd5Seconds delegates to runtime", async () => {
@@ -264,6 +293,17 @@ describe("hvscService", () => {
       expect(page.limit).toBeGreaterThanOrEqual(10);
       expect(page.offset).toBe(0);
       expect(page.totalSongs).toBe(0);
+      expect(beginHvscPerfScope).toHaveBeenCalledWith(
+        "browse:query",
+        expect.objectContaining({ path: "/", limit: 10, offset: 0 }),
+      );
+      expect(endHvscPerfScope).toHaveBeenCalled();
+      expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scenario: "browse-query",
+          metadata: expect.objectContaining({ path: "/", limit: 10, offset: 0 }),
+        }),
+      );
     });
 
     it("maps paged results into compatibility listing", async () => {

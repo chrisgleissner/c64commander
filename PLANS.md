@@ -1,3 +1,79 @@
+# HVSC Performance Optimization Plan
+
+## Current status
+
+- Classification: `CODE_CHANGE`
+- Phase 0 measurement foundation is partially complete.
+- Verified execution prerequisites:
+  - cached full-size archives present at `~/.cache/c64commander/hvsc/` (`HVSC_84-all-of-them.7z`, `HVSC_Update_84.7z`)
+  - real Ultimate responds at `http://u64/v1/info`
+  - attached device tooling reports Pixel 4 serial `9B081FFAZ001WX` online
+- Landed infrastructure in this pass:
+  - source-level HVSC perf ring buffer and export path via `src/lib/hvsc/hvscPerformance.ts`
+  - trace bridge and diagnostics export access to `hvscPerfTimings`
+  - first instrumentation on browse load/query, download/checksum, ingest extract/songlengths/index-build, and playback SID load
+  - disk-backed, throttled HVSC mock server mode with `HEAD` support and request timing logs
+  - secondary web Playwright perf scenario plus aggregation and optional assertion scripts
+  - CI entry points in `package.json`, `.github/workflows/android.yaml`, and `.github/workflows/perf-nightly.yaml`
+- Fresh measured evidence captured in this pass is still limited to the secondary web browse/playback lane:
+  - `ci-artifacts/hvsc-performance/web-secondary-quick.json`
+  - 3-loop fixture-backed run with p95 metrics: browse snapshot `3.6 ms`, initial browse query `118.1 ms`, search browse query `13.2 ms`, playback SID load `0.2 ms`
+- Targets `T1`-`T6` still do not have a real Pixel 4 + real U64 pass/fail matrix for this pass.
+- Dominant blocker: the missing piece is now real-device Maestro + Perfetto scenario capture and full-size baseline execution, not basic instrumentation.
+
+## Completed cycles
+
+- 2026-04-05 Cycle 0A: environment and gap scan completed.
+  - Cache check: full-size baseline and update archives available locally.
+  - Hardware probe: `u64` reachable; `c64u` not yet required because `u64` succeeded.
+  - Device probe: Pixel 4 available to the current toolchain.
+  - Repo scan: prompt-declared perf scripts, workflows, and source instrumentation are absent in the current tree.
+- 2026-04-05 Cycle 0B: measurement foundation and secondary web quick lane completed.
+  - Added HVSC perf ring buffer/export support and instrumented the first high-value runtime phases.
+  - Extended the mock HVSC server with disk-backed archives, throttled transfer, `HEAD`, and request logging.
+  - Added `playwright/hvscPerf.spec.ts`, `scripts/hvsc/collect-web-perf.mjs`, and `scripts/hvsc/assert-web-perf-budgets.mjs`.
+  - Added `test:perf`, `test:perf:quick`, `test:perf:nightly`, `test:perf:assert:web`, plus CI quick/nightly workflow hooks.
+  - Validation passed after repairing `hvscDownload.ts`, `playwright/mockHvscServer.ts`, Playwright project selection, and the perf harness selector/default-file issues.
+  - Secondary web quick baseline recorded p95 metrics of `3.6 ms` browse snapshot load, `118.1 ms` initial browse query, `13.2 ms` search browse query, and `0.2 ms` playback SID load.
+
+## Next cycle
+
+- Addressed targets: unlock the first honest real-device baseline for `T1`-`T5` and establish the first real pass/fail matrix.
+- Bottleneck: remaining gap is scenario execution and artifact capture on Pixel 4 + real U64, not missing internal timings.
+- Research alignment:
+  - Section 6 requires deterministic S1-S11 scenario execution on the primary target.
+  - Section 7 requires the new `hvsc:perf:<phase>:<event>` marks to be captured together with Perfetto and telemetry evidence.
+  - Section 14 requires a fresh before/after baseline before ranking `B1`-`B5`.
+- Planned code changes for this cycle:
+  - add the missing Maestro and Android capture glue needed to run repeatable Pixel 4 scenarios against the real device path
+  - wire Perfetto and Android telemetry outputs into stable per-scenario artifact directories
+  - run the first real-device baseline for download, ingest, browse, filter, and playback using the new timing export path
+- Expected impact:
+  - no direct target budget win yet
+  - converts the remaining unknown primary-target behavior into measured data so the first true optimization cycle can choose a dominant bottleneck with evidence
+
+## Remaining gap
+
+- `T1`: unmeasured on Pixel 4 and in full-size Docker runs; the quick harness does not exercise download
+- `T2`: unmeasured on Pixel 4 and in full-size Docker runs; the quick harness does not exercise ingest
+- `T3`: unmeasured on Pixel 4; the secondary web initial browse query p95 of `118.1 ms` is encouraging but is not target evidence
+- `T4`: unmeasured on Pixel 4; no large-playlist filter scenario has been executed yet
+- `T5`: unmeasured on Pixel 4; the secondary web playback SID-load p95 of `0.2 ms` does not cover end-to-end playback start
+- `T6`: unmeasured; no 100K playlist-scale benchmark exists yet
+- Real-device Maestro + Perfetto scenario capture is still missing.
+- `test:bench` microbench coverage is still missing.
+- Full-size Docker perf budget coverage is still missing.
+
+## CI benchmark status
+
+- `.github/workflows/android.yaml` now contains `perf-benchmark-quick`, but it currently runs only the secondary web Playwright perf collection plus optional budget checks.
+- `.github/workflows/perf-nightly.yaml` now exists, but it currently covers only the secondary web nightly lane when cached archives are available.
+- `package.json` now defines `test:perf`, `test:perf:quick`, `test:perf:nightly`, and `test:perf:assert:web`; `test:bench` is still absent.
+- Perf artifacts are currently uploaded under `ci-artifacts/hvsc-performance/**`, not the broader prompt-defined `ci-artifacts/perf/**` structure.
+- Budget enforcement is currently observation-only unless environment thresholds are configured.
+
+---
+
 # HVSC Production-Readiness Implementation Plan
 
 ## Current Pass - 2026-04-03 HVSC Strong Convergence Closure
