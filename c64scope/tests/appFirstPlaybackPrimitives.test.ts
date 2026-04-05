@@ -181,6 +181,46 @@ describe("app-first playback primitives", () => {
     expect(tapByTextContainingMock).not.toHaveBeenCalled();
   });
 
+  it("falls back to the picker Root action when the visible Root label is not tappable", async () => {
+    const { openPathSegments } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2/test-data/mod" class="android.widget.TextView" enabled="true" bounds="[176,1001][640,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" content-desc="Root" class="android.widget.Button" clickable="true" enabled="true" bounds="[120,920][960,1010]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /" class="android.widget.TextView" enabled="true" bounds="[176,1001][250,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `);
+    tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await openPathSegments(client as never, "serial-1", ["USB2"]);
+
+    expect(client.tap).toHaveBeenCalledWith("serial-1", 540, 965);
+    expect(tapByTextMock).toHaveBeenNthCalledWith(1, client, "serial-1", "Root");
+    expect(tapByTextMock).toHaveBeenNthCalledWith(2, client, "serial-1", "Open USB2");
+  });
+
   it("treats slash-prefixed HVSC breadcrumbs as the current picker path regression", async () => {
     const { openPathSegments } = await import("../src/validation/appFirstPlaybackPrimitives.js");
 
