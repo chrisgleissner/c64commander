@@ -106,7 +106,7 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
 
 ### Play
 
-Build playlists for programs and songs sourced from the local device, C64U storage, CommoServe, or HVSC. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.
+Build playlists for programs and songs sourced from the local device, C64U storage, HVSC, or CommoServe. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.
 
 <table>
   <tr>
@@ -118,7 +118,7 @@ Build playlists for programs and songs sourced from the local device, C64U stora
 
 ### Browse & Import
 
-Choose an import source from the same playlist workflow: add local folders from your device, browse your C64U storage, or search CommoServe and import the matching results.
+Choose an import source from the same playlist workflow: add folders from your local device or C64U storage, download HVSC, or search CommoServe and import matching results.
 
 <table>
   <tr>
