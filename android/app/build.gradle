@@ -15,8 +15,54 @@ def upstream7zipSourceSha256 = "3e596155744af055a77fc433c703d54e3ea9212246287b5b
 def upstream7zipGeneratedJniLibsDir = new File(buildDir, "generated/jniLibs/upstream7zip")
 def upstream7zipWorkDir = new File(buildDir, "intermediates/upstream7zip")
 def upstream7zipBuildScript = rootProject.file("scripts/build-upstream-7zip.sh")
+def upstream7zipNdkVersion = "27.2.12479018"
 def upstream7zipApiLevel = 24
 def upstream7zipAbis = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
+
+def loadAndroidLocalProperties = {
+    def props = new Properties()
+    def localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        localPropsFile.withInputStream { stream ->
+            props.load(stream)
+        }
+    }
+    return props
+}
+
+def normalizeAndroidPath = { String rawPath ->
+    rawPath.replace('\\:', ':')
+}
+
+def resolveAndroidSdkDir = {
+    def envSdkDir = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+    if (envSdkDir) {
+        return new File(envSdkDir)
+    }
+
+    def props = loadAndroidLocalProperties()
+    def localSdkDir = props.getProperty("sdk.dir")
+    if (localSdkDir) {
+        return new File(normalizeAndroidPath(localSdkDir))
+    }
+
+    return new File(System.getProperty("user.home"), "Android/Sdk")
+}
+
+def resolveAndroidNdkDir = {
+    def envNdkDir = System.getenv("ANDROID_NDK_ROOT") ?: System.getenv("ANDROID_NDK_HOME")
+    if (envNdkDir) {
+        return new File(envNdkDir)
+    }
+
+    def props = loadAndroidLocalProperties()
+    def localNdkDir = props.getProperty("ndk.dir")
+    if (localNdkDir) {
+        return new File(normalizeAndroidPath(localNdkDir))
+    }
+
+    return new File(resolveAndroidSdkDir(), "ndk/${upstream7zipNdkVersion}")
+}
 
 def sha256Of = { File file ->
     def digest = MessageDigest.getInstance("SHA-256")
@@ -217,7 +263,7 @@ tasks.register('buildUpstream7zipAndroidBinaries', Exec) {
         if (!upstream7zipBuildScript.exists()) {
             throw new GradleException("Missing upstream 7-Zip build script: ${upstream7zipBuildScript}")
         }
-        def ndkDir = new File(System.getProperty("user.home"), "Android/Sdk/ndk/27.2.12479018")
+        def ndkDir = resolveAndroidNdkDir()
         if (!ndkDir.exists()) {
             throw new GradleException("Android NDK not found for upstream 7-Zip build: ${ndkDir}")
         }
