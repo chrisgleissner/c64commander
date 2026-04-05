@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
+import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addErrorLog } from "@/lib/logging";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -115,11 +116,38 @@ export const useQueryFilteredPlaylist = ({
 
       const repository = getPlaylistDataRepository();
       const serialized = serializePlaylistToQueryRepository(playlist, playlistStorageKey);
-      await repository.upsertTracks(serialized.tracks);
-      await repository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
-      if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
-        setRepositorySyncFailed(false);
-        setSyncedRevision(syncRequestId);
+      const syncScope = beginHvscPerfScope("playlist:repo-sync", {
+        playlistId: playlistStorageKey,
+        requestId: syncRequestId,
+        trackCount: serialized.tracks.length,
+        playlistItemCount: serialized.playlistItems.length,
+      });
+      try {
+        await repository.upsertTracks(serialized.tracks);
+        await repository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
+        endHvscPerfScope(syncScope, {
+          outcome: "success",
+          playlistId: playlistStorageKey,
+          requestId: syncRequestId,
+          trackCount: serialized.tracks.length,
+          playlistItemCount: serialized.playlistItems.length,
+        });
+        if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
+          setRepositorySyncFailed(false);
+          setSyncedRevision(syncRequestId);
+        }
+      } catch (error) {
+        const err = error as Error;
+        endHvscPerfScope(syncScope, {
+          outcome: "error",
+          playlistId: playlistStorageKey,
+          requestId: syncRequestId,
+          trackCount: serialized.tracks.length,
+          playlistItemCount: serialized.playlistItems.length,
+          errorName: err.name,
+          errorMessage: err.message,
+        });
+        throw error;
       }
     };
 
@@ -159,10 +187,35 @@ export const useQueryFilteredPlaylist = ({
 
       if (syncedRevision === 0) return;
 
+      const filterScope = beginHvscPerfScope("playlist:filter", {
+        playlistId: playlistStorageKey,
+        query,
+        viewAllLimit,
+        playlistSize: currentPlaylist.length,
+        categoryFilters: playlistTypeFilters,
+      });
+
+      const finalizeFilterScope = (metadata: Record<string, unknown>) => {
+        endHvscPerfScope(filterScope, {
+          playlistId: playlistStorageKey,
+          query,
+          viewAllLimit,
+          playlistSize: currentPlaylist.length,
+          categoryFilters: playlistTypeFilters,
+          ...metadata,
+        });
+      };
+
       if (repositorySyncFailed) {
         const nextFiltered = currentPlaylist.filter(
           (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
         );
+        finalizeFilterScope({
+          outcome: "fallback",
+          source: "memory",
+          resultCount: Math.min(nextFiltered.length, viewAllLimit),
+          totalMatchCount: nextFiltered.length,
+        });
         if (!cancelled) {
           setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
           setTotalMatchCount(nextFiltered.length);
@@ -184,6 +237,13 @@ export const useQueryFilteredPlaylist = ({
         .map((row) => byId.get(row.playlistItem.playlistItemId) ?? null)
         .filter((item): item is PlaylistItem => Boolean(item));
 
+      finalizeFilterScope({
+        outcome: "success",
+        source: "repository",
+        resultCount: nextFiltered.length,
+        totalMatchCount: result.totalMatchCount,
+      });
+
       if (!cancelled) {
         setQueryFilteredPlaylist(nextFiltered);
         setTotalMatchCount(result.totalMatchCount);
@@ -199,6 +259,21 @@ export const useQueryFilteredPlaylist = ({
         const nextFiltered = playlistRef.current.filter(
           (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
         );
+        const fallbackScope = beginHvscPerfScope("playlist:filter", {
+          playlistId: playlistStorageKey,
+          query,
+          viewAllLimit,
+          playlistSize: playlistRef.current.length,
+          categoryFilters: playlistTypeFilters,
+        });
+        endHvscPerfScope(fallbackScope, {
+          outcome: "fallback-after-error",
+          source: "memory",
+          resultCount: Math.min(nextFiltered.length, viewAllLimit),
+          totalMatchCount: nextFiltered.length,
+          errorName: (error as Error).name,
+          errorMessage: (error as Error).message,
+        });
         setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
         setTotalMatchCount(nextFiltered.length);
       }

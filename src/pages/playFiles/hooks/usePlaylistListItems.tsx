@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import { Folder } from "lucide-react";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { describeConfigOrigin, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
+import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import type { ActionListItem, ActionListMenuItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -54,6 +55,12 @@ export const usePlaylistListItems = ({
   currentPlayingItemId,
 }: PlaylistListItemsOptions) =>
   useMemo(() => {
+    const renderScope = beginHvscPerfScope("browse:render", {
+      filteredCount: filteredPlaylist.length,
+      playlistCount: playlist.length,
+      currentPlayingItemId,
+      hvscItemCount: filteredPlaylist.filter((item) => item.request.source === "hvsc").length,
+    });
     const items: ActionListItem[] = [];
     const playlistIndexById = new Map(playlist.map((entry, index) => [entry.id, index]));
     let lastFolder: string | null = null;
@@ -231,6 +238,14 @@ export const usePlaylistListItems = ({
         onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,
       } as ActionListItem);
+    });
+    endHvscPerfScope(renderScope, {
+      outcome: "success",
+      filteredCount: filteredPlaylist.length,
+      playlistCount: playlist.length,
+      renderedRowCount: items.filter((item) => item.variant !== "header").length,
+      renderedGroupCount: items.filter((item) => item.variant === "header").length,
+      currentPlayingItemId,
     });
     return items;
   }, [

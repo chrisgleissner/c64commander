@@ -10,6 +10,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "@/hooks/use-toast";
 import { createArchiveClient } from "@/lib/archive/client";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
+import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
@@ -114,6 +115,40 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     typeof selection.modifiedAt === "string";
 
   const PLAYLIST_APPEND_BATCH_SIZE = 250;
+
+  const measureAddBatch = async <T>(
+    sourceType: SourceLocation["type"],
+    batchSize: number,
+    run: () => Promise<T>,
+    metadata?: Record<string, unknown>,
+  ) => {
+    const scope = beginHvscPerfScope("playlist:add-batch", {
+      sourceType,
+      batchSize,
+      ...metadata,
+    });
+    try {
+      const result = await run();
+      endHvscPerfScope(scope, {
+        outcome: "success",
+        sourceType,
+        batchSize,
+        ...metadata,
+      });
+      return result;
+    } catch (error) {
+      const err = error as Error;
+      endHvscPerfScope(scope, {
+        outcome: "error",
+        sourceType,
+        batchSize,
+        errorName: err.name,
+        errorMessage: err.message,
+        ...metadata,
+      });
+      throw error;
+    }
+  };
 
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
@@ -239,11 +274,22 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
         const flushArchiveBatch = async () => {
           if (!pendingArchiveBatch.length) return;
-          const resolvedItems = await applySonglengthsToItems(pendingArchiveBatch);
-          appendedArchiveItems += resolvedItems.length;
-          setPlaylist((prev) => [...prev, ...resolvedItems]);
+          const batch = pendingArchiveBatch;
           pendingArchiveBatch = [];
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          await measureAddBatch(
+            source.type,
+            batch.length,
+            async () => {
+              const resolvedItems = await applySonglengthsToItems(batch);
+              appendedArchiveItems += resolvedItems.length;
+              setPlaylist((prev) => [...prev, ...resolvedItems]);
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            },
+            {
+              sourceId: source.id,
+              selectionCount: selections.length,
+            },
+          );
         };
 
         for (const selection of selections) {
@@ -352,12 +398,22 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
       const appendPlaylistBatch = async (batch: PlaylistItem[]) => {
         if (!batch.length) return;
-        const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
-          allowMd5Fallback: false,
-        });
-        appendedPlaylistItems += resolvedItems.length;
-        setPlaylist((prev) => [...prev, ...resolvedItems]);
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await measureAddBatch(
+          source.type,
+          batch.length,
+          async () => {
+            const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
+              allowMd5Fallback: false,
+            });
+            appendedPlaylistItems += resolvedItems.length;
+            setPlaylist((prev) => [...prev, ...resolvedItems]);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          },
+          {
+            sourceId: source.id,
+            discoveredSonglengthCount: discoveredSonglengths?.length ?? 0,
+          },
+        );
       };
 
       let pendingPlaylistBatch: PlaylistItem[] = [];

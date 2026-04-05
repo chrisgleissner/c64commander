@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_ID="uk.gleissner.c64commander"
-DEFAULT_OUTPUT_ROOT="$ROOT_DIR/test-results/hvsc-android-benchmark"
+DEFAULT_OUTPUT_ROOT="$ROOT_DIR/ci-artifacts/hvsc-performance/android"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$DEFAULT_OUTPUT_ROOT}"
 APK_PATH="${APK_PATH:-$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk}"
 C64U_TARGET="${C64U_TARGET:-real}"

@@ -45,7 +45,7 @@ const project = args.get('--project') || process.env.HVSC_PERF_PROJECT || 'web';
 const bytesPerSecond =
     args.get('--bytes-per-second') || process.env.HVSC_PERF_BYTES_PER_SECOND || String(5 * 1024 * 1024);
 const outFile =
-    args.get('--out') || process.env.HVSC_PERF_SUMMARY_FILE || 'ci-artifacts/hvsc-performance/web-secondary.json';
+    args.get('--out') || process.env.HVSC_PERF_SUMMARY_FILE || 'ci-artifacts/hvsc-performance/web/web-secondary.json';
 const tmpDir = path.resolve('.tmp', 'hvsc-perf');
 const baselineArchive = useRealArchives
     ? resolveCachedArchive([

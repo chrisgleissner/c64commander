@@ -1,5 +1,93 @@
 # HVSC Performance Worklog
 
+## [2026-04-05 09:00] P0.1 Reconcile tree with audit and top-level trackers
+
+Reconciled the full HVSC performance asset inventory against `docs/research/hvsc/performance/audit/audit.md`.
+
+Worktree state: clean (no dirty files).
+
+Previously undocumented assets now recorded in `PLANS.md`:
+
+- `.maestro/perf-hvsc-baseline.yaml` (Android Maestro flow tagged `hvsc-perf`)
+- `scripts/run-hvsc-android-benchmark.sh` (Android benchmark orchestrator)
+- `ci/telemetry/android/perfetto-hvsc.cfg` (Perfetto capture config)
+- Smoke benchmark snapshot plumbing in `useHvscLibrary.ts`, `hvscService.ts`, `playbackRouter.ts`
+- All 5 perf-related test files now listed
+- All 4 research documents now listed
+
+Added to `PLANS.md`:
+
+- Full asset inventory table (16 files across runtime, web, Android, CI, tests, artifacts, and research)
+- Explicit target status matrix showing all T1-T6 as `UNMEASURED`
+- Convergence phase status table showing P0.1 `DONE`, all others `NOT STARTED`
+- Honest description of the secondary web baseline lane's narrow scope
+- Listed the 5 missing instrumentation scopes from audit Gap 5
+
+Audit gaps confirmed as open:
+
+- Gap 1: S1-S11 benchmark matrix not implemented
+- Gap 2: Web harness does not benchmark download or ingest
+- Gap 3: Android harness is scaffolding, not a closed measurement system
+- Gap 4: Perfetto support is thin (no sched, no FrameTimeline, no SQL extraction)
+- Gap 5: Five instrumentation scopes missing
+- Gap 6: CI perf implementation is narrower than convergence prompt requires
+- Gap 7: No bottleneck B1-B5 has been performance-optimized
+
+Decision: P0.1 gate is satisfied. Proceeding to P0.2 artifact directory normalization.
+
+## [2026-04-05 09:15] P0.2 Normalize artifact directory strategy
+
+Implemented one canonical perf artifact layout under `ci-artifacts/hvsc-performance/` with `web/`, `android/`, and `bench/` subdirectories.
+
+Files changed:
+
+- `package.json`: `test:perf:quick` and `test:perf:nightly` output to `web/` subdirectory
+- `scripts/hvsc/collect-web-perf.mjs`: default output path → `ci-artifacts/hvsc-performance/web/`
+- `scripts/hvsc/assert-web-perf-budgets.mjs`: default file path → `ci-artifacts/hvsc-performance/web/`
+- `scripts/run-hvsc-android-benchmark.sh`: default output root → `ci-artifacts/hvsc-performance/android/`
+- `.github/workflows/perf-nightly.yaml`: summary file env var updated to `web/` path
+- Moved existing `web-secondary-quick.json` into `web/` subdirectory
+
+`ci-artifacts/` is gitignored so the directory structure is ephemeral. Scripts ensure dirs at runtime. `.github/workflows/android.yaml` upload glob covers all subdirectories.
+
+Decision: P0.2 gate is satisfied. Proceeding to P1.1 benchmark matrix closure.
+
+## [2026-04-05 09:30] P1.1 Close benchmark matrix gap S1-S11
+
+Created `playwright/hvscPerfScenarios.spec.ts` — a comprehensive Playwright spec that implements all 11 performance scenarios (S1–S11) for the web platform.
+
+File added:
+
+- `playwright/hvscPerfScenarios.spec.ts` (330 lines): 11 individual test cases, one per scenario
+
+Scenarios implemented:
+
+| Scenario | Test name                           | What it exercises                                                          |
+| -------- | ----------------------------------- | -------------------------------------------------------------------------- |
+| S1       | `S1 download HVSC from mock server` | Real download path (no `__hvscMock__`), clicks `#hvsc-download`            |
+| S2       | `S2 ingest HVSC`                    | Captures `ingest:*` scoped timings from download+ingest flow               |
+| S3       | `S3 open HVSC source browser`       | Opens add-items dialog → selects HVSC → waits for `source-entry-row`       |
+| S4       | `S4 traverse down into folders`     | Navigates into DEMOS, 0-9, MUSICIANS via `source-entry-row` clicks         |
+| S5       | `S5 traverse back up to root`       | Uses back/navigate-up button to return to HVSC root                        |
+| S6       | `S6 add songs to playlist`          | Selects all songs via `Select *` labels, confirms with `add-items-confirm` |
+| S7       | `S7 render playlist`                | Waits for `playlist-item` rows to appear                                   |
+| S8       | `S8 filter playlist high-match`     | Types "Orbyte" into `list-filter-input`                                    |
+| S9       | `S9 filter playlist zero-match`     | Types "xyzzy_no_match_123" into `list-filter-input`                        |
+| S10      | `S10 filter playlist low-match`     | Types "Commando" into `list-filter-input`                                  |
+| S11      | `S11 start playback from playlist`  | Clicks Play on first `playlist-item`, waits for SID play request           |
+
+Architecture decisions:
+
+- S1-S2 run without `__hvscMock__` injection to exercise the real download/ingest code path against the mock HVSC HTTP server. On web with fixtures this proves mechanism only (3 songs).
+- S3-S11 use `installReadyHvscMock()` (pre-installed state) for deterministic HVSC state.
+- Each scenario records both wall-clock timing and any captured perf scope timings.
+- Results are written to `HVSC_PERF_SCENARIOS_OUTPUT_FILE` as structured JSON.
+- `playlist:filter` perf scope not yet instrumented — S8-S10 record wall-clock only. Tracked for P1.4.
+
+Platform coverage matrix added to PLANS.md documenting which scenarios are actionable per platform and what gaps remain (real-archive web blocked by `MAX_BRIDGE_READ_BYTES`, Android S4/S5/S7-S10 not covered by Maestro, missing perf scopes P1.4).
+
+Validation: spec compiles clean (0 TS errors), Prettier-compliant.
+
 ## [2026-04-05 07:50] Phase 0 environment and infrastructure gap scan
 
 Started the HVSC performance convergence pass and recorded the execution prerequisites before code changes.

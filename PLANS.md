@@ -3,23 +3,126 @@
 ## Current status
 
 - Classification: `CODE_CHANGE`
-- Phase 0 measurement foundation is partially complete.
+- Phase: convergence pass per `docs/research/hvsc/performance/audit/convergence-prompt.md`
+- Current convergence task: `P0.2` complete; starting `P1.1`.
+- Worktree: clean (no dirty files).
 - Verified execution prerequisites:
   - cached full-size archives present at `~/.cache/c64commander/hvsc/` (`HVSC_84-all-of-them.7z`, `HVSC_Update_84.7z`)
   - real Ultimate responds at `http://u64/v1/info`
   - attached device tooling reports Pixel 4 serial `9B081FFAZ001WX` online
-- Landed infrastructure in this pass:
-  - source-level HVSC perf ring buffer and export path via `src/lib/hvsc/hvscPerformance.ts`
-  - trace bridge and diagnostics export access to `hvscPerfTimings`
-  - first instrumentation on browse load/query, download/checksum, ingest extract/songlengths/index-build, and playback SID load
-  - disk-backed, throttled HVSC mock server mode with `HEAD` support and request timing logs
-  - secondary web Playwright perf scenario plus aggregation and optional assertion scripts
-  - CI entry points in `package.json`, `.github/workflows/android.yaml`, and `.github/workflows/perf-nightly.yaml`
-- Fresh measured evidence captured in this pass is still limited to the secondary web browse/playback lane:
-  - `ci-artifacts/hvsc-performance/web-secondary-quick.json`
-  - 3-loop fixture-backed run with p95 metrics: browse snapshot `3.6 ms`, initial browse query `118.1 ms`, search browse query `13.2 ms`, playback SID load `0.2 ms`
-- Targets `T1`-`T6` still do not have a real Pixel 4 + real U64 pass/fail matrix for this pass.
-- Dominant blocker: the missing piece is now real-device Maestro + Perfetto scenario capture and full-size baseline execution, not basic instrumentation.
+
+## HVSC perf asset inventory (reconciled 2026-04-05)
+
+All HVSC performance assets in the current tree, reconciled against the audit.
+
+### Runtime instrumentation
+
+| File                                                      | Purpose                                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `src/lib/hvsc/hvscPerformance.ts`                         | Ring buffer, scope helpers, `performance.mark()`/`performance.measure()` integration |
+| `src/lib/tracing/traceBridge.ts`                          | Exports `hvscPerfTimings` to tracing surface                                         |
+| `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx` | Exports `hvscPerfTimings` to diagnostics overlay                                     |
+| `src/lib/smoke/smokeMode.ts`                              | Exports `hvscPerfTimings` to smoke benchmark snapshots                               |
+
+### Instrumented scopes (landed)
+
+- `download`, `download:checksum`
+- `ingest:extract`, `ingest:songlengths`, `ingest:index-build`
+- `browse:load-snapshot`, `browse:query`
+- `playback:load-sid`
+
+### Missing instrumented scopes (per audit Gap 5)
+
+- `browse:render`
+- `playlist:add-batch`
+- `playlist:filter`
+- `playlist:repo-sync`
+- `playback:first-audio`
+
+### Web benchmark infrastructure
+
+| File                                       | Purpose                                                                            |
+| ------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `playwright/hvscPerf.spec.ts`              | Playwright perf test; browse + playback only; does NOT exercise download or ingest |
+| `scripts/hvsc/collect-web-perf.mjs`        | Loop runner; produces p50/p95 summary JSON                                         |
+| `scripts/hvsc/assert-web-perf-budgets.mjs` | Budget comparator; observation-only without env vars                               |
+| `playwright/mockHvscServer.ts`             | Disk-backed throttled mock HVSC server with `HEAD` and request logging             |
+
+### Android benchmark infrastructure
+
+| File                                     | Purpose                                                                                |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `.maestro/perf-hvsc-baseline.yaml`       | Maestro flow tagged `hvsc-perf`; navigates download → browse → add → play              |
+| `scripts/run-hvsc-android-benchmark.sh`  | End-to-end orchestrator: Perfetto + telemetry + Maestro + artifact pull + summary      |
+| `ci/telemetry/android/perfetto-hvsc.cfg` | Perfetto config; captures `linux.process_stats`, `linux.sys_stats`, `android.log` only |
+
+### Smoke benchmark snapshot plumbing
+
+| File                                          | Purpose                                                |
+| --------------------------------------------- | ------------------------------------------------------ |
+| `src/pages/playFiles/hooks/useHvscLibrary.ts` | Emits smoke benchmark snapshots during HVSC operations |
+| `src/lib/hvsc/hvscService.ts`                 | Emits smoke benchmark snapshots during browse queries  |
+| `src/lib/playback/playbackRouter.ts`          | Emits smoke benchmark snapshots during playback start  |
+
+### CI workflow integration
+
+| File                                  | Job/script                                                                  |
+| ------------------------------------- | --------------------------------------------------------------------------- |
+| `.github/workflows/android.yaml`      | `perf-benchmark-quick` job; runs secondary web Playwright perf only         |
+| `.github/workflows/perf-nightly.yaml` | Nightly cron; runs secondary web nightly lane only                          |
+| `package.json`                        | `test:perf`, `test:perf:quick`, `test:perf:nightly`, `test:perf:assert:web` |
+
+### Tests
+
+| File                                                    | Purpose                                       |
+| ------------------------------------------------------- | --------------------------------------------- |
+| `tests/unit/hvsc/hvscPerformance.test.ts`               | Ring buffer, eviction, error metadata         |
+| `tests/unit/playwright/mockHvscServer.test.ts`          | Mock server throttle, `HEAD`, request logging |
+| `tests/unit/ci/androidMaestroWorkflowContracts.test.ts` | Maestro flow contract assertions              |
+| `tests/unit/ci/playFilesHvscHookContracts.test.ts`      | HVSC hook contract assertions                 |
+| `tests/unit/ci/run_maestro_device_preflight.test.sh`    | Device preflight checks                       |
+
+### Artifacts
+
+| Path                                                         | Content                                     |
+| ------------------------------------------------------------ | ------------------------------------------- |
+| `ci-artifacts/hvsc-performance/web/web-secondary-quick.json` | Last quick baseline (3 loops, fixture mode) |
+
+### Research documents
+
+| File                                                                               | Purpose                                                            |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `docs/research/hvsc/performance/audit/audit.md`                                    | Source-backed gap analysis (this convergence pass's primary input) |
+| `docs/research/hvsc/performance/audit/convergence-prompt.md`                       | Execution convergence prompt (this pass)                           |
+| `docs/research/hvsc/performance/hvsc-performance-research-prompt-2026-04-05.md`    | Deep-research prompt                                               |
+| `docs/research/hvsc/performance/hvsc-performance-research-brief-2026-04-05.md`     | Research brief                                                     |
+| `docs/research/hvsc/performance/hvsc-performance-research-report-2026-04-05.md`    | Full research report                                               |
+| `docs/research/hvsc/performance/hvsc-performance-convergence-prompt-2026-04-05.md` | Convergence prompt (pre-audit)                                     |
+
+## Target status matrix
+
+| Target                                           | Budget    | Status       | Evidence                                                             |
+| ------------------------------------------------ | --------- | ------------ | -------------------------------------------------------------------- |
+| `T1` Download full HVSC at 5 MiB/s `< 20 s`      | `< 20 s`  | `UNMEASURED` | Web lane does not exercise download; no Android measurement          |
+| `T2` Ingest 60,582+ songs `< 25 s`               | `< 25 s`  | `UNMEASURED` | Web lane does not exercise ingest; no Android measurement            |
+| `T3` Browse traversal `< 2 s` worst case         | `< 2 s`   | `UNMEASURED` | Secondary web p95 `118.1 ms` is not target evidence (wrong platform) |
+| `T4` Filter 60K+ playlist `< 2 s` worst case     | `< 2 s`   | `UNMEASURED` | No filter scenario exists                                            |
+| `T5` Playback start `< 1 s`                      | `< 1 s`   | `UNMEASURED` | `playbackLoadSidMs` only; not end-to-end; no Pixel 4 proof           |
+| `T6` 100K items without full in-memory hydration | pass/fail | `UNMEASURED` | Code still uses full React state; no 100K benchmark                  |
+
+## Measured web secondary baseline (narrow lane only)
+
+- Scenario: `web-browse-playback-secondary`
+- Mode: `fixture-secondary-web`
+- Loops: `3`
+- Throttle: `5 MiB/s`
+- p95 values: browseLoadSnapshot `3.6 ms`, browseInitialQuery `118.1 ms`, browseSearchQuery `13.2 ms`, playbackLoadSid `0.2 ms`
+- Artifact: `ci-artifacts/hvsc-performance/web/web-secondary-quick.json`
+- **This lane does NOT measure download, ingest, filter, or end-to-end playback start.**
+
+## Dominant blocker
+
+The missing piece is real-device Maestro + Perfetto scenario capture, full-size Docker web scenarios, and the missing instrumentation scopes — not basic infrastructure.
 
 ## Completed cycles
 
@@ -36,41 +139,88 @@
   - Validation passed after repairing `hvscDownload.ts`, `playwright/mockHvscServer.ts`, Playwright project selection, and the perf harness selector/default-file issues.
   - Secondary web quick baseline recorded p95 metrics of `3.6 ms` browse snapshot load, `118.1 ms` initial browse query, `13.2 ms` search browse query, and `0.2 ms` playback SID load.
 
-## Next cycle
+## Convergence phase status
 
-- Addressed targets: unlock the first honest real-device baseline for `T1`-`T5` and establish the first real pass/fail matrix.
-- Bottleneck: remaining gap is scenario execution and artifact capture on Pixel 4 + real U64, not missing internal timings.
-- Research alignment:
-  - Section 6 requires deterministic S1-S11 scenario execution on the primary target.
-  - Section 7 requires the new `hvsc:perf:<phase>:<event>` marks to be captured together with Perfetto and telemetry evidence.
-  - Section 14 requires a fresh before/after baseline before ranking `B1`-`B5`.
-- Planned code changes for this cycle:
-  - add the missing Maestro and Android capture glue needed to run repeatable Pixel 4 scenarios against the real device path
-  - wire Perfetto and Android telemetry outputs into stable per-scenario artifact directories
-  - run the first real-device baseline for download, ingest, browse, filter, and playback using the new timing export path
-- Expected impact:
-  - no direct target budget win yet
-  - converts the remaining unknown primary-target behavior into measured data so the first true optimization cycle can choose a dominant bottleneck with evidence
+| Phase | Task                                       | Status        |
+| ----- | ------------------------------------------ | ------------- |
+| P0    | P0.1 Reconcile tree with audit             | `DONE`        |
+| P0    | P0.2 Normalize artifact directory strategy | `DONE`        |
+| P1    | P1.1 Close benchmark matrix gap S1-S11     | `IN PROGRESS` |
+| P1    | P1.2 Web harness: real download and ingest | `NOT STARTED` |
+| P1    | P1.3 Close Android benchmark harness gap   | `NOT STARTED` |
+| P1    | P1.4 Close instrumentation coverage gap    | `NOT STARTED` |
+| P1    | P1.5 Close Perfetto pipeline gap           | `NOT STARTED` |
+| P1    | P1.6 Close microbenchmark gap              | `NOT STARTED` |
+| P2    | P2.1 Capture honest full baseline          | `NOT STARTED` |
+| P2    | P2.2 Build pass/fail matrix                | `NOT STARTED` |
+| P3    | P3.1 Optimization cycle 1                  | `NOT STARTED` |
+| P3    | P3.2 Repeat optimization cycles            | `NOT STARTED` |
+| P4    | P4.1 Close quick-CI gap                    | `NOT STARTED` |
+| P4    | P4.2 Close nightly-CI gap                  | `NOT STARTED` |
+| P5    | P5.1 Re-audit closure                      | `NOT STARTED` |
+| P5    | P5.2 Final convergence record              | `NOT STARTED` |
 
-## Remaining gap
+## Benchmark scenario coverage matrix (S1-S11)
 
-- `T1`: unmeasured on Pixel 4 and in full-size Docker runs; the quick harness does not exercise download
-- `T2`: unmeasured on Pixel 4 and in full-size Docker runs; the quick harness does not exercise ingest
-- `T3`: unmeasured on Pixel 4; the secondary web initial browse query p95 of `118.1 ms` is encouraging but is not target evidence
-- `T4`: unmeasured on Pixel 4; no large-playlist filter scenario has been executed yet
-- `T5`: unmeasured on Pixel 4; the secondary web playback SID-load p95 of `0.2 ms` does not cover end-to-end playback start
-- `T6`: unmeasured; no 100K playlist-scale benchmark exists yet
-- Real-device Maestro + Perfetto scenario capture is still missing.
-- `test:bench` microbench coverage is still missing.
-- Full-size Docker perf budget coverage is still missing.
+Scenario spec: `playwright/hvscPerfScenarios.spec.ts`
+
+| Scenario | Description                           | Web (fixture)             | Web (real archive)               | Android      | Perf scopes                                                  |
+| -------- | ------------------------------------- | ------------------------- | -------------------------------- | ------------ | ------------------------------------------------------------ |
+| S1       | Download HVSC from server             | mechanism proof (tiny)    | blocked by MAX_BRIDGE_READ_BYTES | Maestro flow | `download`, `download:checksum`                              |
+| S2       | Ingest cached HVSC (cold)             | mechanism proof (3 songs) | blocked by size guard            | Maestro flow | `ingest:extract`, `ingest:songlengths`, `ingest:index-build` |
+| S3       | Enter HVSC root (open source browser) | ✅                        | ✅                               | Maestro flow | `browse:load-snapshot`, `browse:query`                       |
+| S4       | Traverse down into folders            | ✅                        | ✅                               | not yet      | `browse:query`                                               |
+| S5       | Traverse back up to root              | ✅                        | ✅                               | not yet      | `browse:query`                                               |
+| S6       | Add all songs to playlist             | ✅ (3 songs)              | ✅ (60K+ songs)                  | Maestro flow | wall-clock only (P1.4: `playlist:add-batch`)                 |
+| S7       | Render playlist                       | ✅ (3 items)              | ✅ (60K+ items)                  | not yet      | wall-clock only (P1.4: `browse:render`)                      |
+| S8       | Filter: high-match query              | ✅                        | ✅                               | not yet      | wall-clock only (P1.4: `playlist:filter`)                    |
+| S9       | Filter: zero-match query              | ✅                        | ✅                               | not yet      | wall-clock only (P1.4: `playlist:filter`)                    |
+| S10      | Filter: low-match query               | ✅                        | ✅                               | not yet      | wall-clock only (P1.4: `playlist:filter`)                    |
+| S11      | Start playback from playlist          | ✅                        | ✅                               | Maestro flow | `playback:load-sid` (P1.4: `playback:first-audio`)           |
+
+### Platform notes
+
+- **Web fixture mode** (default): uses 3-song fixture archive. Proves measurement pipeline and scenario mechanics. Not meaningful for performance budgets on S1/S2/S6/S7.
+- **Web real-archive mode**: requires `HVSC_PERF_BASELINE_ARCHIVE` and `HVSC_PERF_UPDATE_ARCHIVE` env vars. Web cannot handle 80 MB baseline due to `MAX_BRIDGE_READ_BYTES` guard in `hvscDownload.ts`. S1/S2 at full scale are Android-only.
+- **Android**: Download→browse→add→play covered by `perf-hvsc-baseline.yaml` Maestro flow. S4/S5/S7-S10 not yet covered by Maestro.
+- **Missing perf scopes**: `browse:render`, `playlist:add-batch`, `playlist:filter`, `playlist:repo-sync`, `playback:first-audio` — tracked for P1.4.
+
+## Artifact directory layout (canonical)
+
+All HVSC perf artifacts use `ci-artifacts/hvsc-performance/` as root:
+
+```
+ci-artifacts/hvsc-performance/
+  web/
+    web-secondary-quick.json       # quick CI lane (3 loops, fixture)
+    web-secondary-nightly.json     # nightly lane (5 loops, real archives)
+    web-full-quick.json            # future: full scenario matrix
+    web-full-nightly.json          # future: full scenario matrix
+  android/
+    <run-id>/
+      summary.json                 # structured run summary
+      perfetto/                    # Perfetto traces
+      telemetry/                   # Android telemetry logs
+      maestro/                     # Maestro flow outputs
+      smoke/                       # Smoke benchmark snapshots
+  bench/                           # future: microbenchmark outputs
+```
+
+Scripts updated for this layout:
+
+- `scripts/hvsc/collect-web-perf.mjs` default out → `ci-artifacts/hvsc-performance/web/`
+- `scripts/hvsc/assert-web-perf-budgets.mjs` default file → `ci-artifacts/hvsc-performance/web/`
+- `scripts/run-hvsc-android-benchmark.sh` default output → `ci-artifacts/hvsc-performance/android/`
+- `package.json` `test:perf:quick` and `test:perf:nightly` → `web/` subdirectory
+- `.github/workflows/perf-nightly.yaml` summary file → `web/` subdirectory
+- `.github/workflows/android.yaml` upload glob covers all subdirectories
 
 ## CI benchmark status
 
-- `.github/workflows/android.yaml` now contains `perf-benchmark-quick`, but it currently runs only the secondary web Playwright perf collection plus optional budget checks.
-- `.github/workflows/perf-nightly.yaml` now exists, but it currently covers only the secondary web nightly lane when cached archives are available.
-- `package.json` now defines `test:perf`, `test:perf:quick`, `test:perf:nightly`, and `test:perf:assert:web`; `test:bench` is still absent.
-- Perf artifacts are currently uploaded under `ci-artifacts/hvsc-performance/**`, not the broader prompt-defined `ci-artifacts/perf/**` structure.
-- Budget enforcement is currently observation-only unless environment thresholds are configured.
+- `.github/workflows/android.yaml` `perf-benchmark-quick` job: runs secondary web Playwright perf only.
+- `.github/workflows/perf-nightly.yaml`: covers secondary web nightly lane only.
+- `package.json` scripts: `test:perf`, `test:perf:quick`, `test:perf:nightly`, `test:perf:assert:web`. No `test:bench`.
+- Budget enforcement: observation-only unless environment thresholds are configured.
 
 ---
 

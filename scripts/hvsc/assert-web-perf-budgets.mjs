@@ -9,7 +9,7 @@ const args = new Map(
 );
 
 const filePath =
-    args.get('--file') || process.env.HVSC_PERF_SUMMARY_FILE || 'ci-artifacts/hvsc-performance/web-secondary-quick.json';
+    args.get('--file') || process.env.HVSC_PERF_SUMMARY_FILE || 'ci-artifacts/hvsc-performance/web/web-secondary-quick.json';
 const summary = JSON.parse(readFileSync(filePath, 'utf8'));
 
 const budgets = [
