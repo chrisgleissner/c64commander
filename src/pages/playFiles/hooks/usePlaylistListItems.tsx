@@ -11,6 +11,7 @@ import { Folder } from "lucide-react";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { describeConfigOrigin, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import type { ActionListItem, ActionListMenuItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -152,12 +153,12 @@ export const usePlaylistListItems = ({
         },
         ...(item.configRef
           ? [
-            {
-              type: "info" as const,
-              label: "Location",
-              value: item.configRef.kind === "local" ? "This device" : "C64 Ultimate",
-            },
-          ]
+              {
+                type: "info" as const,
+                label: "Location",
+                value: item.configRef.kind === "local" ? "This device" : "C64 Ultimate",
+              },
+            ]
           : []),
         {
           type: "action",
@@ -179,13 +180,13 @@ export const usePlaylistListItems = ({
         },
         ...(item.configRef
           ? [
-            {
-              type: "action" as const,
-              label: "Remove config association",
-              onSelect: () => onRemoveConfig(item),
-              disabled: isPlaylistLoading,
-            },
-          ]
+              {
+                type: "action" as const,
+                label: "Remove config association",
+                onSelect: () => onRemoveConfig(item),
+                disabled: isPlaylistLoading,
+              },
+            ]
           : []),
       ];
       items.push({
@@ -247,6 +248,19 @@ export const usePlaylistListItems = ({
       renderedGroupCount: items.filter((item) => item.variant === "header").length,
       currentPlayingItemId,
     });
+    if (filteredPlaylist.length > 0) {
+      void recordSmokeBenchmarkSnapshot({
+        scenario: "playlist-render",
+        state: "complete",
+        metadata: {
+          filteredCount: filteredPlaylist.length,
+          playlistCount: playlist.length,
+          renderedRowCount: items.filter((item) => item.variant !== "header").length,
+          renderedGroupCount: items.filter((item) => item.variant === "header").length,
+          currentPlayingItemId,
+        },
+      });
+    }
     return items;
   }, [
     filteredPlaylist,

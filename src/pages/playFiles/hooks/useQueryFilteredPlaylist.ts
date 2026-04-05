@@ -12,6 +12,7 @@ import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addErrorLog } from "@/lib/logging";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -204,6 +205,20 @@ export const useQueryFilteredPlaylist = ({
           categoryFilters: playlistTypeFilters,
           ...metadata,
         });
+        if (query.trim().length > 0) {
+          void recordSmokeBenchmarkSnapshot({
+            scenario: "playlist-filter",
+            state: typeof metadata.outcome === "string" ? metadata.outcome : "complete",
+            metadata: {
+              playlistId: playlistStorageKey,
+              query,
+              viewAllLimit,
+              playlistSize: currentPlaylist.length,
+              categoryFilters: playlistTypeFilters,
+              ...metadata,
+            },
+          });
+        }
       };
 
       if (repositorySyncFailed) {

@@ -105,13 +105,22 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   async load(): Promise<void> {
     await this.index.load();
     this.entriesSnapshot = this.index.getAll();
-    const persistedBrowseSnapshot = await loadHvscBrowseIndexSnapshot();
-    if (persistedBrowseSnapshot) {
-      this.browseSnapshot = persistedBrowseSnapshot;
-      return;
-    }
+    const persistedBrowseSnapshot = await this.loadBrowseSnapshot();
+    if (persistedBrowseSnapshot) return;
     this.browseSnapshot = buildHvscBrowseIndexFromEntries(this.entriesSnapshot);
     await saveHvscBrowseIndexSnapshot(this.browseSnapshot);
+  }
+
+  async loadBrowseSnapshot(): Promise<HvscBrowseIndexSnapshot | null> {
+    if (this.browseSnapshot) return this.browseSnapshot;
+    const persistedBrowseSnapshot = await loadHvscBrowseIndexSnapshot();
+    if (!persistedBrowseSnapshot) return null;
+    this.browseSnapshot = persistedBrowseSnapshot;
+    return this.browseSnapshot;
+  }
+
+  clearBrowseSnapshot(): void {
+    this.browseSnapshot = null;
   }
 
   async save(): Promise<void> {

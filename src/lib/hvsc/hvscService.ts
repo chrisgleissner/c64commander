@@ -152,22 +152,22 @@ export const addHvscProgressListener = async (listener: HvscProgressListener) =>
 };
 
 const ensureHvscIndexReady = async () => {
-  await hvscIndex.load();
-  if (!hvscIndex.getAll().length) {
+  // Root and folder browsing only need the persisted browse snapshot. Avoid
+  // eagerly loading the full media-index JSON on the first browse because that
+  // blocks large real-HVSC libraries before any folder rows can render.
+  let browseSnapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!browseSnapshot) {
     const migrated = await migrateLegacyMediaIndex();
     if (migrated) {
-      await hvscIndex.load();
+      browseSnapshot = await hvscIndex.loadBrowseSnapshot();
     }
   }
-
-  // Avoid a full recursive rescan on the first browse. Runtime listing fallback
-  // can serve the requested folder immediately and prevents blocking the UI on
-  // large 60K+ libraries while the index cache is still cold or absent.
-  const browseSnapshot = await loadHvscBrowseIndexSnapshot();
   if (!browseSnapshot) return;
 
   const integrity = await verifyHvscBrowseIndexIntegrity(browseSnapshot);
-  if (!integrity.isValid) return;
+  if (!integrity.isValid) {
+    hvscIndex.clearBrowseSnapshot();
+  }
 };
 
 const pageRuntimeListing = (

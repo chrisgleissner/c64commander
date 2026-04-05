@@ -88,6 +88,73 @@ Platform coverage matrix added to PLANS.md documenting which scenarios are actio
 
 Validation: spec compiles clean (0 TS errors), Prettier-compliant.
 
+## [2026-04-05 20:30] P1.1 Android scenario surface closed and validated
+
+Extended the Android perf surface so the Maestro suite now has explicit scenario coverage for the benchmark matrix entries that were previously missing.
+
+What changed:
+
+- Added smoke benchmark snapshots for:
+  - `playlist-add`
+  - `playlist-render`
+  - `playlist-filter`
+- Added Maestro flows:
+  - `.maestro/perf-hvsc-browse-traversal.yaml`
+  - `.maestro/perf-hvsc-playlist-build.yaml`
+  - `.maestro/perf-hvsc-filter-high.yaml`
+  - `.maestro/perf-hvsc-filter-zero.yaml`
+  - `.maestro/perf-hvsc-filter-low.yaml`
+  - `.maestro/perf-hvsc-playback.yaml`
+- Added regression coverage in:
+  - `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`
+  - `tests/unit/pages/playFiles/usePlaylistListItems.test.tsx`
+  - `tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx`
+  - `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`
+
+Validation results:
+
+- Focused test run: 18 passed, 0 failed
+- `npm run build`: passed
+- `npm run lint`: failed before ESLint due pre-existing unrelated Prettier debt in 13 files outside this cycle
+- `npm run test:coverage`: failed in existing unrelated smoke-mode suites:
+  - `tests/unit/smoke/smokeMode.test.ts`
+  - `tests/unit/lib/smoke/smokeMode.test.ts`
+
+Decision:
+
+- Keep this cycle. It closes the scripted Android scenario gap without introducing new targeted test failures.
+- Proceeding sequentially to P1.2: close the real-download and real-ingest web harness gap.
+
+## [2026-04-05 22:15] P1.2 Web harness real download and ingest closed
+
+Fixed the S1 download scenario to reliably exercise the HVSC download path on web. Previously S1 used `locator.isVisible()` which is an instant snapshot check; replaced with `expect(locator).toBeVisible()` which retries until the HVSC controls render (gated by feature flag async load).
+
+Also fixed the web perf summary evidence builder to correctly treat negative wallClockMs values (-1 = unmeasured) as `unmeasured` rather than `pass`.
+
+Files changed:
+
+- `playwright/hvscPerfScenarios.spec.ts`: S1 now waits for `hvsc-controls` via `expect().toBeVisible({ timeout: 30_000 })`
+- `scripts/hvsc/webPerfSummary.mjs`: `toFiniteNumbers` rejects negative values; `asBudgetResult` rejects negative actualMs
+- `tests/unit/scripts/webPerfSummary.test.ts`: regression test for negative wall clock → unmeasured
+
+Validation:
+
+- 3-loop fixture baseline captured:
+  - S1 download p95: `1254 ms` (tiny fixture archive, not budget-scale)
+  - S2 ingest p95: `381 ms` (3 songs, not budget-scale)
+  - T3 browse p95: `535 ms`
+  - T4 filter p95: `607 ms`
+  - T5 playback p95: `247 ms`
+- All 11 S1-S11 scenarios pass with timing evidence
+- Artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+- `npm run build`: passed
+- Unit tests: 489 files pass, 2 pre-existing failures (smokeMode) unchanged
+- `webPerfSummary.test.ts`: 3/3 pass
+
+Command to reproduce: `PLAYWRIGHT_DEVICES=web PLAYWRIGHT_SKIP_BUILD=1 PLAYWRIGHT_REUSE_SERVER=1 CI=true node scripts/hvsc/collect-web-perf.mjs --suite=scenarios --loops=3 --out=ci-artifacts/hvsc-performance/web/web-full-quick.json`
+
+Decision: Keep. S1/S2 now exercise the real download+ingest code paths on web. Fixture-mode metrics are mechanism proof only; budget-scale evidence requires Android.
+
 ## [2026-04-05 07:50] Phase 0 environment and infrastructure gap scan
 
 Started the HVSC performance convergence pass and recorded the execution prerequisites before code changes.

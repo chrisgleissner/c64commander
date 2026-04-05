@@ -25,9 +25,17 @@ const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   endHvscPerfScope: vi.fn(),
 }));
 
+const { recordSmokeBenchmarkSnapshot } = vi.hoisted(() => ({
+  recordSmokeBenchmarkSnapshot: vi.fn(),
+}));
+
 vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   beginHvscPerfScope,
   endHvscPerfScope,
+}));
+
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  recordSmokeBenchmarkSnapshot,
 }));
 
 const buildItem = (
@@ -233,6 +241,17 @@ describe("usePlaylistListItems", () => {
     expect(endHvscPerfScope).toHaveBeenCalledWith(
       expect.objectContaining({ scope: "browse:render" }),
       expect.objectContaining({ outcome: "success", renderedRowCount: 2 }),
+    );
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playlist-render",
+        state: "complete",
+        metadata: expect.objectContaining({
+          filteredCount: 2,
+          playlistCount: 2,
+          renderedRowCount: 2,
+        }),
+      }),
     );
   });
 });

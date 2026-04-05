@@ -25,6 +25,10 @@ const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   endHvscPerfScope: vi.fn(),
 }));
 
+const { recordSmokeBenchmarkSnapshot } = vi.hoisted(() => ({
+  recordSmokeBenchmarkSnapshot: vi.fn(),
+}));
+
 const buildPlaylistItem = ({
   id,
   name,
@@ -148,6 +152,10 @@ vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   endHvscPerfScope,
 }));
 
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  recordSmokeBenchmarkSnapshot,
+}));
+
 const useHarness = () => {
   const [playlistTypeFilters, setPlaylistTypeFilters] = useState<Array<PlaylistItem["category"]>>(["sid", "disk"]);
   const [query, setQuery] = useState("");
@@ -176,6 +184,7 @@ describe("useQueryFilteredPlaylist", () => {
     });
     beginHvscPerfScope.mockClear();
     endHvscPerfScope.mockClear();
+    recordSmokeBenchmarkSnapshot.mockClear();
     repository.upsertTracks.mockResolvedValue(undefined);
     repository.replacePlaylistItems.mockResolvedValue(undefined);
   });
@@ -273,6 +282,15 @@ describe("useQueryFilteredPlaylist", () => {
 
     expect(repository.upsertTracks).not.toHaveBeenCalled();
     expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playlist-filter",
+        metadata: expect.objectContaining({
+          query: "demo",
+          source: "repository",
+        }),
+      }),
+    );
   });
 
   it("loads additional view-all pages without rewriting playlist rows", async () => {
@@ -334,6 +352,15 @@ describe("useQueryFilteredPlaylist", () => {
     expect(endHvscPerfScope).toHaveBeenCalledWith(
       expect.objectContaining({ scope: "playlist:filter" }),
       expect.objectContaining({ outcome: "fallback", source: "memory" }),
+    );
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playlist-filter",
+        metadata: expect.objectContaining({
+          query: "demo",
+          source: "memory",
+        }),
+      }),
     );
   });
 });

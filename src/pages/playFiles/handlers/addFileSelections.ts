@@ -12,6 +12,7 @@ import { createArchiveClient } from "@/lib/archive/client";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addLog } from "@/lib/logging";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
@@ -428,33 +429,33 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const localFile =
           source.type === "local"
             ? resolveLocalRuntimeFile(source.id, normalizedPath) ||
-            (localEntry?.uri
-              ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
-              : undefined) ||
-            (localTreeUri
-              ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
-              : undefined)
+              (localEntry?.uri
+                ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
+                : undefined) ||
+              (localTreeUri
+                ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
+                : undefined)
             : undefined;
         const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
         const playbackConfig =
           source.type === "local" || source.type === "ultimate"
             ? resolvePlaybackConfig({
-              candidates: await discoverConfigCandidates({
-                sourceType: source.type,
-                sourceId: source.type === "local" ? source.id : null,
-                sourceRootPath: source.rootPath,
-                targetFile: file,
-                listEntries: source.listEntries,
-                prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
-                localEntriesBySourceId,
-              }),
-            })
+                candidates: await discoverConfigCandidates({
+                  sourceType: source.type,
+                  sourceId: source.type === "local" ? source.id : null,
+                  sourceRootPath: source.rootPath,
+                  targetFile: file,
+                  listEntries: source.listEntries,
+                  prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
+                  localEntriesBySourceId,
+                }),
+              })
             : {
-              configRef: null as ConfigFileReference | null,
-              configOrigin: "none" as const,
-              configCandidates: [],
-              configOverrides: null,
-            };
+                configRef: null as ConfigFileReference | null,
+                configOrigin: "none" as const,
+                configCandidates: [],
+                configOverrides: null,
+              };
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
           name: file.name,
@@ -741,6 +742,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       toast({
         title: "Items added",
         description: `${appendedPlaylistItems} file(s) added to playlist.`,
+      });
+      void recordSmokeBenchmarkSnapshot({
+        scenario: "playlist-add",
+        state: "complete",
+        metadata: {
+          sourceId: source.id,
+          sourceType: source.type,
+          selectionCount: selections.length,
+          playableCount: appendedPlaylistItems,
+          elapsedMs: Date.now() - startedAt,
+        },
       });
       setAddItemsProgress((prev) => ({
         ...prev,

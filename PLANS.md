@@ -4,8 +4,8 @@
 
 - Classification: `CODE_CHANGE`
 - Phase: convergence pass per `docs/research/hvsc/performance/audit/convergence-prompt.md`
-- Current convergence task: `P0.2` complete; starting `P1.1`.
-- Worktree: clean (no dirty files).
+- Current convergence task: `P1.2` complete; starting `P1.3`.
+- Worktree: dirty (active convergence edits for P1.2 closure and tracker updates).
 - Verified execution prerequisites:
   - cached full-size archives present at `~/.cache/c64commander/hvsc/` (`HVSC_84-all-of-them.7z`, `HVSC_Update_84.7z`)
   - real Ultimate responds at `http://u64/v1/info`
@@ -31,7 +31,7 @@ All HVSC performance assets in the current tree, reconciled against the audit.
 - `browse:load-snapshot`, `browse:query`
 - `playback:load-sid`
 
-### Missing instrumented scopes (per audit Gap 5)
+### Previously missing instrumented scopes (now landed)
 
 - `browse:render`
 - `playlist:add-batch`
@@ -58,11 +58,14 @@ All HVSC performance assets in the current tree, reconciled against the audit.
 
 ### Smoke benchmark snapshot plumbing
 
-| File                                          | Purpose                                                |
-| --------------------------------------------- | ------------------------------------------------------ |
-| `src/pages/playFiles/hooks/useHvscLibrary.ts` | Emits smoke benchmark snapshots during HVSC operations |
-| `src/lib/hvsc/hvscService.ts`                 | Emits smoke benchmark snapshots during browse queries  |
-| `src/lib/playback/playbackRouter.ts`          | Emits smoke benchmark snapshots during playback start  |
+| File                                                    | Purpose                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| `src/pages/playFiles/hooks/useHvscLibrary.ts`           | Emits smoke benchmark snapshots during HVSC operations    |
+| `src/lib/hvsc/hvscService.ts`                           | Emits smoke benchmark snapshots during browse queries     |
+| `src/pages/playFiles/handlers/addFileSelections.ts`     | Emits smoke benchmark snapshots during playlist adds      |
+| `src/pages/playFiles/hooks/useQueryFilteredPlaylist.ts` | Emits smoke benchmark snapshots during playlist filtering |
+| `src/pages/playFiles/hooks/usePlaylistListItems.tsx`    | Emits smoke benchmark snapshots during playlist rendering |
+| `src/lib/playback/playbackRouter.ts`                    | Emits smoke benchmark snapshots during playback start     |
 
 ### CI workflow integration
 
@@ -101,14 +104,29 @@ All HVSC performance assets in the current tree, reconciled against the audit.
 
 ## Target status matrix
 
-| Target                                           | Budget    | Status       | Evidence                                                             |
-| ------------------------------------------------ | --------- | ------------ | -------------------------------------------------------------------- |
-| `T1` Download full HVSC at 5 MiB/s `< 20 s`      | `< 20 s`  | `UNMEASURED` | Web lane does not exercise download; no Android measurement          |
-| `T2` Ingest 60,582+ songs `< 25 s`               | `< 25 s`  | `UNMEASURED` | Web lane does not exercise ingest; no Android measurement            |
-| `T3` Browse traversal `< 2 s` worst case         | `< 2 s`   | `UNMEASURED` | Secondary web p95 `118.1 ms` is not target evidence (wrong platform) |
-| `T4` Filter 60K+ playlist `< 2 s` worst case     | `< 2 s`   | `UNMEASURED` | No filter scenario exists                                            |
-| `T5` Playback start `< 1 s`                      | `< 1 s`   | `UNMEASURED` | `playbackLoadSidMs` only; not end-to-end; no Pixel 4 proof           |
-| `T6` 100K items without full in-memory hydration | pass/fail | `UNMEASURED` | Code still uses full React state; no 100K benchmark                  |
+| Target                                           | Budget    | Status       | Evidence                                                                            |
+| ------------------------------------------------ | --------- | ------------ | ----------------------------------------------------------------------------------- |
+| `T1` Download full HVSC at 5 MiB/s `< 20 s`      | `< 20 s`  | `UNMEASURED` | Web fixture p95 `1254 ms` (tiny archive, not budget-scale); no Android measurement  |
+| `T2` Ingest 60,582+ songs `< 25 s`               | `< 25 s`  | `UNMEASURED` | Web fixture p95 `381 ms` (3 songs, not budget-scale); no Android measurement        |
+| `T3` Browse traversal `< 2 s` worst case         | `< 2 s`   | `UNMEASURED` | Web fixture p95 `535 ms`; secondary web p95 `118.1 ms`; no Pixel 4 proof            |
+| `T4` Filter 60K+ playlist `< 2 s` worst case     | `< 2 s`   | `UNMEASURED` | Web fixture p95 `607 ms` (3 items, not budget-scale); no Pixel 4 proof              |
+| `T5` Playback start `< 1 s`                      | `< 1 s`   | `UNMEASURED` | Web fixture p95 `247 ms`; no Pixel 4 proof                                          |
+| `T6` 100K items without full in-memory hydration | pass/fail | `UNMEASURED` | Code still uses full React state; no 100K benchmark                                 |
+
+## Measured web full S1-S11 baseline (fixture mode)
+
+- Scenario: `web-hvsc-s1-s11`
+- Mode: `fixture-s1-s11-web`
+- Loops: `3`
+- Throttle: `5 MiB/s`
+- Artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+- Target evidence (p95, fixture scale):
+  - T1 download: `1254 ms` (tiny archive, passes trivially)
+  - T2 ingest: `381 ms` (3 songs, passes trivially)
+  - T3 browse: `535 ms`
+  - T4 filter: `607 ms` (3 items)
+  - T5 playback: `247 ms`
+- **Fixture-mode evidence is mechanism proof only. Budget-scale proof requires Android or real-archive mode.**
 
 ## Measured web secondary baseline (narrow lane only)
 
@@ -122,7 +140,7 @@ All HVSC performance assets in the current tree, reconciled against the audit.
 
 ## Dominant blocker
 
-The missing piece is real-device Maestro + Perfetto scenario capture, full-size Docker web scenarios, and the missing instrumentation scopes — not basic infrastructure.
+The missing piece is a closed Android benchmark runner with warm-up, repeated runs, per-scenario artifact summarization, and Pixel 4 budget-scale evidence.
 
 ## Completed cycles
 
@@ -138,6 +156,22 @@ The missing piece is real-device Maestro + Perfetto scenario capture, full-size 
   - Added `test:perf`, `test:perf:quick`, `test:perf:nightly`, `test:perf:assert:web`, plus CI quick/nightly workflow hooks.
   - Validation passed after repairing `hvscDownload.ts`, `playwright/mockHvscServer.ts`, Playwright project selection, and the perf harness selector/default-file issues.
   - Secondary web quick baseline recorded p95 metrics of `3.6 ms` browse snapshot load, `118.1 ms` initial browse query, `13.2 ms` search browse query, and `0.2 ms` playback SID load.
+- 2026-04-05 Cycle 1A: P1.1 Android scenario matrix closure completed.
+  - Added generic smoke benchmark checkpoints for playlist add, playlist render, and playlist filter so Android flows can emit structured snapshots beyond install, browse, and playback.
+  - Added Maestro scenario flows for deep browse traversal, playlist build, three filter queries, and playback.
+  - Added regression coverage for the new snapshot paths and the expanded Maestro contract surface.
+  - Focused validation passed: 18 targeted tests green.
+  - `npm run build` passed.
+  - `npm run lint` remains blocked by pre-existing unrelated Prettier failures in 13 files outside this cycle.
+  - `npm run test:coverage` remains blocked by pre-existing failures in `tests/unit/smoke/smokeMode.test.ts` and `tests/unit/lib/smoke/smokeMode.test.ts`.
+- 2026-04-05 Cycle 1B: P1.2 Web harness real download and ingest completed.
+  - Fixed S1 download scenario: replaced `locator.isVisible()` snapshot check with `expect(locator).toBeVisible()` retry-based assertion to wait for HVSC controls to render.
+  - Fixed evidence builder: `toFiniteNumbers` and `asBudgetResult` now reject negative values (wallClockMs = -1 means unmeasured, not passing).
+  - Added regression test: `webPerfSummary.test.ts` verifies negative wall clock values produce `unmeasured` status.
+  - Captured 3-loop fixture baseline: S1 download p95 `1254 ms`, S2 ingest p95 `381 ms`, T3 browse `535 ms`, T4 filter `607 ms`, T5 playback `247 ms`.
+  - Artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`.
+  - All 11 scenarios (S1-S11) pass on web fixture mode with timing evidence.
+  - Build passes. Unit tests: 489 files pass, 2 pre-existing failures unchanged.
 
 ## Convergence phase status
 
@@ -145,8 +179,8 @@ The missing piece is real-device Maestro + Perfetto scenario capture, full-size 
 | ----- | ------------------------------------------ | ------------- |
 | P0    | P0.1 Reconcile tree with audit             | `DONE`        |
 | P0    | P0.2 Normalize artifact directory strategy | `DONE`        |
-| P1    | P1.1 Close benchmark matrix gap S1-S11     | `IN PROGRESS` |
-| P1    | P1.2 Web harness: real download and ingest | `NOT STARTED` |
+| P1    | P1.1 Close benchmark matrix gap S1-S11     | `DONE`        |
+| P1    | P1.2 Web harness: real download and ingest | `DONE`        |
 | P1    | P1.3 Close Android benchmark harness gap   | `NOT STARTED` |
 | P1    | P1.4 Close instrumentation coverage gap    | `NOT STARTED` |
 | P1    | P1.5 Close Perfetto pipeline gap           | `NOT STARTED` |
@@ -164,26 +198,26 @@ The missing piece is real-device Maestro + Perfetto scenario capture, full-size 
 
 Scenario spec: `playwright/hvscPerfScenarios.spec.ts`
 
-| Scenario | Description                           | Web (fixture)             | Web (real archive)               | Android      | Perf scopes                                                  |
-| -------- | ------------------------------------- | ------------------------- | -------------------------------- | ------------ | ------------------------------------------------------------ |
-| S1       | Download HVSC from server             | mechanism proof (tiny)    | blocked by MAX_BRIDGE_READ_BYTES | Maestro flow | `download`, `download:checksum`                              |
-| S2       | Ingest cached HVSC (cold)             | mechanism proof (3 songs) | blocked by size guard            | Maestro flow | `ingest:extract`, `ingest:songlengths`, `ingest:index-build` |
-| S3       | Enter HVSC root (open source browser) | ✅                        | ✅                               | Maestro flow | `browse:load-snapshot`, `browse:query`                       |
-| S4       | Traverse down into folders            | ✅                        | ✅                               | not yet      | `browse:query`                                               |
-| S5       | Traverse back up to root              | ✅                        | ✅                               | not yet      | `browse:query`                                               |
-| S6       | Add all songs to playlist             | ✅ (3 songs)              | ✅ (60K+ songs)                  | Maestro flow | wall-clock only (P1.4: `playlist:add-batch`)                 |
-| S7       | Render playlist                       | ✅ (3 items)              | ✅ (60K+ items)                  | not yet      | wall-clock only (P1.4: `browse:render`)                      |
-| S8       | Filter: high-match query              | ✅                        | ✅                               | not yet      | wall-clock only (P1.4: `playlist:filter`)                    |
-| S9       | Filter: zero-match query              | ✅                        | ✅                               | not yet      | wall-clock only (P1.4: `playlist:filter`)                    |
-| S10      | Filter: low-match query               | ✅                        | ✅                               | not yet      | wall-clock only (P1.4: `playlist:filter`)                    |
-| S11      | Start playback from playlist          | ✅                        | ✅                               | Maestro flow | `playback:load-sid` (P1.4: `playback:first-audio`)           |
+| Scenario | Description                           | Web (fixture)                | Web (real archive)               | Android      | Perf scopes                                                  |
+| -------- | ------------------------------------- | ---------------------------- | -------------------------------- | ------------ | ------------------------------------------------------------ |
+| S1       | Download HVSC from server             | ✅ mechanism proof (tiny)    | blocked by MAX_BRIDGE_READ_BYTES | Maestro flow | `download`, `download:checksum`                              |
+| S2       | Ingest cached HVSC (cold)             | ✅ mechanism proof (3 songs) | blocked by size guard            | Maestro flow | `ingest:extract`, `ingest:songlengths`, `ingest:index-build` |
+| S3       | Enter HVSC root (open source browser) | ✅                           | ✅                               | Maestro flow | `browse:load-snapshot`, `browse:query`                       |
+| S4       | Traverse down into folders            | ✅                           | ✅                               | Maestro flow | `browse:query`                                               |
+| S5       | Traverse back up to root              | ✅                           | ✅                               | Maestro flow | `browse:query`                                               |
+| S6       | Add all songs to playlist             | ✅ (3 songs)                 | ✅ (60K+ songs)                  | Maestro flow | `playlist:add-batch`                                         |
+| S7       | Render playlist                       | ✅ (3 items)                 | ✅ (60K+ items)                  | Maestro flow | `browse:render`                                              |
+| S8       | Filter: high-match query              | ✅                           | ✅                               | Maestro flow | `playlist:filter`                                            |
+| S9       | Filter: zero-match query              | ✅                           | ✅                               | Maestro flow | `playlist:filter`                                            |
+| S10      | Filter: low-match query               | ✅                           | ✅                               | Maestro flow | `playlist:filter`                                            |
+| S11      | Start playback from playlist          | ✅                           | ✅                               | Maestro flow | `playback:first-audio`, `playback:load-sid`                  |
 
 ### Platform notes
 
 - **Web fixture mode** (default): uses 3-song fixture archive. Proves measurement pipeline and scenario mechanics. Not meaningful for performance budgets on S1/S2/S6/S7.
 - **Web real-archive mode**: requires `HVSC_PERF_BASELINE_ARCHIVE` and `HVSC_PERF_UPDATE_ARCHIVE` env vars. Web cannot handle 80 MB baseline due to `MAX_BRIDGE_READ_BYTES` guard in `hvscDownload.ts`. S1/S2 at full scale are Android-only.
-- **Android**: Download→browse→add→play covered by `perf-hvsc-baseline.yaml` Maestro flow. S4/S5/S7-S10 not yet covered by Maestro.
-- **Missing perf scopes**: `browse:render`, `playlist:add-batch`, `playlist:filter`, `playlist:repo-sync`, `playback:first-audio` — tracked for P1.4.
+- **Android**: Scenario coverage now spans `perf-hvsc-baseline.yaml`, `perf-hvsc-browse-traversal.yaml`, `perf-hvsc-playlist-build.yaml`, the three `perf-hvsc-filter-*.yaml` flows, and `perf-hvsc-playback.yaml`.
+- **Measured evidence gap**: Android scenarios are scripted, but the current runner still executes the `hvsc-perf` tag set as one broad suite without warm-up discard, per-scenario summaries, or renamed scenario artifacts. This is tracked in P1.3.
 
 ## Artifact directory layout (canonical)
 

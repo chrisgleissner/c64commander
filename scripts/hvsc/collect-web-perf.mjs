@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { summarizeScenarioIterations, summarizeSecondaryIterations } from './webPerfSummary.mjs';
+import { loadPerfIterationArtifact } from './webPerfArtifacts.mjs';
 
 const args = new Map(
     process.argv.slice(2).map((arg) => {
@@ -62,6 +63,7 @@ await mkdir(tmpDir, { recursive: true });
 mkdirSync(path.dirname(outFile), { recursive: true });
 
 const iterations = [];
+let overallExitCode = 0;
 for (let index = 0; index < loops; index += 1) {
     const rawFile = path.join(tmpDir, `loop-${String(index + 1).padStart(2, '0')}.json`);
     const specPath = suite === 'scenarios' ? 'playwright/hvscPerfScenarios.spec.ts' : 'playwright/hvscPerf.spec.ts';
@@ -81,10 +83,17 @@ for (let index = 0; index < loops; index += 1) {
             },
         },
     );
-    if (result.status !== 0) {
-        process.exit(result.status ?? 1);
+    const iteration = loadPerfIterationArtifact({ rawFile, exitStatus: result.status ?? 1 });
+    if (iteration) {
+        iterations.push(iteration);
     }
-    iterations.push(JSON.parse(readFileSync(rawFile, 'utf8')));
+    if (result.status !== 0) {
+        overallExitCode = result.status ?? 1;
+        if (!iteration) {
+            process.exit(overallExitCode);
+        }
+        break;
+    }
 }
 
 const suiteSummary = suite === 'scenarios'
@@ -109,9 +118,14 @@ const summary = {
         baselineArchive,
         updateArchive,
     },
+    status: overallExitCode === 0 ? 'passed' : 'failed',
+    runnerExitCode: overallExitCode,
     ...suiteSummary,
     iterations,
 };
 
 writeFileSync(outFile, JSON.stringify(summary, null, 2), 'utf8');
 process.stdout.write(`${path.resolve(outFile)}\n`);
+if (overallExitCode !== 0) {
+    process.exit(overallExitCode);
+}

@@ -1,0 +1,57 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf
+  - hvsc-perf-browse
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- retry:
+    maxRetries: 6
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: "add-items-to-playlist"
+          direction: DOWN
+          timeout: ${TIMEOUT}
+      - tapOn:
+          id: "add-items-to-playlist"
+      - extendedWaitUntil:
+          visible: "Choose source"
+          timeout: ${TIMEOUT}
+      - tapOn:
+          id: "import-option-hvsc"
+          optional: true
+      - tapOn:
+          text: "Add file / folder from HVSC"
+          optional: true
+      - tapOn:
+          text: "HVSC"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "From HVSC"
+          timeout: ${TIMEOUT}
+- extendedWaitUntil:
+    visible: "Open MUSICIANS"
+    timeout: ${TIMEOUT}
+- tapOn: "Open MUSICIANS"
+- extendedWaitUntil:
+    visible: "Open H"
+    timeout: ${TIMEOUT}
+- tapOn: "Open H"
+- extendedWaitUntil:
+    visible: "Open Hubbard_Rob"
+    timeout: ${TIMEOUT}
+- tapOn: "Open Hubbard_Rob"
+- tapOn:
+    id: "navigate-root"
+- extendedWaitUntil:
+    visible: "Open MUSICIANS"
+    timeout: ${TIMEOUT}
+- tapOn:
+    text: "Cancel"
+    optional: true

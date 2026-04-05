@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 
@@ -12,6 +12,10 @@ const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
     metadata: metadata ?? null,
   })),
   endHvscPerfScope: vi.fn(),
+}));
+
+const { recordSmokeBenchmarkSnapshot } = vi.hoisted(() => ({
+  recordSmokeBenchmarkSnapshot: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -64,6 +68,10 @@ vi.mock("@/lib/config/configResolution", () => ({
 vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   beginHvscPerfScope,
   endHvscPerfScope,
+}));
+
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  recordSmokeBenchmarkSnapshot,
 }));
 
 const createHvscSource = (entries: Awaited<ReturnType<SourceLocation["listEntries"]>>): SourceLocation => ({
@@ -129,6 +137,40 @@ const createDeps = () => {
 };
 
 describe("addFileSelections batching", () => {
+  beforeEach(() => {
+    beginHvscPerfScope.mockClear();
+    endHvscPerfScope.mockClear();
+    recordSmokeBenchmarkSnapshot.mockClear();
+  });
+
+  it("records a playlist-add benchmark snapshot after successful HVSC adds", async () => {
+    const deps = createDeps();
+    const source = createHvscSource([
+      {
+        type: "file" as const,
+        name: "Commando.sid",
+        path: "/MUSICIANS/Hubbard_Rob/Commando.sid",
+      },
+    ]);
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [{ type: "dir", name: "Hubbard_Rob", path: "/MUSICIANS/Hubbard_Rob" }]);
+
+    expect(result).toBe(true);
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playlist-add",
+        state: "complete",
+        metadata: expect.objectContaining({
+          sourceId: "hvsc-library",
+          sourceType: "hvsc",
+          selectionCount: 1,
+          playableCount: 1,
+        }),
+      }),
+    );
+  });
+
   it("flushes large playable selections to the playlist in bounded batches", async () => {
     const deps = createDeps();
     const entries = Array.from({ length: 600 }, (_, index) => ({

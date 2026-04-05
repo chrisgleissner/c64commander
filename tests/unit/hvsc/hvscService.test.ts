@@ -10,6 +10,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mediaIndexMocks = vi.hoisted(() => ({
   load: vi.fn(async () => undefined),
+  loadBrowseSnapshot: vi.fn(async () => ({
+    schemaVersion: 1,
+    updatedAt: new Date().toISOString(),
+    songs: {},
+    folders: { "/": { path: "/", folders: [], songs: [] } },
+  })),
+  clearBrowseSnapshot: vi.fn(),
   getAll: vi.fn(() => []),
   scan: vi.fn(async () => undefined),
   queryFolderPage: vi.fn(() => ({
@@ -83,6 +90,8 @@ vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
 vi.mock("@/lib/hvsc/hvscMediaIndex", () => ({
   createHvscMediaIndex: vi.fn(() => ({
     load: mediaIndexMocks.load,
+    loadBrowseSnapshot: mediaIndexMocks.loadBrowseSnapshot,
+    clearBrowseSnapshot: mediaIndexMocks.clearBrowseSnapshot,
     getAll: mediaIndexMocks.getAll,
     scan: mediaIndexMocks.scan,
     queryFolderPage: mediaIndexMocks.queryFolderPage,
@@ -177,6 +186,13 @@ describe("hvscService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mediaIndexMocks.load.mockResolvedValue(undefined);
+    mediaIndexMocks.loadBrowseSnapshot.mockResolvedValue({
+      schemaVersion: 1,
+      updatedAt: new Date().toISOString(),
+      songs: {},
+      folders: { "/": { path: "/", folders: [], songs: [] } },
+    });
+    mediaIndexMocks.clearBrowseSnapshot.mockReset();
     mediaIndexMocks.getAll.mockReturnValue([]);
     mediaIndexMocks.scan.mockResolvedValue(undefined);
     mediaIndexMocks.queryFolderPage.mockReturnValue({
@@ -541,13 +557,14 @@ describe("hvscService", () => {
   });
 
   describe("ensureHvscIndexReady", () => {
-    it("scans index when browse snapshot is null (line 153)", async () => {
-      vi.mocked(loadHvscBrowseIndexSnapshot).mockResolvedValueOnce(null);
+    it("falls through to runtime listing when browse snapshot is null", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce(null);
       const page = await getHvscFolderListingPaged({ path: "/" });
       expect(page.totalSongs).toBe(0);
+      expect(mediaIndexMocks.load).not.toHaveBeenCalled();
     });
 
-    it("rescans when index integrity is invalid (line 160)", async () => {
+    it("drops invalid browse snapshots without loading the full media index", async () => {
       vi.mocked(verifyHvscBrowseIndexIntegrity).mockResolvedValueOnce({
         isValid: false,
         sampled: 0,
@@ -555,6 +572,27 @@ describe("hvscService", () => {
       });
       const page = await getHvscFolderListingPaged({ path: "/" });
       expect(page.totalSongs).toBe(0);
+      expect(mediaIndexMocks.clearBrowseSnapshot).toHaveBeenCalled();
+      expect(mediaIndexMocks.load).not.toHaveBeenCalled();
+    });
+
+    it("uses the browse snapshot path without eagerly loading the full media index", async () => {
+      mediaIndexMocks.queryFolderPage.mockReturnValueOnce({
+        path: "/",
+        folders: ["/DEMOS"],
+        songs: [],
+        totalFolders: 1,
+        totalSongs: 0,
+        offset: 0,
+        limit: 200,
+        query: "",
+      });
+
+      const page = await getHvscFolderListingPaged({ path: "/" });
+
+      expect(page.folders).toEqual(["/DEMOS"]);
+      expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalled();
+      expect(mediaIndexMocks.load).not.toHaveBeenCalled();
     });
   });
 
