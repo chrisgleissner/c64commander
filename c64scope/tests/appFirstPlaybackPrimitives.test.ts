@@ -221,6 +221,62 @@ describe("app-first playback primitives", () => {
     expect(tapByTextMock).toHaveBeenNthCalledWith(2, client, "serial-1", "Open USB2");
   });
 
+  it("retries a picker segment when the path label does not advance after a successful tap", async () => {
+    const { openPathSegments } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Path: /USB2/test-data" class="android.widget.TextView" enabled="true" bounds="[176,1001][560,1058]" />
+        </hierarchy>
+      `);
+    tapByTextMock.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await openPathSegments(client as never, "serial-1", ["USB2", "test-data"]);
+
+    expect(client.swipe).toHaveBeenCalledWith("serial-1", 540, 1620, 540, 1080, 260);
+    expect(tapByTextMock).toHaveBeenNthCalledWith(1, client, "serial-1", "Open test-data");
+    expect(tapByTextMock).toHaveBeenNthCalledWith(2, client, "serial-1", "Open test-data");
+  });
+
   it("treats slash-prefixed HVSC breadcrumbs as the current picker path regression", async () => {
     const { openPathSegments } = await import("../src/validation/appFirstPlaybackPrimitives.js");
 
