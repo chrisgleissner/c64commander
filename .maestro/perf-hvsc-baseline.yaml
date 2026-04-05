@@ -43,9 +43,9 @@ env:
 - tapOn:
     id: "hvsc-download"
 - extendedWaitUntil:
-    visible: "Indexed .* of .* songs\\."
+    visible: "Status: Ready"
     timeout: ${LONG_TIMEOUT}
-- assertVisible: "Indexed .* of .* songs\\."
+- assertVisible: "HVSC ready"
 - scrollUntilVisible:
     element:
       id: "add-items-to-playlist"
@@ -70,7 +70,7 @@ env:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Select items"
+          visible: "From HVSC"
           timeout: ${TIMEOUT}
 - extendedWaitUntil:
     visible: "Open DEMOS"
