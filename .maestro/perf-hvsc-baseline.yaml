@@ -43,9 +43,9 @@ env:
 - tapOn:
     id: "hvsc-download"
 - extendedWaitUntil:
-    visible: "HVSC ready"
+    visible: "Indexed .* of .* songs\\."
     timeout: ${LONG_TIMEOUT}
-- assertVisible: "HVSC ready"
+- assertVisible: "Indexed .* of .* songs\\."
 - scrollUntilVisible:
     element:
       id: "add-items-to-playlist"
@@ -59,11 +59,6 @@ env:
 - retry:
     maxRetries: 6
     commands:
-      - scrollUntilVisible:
-          element:
-            text: "HVSC"
-          direction: DOWN
-          timeout: ${TIMEOUT}
       - tapOn:
           id: "import-option-hvsc"
           optional: true

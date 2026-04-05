@@ -252,7 +252,8 @@ export default function PlayFilesPage() {
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
 
-  const { hvscStatus, hvscRoot, hvscLibraryAvailable, buildHvscLocalPlayFile } = useHvscLibrary();
+  const hvsc = useHvscLibrary();
+  const { hvscStatus, hvscRoot, hvscLibraryAvailable, buildHvscLocalPlayFile } = hvsc;
 
   const { localEntriesBySourceId, localSourceTreeUris } = useLocalEntries(localSources);
 
@@ -546,12 +547,12 @@ export default function PlayFilesPage() {
         prev.map((item) =>
           item.id === itemId
             ? {
-                ...item,
-                configRef,
-                configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
-                configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
-                configCandidates: options?.candidates ?? item.configCandidates ?? null,
-              }
+              ...item,
+              configRef,
+              configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
+              configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
+              configCandidates: options?.candidates ?? item.configCandidates ?? null,
+            }
             : item,
         ),
       );
@@ -564,16 +565,16 @@ export default function PlayFilesPage() {
       prev.map((entry) =>
         entry.id === item.id
           ? {
-              ...entry,
-              configOverrides: overrides,
-              configOrigin: overrides?.length
-                ? "manual"
-                : entry.configRef
-                  ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
-                  : entry.configOrigin === "manual-none"
-                    ? "manual-none"
-                    : "none",
-            }
+            ...entry,
+            configOverrides: overrides,
+            configOrigin: overrides?.length
+              ? "manual"
+              : entry.configRef
+                ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
+                : entry.configOrigin === "manual-none"
+                  ? "manual-none"
+                  : "none",
+          }
           : entry,
       ),
     );
@@ -1660,7 +1661,7 @@ export default function PlayFilesPage() {
 
           {hvscControlsEnabled && (
             <div data-section-label="HVSC" data-testid="play-section-hvsc">
-              <HvscManager hvscControlsEnabled={true} />
+              <HvscManager hvscControlsEnabled={true} hvsc={hvsc} />
             </div>
           )}
         </PageStack>

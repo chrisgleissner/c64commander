@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useHvscLibrary } from "../hooks/useHvscLibrary";
+import type { HvscLibraryState } from "../hooks/useHvscLibrary";
 import { HvscControls } from "./HvscControls";
 import { formatBytes } from "../playFilesUtils";
 
 interface HvscManagerProps {
   hvscControlsEnabled: boolean;
+  hvsc: HvscLibraryState;
 }
 
-export function HvscManager({ hvscControlsEnabled }: HvscManagerProps) {
-  const hvsc = useHvscLibrary();
+export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
   const { formatHvscDuration, formatHvscTimestamp } = hvsc;
 
   if (!hvscControlsEnabled) {

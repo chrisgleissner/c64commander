@@ -17,7 +17,8 @@ describe("Android Maestro workflow contracts", () => {
 
     it("opens the play tab through app selectors instead of bottom-edge coordinates", () => {
         const flow = readRepoFile(".maestro", "perf-hvsc-baseline.yaml");
-        expect(flow).toContain('visible: "HVSC ready"');
+        expect(flow).toContain('visible: "Indexed .* of .* songs\\\\."');
+        expect(flow).toContain('id: "import-option-hvsc"');
         expect(flow).toContain('text: "Done"');
         expect(flow).toContain('point: "25%,90%"');
         expect(flow).toContain('text: "Retry connection"');
