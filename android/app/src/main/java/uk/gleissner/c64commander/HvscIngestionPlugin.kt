@@ -14,6 +14,7 @@ import android.content.ContentValues
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.os.Trace
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -236,6 +237,7 @@ open class HvscIngestionPlugin : Plugin() {
 
   private fun flushSongBatch(db: SQLiteDatabase, batch: MutableList<SongUpsertRow>): Int {
     if (batch.isEmpty()) return 0
+    Trace.beginSection("hvsc:flushSongBatch")
     var applied = 0
     db.beginTransaction()
     try {
@@ -258,11 +260,13 @@ open class HvscIngestionPlugin : Plugin() {
       return applied
     } finally {
       db.endTransaction()
+      Trace.endSection()
     }
   }
 
   private fun applyDeletionRows(db: SQLiteDatabase, paths: List<String>): Int {
     if (paths.isEmpty()) return 0
+    Trace.beginSection("hvsc:applyDeletionRows")
     var deleted = 0
     db.beginTransaction()
     try {
@@ -274,6 +278,7 @@ open class HvscIngestionPlugin : Plugin() {
       return deleted
     } finally {
       db.endTransaction()
+      Trace.endSection()
     }
   }
 
@@ -396,6 +401,7 @@ open class HvscIngestionPlugin : Plugin() {
     cancellationRequested.set(false)
     activeJob =
             scope.launch {
+              Trace.beginSection("hvsc:ingestHvsc")
               var dbHelper: HvscMetadataDbHelper? = null
               var db: SQLiteDatabase? = null
               val filesDir = context.filesDir
@@ -667,6 +673,7 @@ open class HvscIngestionPlugin : Plugin() {
                           error
                   )
                 }
+                Trace.endSection()
               }
             }
   }

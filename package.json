@@ -44,6 +44,7 @@
     "test:perf:secondary:quick": "node scripts/hvsc/collect-web-perf.mjs --suite=secondary --loops=3 --out=ci-artifacts/hvsc-performance/web/web-secondary-quick.json",
     "test:perf:secondary:nightly": "HVSC_PERF_USE_REAL_ARCHIVES=1 HVSC_PERF_LOOPS=5 HVSC_PERF_BYTES_PER_SECOND=5242880 node scripts/hvsc/collect-web-perf.mjs --suite=secondary --out=ci-artifacts/hvsc-performance/web/web-secondary-nightly.json",
     "test:perf:assert:web": "node scripts/hvsc/assert-web-perf-budgets.mjs",
+    "test:perf:assert:android": "node scripts/hvsc/assert-android-perf-budgets.mjs",
     "test:bench": "vitest bench tests/benchmarks/hvscHotPaths.bench.ts --project unit-node --run",
     "test:e2e": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep-invert \"@screenshots|@web-platform\"",
     "test:e2e:native": "npm run maestro:gating",

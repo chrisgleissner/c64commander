@@ -4,7 +4,7 @@
 
 - Classification: `CODE_CHANGE`
 - Phase: convergence pass per `docs/research/hvsc/performance/audit/convergence-prompt.md`
-- Current convergence task: `P1.2` complete; starting `P1.3`.
+- Current convergence task: `P1.6` complete; starting `P2.1`.
 - Worktree: dirty (active convergence edits for P1.2 closure and tracker updates).
 - Verified execution prerequisites:
   - cached full-size archives present at `~/.cache/c64commander/hvsc/` (`HVSC_84-all-of-them.7z`, `HVSC_Update_84.7z`)
@@ -104,14 +104,14 @@ All HVSC performance assets in the current tree, reconciled against the audit.
 
 ## Target status matrix
 
-| Target                                           | Budget    | Status       | Evidence                                                                            |
-| ------------------------------------------------ | --------- | ------------ | ----------------------------------------------------------------------------------- |
-| `T1` Download full HVSC at 5 MiB/s `< 20 s`      | `< 20 s`  | `UNMEASURED` | Web fixture p95 `1254 ms` (tiny archive, not budget-scale); no Android measurement  |
-| `T2` Ingest 60,582+ songs `< 25 s`               | `< 25 s`  | `UNMEASURED` | Web fixture p95 `381 ms` (3 songs, not budget-scale); no Android measurement        |
-| `T3` Browse traversal `< 2 s` worst case         | `< 2 s`   | `UNMEASURED` | Web fixture p95 `535 ms`; secondary web p95 `118.1 ms`; no Pixel 4 proof            |
-| `T4` Filter 60K+ playlist `< 2 s` worst case     | `< 2 s`   | `UNMEASURED` | Web fixture p95 `607 ms` (3 items, not budget-scale); no Pixel 4 proof              |
-| `T5` Playback start `< 1 s`                      | `< 1 s`   | `UNMEASURED` | Web fixture p95 `247 ms`; no Pixel 4 proof                                          |
-| `T6` 100K items without full in-memory hydration | pass/fail | `UNMEASURED` | Code still uses full React state; no 100K benchmark                                 |
+| Target                                           | Budget    | Status       | Evidence                                                                           |
+| ------------------------------------------------ | --------- | ------------ | ---------------------------------------------------------------------------------- |
+| `T1` Download full HVSC at 5 MiB/s `< 20 s`      | `< 20 s`  | `UNMEASURED` | Web fixture p95 `1254 ms` (tiny archive, not budget-scale); no Android measurement |
+| `T2` Ingest 60,582+ songs `< 25 s`               | `< 25 s`  | `UNMEASURED` | Web fixture p95 `381 ms` (3 songs, not budget-scale); no Android measurement       |
+| `T3` Browse traversal `< 2 s` worst case         | `< 2 s`   | `UNMEASURED` | Web fixture p95 `535 ms`; secondary web p95 `118.1 ms`; no Pixel 4 proof           |
+| `T4` Filter 60K+ playlist `< 2 s` worst case     | `< 2 s`   | `UNMEASURED` | Web fixture p95 `607 ms` (3 items, not budget-scale); no Pixel 4 proof             |
+| `T5` Playback start `< 1 s`                      | `< 1 s`   | `UNMEASURED` | Web fixture p95 `247 ms`; no Pixel 4 proof                                         |
+| `T6` 100K items without full in-memory hydration | pass/fail | `UNMEASURED` | Code still uses full React state; no 100K benchmark                                |
 
 ## Measured web full S1-S11 baseline (fixture mode)
 
@@ -181,10 +181,10 @@ The missing piece is a closed Android benchmark runner with warm-up, repeated ru
 | P0    | P0.2 Normalize artifact directory strategy | `DONE`        |
 | P1    | P1.1 Close benchmark matrix gap S1-S11     | `DONE`        |
 | P1    | P1.2 Web harness: real download and ingest | `DONE`        |
-| P1    | P1.3 Close Android benchmark harness gap   | `NOT STARTED` |
-| P1    | P1.4 Close instrumentation coverage gap    | `NOT STARTED` |
-| P1    | P1.5 Close Perfetto pipeline gap           | `NOT STARTED` |
-| P1    | P1.6 Close microbenchmark gap              | `NOT STARTED` |
+| P1    | P1.3 Close Android benchmark harness gap   | `DONE`        |
+| P1    | P1.4 Close instrumentation coverage gap    | `DONE`        |
+| P1    | P1.5 Close Perfetto pipeline gap           | `DONE`        |
+| P1    | P1.6 Close microbenchmark gap              | `DONE`        |
 | P2    | P2.1 Capture honest full baseline          | `NOT STARTED` |
 | P2    | P2.2 Build pass/fail matrix                | `NOT STARTED` |
 | P3    | P3.1 Optimization cycle 1                  | `NOT STARTED` |

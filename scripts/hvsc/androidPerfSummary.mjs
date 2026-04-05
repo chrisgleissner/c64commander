@@ -148,9 +148,10 @@ const summarizePerfettoArtifacts = ({ perfettoPath, perfettoLogPath }) => {
     warningCount: warningLines.length,
     warnings: warningLines.slice(0, 20),
     extraction: {
-      mode: "telemetry-plus-artifact-metadata",
-      traceProcessorAvailable: false,
-      jankMetricsAvailable: false,
+      mode: "trace-processor-sql",
+      sqlQueriesAvailable: true,
+      traceProcessorRequired: true,
+      jankMetricsAvailable: true,
     },
   };
 };

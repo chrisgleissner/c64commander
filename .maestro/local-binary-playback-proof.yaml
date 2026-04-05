@@ -104,8 +104,7 @@ env:
 - tapOn: "Select demo.d64"
 - tapOn: "Select demo.prg"
 - tapOn: "Select demo.crt"
-- tapOn:
-    id: "add-items-confirm"
+- tapOn: "Add to playlist"
 
 - extendedWaitUntil:
     visible:

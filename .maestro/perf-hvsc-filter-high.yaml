@@ -9,6 +9,8 @@ env:
   TIMEOUT: ${TIMEOUT || "30000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    text: "Play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}

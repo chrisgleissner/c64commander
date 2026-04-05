@@ -1,5 +1,77 @@
 # HVSC Performance Worklog
 
+## [2026-04-06 00:20] P1.6 Close microbenchmark gap — already complete
+
+All three completion gates verified satisfied without additional changes:
+
+1. `package.json` contains `test:bench` (line 48): `vitest bench tests/benchmarks/hvscHotPaths.bench.ts --project unit-node --run`
+2. Benchmark file exists: `tests/benchmarks/hvscHotPaths.bench.ts` with 4 benchmarks covering browse index build (50k entries), browse index query (100k entries), deletion list parsing (20k entries), archive name hashing (5k names)
+3. CI invokes them: `.github/workflows/android.yaml:151` and `.github/workflows/perf-nightly.yaml:46` both run `npm run test:bench`
+
+No code changes required.
+
+## [2026-04-06 00:15] P1.5 Close Perfetto pipeline gap
+
+Upgraded Perfetto from capture-only to a structured metric extraction pipeline.
+
+Files changed:
+
+- `ci/telemetry/android/perfetto-hvsc.cfg`: Buffer 20 MiB → 64 MiB. Added `linux.ftrace` data source with `sched/sched_switch`, `sched/sched_waking`, `power/cpu_frequency`, `power/suspend_resume` events. Added atrace categories `view`, `gfx`, `am`, `dalvik` and `atrace_apps: "uk.gleissner.c64commander"` for app-level trace sections.
+- `android/app/src/main/java/uk/gleissner/c64commander/hvsc/HvscArchiveExtractor.kt`: Added `import android.os.Trace`. Instrumented `probe()`, `extract()`, `extractSevenZipToRawTree()`, `extractZipToRawTree()`, `materializeRelevantFiles()` with `Trace.beginSection("hvsc:...")`/`Trace.endSection()` in try/finally blocks.
+- `android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt`: Added `import android.os.Trace`. Instrumented `ingestHvsc()`, `flushSongBatch()`, `applyDeletionRows()` with `Trace.beginSection("hvsc:...")`/`Trace.endSection()`.
+- `ci/telemetry/android/perfetto-sql/`: Created 5 SQL extraction queries: `cpu_usage.sql`, `memory_rss.sql`, `app_trace_sections.sql`, `frame_jank.sql`, `scheduling_latency.sql`. All target the c64commander process.
+- `scripts/hvsc/extract-perfetto-metrics.mjs`: New. Runs SQL queries via `trace_processor_shell` against a `.pftrace` file. Outputs structured JSON. Gracefully degrades if processor is absent (`no-processor` status) or trace is missing (`no-trace` status).
+- `scripts/run-hvsc-android-benchmark.sh`: Wired extraction after trace pull. Added `--perfetto-metrics` parameter to summary writer invocation.
+- `scripts/hvsc/write-android-perf-summary.mjs`: Added `--perfetto-metrics` parameter. Summary JSON now includes `perfettoMetrics` path and `perfettoExtraction` object with status, app trace sections, and frame jank data.
+- `scripts/hvsc/androidPerfSummary.mjs`: Updated `summarizePerfettoArtifacts` extraction mode from `telemetry-plus-artifact-metadata` to `trace-processor-sql` with `sqlQueriesAvailable: true`, `jankMetricsAvailable: true`.
+
+Tests added:
+
+- `tests/unit/ci/perfettoPipelineContracts.test.ts`: 11 tests covering Perfetto config richness, buffer size, SQL query completeness, extraction script structure, runner wiring, summary integration, and Kotlin trace instrumentation (begin/end pairing).
+
+Tests fixed:
+
+- `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`: Updated pre-existing test to match current Maestro flow (removed stale `point:` assertions).
+
+Validation: 24 targeted tests pass (17 contract + 7 summary tests). All existing androidPerfSummary and budget assertion tests unchanged and passing.
+
+## [2026-04-06 00:00] P1.4 Close instrumentation coverage gap
+
+All 5 previously-missing instrumentation scopes confirmed landed with proper begin/end pairing and regression test coverage:
+
+- `browse:render` in `src/pages/playFiles/hooks/usePlaylistListItems.tsx` — tested in `usePlaylistListItems.test.tsx`
+- `playlist:add-batch` in `src/pages/playFiles/handlers/addFileSelections.ts` — tested in `addFileSelectionsBatching.test.ts`
+- `playlist:filter` in `src/pages/playFiles/hooks/useQueryFilteredPlaylist.ts` — tested in `webPerfSummary.test.ts`, `androidPerfMultiLoop.test.ts`, `androidPerfSummary.test.ts`
+- `playlist:repo-sync` in `src/pages/playFiles/hooks/useQueryFilteredPlaylist.ts` — tested in `useQueryFilteredPlaylist.test.tsx`
+- `playback:first-audio` in `src/lib/playback/playbackRouter.ts` — tested in `webPerfSummary.test.ts`, `androidPerfMultiLoop.test.ts`, `androidPerfSummary.test.ts`
+
+No code changes required — scopes were already implemented by prior work. Verified all scopes propagate to Android bundled assets.
+
+## [2026-04-05 23:30] P1.3 Close Android benchmark harness gap
+
+Extended the Android benchmark runner to a closed multi-loop measurement system with warm-up discard, per-loop smoke snapshot isolation, and budget assertion.
+
+Files changed:
+
+- `scripts/run-hvsc-android-benchmark.sh`: Added `--loops` (default 3) and `--warmup` (default 1). Runner now executes `WARMUP + LOOPS` total Maestro flow iterations, clears smoke snapshots between iterations, stores per-loop artifacts in separate subdirectories (`warmup-N` / `loop-N`), and passes only measured (non-warmup) smoke files to the summary writer.
+- `scripts/hvsc/write-android-perf-summary.mjs`: Added `--smoke-files` (comma-separated file list), `--loops`, and `--warmup` parameters. Supports both legacy `--smoke-dir` and new `--smoke-files` input. Summary JSON now includes `loops` and `warmup` metadata.
+- `scripts/hvsc/assert-android-perf-budgets.mjs`: New script. Reads Android summary JSON, checks T1-T5 against budget thresholds, supports both observation-only (default) and enforced modes (`HVSC_ANDROID_BUDGET_ENFORCE=1`). Budget thresholds configurable via environment variables.
+- `package.json`: Added `test:perf:assert:android` script.
+
+Tests added:
+
+- `tests/unit/scripts/androidPerfMultiLoop.test.ts`: 4 tests covering multi-loop aggregation, target evidence from multiple scenarios, budget failure detection, and warmup exclusion.
+- `tests/unit/scripts/assertAndroidPerfBudgets.test.ts`: 4 tests covering observation-only mode, enforced pass, enforced fail, unmeasured rejection, and loop metadata display.
+- `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`: 2 new tests verifying runner multi-loop parameters and budget assertion script existence.
+
+Validation:
+
+- 22 targeted tests pass (0 failures)
+- `npm run build`: passed
+- Prettier-compliant after format pass
+
+Decision: Keep. The Android runner is now a closed multi-loop measurement system. Budget-scale evidence capture deferred to P2.1.
+
 ## [2026-04-05 09:00] P0.1 Reconcile tree with audit and top-level trackers
 
 Reconciled the full HVSC performance asset inventory against `docs/research/hvsc/performance/audit/audit.md`.

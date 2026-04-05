@@ -9,6 +9,11 @@ env:
   TIMEOUT: ${TIMEOUT || "30000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    text: "Play"
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
       id: "add-items-to-playlist"
@@ -47,8 +52,8 @@ env:
     visible: "Select MUSICIANS"
     timeout: ${TIMEOUT}
 - tapOn: "Select MUSICIANS"
-- tapOn:
-    id: "add-items-confirm"
+- waitForAnimationToEnd
+- tapOn: "Add to playlist"
 - extendedWaitUntil:
     visible: "Items added"
     timeout: ${LONG_TIMEOUT}

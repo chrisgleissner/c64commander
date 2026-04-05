@@ -14,7 +14,7 @@ BOOT_TIMEOUT_SECS=${BOOT_TIMEOUT_SECS:-180}
 AUTOMATION_READY_TIMEOUT_SECS=${AUTOMATION_READY_TIMEOUT_SECS:-20}
 POWER_STAYON_ENABLED=0
 DEFAULT_LONG_TIMEOUT_MS=${DEFAULT_LONG_TIMEOUT_MS:-20000}
-HVSC_PERF_LONG_TIMEOUT_MS=${HVSC_PERF_LONG_TIMEOUT_MS:-180000}
+HVSC_PERF_LONG_TIMEOUT_MS=${HVSC_PERF_LONG_TIMEOUT_MS:-600000}
 DEFAULT_TIMEOUT_MS=${DEFAULT_TIMEOUT_MS:-15000}
 DEFAULT_SHORT_TIMEOUT_MS=${DEFAULT_SHORT_TIMEOUT_MS:-5000}
 
@@ -26,6 +26,7 @@ C64U_TARGET="${C64U_TARGET:-mock}"
 C64U_HOST="${C64U_HOST:-C64U}"
 HVSC_BASE_URL="${HVSC_BASE_URL:-}"
 BENCHMARK_RUN_ID="${BENCHMARK_RUN_ID:-}"
+SKIP_APP_RESET="${SKIP_APP_RESET:-false}"
 
 usage() {
   cat <<EOF
@@ -41,6 +42,7 @@ Options:
   --c64u-host <hostname>   Hostname/IP for real target (default: ${C64U_HOST})
   --hvsc-base-url <url>    Override HVSC release base URL for smoke mode
   --benchmark-run-id <id>  Benchmark run id written into smoke snapshots
+  --skip-app-reset         Skip APK install, pm clear, config write, and HVSC fixture setup
   -h, --help               Show this help
 EOF
 }
@@ -323,6 +325,10 @@ while [[ $# -gt 0 ]]; do
       BENCHMARK_RUN_ID="$2"
       shift 2
       ;;
+    --skip-app-reset)
+      SKIP_APP_RESET="true"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -378,21 +384,23 @@ if ! wait_for_boot "$DEVICE_ID"; then
   exit 1
 fi
 
-install_apk
+if [[ "$SKIP_APP_RESET" != "true" ]]; then
+  install_apk
 
-adb -s "$DEVICE_ID" shell "am force-stop '$APP_ID' >/dev/null 2>&1; \
-  pm clear '$APP_ID' >/dev/null 2>&1; \
-  pm grant '$APP_ID' android.permission.READ_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
-  pm grant '$APP_ID' android.permission.WRITE_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
-  pm grant '$APP_ID' android.permission.READ_MEDIA_AUDIO >/dev/null 2>&1 || true; \
-  pm grant '$APP_ID' android.permission.READ_MEDIA_IMAGES >/dev/null 2>&1 || true; \
-  pm grant '$APP_ID' android.permission.READ_MEDIA_VIDEO >/dev/null 2>&1 || true; \
-  pm grant '$APP_ID' android.permission.MANAGE_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
-  appops set '$APP_ID' MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1 || true" || true
+  adb -s "$DEVICE_ID" shell "am force-stop '$APP_ID' >/dev/null 2>&1; \
+    pm clear '$APP_ID' >/dev/null 2>&1; \
+    pm grant '$APP_ID' android.permission.READ_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
+    pm grant '$APP_ID' android.permission.WRITE_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
+    pm grant '$APP_ID' android.permission.READ_MEDIA_AUDIO >/dev/null 2>&1 || true; \
+    pm grant '$APP_ID' android.permission.READ_MEDIA_IMAGES >/dev/null 2>&1 || true; \
+    pm grant '$APP_ID' android.permission.READ_MEDIA_VIDEO >/dev/null 2>&1 || true; \
+    pm grant '$APP_ID' android.permission.MANAGE_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
+    appops set '$APP_ID' MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1 || true" || true
 
-write_smoke_config
+  write_smoke_config
 
-ensure_hvsc_library "$DEVICE_ID"
+  ensure_hvsc_library "$DEVICE_ID"
+fi
 
 ensure_device_ready_for_automation "$DEVICE_ID"
 

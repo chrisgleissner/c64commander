@@ -1,5 +1,6 @@
 package uk.gleissner.c64commander.hvsc
 
+import android.os.Trace
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
@@ -91,13 +92,19 @@ class DefaultHvscArchiveExtractor(
         private val sevenZipExecutableProvider: () -> File? = { null },
 ) : HvscArchiveExtractor {
   override fun probe(archiveFile: File, mode: HvscArchiveMode): ArchiveProfile {
-    require(archiveFile.exists() && archiveFile.isFile) {
-      "Archive file not found: ${archiveFile.absolutePath}"
-    }
-    return when {
-      archiveFile.name.endsWith(".7z", ignoreCase = true) -> probeSevenZipArchive(archiveFile, mode)
-      archiveFile.name.endsWith(".zip", ignoreCase = true) -> probeZipArchive(archiveFile, mode)
-      else -> throw IllegalStateException("Unsupported archive format: ${archiveFile.name}")
+    Trace.beginSection("hvsc:probe")
+    try {
+      require(archiveFile.exists() && archiveFile.isFile) {
+        "Archive file not found: ${archiveFile.absolutePath}"
+      }
+      return when {
+        archiveFile.name.endsWith(".7z", ignoreCase = true) ->
+                probeSevenZipArchive(archiveFile, mode)
+        archiveFile.name.endsWith(".zip", ignoreCase = true) -> probeZipArchive(archiveFile, mode)
+        else -> throw IllegalStateException("Unsupported archive format: ${archiveFile.name}")
+      }
+    } finally {
+      Trace.endSection()
     }
   }
 
@@ -109,54 +116,61 @@ class DefaultHvscArchiveExtractor(
           memoryBudget: MemoryBudget,
           onProgress: (ExtractionProgress) -> Unit,
   ): ExtractionResult {
-    val profile = probe(archiveFile, mode)
-    enforceMemoryBudget(profile, memoryBudget)
-    if (cancellationToken.get()) {
-      throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
-    }
-
-    if (outputDir.exists() && !outputDir.isDirectory) {
-      throw IllegalStateException("HVSC output path is not a directory: ${outputDir.absolutePath}")
-    }
-    if (!outputDir.exists() && !outputDir.mkdirs()) {
-      throw IllegalStateException(
-              "Failed to create HVSC output directory: ${outputDir.absolutePath}"
-      )
-    }
-
-    val rawRoot =
-            File(
-                    outputDir.parentFile ?: outputDir,
-                    "${outputDir.name}-raw-${System.currentTimeMillis()}"
-            )
-    if (!rawRoot.mkdirs()) {
-      throw IllegalStateException(
-              "Failed to create temporary extraction directory: ${rawRoot.absolutePath}"
-      )
-    }
-
+    Trace.beginSection("hvsc:extract")
     try {
-      when {
-        archiveFile.name.endsWith(".7z", ignoreCase = true) ->
-                extractSevenZipToRawTree(
-                        archiveFile,
-                        rawRoot,
-                        profile,
-                        cancellationToken,
-                        onProgress
-                )
-        archiveFile.name.endsWith(".zip", ignoreCase = true) ->
-                extractZipToRawTree(archiveFile, rawRoot, profile, cancellationToken, onProgress)
-        else -> throw IllegalStateException("Unsupported archive format: ${archiveFile.name}")
-      }
-
+      val profile = probe(archiveFile, mode)
+      enforceMemoryBudget(profile, memoryBudget)
       if (cancellationToken.get()) {
         throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
       }
 
-      return materializeRelevantFiles(rawRoot, outputDir, profile, mode)
+      if (outputDir.exists() && !outputDir.isDirectory) {
+        throw IllegalStateException(
+                "HVSC output path is not a directory: ${outputDir.absolutePath}"
+        )
+      }
+      if (!outputDir.exists() && !outputDir.mkdirs()) {
+        throw IllegalStateException(
+                "Failed to create HVSC output directory: ${outputDir.absolutePath}"
+        )
+      }
+
+      val rawRoot =
+              File(
+                      outputDir.parentFile ?: outputDir,
+                      "${outputDir.name}-raw-${System.currentTimeMillis()}"
+              )
+      if (!rawRoot.mkdirs()) {
+        throw IllegalStateException(
+                "Failed to create temporary extraction directory: ${rawRoot.absolutePath}"
+        )
+      }
+
+      try {
+        when {
+          archiveFile.name.endsWith(".7z", ignoreCase = true) ->
+                  extractSevenZipToRawTree(
+                          archiveFile,
+                          rawRoot,
+                          profile,
+                          cancellationToken,
+                          onProgress
+                  )
+          archiveFile.name.endsWith(".zip", ignoreCase = true) ->
+                  extractZipToRawTree(archiveFile, rawRoot, profile, cancellationToken, onProgress)
+          else -> throw IllegalStateException("Unsupported archive format: ${archiveFile.name}")
+        }
+
+        if (cancellationToken.get()) {
+          throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
+        }
+
+        return materializeRelevantFiles(rawRoot, outputDir, profile, mode)
+      } finally {
+        rawRoot.deleteRecursively()
+      }
     } finally {
-      rawRoot.deleteRecursively()
+      Trace.endSection()
     }
   }
 
@@ -336,99 +350,104 @@ class DefaultHvscArchiveExtractor(
           cancellationToken: AtomicBoolean,
           onProgress: (ExtractionProgress) -> Unit,
   ) {
-    val executable = requireSevenZipExecutable()
-    val process =
-            ProcessBuilder(
-                            listOf(
-                                    executable.absolutePath,
-                                    "x",
-                                    "-y",
-                                    "-bb1",
-                                    "-bso1",
-                                    "-bse1",
-                                    "-o${rawRoot.absolutePath}",
-                                    archiveFile.absolutePath,
-                            )
-                    )
-                    .redirectErrorStream(true)
-                    .start()
-
-    val tail = ArrayDeque<String>()
-    var processedEntries = 0
-    var songsExtracted = 0
-
-    val cancellationMonitor = Thread {
-      while (process.isAlive) {
-        if (cancellationToken.get()) {
-          process.destroy()
-          if (process.isAlive) {
-            process.destroyForcibly()
-          }
-          break
-        }
-        try {
-          Thread.sleep(50)
-        } catch (_: InterruptedException) {
-          Thread.currentThread().interrupt()
-          return@Thread
-        }
-      }
-    }
-    cancellationMonitor.isDaemon = true
-    cancellationMonitor.start()
-
+    Trace.beginSection("hvsc:extract7z")
     try {
-      process.inputStream.bufferedReader().useLines { lines ->
-        lines.forEach { line ->
-          if (tail.size >= 40) {
-            tail.removeFirst()
-          }
-          tail.addLast(line)
+      val executable = requireSevenZipExecutable()
+      val process =
+              ProcessBuilder(
+                              listOf(
+                                      executable.absolutePath,
+                                      "x",
+                                      "-y",
+                                      "-bb1",
+                                      "-bso1",
+                                      "-bse1",
+                                      "-o${rawRoot.absolutePath}",
+                                      archiveFile.absolutePath,
+                              )
+                      )
+                      .redirectErrorStream(true)
+                      .start()
 
-          if (line.startsWith("- ")) {
-            val currentFile = line.removePrefix("- ").trim()
-            processedEntries += 1
-            if (currentFile.lowercase(Locale.US).endsWith(".sid")) {
-              songsExtracted += 1
-            }
-            onProgress(
-                    ExtractionProgress(
-                            processedEntries = processedEntries,
-                            totalEntries = profile.entryCount,
-                            currentFile = currentFile,
-                            songsExtracted = songsExtracted,
-                    )
-            )
-          }
+      val tail = ArrayDeque<String>()
+      var processedEntries = 0
+      var songsExtracted = 0
 
-          if (cancellationToken.get() && process.isAlive) {
+      val cancellationMonitor = Thread {
+        while (process.isAlive) {
+          if (cancellationToken.get()) {
             process.destroy()
+            if (process.isAlive) {
+              process.destroyForcibly()
+            }
+            break
+          }
+          try {
+            Thread.sleep(50)
+          } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return@Thread
           }
         }
       }
-    } catch (error: IOException) {
-      if (!cancellationToken.get()) {
-        throw error
-      }
-    }
+      cancellationMonitor.isDaemon = true
+      cancellationMonitor.start()
 
-    val exitCode = process.waitFor()
-    cancellationMonitor.join(100)
-    if (cancellationToken.get()) {
-      throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
-    }
-    if (exitCode != 0) {
-      throw IOException(
-              buildString {
-                append(
-                        "Upstream 7-Zip extraction failed for ${archiveFile.absolutePath} (exit=$exitCode)"
-                )
-                if (tail.isNotEmpty()) {
-                  append(": ")
-                  append(tail.joinToString(" | "))
-                }
+      try {
+        process.inputStream.bufferedReader().useLines { lines ->
+          lines.forEach { line ->
+            if (tail.size >= 40) {
+              tail.removeFirst()
+            }
+            tail.addLast(line)
+
+            if (line.startsWith("- ")) {
+              val currentFile = line.removePrefix("- ").trim()
+              processedEntries += 1
+              if (currentFile.lowercase(Locale.US).endsWith(".sid")) {
+                songsExtracted += 1
               }
-      )
+              onProgress(
+                      ExtractionProgress(
+                              processedEntries = processedEntries,
+                              totalEntries = profile.entryCount,
+                              currentFile = currentFile,
+                              songsExtracted = songsExtracted,
+                      )
+              )
+            }
+
+            if (cancellationToken.get() && process.isAlive) {
+              process.destroy()
+            }
+          }
+        }
+      } catch (error: IOException) {
+        if (!cancellationToken.get()) {
+          throw error
+        }
+      }
+
+      val exitCode = process.waitFor()
+      cancellationMonitor.join(100)
+      if (cancellationToken.get()) {
+        throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
+      }
+      if (exitCode != 0) {
+        throw IOException(
+                buildString {
+                  append(
+                          "Upstream 7-Zip extraction failed for ${archiveFile.absolutePath} (exit=$exitCode)"
+                  )
+                  if (tail.isNotEmpty()) {
+                    append(": ")
+                    append(tail.joinToString(" | "))
+                  }
+                }
+        )
+      }
+    } finally {
+      Trace.endSection()
     }
   }
 
@@ -439,53 +458,58 @@ class DefaultHvscArchiveExtractor(
           cancellationToken: AtomicBoolean,
           onProgress: (ExtractionProgress) -> Unit,
   ) {
-    var processedEntries = 0
-    var songsExtracted = 0
-    ZipFile(archiveFile).use { zip ->
-      val entries = zip.entries()
-      while (entries.hasMoreElements()) {
-        if (cancellationToken.get()) {
-          throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
-        }
-        val entry = entries.nextElement()
-        val rawPath = sanitizeRawRelativePath(entry.name ?: "")
-        if (entry.isDirectory) {
-          File(rawRoot, rawPath).mkdirs()
-        } else {
-          val targetFile = File(rawRoot, rawPath)
-          ensureWithinRoot(rawRoot, targetFile)
-          targetFile.parentFile?.mkdirs()
-          zip.getInputStream(entry).use { input ->
-            BufferedInputStream(input).use { buffered ->
-              BufferedOutputStream(FileOutputStream(targetFile)).use { output ->
-                val buffer = ByteArray(32 * 1024)
-                while (true) {
-                  val read = buffered.read(buffer)
-                  if (read <= 0) {
-                    break
+    Trace.beginSection("hvsc:extractZip")
+    try {
+      var processedEntries = 0
+      var songsExtracted = 0
+      ZipFile(archiveFile).use { zip ->
+        val entries = zip.entries()
+        while (entries.hasMoreElements()) {
+          if (cancellationToken.get()) {
+            throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
+          }
+          val entry = entries.nextElement()
+          val rawPath = sanitizeRawRelativePath(entry.name ?: "")
+          if (entry.isDirectory) {
+            File(rawRoot, rawPath).mkdirs()
+          } else {
+            val targetFile = File(rawRoot, rawPath)
+            ensureWithinRoot(rawRoot, targetFile)
+            targetFile.parentFile?.mkdirs()
+            zip.getInputStream(entry).use { input ->
+              BufferedInputStream(input).use { buffered ->
+                BufferedOutputStream(FileOutputStream(targetFile)).use { output ->
+                  val buffer = ByteArray(32 * 1024)
+                  while (true) {
+                    val read = buffered.read(buffer)
+                    if (read <= 0) {
+                      break
+                    }
+                    output.write(buffer, 0, read)
                   }
-                  output.write(buffer, 0, read)
+                  output.flush()
                 }
-                output.flush()
               }
             }
           }
-        }
 
-        processedEntries += 1
-        val lowered = rawPath.lowercase(Locale.US)
-        if (!entry.isDirectory && lowered.endsWith(".sid")) {
-          songsExtracted += 1
+          processedEntries += 1
+          val lowered = rawPath.lowercase(Locale.US)
+          if (!entry.isDirectory && lowered.endsWith(".sid")) {
+            songsExtracted += 1
+          }
+          onProgress(
+                  ExtractionProgress(
+                          processedEntries = processedEntries,
+                          totalEntries = profile.entryCount,
+                          currentFile = rawPath,
+                          songsExtracted = songsExtracted,
+                  )
+          )
         }
-        onProgress(
-                ExtractionProgress(
-                        processedEntries = processedEntries,
-                        totalEntries = profile.entryCount,
-                        currentFile = rawPath,
-                        songsExtracted = songsExtracted,
-                )
-        )
       }
+    } finally {
+      Trace.endSection()
     }
   }
 
@@ -495,66 +519,71 @@ class DefaultHvscArchiveExtractor(
           profile: ArchiveProfile,
           mode: HvscArchiveMode,
   ): ExtractionResult {
-    val extractedSongs = mutableListOf<ExtractedSong>()
-    val failedPaths = mutableListOf<String>()
-    val deletionPaths = mutableListOf<String>()
-    var songlengthFilesWritten = 0
+    Trace.beginSection("hvsc:materialize")
+    try {
+      val extractedSongs = mutableListOf<ExtractedSong>()
+      val failedPaths = mutableListOf<String>()
+      val deletionPaths = mutableListOf<String>()
+      var songlengthFilesWritten = 0
 
-    rawRoot.walkTopDown().forEach { candidate ->
-      if (!candidate.isFile) {
-        return@forEach
-      }
-      val rawRelativePath = candidate.relativeTo(rawRoot).invariantSeparatorsPath
-      val normalizedPath = normalizeArchiveEntryPath(rawRelativePath, mode)
-      if (normalizedPath.isBlank()) {
-        return@forEach
-      }
-      val lowered = normalizedPath.lowercase(Locale.US)
+      rawRoot.walkTopDown().forEach { candidate ->
+        if (!candidate.isFile) {
+          return@forEach
+        }
+        val rawRelativePath = candidate.relativeTo(rawRoot).invariantSeparatorsPath
+        val normalizedPath = normalizeArchiveEntryPath(rawRelativePath, mode)
+        if (normalizedPath.isBlank()) {
+          return@forEach
+        }
+        val lowered = normalizedPath.lowercase(Locale.US)
 
-      try {
-        when {
-          isDeletionList(normalizedPath) -> {
-            if (candidate.length() <= MAX_DELETION_LIST_SIZE_BYTES) {
-              deletionPaths.addAll(parseDeletionList(candidate.readText()))
+        try {
+          when {
+            isDeletionList(normalizedPath) -> {
+              if (candidate.length() <= MAX_DELETION_LIST_SIZE_BYTES) {
+                deletionPaths.addAll(parseDeletionList(candidate.readText()))
+              }
+            }
+            lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt") -> {
+              val targetFile = ensureWithinRoot(outputDir, File(outputDir, normalizedPath))
+              targetFile.parentFile?.mkdirs()
+              moveIntoPlace(candidate, targetFile)
+              songlengthFilesWritten += 1
+            }
+            lowered.endsWith(".sid") -> {
+              val targetFile = ensureWithinRoot(outputDir, File(outputDir, normalizedPath))
+              targetFile.parentFile?.mkdirs()
+              moveIntoPlace(candidate, targetFile)
+              val header = readSidHeader(targetFile)
+              extractedSongs.add(
+                      ExtractedSong(
+                              virtualPath = "/$normalizedPath",
+                              fileName = targetFile.name,
+                              songs = header?.songs,
+                              startSong = header?.startSong,
+                      )
+              )
             }
           }
-          lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt") -> {
-            val targetFile = ensureWithinRoot(outputDir, File(outputDir, normalizedPath))
-            targetFile.parentFile?.mkdirs()
-            moveIntoPlace(candidate, targetFile)
-            songlengthFilesWritten += 1
-          }
-          lowered.endsWith(".sid") -> {
-            val targetFile = ensureWithinRoot(outputDir, File(outputDir, normalizedPath))
-            targetFile.parentFile?.mkdirs()
-            moveIntoPlace(candidate, targetFile)
-            val header = readSidHeader(targetFile)
-            extractedSongs.add(
-                    ExtractedSong(
-                            virtualPath = "/$normalizedPath",
-                            fileName = targetFile.name,
-                            songs = header?.songs,
-                            startSong = header?.startSong,
-                    )
-            )
-          }
+        } catch (error: Exception) {
+          failedPaths.add("/$normalizedPath")
+          throw IOException("Failed to materialize HVSC entry /$normalizedPath", error)
         }
-      } catch (error: Exception) {
-        failedPaths.add("/$normalizedPath")
-        throw IOException("Failed to materialize HVSC entry /$normalizedPath", error)
       }
-    }
 
-    return ExtractionResult(
-            profile = profile,
-            totalEntries = profile.entryCount,
-            songsIngested = extractedSongs.size,
-            failedSongs = failedPaths.size,
-            failedPaths = failedPaths,
-            songlengthFilesWritten = songlengthFilesWritten,
-            deletionPaths = deletionPaths.distinct(),
-            extractedSongs = extractedSongs,
-    )
+      return ExtractionResult(
+              profile = profile,
+              totalEntries = profile.entryCount,
+              songsIngested = extractedSongs.size,
+              failedSongs = failedPaths.size,
+              failedPaths = failedPaths,
+              songlengthFilesWritten = songlengthFilesWritten,
+              deletionPaths = deletionPaths.distinct(),
+              extractedSongs = extractedSongs,
+      )
+    } finally {
+      Trace.endSection()
+    }
   }
 
   private fun moveIntoPlace(source: File, target: File) {

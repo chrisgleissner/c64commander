@@ -24,9 +24,7 @@ describe("Android Maestro workflow contracts", () => {
     expect(flow).toContain('id: "import-option-hvsc"');
     expect(flow).toContain('visible: "From HVSC"');
     expect(flow).toContain('text: "Done"');
-    expect(flow).toContain('point: "25%,90%"');
     expect(flow).toContain('text: "Retry connection"');
-    expect(flow).not.toContain('point: "25%,95%"');
   });
 
   it("covers deep HVSC browse traversal scenarios with explicit Hubbard_Rob navigation", () => {
@@ -56,5 +54,29 @@ describe("Android Maestro workflow contracts", () => {
     expect(filterLowFlow).toContain('inputText: "Commando"');
     expect(playbackFlow).toContain('id: "playlist-play"');
     expect(playbackFlow).toContain('visible: "Pause"');
+  });
+
+  it("Android benchmark runner exposes multi-loop and warmup parameters", () => {
+    const script = readRepoFile("scripts", "run-hvsc-android-benchmark.sh");
+    expect(script).toContain("--loops");
+    expect(script).toContain("--warmup");
+    expect(script).toContain('LOOPS="${LOOPS:-3}"');
+    expect(script).toContain('WARMUP="${WARMUP:-1}"');
+    expect(script).toContain("TOTAL_LOOPS=$((WARMUP + LOOPS))");
+    expect(script).toContain("clear_smoke_snapshots");
+    expect(script).toContain("pull_smoke_snapshots");
+    expect(script).toContain("MEASURED_SMOKE_FILES");
+  });
+
+  it("Android budget assertion script exists with T1-T5 coverage", () => {
+    const script = readRepoFile("scripts", "hvsc", "assert-android-perf-budgets.mjs");
+    expect(script).toContain("targetEvidence");
+    expect(script).toContain("T1");
+    expect(script).toContain("T2");
+    expect(script).toContain("T3");
+    expect(script).toContain("T4");
+    expect(script).toContain("T5");
+    expect(script).toContain("HVSC_ANDROID_BUDGET_ENFORCE");
+    expect(script).toContain("observation-only");
   });
 });

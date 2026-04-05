@@ -13,6 +13,8 @@ BENCHMARK_RUN_ID="${BENCHMARK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-hvsc-android}"
 PERFETTO_DURATION_SEC="${PERFETTO_DURATION_SEC:-180}"
 MAESTRO_TAGS="${MAESTRO_TAGS:-hvsc-perf}"
 DEVICE_ID="${DEVICE_ID:-}"
+LOOPS="${LOOPS:-3}"
+WARMUP="${WARMUP:-1}"
 
 usage() {
   cat <<EOF
@@ -28,6 +30,8 @@ Options:
   --benchmark-run-id <id>         Artifact run id (default: $BENCHMARK_RUN_ID)
   --perfetto-duration-sec <sec>   Perfetto trace duration (default: $PERFETTO_DURATION_SEC)
   --maestro-tags <tags>           Maestro tag filter list (default: $MAESTRO_TAGS)
+  --loops <n>                     Number of measured loops (default: $LOOPS)
+  --warmup <n>                    Number of warm-up loops to discard (default: $WARMUP)
   -h, --help                      Show this help
 EOF
 }
@@ -135,6 +139,14 @@ while [[ $# -gt 0 ]]; do
       MAESTRO_TAGS="$2"
       shift 2
       ;;
+    --loops)
+      LOOPS="$2"
+      shift 2
+      ;;
+    --warmup)
+      WARMUP="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -184,25 +196,129 @@ adb -s "$DEVICE_ID" shell "rm -f '$PERFETTO_REMOTE_PATH'" >/dev/null 2>&1 || tru
 adb -s "$DEVICE_ID" shell "perfetto --txt -o '$PERFETTO_REMOTE_PATH' -c -" < "$PERFETTO_CONFIG_PATH" > "$PERFETTO_LOG_PATH" 2>&1 &
 PERFETTO_PID=$!
 
-log "Running Maestro HVSC perf flow"
-RUN_MAESTRO_ARGS=(
-  --mode tags
-  --tags "$MAESTRO_TAGS"
-  --device-id "$DEVICE_ID"
-  --apk-path "$APK_PATH"
-  --output-dir "$MAESTRO_DIR"
-  --c64u-target "$C64U_TARGET"
-  --c64u-host "$C64U_HOST"
-  --benchmark-run-id "$BENCHMARK_RUN_ID"
-)
-if [[ -n "$HVSC_BASE_URL" ]]; then
-  RUN_MAESTRO_ARGS+=(--hvsc-base-url "$HVSC_BASE_URL")
+TOTAL_LOOPS=$((WARMUP + LOOPS))
+MAESTRO_STATUS=0
+
+build_maestro_args() {
+  local loop_output_dir="$1"
+  local run_id="$2"
+  local tag_override="${3:-$MAESTRO_TAGS}"
+  local skip_reset="${4:-false}"
+  local args=(
+    --mode tags
+    --tags "$tag_override"
+    --device-id "$DEVICE_ID"
+    --apk-path "$APK_PATH"
+    --output-dir "$loop_output_dir"
+    --c64u-target "$C64U_TARGET"
+    --c64u-host "$C64U_HOST"
+    --benchmark-run-id "$run_id"
+  )
+  if [[ -n "$HVSC_BASE_URL" ]]; then
+    args+=(--hvsc-base-url "$HVSC_BASE_URL")
+  fi
+  if [[ "$skip_reset" == "true" ]]; then
+    args+=(--skip-app-reset)
+  fi
+  echo "${args[@]}"
+}
+
+pull_smoke_snapshots() {
+  local dest_dir="$1"
+  mkdir -p "$dest_dir"
+
+  if adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'test -f files/c64u-smoke-status.json'" >/dev/null 2>&1; then
+    pull_app_file "c64u-smoke-status.json" "$dest_dir/c64u-smoke-status.json"
+  fi
+
+  mapfile -t benchmark_files < <(
+    adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'cd files && ls c64u-smoke-benchmark-*.json 2>/dev/null || true'" | tr -d '\r'
+  )
+  for file_name in "${benchmark_files[@]}"; do
+    [[ -z "$file_name" ]] && continue
+    pull_app_file "$file_name" "$dest_dir/$file_name"
+  done
+}
+
+clear_smoke_snapshots() {
+  adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'cd files && rm -f c64u-smoke-benchmark-*.json c64u-smoke-status.json'" >/dev/null 2>&1 || true
+}
+
+log "Starting multi-loop HVSC benchmark: $WARMUP warmup + $LOOPS measured loops"
+
+# Detect whether the tag set includes a setup phase.
+# When using hvsc-perf tags, we need to run the setup flow (hvsc-perf-setup)
+# first to download+ingest HVSC, then remaining flows in a separate pass.
+SETUP_TAGS=""
+REMAINING_TAGS=""
+if [[ "$MAESTRO_TAGS" == *"hvsc-perf"* ]]; then
+  SETUP_TAGS="hvsc-perf-setup"
+  REMAINING_TAGS="hvsc-perf,-hvsc-perf-setup"
 fi
 
-set +e
-"$ROOT_DIR/scripts/run-maestro.sh" "${RUN_MAESTRO_ARGS[@]}"
-MAESTRO_STATUS=$?
-set -e
+for loop_index in $(seq 1 "$TOTAL_LOOPS"); do
+  is_warmup=$([[ $loop_index -le $WARMUP ]] && echo "true" || echo "false")
+  loop_label=$([[ "$is_warmup" == "true" ]] && echo "warmup-$loop_index" || echo "loop-$((loop_index - WARMUP))")
+  loop_run_id="${BENCHMARK_RUN_ID}-${loop_label}"
+  loop_maestro_dir="$MAESTRO_DIR/$loop_label"
+  loop_smoke_dir="$SMOKE_DIR/$loop_label"
+  mkdir -p "$loop_maestro_dir"
+
+  log "[$loop_label] Clearing previous smoke snapshots"
+  clear_smoke_snapshots
+
+  loop_status=0
+  if [[ -n "$SETUP_TAGS" ]]; then
+    # Phase 1: Run setup flows (with full app reset)
+    log "[$loop_label] Phase 1: Running Maestro HVSC setup flow"
+    setup_dir="$loop_maestro_dir/setup"
+    mkdir -p "$setup_dir"
+    read -ra setup_args <<< "$(build_maestro_args "$setup_dir" "$loop_run_id-setup" "$SETUP_TAGS" "false")"
+    set +e
+    "$ROOT_DIR/scripts/run-maestro.sh" "${setup_args[@]}"
+    setup_status=$?
+    set -e
+
+    if [[ $setup_status -ne 0 ]]; then
+      log "[$loop_label] Setup phase failed with exit code $setup_status — skipping measurement flows"
+      loop_status=$setup_status
+    else
+      # Phase 2: Run remaining flows (skip app reset to preserve HVSC state)
+      log "[$loop_label] Phase 2: Running Maestro HVSC measurement flows"
+      read -ra remaining_args <<< "$(build_maestro_args "$loop_maestro_dir" "$loop_run_id" "$REMAINING_TAGS" "true")"
+      set +e
+      "$ROOT_DIR/scripts/run-maestro.sh" "${remaining_args[@]}"
+      remaining_status=$?
+      set -e
+
+      if [[ $remaining_status -ne 0 ]]; then
+        loop_status=$remaining_status
+      fi
+    fi
+  else
+    # Single-phase: all flows in one Maestro run
+    log "[$loop_label] Running Maestro HVSC perf flow"
+    read -ra maestro_args <<< "$(build_maestro_args "$loop_maestro_dir" "$loop_run_id")"
+    set +e
+    "$ROOT_DIR/scripts/run-maestro.sh" "${maestro_args[@]}"
+    loop_status=$?
+    set -e
+  fi
+
+  log "[$loop_label] Pulling smoke benchmark artifacts"
+  pull_smoke_snapshots "$loop_smoke_dir"
+
+  if [[ "$is_warmup" == "true" ]]; then
+    log "[$loop_label] Warm-up loop complete (artifacts retained but excluded from summary)"
+  else
+    if [[ $loop_status -ne 0 ]]; then
+      MAESTRO_STATUS=$loop_status
+      log "[$loop_label] Maestro flow failed with exit code $loop_status"
+    else
+      log "[$loop_label] Measured loop complete"
+    fi
+  fi
+done
 
 log "Waiting for Perfetto capture to finish"
 wait "$PERFETTO_PID"
@@ -216,30 +332,33 @@ unset TELEMETRY_PID
 log "Pulling Perfetto trace"
 adb -s "$DEVICE_ID" pull "$PERFETTO_REMOTE_PATH" "$PERFETTO_LOCAL_PATH" >/dev/null
 
-log "Pulling smoke benchmark artifacts"
-if adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'test -f files/c64u-smoke-status.json'" >/dev/null 2>&1; then
-  pull_app_file "c64u-smoke-status.json" "$SMOKE_DIR/c64u-smoke-status.json"
-fi
+log "Extracting Perfetto metrics"
+PERFETTO_METRICS_PATH="$PERFETTO_DIR/extracted-metrics.json"
+node "$ROOT_DIR/scripts/hvsc/extract-perfetto-metrics.mjs" \
+  --trace="$PERFETTO_LOCAL_PATH" \
+  --output="$PERFETTO_METRICS_PATH" \
+  --sql-dir="$ROOT_DIR/ci/telemetry/android/perfetto-sql" || true
 
-mapfile -t benchmark_files < <(
-  adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'cd files && ls c64u-smoke-benchmark-*.json 2>/dev/null || true'" | tr -d '\r'
-)
+# Collect only measured (non-warmup) smoke snapshot files for summary
+MEASURED_SMOKE_FILES=()
+for loop_index in $(seq 1 "$LOOPS"); do
+  loop_smoke_dir="$SMOKE_DIR/loop-$loop_index"
+  if [[ -d "$loop_smoke_dir" ]]; then
+    while IFS= read -r -d '' file; do
+      MEASURED_SMOKE_FILES+=("$file")
+    done < <(find "$loop_smoke_dir" -name 'c64u-smoke-benchmark-*.json' -print0 | sort -z)
+  fi
+done
 
-if [[ ${#benchmark_files[@]} -eq 0 ]]; then
-  echo "No smoke benchmark files were produced by the HVSC perf flow." >&2
+if [[ ${#MEASURED_SMOKE_FILES[@]} -eq 0 ]]; then
+  echo "No smoke benchmark files were produced by the measured HVSC perf loops." >&2
   exit 1
 fi
 
-for file_name in "${benchmark_files[@]}"; do
-  [[ -z "$file_name" ]] && continue
-  pull_app_file "$file_name" "$SMOKE_DIR/$file_name"
-done
-
-for required_snapshot in c64u-smoke-benchmark-install.json c64u-smoke-benchmark-browse-query.json c64u-smoke-benchmark-playback-start.json; do
-  if [[ ! -f "$SMOKE_DIR/$required_snapshot" ]]; then
-    echo "Missing required smoke benchmark artifact: $required_snapshot" >&2
-    exit 1
-  fi
+# Build --smoke-files argument for the summary writer
+SMOKE_FILES_ARG=""
+for file in "${MEASURED_SMOKE_FILES[@]}"; do
+  SMOKE_FILES_ARG="${SMOKE_FILES_ARG:+$SMOKE_FILES_ARG,}$file"
 done
 
 node "$ROOT_DIR/scripts/hvsc/write-android-perf-summary.mjs" \
@@ -252,8 +371,12 @@ node "$ROOT_DIR/scripts/hvsc/write-android-perf-summary.mjs" \
   --maestro-status="$MAESTRO_STATUS" \
   --perfetto-trace="$PERFETTO_LOCAL_PATH" \
   --perfetto-log="$PERFETTO_LOG_PATH" \
-  --smoke-dir="$SMOKE_DIR" \
-  --telemetry-dir="$TELEMETRY_DIR"
+  --perfetto-metrics="$PERFETTO_METRICS_PATH" \
+  --smoke-files="$SMOKE_FILES_ARG" \
+  --telemetry-dir="$TELEMETRY_DIR" \
+  --loops="$LOOPS" \
+  --warmup="$WARMUP"
 
 log "HVSC Android benchmark artifacts written to $RUN_DIR"
+log "Summary: $SUMMARY_PATH"
 exit "$MAESTRO_STATUS"

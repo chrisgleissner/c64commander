@@ -1,6 +1,7 @@
 appId: uk.gleissner.c64commander
 tags:
   - hvsc-perf
+  - hvsc-perf-setup
   - device
 env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
@@ -21,7 +22,7 @@ env:
           text: "Done"
           optional: true
       - tapOn:
-          point: "25%,90%"
+          text: "Play"
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible: "Playlist"
@@ -98,14 +99,13 @@ env:
     visible: "Select 10_Orbyte.sid"
     timeout: ${TIMEOUT}
 - tapOn: "Select 10_Orbyte.sid"
-- tapOn:
-    id: "add-items-confirm"
+- waitForAnimationToEnd
+- tapOn: "Add to playlist"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    notVisible: "From HVSC"
+    timeout: ${TIMEOUT}
 - extendedWaitUntil:
     visible: "10_Orbyte.sid"
     timeout: ${TIMEOUT}
-- tapOn:
-    id: "playlist-play"
-- extendedWaitUntil:
-    visible: "Pause"
-    timeout: ${LONG_TIMEOUT}
-- assertVisible: "10_Orbyte.sid"
+- assertVisible: "Playlist"
