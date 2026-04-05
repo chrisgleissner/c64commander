@@ -118,7 +118,7 @@ Build playlists for programs and songs sourced from the local device, C64U stora
 
 ### Browse & Import
 
-Choose an import source from the same playlist workflow: add folders from your local device or C64U storage, download HVSC, or search CommoServe and import matching results.
+Import files to playlists or disk collections from your local device, C64U storage, HVSC, or CommoServe.
 
 <table>
   <tr>
