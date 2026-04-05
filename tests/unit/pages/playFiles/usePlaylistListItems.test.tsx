@@ -13,6 +13,23 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 
+const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
+  beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
+    scope,
+    name: `hvsc:perf:${scope}`,
+    startMarkName: `${scope}:start`,
+    startedAt: "2026-04-05T00:00:00.000Z",
+    startedAtMs: 0,
+    metadata: metadata ?? null,
+  })),
+  endHvscPerfScope: vi.fn(),
+}));
+
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  beginHvscPerfScope,
+  endHvscPerfScope,
+}));
+
 const buildItem = (
   source: "local" | "ultimate" | "hvsc",
   path: string,
@@ -180,5 +197,42 @@ describe("usePlaylistListItems", () => {
     expect(onAttachLocalConfig).toHaveBeenCalledWith(playlist[0]);
     expect(onAttachUltimateConfig).toHaveBeenCalledWith(playlist[0]);
     expect(onRemoveConfig).toHaveBeenCalledWith(playlist[0]);
+  });
+
+  it("records browse render timings for derived playlist rows", () => {
+    const playlist = [
+      buildItem("hvsc", "/MUSICIANS/Hubbard_Rob/Commando.sid"),
+      buildItem("hvsc", "/MUSICIANS/Hubbard_Rob/Delta.sid"),
+    ];
+
+    renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading: false,
+        handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId: null,
+      }),
+    );
+
+    expect(beginHvscPerfScope).toHaveBeenCalledWith(
+      "browse:render",
+      expect.objectContaining({ filteredCount: 2, hvscItemCount: 2 }),
+    );
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "browse:render" }),
+      expect.objectContaining({ outcome: "success", renderedRowCount: 2 }),
+    );
   });
 });

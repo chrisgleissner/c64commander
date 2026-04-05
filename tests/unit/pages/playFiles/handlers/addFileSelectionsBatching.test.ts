@@ -2,6 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 
+const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
+  beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
+    scope,
+    name: `hvsc:perf:${scope}`,
+    startMarkName: `${scope}:start`,
+    startedAt: "2026-04-05T00:00:00.000Z",
+    startedAtMs: 0,
+    metadata: metadata ?? null,
+  })),
+  endHvscPerfScope: vi.fn(),
+}));
+
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
@@ -47,6 +59,11 @@ vi.mock("@/lib/config/configResolution", () => ({
     configCandidates: [],
     configOverrides: null,
   })),
+}));
+
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  beginHvscPerfScope,
+  endHvscPerfScope,
 }));
 
 const createHvscSource = (entries: Awaited<ReturnType<SourceLocation["listEntries"]>>): SourceLocation => ({
@@ -131,6 +148,15 @@ describe("addFileSelections batching", () => {
     expect(deps.applySonglengthsToItems.mock.calls.map(([items]: [unknown[]]) => items.length)).toEqual([
       250, 250, 100,
     ]);
+    expect(beginHvscPerfScope).toHaveBeenCalledTimes(3);
+    expect(beginHvscPerfScope).toHaveBeenCalledWith(
+      "playlist:add-batch",
+      expect.objectContaining({ sourceType: "hvsc", batchSize: 250 }),
+    );
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playlist:add-batch" }),
+      expect.objectContaining({ outcome: "success", sourceType: "hvsc" }),
+    );
   });
 
   it("streams recursive local folders into playlist batches before traversal completes", async () => {

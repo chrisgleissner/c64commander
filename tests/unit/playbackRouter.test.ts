@@ -19,6 +19,18 @@ import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 
+const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
+  beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
+    scope,
+    name: `hvsc:perf:${scope}`,
+    startMarkName: `${scope}:start`,
+    startedAt: "2026-04-05T00:00:00.000Z",
+    startedAtMs: 0,
+    metadata: metadata ?? null,
+  })),
+  endHvscPerfScope: vi.fn(),
+}));
+
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
@@ -96,6 +108,11 @@ vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot: vi.fn(),
 }));
 
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  beginHvscPerfScope,
+  endHvscPerfScope,
+}));
+
 beforeEach(() => {
   vi.mocked(injectAutostart).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
@@ -110,6 +127,8 @@ beforeEach(() => {
   } as any);
   vi.mocked(recordDeviceGuard).mockReset();
   vi.mocked(recordSmokeBenchmarkSnapshot).mockReset();
+  beginHvscPerfScope.mockReset();
+  endHvscPerfScope.mockReset();
   vi.mocked(getActiveAction).mockReturnValue({
     correlationId: "test-correlation",
     origin: "ui",
@@ -142,6 +161,14 @@ describe("playbackRouter", () => {
     const plan = buildPlayPlan({ source: "ultimate", path: "/MUSIC/DEMO.SID" });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith("/MUSIC/DEMO.SID", undefined);
+    expect(beginHvscPerfScope).toHaveBeenCalledWith(
+      "playback:first-audio",
+      expect.objectContaining({ mode: "ultimate-direct", path: "/MUSIC/DEMO.SID" }),
+    );
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playback:first-audio" }),
+      expect.objectContaining({ outcome: "success", mode: "ultimate-direct" }),
+    );
     expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         scenario: "playback-start",

@@ -152,12 +152,12 @@ export const usePlaylistListItems = ({
         },
         ...(item.configRef
           ? [
-              {
-                type: "info" as const,
-                label: "Location",
-                value: item.configRef.kind === "local" ? "This device" : "C64 Ultimate",
-              },
-            ]
+            {
+              type: "info" as const,
+              label: "Location",
+              value: item.configRef.kind === "local" ? "This device" : "C64 Ultimate",
+            },
+          ]
           : []),
         {
           type: "action",
@@ -179,13 +179,13 @@ export const usePlaylistListItems = ({
         },
         ...(item.configRef
           ? [
-              {
-                type: "action" as const,
-                label: "Remove config association",
-                onSelect: () => onRemoveConfig(item),
-                disabled: isPlaylistLoading,
-              },
-            ]
+            {
+              type: "action" as const,
+              label: "Remove config association",
+              onSelect: () => onRemoveConfig(item),
+              disabled: isPlaylistLoading,
+            },
+          ]
           : []),
       ];
       items.push({

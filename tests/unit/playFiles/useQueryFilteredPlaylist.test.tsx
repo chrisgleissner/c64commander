@@ -13,6 +13,18 @@ import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilter
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 
+const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
+  beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
+    scope,
+    name: `hvsc:perf:${scope}`,
+    startMarkName: `${scope}:start`,
+    startedAt: "2026-04-05T00:00:00.000Z",
+    startedAtMs: 0,
+    metadata: metadata ?? null,
+  })),
+  endHvscPerfScope: vi.fn(),
+}));
+
 const buildPlaylistItem = ({
   id,
   name,
@@ -131,6 +143,11 @@ vi.mock("@/lib/playlistRepository", () => ({
   getPlaylistDataRepository: () => repository,
 }));
 
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  beginHvscPerfScope,
+  endHvscPerfScope,
+}));
+
 const useHarness = () => {
   const [playlistTypeFilters, setPlaylistTypeFilters] = useState<Array<PlaylistItem["category"]>>(["sid", "disk"]);
   const [query, setQuery] = useState("");
@@ -157,6 +174,8 @@ describe("useQueryFilteredPlaylist", () => {
         value.mockClear();
       }
     });
+    beginHvscPerfScope.mockClear();
+    endHvscPerfScope.mockClear();
     repository.upsertTracks.mockResolvedValue(undefined);
     repository.replacePlaylistItems.mockResolvedValue(undefined);
   });
@@ -188,6 +207,22 @@ describe("useQueryFilteredPlaylist", () => {
 
     expect(repository.upsertTracks).not.toHaveBeenCalled();
     expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
+    expect(beginHvscPerfScope).toHaveBeenCalledWith(
+      "playlist:repo-sync",
+      expect.objectContaining({ playlistId: buildPlaylistStorageKey("device-1") }),
+    );
+    expect(beginHvscPerfScope).toHaveBeenCalledWith(
+      "playlist:filter",
+      expect.objectContaining({ playlistId: buildPlaylistStorageKey("device-1"), query: "" }),
+    );
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playlist:repo-sync" }),
+      expect.objectContaining({ outcome: "success" }),
+    );
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playlist:filter" }),
+      expect.objectContaining({ source: "repository" }),
+    );
   });
 
   it("re-queries text filters without rewriting playlist rows", async () => {
@@ -292,5 +327,13 @@ describe("useQueryFilteredPlaylist", () => {
     });
 
     expect(repository.queryPlaylist).not.toHaveBeenCalled();
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playlist:repo-sync" }),
+      expect.objectContaining({ outcome: "error", errorMessage: "sync failed" }),
+    );
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playlist:filter" }),
+      expect.objectContaining({ outcome: "fallback", source: "memory" }),
+    );
   });
 });
