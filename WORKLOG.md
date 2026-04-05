@@ -1,5 +1,69 @@
 # Playback Configuration System - Execution Worklog
 
+## 2026-04-04T10:05:00Z - HVSC decompression convergence pass started
+
+### Action
+
+Started the mandated execution pass for HVSC decompression convergence. Re-read the authoritative implementation plan, research, and gap analysis; inspected the current Android HVSC plugin and tests; appended a new `HVSC DECOMPRESSION CONVERGENCE` section to `PLANS.md` as the active source of truth for this pass.
+
+### Result
+
+- Confirmed the current Android extractor is still embedded inside `HvscIngestionPlugin.kt` and uses Apache Commons Compress `SevenZFile` plus `xz`.
+- Confirmed there is no cache-aware real-archive provider or real HVSC archive extraction test yet.
+- Confirmed the immediate next step is Phase 1 archive characterization with the real HVSC archive, followed by Phase 2 real-engine validation against the same archive.
+
+### Evidence
+
+- Updated: `PLANS.md`
+- Read: `docs/research/hvsc/implementation-plan-decompression-and-e2e-2026-04-03.md`
+- Read: `docs/research/hvsc/hvcs-7z-decompression-research.md`
+- Read: `docs/research/hvsc/gap-analysis-decompression-and-e2e-workflow-2026-04-03.md`
+- Read: `android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt`
+- Read: `android/app/build.gradle`
+- Read: `android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt`
+- Read: `android/app/src/test/java/uk/gleissner/c64commander/HvscSevenZipRuntimeTest.kt`
+
+### Next step
+
+Populate the local HVSC cache if needed, run `7zz l -slt` and `7zz t` against the real archive, and write the observed archive profile back into the gap analysis, implementation plan, and worklog.
+
+## 2026-04-04T10:25:00Z - Phase 1 archive characterisation complete
+
+### Action
+
+Downloaded the real HVSC #84 archive into the stable local cache, computed its SHA-256 checksum, inspected the archive headers with `7z l -slt`, and ran a full integrity test with `7z t`.
+
+### Result
+
+- Cache path: `~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z`
+- SHA-256: `9ed41b3a8759af5e1489841cd62682e471824892eabf648d913b0c9725a4d6d3`
+- Archive profile:
+  - `Method = LZMA:336m PPMD BCJ2`
+  - `Solid = +`
+  - `Blocks = 2`
+  - `Physical Size = 83748140`
+  - `Headers Size = 846074`
+  - `Files = 60737`
+  - `Folders = 2`
+  - `Uncompressed Size = 372025688`
+  - listing was visible without a password and sampled entries reported `Encrypted = -`
+- Integrity result: `Everything is Ok`
+- Phase 1 outcome: the real method chain is no longer an assumption, and it is more complex than the earlier `LZMA:336m` shorthand suggested because it includes both `PPMD` and `BCJ2`.
+
+### Evidence
+
+- Command: `curl -L --fail --output ~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z https://hvsc.sannic.nl/HVSC%2084/HVSC_84-all-of-them.7z`
+- Command: `sha256sum ~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z`
+- Command: `7z l -slt ~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z`
+- Command: `7z t ~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z`
+- Updated: `docs/research/hvsc/gap-analysis-decompression-and-e2e-workflow-2026-04-03.md`
+- Updated: `docs/research/hvsc/implementation-plan-decompression-and-e2e-2026-04-03.md`
+- Updated: `docs/research/hvsc/hvcs-7z-decompression-research.md`
+
+### Next step
+
+Implement the cache-aware real-archive Android JVM tests and run the current Apache Commons Compress extraction path against this exact archive to produce the explicit keep-or-replace verdict required by Phase 2.
+
 ## 2026-04-04T09:30:00Z - AUD-004 and AUD-005 DONE - End-to-end SID playback proven
 
 ### Action

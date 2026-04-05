@@ -28,7 +28,7 @@ export const getPlaylistDataRepository = (): PlaylistDataRepository => {
 
   addErrorLog(
     "IndexedDB is unavailable — falling back to localStorage repository. " +
-    "Large playlists will not perform well in this environment.",
+      "Large playlists will not perform well in this environment.",
     {},
   );
   repository = getLocalStoragePlaylistDataRepository();

@@ -169,10 +169,10 @@ export const applyHvscProgressEventToSummary = (
       download:
         summary.download.status === "in-progress"
           ? {
-            ...summary.download,
-            status: "success",
-            finishedAt: summary.download.finishedAt ?? now,
-          }
+              ...summary.download,
+              status: "success",
+              finishedAt: summary.download.finishedAt ?? now,
+            }
           : summary.download,
       extraction: {
         ...summary.extraction,

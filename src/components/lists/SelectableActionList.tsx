@@ -393,7 +393,10 @@ export const SelectableActionList = ({
     [disableClientFiltering],
   );
 
-  const filteredItems = useMemo(() => filterWithHeaders(inlineFilterText, items), [filterWithHeaders, inlineFilterText, items]);
+  const filteredItems = useMemo(
+    () => filterWithHeaders(inlineFilterText, items),
+    [filterWithHeaders, inlineFilterText, items],
+  );
 
   const viewAllFilteredItems = useMemo(
     () => filterWithHeaders(expandedFilterText, effectiveViewAllItems),
@@ -402,7 +405,10 @@ export const SelectableActionList = ({
 
   const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
-  const filteredVisibleCount = filteredItems.reduce((count, item) => (item.variant === "header" ? count : count + 1), 0);
+  const filteredVisibleCount = filteredItems.reduce(
+    (count, item) => (item.variant === "header" ? count : count + 1),
+    0,
+  );
   const effectiveTotalItemCount =
     disableClientFiltering && typeof totalItemCount === "number" ? totalItemCount : filteredVisibleCount;
 

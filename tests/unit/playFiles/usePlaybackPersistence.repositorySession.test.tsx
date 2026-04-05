@@ -159,7 +159,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
     });
 
     expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
-      expect(repository.saveSession).toHaveBeenLastCalledWith(
+    expect(repository.saveSession).toHaveBeenLastCalledWith(
       expect.objectContaining({
         playlistId: playlistStorageKey,
         currentPlaylistItemId: "hvsc:hvsc-library:/MUSICIANS/Test/two.sid",

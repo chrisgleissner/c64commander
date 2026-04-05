@@ -339,9 +339,7 @@ describe("hvscFilesystem", () => {
     });
 
     it("resolveStagingPath maps virtual paths to staging directory", () => {
-      expect(resolveStagingPath("/DEMOS/0-9/Test.sid")).toBe(
-        "hvsc/library-staging/DEMOS/0-9/Test.sid",
-      );
+      expect(resolveStagingPath("/DEMOS/0-9/Test.sid")).toBe("hvsc/library-staging/DEMOS/0-9/Test.sid");
       expect(resolveStagingPath("/")).toBe("hvsc/library-staging");
     });
 
@@ -359,10 +357,7 @@ describe("hvscFilesystem", () => {
 
       // Set up staging with new content
       ensureDir("hvsc/library-staging");
-      setFile(
-        "hvsc/library-staging/NEW/New.sid",
-        toBase64Bytes(new Uint8Array([2])),
-      );
+      setFile("hvsc/library-staging/NEW/New.sid", toBase64Bytes(new Uint8Array([2])));
 
       await promoteLibraryStagingDir();
 
@@ -378,10 +373,7 @@ describe("hvscFilesystem", () => {
     it("promoteLibraryStagingDir works on first install with no existing library", async () => {
       // No existing library — only staging exists
       ensureDir("hvsc/library-staging");
-      setFile(
-        "hvsc/library-staging/FIRST/Song.sid",
-        toBase64Bytes(new Uint8Array([3])),
-      );
+      setFile("hvsc/library-staging/FIRST/Song.sid", toBase64Bytes(new Uint8Array([3])));
 
       await promoteLibraryStagingDir();
 
@@ -391,15 +383,9 @@ describe("hvscFilesystem", () => {
 
     it("cleanupStaleStagingDir removes both staging and old directories", async () => {
       ensureDir("hvsc/library-staging/leftover");
-      setFile(
-        "hvsc/library-staging/leftover/stale.sid",
-        toBase64Bytes(new Uint8Array([1])),
-      );
+      setFile("hvsc/library-staging/leftover/stale.sid", toBase64Bytes(new Uint8Array([1])));
       ensureDir("hvsc/library-old/leftover");
-      setFile(
-        "hvsc/library-old/leftover/stale.sid",
-        toBase64Bytes(new Uint8Array([2])),
-      );
+      setFile("hvsc/library-old/leftover/stale.sid", toBase64Bytes(new Uint8Array([2])));
 
       await cleanupStaleStagingDir();
 

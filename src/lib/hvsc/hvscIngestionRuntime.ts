@@ -795,24 +795,24 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
         const result =
           ingestionMode === "native"
             ? await ingestArchivePathNative({
-              plan,
-              archivePath,
-              archiveName,
-              cancelToken,
-              emitProgress,
-              pipeline,
-              baselineInstalled,
-            })
+                plan,
+                archivePath,
+                archiveName,
+                cancelToken,
+                emitProgress,
+                pipeline,
+                baselineInstalled,
+              })
             : await ingestArchiveBuffer({
-              plan,
-              archiveName: archivePath,
-              archiveBuffer: downloadedBuffer ?? (await readArchiveBuffer(archivePath)),
-              cancelToken,
-              cancelTokens: runtimeState.cancelTokens,
-              emitProgress,
-              pipeline,
-              baselineInstalled,
-            });
+                plan,
+                archiveName: archivePath,
+                archiveBuffer: downloadedBuffer ?? (await readArchiveBuffer(archivePath)),
+                cancelToken,
+                cancelTokens: runtimeState.cancelTokens,
+                emitProgress,
+                pipeline,
+                baselineInstalled,
+              });
         baselineInstalled = result.baselineInstalled;
         currentPipelineState = pipeline.current();
         continue;
@@ -856,24 +856,24 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       const result =
         ingestionMode === "native"
           ? await ingestArchivePathNative({
-            plan,
-            archivePath,
-            archiveName,
-            cancelToken,
-            emitProgress,
-            pipeline,
-            baselineInstalled,
-          })
+              plan,
+              archivePath,
+              archiveName,
+              cancelToken,
+              emitProgress,
+              pipeline,
+              baselineInstalled,
+            })
           : await ingestArchiveBuffer({
-            plan,
-            archiveName: archivePath,
-            archiveBuffer: await readArchiveBuffer(archivePath),
-            cancelToken,
-            cancelTokens: runtimeState.cancelTokens,
-            emitProgress,
-            pipeline,
-            baselineInstalled,
-          });
+              plan,
+              archiveName: archivePath,
+              archiveBuffer: await readArchiveBuffer(archivePath),
+              cancelToken,
+              cancelTokens: runtimeState.cancelTokens,
+              emitProgress,
+              pipeline,
+              baselineInstalled,
+            });
       baselineInstalled = result.baselineInstalled;
       currentPipelineState = pipeline.current();
     }
@@ -1068,24 +1068,24 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       const result =
         ingestionMode === "native"
           ? await ingestArchivePathNative({
-            plan,
-            archivePath: cached,
-            archiveName: cached,
-            cancelToken,
-            emitProgress,
-            pipeline,
-            baselineInstalled,
-          })
+              plan,
+              archivePath: cached,
+              archiveName: cached,
+              cancelToken,
+              emitProgress,
+              pipeline,
+              baselineInstalled,
+            })
           : await ingestArchiveBuffer({
-            plan,
-            archiveName: cached,
-            archiveBuffer: await readArchiveBuffer(cached),
-            cancelToken,
-            cancelTokens: runtimeState.cancelTokens,
-            emitProgress,
-            pipeline,
-            baselineInstalled,
-          });
+              plan,
+              archiveName: cached,
+              archiveBuffer: await readArchiveBuffer(cached),
+              cancelToken,
+              cancelTokens: runtimeState.cancelTokens,
+              emitProgress,
+              pipeline,
+              baselineInstalled,
+            });
       baselineInstalled = result.baselineInstalled;
       currentPipelineState = pipeline.current();
     }

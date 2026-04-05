@@ -75,7 +75,12 @@ export const ItemSelectionView = ({
         </Button>
       </div>
 
-      <div className="flex items-start gap-2 w-full min-w-0 font-semibold text-sm" data-testid="source-path-label">
+      <div
+        id="source-path-label"
+        className="flex items-start gap-2 w-full min-w-0 font-semibold text-sm"
+        data-testid="source-path-label"
+        aria-label={`Path: ${path}`}
+      >
         <Folder className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
         <div className="min-w-0">
           <PathWrap path={path} className="text-foreground" />

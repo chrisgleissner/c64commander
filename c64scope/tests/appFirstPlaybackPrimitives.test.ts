@@ -100,6 +100,10 @@ describe("app-first playback primitives", () => {
         </hierarchy>
       `).mockResolvedValueOnce(`
         <hierarchy>
+          <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
           <node text="Path: /USB2/test-data" class="android.widget.TextView" enabled="true" bounds="[176,1001][470,1058]" />
         </hierarchy>
       `);
@@ -107,8 +111,16 @@ describe("app-first playback primitives", () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(false);
-    tapByTextContainingMock.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    tapByTextContainingMock
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
 
     const client = {
       tap: vi.fn().mockResolvedValue(undefined),
@@ -167,6 +179,101 @@ describe("app-first playback primitives", () => {
 
     expect(tapByTextMock).toHaveBeenCalledWith(client, "serial-1", "Open SID");
     expect(tapByTextContainingMock).not.toHaveBeenCalled();
+  });
+
+  it("treats slash-prefixed HVSC breadcrumbs as the current picker path regression", async () => {
+    const { openPathSegments } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[48,640][240,704]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS/0-9" class="android.widget.TextView" enabled="true" bounds="[48,640][300,704]" />
+        </hierarchy>
+      `);
+    tapByTextMock.mockResolvedValueOnce(true);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await openPathSegments(client as never, "serial-1", ["DEMOS", "0-9"]);
+
+    expect(tapByTextMock).toHaveBeenCalledTimes(1);
+    expect(tapByTextMock).toHaveBeenCalledWith(client, "serial-1", "Open 0-9");
+  });
+
+  it("falls back to slash-prefixed HVSC folder rows when a segment is shown as /NAME", async () => {
+    const { openPathSegments } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[48,640][240,704]" />
+        </hierarchy>
+      `);
+    tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await openPathSegments(client as never, "serial-1", ["DEMOS"]);
+
+    expect(tapByTextMock).toHaveBeenNthCalledWith(1, client, "serial-1", "Open DEMOS");
+    expect(tapByTextMock).toHaveBeenNthCalledWith(2, client, "serial-1", "DEMOS");
+    expect(tapByTextMock).toHaveBeenNthCalledWith(3, client, "serial-1", "/DEMOS");
+  });
+
+  it("taps disabled HVSC picker action rows via content description regression", async () => {
+    const { openPathSegments } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[132,893][291,951]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[132,893][291,951]" />
+          <node text="" content-desc="Open 0-9" class="android.widget.Button" clickable="true" enabled="false" bounds="[66,981][1012,1089]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS/0-9" class="android.widget.TextView" enabled="true" bounds="[132,893][420,951]" />
+        </hierarchy>
+      `);
+    tapByTextMock.mockResolvedValue(false);
+    tapByTextContainingMock.mockResolvedValue(false);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await openPathSegments(client as never, "serial-1", ["DEMOS", "0-9"]);
+
+    expect(client.tap).toHaveBeenCalledWith("serial-1", 539, 1035);
   });
 
   it("treats an already-visible C64U picker as a satisfied source selection", async () => {
@@ -265,6 +372,15 @@ describe("app-first playback primitives", () => {
     tapByResourceIdMock.mockResolvedValue(false);
     tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     tapByTextContainingMock.mockResolvedValue(false);
+    // Pre-existence readiness check (HVSC picker not yet visible)
+    // Post-tap readiness: picker loaded with Refresh button
+    dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[132,893][291,951]" />
+          <node text="Refresh" class="android.widget.Button" clickable="true" enabled="true" bounds="[456,739][789,863]" />
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[66,462][313,508]" />
+        </hierarchy>
+      `);
 
     const client = {
       tap: vi.fn().mockResolvedValue(undefined),
@@ -621,5 +737,106 @@ describe("app-first playback primitives", () => {
       /Could not confirm checkbox selection for 'Tune.sid' after 4 attempts \(selected count=0\)\./,
     );
     expect(client.tap).toHaveBeenCalledTimes(4);
+  });
+
+  it("waits for HVSC picker to be fully loaded before returning from source selection", async () => {
+    const { chooseSource } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    tapByResourceIdMock.mockResolvedValueOnce(true);
+    // First readiness check: picker not yet visible (pre-existing check)
+    // Loading complete: Refresh button now enabled
+    // After tap: picker visible but still loading (no enabled Refresh button)
+    dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[132,893][291,951]" />
+          <node text="Loading…" class="android.widget.Button" clickable="true" enabled="false" bounds="[456,739][789,863]" />
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[66,462][313,508]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[132,893][291,951]" />
+          <node text="Refresh" class="android.widget.Button" clickable="true" enabled="true" bounds="[456,739][789,863]" />
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[66,462][313,508]" />
+          <node text="" content-desc="Open 0-9" class="android.widget.Button" clickable="true" enabled="true" bounds="[66,981][1012,1089]" />
+        </hierarchy>
+      `);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await chooseSource(client as never, "serial-1", ["HVSC"]);
+
+    expect(tapByResourceIdMock).toHaveBeenCalledWith(client, "serial-1", "import-option-hvsc");
+    // Three dumpUiHierarchy calls: pre-existing readiness check, post-tap loading, post-tap loaded
+    expect(dumpUiHierarchyMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("treats an already-visible and loaded HVSC picker as a satisfied HVSC source selection", async () => {
+    const { chooseSource } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[132,893][291,951]" />
+          <node text="Refresh" class="android.widget.Button" clickable="true" enabled="true" bounds="[456,739][789,863]" />
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[66,462][313,508]" />
+        </hierarchy>
+      `);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await chooseSource(client as never, "serial-1", ["HVSC"]);
+
+    expect(tapByResourceIdMock).not.toHaveBeenCalled();
+    expect(tapByTextMock).not.toHaveBeenCalled();
+  });
+
+  it("fails when the HVSC picker never becomes ready after repeated source selection attempts", async () => {
+    vi.useFakeTimers();
+    const { chooseSource } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    tapByResourceIdMock.mockResolvedValue(true);
+    // All readiness checks return picker visible but perpetually loading
+    dumpUiHierarchyMock.mockResolvedValue(`
+      <hierarchy>
+        <node text="/DEMOS" class="android.widget.TextView" enabled="true" bounds="[132,893][291,951]" />
+        <node text="Loading…" class="android.widget.Button" clickable="true" enabled="false" bounds="[456,739][789,863]" />
+        <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[66,462][313,508]" />
+      </hierarchy>
+    `);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const promise = chooseSource(client as never, "serial-1", ["HVSC"]);
+    const expectation = expect(promise).rejects.toThrow(/HVSC source picker did not become ready/);
+    await vi.runAllTimersAsync();
+
+    await expectation;
+    vi.useRealTimers();
   });
 });

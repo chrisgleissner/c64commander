@@ -161,12 +161,30 @@ class HvscIngestionPluginTest {
                     String
 
     assertEquals(
-            "HVSC 7z method chain [3, 4, 1] is unsupported by Android native extraction; retry will use the non-native fallback extractor",
+            "HVSC 7z method chain [3, 4, 1] is unsupported by the bundled upstream extractor",
             result,
     )
   }
 
-  private fun makeCallWithData(relativeArchivePath: String, offsetBytes: Long?, lengthBytes: Int): PluginCall {
+  @Test
+  fun resolveBundledSevenZipExecutableUsesNativeLibraryPathRegression() {
+    val nativeLibraryDir = File(context.filesDir, "native-libs-test")
+    context.applicationInfo.nativeLibraryDir = nativeLibraryDir.absolutePath
+    nativeLibraryDir.mkdirs()
+    val bundledExecutable = File(nativeLibraryDir, "lib7zz.so")
+    bundledExecutable.writeText("fake-7zip-binary")
+
+    val resolvedExecutable = plugin.resolveBundledSevenZipExecutable()
+
+    assertEquals(bundledExecutable.absolutePath, resolvedExecutable.absolutePath)
+    assertEquals("fake-7zip-binary", resolvedExecutable.readText())
+  }
+
+  private fun makeCallWithData(
+          relativeArchivePath: String,
+          offsetBytes: Long?,
+          lengthBytes: Int
+  ): PluginCall {
     val call = mock(PluginCall::class.java)
     `when`(call.getString("relativeArchivePath")).thenReturn(relativeArchivePath)
     `when`(call.getInt("lengthBytes")).thenReturn(lengthBytes)

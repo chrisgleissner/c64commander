@@ -373,7 +373,148 @@
   - targeted Playwright/HVSC tests if UI behavior changes materially
   - `cd android && ./gradlew test`
   - `adb devices -l`
+
+  ## HVSC DECOMPRESSION CONVERGENCE
+
+  ### Change Classification
+  - Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`, `UI_CHANGE`
+  - Goal: make HVSC decompression and ingestion production-ready across Android, iOS, and Web with real-archive evidence, deterministic memory safety, and end-to-end proof on Pixel 4 plus Ultimate 64 at `u64`.
+  - Authoritative inputs:
+    - `docs/research/hvsc/implementation-plan-decompression-and-e2e-2026-04-03.md`
+    - `docs/research/hvsc/hvcs-7z-decompression-research.md`
+    - `docs/research/hvsc/gap-analysis-decompression-and-e2e-workflow-2026-04-03.md`
+
+  ### Impact Map
+  - Android extraction and plugin flow:
+    - `android/app/src/main/java/uk/gleissner/c64commander/**`
+    - `android/app/build.gradle`
+  - Android tests and fixtures:
+    - `android/app/src/test/**`
+    - `android/app/src/test/fixtures/**`
+  - App/runtime integration and docs:
+    - `src/lib/hvsc/**`
+    - `docs/research/hvsc/**`
+    - `docs/architecture.md`
+    - `docs/testing/**`
+    - `PLANS.md`
+    - `WORKLOG.md`
+    - `artifacts/**`
+
+  ### Phase 1 - Archive Characterisation
+  - GAP IDs: `GAP-005`
+  - Success criteria:
+    - the real HVSC archive is cached locally at a stable path
+    - `7zz l -slt` and `7zz t` are run against that archive
+    - the exact method chain, dictionary size, solid/block structure, encryption state, entry count, and uncompressed size are documented from command output rather than assumption
+  - Proof artifacts:
+    - archive path and checksum in `WORKLOG.md`
+    - updated archive profile in the gap analysis and implementation plan docs
+  - Exact next actions:
+    - verify `7zz` availability
+    - populate `~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z`
+    - run `7zz l -slt` and `7zz t`
+    - summarize results into docs and worklog
+
+  ### Phase 2 - Validate Current Android Engine
+  - GAP IDs: `GAP-001`, `GAP-004`
+  - Success criteria:
+    - the current Apache Commons Compress + `xz` path opens the real archive, enumerates entries, extracts at least 100 SID files, validates `PSID`/`RSID` headers, and shows acceptable memory and timing behavior
+    - a documented keep-or-replace verdict exists based on real evidence
+  - Proof artifacts:
+    - JVM real-archive tests under `android/app/src/test/**`
+    - measured timing and memory notes in `WORKLOG.md`
+    - explicit engine verdict in the gap analysis and implementation plan docs
+  - Exact next actions:
+    - add a cache-aware real-archive provider for Android tests
+    - add real-archive extraction tests for open, enumerate, sample extract, and SID validation
+    - run the tests and capture results
+
+  ### Phase 2b - Replace Engine If Real Evidence Fails
+  - GAP IDs: `GAP-004`
+  - Success criteria:
+    - if the current engine fails, exactly one replacement path is integrated and revalidated against the same real archive
+    - the chosen replacement is justified by the actual HVSC method chain
+  - Proof artifacts:
+    - Android build integration for the chosen engine
+    - repeated real-archive validation results
+    - updated rationale in research, implementation plan, and gap analysis docs
+  - Exact next actions:
+    - only execute if Phase 2 fails
+    - prefer upstream 7-Zip NDK/JNI; accept PLzmaSDK/LZMA SDK only if the real method chain justifies it
+
+  ### Phase 3 - Standalone Extraction Library
+  - GAP IDs: `GAP-002`, `GAP-011`
+  - Success criteria:
+    - a standalone Kotlin extraction library exists, supports `.7z` and `.zip`, streams file-by-file, exposes progress and cancellation, and enforces path safety
+    - duplicated plugin extraction logic is removed in favor of the library
+  - Proof artifacts:
+    - new extractor classes and focused unit tests
+    - plugin integration tests kept green
+  - Exact next actions:
+    - extract shared archive logic into `android/app/src/main/java/uk/gleissner/c64commander/hvsc/**`
+    - wire the plugin to call the library instead of owning decompression
+
+  ### Phase 4 - Real-Archive Test Infrastructure
+  - GAP IDs: `GAP-003`, `GAP-009`
+  - Success criteria:
+    - real-archive tests are cache-backed, checksum-verified, intentionally invokable, and CI-safe when the archive is absent
+  - Proof artifacts:
+    - real archive provider utility
+    - Gradle task to populate the cache
+    - documentation for local and CI execution
+  - Exact next actions:
+    - add archive cache resolution via env var and default path
+    - add checksum verification and clean skip behavior
+    - add Gradle task for cache population
+
+  ### Phase 5 - Memory Safety
+  - GAP IDs: `GAP-010`
+  - Success criteria:
+    - extraction probes archive requirements before work begins
+    - extraction aborts clearly when memory budget is insufficient
+    - memory-pressure cancellation is implemented and tested
+  - Proof artifacts:
+    - extractor probe and budget logic
+    - unit tests for accept, reject, and cancel cases
+    - measured notes recorded in `WORKLOG.md`
+  - Exact next actions:
+    - model archive memory requirements from real metadata
+    - add budget enforcement and cancellation hooks
+    - validate on JVM tests and during Android proof
+
+  ### Phase 6 - Hardware-in-the-Loop Proof
+  - GAP IDs: `GAP-007`
+  - Success criteria:
+    - Pixel 4 installs the app, ingests the real HVSC archive through the Android native path, browses extracted songs, adds a genuine HVSC-extracted song to a playlist, plays it on the Ultimate 64 at `u64`, and shows playback evidence with a visible HEALTHY badge
+  - Proof artifacts:
+    - `artifacts/hvsc-e2e-proof-YYYYMMDDTHHMMSSZ/`
+    - `TIMELINE.md`, `screenshots/`, `logcat-full.txt`, `u64-info.json`, `extraction-summary.json`
+  - Exact next actions:
+    - only run after Android extraction is proven locally
+    - probe `u64`
+    - install debug build on the attached Pixel 4
+    - capture full artifact set during the end-to-end flow
+
+  ### Phase 7 - Web Product Decision
+  - GAP IDs: `GAP-006`
+  - Success criteria:
+    - Web product truth is explicit and matches runtime truth
+    - architecture, docs, and UI messaging no longer contradict each other
+  - Proof artifacts:
+    - updated architecture and testing docs with the chosen Web decision
+  - Exact next actions:
+    - choose between permanently unsupported full Web ingest, server-side extraction, or another proven delivery path
+    - update docs and runtime messaging to match that decision
+
+  ### External Constraint Register
+  - iOS native extraction hardening and proof remains dependent on macOS/Swift execution. This workstream must still update docs truthfully, but Linux-host execution cannot claim iOS native completion unless limited to code changes and repository-side tests that actually run here.
+
+  ### Current Focus
+  - Append the convergence contract and move immediately into Phase 1 archive characterisation.
+  - Keep the current Android engine only if the real HVSC archive proves it acceptable.
+  - Do not claim end-to-end success without a genuine HVSC-extracted song playing on the Ultimate 64 at `u64`.
   - C64 Ultimate probes/playback attempts as environment allows
+
 - Exit criteria:
   - final report distinguishes closed issues, partial closures, and external blockers
   - hardware attempts are evidenced even if blocked

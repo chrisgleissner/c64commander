@@ -99,9 +99,6 @@ describe("playlist repository factory", () => {
 
     getPlaylistDataRepository();
 
-    expect(addErrorLog).toHaveBeenCalledWith(
-      expect.stringContaining("IndexedDB is unavailable"),
-      expect.any(Object),
-    );
+    expect(addErrorLog).toHaveBeenCalledWith(expect.stringContaining("IndexedDB is unavailable"), expect.any(Object));
   });
 });

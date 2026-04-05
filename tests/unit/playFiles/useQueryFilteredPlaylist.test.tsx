@@ -196,15 +196,7 @@ describe("useQueryFilteredPlaylist", () => {
       totalMatchCount: queryRows.length,
     }));
     repository.queryPlaylist.mockImplementation(
-      async ({
-        categoryFilter,
-        query,
-        limit,
-      }: {
-        categoryFilter?: string[];
-        query?: string;
-        limit: number;
-      }) => {
+      async ({ categoryFilter, query, limit }: { categoryFilter?: string[]; query?: string; limit: number }) => {
         const rows = queryRows.filter((row) => {
           const categoryMatch = categoryFilter?.length ? categoryFilter.includes(row.track.category ?? "") : true;
           const queryMatch = query ? row.track.title.toLowerCase().includes(query.toLowerCase()) : true;
@@ -276,5 +268,29 @@ describe("useQueryFilteredPlaylist", () => {
 
     expect(repository.upsertTracks).not.toHaveBeenCalled();
     expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
+  });
+
+  it("keeps filtering in memory when repository sync fails", async () => {
+    repository.upsertTracks.mockRejectedValueOnce(new Error("sync failed"));
+
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => {
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["sid-1"]);
+    });
+
+    repository.queryPlaylist.mockClear();
+
+    act(() => {
+      result.current.setQuery("demo");
+    });
+
+    await waitFor(() => {
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["disk-1"]);
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(1);
+    });
+
+    expect(repository.queryPlaylist).not.toHaveBeenCalled();
   });
 });

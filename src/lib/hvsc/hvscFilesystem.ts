@@ -374,15 +374,10 @@ export const createLibraryStagingDir = async () => {
 export const resolveStagingPath = (virtualPath: string) => {
   const normalized = normalizeFilePath(virtualPath);
   const relative = normalized.replace(/^\//, "");
-  return relative
-    ? `${HVSC_LIBRARY_STAGING_DIR}/${relative}`
-    : HVSC_LIBRARY_STAGING_DIR;
+  return relative ? `${HVSC_LIBRARY_STAGING_DIR}/${relative}` : HVSC_LIBRARY_STAGING_DIR;
 };
 
-export const writeStagingFile = async (
-  virtualPath: string,
-  data: Uint8Array,
-) => {
+export const writeStagingFile = async (virtualPath: string, data: Uint8Array) => {
   const path = resolveStagingPath(virtualPath);
   const parent = path.split("/").slice(0, -1).join("/");
   if (parent) {

@@ -77,6 +77,7 @@ const buildRowSearchText = (track: TrackRecord) => {
     track.author ?? "",
     track.released ?? "",
     track.path,
+    track.sourceKind,
     track.sourceLocator,
     track.category ?? "",
   ];

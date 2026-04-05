@@ -57,7 +57,9 @@ const serializePlaylistToQueryRepository = (items: PlaylistItem[], playlistId: s
 const matchesPlaylistQuery = (item: PlaylistItem, query: string) => {
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return true;
-  const haystack = [item.label, item.path, item.request.path, item.request.source, item.category].join(" ").toLowerCase();
+  const haystack = [item.label, item.path, item.request.path, item.request.source, item.category]
+    .join(" ")
+    .toLowerCase();
   return haystack.includes(trimmed);
 };
 
@@ -80,6 +82,7 @@ export const useQueryFilteredPlaylist = ({
   const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
   const [totalMatchCount, setTotalMatchCount] = useState(0);
   const [syncedRevision, setSyncedRevision] = useState(0);
+  const [repositorySyncFailed, setRepositorySyncFailed] = useState(false);
   const [viewAllLimit, setViewAllLimit] = useState(initialViewAllLimit);
   const playlistRef = useRef(playlist);
   const filtersRef = useRef(playlistTypeFilters);
@@ -104,6 +107,7 @@ export const useQueryFilteredPlaylist = ({
         if (!cancelled) {
           setQueryFilteredPlaylist([]);
           setTotalMatchCount(0);
+          setRepositorySyncFailed(false);
           setSyncedRevision(syncRequestId);
         }
         return;
@@ -114,6 +118,7 @@ export const useQueryFilteredPlaylist = ({
       await repository.upsertTracks(serialized.tracks);
       await repository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
       if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
+        setRepositorySyncFailed(false);
         setSyncedRevision(syncRequestId);
       }
     };
@@ -124,11 +129,12 @@ export const useQueryFilteredPlaylist = ({
         error: (error as Error).message,
       });
       if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
-        setQueryFilteredPlaylist(
-          playlist.filter(
-            (item) => filtersRef.current.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
-          ),
+        const filteredPlaylist = playlist.filter(
+          (item) => filtersRef.current.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
         );
+        setQueryFilteredPlaylist(filteredPlaylist.slice(0, viewAllLimit));
+        setTotalMatchCount(filteredPlaylist.length);
+        setRepositorySyncFailed(true);
         setSyncedRevision(syncRequestId);
       }
     });
@@ -152,6 +158,17 @@ export const useQueryFilteredPlaylist = ({
       }
 
       if (syncedRevision === 0) return;
+
+      if (repositorySyncFailed) {
+        const nextFiltered = currentPlaylist.filter(
+          (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
+        );
+        if (!cancelled) {
+          setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
+          setTotalMatchCount(nextFiltered.length);
+        }
+        return;
+      }
 
       const repository = getPlaylistDataRepository();
       const result = await repository.queryPlaylist({
@@ -182,9 +199,7 @@ export const useQueryFilteredPlaylist = ({
         const nextFiltered = playlistRef.current.filter(
           (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
         );
-        setQueryFilteredPlaylist(
-          nextFiltered.slice(0, viewAllLimit),
-        );
+        setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
         setTotalMatchCount(nextFiltered.length);
       }
     });
@@ -192,9 +207,12 @@ export const useQueryFilteredPlaylist = ({
     return () => {
       cancelled = true;
     };
-  }, [playlistStorageKey, playlistTypeFilters, query, syncedRevision, viewAllLimit]);
+  }, [playlistStorageKey, playlistTypeFilters, query, repositorySyncFailed, syncedRevision, viewAllLimit]);
 
-  const previewPlaylist = useMemo(() => queryFilteredPlaylist.slice(0, previewLimit), [previewLimit, queryFilteredPlaylist]);
+  const previewPlaylist = useMemo(
+    () => queryFilteredPlaylist.slice(0, previewLimit),
+    [previewLimit, queryFilteredPlaylist],
+  );
 
   return {
     previewPlaylist,

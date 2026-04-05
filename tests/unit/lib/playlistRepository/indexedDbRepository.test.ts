@@ -200,6 +200,47 @@ describe("indexedDB playlist repository", () => {
     expect(tracks.has("missing")).toBe(false);
   });
 
+  it("matches source kind terms in repository text queries", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+
+    await repository.upsertTracks([
+      buildTrack({
+        trackId: "track-hvsc",
+        title: "One.sid",
+        path: "/MUSICIANS/Test/One.sid",
+        sourceLocator: "/MUSICIANS/Test/One.sid",
+        sourceKind: "hvsc",
+        category: "song",
+      }),
+      buildTrack({
+        trackId: "track-local",
+        title: "Local.sid",
+        path: "/Music/Local.sid",
+        sourceLocator: "/Music/Local.sid",
+        sourceKind: "local",
+        category: "song",
+      }),
+    ]);
+
+    await repository.replacePlaylistItems("playlist-default", [
+      buildItem("item-hvsc", "track-hvsc", "0001"),
+      buildItem("item-local", "track-local", "0002"),
+    ]);
+
+    const page = await repository.queryPlaylist({
+      playlistId: "playlist-default",
+      query: "hvsc",
+      limit: 10,
+      offset: 0,
+      sort: "playlist-position",
+    });
+
+    expect(page.totalMatchCount).toBe(1);
+    expect(page.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-hvsc"]);
+  });
+
   it("creates random sessions, advances cursor, and wraps around", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1730000000000);
     const repository = getIndexedDbPlaylistDataRepository({
