@@ -113,6 +113,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     selection.sizeBytes != null ||
     typeof selection.modifiedAt === "string";
 
+  const PLAYLIST_APPEND_BATCH_SIZE = 250;
+
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
     addItemsStartedAtRef.current = startedAt;
@@ -156,24 +158,41 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       }));
     };
 
-    const collectRecursive = async (rootPath: string) => {
+    const listingCache = new Map<string, SourceEntry[]>();
+
+    const collectRecursive = async (rootPath: string, onDiscoveredFiles?: (files: SourceEntry[]) => Promise<void>) => {
       const queue = [rootPath];
       const visited = new Set<string>();
       const files: SourceEntry[] = [];
+      let pendingBatch: SourceEntry[] = [];
       const maxConcurrent = 3;
       const pending = new Set<Promise<void>>();
+
+      const flushDiscoveredFiles = async (force = false) => {
+        if (!onDiscoveredFiles) return;
+        if (!pendingBatch.length || (!force && pendingBatch.length < PLAYLIST_APPEND_BATCH_SIZE)) return;
+        const batch = pendingBatch;
+        pendingBatch = [];
+        await onDiscoveredFiles(batch);
+      };
 
       const processPath = async (path: string) => {
         if (!path || visited.has(path)) return;
         visited.add(path);
         const entries = await source.listEntries(path);
+        listingCache.set(path, entries);
         entries.forEach((entry) => {
           if (entry.type === "dir") {
             queue.push(entry.path);
           } else {
-            files.push(entry);
+            if (onDiscoveredFiles) {
+              pendingBatch.push(entry);
+            } else {
+              files.push(entry);
+            }
           }
         });
+        await flushDiscoveredFiles();
         updateProgress(entries.filter((entry) => entry.type === "file").length);
       };
 
@@ -189,6 +208,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
       }
+      await flushDiscoveredFiles(true);
       return files;
     };
 
@@ -214,7 +234,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
 
         const archiveClient = createArchiveClient(archiveConfig);
-        const playlistItems: PlaylistItem[] = [];
+        let appendedArchiveItems = 0;
+        let pendingArchiveBatch: PlaylistItem[] = [];
+
+        const flushArchiveBatch = async () => {
+          if (!pendingArchiveBatch.length) return;
+          const resolvedItems = await applySonglengthsToItems(pendingArchiveBatch);
+          appendedArchiveItems += resolvedItems.length;
+          setPlaylist((prev) => [...prev, ...resolvedItems]);
+          pendingArchiveBatch = [];
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        };
 
         for (const selection of selections) {
           const { resultId, category } = parseArchiveSelectionPath(selection.path);
@@ -246,18 +276,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           if (!item) {
             throw new Error(`Unsupported archive file ${playableEntry.path}.`);
           }
-          playlistItems.push(item);
+          pendingArchiveBatch.push(item);
+          if (pendingArchiveBatch.length >= PLAYLIST_APPEND_BATCH_SIZE) {
+            await flushArchiveBatch();
+          }
         }
 
-        setPlaylist((prev) => [...prev, ...playlistItems]);
+        await flushArchiveBatch();
         toast({
           title: "Items added",
-          description: `${playlistItems.length} archive result(s) added to playlist.`,
+          description: `${appendedArchiveItems} archive result(s) added to playlist.`,
         });
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "done",
-          count: playlistItems.length,
+          count: appendedArchiveItems,
           message: "Added to playlist",
         }));
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -265,7 +298,32 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       }
 
       const selectedFiles: SourceEntry[] = [];
-      const listingCache = new Map<string, SourceEntry[]>();
+      const selectedFilesByParent = new Map<string, SourceEntry[]>();
+      const registerSelectedFile = (file: SourceEntry) => {
+        const parent = getParentPath(file.path);
+        const existing = selectedFilesByParent.get(parent) ?? [];
+        existing.push(file);
+        selectedFilesByParent.set(parent, existing);
+      };
+      const getDirectoryEntries = (parentPath: string) => {
+        const selectedEntries = selectedFilesByParent.get(parentPath) ?? [];
+        const cachedEntries = listingCache.get(parentPath) ?? [];
+        const merged = new Map<string, SourceEntry>();
+        [...selectedEntries, ...cachedEntries].forEach((entry) => {
+          if (entry.type === "file") {
+            merged.set(normalizeSourcePath(entry.path), entry);
+          }
+        });
+        return [...merged.values()];
+      };
+      const prefetchedConfigEntriesByPath = new Map<string, SourceEntry[]>();
+      const getPrefetchedConfigEntriesByPath = () => {
+        selectedFilesByParent.forEach((_, path) => {
+          const normalizedPath = normalizeSourcePath(path);
+          prefetchedConfigEntriesByPath.set(normalizedPath, getDirectoryEntries(path));
+        });
+        return prefetchedConfigEntriesByPath;
+      };
       const resolveSelectionEntry = async (filePath: string) => {
         const parent = getParentPath(filePath);
         if (!listingCache.has(parent)) {
@@ -289,20 +347,109 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           ) ?? null
         );
       };
+      let appendedPlaylistItems = 0;
+      let discoveredPlayableItems = 0;
+      let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
+      const appendPlaylistBatch = async (batch: PlaylistItem[]) => {
+        if (!batch.length) return;
+        const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
+          allowMd5Fallback: false,
+        });
+        appendedPlaylistItems += resolvedItems.length;
+        setPlaylist((prev) => [...prev, ...resolvedItems]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      };
+
+      let pendingPlaylistBatch: PlaylistItem[] = [];
+      const appendPlayableFile = async (file: SourceEntry) => {
+        if (!getPlayCategory(file.path)) return;
+        registerSelectedFile(file);
+        const normalizedPath = normalizeSourcePath(file.path);
+        const localEntry = source.type === "local" ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
+        const entryModified = localEntry?.modifiedAt
+          ? parseModifiedAt(localEntry.modifiedAt)
+          : parseModifiedAt(file.modifiedAt);
+        const localFile =
+          source.type === "local"
+            ? resolveLocalRuntimeFile(source.id, normalizedPath) ||
+              (localEntry?.uri
+                ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
+                : undefined) ||
+              (localTreeUri
+                ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
+                : undefined)
+            : undefined;
+        const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
+        const playbackConfig =
+          source.type === "local" || source.type === "ultimate"
+            ? resolvePlaybackConfig({
+                candidates: await discoverConfigCandidates({
+                  sourceType: source.type,
+                  sourceId: source.type === "local" ? source.id : null,
+                  sourceRootPath: source.rootPath,
+                  targetFile: file,
+                  listEntries: source.listEntries,
+                  prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
+                  localEntriesBySourceId,
+                }),
+              })
+            : {
+                configRef: null as ConfigFileReference | null,
+                configOrigin: "none" as const,
+                configCandidates: [],
+                configOverrides: null,
+              };
+        const playable: PlayableEntry = {
+          source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
+          name: file.name,
+          path: normalizedPath,
+          configRef: playbackConfig.configRef,
+          configOrigin: playbackConfig.configOrigin,
+          configOverrides: playbackConfig.configOverrides,
+          configCandidates: playbackConfig.configCandidates,
+          durationMs: file.durationMs,
+          songNr: file.songNr,
+          subsongCount: file.subsongCount,
+          sourceId: source.type === "local" || source.type === "hvsc" ? source.id : null,
+          file: hvscFile ?? localFile,
+          sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
+          modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
+        };
+        const item = buildPlaylistItem(playable);
+        if (!item) return;
+        pendingPlaylistBatch.push(item);
+        discoveredPlayableItems += 1;
+        if (pendingPlaylistBatch.length >= PLAYLIST_APPEND_BATCH_SIZE) {
+          const batch = pendingPlaylistBatch;
+          pendingPlaylistBatch = [];
+          await appendPlaylistBatch(batch);
+        }
+      };
+
+      const recursiveSonglengthsEntries: SourceEntry[] = [];
       for (const selection of selections) {
         if (selection.type === "dir") {
           if (recurseFolders) {
-            const nested =
-              source.type === "hvsc"
-                ? await source.listFilesRecursive(selection.path)
-                : await collectRecursive(selection.path);
-            selectedFiles.push(...nested);
-            if (source.type === "hvsc") {
+            if (source.type === "local") {
+              await collectRecursive(selection.path, async (batch) => {
+                for (const file of batch) {
+                  registerSelectedFile(file);
+                  selectedFiles.push(file);
+                  if (isSonglengthsFileName(file.name)) {
+                    recursiveSonglengthsEntries.push(file);
+                  }
+                }
+              });
+            } else {
+              const nested = await source.listFilesRecursive(selection.path);
+              selectedFiles.push(...nested);
               updateProgress(nested.length);
             }
           } else {
             const entries = await source.listEntries(selection.path);
             const files = entries.filter((entry) => entry.type === "file");
+            listingCache.set(selection.path, entries);
+            files.forEach(registerSelectedFile);
             selectedFiles.push(...files);
             updateProgress(files.length);
           }
@@ -321,34 +468,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             sizeBytes: meta?.sizeBytes ?? null,
             modifiedAt: meta?.modifiedAt ?? null,
           });
+          registerSelectedFile(selectedFiles[selectedFiles.length - 1]!);
           updateProgress(1);
         }
       }
 
-      const selectedFilesByParent = new Map<string, SourceEntry[]>();
-      selectedFiles.forEach((file) => {
-        const parent = getParentPath(file.path);
-        const existing = selectedFilesByParent.get(parent) ?? [];
-        existing.push(file);
-        selectedFilesByParent.set(parent, existing);
-      });
-      const getDirectoryEntries = (parentPath: string) => {
-        const selectedEntries = selectedFilesByParent.get(parentPath) ?? [];
-        const cachedEntries = listingCache.get(parentPath) ?? [];
-        const merged = new Map<string, SourceEntry>();
-        [...selectedEntries, ...cachedEntries].forEach((entry) => {
-          if (entry.type === "file") {
-            merged.set(normalizeSourcePath(entry.path), entry);
-          }
-        });
-        return [...merged.values()];
-      };
-      const prefetchedConfigEntriesByPath = new Map(
-        [...selectedFilesByParent.keys()].map((path) => [normalizeSourcePath(path), getDirectoryEntries(path)]),
-      );
-
-      const playlistItems: PlaylistItem[] = [];
-      let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
       if (source.type === "local") {
         const treeUri = localSourceTreeUris.get(source.id);
         const entriesMap = localEntriesBySourceId.get(source.id);
@@ -379,22 +503,31 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             addSonglengthsEntry(entry.path, file);
           });
 
-        const directorySelections = selections.filter((selection) => selection.type === "dir");
-        for (const selection of directorySelections) {
-          try {
-            const recursiveEntries = await source.listFilesRecursive(selection.path);
-            recursiveEntries
-              .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
-              .forEach((entry) => {
-                const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
-                addSonglengthsEntry(entry.path, file);
+        if (recurseFolders) {
+          // Songlengths entries were already tracked during streaming recursive traversal;
+          // register any that the selectedFiles scan above missed (e.g. different path casing).
+          for (const entry of recursiveSonglengthsEntries) {
+            const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
+            addSonglengthsEntry(entry.path, file);
+          }
+        } else {
+          const directorySelections = selections.filter((selection) => selection.type === "dir");
+          for (const selection of directorySelections) {
+            try {
+              const recursiveEntries = await source.listFilesRecursive(selection.path);
+              recursiveEntries
+                .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
+                .forEach((entry) => {
+                  const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
+                  addSonglengthsEntry(entry.path, file);
+                });
+            } catch (error) {
+              addLog("warn", "Failed to recursively list files for songlengths discovery.", {
+                sourceId: source.id,
+                selectionPath: selection.path,
+                error: (error as Error).message,
               });
-          } catch (error) {
-            addLog("warn", "Failed to recursively list files for songlengths discovery.", {
-              sourceId: source.id,
-              selectionPath: selection.path,
-              error: (error as Error).message,
-            });
+            }
           }
         }
 
@@ -497,64 +630,19 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           });
         }
       }
-      for (const file of selectedFiles) {
-        if (!getPlayCategory(file.path)) continue;
-        const normalizedPath = normalizeSourcePath(file.path);
-        const localEntry = source.type === "local" ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
-        const entryModified = localEntry?.modifiedAt
-          ? parseModifiedAt(localEntry.modifiedAt)
-          : parseModifiedAt(file.modifiedAt);
-        const localFile =
-          source.type === "local"
-            ? resolveLocalRuntimeFile(source.id, normalizedPath) ||
-              (localEntry?.uri
-                ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
-                : undefined) ||
-              (localTreeUri
-                ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
-                : undefined)
-            : undefined;
-        const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
-        const playbackConfig =
-          source.type === "local" || source.type === "ultimate"
-            ? resolvePlaybackConfig({
-                candidates: await discoverConfigCandidates({
-                  sourceType: source.type,
-                  sourceId: source.type === "local" ? source.id : null,
-                  sourceRootPath: source.rootPath,
-                  targetFile: file,
-                  listEntries: source.listEntries,
-                  prefetchedEntriesByPath: prefetchedConfigEntriesByPath,
-                  localEntriesBySourceId,
-                }),
-              })
-            : {
-                configRef: null as ConfigFileReference | null,
-                configOrigin: "none" as const,
-                configCandidates: [],
-                configOverrides: null,
-              };
-        const playable: PlayableEntry = {
-          source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
-          name: file.name,
-          path: normalizedPath,
-          configRef: playbackConfig.configRef,
-          configOrigin: playbackConfig.configOrigin,
-          configOverrides: playbackConfig.configOverrides,
-          configCandidates: playbackConfig.configCandidates,
-          durationMs: file.durationMs,
-          songNr: file.songNr,
-          subsongCount: file.subsongCount,
-          sourceId: source.type === "local" || source.type === "hvsc" ? source.id : null,
-          file: hvscFile ?? localFile,
-          sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
-          modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
-        };
-        const item = buildPlaylistItem(playable);
-        if (item) playlistItems.push(item);
+      while (selectedFiles.length > 0) {
+        const chunk = selectedFiles.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
+        for (const file of chunk) {
+          await appendPlayableFile(file);
+        }
       }
 
-      if (!playlistItems.length) {
+      if (pendingPlaylistBatch.length) {
+        await appendPlaylistBatch(pendingPlaylistBatch);
+        pendingPlaylistBatch = [];
+      }
+
+      if (!discoveredPlayableItems) {
         const reason = selectedFiles.length === 0 ? "no-files-found" : "unsupported-files";
         addLog("debug", "No supported files after scan", {
           sourceId: source.id,
@@ -585,22 +673,18 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       if (elapsed < minDuration) {
         await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
       }
-      const resolvedItems = await applySonglengthsToItems(playlistItems, discoveredSonglengths, {
-        allowMd5Fallback: false,
-      });
-      setPlaylist((prev) => [...prev, ...resolvedItems]);
       if (localTreeUri) {
         addLog("debug", "SAF scan complete", {
           sourceId: source.id,
           treeUri: redactTreeUri(localTreeUri),
           totalFiles: selectedFiles.length,
-          supportedFiles: playlistItems.length,
+          supportedFiles: appendedPlaylistItems,
           elapsedMs: Date.now() - startedAt,
         });
       }
       toast({
         title: "Items added",
-        description: `${playlistItems.length} file(s) added to playlist.`,
+        description: `${appendedPlaylistItems} file(s) added to playlist.`,
       });
       setAddItemsProgress((prev) => ({
         ...prev,

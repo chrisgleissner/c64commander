@@ -202,4 +202,67 @@ describe("SelectableActionList", () => {
     expect(screen.queryByText("No files selected")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "View all" })).not.toBeInTheDocument();
   });
+
+  it("supports externally controlled filtering without applying an additional client-side scan", () => {
+    localStorage.clear();
+    setViewportWidth(1280);
+    const onFilterValueChange = vi.fn();
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={[items[0]!]}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={4}
+          filterValue="remote"
+          onFilterValueChange={onFilterValueChange}
+          viewAllFilterValue="remote"
+          onViewAllFilterValueChange={onFilterValueChange}
+          disableClientFiltering
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByText("Alpha")).toBeVisible();
+    fireEvent.change(screen.getByTestId("list-filter-input"), { target: { value: "remote sid" } });
+    expect(onFilterValueChange).toHaveBeenCalledWith("remote sid");
+    expect(screen.getByText("Alpha")).toBeVisible();
+  });
+
+  it("keeps the preview window bounded while rendering a larger externally paged view-all list", () => {
+    localStorage.clear();
+    setViewportWidth(1280);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={[items[0]!]}
+          viewAllItems={items}
+          totalItemCount={4}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={1}
+          disableClientFiltering
+          viewAllTitle="All files"
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByText("4 items")).toBeVisible();
+    expect(screen.queryAllByText("Alpha")).toHaveLength(1);
+    expect(screen.queryByText("Beta")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View all" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "View all" }));
+
+    expect(screen.getByText("Alpha")).toBeVisible();
+    expect(screen.getByRole("dialog")).toBeVisible();
+  });
 });

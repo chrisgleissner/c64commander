@@ -59,6 +59,10 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   deleteLibraryFile: (...args: unknown[]) => mocks.deleteLibraryFile(...args),
   resetLibraryRoot: (...args: unknown[]) => mocks.resetLibraryRoot(...args),
   resetSonglengthsCache: (...args: unknown[]) => mocks.resetSonglengthsCache(...args),
+  createLibraryStagingDir: vi.fn(async () => undefined),
+  writeStagingFile: vi.fn(),
+  promoteLibraryStagingDir: vi.fn(async () => undefined),
+  cleanupStaleStagingDir: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscStateStore", () => ({

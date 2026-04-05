@@ -1064,6 +1064,39 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  it("ignores unrelated legacy playlist keys when restoring the active device playlist", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-2");
+    const unrelatedKey = buildPlaylistStorageKey("stale-device");
+
+    localStorage.setItem(
+      unrelatedKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/stale.sid",
+            name: "stale.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(0);
+    });
+  });
+
   it("restores paused session without starting auto-advance timer", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
 

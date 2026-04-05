@@ -13,7 +13,9 @@ import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 export type PlaylistPanelProps = {
-  items: ActionListItem[];
+  previewItems: ActionListItem[];
+  viewAllItems: ActionListItem[];
+  totalItemCount: number;
   selectedCount: number;
   allSelected: boolean;
   onToggleSelectAll: () => void;
@@ -26,10 +28,16 @@ export type PlaylistPanelProps = {
   hasPlaylist: boolean;
   onAddItems: () => void;
   onClearPlaylist: () => void;
+  playlistFilterText: string;
+  onPlaylistFilterTextChange: (value: string) => void;
+  hasMoreViewAllItems: boolean;
+  onViewAllEndReached: () => void;
 };
 
 export const PlaylistPanel = ({
-  items,
+  previewItems,
+  viewAllItems,
+  totalItemCount,
   selectedCount,
   allSelected,
   onToggleSelectAll,
@@ -42,6 +50,10 @@ export const PlaylistPanel = ({
   hasPlaylist,
   onAddItems,
   onClearPlaylist,
+  playlistFilterText,
+  onPlaylistFilterTextChange,
+  hasMoreViewAllItems,
+  onViewAllEndReached,
 }: PlaylistPanelProps) => {
   const { profile } = useDisplayProfile();
 
@@ -79,7 +91,9 @@ export const PlaylistPanel = ({
       <SelectableActionList
         title="Playlist"
         selectionLabel="items"
-        items={items}
+        items={previewItems}
+        viewAllItems={viewAllItems}
+        totalItemCount={totalItemCount}
         emptyLabel="No tracks in playlist yet."
         selectAllLabel="Select all"
         deselectAllLabel="Deselect all"
@@ -94,6 +108,13 @@ export const PlaylistPanel = ({
         rowTestId="playlist-item"
         filterHeader={renderCategoryFilters(false)}
         viewAllFilterHeader={profile === "compact" ? renderCategoryFilters(true) : undefined}
+        filterValue={playlistFilterText}
+        onFilterValueChange={onPlaylistFilterTextChange}
+        viewAllFilterValue={playlistFilterText}
+        onViewAllFilterValueChange={onPlaylistFilterTextChange}
+        disableClientFiltering
+        hasMoreViewAllItems={hasMoreViewAllItems}
+        onViewAllEndReached={onViewAllEndReached}
         headerActions={
           <div className="flex flex-wrap items-center gap-2">
             <Button

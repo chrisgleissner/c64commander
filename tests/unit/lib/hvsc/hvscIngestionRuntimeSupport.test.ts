@@ -116,7 +116,13 @@ describe("hvscIngestionRuntimeSupport", () => {
     expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "idle", ingestionError: "Cancelled" });
     expect(saveHvscStatusSummaryMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        download: expect.objectContaining({ status: "idle", errorMessage: "Cancelled" }),
+        download: expect.objectContaining({
+          status: "idle",
+          errorMessage: "Cancelled",
+          archiveName: "HVSC.7z",
+          lastStage: "cancelled",
+          recoveryHint: expect.stringContaining("Retry the HVSC install or ingest"),
+        }),
         extraction: expect.objectContaining({ status: "idle" }),
       }),
     );
@@ -148,8 +154,18 @@ describe("hvscIngestionRuntimeSupport", () => {
     });
     expect(saveHvscStatusSummaryMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        download: expect.objectContaining({ status: "failure", errorCategory: "unknown" }),
-        extraction: expect.objectContaining({ status: "failure", errorCategory: "unknown" }),
+        download: expect.objectContaining({
+          status: "failure",
+          errorCategory: "unknown",
+          lastStage: "recovered-interrupted",
+          recoveryHint: expect.stringContaining("Partial progress was not promoted"),
+        }),
+        extraction: expect.objectContaining({
+          status: "failure",
+          errorCategory: "unknown",
+          lastStage: "recovered-interrupted",
+          recoveryHint: expect.stringContaining("Partial progress was not promoted"),
+        }),
       }),
     );
   });

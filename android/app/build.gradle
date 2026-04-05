@@ -3,6 +3,78 @@ apply plugin: 'kotlin-android'
 apply plugin: 'jacoco'
 
 import groovy.json.JsonSlurper
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import java.security.MessageDigest
+
+def hvscArchiveName = "HVSC_84-all-of-them.7z"
+def hvscArchiveUrl = "https://hvsc.sannic.nl/HVSC%2084/HVSC_84-all-of-them.7z"
+def hvscArchiveSha256 = "9ed41b3a8759af5e1489841cd62682e471824892eabf648d913b0c9725a4d6d3"
+def hvscArchiveCacheDir = new File(System.getProperty("user.home"), ".cache/c64commander/hvsc")
+def upstream7zipSourceUrl = "https://www.7-zip.org/a/7z2600-src.tar.xz"
+def upstream7zipSourceSha256 = "3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16"
+def upstream7zipGeneratedJniLibsDir = new File(buildDir, "generated/jniLibs/upstream7zip")
+def upstream7zipWorkDir = new File(buildDir, "intermediates/upstream7zip")
+def upstream7zipBuildScript = rootProject.file("scripts/build-upstream-7zip.sh")
+def upstream7zipNdkVersion = "27.2.12479018"
+def upstream7zipApiLevel = 24
+def upstream7zipAbis = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
+
+def loadAndroidLocalProperties = {
+    def props = new Properties()
+    def localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        localPropsFile.withInputStream { stream ->
+            props.load(stream)
+        }
+    }
+    return props
+}
+
+def normalizeAndroidPath = { String rawPath ->
+    rawPath.replace('\\:', ':')
+}
+
+def resolveAndroidSdkDir = {
+    def envSdkDir = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+    if (envSdkDir) {
+        return new File(envSdkDir)
+    }
+
+    def props = loadAndroidLocalProperties()
+    def localSdkDir = props.getProperty("sdk.dir")
+    if (localSdkDir) {
+        return new File(normalizeAndroidPath(localSdkDir))
+    }
+
+    return new File(System.getProperty("user.home"), "Android/Sdk")
+}
+
+def resolveAndroidNdkDir = {
+    def envNdkDir = System.getenv("ANDROID_NDK_ROOT") ?: System.getenv("ANDROID_NDK_HOME")
+    if (envNdkDir) {
+        return new File(envNdkDir)
+    }
+
+    def props = loadAndroidLocalProperties()
+    def localNdkDir = props.getProperty("ndk.dir")
+    if (localNdkDir) {
+        return new File(normalizeAndroidPath(localNdkDir))
+    }
+
+    return new File(resolveAndroidSdkDir(), "ndk/${upstream7zipNdkVersion}")
+}
+
+def sha256Of = { File file ->
+    def digest = MessageDigest.getInstance("SHA-256")
+    file.withInputStream { stream ->
+        byte[] buffer = new byte[8192]
+        int read
+        while ((read = stream.read(buffer)) != -1) {
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().collect { String.format('%02x', it) }.join()
+}
 
 def keystoreProps = new Properties()
 def keyPropsFile = rootProject.file("key.properties")
@@ -62,6 +134,12 @@ android {
         jvmTarget = '17'
     }
 
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
     defaultConfig {
         applicationId "uk.gleissner.c64commander"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -80,6 +158,16 @@ android {
         }
         logger.lifecycle("Resolved versionCode=${versionCode}, versionName=${versionName}")
     }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDir]
+        }
+        androidTest {
+            assets.srcDirs += ['src/test/fixtures']
+        }
+    }
+
     signingConfigs {
         release {
             def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
@@ -162,12 +250,39 @@ android {
             }
         }
     }
-    sourceSets {
-        androidTest {
-            assets.srcDirs += ['src/test/fixtures']
+}
+
+tasks.register('buildUpstream7zipAndroidBinaries', Exec) {
+    group = 'build'
+    description = 'Builds pinned upstream 7-Zip Android executables for the ABIs bundled with the app.'
+
+    inputs.file(upstream7zipBuildScript)
+    outputs.dir(upstream7zipGeneratedJniLibsDir)
+
+    doFirst {
+        if (!upstream7zipBuildScript.exists()) {
+            throw new GradleException("Missing upstream 7-Zip build script: ${upstream7zipBuildScript}")
         }
+        def ndkDir = resolveAndroidNdkDir()
+        if (!ndkDir.exists()) {
+            throw new GradleException("Android NDK not found for upstream 7-Zip build: ${ndkDir}")
+        }
+        upstream7zipGeneratedJniLibsDir.mkdirs()
+        commandLine(
+            'bash',
+            upstream7zipBuildScript.absolutePath,
+            ndkDir.absolutePath,
+            upstream7zipWorkDir.absolutePath,
+            upstream7zipGeneratedJniLibsDir.absolutePath,
+            upstream7zipSourceUrl,
+            upstream7zipSourceSha256,
+            upstream7zipApiLevel.toString(),
+            *upstream7zipAbis,
+        )
     }
 }
+
+preBuild.dependsOn(tasks.named('buildUpstream7zipAndroidBinaries'))
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
@@ -300,6 +415,44 @@ tasks.register('jacocoTestCoverageVerification', JacocoCoverageVerification) {
                 minimum = 0.75
             }
         }
+    }
+}
+
+tasks.withType(Test).configureEach {
+    // Robolectric 4.11.x does not run reliably on the host JDK 25 runtime used in this environment.
+    // Keep Android compilation on Java 17, but execute JVM unit tests with a supported Java 21 launcher.
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    })
+}
+
+tasks.register('downloadHvscTestFixture') {
+    group = 'verification'
+    description = 'Downloads the real HVSC archive to the local cache used by Android JVM tests and verifies its checksum.'
+
+    doLast {
+        if (!hvscArchiveCacheDir.exists() && !hvscArchiveCacheDir.mkdirs()) {
+            throw new GradleException("Failed to create HVSC cache directory: ${hvscArchiveCacheDir}")
+        }
+
+        def archiveFile = new File(hvscArchiveCacheDir, hvscArchiveName)
+        if (!archiveFile.exists()) {
+            logger.lifecycle("Downloading HVSC fixture from ${hvscArchiveUrl} to ${archiveFile}")
+            new URL(hvscArchiveUrl).withInputStream { input ->
+                archiveFile.withOutputStream { output ->
+                    output << input
+                }
+            }
+        }
+
+        def actualSha256 = sha256Of(archiveFile)
+        if (actualSha256 != hvscArchiveSha256) {
+            throw new GradleException(
+                "HVSC fixture checksum mismatch for ${archiveFile}. Expected ${hvscArchiveSha256}, got ${actualSha256}"
+            )
+        }
+
+        logger.lifecycle("HVSC fixture ready: ${archiveFile} (${archiveFile.length()} bytes, sha256=${actualSha256})")
     }
 }
 

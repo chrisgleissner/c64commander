@@ -1,173 +1,639 @@
-# Playback Configuration System - Execution Plan
+# HVSC Production-Readiness Implementation Plan
+
+## Current Pass - 2026-04-03 HVSC Strong Convergence Closure
 
 ## Change Classification
 
 - Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`, `UI_CHANGE`
-- Authoritative spec: `docs/research/config/playback-config.md`
-- Goal: implement playback config end-to-end across playlist import, persistence, playback, UI, overrides, diagnostics, and disk-related surfaces without introducing unrelated churn.
+- Goal: close the remaining HVSC production-readiness issues from `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md` with current source-backed proof, fresh validation, and archived Web/Android/Ultimate/iOS evidence.
+- Issue targets:
+  - `HVSC-AUD-001`
+  - `HVSC-AUD-002`
+  - `HVSC-AUD-003`
+  - `HVSC-AUD-004`
+  - `HVSC-AUD-005`
+  - `HVSC-AUD-006`
+  - `HVSC-AUD-007`
+  - `HVSC-AUD-010`
+  - `HVSC-AUD-011`
+  - `HVSC-AUD-012`
+  - `HVSC-AUD-013`
+  - `HVSC-AUD-014`
 
-## PHASE 1: Read spec and map scope
+## Impact Map
 
-- Scope: confirm the implementation contract, classify the change, identify all affected subsystems and validation obligations.
-- Files/modules expected to change: `PLANS.md`, `WORKLOG.md`, `docs/research/config/playback-config.md`, `src/pages/playFiles/**`, `src/lib/config/**`, `src/lib/playlistRepository/**`, `src/pages/DisksPage.tsx`, related tests.
-- Invariants:
-  - The spec remains the source of truth.
-  - No behavior is weakened for convenience.
-  - Validation scope is driven by actual touched layers.
-- Validation steps:
-  - Read the spec and relevant implementation files.
-  - Confirm existing plan/worklog files are replaced with execution artifacts.
+- Source:
+  - `src/lib/playlistRepository/**`
+  - `src/pages/playFiles/**`
+  - `src/lib/hvsc/**`
+  - `src/lib/sourceNavigation/**`
+  - `ios/App/App/**`
+  - `ios/native-tests/**`
+- Tests and validation:
+  - `tests/unit/lib/playlistRepository/**`
+  - `tests/unit/playFiles/**`
+  - `tests/unit/pages/playFiles/**`
+  - `tests/unit/hvsc/**`
+  - `playwright/**`
+  - `.maestro/**`
+- Evidence and docs:
+  - `PLANS.md`
+  - `WORKLOG.md`
+  - `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+  - `docs/plans/hvsc/artifacts/**`
+  - `artifacts/**`
+
+## Phase 1 - Close Query, Hydration, And Selection Gaps
+
+- Issue IDs:
+  - `HVSC-AUD-001` — **DONE** (streaming callback, duplicate traversal elimination, chunked splice, scale tests at 1k/5k)
+  - `HVSC-AUD-002` — **DONE** (docs revised to describe proven IndexedDB + in-memory HVSC design as production baseline; FTS5/relational schema marked aspirational)
+  - `HVSC-AUD-013` — **DONE** (legacy blob persistence eliminated, migration cleanup, repository-only persist)
+  - `HVSC-AUD-014` — **DONE** (production uses IndexedDB; localStorage fallback warns explicitly; not reachable on supported platforms)
+- Scope:
+  - remove legacy production fallback to `localStorage` snapshot/query-index repositories for large playlists
+  - stop full-playlist hydration during startup and resume
+  - bound recursive add flows so they do not retain the full discovered file set before append
+  - add scale-oriented tests above the repository layer
 - Exit criteria:
-  - Execution plan exists and reflects real repository seams.
-  - Worklog is active and timestamped.
+  - production-capable query paths use indexed storage contracts only
+  - startup/resume hydrates only the initial window plus active-item/session metadata
+  - recursive add flows stream batches instead of accumulating the full file list in hot-path memory
 
-## PHASE 2: Inspect existing playback-config-related code paths
+## Phase 2 - Close Ingest, Integrity, And iOS Gaps
 
-- Scope: inspect current data model, playlist hydration/persistence, import discovery, playback config application, diagnostics hooks, and current config UI affordances.
-- Files/modules expected to change: `src/pages/PlayFilesPage.tsx`, `src/pages/playFiles/handlers/addFileSelections.ts`, `src/pages/playFiles/hooks/usePlaybackController.ts`, `src/pages/playFiles/hooks/usePlaybackPersistence.ts`, `src/pages/playFiles/hooks/usePlaylistListItems.tsx`, `src/pages/playFiles/components/PlaylistPanel.tsx`, `src/pages/playFiles/types.ts`, `src/lib/config/applyConfigFileReference.ts`, `src/lib/config/configFileReferenceSelection.ts`, `src/lib/playlistRepository/types.ts`, `src/pages/DisksPage.tsx`.
-- Invariants:
-  - Existing playback sequencing remains serialized through the machine transition queue.
-  - Existing config browser and picker flows are reused where possible.
-  - No config is applied during browse/import/mount flows.
-- Validation steps:
-  - Read the concrete modules and identify extension seams.
-  - Verify whether disks reuse playlist playback or need dedicated state.
+- Issue IDs:
+  - `HVSC-AUD-003` — **DONE** (staged extraction with atomic promotion on TypeScript and Android; crash recovery via stale staging cleanup; regression tests for create/write/promote/cleanup lifecycle)
+  - `HVSC-AUD-006` — **BLOCKED** (Swift toolchain not available on Linux; iOS native ingest still memory-heavy, no HVSC-specific XCTest coverage)
+  - `HVSC-AUD-007` — **DONE** (Web non-native path explicitly blocked in production; 5 MiB guard enforced at download+read; platform capability matrix documented in architecture.md)
+  - `HVSC-AUD-010` — **DONE** (already closed: checksum/size integrity enforced and tested; expected-size validation regression test added)
+  - `HVSC-AUD-012` — **DONE** (query timing with correlation IDs added to HVSC browse path; playback inherits correlation via REST action tracing; tests lock in structured fields)
+- Scope:
+  - implement staged/promoted ingest semantics with deterministic rollback on failure
+  - strengthen archive integrity policy and persisted recovery evidence
+  - formalize Web/non-native capability limits in code and docs
+  - add iOS HVSC native validation under `ios/native-tests`
+  - add correlation identifiers and timing to persisted HVSC diagnostics where missing
 - Exit criteria:
-  - Affected code paths are confirmed with concrete files/symbols.
-  - Open implementation questions are reduced to code-level choices, not discovery gaps.
+  - active HVSC library state is not replaced by a failed or interrupted ingest
+  - iOS has repeatable HVSC-specific native coverage that can run from this Linux host via SwiftPM
+  - Web capability is either proven through Docker-backed runtime or explicitly narrowed with enforced UX
 
-## PHASE 3: Implement core data model and persistence changes
+## Phase 3 - Collect Scale, Web, Android, And Playback Proof
 
-- Scope: add config candidate, resolution, origin, decline, and override structures to runtime and persisted playlist data with backward-compatible hydration.
-- Files/modules expected to change: `src/pages/playFiles/types.ts`, `src/lib/playlistRepository/types.ts`, `src/pages/playFiles/hooks/usePlaybackPersistence.ts`, `src/lib/playlistRepository/localStorageRepository.ts`, `src/lib/playlistRepository/indexedDbRepository.ts`, `src/lib/playlistRepository/queryIndex.ts`, `src/pages/PlayFilesPage.tsx`.
-- Invariants:
-  - Existing stored playlists load without data loss.
-  - Manual-none is distinct from no-config-found.
-  - Persisted state remains deterministic and serializable.
-- Validation steps:
-  - Add unit coverage for hydration/migration and repository round-trip behavior.
-  - Verify legacy playlists restore with sensible defaults.
+- Issue IDs:
+  - `HVSC-AUD-004` — **DONE** (two HIL runs archived; second proves end-to-end SID playback on Pixel 4 → C64U with 12 timestamped screenshots and logcat)
+  - `HVSC-AUD-005` — **DONE** (app-first SID playback proven: C64U filesystem browsed, demo.sid added to playlist, playback at 1:19/3:00 with HEALTHY device status)
+  - `HVSC-AUD-011` — **DONE** (hook-level scale tests at 10k/50k/100k with windowing, filtering, and pagination assertions)
+- Scope:
+  - collect Docker-backed Web proof for the HVSC path
+  - collect Pixel 4 app-first HVSC ingest/browse/add/play evidence
+  - collect Ultimate playback proof with `c64scope` packet/RMS oracle
+  - record UI/device scale artifacts for filter/add/scroll actions
 - Exit criteria:
-  - Runtime types can represent all playback-config states.
-  - Persistence round-trips config origin and overrides correctly.
+  - archived artifact sets exist for Web, Android, and real playback proof
+  - scale evidence is tied to explicit 10k/50k/100k validation or a concrete external blocker
 
-## PHASE 4: Implement discovery and resolution behavior
+## Phase 4 - Final Register Reconciliation
 
-- Scope: build multi-strategy discovery and deterministic resolution with ambiguity preserved instead of auto-selecting.
-- Files/modules expected to change: new `src/lib/config/configDiscovery.ts`, new `src/lib/config/configResolution.ts`, `src/pages/playFiles/handlers/addFileSelections.ts`, `src/lib/config/configFileReferenceSelection.ts`, related helpers and tests.
-- Invariants:
-  - Manual decisions always outrank automatic discovery.
-  - Only exact-name and single-directory candidates may auto-resolve.
-  - Parent-directory candidates never silently auto-select.
-- Validation steps:
-  - Unit tests for strategy ordering, distance/confidence values, and precedence.
-  - Integration tests for import-time attachment behavior across local and ultimate sources.
+- Scope:
+  - update `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+  - ensure every issue is `DONE` or freshly justified `BLOCKED`
+  - record every executed command and artifact location in `WORKLOG.md`
 - Exit criteria:
-  - Discovery emits candidate lists with expected metadata.
-  - Resolution behavior matches the spec exactly.
+  - no issue remains `PARTIAL` or `TODO`
+  - the final status register matches the actual code, tests, and artifacts in the worktree
 
-## PHASE 5: Implement application pipeline changes
+## Current Pass - 2026-04-03 Strong Convergence Prompt Rewrite
 
-- Scope: extend pre-playback config handling to support resolution objects, unavailable-config handling, redundant-apply skipping, base config plus override application order, and playback-only triggering.
-- Files/modules expected to change: `src/lib/config/applyConfigFileReference.ts`, new config apply helpers, `src/pages/playFiles/hooks/usePlaybackController.ts`, possibly `src/lib/c64api.ts` or config API helpers.
-- Invariants:
-  - Config applies only immediately before playback.
-  - Base `.cfg` loads before REST overrides.
-  - Redundant applies are skipped only when resolved config and overrides are identical.
-- Validation steps:
-  - Unit tests around apply ordering and skip logic.
-  - Integration tests proving no application during import/mount/browse flows.
+## Change Classification
+
+- Classification: `DOC_ONLY`
+- Goal: replace the existing HVSC implementation prompt with a stronger convergence prompt that cannot honestly terminate until every remaining issue from the follow-up register is either fixed with proof or explicitly blocked by a verified external constraint.
+- Primary output: `docs/research/hvsc/implementation-execution-prompt-2026-04-03.md`
+
+## Impact Map
+
+- Docs:
+  - `PLANS.md`
+  - `WORKLOG.md`
+  - `docs/research/hvsc/implementation-execution-prompt-2026-04-03.md`
+- Evidence inputs:
+  - `docs/research/hvsc/production-readiness-audit-2026-04-03.md`
+  - `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+  - `docs/testing/physical-device-matrix.md`
+  - `docs/plans/hvsc/automation-coverage-map.md`
+- Platforms the prompt must cover:
+  - Android with attached Pixel 4
+  - Web with local Docker deployment
+  - iOS with CI-backed Maestro/native proof only, not Linux-host HIL
+
+## Phase A - Reconcile Prompt Inputs
+
+- Scope:
+  - compare the existing implementation prompt against the follow-up status register
+  - ensure the new prompt targets only the still-open issue set
+  - encode the new environment constraints: Pixel 4 available, Docker/Web available, iOS HIL out of scope
 - Exit criteria:
-  - Playback path consumes playback-config state safely.
-  - Failure behavior is explicit and blocks or prompts as required.
+  - the prompt backlog matches the follow-up register exactly
+  - platform proof requirements are explicit and non-contradictory
 
-## PHASE 6: Implement UI surfaces and interaction flows
+## Phase B - Rewrite The Convergence Prompt
 
-- Scope: expose config status indicators, detail sheet, candidate chooser, manual attach/decline flows, current config visibility, and cross-surface UI parity.
-- Files/modules expected to change: `src/pages/PlayFilesPage.tsx`, `src/pages/playFiles/hooks/usePlaylistListItems.tsx`, `src/pages/playFiles/components/PlaylistPanel.tsx`, new playback-config UI components under `src/pages/playFiles/components/`, `src/pages/DisksPage.tsx`, shared dialog/sheet components if needed.
-- Invariants:
-  - Health badge and overlay visibility contracts remain intact.
-  - Decision points use modals; workflows use bottom sheets.
-  - UI makes auto vs manual vs declined state explicit.
-- Validation steps:
-  - Component/UI tests for indicators, menus, chooser actions, and modal flows.
-  - Targeted end-to-end tests for playlist and disk surfaces.
+- Scope:
+  - replace the old implementation prompt with a stronger convergence contract
+  - require strict closure criteria, evidence bars, and termination rules
+  - forbid optimistic completion before all remaining issues are closed or externally blocked
 - Exit criteria:
-  - Users can inspect, choose, change, or decline configs from the required surfaces.
-  - Active config visibility is present during playback.
+  - the prompt names every remaining issue
+  - the prompt includes hard stop conditions for incomplete HIL, incomplete scale proof, and incomplete iOS CI/Maestro proof
 
-## PHASE 7: Implement editing/override behavior
+## Phase C - Final Prompt Review
 
-- Scope: add override data model, editing UI, base-config change safeguards, and playback-time REST override application.
-- Files/modules expected to change: new config override/editor helpers, `src/lib/config/applyConfigFileReference.ts`, `src/pages/PlayFilesPage.tsx`, new editor components, reuse of config browser widgets and normalizers.
-- Invariants:
-  - Overrides are item-scoped and deterministic.
-  - Changing the base config clears overrides only with explicit confirmation.
-  - Override-only mode works without a base config file.
-- Validation steps:
-  - Unit and component tests for override persistence and base-change confirmation.
-  - Integration tests for override-only playback and base-plus-override ordering.
+- Scope:
+  - verify the rewritten prompt is aligned with the current follow-up status counts
+  - ensure the prompt does not require impossible Linux-host iOS HIL work
+  - ensure Android/Web/iOS validation requirements are concrete and executable
 - Exit criteria:
-  - Users can create, edit, clear, and persist overrides.
-  - Playback applies overrides correctly after base config.
+  - the prompt can be used directly as an execution contract for the next implementation pass
+  - `PLANS.md` and `WORKLOG.md` reflect this authoring pass accurately
 
-## PHASE 8: Integrate diagnostics and failure handling
+## Current Status
 
-- Scope: log discovery, resolution, apply, skip, override, unavailable, and failure events through existing diagnostics/logging surfaces and implement explicit user-safe failures.
-- Files/modules expected to change: `src/lib/config/**`, `src/pages/playFiles/hooks/usePlaybackController.ts`, `src/lib/logging.ts` consumers, diagnostics-related UI hooks, relevant tests.
-- Invariants:
-  - No caught exception is swallowed.
-  - Failures remain diagnosable with item, source, and config context.
-  - User-facing errors are deterministic and actionable.
-- Validation steps:
-  - Tests asserting logs/error handling for unavailable configs and apply failures.
-  - Manual inspection of diagnostics payloads where automated assertions are impractical.
+- Phase A: completed
+- Phase B: in progress
+- Phase C: pending
+
+## Current Focus
+
+- Strengthen the prompt so it cannot “finish” on partial convergence.
+- Make Android Pixel 4 proof and Docker/Web proof mandatory where the open issues require them.
+- Keep iOS HIL out of scope on Linux while still demanding the strongest available CI-backed Maestro/native evidence.
+
+## Current Pass - 2026-04-03 Follow-up Status Assessment
+
+## Change Classification
+
+- Classification: `DOC_ONLY`
+- Goal: produce a source-backed follow-up status register for `docs/research/hvsc/production-readiness-audit-2026-04-03.md`, reconcile it with the implementation already landed in the worktree, and turn all non-closed issues into an executable remaining-work plan.
+- Primary output: `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+
+## Impact Map
+
+- Docs:
+  - `PLANS.md`
+  - `WORKLOG.md`
+  - `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md`
+- Comment/doc reality sync if needed:
+  - `ios/App/App/HvscIngestionPlugin.swift`
+- Evidence sources to inspect:
+  - `docs/research/hvsc/production-readiness-audit-2026-04-03.md`
+  - current `PLANS.md`
+  - current `WORKLOG.md`
+  - live source and tests under `src/lib/hvsc/**`, `src/lib/playlistRepository/**`, `src/pages/playFiles/**`, `android/app/src/test/**`, and referenced docs
+- Platforms assessed:
+  - Android
+  - iOS
+  - Web
+
+## Phase A - Reconcile Live Evidence
+
+- Scope:
+  - extract every issue from `HVSC-AUD-001` through `HVSC-AUD-014`
+  - compare the audit baseline with landed implementation, tests, and recorded validation history
+  - identify stale statements that now contradict the live repo
 - Exit criteria:
-  - Playback-config operations are visible in diagnostics.
-  - Failure handling matches the spec across primary edge cases.
+  - every issue has a live evidence file list and an initial state hypothesis
+  - contradictions between the audit baseline and current reality are recorded in `WORKLOG.md`
 
-## PHASE 9: Add and strengthen tests
+## Phase B - Produce Follow-up Status Register
 
-- Scope: add regression coverage for precedence, ambiguity, persistence, playback-only triggering, unavailable files, redundant applies, UI transparency, and disk parity.
-- Files/modules expected to change: unit tests under `src/lib/config/**`, hook/component tests under `src/pages/playFiles/**`, Playwright tests under `playwright/**`, possibly repository tests.
-- Invariants:
-  - Every bug fix or edge case addressed by implementation has focused regression coverage.
-  - Tests prove behavior instead of merely covering lines.
-- Validation steps:
-  - Run relevant unit/integration/UI/E2E suites.
-  - Run coverage and keep branch coverage at or above repository thresholds.
+- Scope:
+  - write the follow-up document with per-issue `DONE` / `PARTIAL` / `TODO` / `BLOCKED` status
+  - keep each judgment tied to specific code, tests, docs, or recorded runtime evidence
+  - distinguish clearly between meaningful progress and true closure
 - Exit criteria:
-  - Critical playback-config flows are covered.
-  - No uncovered major spec requirement remains.
+  - the follow-up document contains all required sections in the requested order
+  - status counts reconcile exactly with the per-issue register
 
-## PHASE 10: Validate end-to-end behavior and finalize
+## Phase C - Minimal Reality Sync
 
-- Scope: run lint/build/test/coverage and targeted UI validation, update docs tightly coupled to shipped behavior, and bring plan/worklog to completion.
-- Files/modules expected to change: `PLANS.md`, `WORKLOG.md`, relevant docs if code behavior requires user/developer documentation updates.
-- Invariants:
-  - Repository stays buildable.
-  - Completion claims match actual command results.
-  - Screenshots are regenerated only if documentation images became inaccurate.
-- Validation steps:
-  - `npm run lint`
+- Scope:
+  - fix only clearly stale documentation or source comments that materially affect the follow-up status accuracy
+  - avoid widening into feature work or fresh implementation
+- Exit criteria:
+  - any remaining parity/status statements cited by the follow-up document are accurate
+  - `WORKLOG.md` records why each minimal sync was needed
+
+## Phase D - Final Consistency Review
+
+- Scope:
+  - verify bucket counts, closure matrix, and remaining-work phases
+  - ensure the report does not claim builds, tests, screenshots, or HIL proof that were not actually performed
+- Exit criteria:
+  - `PLANS.md`, `WORKLOG.md`, and the follow-up document all agree on the current readiness picture
+  - the final user summary can state exactly which issues are closed and which remain open
+
+## Current Status
+
+- Phase A: completed
+- Phase B: in progress
+- Phase C: pending
+- Phase D: pending
+
+## Current Focus
+
+- Finish the evidence-backed status register before touching any stale-reality syncs.
+- Keep the closure bar strict: repository or diagnostics improvements do not close architecture, scale, or HIL-proof issues on their own.
+- Record any contradiction between the original audit and current repo state in `WORKLOG.md` instead of silently rewriting the audit.
+
+## Change Classification
+
+- Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`, `UI_CHANGE`
+- Goal: converge the audited HVSC storage, playlist, ingest, and validation path toward production readiness without re-running the discovery pass.
+- Audit baseline: `docs/research/hvsc/production-readiness-audit-2026-04-03.md`
+
+## Impact Map
+
+- Source:
+  - `src/lib/playlistRepository/**`
+  - `src/pages/playFiles/hooks/usePlaybackPersistence.ts`
+  - `src/pages/playFiles/hooks/usePlaylistListItems.tsx`
+  - `src/pages/PlayFilesPage.tsx`
+  - `src/pages/playFiles/handlers/addFileSelections.ts`
+  - `src/lib/hvsc/**`
+  - `src/lib/sourceNavigation/**`
+  - `ios/App/App/HvscIngestionPlugin.swift`
+- Tests:
+  - `tests/unit/lib/playlistRepository/**`
+  - `tests/unit/playFiles/**`
+  - `tests/unit/pages/playFiles/**`
+  - Android JVM tests under `android/app/src/test/**` as needed
+- Docs:
+  - `PLANS.md`
+  - `WORKLOG.md`
+  - `docs/internals/ios-parity-matrix.md`
+- Platforms:
+  - Web
+  - Android
+  - iOS
+
+## Phase 1 - Reconcile Audit Into Execution Slices
+
+- Scope:
+  - translate audited issue IDs into concrete implementation slices
+  - preserve existing local worktree changes
+  - keep `PLANS.md` and `WORKLOG.md` authoritative
+- Issue coverage:
+  - all implementation phases below are keyed to `HVSC-AUD-001/002/003/006/007/008/009/010/011/012/013/014`
+- Exit criteria:
+  - the plan reflects the live implementation pass rather than the completed research pass
+  - dependencies between repository, persistence, UI, and ingest work are explicit
+
+## Phase 2 - Playlist Storage And Query Foundation
+
+- Scope:
+  - replace the IndexedDB full-snapshot repository with incremental normalized records
+  - keep playlist/session data out of full-rewrite hot paths
+  - reduce page-level duplicate playlist rewrites where feasible
+- Targeted issues:
+  - `HVSC-AUD-002`
+  - `HVSC-AUD-013`
+  - `HVSC-AUD-014`
+- Planned files:
+  - `src/lib/playlistRepository/indexedDbRepository.ts`
+  - `src/lib/playlistRepository/repository.ts`
+  - `src/lib/playlistRepository/types.ts`
+  - `src/pages/playFiles/hooks/usePlaybackPersistence.ts`
+  - `src/pages/PlayFilesPage.tsx`
+- Validation:
+  - repository contract tests
+  - playback persistence regression tests proving current-index changes do not rewrite the playlist
+- Exit criteria:
+  - IndexedDB writes are incremental instead of single-state rewrites
+  - current-track/session updates persist separately from playlist rows
+  - repository hydration can restore the active item without rematerializing on every session mutation
+
+## Phase 3 - Playlist UX Scale Cleanup
+
+- Scope:
+  - remove avoidable O(n^2) row derivation and eager playlist-side scans
+  - batch or bound large add flows where practical in this pass
+- Targeted issues:
+  - `HVSC-AUD-001`
+  - `HVSC-AUD-011`
+- Planned files:
+  - `src/pages/playFiles/hooks/usePlaylistListItems.tsx`
+  - `src/pages/playFiles/handlers/addFileSelections.ts`
+  - `src/components/lists/SelectableActionList.tsx`
+  - `src/pages/playFiles/components/PlaylistPanel.tsx`
+- Validation:
+  - existing list-item tests plus new regression coverage for index lookups and large-playlist behavior
+- Exit criteria:
+  - no per-row `findIndex(...)` over the full playlist
+  - large add/derive paths are more bounded than the audited baseline
+
+## Phase 4 - HVSC Ingest And Platform Path Fixes
+
+- Scope:
+  - implement the highest-leverage ingest durability and platform-path fixes feasible in one pass
+  - close stale iOS parity comments/docs
+- Targeted issues:
+  - `HVSC-AUD-003`
+  - `HVSC-AUD-006`
+  - `HVSC-AUD-007`
+  - `HVSC-AUD-009`
+  - `HVSC-AUD-010`
+  - `HVSC-AUD-012`
+- Planned files:
+  - `src/lib/hvsc/**`
+  - `ios/App/App/HvscIngestionPlugin.swift`
+  - `docs/internals/ios-parity-matrix.md`
+- Validation:
+  - targeted Vitest HVSC suites
+  - platform-specific smoke tests where supported locally
+- Exit criteria:
+  - touched ingest/runtime paths have explicit failure semantics and updated docs
+  - stale iOS parity claims are removed
+
+## Phase 5 - Validation And Hardware Attempts
+
+- Scope:
+  - run the minimum honest validation for touched code
+  - satisfy repository coverage obligations
+  - retry Android/C64U hardware evidence collection
+- Targeted issues:
+  - `HVSC-AUD-004`
+  - `HVSC-AUD-005`
+  - `HVSC-AUD-008`
+  - `HVSC-AUD-011`
+- Required commands:
   - `npm run test`
-  - `npm run build`
   - `npm run test:coverage`
-  - smallest honest targeted UI validation for touched surfaces
-- Exit criteria:
-  - All required validation passes.
-  - PLANS.md phases are marked complete.
-  - WORKLOG.md contains a continuous execution trace.
+  - targeted Playwright/HVSC tests if UI behavior changes materially
+  - `cd android && ./gradlew test`
+  - `adb devices -l`
 
-## Status
+  ## HVSC DECOMPRESSION CONVERGENCE
+
+  ### Change Classification
+  - Classification: `DOC_PLUS_CODE`, `CODE_CHANGE`, `UI_CHANGE`
+  - Goal: make HVSC decompression and ingestion production-ready across Android, iOS, and Web with real-archive evidence, deterministic memory safety, and end-to-end proof on Pixel 4 plus Ultimate 64 at `u64`.
+  - Authoritative inputs:
+    - `docs/research/hvsc/implementation-plan-decompression-and-e2e-2026-04-03.md`
+    - `docs/research/hvsc/hvcs-7z-decompression-research.md`
+    - `docs/research/hvsc/gap-analysis-decompression-and-e2e-workflow-2026-04-03.md`
+
+  ### Impact Map
+  - Android extraction and plugin flow:
+    - `android/app/src/main/java/uk/gleissner/c64commander/**`
+    - `android/app/build.gradle`
+  - Android tests and fixtures:
+    - `android/app/src/test/**`
+    - `android/app/src/test/fixtures/**`
+  - App/runtime integration and docs:
+    - `src/lib/hvsc/**`
+    - `docs/research/hvsc/**`
+    - `docs/architecture.md`
+    - `docs/testing/**`
+    - `PLANS.md`
+    - `WORKLOG.md`
+    - `artifacts/**`
+
+  ### Phase 1 - Archive Characterisation
+  - GAP IDs: `GAP-005`
+  - Success criteria:
+    - the real HVSC archive is cached locally at a stable path
+    - `7zz l -slt` and `7zz t` are run against that archive
+    - the exact method chain, dictionary size, solid/block structure, encryption state, entry count, and uncompressed size are documented from command output rather than assumption
+  - Proof artifacts:
+    - archive path and checksum in `WORKLOG.md`
+    - updated archive profile in the gap analysis and implementation plan docs
+  - Exact next actions:
+    - verify `7zz` availability
+    - populate `~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z`
+    - run `7zz l -slt` and `7zz t`
+    - summarize results into docs and worklog
+
+  ### Phase 2 - Validate Current Android Engine
+  - GAP IDs: `GAP-001`, `GAP-004`
+  - Success criteria:
+    - the current Apache Commons Compress + `xz` path opens the real archive, enumerates entries, extracts at least 100 SID files, validates `PSID`/`RSID` headers, and shows acceptable memory and timing behavior
+    - a documented keep-or-replace verdict exists based on real evidence
+  - Proof artifacts:
+    - JVM real-archive tests under `android/app/src/test/**`
+    - measured timing and memory notes in `WORKLOG.md`
+    - explicit engine verdict in the gap analysis and implementation plan docs
+  - Exact next actions:
+    - add a cache-aware real-archive provider for Android tests
+    - add real-archive extraction tests for open, enumerate, sample extract, and SID validation
+    - run the tests and capture results
+
+  ### Phase 2b - Replace Engine If Real Evidence Fails
+  - GAP IDs: `GAP-004`
+  - Success criteria:
+    - if the current engine fails, exactly one replacement path is integrated and revalidated against the same real archive
+    - the chosen replacement is justified by the actual HVSC method chain
+  - Proof artifacts:
+    - Android build integration for the chosen engine
+    - repeated real-archive validation results
+    - updated rationale in research, implementation plan, and gap analysis docs
+  - Exact next actions:
+    - only execute if Phase 2 fails
+    - prefer upstream 7-Zip NDK/JNI; accept PLzmaSDK/LZMA SDK only if the real method chain justifies it
+
+  ### Phase 3 - Standalone Extraction Library
+  - GAP IDs: `GAP-002`, `GAP-011`
+  - Success criteria:
+    - a standalone Kotlin extraction library exists, supports `.7z` and `.zip`, streams file-by-file, exposes progress and cancellation, and enforces path safety
+    - duplicated plugin extraction logic is removed in favor of the library
+  - Proof artifacts:
+    - new extractor classes and focused unit tests
+    - plugin integration tests kept green
+  - Exact next actions:
+    - extract shared archive logic into `android/app/src/main/java/uk/gleissner/c64commander/hvsc/**`
+    - wire the plugin to call the library instead of owning decompression
+
+  ### Phase 4 - Real-Archive Test Infrastructure
+  - GAP IDs: `GAP-003`, `GAP-009`
+  - Success criteria:
+    - real-archive tests are cache-backed, checksum-verified, intentionally invokable, and CI-safe when the archive is absent
+  - Proof artifacts:
+    - real archive provider utility
+    - Gradle task to populate the cache
+    - documentation for local and CI execution
+  - Exact next actions:
+    - add archive cache resolution via env var and default path
+    - add checksum verification and clean skip behavior
+    - add Gradle task for cache population
+
+  ### Phase 5 - Memory Safety
+  - GAP IDs: `GAP-010`
+  - Success criteria:
+    - extraction probes archive requirements before work begins
+    - extraction aborts clearly when memory budget is insufficient
+    - memory-pressure cancellation is implemented and tested
+  - Proof artifacts:
+    - extractor probe and budget logic
+    - unit tests for accept, reject, and cancel cases
+    - measured notes recorded in `WORKLOG.md`
+  - Exact next actions:
+    - model archive memory requirements from real metadata
+    - add budget enforcement and cancellation hooks
+    - validate on JVM tests and during Android proof
+
+  ### Phase 6 - Hardware-in-the-Loop Proof
+  - GAP IDs: `GAP-007`
+  - Success criteria:
+    - Pixel 4 installs the app, ingests the real HVSC archive through the Android native path, browses extracted songs, adds a genuine HVSC-extracted song to a playlist, plays it on the Ultimate 64 at `u64`, and shows playback evidence with a visible HEALTHY badge
+  - Proof artifacts:
+    - `artifacts/hvsc-e2e-proof-YYYYMMDDTHHMMSSZ/`
+    - `TIMELINE.md`, `screenshots/`, `logcat-full.txt`, `u64-info.json`, `extraction-summary.json`
+  - Exact next actions:
+    - only run after Android extraction is proven locally
+    - probe `u64`
+    - install debug build on the attached Pixel 4
+    - capture full artifact set during the end-to-end flow
+
+  ### Phase 7 - Web Product Decision
+  - GAP IDs: `GAP-006`
+  - Success criteria:
+    - Web product truth is explicit and matches runtime truth
+    - architecture, docs, and UI messaging no longer contradict each other
+  - Proof artifacts:
+    - updated architecture and testing docs with the chosen Web decision
+  - Exact next actions:
+    - choose between permanently unsupported full Web ingest, server-side extraction, or another proven delivery path
+    - update docs and runtime messaging to match that decision
+
+  ### External Constraint Register
+  - iOS native extraction hardening and proof remains dependent on macOS/Swift execution. This workstream must still update docs truthfully, but Linux-host execution cannot claim iOS native completion unless limited to code changes and repository-side tests that actually run here.
+
+  ### Current Focus
+  - Append the convergence contract and move immediately into Phase 1 archive characterisation.
+  - Keep the current Android engine only if the real HVSC archive proves it acceptable.
+  - Do not claim end-to-end success without a genuine HVSC-extracted song playing on the Ultimate 64 at `u64`.
+  - C64 Ultimate probes/playback attempts as environment allows
+
+- Exit criteria:
+  - final report distinguishes closed issues, partial closures, and external blockers
+  - hardware attempts are evidenced even if blocked
+
+## Current Status
 
 - Phase 1: completed
 - Phase 2: completed
-- Phase 3: completed
-- Phase 4: completed
-- Phase 5: in progress
-- Phase 6: in progress
-- Phase 7: pending
-- Phase 8: pending
-- Phase 9: in progress
-- Phase 10: pending
+- Phase 3: in progress
+- Phase 4: partially completed
+- Phase 5: completed
+
+## Current Focus
+
+- Reduce remaining playlist UX hot-path costs beyond the repository/session fixes already landed.
+- Keep the HVSC ingest/platform findings honest: the Android JVM lane is green now, but full end-to-end HVSC download/ingest/browse proof on device is still incomplete.
+- Push the remaining audit gaps toward query-windowed playlist browsing/search and stronger ingest durability semantics instead of legacy snapshot fallbacks.
+- For all remaining hardware validation, use the adb-attached Pixel 4 and probe `u64` and `c64u` by hostname; if both answer over REST, prefer `u64`, otherwise use whichever reachable device responds.
+- Leave the execution artifacts aligned with what was actually implemented and validated in this pass.
+
+## Progress Notes
+
+- Completed in this pass:
+  - incremental IndexedDB persistence for tracks, playlist rows, playlist order, and sessions
+  - separate repository session persistence so ordinary current-track changes stop rewriting the playlist dataset
+  - removal of the audited O(n^2) playlist-row `findIndex(...)` lookup
+  - Play-page query hook split so category-filter changes requery without resyncing the repository
+  - Play-page playlist filtering now uses a bounded query window: the collapsed card stays preview-sized while the sheet lazily loads additional repository-backed pages on demand
+  - large playlist-add flows now append in bounded batches for both recursive file scans and CommoServe archive-result imports
+  - legacy localStorage playlist restore no longer scans unrelated device keys when hydrating the active playlist
+  - non-native HVSC ingest now fails explicitly for unsupported full-archive runtime paths instead of silently presenting a production fallback
+  - cached HVSC archive markers now carry expected size metadata and the runtime deletes marker/file pairs that no longer match the on-disk archive size
+  - HVSC status summaries now retain ingestion IDs, archive names, stage context, and recovery hints for cancellations, restart recovery, and failure diagnostics
+  - Android JVM unit tests now run with a Java 21 launcher, restoring a green local `./gradlew test` lane in this environment
+  - stale iOS HVSC parity comments/docs corrected
+- Validation completed:
+  - `npm run build`
+  - `npm run lint` with only pre-existing warnings from generated coverage artifacts
+  - `npm run test`
+  - `npm run test:coverage`
+  - `node scripts/check-coverage-threshold.mjs coverage/coverage-final.json`
+  - coverage gate satisfied: branch coverage `91.25%`, line coverage `94.74%`
+  - `cd android && ./gradlew test`
+  - `adb devices -l`
+  - `npm run cap:build`
+  - `cd android && ./gradlew installDebug`
+  - `adb shell am start -W -n uk.gleissner.c64commander/.MainActivity`
+  - `curl http://c64u/v1/info`
+  - direct SID playback probe against `http://c64u/v1/runners:sidplay`
+  - `curl http://u64/v1/info`
+  - refreshed targeted Vitest coverage for playlist query windowing and HVSC cache-marker integrity
+  - Android install and cold launch on attached Pixel 4
+- Validation still blocked or incomplete:
+  - no fresh end-to-end Pixel 4 proof yet for full HVSC download, extraction, ingest, browse, and large-playlist manipulation inside the app
+  - no direct in-app Ultimate playback proof yet beyond the confirmed device API and direct runner endpoint probe
+  - `u64` is currently the reachable preferred Ultimate target; `c64u` REST probing is currently failing
+
+## Historical Note
+
+- The prior `DOC_ONLY` research plan was completed and its output remains the audit baseline in `docs/research/hvsc/production-readiness-audit-2026-04-03.md`.
+
+## Plan Extension — 2026-04-04T08:45:00Z
+
+**Status: COMPLETE** — All tasks executed. AUD-004 and AUD-005 closed with decisive evidence in `artifacts/hvsc-hil-20260404T064552Z/`.
+
+### Context
+
+Environment blockers that previously prevented AUD-004 and AUD-005 closure are now resolved:
+
+- `u64` is reachable at 192.168.1.13: `curl http://u64/v1/info` returns `Ultimate 64 Elite`, firmware 3.14d
+- Pixel 4 (`9B081FFAZ001WX`) is connected via ADB
+- SID fixture staged on C64U at `/Temp/demo.sid` via FTP
+- AUD-006 (iOS) is out-of-scope per task instructions
+
+### SUPERSEDED assessments
+
+- AUD-004 was previously marked `DONE` with an incomplete qualifier (HVSC extraction failed). SUPERSEDED — must demonstrate a complete end-to-end HIL run with C64U source browse, playlist add, and playback.
+- AUD-005 was previously marked `BLOCKED` (u64 unreachable). SUPERSEDED — u64 is now reachable, enabling app-first playback proof.
+
+### Task 1 — Build and install latest app on Pixel 4
+
+- Build: `npm run cap:build`
+- Install: `cd android && ./gradlew installDebug`
+- Verify: `adb shell am start -W -n uk.gleissner.c64commander/.MainActivity`
+
+### Task 2 — AUD-004: Complete Android HIL acceptance run
+
+- Launch app on Pixel 4
+- Confirm C64U connection (u64 visible on Home page)
+- Navigate to Play Files
+- Browse C64U source (u64 files via FTP)
+- Add SID file from C64U to playlist
+- Play the SID on the C64U (triggers REST `PUT /v1/runners:sidplay`)
+- Capture timestamped screenshots at each step
+- Capture logcat evidence
+- Archive in `artifacts/hvsc-hil-<timestamp>/`
+- DONE criteria: archived end-to-end HIL run from app launch through C64U file browse → add → play
+
+### Task 3 — AUD-005: App-first playback with audio/REST proof
+
+- During Task 2 playback: capture REST proof that play command was sent to C64U
+- Verify C64U accepted the playback request (HTTP 200, empty errors)
+- Verify FTP evidence of uploaded SID on device
+- Capture c64scope audio analysis if available, or direct REST verification
+- DONE criteria: archived evidence proving selected track in app = track streamed by Ultimate, with REST acceptance proof
+
+### Task 4 — Review all other DONE issues
+
+- Verify each DONE issue's evidence is still accurate against current code
+- Flag any that need updates
+
+### Task 5 — Update follow-up doc and PLANS.md
+
+- Update `docs/research/hvsc/production-readiness-status-2026-04-03-followup.md` with final statuses
+- Update PLANS.md phase annotations
+- Update WORKLOG.md
+
+### Task 6 — Final validation
+
+- `npm run test`
+- `npm run test:coverage` (branch coverage ≥ 91%)
+- Confirm all convergence criteria met

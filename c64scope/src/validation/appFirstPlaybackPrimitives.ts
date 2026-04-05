@@ -45,20 +45,85 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function readPickerPathFromNodes(nodes: ReturnType<typeof parseUiNodes>): string | null {
-  const pathNode = findVisibleTextContaining(nodes, "Path:");
-  if (!pathNode) {
-    return null;
-  }
-
-  const rawLabel = (pathNode.text || pathNode.contentDesc).trim();
-  if (!rawLabel.toLowerCase().startsWith("path:")) {
-    return null;
-  }
-  return normalizePath(rawLabel.slice("Path:".length));
+function normalizedLabel(label: string): string {
+  return label.trim().toLowerCase();
 }
 
-function c64uPickerLooksReady(nodes: ReturnType<typeof parseUiNodes>): boolean {
+function findPickerActionNode(
+  nodes: ReturnType<typeof parseUiNodes>,
+  candidates: readonly string[],
+  matchMode: "exact" | "contains",
+) {
+  const normalizedCandidates = candidates.map(normalizedLabel).filter((candidate) => candidate.length > 0);
+  for (const node of nodes) {
+    const label = normalizedLabel(node.text || node.contentDesc);
+    if (!label) {
+      continue;
+    }
+    if (!node.clickable && node.className !== "android.widget.Button") {
+      continue;
+    }
+    const center = parseBoundsCenter(node.bounds);
+    if (!center) {
+      continue;
+    }
+    const matched = normalizedCandidates.some((candidate) =>
+      matchMode === "exact" ? label === candidate : label.includes(candidate),
+    );
+    if (matched) {
+      return node;
+    }
+  }
+  return null;
+}
+
+async function tapPickerAction(
+  client: DroidmindClient,
+  serial: string,
+  candidates: readonly string[],
+): Promise<boolean> {
+  const xml = await dumpUiHierarchy(serial);
+  const nodes = parseUiNodes(xml);
+  const node = findPickerActionNode(nodes, candidates, "exact") ?? findPickerActionNode(nodes, candidates, "contains");
+  if (!node) {
+    return false;
+  }
+
+  const center = parseBoundsCenter(node.bounds);
+  if (!center) {
+    return false;
+  }
+
+  await client.tap(serial, center.x, center.y);
+  await sleep(900);
+  return true;
+}
+
+function readPickerPathFromNodes(nodes: ReturnType<typeof parseUiNodes>): string | null {
+  const pathNode = findVisibleTextContaining(nodes, "Path:");
+  if (pathNode) {
+    const rawLabel = (pathNode.text || pathNode.contentDesc).trim();
+    if (!rawLabel.toLowerCase().startsWith("path:")) {
+      return null;
+    }
+    return normalizePath(rawLabel.slice("Path:".length));
+  }
+
+  const slashPrefixedPathNode = nodes.find((node) => {
+    if (!node.enabled) {
+      return false;
+    }
+    const rawLabel = (node.text || node.contentDesc).trim();
+    return rawLabel.startsWith("/") && !rawLabel.includes(" ");
+  });
+  if (!slashPrefixedPathNode) {
+    return null;
+  }
+
+  return normalizePath((slashPrefixedPathNode.text || slashPrefixedPathNode.contentDesc).trim());
+}
+
+function pickerContentIsVisible(nodes: ReturnType<typeof parseUiNodes>): boolean {
   return (
     readPickerPathFromNodes(nodes) !== null ||
     findVisibleText(nodes, "Select items") !== null ||
@@ -66,6 +131,18 @@ function c64uPickerLooksReady(nodes: ReturnType<typeof parseUiNodes>): boolean {
     findVisibleText(nodes, "Filter files…") !== null ||
     findVisibleText(nodes, "Filter files...") !== null
   );
+}
+
+function c64uPickerLooksReady(nodes: ReturnType<typeof parseUiNodes>): boolean {
+  return pickerContentIsVisible(nodes);
+}
+
+function pickerIsNotLoading(nodes: ReturnType<typeof parseUiNodes>): boolean {
+  return findVisibleText(nodes, "Refresh") !== null;
+}
+
+function pickerIsFullyReady(nodes: ReturnType<typeof parseUiNodes>): boolean {
+  return pickerContentIsVisible(nodes) && pickerIsNotLoading(nodes);
 }
 
 function readSelectedCount(nodes: ReturnType<typeof parseUiNodes>): number | null {
@@ -142,6 +219,18 @@ async function waitForC64UPickerReady(serial: string, retries: number, delayMs: 
   return false;
 }
 
+async function waitForPickerFullyReady(serial: string, retries: number, delayMs: number): Promise<boolean> {
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    const xml = await dumpUiHierarchy(serial);
+    const nodes = parseUiNodes(xml);
+    if (pickerIsFullyReady(nodes)) {
+      return true;
+    }
+    await sleep(delayMs);
+  }
+  return false;
+}
+
 async function swipePickerContents(client: DroidmindClient, serial: string): Promise<void> {
   await client.swipe(serial, 540, 1620, 540, 1080, 260);
   await sleep(300);
@@ -180,6 +269,12 @@ export async function chooseSource(client: DroidmindClient, serial: string, labe
         return;
       }
     }
+    if (resourceId === "import-option-hvsc") {
+      const existingPickerReady = await waitForPickerFullyReady(serial, 1, 1);
+      if (existingPickerReady) {
+        return;
+      }
+    }
     const selectionAttempts = resourceId === "import-option-c64u" ? 3 : SOURCE_OPTION_REVEAL_ATTEMPTS;
     for (let attempt = 1; attempt <= selectionAttempts; attempt += 1) {
       let selected = resourceId ? await tapByResourceId(client, serial, resourceId) : false;
@@ -209,10 +304,23 @@ export async function chooseSource(client: DroidmindClient, serial: string, labe
         }
         continue;
       }
+      if (resourceId === "import-option-hvsc") {
+        const pickerReady = await waitForPickerFullyReady(serial, 30, 500);
+        if (pickerReady) {
+          return;
+        }
+        if (attempt < selectionAttempts) {
+          await swipePickerContents(client, serial);
+        }
+        continue;
+      }
       return;
     }
     if (resourceId === "import-option-c64u") {
       throw new Error("C64U source picker did not become ready after selecting the source.");
+    }
+    if (resourceId === "import-option-hvsc") {
+      throw new Error("HVSC source picker did not become ready after selecting the source.");
     }
   }
   throw new Error(`Could not select any source option from: ${labels.join(", ")}`);
@@ -231,7 +339,10 @@ export async function openPathSegments(
     (targetFirstSegment.length > 0 && currentSegments.length > 0 && currentSegments[0] !== targetFirstSegment);
 
   if (shouldResetToRoot) {
-    await tapByText(client, serial, "Root");
+    const resetTapped = await tapByText(client, serial, "Root");
+    if (!resetTapped) {
+      await tapPickerAction(client, serial, ["Root"]);
+    }
     const rootVisible = await waitForPickerPath(serial, "/", 6, 250);
     currentPath = rootVisible ? "/" : ((await readPickerPath(serial)) ?? "/");
   }
@@ -242,11 +353,16 @@ export async function openPathSegments(
     let opened = false;
     const expectedPath = joinPath(currentPath, segment);
     for (let attempt = 1; attempt <= 8; attempt += 1) {
+      const slashPrefixedSegment = `/${segment.trim().replace(/^\/+|\/+$/g, "")}`;
+      const tapCandidates = [`Open ${segment}`, segment, slashPrefixedSegment];
       opened =
-        (await tapByText(client, serial, `Open ${segment}`)) ||
-        (await tapByTextContaining(client, serial, `Open ${segment}`)) ||
-        (await tapByText(client, serial, segment)) ||
-        (await tapByTextContaining(client, serial, segment));
+        (await tapByText(client, serial, tapCandidates[0]!)) ||
+        (await tapByTextContaining(client, serial, tapCandidates[0]!)) ||
+        (await tapByText(client, serial, tapCandidates[1]!)) ||
+        (await tapByTextContaining(client, serial, tapCandidates[1]!)) ||
+        (await tapByText(client, serial, tapCandidates[2]!)) ||
+        (await tapByTextContaining(client, serial, tapCandidates[2]!)) ||
+        (await tapPickerAction(client, serial, tapCandidates));
       if (opened) {
         const pathAdvanced = await waitForPickerPath(serial, expectedPath, 6, 250);
         if (pathAdvanced) {

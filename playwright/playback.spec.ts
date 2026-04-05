@@ -627,10 +627,21 @@ test.describe("Playback file browser", () => {
       })
       .toBeTruthy();
 
-    await scrollArea.evaluate((node: HTMLElement) => {
-      node.scrollTop = node.scrollHeight;
-    });
-    await expect(scrollArea).toContainText("Track_2700.sid");
+    await expect
+      .poll(
+        async () => {
+          await scrollArea.evaluate((node: HTMLElement) => {
+            node.scrollTop = node.scrollHeight;
+          });
+          return page
+            .getByText("Track_2700.sid")
+            .first()
+            .isVisible()
+            .catch(() => false);
+        },
+        { timeout: 15000 },
+      )
+      .toBe(true);
     await snap(page, testInfo, "playlist-view-all-scrolled");
   });
 

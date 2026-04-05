@@ -41,6 +41,10 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   deleteCachedArchive: vi.fn(async () => undefined),
   writeCachedArchiveMarker: vi.fn(async () => undefined),
   readCachedArchiveMarker: vi.fn(async () => null),
+  createLibraryStagingDir: vi.fn(async () => undefined),
+  writeStagingFile: vi.fn(),
+  promoteLibraryStagingDir: vi.fn(async () => undefined),
+  cleanupStaleStagingDir: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -72,6 +76,7 @@ import {
   readArchiveBuffer,
   resolveCachedArchive,
   getCacheStatusInternal,
+  computeArchiveChecksumMd5,
 } from "@/lib/hvsc/hvscDownload";
 import { Filesystem } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
@@ -443,7 +448,9 @@ describe("hvscDownload", () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
         size: 10 * 1024 * 1024,
       } as any);
-      await expect(readArchiveBuffer("hvsc-baseline-84.7z")).rejects.toThrow("HVSC bridge read blocked");
+      await expect(readArchiveBuffer("hvsc-baseline-84.7z")).rejects.toThrow(
+        "requires the native ingestion plugin on this platform",
+      );
     });
 
     it("continues when stat throws during size check (BRDA:334)", async () => {
@@ -520,13 +527,71 @@ describe("hvscDownload", () => {
     it("returns name when stat finds directory type and marker is set (BRDA:279)", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
         type: "directory",
+        size: 1234,
       } as any);
       const { readCachedArchiveMarker } = await import("@/lib/hvsc/hvscFilesystem");
       vi.mocked(readCachedArchiveMarker).mockResolvedValue({
         version: 84,
+        sizeBytes: 1234,
       } as any);
       const result = await resolveCachedArchive("hvsc-baseline", 84);
       expect(result).toBe("hvsc-baseline-84");
+    });
+
+    it("deletes cached archives when the marker size no longer matches the file size", async () => {
+      vi.mocked(Filesystem.stat).mockResolvedValue({
+        type: "file",
+        size: 512,
+      } as any);
+      const { readCachedArchiveMarker, deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+        version: 84,
+        sizeBytes: 1024,
+      } as any);
+
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(result).toBeNull();
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
+    });
+
+    it("deletes cached archives when the marker checksum no longer matches the file bytes", async () => {
+      vi.mocked(Filesystem.stat).mockResolvedValue({
+        type: "file",
+        size: 3,
+      } as any);
+      vi.mocked(Filesystem.readFile).mockResolvedValue({
+        data: Buffer.from(new Uint8Array([1, 2, 3])).toString("base64"),
+      } as any);
+      const { readCachedArchiveMarker, deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+        version: 84,
+        sizeBytes: 3,
+        checksumMd5: "wrong-checksum",
+      } as any);
+
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(result).toBeNull();
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
+    });
+
+    it("deletes cached archives when file size is below 99% of expected size", async () => {
+      vi.mocked(Filesystem.stat).mockResolvedValue({
+        type: "file",
+        size: 50000,
+      } as any);
+      const { readCachedArchiveMarker, deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+        version: 84,
+        sizeBytes: 50000,
+        expectedSizeBytes: 1000000,
+      } as any);
+
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(result).toBeNull();
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
     });
   });
 
@@ -582,6 +647,7 @@ describe("hvscDownload", () => {
     it("streams download progress and writes archive", async () => {
       const chunks = [new Uint8Array([1, 2]), new Uint8Array([3, 4]), new Uint8Array([5, 6])];
       let index = 0;
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 6 } as any);
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
         headers: { get: () => "6" },
@@ -600,8 +666,18 @@ describe("hvscDownload", () => {
       const options = makeOptions();
       const inMemory = await downloadArchive(options);
 
-      const { writeCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+      const { writeCachedArchive, writeCachedArchiveMarker } = await import("@/lib/hvsc/hvscFilesystem");
       expect(writeCachedArchive).toHaveBeenCalledWith("hvsc-baseline-84.7z", expect.any(Uint8Array));
+      expect(writeCachedArchiveMarker).toHaveBeenCalledWith(
+        "hvsc-baseline-84.7z",
+        expect.objectContaining({
+          version: 84,
+          type: "baseline",
+          expectedSizeBytes: 6,
+          checksumMd5: computeArchiveChecksumMd5(new Uint8Array([1, 2, 3, 4, 5, 6])),
+          sourceUrl: "https://example.com/hvsc.7z",
+        }),
+      );
       const progressStages = (options.emitProgress as any).mock.calls.map((call: any[]) => call[0]?.stage);
       expect(progressStages).toContain("download");
       expect(inMemory).toBeNull();
@@ -671,6 +747,18 @@ describe("hvscDownload", () => {
       });
 
       await expect(downloadArchive(makeOptions({ cancelTokens: tokens }))).rejects.toThrow("HVSC update cancelled");
+    });
+
+    it("fails early when non-native download content length exceeds the bridge budget", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (name: string) => (name === "content-length" ? String(10 * 1024 * 1024) : null) },
+      });
+
+      await expect(downloadArchive(makeOptions())).rejects.toThrow(
+        "requires the native ingestion plugin on this platform",
+      );
+      expect(Filesystem.downloadFile).not.toHaveBeenCalled();
     });
 
     it("propagates HTTP errors", async () => {

@@ -166,6 +166,24 @@ describe("addFileSelections archive source handler", () => {
     expect(item1.request.source).toBe("commoserve");
   });
 
+  it("flushes large archive result sets to the playlist in bounded batches", async () => {
+    const deps = createMockDeps();
+    const handler = createAddFileSelectionsHandler(deps as any);
+    const selections = Array.from({ length: 600 }, (_, index) => ({
+      type: "file" as const,
+      name: `Archive ${index + 1}`,
+      path: `${1000 + index}/42`,
+    }));
+
+    const result = await handler(archiveSource, selections);
+
+    expect(result).toBe(true);
+    expect(deps.applySonglengthsToItems).toHaveBeenCalledTimes(3);
+    expect(deps.setPlaylist).toHaveBeenCalledTimes(3);
+    expect(deps.applySonglengthsToItems.mock.calls.map(([items]) => items.length)).toEqual([250, 250, 100]);
+    expect(deps._playlistItems).toHaveLength(600);
+  });
+
   it("reports error when archive selections are empty", async () => {
     const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
     const deps = createMockDeps();

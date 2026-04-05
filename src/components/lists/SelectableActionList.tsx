@@ -80,6 +80,8 @@ export type ActionListItem = {
 export type SelectableActionListProps = {
   title: string;
   items: ActionListItem[];
+  viewAllItems?: ActionListItem[];
+  totalItemCount?: number;
   emptyLabel: string;
   selectAllLabel?: string;
   deselectAllLabel?: string;
@@ -97,6 +99,13 @@ export type SelectableActionListProps = {
   filterHeader?: React.ReactNode;
   viewAllFilterHeader?: React.ReactNode;
   filterPlaceholder?: string;
+  filterValue?: string;
+  onFilterValueChange?: (value: string) => void;
+  viewAllFilterValue?: string;
+  onViewAllFilterValueChange?: (value: string) => void;
+  disableClientFiltering?: boolean;
+  hasMoreViewAllItems?: boolean;
+  onViewAllEndReached?: () => void;
   showSelectionControls?: boolean;
   selectionLabel?: string;
 };
@@ -284,6 +293,8 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
 export const SelectableActionList = ({
   title,
   items,
+  viewAllItems,
+  totalItemCount,
   emptyLabel,
   selectAllLabel = "Select all",
   deselectAllLabel = "Deselect all",
@@ -301,21 +312,54 @@ export const SelectableActionList = ({
   filterHeader,
   viewAllFilterHeader,
   filterPlaceholder = "Filter files...",
+  filterValue,
+  onFilterValueChange,
+  viewAllFilterValue,
+  onViewAllFilterValueChange,
+  disableClientFiltering = false,
+  hasMoreViewAllItems = false,
+  onViewAllEndReached,
   showSelectionControls = true,
   selectionLabel,
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
   const [viewAllOpen, setViewAllOpen] = useState(false);
-  const [filterText, setFilterText] = useState("");
-  const [viewAllFilterText, setViewAllFilterText] = useState("");
+  const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
+  const [uncontrolledViewAllFilterText, setUncontrolledViewAllFilterText] = useState("");
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const effectiveViewAllItems = viewAllItems ?? items;
+  const inlineFilterText = filterValue ?? uncontrolledFilterText;
+  const expandedFilterText = viewAllFilterValue ?? uncontrolledViewAllFilterText;
+
+  const setInlineFilterText = useCallback(
+    (value: string) => {
+      onFilterValueChange?.(value);
+      if (filterValue === undefined) {
+        setUncontrolledFilterText(value);
+      }
+    },
+    [filterValue, onFilterValueChange],
+  );
+
+  const setExpandedFilterText = useCallback(
+    (value: string) => {
+      onViewAllFilterValueChange?.(value);
+      if (viewAllFilterValue === undefined) {
+        setUncontrolledViewAllFilterText(value);
+      }
+    },
+    [onViewAllFilterValueChange, viewAllFilterValue],
+  );
 
   const filterWithHeaders = useCallback(
-    (query: string) => {
+    (query: string, sourceItems: ActionListItem[]) => {
+      if (disableClientFiltering) {
+        return sourceItems;
+      }
       const trimmed = query.trim();
-      if (!trimmed) return items;
+      if (!trimmed) return sourceItems;
       const lower = trimmed.toLowerCase();
       const list: ActionListItem[] = [];
       let pendingHeader: ActionListItem | null = null;
@@ -327,7 +371,7 @@ export const SelectableActionList = ({
         return item.title.toLowerCase().includes(lower) || subtitle.includes(lower) || extra.includes(lower);
       };
 
-      items.forEach((item) => {
+      sourceItems.forEach((item) => {
         if (item.variant === "header") {
           if (pendingHeader && hasMatchInSection) {
             list.push(pendingHeader);
@@ -346,18 +390,29 @@ export const SelectableActionList = ({
 
       return list;
     },
-    [items],
+    [disableClientFiltering],
   );
 
-  const filteredItems = useMemo(() => filterWithHeaders(filterText), [items, filterText]);
+  const filteredItems = useMemo(
+    () => filterWithHeaders(inlineFilterText, items),
+    [filterWithHeaders, inlineFilterText, items],
+  );
 
-  const viewAllFilteredItems = useMemo(() => filterWithHeaders(viewAllFilterText), [items, viewAllFilterText]);
+  const viewAllFilteredItems = useMemo(
+    () => filterWithHeaders(expandedFilterText, effectiveViewAllItems),
+    [effectiveViewAllItems, expandedFilterText, filterWithHeaders],
+  );
 
   const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
+  const filteredVisibleCount = filteredItems.reduce(
+    (count, item) => (item.variant === "header" ? count : count + 1),
+    0,
+  );
+  const effectiveTotalItemCount =
+    disableClientFiltering && typeof totalItemCount === "number" ? totalItemCount : filteredVisibleCount;
 
   const { visibleItems, hasMore } = useMemo(() => {
-    const totalItems = filteredItems.reduce((count, item) => (item.variant === "header" ? count : count + 1), 0);
     const list: ActionListItem[] = [];
     let pendingHeader: ActionListItem | null = null;
     let remaining = maxVisible;
@@ -374,8 +429,8 @@ export const SelectableActionList = ({
       list.push(item);
       remaining -= 1;
     }
-    return { visibleItems: list, hasMore: totalItems > maxVisible };
-  }, [filteredItems, maxVisible]);
+    return { visibleItems: list, hasMore: effectiveTotalItemCount > maxVisible };
+  }, [effectiveTotalItemCount, filteredItems, maxVisible]);
 
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
@@ -414,16 +469,16 @@ export const SelectableActionList = ({
         <Input
           type="text"
           placeholder={filterPlaceholder}
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
+          value={inlineFilterText}
+          onChange={(e) => setInlineFilterText(e.target.value)}
           className="pl-9 pr-9 h-9"
           data-testid="list-filter-input"
         />
-        {filterText && (
+        {inlineFilterText && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setFilterText("")}
+            onClick={() => setInlineFilterText("")}
             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
             aria-label="Clear filter"
           >
@@ -440,7 +495,7 @@ export const SelectableActionList = ({
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="text-muted-foreground min-w-0 break-words">
-              {filteredItems.length ? `${filteredItems.length} items` : emptyLabel}
+              {effectiveTotalItemCount ? `${effectiveTotalItemCount} items` : emptyLabel}
             </span>
             <Button
               variant="outline"
@@ -488,16 +543,16 @@ export const SelectableActionList = ({
                   <Input
                     type="text"
                     placeholder={filterPlaceholder}
-                    value={viewAllFilterText}
-                    onChange={(e) => setViewAllFilterText(e.target.value)}
+                    value={expandedFilterText}
+                    onChange={(e) => setExpandedFilterText(e.target.value)}
                     className="pl-9 pr-9 h-9"
                     data-testid="view-all-filter-input"
                   />
-                  {viewAllFilterText && (
+                  {expandedFilterText && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setViewAllFilterText("")}
+                      onClick={() => setExpandedFilterText("")}
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
                       aria-label="Clear filter"
                     >
@@ -527,6 +582,11 @@ export const SelectableActionList = ({
                       data={viewAllFilteredItems}
                       defaultItemHeight={60}
                       overscan={500}
+                      endReached={() => {
+                        if (hasMoreViewAllItems) {
+                          onViewAllEndReached?.();
+                        }
+                      }}
                       scrollerRef={(ref) => {
                         if (ref && viewAllScrollRef) {
                           (viewAllScrollRef as React.MutableRefObject<HTMLElement | null>).current = ref as HTMLElement;

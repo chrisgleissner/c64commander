@@ -14,12 +14,6 @@ import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistStorageKey, PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 
-vi.mock("@/pages/playFiles/hooks/playbackPersistenceBudget", () => ({
-  shouldPersistLegacyPlaylistBlob: vi.fn().mockReturnValue(true),
-}));
-
-import { shouldPersistLegacyPlaylistBlob } from "@/pages/playFiles/hooks/playbackPersistenceBudget";
-
 // Flexible harness allowing custom buildPlaylistItem and initial state
 const usePlaybackHarness = ({
   playlistStorageKey,
@@ -151,7 +145,6 @@ describe("usePlaybackPersistence – edge cases", () => {
     localStorage.clear();
     sessionStorage.clear();
     resetPlaylistDataRepositoryForTests();
-    vi.mocked(shouldPersistLegacyPlaylistBlob).mockReturnValue(true);
   });
 
   it("handles non-object JSON in sessionStorage (ignores malformed session)", async () => {
@@ -314,9 +307,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     });
   });
 
-  it("size budget exceeded: skips legacy localStorage write and removes old keys", async () => {
-    vi.mocked(shouldPersistLegacyPlaylistBlob).mockReturnValue(false);
-
+  it("persist effect never writes legacy localStorage blob and removes old keys", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
@@ -341,8 +332,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     });
 
     // After hydration, the persist effect fires with the restored playlist.
-    // shouldPersistLegacyPlaylistBlob returns false → else branch fires (line 400)
-    // localStorage.removeItem should have been called for playlistStorageKey
+    // Legacy blob persistence is repository-only; localStorage blobs are cleaned up.
     await waitFor(() => {
       expect(localStorage.getItem(playlistStorageKey)).toBeNull();
     });
@@ -508,6 +498,37 @@ describe("usePlaybackPersistence – edge cases", () => {
       };
       expect(parsed.currentItemId).toBeNull();
       expect(parsed.currentIndex).toBe(-1);
+    });
+  });
+
+  it("cleans up legacy localStorage blob after migrating to repository on hydration", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const defaultKey = buildPlaylistStorageKey("default");
+    const blob = JSON.stringify({
+      items: [
+        {
+          source: "hvsc",
+          path: "/MUSICIANS/Test/migrate.sid",
+          name: "migrate.sid",
+          sourceId: "hvsc",
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      currentIndex: 0,
+    });
+    localStorage.setItem(playlistStorageKey, blob);
+    localStorage.setItem(defaultKey, blob);
+
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    // Legacy blobs should be removed after migration to the repository
+    await waitFor(() => {
+      expect(localStorage.getItem(playlistStorageKey)).toBeNull();
+      expect(localStorage.getItem(defaultKey)).toBeNull();
     });
   });
 });

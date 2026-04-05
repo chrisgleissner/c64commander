@@ -15,6 +15,7 @@ import {
   loadHvscStatusSummary,
   saveHvscStatusSummary,
   updateHvscStatusSummaryFromEvent,
+  recordHvscQueryTiming,
   type HvscStatusSummary,
 } from "@/lib/hvsc/hvscStatusStore";
 import { addLog } from "@/lib/logging";
@@ -53,20 +54,28 @@ describe("hvscStatusStore", () => {
       const summary: HvscStatusSummary = {
         download: {
           status: "success",
+          ingestionId: "ingestion-1",
+          archiveName: "hvsc-baseline-84.7z",
+          lastStage: "download",
           startedAt: "now",
           finishedAt: "later",
           durationMs: 1234,
           sizeBytes: 987,
           downloadedBytes: 456,
           totalBytes: 1024,
+          recoveryHint: null,
         },
         extraction: {
           status: "success",
+          ingestionId: "ingestion-1",
+          archiveName: "hvsc-baseline-84.7z",
+          lastStage: "complete",
           startedAt: "now",
           finishedAt: "later",
           durationMs: 5678,
           filesExtracted: 42,
           totalFiles: 120,
+          recoveryHint: null,
         },
         lastUpdatedAt: "later",
       };
@@ -90,6 +99,7 @@ describe("hvscStatusStore", () => {
       const stored = JSON.parse(localStorage.getItem("c64u_hvsc_status:v1") ?? "{}");
       expect(stored.download?.downloadedBytes).toBe(10);
       expect(result.download.downloadedBytes).toBe(10);
+      expect(result.download.ingestionId).toBe("test");
     });
 
     it("ignores updates when storage is corrupted", () => {
@@ -125,6 +135,7 @@ describe("hvscStatusStore", () => {
         percent: 25,
       });
       expect(summary.download.status).toBe("in-progress");
+      expect(summary.download.ingestionId).toBe("test");
       expect(summary.download.downloadedBytes).toBe(512);
       expect(summary.download.totalBytes).toBe(2048);
     });
@@ -157,6 +168,7 @@ describe("hvscStatusStore", () => {
       const event = {
         stage: "download",
         message: "Downloaded",
+        archiveName: "hvsc-baseline-84.7z",
         downloadedBytes: 100,
         totalBytes: 100,
         percent: 100,
@@ -165,9 +177,29 @@ describe("hvscStatusStore", () => {
 
       const next = applyHvscProgressEventToSummary(base, event, null);
       expect(next.download.status).toBe("success");
+      expect(next.download.archiveName).toBe("hvsc-baseline-84.7z");
       expect(next.download.finishedAt).toBeTruthy();
       expect(next.download.durationMs).toBe(1234);
       expect(next.download.totalBytes).toBe(100);
+    });
+
+    it("records recovery hints on extraction failures", () => {
+      const initial = getDefaultHvscStatusSummary();
+      const next = applyHvscProgressEventToSummary(
+        initial,
+        {
+          ingestionId: "ingestion-2",
+          stage: "error",
+          message: "corrupt archive",
+          archiveName: "hvsc-update-85.7z",
+          errorCause: "corrupt archive",
+        },
+        "archive_validation",
+      );
+
+      expect(next.extraction.status).toBe("failure");
+      expect(next.extraction.archiveName).toBe("hvsc-update-85.7z");
+      expect(next.extraction.recoveryHint).toContain("Delete the cached archive");
     });
 
     it("ignores non-complete events", () => {
@@ -383,6 +415,58 @@ describe("hvscStatusStore", () => {
         "archive_extraction",
       );
       expect(result.extraction.errorMessage).toBe("Fallback message used");
+    });
+  });
+
+  describe("recordHvscQueryTiming", () => {
+    it("logs query timing with correlation ID and structured fields", () => {
+      recordHvscQueryTiming({
+        correlationId: "COR-0042",
+        phase: "index",
+        path: "/MUSICIANS/Hubbard_Rob",
+        query: "",
+        offset: 0,
+        limit: 200,
+        resultCount: 47,
+        windowMs: 3.14,
+        timestamp: "2026-04-04T03:00:00.000Z",
+      });
+
+      expect(addLog).toHaveBeenCalledWith("info", "HVSC query timing", {
+        correlationId: "COR-0042",
+        phase: "index",
+        path: "/MUSICIANS/Hubbard_Rob",
+        query: "",
+        offset: 0,
+        limit: 200,
+        resultCount: 47,
+        windowMs: 3.14,
+      });
+    });
+
+    it("logs query timing with search query and non-zero offset", () => {
+      recordHvscQueryTiming({
+        correlationId: "COR-0099",
+        phase: "runtime",
+        path: "/MUSICIANS",
+        query: "commando",
+        offset: 200,
+        limit: 100,
+        resultCount: 3,
+        windowMs: 12.5,
+        timestamp: "2026-04-04T03:00:01.000Z",
+      });
+
+      expect(addLog).toHaveBeenCalledWith("info", "HVSC query timing", {
+        correlationId: "COR-0099",
+        phase: "runtime",
+        path: "/MUSICIANS",
+        query: "commando",
+        offset: 200,
+        limit: 100,
+        resultCount: 3,
+        windowMs: 12.5,
+      });
     });
   });
 });

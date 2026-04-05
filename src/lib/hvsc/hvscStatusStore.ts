@@ -23,6 +23,9 @@ export type HvscStepStatus = "idle" | "in-progress" | "success" | "failure";
 
 export type HvscDownloadStatus = {
   status: HvscStepStatus;
+  ingestionId?: string | null;
+  archiveName?: string | null;
+  lastStage?: string | null;
   startedAt?: string | null;
   finishedAt?: string | null;
   durationMs?: number | null;
@@ -31,10 +34,14 @@ export type HvscDownloadStatus = {
   totalBytes?: number | null;
   errorCategory?: HvscFailureCategory | null;
   errorMessage?: string | null;
+  recoveryHint?: string | null;
 };
 
 export type HvscExtractionStatus = {
   status: HvscStepStatus;
+  ingestionId?: string | null;
+  archiveName?: string | null;
+  lastStage?: string | null;
   startedAt?: string | null;
   finishedAt?: string | null;
   durationMs?: number | null;
@@ -42,6 +49,7 @@ export type HvscExtractionStatus = {
   totalFiles?: number | null;
   errorCategory?: HvscFailureCategory | null;
   errorMessage?: string | null;
+  recoveryHint?: string | null;
 };
 
 export type HvscStatusSummary = {
@@ -102,6 +110,19 @@ const resolveFailureCategory = (event: HvscProgressEvent, lastStage?: string | n
   return "unknown";
 };
 
+const buildRecoveryHint = (category: HvscFailureCategory, stage?: string | null) => {
+  if (category === "network" || category === "download") {
+    return "Retry the download. If the problem repeats, delete the cached archive and re-download.";
+  }
+  if (category === "storage") {
+    return "Free storage or fix file permissions, then retry the ingest.";
+  }
+  if (category === "extraction" || category === "corrupt-archive" || stage === "archive_validation") {
+    return "Delete the cached archive and retry the ingest from a fresh download.";
+  }
+  return "Retry the HVSC install or ingest. If it repeats, re-download the archive first.";
+};
+
 export const applyHvscProgressEventToSummary = (
   summary: HvscStatusSummary,
   event: HvscProgressEvent,
@@ -124,6 +145,9 @@ export const applyHvscProgressEventToSummary = (
       download: {
         ...summary.download,
         status: isDownloadComplete ? "success" : "in-progress",
+        ingestionId: event.ingestionId,
+        archiveName: event.archiveName ?? summary.download.archiveName ?? null,
+        lastStage: event.stage,
         startedAt: summary.download.startedAt ?? now,
         finishedAt,
         durationMs: event.elapsedTimeMs ?? summary.download.durationMs ?? null,
@@ -133,6 +157,7 @@ export const applyHvscProgressEventToSummary = (
         totalBytes: event.totalBytes ?? summary.download.totalBytes ?? null,
         errorCategory: null,
         errorMessage: null,
+        recoveryHint: null,
       },
       lastUpdatedAt: now,
     };
@@ -152,12 +177,16 @@ export const applyHvscProgressEventToSummary = (
       extraction: {
         ...summary.extraction,
         status: "in-progress",
+        ingestionId: event.ingestionId,
+        archiveName: event.archiveName ?? summary.extraction.archiveName ?? summary.download.archiveName ?? null,
+        lastStage: event.stage,
         startedAt: summary.extraction.startedAt ?? now,
         durationMs: event.elapsedTimeMs ?? summary.extraction.durationMs ?? null,
         filesExtracted: event.processedCount ?? summary.extraction.filesExtracted ?? null,
         totalFiles: event.totalCount ?? summary.extraction.totalFiles ?? null,
         errorCategory: null,
         errorMessage: null,
+        recoveryHint: null,
       },
     };
   }
@@ -168,12 +197,20 @@ export const applyHvscProgressEventToSummary = (
       download: {
         ...summary.download,
         status: summary.download.status === "success" ? summary.download.status : "success",
+        ingestionId: event.ingestionId,
+        archiveName: event.archiveName ?? summary.download.archiveName ?? null,
+        lastStage: event.stage,
         finishedAt: summary.download.finishedAt ?? now,
+        recoveryHint: null,
       },
       extraction: {
         ...summary.extraction,
         status: summary.extraction.status === "success" ? summary.extraction.status : "success",
+        ingestionId: event.ingestionId,
+        archiveName: event.archiveName ?? summary.extraction.archiveName ?? summary.download.archiveName ?? null,
+        lastStage: event.stage,
         finishedAt: summary.extraction.finishedAt ?? now,
+        recoveryHint: null,
       },
       lastUpdatedAt: now,
     };
@@ -188,9 +225,13 @@ export const applyHvscProgressEventToSummary = (
         download: {
           ...summary.download,
           status: "failure",
+          ingestionId: event.ingestionId,
+          archiveName: event.archiveName ?? summary.download.archiveName ?? null,
+          lastStage: event.stage,
           finishedAt: now,
           errorCategory: category,
           errorMessage,
+          recoveryHint: buildRecoveryHint(category, lastStage),
         },
         lastUpdatedAt: now,
       };
@@ -200,9 +241,13 @@ export const applyHvscProgressEventToSummary = (
       extraction: {
         ...summary.extraction,
         status: "failure",
+        ingestionId: event.ingestionId,
+        archiveName: event.archiveName ?? summary.extraction.archiveName ?? summary.download.archiveName ?? null,
+        lastStage: event.stage,
         finishedAt: now,
         errorCategory: category,
         errorMessage,
+        recoveryHint: buildRecoveryHint(category, lastStage),
       },
       lastUpdatedAt: now,
     };
@@ -216,4 +261,29 @@ export const updateHvscStatusSummaryFromEvent = (event: HvscProgressEvent, lastS
   const next = applyHvscProgressEventToSummary(current, event, lastStage);
   saveHvscStatusSummary(next);
   return next;
+};
+
+export type HvscQueryTimingRecord = {
+  correlationId: string;
+  phase: string;
+  path: string;
+  query: string;
+  offset: number;
+  limit: number;
+  resultCount: number;
+  windowMs: number;
+  timestamp: string;
+};
+
+export const recordHvscQueryTiming = (record: HvscQueryTimingRecord) => {
+  addLog("info", "HVSC query timing", {
+    correlationId: record.correlationId,
+    phase: record.phase,
+    path: record.path,
+    query: record.query,
+    offset: record.offset,
+    limit: record.limit,
+    resultCount: record.resultCount,
+    windowMs: record.windowMs,
+  });
 };

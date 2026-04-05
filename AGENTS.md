@@ -312,6 +312,10 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 
 - For Android exploratory or regression investigations, assume a local Android handset is attached over adb and a live C64 Ultimate is reachable at hostname `c64u`.
 - Prefer proving Android/C64U fixes against that real-device path before treating emulator-only evidence as sufficient.
+- For hardware-backed validation, use the adb-attached Pixel 4 when it is present.
+- Probe both `u64` and `c64u` over REST at `http://u64/v1/info` and `http://c64u/v1/info` before device-flow validation.
+- If both devices are reachable, prefer `u64`; otherwise use whichever host responds successfully.
+- Record which hardware target was chosen and do not claim device validation when neither host is reachable.
 
 ## Modularization guardrails
 

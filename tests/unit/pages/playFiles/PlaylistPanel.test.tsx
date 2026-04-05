@@ -47,6 +47,7 @@ type HarnessProps = {
   onClearPlaylist?: () => void;
   categoryOptions?: PlayFileCategory[];
   playlistTypeFilters?: PlayFileCategory[];
+  playlistFilterText?: string;
 };
 
 const PlaylistPanelHarness = ({
@@ -57,6 +58,7 @@ const PlaylistPanelHarness = ({
   onClearPlaylist = vi.fn(),
   categoryOptions = ["sid", "mod", "prg", "crt", "disk"] satisfies PlayFileCategory[],
   playlistTypeFilters = ["sid", "mod", "prg", "crt", "disk"],
+  playlistFilterText = "",
 }: HarnessProps) => {
   const { setOverride } = useDisplayProfilePreference();
 
@@ -66,7 +68,9 @@ const PlaylistPanelHarness = ({
 
   return (
     <PlaylistPanel
-      items={items}
+      previewItems={items}
+      viewAllItems={items}
+      totalItemCount={items.length}
       selectedCount={selectedCount}
       allSelected={false}
       onToggleSelectAll={vi.fn()}
@@ -87,6 +91,10 @@ const PlaylistPanelHarness = ({
       hasPlaylist={hasPlaylist}
       onAddItems={onAddItems}
       onClearPlaylist={onClearPlaylist}
+      playlistFilterText={playlistFilterText}
+      onPlaylistFilterTextChange={vi.fn()}
+      hasMoreViewAllItems={false}
+      onViewAllEndReached={vi.fn()}
     />
   );
 };

@@ -19,6 +19,8 @@ import {
 
 const HVSC_WORK_DIR = "hvsc";
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
+const HVSC_LIBRARY_STAGING_DIR = `${HVSC_WORK_DIR}/library-staging`;
+const HVSC_LIBRARY_OLD_DIR = `${HVSC_WORK_DIR}/library-old`;
 const HVSC_CACHE_DIR = `${HVSC_WORK_DIR}/cache`;
 export const MAX_BRIDGE_READ_BYTES = 5 * 1024 * 1024;
 
@@ -352,6 +354,63 @@ export const resetLibraryRoot = async () => {
   await ensureDir(HVSC_LIBRARY_DIR);
 };
 
+const removeDirSilently = async (path: string) => {
+  try {
+    await Filesystem.rmdir({
+      directory: Directory.Data,
+      path,
+      recursive: true,
+    });
+  } catch {
+    // Directory may not exist; ignore
+  }
+};
+
+export const createLibraryStagingDir = async () => {
+  await removeDirSilently(HVSC_LIBRARY_STAGING_DIR);
+  await ensureDir(HVSC_LIBRARY_STAGING_DIR);
+};
+
+export const resolveStagingPath = (virtualPath: string) => {
+  const normalized = normalizeFilePath(virtualPath);
+  const relative = normalized.replace(/^\//, "");
+  return relative ? `${HVSC_LIBRARY_STAGING_DIR}/${relative}` : HVSC_LIBRARY_STAGING_DIR;
+};
+
+export const writeStagingFile = async (virtualPath: string, data: Uint8Array) => {
+  const path = resolveStagingPath(virtualPath);
+  const parent = path.split("/").slice(0, -1).join("/");
+  if (parent) {
+    await ensureDir(parent);
+  }
+  await writeFileWithRetry(path, uint8ToBase64(data));
+};
+
+export const promoteLibraryStagingDir = async () => {
+  resetSonglengthsCache();
+  await removeDirSilently(HVSC_LIBRARY_OLD_DIR);
+  try {
+    await Filesystem.rename({
+      directory: Directory.Data,
+      from: HVSC_LIBRARY_DIR,
+      to: HVSC_LIBRARY_OLD_DIR,
+    });
+  } catch {
+    // Old library may not exist (first install)
+  }
+  await Filesystem.rename({
+    directory: Directory.Data,
+    from: HVSC_LIBRARY_STAGING_DIR,
+    to: HVSC_LIBRARY_DIR,
+  });
+  await removeDirSilently(HVSC_LIBRARY_OLD_DIR);
+};
+
+export const cleanupStaleStagingDir = async () => {
+  await removeDirSilently(HVSC_LIBRARY_STAGING_DIR);
+  await removeDirSilently(HVSC_LIBRARY_OLD_DIR);
+};
+
 export const readCachedArchive = async (relativePath: string) => {
   const result = await readFileWithSizeGuard(`${HVSC_CACHE_DIR}/${relativePath}`);
   return base64ToUint8(result.data);
@@ -366,6 +425,9 @@ export type HvscArchiveMarker = {
   version: number;
   type: "baseline" | "update";
   sizeBytes?: number | null;
+  expectedSizeBytes?: number | null;
+  checksumMd5?: string | null;
+  sourceUrl?: string | null;
   completedAt: string;
 };
 

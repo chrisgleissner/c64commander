@@ -27,6 +27,10 @@ import {
   deleteLibraryFile,
   resetLibraryRoot,
   resetSonglengthsCache,
+  createLibraryStagingDir,
+  writeStagingFile,
+  promoteLibraryStagingDir,
+  cleanupStaleStagingDir,
 } from "./hvscFilesystem";
 import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
 import { loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
@@ -106,17 +110,28 @@ const canUseNonNativeHvscIngestion = () => {
   return import.meta.env.VITE_ENABLE_NON_NATIVE_HVSC_INGESTION === "1";
 };
 
+export const NON_NATIVE_HVSC_INGESTION_UNSUPPORTED_MESSAGE =
+  "HVSC full-archive ingestion requires the native ingestion plugin on this platform. " +
+  "Enable VITE_ENABLE_NON_NATIVE_HVSC_INGESTION=1 only for controlled testing.";
+
 const resolveHvscIngestionMode = () => {
   if (canUseNativeHvscIngestion()) {
     return "native" as const;
   }
-  if (!canUseNonNativeHvscIngestion()) {
-    addLog("warn", "HVSC native ingestion plugin unavailable; falling back to non-native ingestion path", {
+  if (canUseNonNativeHvscIngestion()) {
+    addLog("warn", "HVSC native ingestion plugin unavailable; using non-native ingestion path", {
       nativeAvailable: false,
-      overrideEnabled: false,
+      overrideEnabled: import.meta.env.VITE_ENABLE_NON_NATIVE_HVSC_INGESTION === "1",
+      mode: import.meta.env.MODE,
     });
+    return "non-native" as const;
   }
-  return "non-native" as const;
+  addLog("error", "HVSC native ingestion plugin unavailable on unsupported platform", {
+    nativeAvailable: false,
+    overrideEnabled: false,
+    mode: import.meta.env.MODE,
+  });
+  throw new Error(NON_NATIVE_HVSC_INGESTION_UNSUPPORTED_MESSAGE);
 };
 
 const isUnsupportedNativeSevenZipMethodError = (error: unknown) => {
@@ -297,7 +312,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   };
 
   if (plan.type === "baseline") {
-    await resetLibraryRoot();
+    await createLibraryStagingDir();
     baselineInstalled = plan.version;
   }
 
@@ -349,7 +364,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
         const targetPath =
           plan.type === "baseline" ? normalizeLibraryPath(normalized) : normalizeUpdateLibraryPath(normalized);
         if (targetPath) {
-          await writeLibraryFile(targetPath, data);
+          await (plan.type === "baseline" ? writeStagingFile : writeLibraryFile)(targetPath, data);
           emitProgress({
             stage: "songlengths",
             message: `Loaded ${targetPath.split("/").pop()}`,
@@ -379,7 +394,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
             error: (parseError as Error).message,
           });
         }
-        await writeLibraryFile(virtualPath, data);
+        await (plan.type === "baseline" ? writeStagingFile : writeLibraryFile)(virtualPath, data);
         browseIndex.upsertSong({
           virtualPath,
           fileName: virtualPath.split("/").pop() ?? virtualPath,
@@ -459,6 +474,10 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     throw new Error(
       `HVSC ingestion cleanup failed for ${deletionFailures.length} file(s): ${formatPathListPreview(deletionFailures)}. See diagnostics for full failure manifest.`,
     );
+  }
+
+  if (plan.type === "baseline") {
+    await promoteLibraryStagingDir();
   }
 
   resetSonglengthsCache();
@@ -670,6 +689,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   const emitProgress = createProgressEmitter(ingestionId);
   emitProgress({ stage: "start", message: "HVSC install/update started" });
   await ensureHvscDirs();
+  await cleanupStaleStagingDir();
   runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
 
   let currentArchive: string | null = null;
@@ -925,6 +945,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   emitProgress({ stage: "start", message: "HVSC cached ingestion started" });
   resetHvscProgressSummaryStage();
   await ensureHvscDirs();
+  await cleanupStaleStagingDir();
   runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
 
   let currentArchive: string | null = null;

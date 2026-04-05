@@ -22,6 +22,8 @@ import { loadHvscRoot } from "./hvscRootLocator";
 import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "./hvscBrowseIndexStore";
+import { nextCorrelationId } from "@/lib/tracing/traceIds";
+import { recordHvscQueryTiming } from "./hvscStatusStore";
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -218,6 +220,22 @@ export const getHvscFolderListingPaged = async (options: {
   const query = options.query ?? "";
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const limit = Math.max(1, Math.floor(options.limit ?? 200));
+  const correlationId = nextCorrelationId();
+  const queryStartMs = performance.now();
+
+  const recordTiming = (page: HvscFolderListingPage, phase: string) => {
+    recordHvscQueryTiming({
+      correlationId,
+      phase,
+      path,
+      query,
+      offset,
+      limit,
+      resultCount: page.songs.length + page.folders.length,
+      windowMs: Math.round((performance.now() - queryStartMs) * 100) / 100,
+      timestamp: new Date().toISOString(),
+    });
+  };
 
   try {
     await ensureHvscIndexReady();
@@ -228,18 +246,24 @@ export const getHvscFolderListingPaged = async (options: {
       limit,
     });
     if (page.totalFolders > 0 || page.totalSongs > 0 || !isHvscBridgeAvailable()) {
+      recordTiming(page, "index");
       return page;
     }
     const mock = getMockBridge();
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
-      return pageRuntimeListing(runtimeListing, query, offset, limit);
+      const result = pageRuntimeListing(runtimeListing, query, offset, limit);
+      recordTiming(result, "mock-runtime");
+      return result;
     }
     const runtimeListing = await getRuntimeFolderListing(path);
-    return pageRuntimeListing(runtimeListing, query, offset, limit);
+    const result = pageRuntimeListing(runtimeListing, query, offset, limit);
+    recordTiming(result, "runtime");
+    return result;
   } catch (error) {
     const err = error as Error;
     addLog("info", "HVSC paged folder listing failed; falling back to runtime", {
+      correlationId,
       path,
       query,
       offset,
@@ -253,10 +277,14 @@ export const getHvscFolderListingPaged = async (options: {
     const mock = getMockBridge();
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
-      return pageRuntimeListing(runtimeListing, query, offset, limit);
+      const result = pageRuntimeListing(runtimeListing, query, offset, limit);
+      recordTiming(result, "mock-runtime-fallback");
+      return result;
     }
     const runtimeListing = await getRuntimeFolderListing(path);
-    return pageRuntimeListing(runtimeListing, query, offset, limit);
+    const result = pageRuntimeListing(runtimeListing, query, offset, limit);
+    recordTiming(result, "runtime-fallback");
+    return result;
   }
 };
 

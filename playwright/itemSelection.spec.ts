@@ -31,6 +31,34 @@ const openAddItemsDialog = async (page: Page) => {
   await expect(page.getByRole("dialog")).toBeVisible();
 };
 
+const readPlaylistRepositoryCount = async (page: Page, playlistId = "c64u_playlist:v1:TEST-123") =>
+  page.evaluate(
+    async ({ activePlaylistId }) => {
+      const openDb = () =>
+        new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open("c64u-playlist-repository", 1);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed"));
+        });
+
+      const db = await openDb();
+      try {
+        const value = await new Promise<unknown>((resolve, reject) => {
+          const tx = db.transaction("state", "readonly");
+          const request = tx.objectStore("state").get(`playlist-order:${activePlaylistId}`);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error ?? new Error("IndexedDB read failed"));
+        });
+
+        const playlistOrder = value as { "playlist-position"?: string[] } | undefined;
+        return playlistOrder?.["playlist-position"]?.length ?? 0;
+      } finally {
+        db.close();
+      }
+    },
+    { activePlaylistId: playlistId },
+  );
+
 const waitForFtpIdle = async (container: Page) => {
   const loading = container.getByTestId("ftp-loading");
   if (await loading.count()) {
@@ -561,25 +589,16 @@ test.describe("Item Selection Dialog UX", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const firstCount = await page.evaluate(() => {
-      const raw = localStorage.getItem("c64u_playlist:v1:TEST-123");
-      if (!raw) return 0;
-      const parsed = JSON.parse(raw) as { items?: unknown[] };
-      return parsed.items?.length ?? 0;
-    });
-    expect(firstCount).toBeGreaterThan(0);
+    await expect.poll(async () => readPlaylistRepositoryCount(page)).toBeGreaterThan(0);
+    const firstCount = await readPlaylistRepositoryCount(page);
 
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const secondCount = await page.evaluate(() => {
-      const raw = localStorage.getItem("c64u_playlist:v1:TEST-123");
-      if (!raw) return 0;
-      const parsed = JSON.parse(raw) as { items?: unknown[] };
-      return parsed.items?.length ?? 0;
-    });
+    await expect.poll(async () => readPlaylistRepositoryCount(page)).toBeGreaterThanOrEqual(firstCount);
+    const secondCount = await readPlaylistRepositoryCount(page);
     expect(secondCount).toBeGreaterThanOrEqual(firstCount);
     await snap(page, testInfo, "play-repeated-add");
   });
