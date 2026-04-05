@@ -18,7 +18,6 @@ import type {
 import { Capacitor } from "@capacitor/core";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { createHvscMediaIndex } from "./hvscMediaIndex";
-import { loadHvscRoot } from "./hvscRootLocator";
 import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
@@ -156,30 +155,19 @@ const ensureHvscIndexReady = async () => {
   await hvscIndex.load();
   if (!hvscIndex.getAll().length) {
     const migrated = await migrateLegacyMediaIndex();
-    if (!migrated) {
-      const root = loadHvscRoot();
-      await hvscIndex.scan([root.path]);
+    if (migrated) {
+      await hvscIndex.load();
     }
   }
 
+  // Avoid a full recursive rescan on the first browse. Runtime listing fallback
+  // can serve the requested folder immediately and prevents blocking the UI on
+  // large 60K+ libraries while the index cache is still cold or absent.
   const browseSnapshot = await loadHvscBrowseIndexSnapshot();
-  if (!browseSnapshot) {
-    const root = loadHvscRoot();
-    await hvscIndex.scan([root.path]);
-    return;
-  }
+  if (!browseSnapshot) return;
 
   const integrity = await verifyHvscBrowseIndexIntegrity(browseSnapshot);
-  if (!integrity.isValid) {
-    const root = loadHvscRoot();
-    await hvscIndex.scan([root.path]);
-    return;
-  }
-
-  const root = loadHvscRoot();
-  if (!hvscIndex.getAll().length) {
-    await hvscIndex.scan([root.path]);
-  }
+  if (!integrity.isValid) return;
 };
 
 const pageRuntimeListing = (

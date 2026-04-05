@@ -120,7 +120,7 @@ jobs:
             coverage/coverage-final.json
 
   perf-benchmark-quick:
-    name: Perf | Quick HVSC secondary web benchmark
+    name: Perf | Quick HVSC web benchmark
     runs-on: ubuntu-latest
 
     steps:
@@ -147,8 +147,14 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Collect quick HVSC perf summary
+      - name: Run HVSC microbenchmarks
+        run: npm run test:bench
+
+      - name: Collect quick HVSC full scenario summary
         run: npm run test:perf:quick
+
+      - name: Collect quick HVSC secondary summary
+        run: npm run test:perf:secondary:quick
 
       - name: Apply optional perf budgets
         run: npm run test:perf:assert:web

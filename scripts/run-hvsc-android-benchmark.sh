@@ -242,27 +242,18 @@ for required_snapshot in c64u-smoke-benchmark-install.json c64u-smoke-benchmark-
   fi
 done
 
-node - "$SUMMARY_PATH" "$BENCHMARK_RUN_ID" "$DEVICE_ID" "$C64U_TARGET" "$C64U_HOST" "$HVSC_BASE_URL" "$MAESTRO_STATUS" "$PERFETTO_LOCAL_PATH" "$SMOKE_DIR" <<'EOF'
-const fs = require('fs');
-const path = require('path');
-
-const [summaryPath, runId, deviceId, target, host, hvscBaseUrl, maestroStatus, perfettoPath, smokeDir] = process.argv.slice(2);
-const smokeFiles = fs.readdirSync(smokeDir).filter((file) => file.endsWith('.json')).sort();
-
-const summary = {
-  runId,
-  deviceId,
-  target,
-  host: host || null,
-  hvscBaseUrl: hvscBaseUrl || null,
-  maestroStatus: Number(maestroStatus),
-  perfettoTrace: path.relative(path.dirname(summaryPath), perfettoPath),
-  smokeArtifacts: smokeFiles.map((file) => path.relative(path.dirname(summaryPath), path.join(smokeDir, file))),
-  createdAt: new Date().toISOString(),
-};
-
-fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
-EOF
+node "$ROOT_DIR/scripts/hvsc/write-android-perf-summary.mjs" \
+  --summary="$SUMMARY_PATH" \
+  --run-id="$BENCHMARK_RUN_ID" \
+  --device-id="$DEVICE_ID" \
+  --target="$C64U_TARGET" \
+  --host="$C64U_HOST" \
+  --hvsc-base-url="$HVSC_BASE_URL" \
+  --maestro-status="$MAESTRO_STATUS" \
+  --perfetto-trace="$PERFETTO_LOCAL_PATH" \
+  --perfetto-log="$PERFETTO_LOG_PATH" \
+  --smoke-dir="$SMOKE_DIR" \
+  --telemetry-dir="$TELEMETRY_DIR"
 
 log "HVSC Android benchmark artifacts written to $RUN_DIR"
 exit "$MAESTRO_STATUS"

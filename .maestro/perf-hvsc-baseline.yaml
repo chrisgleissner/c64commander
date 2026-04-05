@@ -46,6 +46,16 @@ env:
     visible: "Status: Ready"
     timeout: ${LONG_TIMEOUT}
 - assertVisible: "HVSC ready"
+- runFlow:
+    when:
+      visible: "Run Ingest HVSC"
+    commands:
+      - tapOn:
+          id: "hvsc-ingest"
+      - extendedWaitUntil:
+          visible: "Indexed "
+          timeout: ${LONG_TIMEOUT}
+      - assertVisible: "HVSC ready"
 - scrollUntilVisible:
     element:
       id: "add-items-to-playlist"

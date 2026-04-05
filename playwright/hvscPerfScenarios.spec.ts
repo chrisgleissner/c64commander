@@ -208,6 +208,30 @@ const resetHvscPerfTimings = async (page: Page) => {
     });
 };
 
+const waitForHvscDownloadComplete = async (page: Page) => {
+    const controls = page.getByTestId("hvsc-controls");
+    const ingestButton = page.locator("#hvsc-ingest");
+    await expect
+        .poll(
+            async () => {
+                const text = (await controls.textContent()) ?? "";
+                if (/Installed version|Status: Ready/i.test(text)) return "ready";
+                const ingestReady = await ingestButton.isEnabled().catch(() => false);
+                if (ingestReady && /Run Ingest HVSC|HVSC archives are cached/i.test(text)) return "cached";
+                return "";
+            },
+            { timeout: 600_000 },
+        )
+        .not.toBe("");
+    return (await controls.textContent()) ?? "";
+};
+
+const waitForHvscReady = async (page: Page) => {
+    await expect(page.getByTestId("hvsc-controls")).toContainText(/Installed version|Status: Ready/i, {
+        timeout: 600_000,
+    });
+};
+
 const findTiming = (timings: HvscPerfTiming[], scope: string, predicate?: (timing: HvscPerfTiming) => boolean) =>
     timings.find((timing) => timing.scope === scope && (!predicate || predicate(timing)))?.durationMs ?? null;
 
@@ -288,6 +312,7 @@ test.describe("HVSC perf scenarios S1-S11", () => {
      * Fixture mode: tiny archive (< 1 KB). Real-archive mode sets env vars.
      */
     test("S1 download HVSC from mock server", async ({ page }) => {
+        test.setTimeout(600_000);
         await seedBaseConfig(page, c64Server.baseUrl, `${hvscServer.baseUrl}/hvsc`);
         await page.goto("/play");
         await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
@@ -299,8 +324,7 @@ test.describe("HVSC perf scenarios S1-S11", () => {
         if (await downloadButton.isVisible({ timeout: 5000 }).catch(() => false)) {
             const { wallClockMs } = await measureWallClock(async () => {
                 await downloadButton.click();
-                // Wait for the flow to complete: downloading → ingesting → ready
-                await expect(page.getByTestId("hvsc-controls")).toContainText(/Status: Ready/i, { timeout: 120_000 });
+                await waitForHvscDownloadComplete(page);
             });
 
             const timings = await getHvscPerfTimings(page);
@@ -316,18 +340,31 @@ test.describe("HVSC perf scenarios S1-S11", () => {
 
     /**
      * S2: Ingest cached HVSC (cold).
-     * Captures ingest-specific timings from the S1 download+ingest flow.
-     * If S1 completed, the ingest timings are already in the perf ring buffer.
+     * Each Playwright test is isolated, so establish the cached/install state inside
+     * this test instead of assuming S1's state carries across test boundaries.
      */
     test("S2 ingest HVSC", async ({ page }) => {
+        test.setTimeout(600_000);
         await seedBaseConfig(page, c64Server.baseUrl, `${hvscServer.baseUrl}/hvsc`);
         await page.goto("/play");
         await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
 
-        // Wait for HVSC to be ready (either from S1 flow or already done)
-        await expect(page.getByTestId("hvsc-controls")).toContainText(/Installed version|Status: Ready/i, {
-            timeout: 120_000,
-        });
+        let controlsText = (await page.getByTestId("hvsc-controls").textContent()) ?? "";
+        if (!controlsText.match(/Installed version|Status: Ready|Run Ingest HVSC|HVSC archives are cached/i)) {
+            const downloadButton = page.locator("#hvsc-download");
+            await expect(downloadButton).toBeVisible();
+            await downloadButton.click();
+            controlsText = await waitForHvscDownloadComplete(page);
+        }
+
+        if (controlsText.match(/Run Ingest HVSC|HVSC archives are cached/i)) {
+            await resetHvscPerfTimings(page);
+            const ingestButton = page.locator("#hvsc-ingest");
+            await expect(ingestButton).toBeVisible();
+            await expect(ingestButton).toBeEnabled({ timeout: 600_000 });
+            await ingestButton.click();
+            await waitForHvscReady(page);
+        }
 
         const timings = await getHvscPerfTimings(page);
         const ingestTimings = timings.filter((t) => t.scope.startsWith("ingest:"));

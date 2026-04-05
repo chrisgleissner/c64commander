@@ -4,21 +4,7 @@ import { rm, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-
-const quantile = (values, q) => {
-    if (!values.length) return null;
-    const sorted = [...values].sort((left, right) => left - right);
-    const position = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * q) - 1));
-    return sorted[position];
-};
-
-const summarizeMetric = (samples) => ({
-    samples,
-    min: samples.length ? Math.min(...samples) : null,
-    max: samples.length ? Math.max(...samples) : null,
-    p50: quantile(samples, 0.5),
-    p95: quantile(samples, 0.95),
-});
+import { summarizeScenarioIterations, summarizeSecondaryIterations } from './webPerfSummary.mjs';
 
 const args = new Map(
     process.argv.slice(2).map((arg) => {
@@ -42,6 +28,7 @@ const useRealArchives =
     args.get('--use-real-archives') === '1' || process.env.HVSC_PERF_USE_REAL_ARCHIVES === '1';
 const loops = Number(args.get('--loops') || process.env.HVSC_PERF_LOOPS || '3');
 const project = args.get('--project') || process.env.HVSC_PERF_PROJECT || 'web';
+const suite = args.get('--suite') || process.env.HVSC_PERF_SUITE || 'secondary';
 const bytesPerSecond =
     args.get('--bytes-per-second') || process.env.HVSC_PERF_BYTES_PER_SECOND || String(5 * 1024 * 1024);
 const outFile =
@@ -77,14 +64,16 @@ mkdirSync(path.dirname(outFile), { recursive: true });
 const iterations = [];
 for (let index = 0; index < loops; index += 1) {
     const rawFile = path.join(tmpDir, `loop-${String(index + 1).padStart(2, '0')}.json`);
+    const specPath = suite === 'scenarios' ? 'playwright/hvscPerfScenarios.spec.ts' : 'playwright/hvscPerf.spec.ts';
     const result = spawnSync(
         'npx',
-        ['playwright', 'test', 'playwright/hvscPerf.spec.ts', '--project', project, '--reporter=line'],
+        ['playwright', 'test', specPath, '--project', project, '--reporter=line'],
         {
             stdio: 'inherit',
             env: {
                 ...process.env,
-                HVSC_PERF_OUTPUT_FILE: rawFile,
+                HVSC_PERF_OUTPUT_FILE: suite === 'secondary' ? rawFile : '',
+                HVSC_PERF_SCENARIOS_OUTPUT_FILE: suite === 'scenarios' ? rawFile : '',
                 HVSC_PERF_BYTES_PER_SECOND: bytesPerSecond,
                 HVSC_PERF_BASELINE_ARCHIVE: baselineArchive ?? '',
                 HVSC_PERF_UPDATE_ARCHIVE: updateArchive ?? '',
@@ -98,28 +87,29 @@ for (let index = 0; index < loops; index += 1) {
     iterations.push(JSON.parse(readFileSync(rawFile, 'utf8')));
 }
 
-const metricNames = ['browseLoadSnapshotMs', 'browseInitialQueryMs', 'browseSearchQueryMs', 'playbackLoadSidMs'];
-const metrics = Object.fromEntries(
-    metricNames.map((name) => {
-        const samples = iterations
-            .map((iteration) => iteration.metrics?.[name])
-            .filter((value) => Number.isFinite(value));
-        return [name, summarizeMetric(samples)];
-    }),
-);
+const suiteSummary = suite === 'scenarios'
+    ? summarizeScenarioIterations(iterations)
+    : { metrics: summarizeSecondaryIterations(iterations) };
 
 const summary = {
     generatedAt: new Date().toISOString(),
-    scenario: 'web-browse-playback-secondary',
+    scenario: suite === 'scenarios' ? 'web-hvsc-s1-s11' : 'web-browse-playback-secondary',
+    suite,
     loops,
     project,
     bytesPerSecond: Number(bytesPerSecond),
-    mode: useRealArchives ? 'real-archive-secondary-web' : 'fixture-secondary-web',
+    mode: useRealArchives
+        ? suite === 'scenarios'
+            ? 'real-archive-s1-s11-web'
+            : 'real-archive-secondary-web'
+        : suite === 'scenarios'
+            ? 'fixture-s1-s11-web'
+            : 'fixture-secondary-web',
     archives: {
         baselineArchive,
         updateArchive,
     },
-    metrics,
+    ...suiteSummary,
     iterations,
 };
 

@@ -19,6 +19,9 @@ describe("Android Maestro workflow contracts", () => {
         const flow = readRepoFile(".maestro", "perf-hvsc-baseline.yaml");
         expect(flow).toContain('visible: "Status: Ready"');
         expect(flow).toContain('assertVisible: "HVSC ready"');
+        expect(flow).toContain('visible: "Run Ingest HVSC"');
+        expect(flow).toContain('id: "hvsc-ingest"');
+        expect(flow).toContain('visible: "Indexed "');
         expect(flow).toContain('id: "import-option-hvsc"');
         expect(flow).toContain('visible: "From HVSC"');
         expect(flow).toContain('text: "Done"');

@@ -103,14 +103,22 @@ export const concatChunks = (chunks: Uint8Array[], totalLength?: number | null) 
   return buffer;
 };
 
-const toHashableArrayBuffer = (bytes: Uint8Array) => {
-  if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
-    return bytes.buffer;
-  }
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+const toHashableArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 };
 
 export const computeArchiveChecksumMd5 = (bytes: Uint8Array) => SparkMD5.ArrayBuffer.hash(toHashableArrayBuffer(bytes));
+
+type SparkMd5ArrayBufferAccumulator = {
+  append: (buffer: ArrayBuffer) => void;
+  end: () => string;
+};
+
+const SparkMd5ArrayBufferCtor = SparkMD5.ArrayBuffer as unknown as {
+  new(): SparkMd5ArrayBufferAccumulator;
+};
 
 const readHeapUsageBytes = () => {
   if (typeof performance !== "undefined" && "memory" in performance) {
@@ -304,13 +312,13 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
         const resolvedChecksumMd5 =
           marker?.checksumMd5 && stat.type === "file"
             ? await computeCachedArchiveChecksumMd5(name, statSize).catch((error) => {
-                addLog("warn", "HVSC cached archive checksum validation failed", {
-                  name,
-                  statSize,
-                  error: (error as Error).message,
-                });
-                return null;
-              })
+              addLog("warn", "HVSC cached archive checksum validation failed", {
+                name,
+                statSize,
+                error: (error as Error).message,
+              });
+              return null;
+            })
             : null;
         const hasSizeMismatch =
           typeof marker?.sizeBytes === "number" &&
@@ -380,10 +388,6 @@ export const getCacheStatusInternal = async () => {
 
 // ── Archive read-back ────────────────────────────────────────────
 
-const buildNonNativeLargeArchiveError = (archiveName: string, sizeBytes: number) =>
-  `HVSC non-native archive handling is limited to ${MAX_BRIDGE_READ_BYTES} bytes. ` +
-  `${archiveName} is ${sizeBytes} bytes and requires the native ingestion plugin on this platform.`;
-
 export const computeCachedArchiveChecksumMd5 = async (archivePath: string, sizeHintBytes?: number | null) => {
   const cacheDir = getHvscCacheDir();
   const relativeArchivePath = `${cacheDir}/${archivePath}`;
@@ -403,11 +407,8 @@ export const computeCachedArchiveChecksumMd5 = async (archivePath: string, sizeH
     }
   }
 
-  if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES) {
-    if (!shouldUseNativeDownload()) {
-      throw new Error(buildNonNativeLargeArchiveError(archivePath, statSize));
-    }
-    const digest = new SparkMD5.ArrayBuffer();
+  if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES && shouldUseNativeDownload()) {
+    const digest = new SparkMd5ArrayBufferCtor();
     let offsetBytes = 0;
     let decodedBytes = 0;
     while (offsetBytes < statSize) {
@@ -460,47 +461,44 @@ export const readArchiveBuffer = async (archivePath: string) => {
       error: (error as Error).message,
     });
   }
-  if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES) {
-    if (shouldUseNativeDownload()) {
-      const chunks: Uint8Array[] = [];
-      let offsetBytes = 0;
-      let decodedBytes = 0;
-      while (offsetBytes < statSize) {
-        const chunk = await HvscIngestion.readArchiveChunk({
-          relativeArchivePath,
-          offsetBytes,
-          lengthBytes: Math.min(HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES, statSize - offsetBytes),
-        });
-        if (chunk.sizeBytes <= 0) break;
-        const decodedChunk = decodeBase64ToUint8Chunked(chunk.data);
-        if (decodedChunk.byteLength !== chunk.sizeBytes) {
-          throw new Error(
-            `HVSC native chunk size mismatch for ${archivePath}: decoded ${decodedChunk.byteLength} bytes, expected ${chunk.sizeBytes}`,
-          );
-        }
-        chunks.push(decodedChunk);
-        offsetBytes += chunk.sizeBytes;
-        decodedBytes += decodedChunk.byteLength;
-        if (chunk.eof) break;
-      }
-      if (decodedBytes !== statSize) {
+  if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES && shouldUseNativeDownload()) {
+    const chunks: Uint8Array[] = [];
+    let offsetBytes = 0;
+    let decodedBytes = 0;
+    while (offsetBytes < statSize) {
+      const chunk = await HvscIngestion.readArchiveChunk({
+        relativeArchivePath,
+        offsetBytes,
+        lengthBytes: Math.min(HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES, statSize - offsetBytes),
+      });
+      if (chunk.sizeBytes <= 0) break;
+      const decodedChunk = decodeBase64ToUint8Chunked(chunk.data);
+      if (decodedChunk.byteLength !== chunk.sizeBytes) {
         throw new Error(
-          `HVSC native chunk read incomplete for ${archivePath}: expected ${statSize} bytes, received ${decodedBytes}`,
+          `HVSC native chunk size mismatch for ${archivePath}: decoded ${decodedChunk.byteLength} bytes, expected ${chunk.sizeBytes}`,
         );
       }
-      const decoded = concatChunks(chunks, decodedBytes);
-      const heapAfter = readHeapUsageBytes();
-      addLog("info", "HVSC archive read via native chunk bridge", {
-        archivePath,
-        bytes: decoded.byteLength,
-        chunks: chunks.length,
-        heapBefore,
-        heapAfter,
-        heapDelta: heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null,
-      });
-      return decoded;
+      chunks.push(decodedChunk);
+      offsetBytes += chunk.sizeBytes;
+      decodedBytes += decodedChunk.byteLength;
+      if (chunk.eof) break;
     }
-    throw new Error(buildNonNativeLargeArchiveError(archivePath, statSize));
+    if (decodedBytes !== statSize) {
+      throw new Error(
+        `HVSC native chunk read incomplete for ${archivePath}: expected ${statSize} bytes, received ${decodedBytes}`,
+      );
+    }
+    const decoded = concatChunks(chunks, decodedBytes);
+    const heapAfter = readHeapUsageBytes();
+    addLog("info", "HVSC archive read via native chunk bridge", {
+      archivePath,
+      bytes: decoded.byteLength,
+      chunks: chunks.length,
+      heapBefore,
+      heapAfter,
+      heapDelta: heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null,
+    });
+    return decoded;
   }
   const archiveData = await Filesystem.readFile({
     directory: Directory.Data,
@@ -572,10 +570,6 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
     const downloadHeapBefore = readHeapUsageBytes();
     const totalBytesHint = await fetchContentLength(downloadUrl);
     expectedSizeBytes = totalBytesHint;
-    if (!shouldUseNativeDownload() && totalBytesHint !== null && totalBytesHint > MAX_BRIDGE_READ_BYTES) {
-      throw new Error(buildNonNativeLargeArchiveError(archiveName, totalBytesHint));
-    }
-
     if (shouldUseNativeDownload()) {
       const cacheDir = getHvscCacheDir();
       let lastReported = 0;

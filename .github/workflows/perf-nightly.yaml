@@ -10,8 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hvsc-secondary-web-nightly:
-    name: Perf | Nightly HVSC secondary web benchmark
+  hvsc-web-nightly:
+    name: Perf | Nightly HVSC web benchmark
     runs-on: ubuntu-latest
 
     steps:
@@ -42,11 +42,20 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Collect nightly HVSC perf summary
+      - name: Run HVSC microbenchmarks
+        run: npm run test:bench
+
+      - name: Collect nightly HVSC full scenario summary
         env:
           HVSC_ARCHIVE_PATH: ${{ github.workspace }}/.cache/hvsc/HVSC_84-all-of-them.7z
           HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
         run: npm run test:perf:nightly
+
+      - name: Collect nightly HVSC secondary summary
+        env:
+          HVSC_ARCHIVE_PATH: ${{ github.workspace }}/.cache/hvsc/HVSC_84-all-of-them.7z
+          HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
+        run: npm run test:perf:secondary:nightly
 
       - name: Apply optional perf budgets
         env:

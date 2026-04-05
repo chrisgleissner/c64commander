@@ -336,7 +336,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             if (!ftpBlob) {
               throw new Error("SID FTP fetch failed for SSL propagation");
             }
-            const sslPayload = createSslPayload(plan.durationMs);
+            const sslPayload = createSslPayload(plan.durationMs as number);
             const sslBlob = new Blob([sslPayload], {
               type: "application/octet-stream",
             });
@@ -490,7 +490,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           (diskType === "d64" || diskType === "d71" || diskType === "d81") &&
           localBlob;
 
-        if (dmaEligible) {
+        if (dmaEligible && localBlob) {
           const image = new Uint8Array(await localBlob.arrayBuffer());
           await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
         } else if (
