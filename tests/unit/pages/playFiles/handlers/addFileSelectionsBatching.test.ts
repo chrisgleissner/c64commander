@@ -209,7 +209,7 @@ describe("addFileSelections batching", () => {
     );
   });
 
-  it("flushes large playable selections to the playlist in bounded batches", async () => {
+  it("flushes large HVSC selections in a single bulk batch", async () => {
     const deps = createDeps();
     const entries = Array.from({ length: 600 }, (_, index) => ({
       type: "file" as const,
@@ -223,15 +223,19 @@ describe("addFileSelections batching", () => {
 
     expect(result).toBe(true);
     expect(deps._playlistItems).toHaveLength(600);
-    expect(deps.applySonglengthsToItems).toHaveBeenCalledTimes(3);
-    expect(deps.setPlaylist).toHaveBeenCalledTimes(3);
-    expect(deps.applySonglengthsToItems.mock.calls.map(([items]: [unknown[]]) => items.length)).toEqual([
-      250, 250, 100,
-    ]);
-    expect(beginHvscPerfScope).toHaveBeenCalledTimes(3);
+    // HVSC uses a bulk batch threshold — all items flush in one batch.
+    expect(deps.applySonglengthsToItems).toHaveBeenCalledTimes(1);
+    expect(deps.setPlaylist).toHaveBeenCalledTimes(1);
+    expect(deps.applySonglengthsToItems.mock.calls.map(([items]: [unknown[]]) => items.length)).toEqual([600]);
+    // playlist:build-items scope + one playlist:add-batch scope
+    expect(beginHvscPerfScope).toHaveBeenCalledTimes(2);
+    expect(beginHvscPerfScope).toHaveBeenCalledWith(
+      "playlist:build-items",
+      expect.objectContaining({ sourceType: "hvsc", fileCount: 600 }),
+    );
     expect(beginHvscPerfScope).toHaveBeenCalledWith(
       "playlist:add-batch",
-      expect.objectContaining({ sourceType: "hvsc", batchSize: 250 }),
+      expect.objectContaining({ sourceType: "hvsc", batchSize: 600 }),
     );
     expect(endHvscPerfScope).toHaveBeenCalledWith(
       expect.objectContaining({ scope: "playlist:add-batch" }),
@@ -421,7 +425,7 @@ describe("addFileSelections batching", () => {
     expect(listFilesRecursiveSpy).not.toHaveBeenCalled();
   });
 
-  it("batches 5k hvsc files through bounded playlist appends", async () => {
+  it("flushes 5k hvsc files in a single bulk batch", async () => {
     const deps = createDeps();
     const filesPerFolder = 500;
     const folderCount = 10; // 10 x 500 = 5,000 files
@@ -456,12 +460,9 @@ describe("addFileSelections batching", () => {
     expect(result).toBe(true);
     const totalFiles = folderCount * filesPerFolder;
     expect(deps._playlistItems).toHaveLength(totalFiles);
-    // 5,000 / 250 = 20 batches
-    expect(deps.setPlaylist).toHaveBeenCalledTimes(20);
-    const batchSizes = deps.applySonglengthsToItems.mock.calls.map(([items]: [unknown[]]) => items.length);
-    batchSizes.forEach((size: number) => {
-      expect(size).toBeLessThanOrEqual(250);
-      expect(size).toBeGreaterThan(0);
-    });
+    // HVSC uses a bulk batch threshold — all items flush in one batch.
+    expect(deps.setPlaylist).toHaveBeenCalledTimes(1);
+    expect(deps.applySonglengthsToItems).toHaveBeenCalledTimes(1);
+    expect(deps.applySonglengthsToItems.mock.calls[0]![0]).toHaveLength(totalFiles);
   }, 60_000);
 });

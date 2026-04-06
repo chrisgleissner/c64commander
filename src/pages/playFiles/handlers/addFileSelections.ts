@@ -122,6 +122,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
   const PLAYLIST_APPEND_BATCH_SIZE = 250;
 
+  // HVSC items carry durations from the browse index and need no per-item
+  // config discovery or songlengths file loading.  Accumulating into one
+  // batch and flushing once eliminates O(n) intermediate React re-renders
+  // that caused >10 min wall time for ~4500 items on Pixel 4 class hardware.
+  const HVSC_BULK_BATCH_THRESHOLD = 200_000;
+
   const measureAddBatch = async <T>(
     sourceType: SourceLocation["type"],
     batchSize: number,
@@ -520,7 +526,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         if (!item) return;
         pendingPlaylistBatch.push(item);
         discoveredPlayableItems += 1;
-        if (pendingPlaylistBatch.length >= PLAYLIST_APPEND_BATCH_SIZE) {
+        const effectiveBatchSize =
+          source.type === "hvsc" ? HVSC_BULK_BATCH_THRESHOLD : PLAYLIST_APPEND_BATCH_SIZE;
+        if (pendingPlaylistBatch.length >= effectiveBatchSize) {
           const batch = pendingPlaylistBatch;
           pendingPlaylistBatch = [];
           await appendPlaylistBatch(batch);
@@ -731,11 +739,29 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           });
         }
       }
+
+      const buildItemsScope =
+        source.type === "hvsc"
+          ? beginHvscPerfScope("playlist:build-items", {
+              sourceType: source.type,
+              fileCount: selectedFiles.length,
+            })
+          : null;
+
       while (selectedFiles.length > 0) {
         const chunk = selectedFiles.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
         for (const file of chunk) {
           await appendPlayableFile(file);
         }
+        // Yield to the event loop so progress updates render on-screen.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      if (buildItemsScope) {
+        endHvscPerfScope(buildItemsScope, {
+          outcome: "success",
+          itemCount: pendingPlaylistBatch.length + appendedPlaylistItems,
+        });
       }
 
       if (pendingPlaylistBatch.length) {

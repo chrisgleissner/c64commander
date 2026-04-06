@@ -130,9 +130,7 @@ const rebuildBrowseIndexFromNative = async () => {
     }));
     const snapshot = buildHvscBrowseIndexFromEntries(entries);
     await saveHvscBrowseIndexSnapshot(snapshot);
-    addLog(
-      `Rebuilt HVSC browse index from native SQLite: ${nativeSongs.totalSongs} songs`,
-    );
+    addLog(`Rebuilt HVSC browse index from native SQLite: ${nativeSongs.totalSongs} songs`);
     return snapshot;
   } catch (error) {
     addErrorLog("Failed to rebuild HVSC browse index from native SQLite", {
@@ -202,9 +200,7 @@ const ensureHvscIndexReady = async () => {
   // If the browse snapshot is still missing (e.g. after native ingest which
   // clears it, or after an app update) or stale/empty (was rebuilt lazily with
   // 0 entries from a prior cycle), try to rebuild from the native SQLite index.
-  const snapshotMissingOrEmpty =
-    !browseSnapshot ||
-    (browseSnapshot && Object.keys(browseSnapshot.songs).length === 0);
+  const snapshotMissingOrEmpty = !browseSnapshot || (browseSnapshot && Object.keys(browseSnapshot.songs).length === 0);
   if (snapshotMissingOrEmpty && hasRuntimeBridge()) {
     browseSnapshot = await rebuildBrowseIndexFromNative();
   }

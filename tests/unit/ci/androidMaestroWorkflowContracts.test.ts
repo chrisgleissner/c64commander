@@ -48,8 +48,8 @@ describe("Android Maestro workflow contracts", () => {
 
     expect(playlistFlow).toContain('visible: "Open DEMOS"');
     expect(playlistFlow).toContain('point: "9%, 45%"');
-    expect(playlistFlow).toContain('point: "9%, 51%"');
     expect(playlistFlow).toContain('point: "9%, 57%"');
+    expect(playlistFlow).toContain('point: "9%, 62%"');
     expect(playlistFlow).toContain('tapOn: "Add to playlist"');
     expect(playlistFlow).toContain('text: "Root"');
     expect(playlistFlow).toContain("hvsc-perf-playlist");
@@ -119,12 +119,12 @@ describe("Android Maestro workflow contracts", () => {
     expect(playlist5k).toContain('visible: "Open DEMOS"');
     // DEMOS checkbox at 9%, 45%
     expect(playlist5k).toContain('point: "9%, 45%"');
-    // GAMES checkbox at 9%, 51%
-    expect(playlist5k).toContain('point: "9%, 51%"');
-    // Must NOT include MUSICIANS checkbox at 9%, 57%
-    expect(playlist5k).not.toContain('point: "9%, 57%"');
+    // GAMES checkbox at 9%, 57%
+    expect(playlist5k).toContain('point: "9%, 57%"');
+    // Must NOT include MUSICIANS checkbox at 9%, 62%
+    expect(playlist5k).not.toContain('point: "9%, 62%"');
     expect(playlist5k).toContain('tapOn: "Add to playlist"');
-    expect(playlist5k).toContain('visible: "Items added"');
+    expect(playlist5k).toContain('visible: "Add more items"');
   });
 
   it("benchmark runner supports --lane parameter for 5K and full lanes", () => {
