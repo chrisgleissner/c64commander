@@ -1,10 +1,13 @@
 appId: uk.gleissner.c64commander
 tags:
   - hvsc-perf
-  - hvsc-perf-browse
+  - hvsc-perf-setup
+  - hvsc-perf-playlist
   - device
 env:
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  # The 60K-item playlist build is a long-running setup step (~15-20 min on Pixel 4).
+  # Phase 1 must pass a LONG_TIMEOUT of at least 1800000 (30 min).
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "1800000"}
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "30000"}
 ---
@@ -30,14 +33,14 @@ env:
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
+- tapOn:
+    id: "add-items-to-playlist"
+- extendedWaitUntil:
+    visible: "Choose source"
+    timeout: ${TIMEOUT}
 - retry:
     maxRetries: 6
     commands:
-      - tapOn:
-          id: "add-items-to-playlist"
-      - extendedWaitUntil:
-          visible: "Choose source"
-          timeout: ${TIMEOUT}
       - tapOn:
           id: "import-option-hvsc"
           optional: true
@@ -51,38 +54,40 @@ env:
       - extendedWaitUntil:
           visible: "From HVSC"
           timeout: ${TIMEOUT}
-# Navigate to root in case the browser retained a previous position
+# Navigate to HVSC root in case the browser retained a previous position
 - tapOn:
     text: "Root"
     optional: true
 - waitForAnimationToEnd
 - extendedWaitUntil:
-    visible: "Open MUSICIANS"
+    visible: "Open DEMOS"
     timeout: ${LONG_TIMEOUT}
-- tapOn: "Open MUSICIANS"
-- extendedWaitUntil:
-    visible: "Open H"
-    timeout: ${TIMEOUT}
-- tapOn: "Open H"
-# Hubbard_Rob may be below the fold in the H folder. Scroll within the dialog
-# (stay above the Cancel/Add buttons at ~87% screen height) to find it.
-- retry:
-    maxRetries: 10
-    commands:
-      - swipe:
-          start: 50%, 60%
-          end: 50%, 30%
-          duration: 500
-          waitToSettleTimeoutMs: 300
-      - waitForAnimationToEnd
-      - extendedWaitUntil:
-          visible: "Open Hubbard_Rob"
-          timeout: ${SHORT_TIMEOUT}
-- tapOn: "Open Hubbard_Rob"
-- tapOn: "Root"
-- extendedWaitUntil:
-    visible: "Open MUSICIANS"
-    timeout: ${TIMEOUT}
+# The folder row's aria-label overrides the inner checkbox in AccessibilityNodeInfo,
+# so Maestro cannot select checkboxes by text or id. Tap the checkbox area by
+# coordinate (left ~9% of screen, row center Y %).
+# Row bounds from Maestro hierarchy on Pixel 4 (1080x2280):
+#   DEMOS      [66,981][1012,1089]   → checkbox ≈ (9%, 45.4%)
+#   GAMES      [66,1237][1012,1347]  → checkbox ≈ (9%, 56.7%)
+#   MUSICIANS  [66,1366][1012,1476]  → checkbox ≈ (9%, 62.3%)
 - tapOn:
-    text: "Cancel"
-    optional: true
+    point: "9%, 45%"
+- tapOn:
+    point: "9%, 57%"
+- tapOn:
+    point: "9%, 62%"
+- waitForAnimationToEnd
+- tapOn: "Add to playlist"
+- extendedWaitUntil:
+    visible: "Items added"
+    timeout: ${LONG_TIMEOUT}
+- waitForAnimationToEnd
+# Give the app time to persist the bulk playlist to IndexedDB
+- swipe:
+    start: 50%, 50%
+    end: 50%, 30%
+    duration: 500
+- swipe:
+    start: 50%, 50%
+    end: 50%, 70%
+    duration: 500
+- assertVisible: "Playlist"

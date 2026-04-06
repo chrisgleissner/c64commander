@@ -1,0 +1,24 @@
+appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+tags:
+  - subflow
+---
+# Press Home first to dismiss any lingering notification shade.
+- pressKey: Home
+# Warm launch: bring the app to foreground without stopping it.
+# Used by measurement flows that need the in-memory HVSC browse index
+# (which is too large for the Capacitor FS bridge to persist).
+- launchApp:
+    stopApp: false
+- tapOn:
+    text: "Done"
+    optional: true
+# Dismiss Android 16 "app compatibility" system dialog if present.
+- tapOn:
+    text: "Don't show again"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true

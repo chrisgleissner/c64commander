@@ -13,9 +13,9 @@ env:
     text: "Play"
 - extendedWaitUntil:
     visible: "Playlist"
-    timeout: ${TIMEOUT}
+    timeout: ${LONG_TIMEOUT}
 - tapOn:
-    id: "list-filter-input"
+    text: "Filter files..."
 - eraseText
 - inputText: "Commando"
 - waitForAnimationToEnd

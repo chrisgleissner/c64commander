@@ -67,12 +67,26 @@ probe_real_host() {
     return 0
   fi
 
-  local candidate
+  local candidate ip_addr
   for candidate in u64 c64u; do
-    if curl -fsS --max-time 3 "http://${candidate}/v1/info" >/dev/null; then
-      C64U_HOST="$candidate"
-      log "Using real C64U host: $C64U_HOST"
-      return 0
+    if curl -fsS --max-time 3 "http://${candidate}/v1/info" >/dev/null 2>&1; then
+      # Resolve hostname to IP so the Android device can reach it
+      # (the phone may not have the same mDNS/DNS as the dev machine)
+      ip_addr=$(getent hosts "$candidate" 2>/dev/null | awk '{print $1; exit}')
+      if [[ -n "$ip_addr" ]]; then
+        # Verify the phone can actually reach this IP
+        if adb -s "$DEVICE_ID" shell "curl -fsS --max-time 3 http://${ip_addr}/v1/info" >/dev/null 2>&1; then
+          C64U_HOST="$ip_addr"
+          log "Using real C64U host: $C64U_HOST (resolved from $candidate)"
+          return 0
+        fi
+        log "Phone cannot reach $candidate at $ip_addr, trying next candidate"
+      else
+        # Fallback: use hostname directly if getent fails
+        C64U_HOST="$candidate"
+        log "Using real C64U host: $C64U_HOST (unresolved)"
+        return 0
+      fi
     fi
   done
 

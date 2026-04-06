@@ -6,6 +6,9 @@ env:
 tags:
   - subflow
 ---
+# Press Home first to dismiss any lingering notification shade or system overlay
+# that may have been left by a previous Maestro run or ANR dialog.
+- pressKey: Home
 - launchApp:
     stopApp: true
 - retry:
@@ -17,6 +20,15 @@ tags:
           file: continue-demo.yaml
       - tapOn:
           text: "Continue in Demo Mode"
+          optional: true
+      - tapOn:
+          text: "Retry connection"
+          optional: true
+      - tapOn:
+          text: "Save & Retry"
+          optional: true
+      - tapOn:
+          text: "Done"
           optional: true
       - tapOn:
           text: "Got it"
@@ -46,3 +58,11 @@ tags:
       - extendedWaitUntil:
           visible: "Home"
           timeout: ${LONG_TIMEOUT}
+# Dismiss Android 16 "app compatibility" system dialog if it appeared after
+# the Home tab rendered.  The dialog blocks all WebView taps.
+- tapOn:
+    text: "Don't show again"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true

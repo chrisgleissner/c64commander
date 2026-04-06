@@ -27,20 +27,38 @@ env:
       - extendedWaitUntil:
           visible: "Playlist"
           timeout: ${TIMEOUT}
+# Clear any leftover search filter from previous test runs.
+# Scroll down from top to reveal the filter area (below the player controls)
+# using safe coordinates that stay above the native tab bar (top at y=2010).
 - repeat:
-    times: 4
+    times: 3
     commands:
       - swipe:
-          start: 50%, 82%
-          end: 50%, 24%
-          duration: 900
-          waitToSettleTimeoutMs: 500
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+          waitToSettleTimeoutMs: 300
       - waitForAnimationToEnd
-- scrollUntilVisible:
-    element:
-      id: "hvsc-download"
-    direction: DOWN
-    timeout: ${TIMEOUT}
+- tapOn:
+    text: "Clear filter"
+    optional: true
+- waitForAnimationToEnd
+# Re-select the Play tab in case the Clear-filter tap hit the tab bar
+- tapOn:
+    id: "tab-play"
+- waitForAnimationToEnd
+# Scroll to find HVSC download. Continue from current position — the 3 swipes
+# above already moved us partway down. Each retry scrolls one more screenfull.
+- retry:
+    maxRetries: 15
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+      - waitForAnimationToEnd
+      - assertVisible:
+          id: "hvsc-download"
 - tapOn:
     id: "hvsc-download"
 - extendedWaitUntil:
@@ -57,11 +75,19 @@ env:
           visible: "Indexed "
           timeout: ${LONG_TIMEOUT}
       - assertVisible: "HVSC ready"
-- scrollUntilVisible:
-    element:
-      id: "add-items-to-playlist"
-    direction: DOWN
-    timeout: ${TIMEOUT}
+# Scroll back to top so the playlist header is genuinely at a tappable
+# screen position; the prior downward scrolls pushed it above the viewport
+# but the WebView accessibility tree still reports its DOM bounds at y≈143.
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+# After scroll-to-top the add-items button is visible — tap directly
 - tapOn:
     id: "add-items-to-playlist"
 - extendedWaitUntil:
@@ -83,6 +109,11 @@ env:
       - extendedWaitUntil:
           visible: "From HVSC"
           timeout: ${TIMEOUT}
+# Navigate to root in case the browser retained a previous position
+- tapOn:
+    text: "Root"
+    optional: true
+- waitForAnimationToEnd
 - extendedWaitUntil:
     visible: "Open DEMOS"
     timeout: ${TIMEOUT}
@@ -105,7 +136,38 @@ env:
 - extendedWaitUntil:
     notVisible: "From HVSC"
     timeout: ${TIMEOUT}
-- extendedWaitUntil:
-    visible: "10_Orbyte.sid"
-    timeout: ${TIMEOUT}
-- assertVisible: "Playlist"
+# Scroll to top so we start from a known position for the playlist assertion
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+# Clear any restored filter that hides playlist items
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- tapOn:
+    text: "Clear filter"
+    optional: true
+- waitForAnimationToEnd
+# Verify the track is now visible in the playlist
+- retry:
+    maxRetries: 15
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+      - waitForAnimationToEnd
+      - assertVisible: "10_Orbyte.sid"
+- assertVisible: "10_Orbyte.sid"

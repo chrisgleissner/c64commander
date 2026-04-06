@@ -35,20 +35,23 @@ describe("Android Maestro workflow contracts", () => {
     expect(flow).toContain('tapOn: "Open H"');
     expect(flow).toContain('visible: "Open Hubbard_Rob"');
     expect(flow).toContain('tapOn: "Open Hubbard_Rob"');
-    expect(flow).toContain('id: "navigate-root"');
+    expect(flow).toContain('tapOn: "Root"');
   });
 
   it("covers playlist build, filter, and playback HVSC perf flows", () => {
-    const playlistFlow = readRepoFile(".maestro", "perf-hvsc-playlist-build.yaml");
+    const playlistFlow = readRepoFile(".maestro", "perf-hvsc-setup-playlist.yaml");
     const filterHighFlow = readRepoFile(".maestro", "perf-hvsc-filter-high.yaml");
     const filterZeroFlow = readRepoFile(".maestro", "perf-hvsc-filter-zero.yaml");
     const filterLowFlow = readRepoFile(".maestro", "perf-hvsc-filter-low.yaml");
     const playbackFlow = readRepoFile(".maestro", "perf-hvsc-playback.yaml");
 
-    expect(playlistFlow).toContain('visible: "Select DEMOS"');
-    expect(playlistFlow).toContain('visible: "Select GAMES"');
-    expect(playlistFlow).toContain('visible: "Select MUSICIANS"');
-    expect(playlistFlow).toContain('id: "add-items-confirm"');
+    expect(playlistFlow).toContain('visible: "Open DEMOS"');
+    expect(playlistFlow).toContain("point: \"9%, 45%\"");
+    expect(playlistFlow).toContain("point: \"9%, 57%\"");
+    expect(playlistFlow).toContain("point: \"9%, 62%\"");
+    expect(playlistFlow).toContain('tapOn: "Add to playlist"');
+    expect(playlistFlow).toContain('text: "Root"');
+    expect(playlistFlow).toContain('hvsc-perf-setup');
     expect(filterHighFlow).toContain('inputText: "hubbard"');
     expect(filterZeroFlow).toContain('inputText: "xyzzy123"');
     expect(filterLowFlow).toContain('inputText: "Commando"');
@@ -78,5 +81,21 @@ describe("Android Maestro workflow contracts", () => {
     expect(script).toContain("T5");
     expect(script).toContain("HVSC_ANDROID_BUDGET_ENFORCE");
     expect(script).toContain("observation-only");
+  });
+
+  it("uses warm launch (no app restart) for flows that need the in-memory browse index", () => {
+    const playlistFlow = readRepoFile(".maestro", "perf-hvsc-setup-playlist.yaml");
+    const browseFlow = readRepoFile(".maestro", "perf-hvsc-browse-traversal.yaml");
+    const launchWarm = readRepoFile(".maestro", "subflows", "launch-warm.yaml");
+
+    // Both flows must use launch-warm, not launch-and-wait, to preserve the browse index
+    expect(playlistFlow).toContain("runFlow: subflows/launch-warm.yaml");
+    expect(browseFlow).toContain("runFlow: subflows/launch-warm.yaml");
+    expect(playlistFlow).not.toContain("runFlow: subflows/launch-and-wait.yaml");
+    expect(browseFlow).not.toContain("runFlow: subflows/launch-and-wait.yaml");
+
+    // launch-warm must not stop the app
+    expect(launchWarm).toContain("stopApp: false");
+    expect(launchWarm).not.toContain("stopApp: true");
   });
 });

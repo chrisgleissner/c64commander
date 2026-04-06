@@ -119,6 +119,7 @@ export const ItemSelectionView = ({
             >
               <div className="shrink-0">
                 <Checkbox
+                  id={`select-${entry.name}`}
                   checked={isSelected}
                   onCheckedChange={() => canSelect && onToggleSelect(entry)}
                   onClick={(event) => event.stopPropagation()}

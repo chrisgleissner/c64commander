@@ -13,12 +13,24 @@ env:
     text: "Play"
 - extendedWaitUntil:
     visible: "Playlist"
-    timeout: ${TIMEOUT}
+    timeout: ${LONG_TIMEOUT}
 - tapOn:
-    id: "list-filter-input"
+    text: "Filter files..."
 - eraseText
 - inputText: "Commando"
 - waitForAnimationToEnd
+- hideKeyboard
+# Scroll to top — the keyboard and filter input focus push the play button
+# above the viewport, and Maestro can only find on-screen WebView elements.
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
 - tapOn:
     id: "playlist-play"
 - extendedWaitUntil:
