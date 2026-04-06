@@ -123,6 +123,12 @@ import {
   shuffleArray,
 } from "@/pages/playFiles/playFilesUtils";
 
+const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
+  "scanning",
+  "ingesting",
+  "committing",
+]);
+
 export default function PlayFilesPage() {
   type AutoAdvanceGuard = {
     trackInstanceId: number;
@@ -174,6 +180,7 @@ export default function PlayFilesPage() {
     handleReshuffle,
   } = usePlaylistManager();
   const hasPlaylistRef = useRef(false);
+  const playlistSnapshotRef = useRef(playlist);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [playlistFilterText, setPlaylistFilterText] = useState("");
@@ -280,6 +287,11 @@ export default function PlayFilesPage() {
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
   }, []);
+
+  useEffect(() => {
+    hasPlaylistRef.current = playlist.length > 0;
+    playlistSnapshotRef.current = playlist;
+  }, [playlist]);
 
   const enqueuePlayTransition = useCallback(async <T,>(task: () => Promise<T>) => {
     const run = playTransitionQueueRef.current.then(task, task);
@@ -469,7 +481,7 @@ export default function PlayFilesPage() {
   }, [autoAdvanceDueAtMs]);
 
   useEffect(() => {
-    if (addItemsProgress.status !== "scanning") return undefined;
+    if (!ACTIVE_ADD_ITEMS_PROGRESS_STATES.has(addItemsProgress.status)) return undefined;
     const interval = window.setInterval(() => {
       const startedAt = addItemsStartedAtRef.current ?? Date.now();
       setAddItemsProgress((prev) => ({
@@ -493,7 +505,7 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     if (browserOpen) return;
-    if (addItemsProgress.status === "scanning") return;
+    if (ACTIVE_ADD_ITEMS_PROGRESS_STATES.has(addItemsProgress.status)) return;
     setAddItemsProgress({
       status: "idle",
       count: 0,
@@ -547,12 +559,12 @@ export default function PlayFilesPage() {
         prev.map((item) =>
           item.id === itemId
             ? {
-              ...item,
-              configRef,
-              configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
-              configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
-              configCandidates: options?.candidates ?? item.configCandidates ?? null,
-            }
+                ...item,
+                configRef,
+                configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
+                configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
+                configCandidates: options?.candidates ?? item.configCandidates ?? null,
+              }
             : item,
         ),
       );
@@ -565,16 +577,16 @@ export default function PlayFilesPage() {
       prev.map((entry) =>
         entry.id === item.id
           ? {
-            ...entry,
-            configOverrides: overrides,
-            configOrigin: overrides?.length
-              ? "manual"
-              : entry.configRef
-                ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
-                : entry.configOrigin === "manual-none"
-                  ? "manual-none"
-                  : "none",
-          }
+              ...entry,
+              configOverrides: overrides,
+              configOrigin: overrides?.length
+                ? "manual"
+                : entry.configRef
+                  ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
+                  : entry.configOrigin === "manual-none"
+                    ? "manual-none"
+                    : "none",
+            }
           : entry,
       ),
     );
@@ -876,6 +888,8 @@ export default function PlayFilesPage() {
         setIsAddingItems,
         setAddItemsProgress,
         setPlaylist,
+        playlistSnapshotRef,
+        playlistStorageKey,
         buildPlaylistItem,
         applySonglengthsToItems,
         mergeSonglengthsFiles,

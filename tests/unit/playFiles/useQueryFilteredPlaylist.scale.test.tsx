@@ -6,9 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
+import {
+  markPlaylistRepositoryPhase,
+  resetPlaylistRepositorySyncForTests,
+} from "@/pages/playFiles/playlistRepositorySync";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
@@ -58,6 +62,7 @@ const repository = {
   upsertTracks: vi.fn().mockResolvedValue(undefined),
   replacePlaylistItems: vi.fn().mockResolvedValue(undefined),
   getPlaylistItems: vi.fn(),
+  getPlaylistItemCount: vi.fn(),
   getTracksByIds: vi.fn(),
   saveSession: vi.fn(),
   getSession: vi.fn(),
@@ -76,6 +81,12 @@ const runScaleTest = async (itemCount: number) => {
   const playlistId = buildPlaylistStorageKey("device-1");
   const items = Array.from({ length: itemCount }, (_, i) => buildScalePlaylistItem(i));
   const allRows = items.map((item, i) => buildScaleQueryRow(item, i, playlistId));
+  markPlaylistRepositoryPhase(playlistId, "READY", {
+    expectedCount: itemCount,
+    committedCount: itemCount,
+    revision: 1,
+    snapshotKey: `scale-${itemCount}`,
+  });
 
   repository.queryPlaylist.mockImplementation(
     async ({
@@ -127,6 +138,7 @@ const runScaleTest = async (itemCount: number) => {
 
 describe("useQueryFilteredPlaylist scale", () => {
   beforeEach(() => {
+    resetPlaylistRepositorySyncForTests();
     Object.values(repository).forEach((value) => {
       if (typeof value === "function" && "mockClear" in value) {
         value.mockClear();
@@ -143,8 +155,8 @@ describe("useQueryFilteredPlaylist scale", () => {
     expect(result.current.viewAllPlaylist.length).toBeLessThanOrEqual(Math.max(previewLimit, 200));
     expect(result.current.totalMatchCount).toBe(itemCount);
     expect(result.current.hasMoreViewAllResults).toBe(true);
-    expect(repository.upsertTracks).toHaveBeenCalledTimes(1);
-    expect(repository.replacePlaylistItems).toHaveBeenCalledTimes(1);
+    expect(repository.upsertTracks).not.toHaveBeenCalled();
+    expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
   }, 30_000);
 
   it("handles 50k playlist items with correct windowing", async () => {
@@ -168,6 +180,14 @@ describe("useQueryFilteredPlaylist scale", () => {
     const items = Array.from({ length: 10_000 }, (_, i) => buildScalePlaylistItem(i));
     const allRows = items.map((item, i) => buildScaleQueryRow(item, i, playlistId));
     const sidCount = allRows.filter((r) => r.track.category === "sid").length;
+    const sidFilters: PlayFileCategory[] = ["sid"];
+
+    markPlaylistRepositoryPhase(playlistId, "READY", {
+      expectedCount: items.length,
+      committedCount: items.length,
+      revision: 1,
+      snapshotKey: "category-10k",
+    });
 
     repository.queryPlaylist.mockImplementation(
       async ({ categoryFilter, limit, offset }: { categoryFilter?: string[]; limit: number; offset?: number }) => {
@@ -186,7 +206,7 @@ describe("useQueryFilteredPlaylist scale", () => {
       useQueryFilteredPlaylist({
         playlist: items,
         playlistStorageKey: playlistId,
-        playlistTypeFilters: ["sid"],
+        playlistTypeFilters: sidFilters,
         query: "",
         previewLimit: 100,
         viewAllPageSize: 200,
@@ -200,4 +220,103 @@ describe("useQueryFilteredPlaylist scale", () => {
     expect(result.current.previewPlaylist.every((item) => item.category === "sid")).toBe(true);
     expect(result.current.totalMatchCount).toBe(2000);
   }, 30_000);
+
+  it("handles 50k load-more, filter, and delete updates without waiting for background sync", async () => {
+    const playlistId = buildPlaylistStorageKey("device-1");
+    const initialItems = Array.from({ length: 50_000 }, (_, i) => buildScalePlaylistItem(i));
+    const buildRows = (items: PlaylistItem[]) => items.map((item, i) => buildScaleQueryRow(item, i, playlistId));
+    let activeItems = initialItems;
+    let activeRows = buildRows(activeItems);
+
+    markPlaylistRepositoryPhase(playlistId, "READY", {
+      expectedCount: activeItems.length,
+      committedCount: activeItems.length,
+      revision: 1,
+      snapshotKey: "stress-1",
+    });
+
+    repository.queryPlaylist.mockImplementation(
+      async ({
+        categoryFilter,
+        query,
+        limit,
+        offset,
+      }: {
+        categoryFilter?: string[];
+        query?: string;
+        limit: number;
+        offset?: number;
+      }) => {
+        const filtered = activeRows.filter((row) => {
+          const categoryMatch = categoryFilter?.length ? categoryFilter.includes(row.track.category ?? "") : true;
+          const queryMatch = query ? row.track.title.toLowerCase().includes(query.toLowerCase()) : true;
+          return categoryMatch && queryMatch;
+        });
+        const start = offset ?? 0;
+        return {
+          rows: filtered.slice(start, start + limit),
+          totalMatchCount: filtered.length,
+        };
+      },
+    );
+
+    const { result, rerender } = renderHook(
+      ({ items, query }) =>
+        useQueryFilteredPlaylist({
+          playlist: items,
+          playlistStorageKey: playlistId,
+          playlistTypeFilters: CATEGORIES,
+          query,
+          previewLimit: 100,
+          viewAllPageSize: 200,
+        }),
+      {
+        initialProps: {
+          items: activeItems,
+          query: "",
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(result.current.totalMatchCount).toBe(50_000);
+      expect(result.current.viewAllPlaylist).toHaveLength(200);
+    });
+
+    act(() => {
+      result.current.loadMoreViewAllResults();
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewAllPlaylist).toHaveLength(400);
+      expect(result.current.hasMoreViewAllResults).toBe(true);
+    });
+
+    rerender({
+      items: activeItems,
+      query: "track 123",
+    });
+
+    await waitFor(() => {
+      expect(result.current.totalMatchCount).toBeGreaterThan(0);
+    });
+
+    activeItems = initialItems.slice(0, 49_000);
+    activeRows = buildRows(activeItems);
+    markPlaylistRepositoryPhase(playlistId, "READY", {
+      expectedCount: activeItems.length,
+      committedCount: activeItems.length,
+      revision: 2,
+      snapshotKey: "stress-2",
+    });
+    rerender({
+      items: activeItems,
+      query: "",
+    });
+
+    await waitFor(() => {
+      expect(result.current.totalMatchCount).toBe(49_000);
+      expect(result.current.previewPlaylist).toHaveLength(100);
+    });
+  }, 60_000);
 });

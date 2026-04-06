@@ -10,8 +10,14 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
+import {
+  markPlaylistRepositoryPhase,
+  resetPlaylistRepositorySyncForTests,
+} from "@/pages/playFiles/playlistRepositorySync";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
+
+const playlistId = buildPlaylistStorageKey("device-1");
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
@@ -75,7 +81,7 @@ const queryRows = [
   {
     playlistItem: {
       playlistItemId: "sid-1",
-      playlistId: buildPlaylistStorageKey("device-1"),
+      playlistId,
       trackId: "track-sid-1",
       songNr: 1,
       sortKey: "00000000",
@@ -98,7 +104,7 @@ const queryRows = [
   {
     playlistItem: {
       playlistItemId: "disk-1",
-      playlistId: buildPlaylistStorageKey("device-1"),
+      playlistId,
       trackId: "track-disk-1",
       songNr: 1,
       sortKey: "00000001",
@@ -124,6 +130,7 @@ const repository = {
   upsertTracks: vi.fn().mockResolvedValue(undefined),
   replacePlaylistItems: vi.fn().mockResolvedValue(undefined),
   getPlaylistItems: vi.fn(),
+  getPlaylistItemCount: vi.fn().mockResolvedValue(playlist.length),
   getTracksByIds: vi.fn(),
   saveSession: vi.fn(),
   getSession: vi.fn(),
@@ -156,12 +163,21 @@ vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot,
 }));
 
-const useHarness = () => {
+const markReady = (count = playlist.length, revision = 1) => {
+  markPlaylistRepositoryPhase(playlistId, "READY", {
+    expectedCount: count,
+    committedCount: count,
+    revision,
+    snapshotKey: `snapshot-${revision}`,
+  });
+};
+
+const useHarness = (items = playlist) => {
   const [playlistTypeFilters, setPlaylistTypeFilters] = useState<Array<PlaylistItem["category"]>>(["sid", "disk"]);
   const [query, setQuery] = useState("");
   const queryFilteredPlaylist = useQueryFilteredPlaylist({
-    playlist,
-    playlistStorageKey: buildPlaylistStorageKey("device-1"),
+    playlist: items,
+    playlistStorageKey: playlistId,
     playlistTypeFilters,
     query,
     previewLimit: 1,
@@ -177,6 +193,7 @@ const useHarness = () => {
 
 describe("useQueryFilteredPlaylist", () => {
   beforeEach(() => {
+    resetPlaylistRepositorySyncForTests();
     Object.values(repository).forEach((value) => {
       if (typeof value === "function" && "mockClear" in value) {
         value.mockClear();
@@ -185,23 +202,31 @@ describe("useQueryFilteredPlaylist", () => {
     beginHvscPerfScope.mockClear();
     endHvscPerfScope.mockClear();
     recordSmokeBenchmarkSnapshot.mockClear();
-    repository.upsertTracks.mockResolvedValue(undefined);
-    repository.replacePlaylistItems.mockResolvedValue(undefined);
+    repository.queryPlaylist.mockImplementation(
+      async ({ categoryFilter, limit }: { categoryFilter?: string[]; limit: number }) => {
+        const rows =
+          categoryFilter && categoryFilter.length
+            ? queryRows.filter((row) => categoryFilter.includes(row.track.category ?? ""))
+            : queryRows;
+        return {
+          rows: rows.slice(0, limit),
+          totalMatchCount: rows.length,
+        };
+      },
+    );
   });
 
-  it("re-queries category filters without rewriting playlist rows", async () => {
+  it("re-queries category filters from the repository once the playlist snapshot is ready", async () => {
+    markReady();
     const { result } = renderHook(() => useHarness());
 
     await waitFor(() => {
-      expect(repository.replacePlaylistItems).toHaveBeenCalledTimes(1);
       expect(repository.queryPlaylist).toHaveBeenCalledTimes(1);
       expect(result.current.queryFilteredPlaylist.viewAllPlaylist).toHaveLength(1);
       expect(result.current.queryFilteredPlaylist.previewPlaylist).toHaveLength(1);
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
     });
 
-    repository.upsertTracks.mockClear();
-    repository.replacePlaylistItems.mockClear();
     repository.queryPlaylist.mockClear();
 
     act(() => {
@@ -210,35 +235,22 @@ describe("useQueryFilteredPlaylist", () => {
 
     await waitFor(() => {
       expect(repository.queryPlaylist).toHaveBeenCalledTimes(1);
-      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["sid-1"]);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "sid-1",
+      ]);
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(1);
     });
 
     expect(repository.upsertTracks).not.toHaveBeenCalled();
     expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
-    expect(beginHvscPerfScope).toHaveBeenCalledWith(
-      "playlist:repo-sync",
-      expect.objectContaining({ playlistId: buildPlaylistStorageKey("device-1") }),
-    );
-    expect(beginHvscPerfScope).toHaveBeenCalledWith(
-      "playlist:filter",
-      expect.objectContaining({ playlistId: buildPlaylistStorageKey("device-1"), query: "" }),
-    );
-    expect(endHvscPerfScope).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: "playlist:repo-sync" }),
-      expect.objectContaining({ outcome: "success" }),
-    );
     expect(endHvscPerfScope).toHaveBeenCalledWith(
       expect.objectContaining({ scope: "playlist:filter" }),
       expect.objectContaining({ source: "repository" }),
     );
   });
 
-  it("re-queries text filters without rewriting playlist rows", async () => {
-    repository.queryPlaylist.mockImplementationOnce(async ({ limit }: { limit: number }) => ({
-      rows: queryRows.slice(0, limit),
-      totalMatchCount: queryRows.length,
-    }));
+  it("re-queries text filters from the repository without rewriting playlist rows", async () => {
+    markReady();
     repository.queryPlaylist.mockImplementation(
       async ({ categoryFilter, query, limit }: { categoryFilter?: string[]; query?: string; limit: number }) => {
         const rows = queryRows.filter((row) => {
@@ -256,14 +268,10 @@ describe("useQueryFilteredPlaylist", () => {
     const { result } = renderHook(() => useHarness());
 
     await waitFor(() => {
-      expect(repository.replacePlaylistItems).toHaveBeenCalledTimes(1);
       expect(repository.queryPlaylist).toHaveBeenCalledTimes(1);
-      expect(result.current.queryFilteredPlaylist.viewAllPlaylist).toHaveLength(1);
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
     });
 
-    repository.upsertTracks.mockClear();
-    repository.replacePlaylistItems.mockClear();
     repository.queryPlaylist.mockClear();
 
     act(() => {
@@ -276,12 +284,12 @@ describe("useQueryFilteredPlaylist", () => {
           query: "demo",
         }),
       );
-      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["disk-1"]);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "disk-1",
+      ]);
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(1);
     });
 
-    expect(repository.upsertTracks).not.toHaveBeenCalled();
-    expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
     expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         scenario: "playlist-filter",
@@ -293,16 +301,17 @@ describe("useQueryFilteredPlaylist", () => {
     );
   });
 
-  it("loads additional view-all pages without rewriting playlist rows", async () => {
+  it("loads additional view-all pages from the repository when more results are available", async () => {
+    markReady();
     const { result } = renderHook(() => useHarness());
 
     await waitFor(() => {
-      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["sid-1"]);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "sid-1",
+      ]);
       expect(result.current.queryFilteredPlaylist.hasMoreViewAllResults).toBe(true);
     });
 
-    repository.upsertTracks.mockClear();
-    repository.replacePlaylistItems.mockClear();
     repository.queryPlaylist.mockClear();
 
     act(() => {
@@ -315,22 +324,26 @@ describe("useQueryFilteredPlaylist", () => {
           limit: 2,
         }),
       );
-      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["sid-1", "disk-1"]);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "sid-1",
+        "disk-1",
+      ]);
       expect(result.current.queryFilteredPlaylist.hasMoreViewAllResults).toBe(false);
     });
-
-    expect(repository.upsertTracks).not.toHaveBeenCalled();
-    expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
   });
 
-  it("keeps filtering in memory when repository sync fails", async () => {
-    repository.upsertTracks.mockRejectedValueOnce(new Error("sync failed"));
+  it("keeps filtering in memory while the repository commit is still in progress", async () => {
+    markPlaylistRepositoryPhase(playlistId, "INGESTING", {
+      expectedCount: playlist.length,
+    });
 
     const { result } = renderHook(() => useHarness());
 
     await waitFor(() => {
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
-      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["sid-1"]);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "sid-1",
+      ]);
     });
 
     repository.queryPlaylist.mockClear();
@@ -340,18 +353,16 @@ describe("useQueryFilteredPlaylist", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item) => item.id)).toEqual(["disk-1"]);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "disk-1",
+      ]);
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(1);
     });
 
     expect(repository.queryPlaylist).not.toHaveBeenCalled();
     expect(endHvscPerfScope).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: "playlist:repo-sync" }),
-      expect.objectContaining({ outcome: "error", errorMessage: "sync failed" }),
-    );
-    expect(endHvscPerfScope).toHaveBeenCalledWith(
       expect.objectContaining({ scope: "playlist:filter" }),
-      expect.objectContaining({ outcome: "fallback", source: "memory" }),
+      expect.objectContaining({ outcome: "memory", source: "memory", repositoryPhase: "INGESTING" }),
     );
     expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -362,5 +373,29 @@ describe("useQueryFilteredPlaylist", () => {
         }),
       }),
     );
+  });
+
+  it("switches to repository-backed results immediately when ready revision arrives", async () => {
+    markPlaylistRepositoryPhase(playlistId, "COMMITTING", {
+      expectedCount: playlist.length,
+    });
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => {
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+    });
+    expect(repository.queryPlaylist).not.toHaveBeenCalled();
+
+    act(() => {
+      markReady(playlist.length, 2);
+    });
+
+    await waitFor(() => {
+      expect(repository.queryPlaylist).toHaveBeenCalledTimes(1);
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "sid-1",
+      ]);
+    });
   });
 });

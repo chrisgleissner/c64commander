@@ -32,6 +32,7 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
+import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
 
 export type AddFileSelectionsDeps = {
   addItemsStartedAtRef: MutableRefObject<number | null>;
@@ -59,6 +60,8 @@ export type AddFileSelectionsDeps = {
   setIsAddingItems: (value: boolean) => void;
   setAddItemsProgress: Dispatch<SetStateAction<AddItemsProgressState>>;
   setPlaylist: Dispatch<SetStateAction<PlaylistItem[]>>;
+  playlistSnapshotRef: MutableRefObject<PlaylistItem[]>;
+  playlistStorageKey: string;
   buildPlaylistItem: (
     entry: PlayableEntry,
     songNrOverride?: number,
@@ -91,6 +94,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     setIsAddingItems,
     setAddItemsProgress,
     setPlaylist,
+    playlistSnapshotRef,
+    playlistStorageKey,
     buildPlaylistItem,
     applySonglengthsToItems,
     mergeSonglengthsFiles,
@@ -177,6 +182,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       elapsedMs: 0,
       total: null,
       message: "Scanning…",
+    });
+    markPlaylistRepositoryPhase(playlistStorageKey, "SCANNING", {
+      expectedCount: playlistSnapshotRef.current.length,
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
     let processed = 0;
@@ -277,13 +285,25 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           if (!pendingArchiveBatch.length) return;
           const batch = pendingArchiveBatch;
           pendingArchiveBatch = [];
+          setAddItemsProgress((prev) => ({
+            ...prev,
+            status: "ingesting",
+            message: "Importing playlist items…",
+          }));
+          markPlaylistRepositoryPhase(playlistStorageKey, "INGESTING", {
+            expectedCount: playlistSnapshotRef.current.length + batch.length,
+          });
           await measureAddBatch(
             source.type,
             batch.length,
             async () => {
               const resolvedItems = await applySonglengthsToItems(batch);
               appendedArchiveItems += resolvedItems.length;
-              setPlaylist((prev) => [...prev, ...resolvedItems]);
+              setPlaylist((prev) => {
+                const next = [...prev, ...resolvedItems];
+                playlistSnapshotRef.current = next;
+                return next;
+              });
               await new Promise((resolve) => setTimeout(resolve, 0));
             },
             {
@@ -330,17 +350,29 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
 
         await flushArchiveBatch();
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          status: "committing",
+          count: appendedArchiveItems,
+          message: "Validating playlist visibility…",
+        }));
+        markPlaylistRepositoryPhase(playlistStorageKey, "COMMITTING", {
+          expectedCount: playlistSnapshotRef.current.length,
+        });
+        await commitPlaylistSnapshot({
+          playlistId: playlistStorageKey,
+          items: playlistSnapshotRef.current,
+        });
         toast({
           title: "Items added",
           description: `${appendedArchiveItems} archive result(s) added to playlist.`,
         });
         setAddItemsProgress((prev) => ({
           ...prev,
-          status: "done",
+          status: "ready",
           count: appendedArchiveItems,
-          message: "Added to playlist",
+          message: "Playlist ready",
         }));
-        await new Promise((resolve) => setTimeout(resolve, 150));
         return true;
       }
 
@@ -399,6 +431,14 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
       const appendPlaylistBatch = async (batch: PlaylistItem[]) => {
         if (!batch.length) return;
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          status: "ingesting",
+          message: "Importing playlist items…",
+        }));
+        markPlaylistRepositoryPhase(playlistStorageKey, "INGESTING", {
+          expectedCount: playlistSnapshotRef.current.length + batch.length,
+        });
         await measureAddBatch(
           source.type,
           batch.length,
@@ -407,7 +447,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               allowMd5Fallback: false,
             });
             appendedPlaylistItems += resolvedItems.length;
-            setPlaylist((prev) => [...prev, ...resolvedItems]);
+            setPlaylist((prev) => {
+              const next = [...prev, ...resolvedItems];
+              playlistSnapshotRef.current = next;
+              return next;
+            });
             await new Promise((resolve) => setTimeout(resolve, 0));
           },
           {
@@ -739,6 +783,18 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
+      setAddItemsProgress((prev) => ({
+        ...prev,
+        status: "committing",
+        message: "Validating playlist visibility…",
+      }));
+      markPlaylistRepositoryPhase(playlistStorageKey, "COMMITTING", {
+        expectedCount: playlistSnapshotRef.current.length,
+      });
+      await commitPlaylistSnapshot({
+        playlistId: playlistStorageKey,
+        items: playlistSnapshotRef.current,
+      });
       toast({
         title: "Items added",
         description: `${appendedPlaylistItems} file(s) added to playlist.`,
@@ -756,10 +812,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       });
       setAddItemsProgress((prev) => ({
         ...prev,
-        status: "done",
-        message: "Added to playlist",
+        status: "ready",
+        message: "Playlist ready",
       }));
-      await new Promise((resolve) => setTimeout(resolve, 150));
       return true;
     } catch (error) {
       const err = error as Error;
@@ -776,6 +831,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         status: "error",
         message: "Add items failed",
       }));
+      markPlaylistRepositoryPhase(playlistStorageKey, "ERROR", {
+        lastError: err.message,
+      });
       reportUserError({
         operation: "PLAYLIST_ADD",
         title: "Add items failed",

@@ -16,7 +16,12 @@ import {
   type FeatureFlagKey,
   type FeatureFlags,
 } from "@/lib/config/featureFlags";
-import { buildBaseUrlFromDeviceHost, getC64APIConfigSnapshot, normalizeDeviceHost, updateC64APIConfig } from "@/lib/c64api";
+import {
+  buildBaseUrlFromDeviceHost,
+  getC64APIConfigSnapshot,
+  normalizeDeviceHost,
+  updateC64APIConfig,
+} from "@/lib/c64api";
 import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import { setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";

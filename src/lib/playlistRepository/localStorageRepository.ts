@@ -207,6 +207,10 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
     );
   }
 
+  async getPlaylistItemCount(playlistId: string) {
+    return this.state.playlistItemsByPlaylistId[playlistId]?.length ?? 0;
+  }
+
   async saveSession(session: PlaylistSessionRecord) {
     this.state.sessionsByPlaylistId[session.playlistId] = session;
     this.commit();

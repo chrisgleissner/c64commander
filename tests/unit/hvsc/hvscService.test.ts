@@ -41,7 +41,7 @@ vi.mock("@capacitor/core", () => ({
 
 vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
   addHvscProgressListener: vi.fn(async (listener: any) => ({
-    remove: async () => { },
+    remove: async () => {},
   })),
   cancelHvscInstall: vi.fn(async () => undefined),
   checkForHvscUpdates: vi.fn(async () => ({

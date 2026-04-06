@@ -23,6 +23,7 @@ export interface TrackRepository {
 export interface PlaylistRepository {
   replacePlaylistItems(playlistId: string, items: PlaylistItemRecord[]): Promise<void>;
   getPlaylistItems(playlistId: string): Promise<PlaylistItemRecord[]>;
+  getPlaylistItemCount(playlistId: string): Promise<number>;
   saveSession(session: PlaylistSessionRecord): Promise<void>;
   getSession(playlistId: string): Promise<PlaylistSessionRecord | null>;
 }

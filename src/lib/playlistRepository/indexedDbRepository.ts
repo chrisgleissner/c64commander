@@ -409,6 +409,17 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
       .filter((item): item is PlaylistItemRecord => Boolean(item));
   }
 
+  async getPlaylistItemCount(playlistId: string): Promise<number> {
+    await this.ensureInitialized();
+    const orders = await readValue<PlaylistOrderRecord>(playlistOrderKey(playlistId)).catch((error) => {
+      if (isOpenFailure(error)) {
+        throw error;
+      }
+      return warnReadFailureAndReturn<PlaylistOrderRecord | null>(error, null);
+    });
+    return orders?.["playlist-position"]?.length ?? 0;
+  }
+
   async saveSession(session: PlaylistSessionRecord): Promise<void> {
     await this.ensureInitialized();
     await writeValues([[sessionKey(session.playlistId), session]]);

@@ -45,7 +45,14 @@ vi.mock("@/lib/native/featureFlags", () => ({
 }));
 
 vi.mock("@/lib/c64api", () => ({
+  buildBaseUrlFromDeviceHost: vi.fn((host: string) => `http://${host}`),
+  getC64APIConfigSnapshot: vi.fn(() => ({ password: "secret" })),
   normalizeDeviceHost: vi.fn((host: string) => host.replace(/\/$/, "")),
+  updateC64APIConfig: vi.fn(),
+}));
+
+vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
+  setHvscBaseUrlOverride: vi.fn(),
 }));
 
 describe("smokeMode", () => {
@@ -101,6 +108,7 @@ describe("smokeMode", () => {
   describe("initializeSmokeMode", () => {
     it("returns null when no config in storage", async () => {
       localStorageMock.getItem.mockReturnValue(null);
+      vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
       const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
       expect(result).toBeNull();
@@ -117,19 +125,20 @@ describe("smokeMode", () => {
       expect(result).toBeNull();
     });
 
-    it("skips native smoke bootstrap when localStorage is unavailable without an explicit probe flag", async () => {
+    it("tries native smoke bootstrap when localStorage is unavailable on native platforms", async () => {
       Object.defineProperty(global, "localStorage", {
         value: undefined,
         writable: true,
         configurable: true,
       });
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
 
       const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
 
       expect(result).toBeNull();
-      expect(Filesystem.readFile).not.toHaveBeenCalled();
+      expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
     });
 
     it("loads config from localStorage", async () => {
@@ -183,31 +192,33 @@ describe("smokeMode", () => {
       expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
     });
 
-    it("sets device host when configured", async () => {
+    it("updates the API config when a device host is configured", async () => {
       const configJson = JSON.stringify({
         target: "real",
         host: "192.168.1.100/",
       });
       localStorageMock.getItem.mockReturnValue(configJson);
 
+      const { updateC64APIConfig } = await import("@/lib/c64api");
       const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       await initializeSmokeMode();
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_device_host", "192.168.1.100");
+      expect(updateC64APIConfig).toHaveBeenCalledWith("http://192.168.1.100", "secret", "192.168.1.100");
     });
 
-    it("skips native smoke file read on startup when no bootstrap signal is present", async () => {
+    it("reads the native smoke file on startup when running on native", async () => {
       localStorageMock.getItem.mockImplementation((key: string) => {
         if (key === "c64u_smoke_config") return null;
         if (key === "c64u_smoke_mode_enabled") return null;
         return null;
       });
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
 
       const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       await initializeSmokeMode();
 
-      expect(Filesystem.readFile).not.toHaveBeenCalled();
+      expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
     });
 
     it("reads native smoke file when explicit bootstrap flag is enabled", async () => {

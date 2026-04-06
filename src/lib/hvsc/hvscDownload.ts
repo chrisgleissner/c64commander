@@ -117,7 +117,7 @@ type SparkMd5ArrayBufferAccumulator = {
 };
 
 const SparkMd5ArrayBufferCtor = SparkMD5.ArrayBuffer as unknown as {
-  new(): SparkMd5ArrayBufferAccumulator;
+  new (): SparkMd5ArrayBufferAccumulator;
 };
 
 const readHeapUsageBytes = () => {
@@ -312,13 +312,13 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
         const resolvedChecksumMd5 =
           marker?.checksumMd5 && stat.type === "file"
             ? await computeCachedArchiveChecksumMd5(name, statSize).catch((error) => {
-              addLog("warn", "HVSC cached archive checksum validation failed", {
-                name,
-                statSize,
-                error: (error as Error).message,
-              });
-              return null;
-            })
+                addLog("warn", "HVSC cached archive checksum validation failed", {
+                  name,
+                  statSize,
+                  error: (error as Error).message,
+                });
+                return null;
+              })
             : null;
         const hasSizeMismatch =
           typeof marker?.sizeBytes === "number" &&

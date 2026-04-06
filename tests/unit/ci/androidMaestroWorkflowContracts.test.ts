@@ -46,12 +46,12 @@ describe("Android Maestro workflow contracts", () => {
     const playbackFlow = readRepoFile(".maestro", "perf-hvsc-playback.yaml");
 
     expect(playlistFlow).toContain('visible: "Open DEMOS"');
-    expect(playlistFlow).toContain("point: \"9%, 45%\"");
-    expect(playlistFlow).toContain("point: \"9%, 57%\"");
-    expect(playlistFlow).toContain("point: \"9%, 62%\"");
+    expect(playlistFlow).toContain('point: "9%, 45%"');
+    expect(playlistFlow).toContain('point: "9%, 57%"');
+    expect(playlistFlow).toContain('point: "9%, 62%"');
     expect(playlistFlow).toContain('tapOn: "Add to playlist"');
     expect(playlistFlow).toContain('text: "Root"');
-    expect(playlistFlow).toContain('hvsc-perf-setup');
+    expect(playlistFlow).toContain("hvsc-perf-setup");
     expect(filterHighFlow).toContain('inputText: "hubbard"');
     expect(filterZeroFlow).toContain('inputText: "xyzzy123"');
     expect(filterLowFlow).toContain('inputText: "Commando"');

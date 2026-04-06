@@ -1,5 +1,7 @@
+import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
+import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
@@ -16,6 +18,16 @@ const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
 
 const { recordSmokeBenchmarkSnapshot } = vi.hoisted(() => ({
   recordSmokeBenchmarkSnapshot: vi.fn(),
+}));
+
+const { commitPlaylistSnapshot, markPlaylistRepositoryPhase } = vi.hoisted(() => ({
+  commitPlaylistSnapshot: vi.fn().mockResolvedValue({
+    committedCount: 0,
+    expectedCount: 0,
+    revision: 1,
+    snapshotKey: "test",
+  }),
+  markPlaylistRepositoryPhase: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -74,6 +86,11 @@ vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot,
 }));
 
+vi.mock("@/pages/playFiles/playlistRepositorySync", () => ({
+  commitPlaylistSnapshot,
+  markPlaylistRepositoryPhase,
+}));
+
 const createHvscSource = (entries: Awaited<ReturnType<SourceLocation["listEntries"]>>): SourceLocation => ({
   id: "hvsc-library",
   type: "hvsc",
@@ -99,6 +116,7 @@ const createLocalSource = (
 
 const createDeps = () => {
   const playlistItems: unknown[] = [];
+  const playlistSnapshotRef = { current: [] as unknown[] };
   return {
     addItemsStartedAtRef: { current: null },
     addItemsOverlayActiveRef: { current: false },
@@ -114,8 +132,12 @@ const createDeps = () => {
     setIsAddingItems: vi.fn(),
     setAddItemsProgress: vi.fn(),
     setPlaylist: vi.fn((updater: (prev: unknown[]) => unknown[]) => {
-      playlistItems.push(...updater([]));
+      const next = updater(playlistSnapshotRef.current);
+      playlistSnapshotRef.current = next;
+      playlistItems.splice(0, playlistItems.length, ...next);
     }),
+    playlistSnapshotRef,
+    playlistStorageKey: buildPlaylistStorageKey("device-1"),
     buildPlaylistItem: vi.fn((entry) => ({
       id: `${entry.source}:${entry.sourceId ?? ""}:${entry.path}`,
       request: { source: entry.source, path: entry.path, file: entry.file },
@@ -141,6 +163,14 @@ describe("addFileSelections batching", () => {
     beginHvscPerfScope.mockClear();
     endHvscPerfScope.mockClear();
     recordSmokeBenchmarkSnapshot.mockClear();
+    commitPlaylistSnapshot.mockClear();
+    markPlaylistRepositoryPhase.mockClear();
+    commitPlaylistSnapshot.mockResolvedValue({
+      committedCount: 0,
+      expectedCount: 0,
+      revision: 1,
+      snapshotKey: "test",
+    });
   });
 
   it("records a playlist-add benchmark snapshot after successful HVSC adds", async () => {
@@ -167,6 +197,11 @@ describe("addFileSelections batching", () => {
           selectionCount: 1,
           playableCount: 1,
         }),
+      }),
+    );
+    expect(commitPlaylistSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playlistId: buildPlaylistStorageKey("device-1"),
       }),
     );
   });
@@ -199,6 +234,61 @@ describe("addFileSelections batching", () => {
       expect.objectContaining({ scope: "playlist:add-batch" }),
       expect.objectContaining({ outcome: "success", sourceType: "hvsc" }),
     );
+    expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not report playlist readiness before the repository commit resolves", async () => {
+    const deps = createDeps();
+    let resolveCommit: ((value: unknown) => void) | null = null;
+    commitPlaylistSnapshot.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCommit = resolve;
+        }),
+    );
+    const source = createHvscSource([
+      {
+        type: "file" as const,
+        name: "Delayed.sid",
+        path: "/MUSICIANS/Test/Delayed.sid",
+      },
+    ]);
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const pending = handler(source, [{ type: "dir", name: "Test", path: "/MUSICIANS/Test" }]);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(deps.setAddItemsProgress).toHaveBeenCalledWith(expect.any(Function));
+    await waitFor(() => {
+      expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
+    });
+    expect(markPlaylistRepositoryPhase).toHaveBeenCalledWith(
+      buildPlaylistStorageKey("device-1"),
+      "COMMITTING",
+      expect.objectContaining({ expectedCount: 1 }),
+    );
+    expect(
+      deps.setAddItemsProgress.mock.calls.some(([updater]: [unknown]) => {
+        if (typeof updater !== "function") {
+          return false;
+        }
+        const next = updater({
+          status: "committing",
+          count: 1,
+          elapsedMs: 0,
+          total: null,
+          message: "Validating playlist visibility…",
+        } as any) as { status: string };
+        return next.status === "ready";
+      }),
+    ).toBe(false);
+
+    resolveCommit?.({ committedCount: 1, expectedCount: 1, revision: 2, snapshotKey: "ready" });
+    const result = await pending;
+
+    expect(result).toBe(true);
+    expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("streams recursive local folders into playlist batches before traversal completes", async () => {

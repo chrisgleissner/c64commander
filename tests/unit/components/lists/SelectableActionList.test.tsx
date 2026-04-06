@@ -265,4 +265,29 @@ describe("SelectableActionList", () => {
     expect(screen.getByText("Alpha")).toBeVisible();
     expect(screen.getByRole("dialog")).toBeVisible();
   });
+
+  it("shows view all immediately for non-empty authoritative lists even when the preview fits", () => {
+    localStorage.clear();
+    setViewportWidth(1280);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={[items[0]!]}
+          totalItemCount={1}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={4}
+          disableClientFiltering
+          viewAllTitle="All files"
+          viewAllMode="non-empty"
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "View all" })).toBeVisible();
+  });
 });

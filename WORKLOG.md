@@ -1,5 +1,74 @@
 # HVSC Performance Worklog
 
+## [2026-04-06 10:20] HVSC playlist convergence: commit barrier, ready-state truth, and post-fix validation
+
+Implemented the playlist correctness convergence pass requested for the HVSC import and large-playlist flow.
+
+What changed:
+
+- Added `src/pages/playFiles/playlistRepositorySync.ts` as the shared repository commit barrier and ready-state store.
+  - Tracks `IDLE`, `SCANNING`, `INGESTING`, `COMMITTING`, `READY`, and `ERROR`.
+  - Deduplicates in-flight snapshot commits by content hash.
+  - Validates repository write completion with `getPlaylistItemCount()` before declaring readiness.
+- Extended the playlist repository contract with `getPlaylistItemCount()` and implemented it in both IndexedDB and localStorage repositories.
+- Removed the old async full-playlist repository mirroring from `useQueryFilteredPlaylist.ts`.
+  - Repository-backed filtering now activates only after a committed ready snapshot is visible.
+  - Until then, filtering stays in-memory instead of waiting on background rewrites.
+- Rewired `usePlaybackPersistence.ts` to use the shared commit barrier and to avoid background repository churn while imports are actively scanning, ingesting, or committing.
+- Upgraded `addFileSelections.ts` to a hard completion barrier.
+  - Import success now waits for repository commit and read-back validation.
+  - The UI transitions through `SCANNING -> INGESTING -> COMMITTING -> READY`.
+  - Failures now mark the repository sync state as `ERROR` instead of silently continuing.
+- Updated shared list behavior so `View all` can be shown for authoritative non-empty lists even when the preview itself does not overflow.
+  - Applied to both `PlaylistPanel.tsx` and `HomeDiskManager.tsx`.
+
+Regression coverage added or updated:
+
+- `tests/unit/playFiles/playlistRepositorySync.test.ts`
+- `tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx`
+- `tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx`
+- `tests/unit/playFiles/usePlaybackPersistence.repositorySession.test.tsx`
+- `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`
+- `tests/unit/pages/playFiles/handlers/addFileSelectionsArchive.test.ts`
+- `tests/unit/pages/playFiles/handlers/addFileSelectionsConfig.test.ts`
+- `tests/unit/components/lists/SelectableActionList.test.tsx`
+
+Validation executed:
+
+- Focused regression run: 95 passed, 0 failed.
+- `npm run build`: passed.
+- `npm run lint`: blocked before ESLint by pre-existing unrelated Prettier failures in untouched files.
+- `npm run test:coverage`: rerun after fixes; no remaining playlist-convergence regressions, but the suite still fails on unrelated existing tests:
+  - `tests/unit/maestro/launchAndWaitFlow.test.ts`
+  - `tests/unit/lib/smoke/smokeMode.test.ts`
+
+Focused coverage note:
+
+- Focused coverage over the touched playlist regression surface passed with 95 tests, 0 failures.
+- The repo does not currently expose diff-only branch coverage for exactly the changed lines, so the only repo-wide coverage gate remains the full `npm run test:coverage` run above.
+
+Post-fix web perf remeasurement:
+
+- Artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+- Command: `npm run test:perf:quick`
+- Budget assertion command: `npm run test:perf:assert:web` (observation-only; no web secondary thresholds configured)
+- Fresh scenario timings from the quick fixture run:
+  - S6 add to playlist: `1613.72 ms` wall clock, `playlist:add-batch` p95 `17.2 ms`, `playlist:repo-sync` p95 `21.1 ms`
+  - S7 render playlist: `6.75 ms` wall clock
+  - S8 filter high match: `545.53 ms` wall clock, `playlist:filter` p95 `17.2 ms`
+  - S9 filter zero match: `544.06 ms` wall clock, `playlist:filter` p95 `16.6 ms`
+  - S10 filter low match: `550.23 ms` wall clock, `playlist:filter` p95 `13.9 ms`
+- Target evidence from the same run:
+  - T2 ingest: `228.4 ms` pass
+  - T3 browse: `334.64 ms` pass
+  - T4 filter: `550.23 ms` pass
+
+Decision:
+
+- Keep this convergence pass.
+- The original correctness regression is fixed at the architecture level: completion now means repository-visible truth, not eventual background consistency.
+- Remaining repo-wide lint and full-coverage blockers are unrelated pre-existing failures outside the playlist convergence surface.
+
 ## [2026-04-06 00:20] P1.6 Close microbenchmark gap — already complete
 
 All three completion gates verified satisfied without additional changes:

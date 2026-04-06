@@ -93,7 +93,7 @@ describe("hvscService", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       CustomEvent: class CustomEvent {
-        constructor(public type: string) { }
+        constructor(public type: string) {}
       },
       ...overrides,
     });

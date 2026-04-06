@@ -1,7 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
+import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
+
+const { commitPlaylistSnapshot, markPlaylistRepositoryPhase } = vi.hoisted(() => ({
+  commitPlaylistSnapshot: vi.fn().mockResolvedValue({
+    committedCount: 0,
+    expectedCount: 0,
+    revision: 1,
+    snapshotKey: "test",
+  }),
+  markPlaylistRepositoryPhase: vi.fn(),
+}));
 
 const mockArchiveClient = {
   getEntries: vi.fn(),
@@ -46,6 +57,11 @@ vi.mock("@/lib/sid/songlengthsDiscovery", () => ({
   isSonglengthsFileName: vi.fn(() => false),
 }));
 
+vi.mock("@/pages/playFiles/playlistRepositorySync", () => ({
+  commitPlaylistSnapshot,
+  markPlaylistRepositoryPhase,
+}));
+
 const archiveSource: SourceLocation = {
   id: "archive-commoserve",
   type: "commoserve",
@@ -78,6 +94,7 @@ const createHvscSource = (listEntries: SourceLocation["listEntries"]): SourceLoc
 
 const createMockDeps = () => {
   const playlistItems: unknown[] = [];
+  const playlistSnapshotRef = { current: [] as unknown[] };
   return {
     addItemsStartedAtRef: { current: null },
     addItemsOverlayActiveRef: { current: false },
@@ -93,8 +110,12 @@ const createMockDeps = () => {
     setIsAddingItems: vi.fn(),
     setAddItemsProgress: vi.fn(),
     setPlaylist: vi.fn((updater: (prev: unknown[]) => unknown[]) => {
-      playlistItems.push(...updater([]));
+      const next = updater(playlistSnapshotRef.current);
+      playlistSnapshotRef.current = next;
+      playlistItems.splice(0, playlistItems.length, ...next);
     }),
+    playlistSnapshotRef,
+    playlistStorageKey: buildPlaylistStorageKey("device-1"),
     buildPlaylistItem: vi.fn((entry) => ({
       id: `${entry.source}:${entry.sourceId ?? ""}:${entry.path}`,
       request: { source: entry.source, path: entry.path, file: entry.file },
@@ -128,6 +149,12 @@ const createMockDeps = () => {
 describe("addFileSelections archive source handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    commitPlaylistSnapshot.mockResolvedValue({
+      committedCount: 0,
+      expectedCount: 0,
+      revision: 1,
+      snapshotKey: "test",
+    });
     mockArchiveClient.getEntries.mockResolvedValue([{ id: 0, path: "demo.d64", size: 174848, date: 1773676443000 }]);
   });
 

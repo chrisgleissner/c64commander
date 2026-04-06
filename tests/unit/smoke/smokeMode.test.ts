@@ -80,7 +80,12 @@ vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
 }));
 
 vi.mock("@/lib/c64api", () => ({
-  normalizeDeviceHost: (value: string) => value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, ""),
+  normalizeDeviceHost: (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, ""),
   buildBaseUrlFromDeviceHost: (...args: unknown[]) => smokeDeps.buildBaseUrlFromDeviceHostMock(...args),
   getC64APIConfigSnapshot: (...args: unknown[]) => smokeDeps.getC64APIConfigSnapshotMock(...args),
   updateC64APIConfig: (...args: unknown[]) => smokeDeps.updateC64APIConfigMock(...args),

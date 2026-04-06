@@ -115,6 +115,7 @@ export const PlaylistPanel = ({
         disableClientFiltering
         hasMoreViewAllItems={hasMoreViewAllItems}
         onViewAllEndReached={onViewAllEndReached}
+        viewAllMode="non-empty"
         headerActions={
           <div className="flex flex-wrap items-center gap-2">
             <Button

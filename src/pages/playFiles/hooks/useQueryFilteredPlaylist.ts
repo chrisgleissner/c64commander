@@ -8,53 +8,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
-import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addErrorLog } from "@/lib/logging";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
-import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-
-const buildTrackId = (source: string, sourceId: string | null | undefined, path: string) =>
-  `${source}:${sourceId ?? ""}:${normalizeSourcePath(path)}`;
-
-const serializePlaylistToQueryRepository = (items: PlaylistItem[], playlistId: string) => {
-  const nowIso = new Date().toISOString();
-  const tracks: TrackRecord[] = items.map((item) => ({
-    trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
-    sourceKind: item.request.source,
-    sourceLocator: normalizeSourcePath(item.path),
-    sourceId: item.sourceId ?? null,
-    category: item.category,
-    title: item.label,
-    author: null,
-    released: null,
-    path: normalizeSourcePath(item.path),
-    sizeBytes: item.sizeBytes ?? null,
-    modifiedAt: item.modifiedAt ?? null,
-    defaultDurationMs: item.durationMs ?? null,
-    subsongCount: item.subsongCount ?? null,
-    createdAt: item.addedAt ?? nowIso,
-    updatedAt: nowIso,
-  }));
-  const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
-    playlistItemId: item.id,
-    playlistId,
-    trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
-    configRef: item.configRef ?? null,
-    configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
-    configOverrides: item.configOverrides ?? null,
-    songNr: item.request.songNr ?? 1,
-    sortKey: String(index).padStart(8, "0"),
-    durationOverrideMs: item.durationMs ?? null,
-    status: item.status ?? "ready",
-    unavailableReason: item.unavailableReason ?? null,
-    addedAt: item.addedAt ?? nowIso,
-  }));
-  return { tracks, playlistItems };
-};
+import { usePlaylistRepositorySyncSnapshot } from "@/pages/playFiles/playlistRepositorySync";
 
 const matchesPlaylistQuery = (item: PlaylistItem, query: string) => {
   const trimmed = query.trim().toLowerCase();
@@ -83,95 +42,18 @@ export const useQueryFilteredPlaylist = ({
   const initialViewAllLimit = Math.max(previewLimit, viewAllPageSize);
   const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
   const [totalMatchCount, setTotalMatchCount] = useState(0);
-  const [syncedRevision, setSyncedRevision] = useState(0);
-  const [repositorySyncFailed, setRepositorySyncFailed] = useState(false);
   const [viewAllLimit, setViewAllLimit] = useState(initialViewAllLimit);
   const playlistRef = useRef(playlist);
-  const filtersRef = useRef(playlistTypeFilters);
   const queryRef = useRef(query);
-  const latestSyncRequestRef = useRef(0);
+  const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
+  const repositoryReady = repositorySnapshot.phase === "READY" && repositorySnapshot.committedCount === playlist.length;
 
   playlistRef.current = playlist;
-  filtersRef.current = playlistTypeFilters;
   queryRef.current = query;
 
   useEffect(() => {
     setViewAllLimit(initialViewAllLimit);
   }, [initialViewAllLimit, playlistStorageKey, playlistTypeFilters, query]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const syncRequestId = latestSyncRequestRef.current + 1;
-    latestSyncRequestRef.current = syncRequestId;
-
-    const run = async () => {
-      if (!playlist.length) {
-        if (!cancelled) {
-          setQueryFilteredPlaylist([]);
-          setTotalMatchCount(0);
-          setRepositorySyncFailed(false);
-          setSyncedRevision(syncRequestId);
-        }
-        return;
-      }
-
-      const repository = getPlaylistDataRepository();
-      const serialized = serializePlaylistToQueryRepository(playlist, playlistStorageKey);
-      const syncScope = beginHvscPerfScope("playlist:repo-sync", {
-        playlistId: playlistStorageKey,
-        requestId: syncRequestId,
-        trackCount: serialized.tracks.length,
-        playlistItemCount: serialized.playlistItems.length,
-      });
-      try {
-        await repository.upsertTracks(serialized.tracks);
-        await repository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
-        endHvscPerfScope(syncScope, {
-          outcome: "success",
-          playlistId: playlistStorageKey,
-          requestId: syncRequestId,
-          trackCount: serialized.tracks.length,
-          playlistItemCount: serialized.playlistItems.length,
-        });
-        if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
-          setRepositorySyncFailed(false);
-          setSyncedRevision(syncRequestId);
-        }
-      } catch (error) {
-        const err = error as Error;
-        endHvscPerfScope(syncScope, {
-          outcome: "error",
-          playlistId: playlistStorageKey,
-          requestId: syncRequestId,
-          trackCount: serialized.tracks.length,
-          playlistItemCount: serialized.playlistItems.length,
-          errorName: err.name,
-          errorMessage: err.message,
-        });
-        throw error;
-      }
-    };
-
-    run().catch((error) => {
-      addErrorLog("Failed to sync playlist query repository", {
-        playlistStorageKey,
-        error: (error as Error).message,
-      });
-      if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
-        const filteredPlaylist = playlist.filter(
-          (item) => filtersRef.current.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
-        );
-        setQueryFilteredPlaylist(filteredPlaylist.slice(0, viewAllLimit));
-        setTotalMatchCount(filteredPlaylist.length);
-        setRepositorySyncFailed(true);
-        setSyncedRevision(syncRequestId);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playlist, playlistStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,14 +68,13 @@ export const useQueryFilteredPlaylist = ({
         return;
       }
 
-      if (syncedRevision === 0) return;
-
       const filterScope = beginHvscPerfScope("playlist:filter", {
         playlistId: playlistStorageKey,
         query,
         viewAllLimit,
         playlistSize: currentPlaylist.length,
         categoryFilters: playlistTypeFilters,
+        repositoryPhase: repositorySnapshot.phase,
       });
 
       const finalizeFilterScope = (metadata: Record<string, unknown>) => {
@@ -215,21 +96,23 @@ export const useQueryFilteredPlaylist = ({
               viewAllLimit,
               playlistSize: currentPlaylist.length,
               categoryFilters: playlistTypeFilters,
+              repositoryPhase: repositorySnapshot.phase,
               ...metadata,
             },
           });
         }
       };
 
-      if (repositorySyncFailed) {
+      if (!repositoryReady) {
         const nextFiltered = currentPlaylist.filter(
           (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
         );
         finalizeFilterScope({
-          outcome: "fallback",
+          outcome: "memory",
           source: "memory",
           resultCount: Math.min(nextFiltered.length, viewAllLimit),
           totalMatchCount: nextFiltered.length,
+          repositoryPhase: repositorySnapshot.phase,
         });
         if (!cancelled) {
           setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
@@ -257,6 +140,7 @@ export const useQueryFilteredPlaylist = ({
         source: "repository",
         resultCount: nextFiltered.length,
         totalMatchCount: result.totalMatchCount,
+        repositoryRevision: repositorySnapshot.revision,
       });
 
       if (!cancelled) {
@@ -297,7 +181,16 @@ export const useQueryFilteredPlaylist = ({
     return () => {
       cancelled = true;
     };
-  }, [playlistStorageKey, playlistTypeFilters, query, repositorySyncFailed, syncedRevision, viewAllLimit]);
+  }, [
+    playlist,
+    playlistStorageKey,
+    playlistTypeFilters,
+    query,
+    repositoryReady,
+    repositorySnapshot.phase,
+    repositorySnapshot.revision,
+    viewAllLimit,
+  ]);
 
   const previewPlaylist = useMemo(
     () => queryFilteredPlaylist.slice(0, previewLimit),
