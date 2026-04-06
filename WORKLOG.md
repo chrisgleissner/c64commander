@@ -1,5 +1,90 @@
 # HVSC Performance Worklog
 
+## [2026-04-06 14:45] UI/docs follow-up: source chooser alignment and diagnostics analysis screenshot realism
+
+Closed the remaining UI and documentation screenshot follow-up items after the HVSC convergence closeout.
+
+What changed:
+
+- Normalized `FileOriginIcon` to render every source inside a shared outer icon slot.
+  - The CommoServe icon now uses a larger inner glyph while preserving the same outer width as Local, C64U, and HVSC.
+  - This fixes the Add Items interstitial alignment issue across compact, medium, and expanded display profiles.
+- Added regression coverage for the chooser/icon changes in:
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/components/FileOriginIcon.test.tsx`
+- Extended the diagnostics health-history analysis popup so the selected timeline segment now drives a scrollable health-check list beneath the history bar.
+  - Selected timeline bands receive an explicit highlight border.
+  - The detail list shows timestamp, overall status, percentile latency, and expandable per-probe details.
+- Added diagnostics regression coverage in:
+  - `tests/unit/components/diagnostics/HealthHistoryPopup.test.tsx`
+  - `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`
+- Updated `playwright/screenshots.spec.ts` so the history analysis screenshot explicitly selects a non-healthy timeline band and expands a detail row before capture.
+
+Screenshot regeneration executed:
+
+- Targeted diagnostics subset:
+  - `docs/img/app/diagnostics/**`
+- Full screenshot corpus:
+  - `npm run screenshots`
+  - 21 screenshot tests passed
+  - 148 PNGs scanned, 148 kept, 0 reverted, 0 deleted
+
+Validation executed:
+
+- Focused unit regressions:
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`: passed
+  - `tests/unit/components/diagnostics/HealthHistoryPopup.test.tsx`: passed
+  - `tests/unit/components/FileOriginIcon.test.tsx`: passed
+  - `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`: passed
+- `npm run lint`: passed
+  - with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 496 test files
+  - 5639 tests
+  - 91.17% branch coverage
+
+Decision:
+
+- Keep the icon-slot normalization and diagnostics history-detail extension.
+- The documentation screenshots now reflect the denser diagnostics seed data and the selected-range health-check timeline.
+
+## [2026-04-06 13:35] HVSC convergence closeout: repo-wide CI green
+
+Closed the remaining repo-wide blockers after the playlist convergence architecture fix.
+
+What changed:
+
+- Fixed a real delayed-hydration regression in `usePlaybackPersistence.ts`.
+  - Playlist restore now retries when the storage key changes from `c64u_playlist:v1:default` to the resolved device key.
+  - Persistence/session effects now wait for the restore revision associated with the active playlist key.
+- Added a regression test in `tests/unit/playFiles/usePlaybackPersistence.test.tsx` that proves device-specific playlist restore still works when the device id resolves after the page mounts.
+- Updated stale repo-wide test expectations:
+  - `tests/unit/maestro/launchAndWaitFlow.test.ts`
+  - `tests/unit/lib/smoke/smokeMode.test.ts`
+  - `playwright/homeInteractivity.spec.ts`
+  - `playwright/layoutOverflow.spec.ts`
+- Ran Prettier on the files that were blocking repo-wide lint.
+
+Validation executed:
+
+- `npm run lint`: passed (with 3 non-fatal warnings in generated `c64scope/coverage/*` files)
+- `npm run test:coverage`: passed
+  - 495 test files
+  - 5635 tests
+  - 91.19% branch coverage
+- `npm run test:ci`: passed end-to-end
+  - screenshots
+  - Playwright E2E
+  - evidence validation
+  - trace comparison
+  - production build
+
+Decision:
+
+- The HVSC playlist convergence pass is complete.
+- CI is green.
+
 ## [2026-04-06 10:20] HVSC playlist convergence: commit barrier, ready-state truth, and post-fix validation
 
 Implemented the playlist correctness convergence pass requested for the HVSC import and large-playlist flow.

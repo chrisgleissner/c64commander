@@ -11,6 +11,7 @@ import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { clearLatencySamples } from "@/lib/diagnostics/latencyTracker";
 import { clearRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
 import {
+  DIAGNOSTICS_TEST_ANALYTICS_EVENT,
   DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT,
   registerDiagnosticsTestBridge,
 } from "@/lib/diagnostics/diagnosticsTestBridge";
@@ -34,6 +35,23 @@ describe("registerDiagnosticsTestBridge", () => {
   it("seeds analytics snapshots through the window bridge when test probes are enabled", () => {
     (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     const now = Date.now();
+    const analyticsEvents: Array<{
+      healthHistory: Array<Record<string, unknown>>;
+      latencySamples: Array<Record<string, unknown>>;
+      recoveryEvents: Array<Record<string, unknown>>;
+    }> = [];
+    const handleAnalyticsState = (event: Event) => {
+      analyticsEvents.push(
+        (
+          event as CustomEvent<{
+            healthHistory: Array<Record<string, unknown>>;
+            latencySamples: Array<Record<string, unknown>>;
+            recoveryEvents: Array<Record<string, unknown>>;
+          }>
+        ).detail,
+      );
+    };
+    window.addEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsState);
 
     registerDiagnosticsTestBridge();
 
@@ -102,6 +120,9 @@ describe("registerDiagnosticsTestBridge", () => {
     expect(snapshot?.latencySamples[0]?.transport).toBe("REST");
     expect(snapshot?.recoveryEvents).toHaveLength(1);
     expect(snapshot?.recoveryEvents[0]?.message).toBe("Recovered after transient timeout");
+    expect(analyticsEvents.at(-1)?.healthHistory).toHaveLength(1);
+    expect(analyticsEvents.at(-1)?.latencySamples).toHaveLength(1);
+    expect(analyticsEvents.at(-1)?.recoveryEvents).toHaveLength(1);
 
     bridge?.seedOverlayState({
       healthCheckRunning: false,
@@ -133,6 +154,8 @@ describe("registerDiagnosticsTestBridge", () => {
     const overlaySnapshot = bridge?.getOverlayStateSnapshot();
     expect(overlaySnapshot?.healthCheckRunning).toBe(false);
     expect(overlaySnapshot?.lastHealthCheckResult).toBeTruthy();
+
+    window.removeEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsState);
   });
 
   it("does not expose the bridge when test probes are disabled", () => {

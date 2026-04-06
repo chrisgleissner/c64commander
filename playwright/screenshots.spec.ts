@@ -1787,6 +1787,26 @@ test.describe("App screenshots", () => {
       await dialog.getByTestId("diagnostics-overflow-menu").click();
       await dialog.getByTestId("open-timeline-screen").click();
       await expect(page.getByTestId("health-history-popup")).toBeVisible();
+      await page.waitForFunction(
+        () => document.querySelectorAll('[data-testid^="health-history-segment-"]').length > 4,
+      );
+      await page.evaluate(() => {
+        const unhealthySegment = document.querySelector<HTMLElement>(
+          '[data-testid^="health-history-segment-"][data-state="Unhealthy"]',
+        );
+        const degradedSegment = document.querySelector<HTMLElement>(
+          '[data-testid^="health-history-segment-"][data-state="Degraded"]',
+        );
+        const target = unhealthySegment ?? degradedSegment;
+        if (!target) {
+          throw new Error("No non-healthy history segment available for screenshot capture.");
+        }
+        target.click();
+      });
+      await expect(page.getByTestId("health-history-event-list")).toBeVisible();
+      const firstHistoryEventRow = page.locator('[data-testid^="health-history-event-row-"] button').first();
+      await firstHistoryEventRow.click();
+      await expect(firstHistoryEventRow).toHaveAttribute("aria-expanded", "true");
       await captureDiagnosticsScreenshot(page, testInfo, "analysis/02-history.png");
       await page.getByTestId("analytic-popup-close").click();
     },

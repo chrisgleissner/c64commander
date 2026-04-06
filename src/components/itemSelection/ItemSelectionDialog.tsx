@@ -36,6 +36,7 @@ import { ItemSelectionView } from "./ItemSelectionView";
 import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
 import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 
 const isLocalAutoConfirmDisabled = () =>
   typeof window !== "undefined" &&
@@ -333,7 +334,7 @@ export const ItemSelectionDialog = ({
 
   const interstitialGridClassName = profile === "expanded" ? "grid-cols-2" : "grid-cols-1";
   const interstitialButtonClassName = cn("justify-start min-w-0", profile === "medium" && "w-full min-h-16 px-4 py-3");
-  const interstitialLabelClassName = cn("flex flex-col items-start truncate", profile === "medium" && "w-full");
+  const interstitialLabelClassName = cn("flex min-w-0 flex-col items-start truncate", profile === "medium" && "w-full");
   const interstitialTextClassName = cn(profile === "medium" && "whitespace-normal break-words text-left leading-snug");
   const footerLayoutClassName = profile === "compact" ? "flex-col" : "flex-row items-center justify-between";
   const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
@@ -352,6 +353,12 @@ export const ItemSelectionDialog = ({
           ? SOURCE_LABELS.hvsc
           : SOURCE_LABELS.commoserve
     : null;
+  const selectedSourceOrigin = source?.type ?? null;
+  const showArchiveLegalNotice = source?.type === "commoserve";
+  const showCompactHeaderConfirm = profile === "compact" && !showArchiveLegalNotice;
+  const interstitialOptionContentClassName = "flex min-w-0 w-full items-center justify-start gap-3";
+  const interstitialIconClassName = "h-8 w-8 shrink-0 self-center text-[1.75rem]";
+  const selectionHeadingIconClassName = "h-5 w-5 shrink-0 text-[1.25rem]";
 
   if (!source) {
     return (
@@ -375,8 +382,8 @@ export const ItemSelectionDialog = ({
                   data-testid="import-option-local"
                   aria-label="Add file / folder from Local"
                 >
-                  <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
-                    <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
+                  <span className={interstitialOptionContentClassName} aria-hidden="true">
+                    <FileOriginIcon origin="local" className={interstitialIconClassName} />
                     <span className={interstitialLabelClassName}>
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {SOURCE_LABELS.local}
@@ -397,8 +404,8 @@ export const ItemSelectionDialog = ({
                   data-testid="import-option-c64u"
                   aria-label="Add file / folder from C64U"
                 >
-                  <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
-                    <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
+                  <span className={interstitialOptionContentClassName} aria-hidden="true">
+                    <FileOriginIcon origin="ultimate" className={interstitialIconClassName} />
                     <span className={interstitialLabelClassName}>
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {SOURCE_LABELS.c64u}
@@ -420,8 +427,8 @@ export const ItemSelectionDialog = ({
                     data-testid="import-option-hvsc"
                     aria-label="Add file / folder from HVSC"
                   >
-                    <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
-                      <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
+                    <span className={interstitialOptionContentClassName} aria-hidden="true">
+                      <FileOriginIcon origin="hvsc" className={interstitialIconClassName} />
                       <span className={interstitialLabelClassName}>
                         <span className={cn("truncate font-medium", interstitialTextClassName)}>
                           {SOURCE_LABELS.hvsc}
@@ -442,8 +449,8 @@ export const ItemSelectionDialog = ({
                     data-testid="import-option-commoserve"
                     aria-label={`Search ${SOURCE_LABELS.commoserve}`}
                   >
-                    <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
-                      <FileOriginIcon origin="commoserve" className="h-4 w-4 mr-1" />
+                    <span className={interstitialOptionContentClassName} aria-hidden="true">
+                      <FileOriginIcon origin="commoserve" className={interstitialIconClassName} />
                       <span className={interstitialLabelClassName}>
                         <span className={cn("truncate font-medium", interstitialTextClassName)}>
                           {SOURCE_LABELS.commoserve}
@@ -482,13 +489,24 @@ export const ItemSelectionDialog = ({
             <div className={cn("flex items-center justify-between gap-2", profile === "compact" && "text-sm")}>
               <div>
                 <p className="text-base font-semibold" data-testid="add-items-selection-heading">
-                  {selectedSourceLabel ? `From ${selectedSourceLabel}` : "Select items"}
+                  {selectedSourceLabel ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span>{`From ${selectedSourceLabel}`}</span>
+                      {selectedSourceOrigin ? (
+                        <span aria-hidden="true" data-testid="add-items-selection-icon">
+                          <FileOriginIcon origin={selectedSourceOrigin} className={selectionHeadingIconClassName} />
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    "Select items"
+                  )}
                 </p>
                 <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
                   {activeSelectionCount} selected
                 </p>
               </div>
-              {profile === "compact" ? (
+              {showCompactHeaderConfirm ? (
                 <Button
                   variant="default"
                   size="sm"
@@ -603,6 +621,11 @@ export const ItemSelectionDialog = ({
                 {progress.total ? <span> / {progress.total}</span> : null}
               </div>
             )}
+            {showArchiveLegalNotice ? (
+              <p className="text-xs leading-snug text-muted-foreground" data-testid="archive-legal-notice">
+                {LEGAL_NOTICE}
+              </p>
+            ) : null}
             <div className={cn("flex gap-2", footerActionsClassName)}>
               <Button
                 variant="outline"
@@ -617,7 +640,7 @@ export const ItemSelectionDialog = ({
               >
                 {progress?.status === "scanning" && onCancelScan ? "Cancel scan" : "Cancel"}
               </Button>
-              {source && profile !== "compact" && (
+              {source && (profile !== "compact" || showArchiveLegalNotice) && (
                 <Button
                   variant="default"
                   size="default"

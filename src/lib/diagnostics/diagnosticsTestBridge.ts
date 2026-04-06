@@ -32,6 +32,7 @@ import type {
 
 export type SeedableLatencySample = LatencySample & { path: string };
 
+export const DIAGNOSTICS_TEST_ANALYTICS_EVENT = "c64u-diagnostics-test-analytics";
 export const DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT = "c64u-diagnostics-test-overlay-state";
 
 export type DiagnosticsOverlaySeedState = {
@@ -77,6 +78,20 @@ const clearAnalytics = () => {
   clearLatencySamples();
   clearHealthHistory();
   clearRecoveryEvidence();
+  publishAnalytics();
+};
+
+const publishAnalytics = () => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(DIAGNOSTICS_TEST_ANALYTICS_EVENT, {
+      detail: {
+        healthHistory: getHealthHistory(),
+        latencySamples: getAllLatencySamples(),
+        recoveryEvents: getRecoveryEvidence(),
+      },
+    }),
+  );
 };
 
 const seedLatencySamples = (samples: SeedableLatencySample[]) => {
@@ -96,6 +111,7 @@ const seedAnalytics: DiagnosticsTestBridge["seedAnalytics"] = (payload) => {
   payload.healthHistory.forEach((entry) => pushHealthHistoryEntry(entry));
   seedLatencySamples(payload.latencySamples);
   payload.recoveryEvents.forEach((event) => recordRecoveryEvidence(event));
+  publishAnalytics();
 };
 
 const publishOverlayState = () => {

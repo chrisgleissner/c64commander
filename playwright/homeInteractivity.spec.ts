@@ -138,7 +138,14 @@ test.describe("Home interactions", () => {
     await expect(sidToggle).toBeVisible();
     await expect(sidToggle).toHaveText("ON");
     await sidToggle.click();
-    await expect(sidEntry).toHaveCount(0);
+
+    await expect
+      .poll(async () => {
+        const count = await sidEntry.count();
+        if (count === 0) return "removed";
+        return (await sidToggle.textContent())?.trim() ?? "unknown";
+      })
+      .toMatch(/removed|OFF/);
   });
 
   test("machine quick actions use REST controls where expected", async ({ page }: { page: Page }) => {

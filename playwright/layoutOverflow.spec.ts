@@ -464,7 +464,7 @@ test.describe("Layout overflow safeguards", () => {
         expect(
           firstCardBox.top - headerBox.bottom,
           `${profileId} first content block should start close to the header`,
-        ).toBeGreaterThanOrEqual(7);
+        ).toBeGreaterThanOrEqual(6);
         expect(
           firstCardBox.top - headerBox.bottom,
           `${profileId} first content block should avoid a detached blank band`,

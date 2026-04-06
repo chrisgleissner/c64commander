@@ -135,6 +135,7 @@ vi.mock("@/lib/diagnostics/recoveryEvidence", () => ({
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsTestBridge", () => ({
+  DIAGNOSTICS_TEST_ANALYTICS_EVENT: "diagnostics-test-analytics",
   DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT: "diagnostics-test-overlay-state",
 }));
 

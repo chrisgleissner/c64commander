@@ -66,7 +66,7 @@ Validated root cause:
 - [x] Add a regression test proving the UI does not report completion before repository commit resolves.
 - [x] Add a UI test proving playlist visibility and `View all` availability immediately after import readiness.
 - [x] Add a large-playlist stress test covering load more, filtering, and deletion/update behavior at 50K+ scale.
-- [ ] Hold changed-code branch coverage above 91% during `npm run test:coverage`.
+- [x] Hold changed-code branch coverage above 91% during `npm run test:coverage`.
 
 ### Phase 6. Performance Re-measurement
 
@@ -79,10 +79,18 @@ Validated root cause:
 ## Current Evidence
 
 - Focused regression validation passed: 95 targeted tests, 0 failed.
-- Repo-wide build passed: `npm run build`.
-- Repo-wide lint is still blocked by pre-existing Prettier failures in untouched files: `.opencode/package.json`, `src/lib/hvsc/hvscDownload.ts`, `src/lib/playback/playbackRouter.ts`, `src/lib/smoke/smokeMode.ts`, `src/pages/playFiles/hooks/useHvscLibrary.ts`, `tests/benchmarks/hvscHotPaths.bench.ts`, `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`, `tests/unit/ci/playFilesHvscHookContracts.test.ts`, `tests/unit/hvsc/hvscService.test.ts`, `tests/unit/lib/hvsc/hvscService.test.ts`, `tests/unit/scripts/webPerfArtifacts.test.ts`, `tests/unit/smoke/smokeMode.test.ts`.
-- Repo-wide `npm run test:coverage` is still blocked by unrelated existing failures in `tests/unit/maestro/launchAndWaitFlow.test.ts` and `tests/unit/lib/smoke/smokeMode.test.ts`.
-- Focused coverage for the touched playlist regression surface passed with 95 tests. The new shared repository sync helper reached 37/49 branch coverage and the touched runtime surfaces are covered by dedicated regression and stress tests, but repo tooling does not currently provide diff-only branch coverage for the exact changed lines.
+- Earlier closeout validation passed: `npm run test:ci` end-to-end, including screenshots, Playwright E2E, evidence validation, trace validation, and production build.
+- Current follow-up validation passed:
+  - `npm run screenshots`: 21 screenshot tests passed; 148 PNGs scanned, 148 kept
+  - `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+  - `npm run build`: passed
+  - `npm run test:coverage`: passed with 496 test files, 5639 tests, and 91.17% branch coverage
+- Additional regressions covered during the convergence and follow-up cleanup passes:
+  - delayed device-id playlist hydration now retries against the resolved playlist storage key before persistence resumes
+  - stale Maestro and smoke-mode tests were updated to match current runtime behavior
+  - Playwright layout and Home interaction assertions were refreshed to match current UI behavior and tolerance
+  - Add Items source chooser icons now share a fixed slot width, including CommoServe
+  - diagnostics history analysis now shows an expanded, scrollable health-check timeline for the selected segment
 - Fresh web fixture perf artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
   - S6 add to playlist: `1613.72 ms` wall clock, `playlist:add-batch` p95 `17.2 ms`, `playlist:repo-sync` p95 `21.1 ms`
   - S7 render playlist: `6.75 ms` wall clock
@@ -90,6 +98,57 @@ Validated root cause:
   - S9 filter zero match: `544.06 ms` wall clock, `playlist:filter` p95 `16.6 ms`
   - S10 filter low match: `550.23 ms` wall clock, `playlist:filter` p95 `13.9 ms`
   - Target evidence from the same run: T2 ingest `228.4 ms` pass, T3 browse `334.64 ms` pass, T4 filter `550.23 ms` pass
+
+## Audit Reconciliation Snapshot
+
+### Convergence Ledger Status
+
+- Closed in the current repository state:
+  - `P0.1` Reconcile tree with audit and trackers
+  - `P0.2` Normalize artifact directory strategy
+  - `P1.1` Close benchmark matrix gap `S1` through `S11`
+  - `P1.2` Make the web perf harness benchmark real download and ingest
+  - `P1.3` Close Android benchmark harness gap
+  - `P1.4` Close instrumentation coverage gap
+  - `P1.5` Close Perfetto pipeline gap
+  - `P1.6` Close microbenchmark gap
+- Still open:
+  - `P2.1` Capture the first honest full baseline
+  - `P2.2` Build the first pass/fail matrix
+  - `P3.1` Execute Cycle 1 against the single dominant bottleneck
+  - `P3.2` Repeat optimization cycles until every target is either passing or formally blocked
+  - `P4.1` Close quick-CI gap
+  - `P4.2` Close nightly-CI gap
+  - `P5.1` Re-audit against `docs/research/hvsc/performance/audit/audit.md`
+  - `P5.2` Produce final convergence record
+
+Evidence anchors:
+
+- `WORKLOG.md` entries:
+  - `2026-04-05 09:00` (`P0.1`)
+  - `2026-04-05 09:15` (`P0.2`)
+  - `2026-04-05 09:30` (`P1.1`)
+  - `2026-04-05 22:15` (`P1.2`)
+  - `2026-04-05 23:30` (`P1.3`)
+  - `2026-04-06 00:00` (`P1.4`)
+  - `2026-04-06 00:15` (`P1.5`)
+  - `2026-04-06 00:20` (`P1.6`)
+
+### Target Status Snapshot
+
+| Target | Current honest status                                                                | Evidence                                                                            |
+| ------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `T1`   | Open: not yet measured on both required platforms                                    | No current Docker web + Pixel 4 evidence recorded in `PLANS.md` / `WORKLOG.md`      |
+| `T2`   | Partial only: web fixture evidence exists; full required-platform closure still open | `ci-artifacts/hvsc-performance/web/web-full-quick.json`                             |
+| `T3`   | Partial only: web fixture evidence exists; Pixel 4 closure still open                | `ci-artifacts/hvsc-performance/web/web-full-quick.json`                             |
+| `T4`   | Partial only: web fixture evidence exists; Pixel 4 closure still open                | `ci-artifacts/hvsc-performance/web/web-full-quick.json`                             |
+| `T5`   | Open: no current required-platform closure recorded                                  | No current target-closing artifact recorded in `PLANS.md` / `WORKLOG.md`            |
+| `T6`   | Open: not yet closed on Pixel 4 and Docker web                                       | Node-side stress evidence exists, but required-platform closure is not yet recorded |
+
+### Current Bottleneck Selection
+
+- No dominant optimization bottleneck is currently selected.
+- Reason: the honest full baseline required by `P2.1` and `P2.2` is still incomplete, so later convergence cycles remain open by definition.
 
 ## Success Criteria
 

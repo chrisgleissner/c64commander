@@ -109,10 +109,15 @@ export function usePlaybackPersistence({
   const playlistRepository = getPlaylistDataRepository();
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
-  const hasHydratedPlaylistRef = useRef(false);
+  const hydratedPlaylistKeyRef = useRef<string | null>(null);
+  const completedInitialRestoreKeyRef = useRef<string | null>(null);
   const hasPlaylistRef = useRef(false);
-  const [hasCompletedInitialRestore, setHasCompletedInitialRestore] = useState(false);
+  const [restoreVersion, setRestoreVersion] = useState(0);
   const currentPlaylistItemId = currentIndex >= 0 ? (playlist[currentIndex]?.id ?? null) : null;
+
+  if (completedInitialRestoreKeyRef.current && completedInitialRestoreKeyRef.current !== playlistStorageKey) {
+    completedInitialRestoreKeyRef.current = null;
+  }
 
   useEffect(() => {
     hasPlaylistRef.current = playlist.length > 0;
@@ -256,8 +261,8 @@ export function usePlaybackPersistence({
   // Restore Playlist (Local Storage)
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
-    if (hasHydratedPlaylistRef.current) return;
-    hasHydratedPlaylistRef.current = true;
+    if (hydratedPlaylistKeyRef.current === playlistStorageKey) return;
+    hydratedPlaylistKeyRef.current = playlistStorageKey;
     (async () => {
       try {
         const defaultKey = buildPlaylistStorageKey("default");
@@ -318,14 +323,16 @@ export function usePlaybackPersistence({
           error: (error as Error).message,
         });
       } finally {
-        setHasCompletedInitialRestore(true);
+        completedInitialRestoreKeyRef.current = playlistStorageKey;
+        setRestoreVersion((version) => version + 1);
       }
     })().catch((error) => {
       addErrorLog("Playlist hydration task failed", {
         playlistStorageKey,
         error: (error as Error).message,
       });
-      setHasCompletedInitialRestore(true);
+      completedInitialRestoreKeyRef.current = playlistStorageKey;
+      setRestoreVersion((version) => version + 1);
     });
   }, [
     playlistStorageKey,
@@ -395,7 +402,7 @@ export function usePlaybackPersistence({
   // Persist Playlist
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
-    if (!hasCompletedInitialRestore) return;
+    if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
     if (
       repositorySnapshot.phase === "SCANNING" ||
       repositorySnapshot.phase === "INGESTING" ||
@@ -425,11 +432,11 @@ export function usePlaybackPersistence({
         error: (error as Error).message,
       });
     }
-  }, [hasCompletedInitialRestore, playlist, playlistRepository, playlistStorageKey, repositorySnapshot.phase]);
+  }, [playlist, playlistRepository, playlistStorageKey, repositorySnapshot.phase, restoreVersion]);
 
   // Persist Repository Session
   useEffect(() => {
-    if (!hasCompletedInitialRestore) return;
+    if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
     const session: PlaylistSessionRecord = {
       playlistId: playlistStorageKey,
       currentPlaylistItemId,
@@ -455,13 +462,13 @@ export function usePlaybackPersistence({
     activePlaylistQuery,
     currentPlaylistItemId,
     elapsedMs,
-    hasCompletedInitialRestore,
     isPaused,
     isPlaying,
     playedMs,
     playlistRepository,
     playlistStorageKey,
     repeatEnabled,
+    restoreVersion,
     shuffleEnabled,
   ]);
 

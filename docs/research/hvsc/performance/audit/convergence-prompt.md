@@ -39,14 +39,14 @@ Read and follow, in this order:
 
 All targets must be measured on the required platforms. A target is not closed by inference.
 
-| ID | Scenario | Hard budget | Platform |
-|---|---|---|---|
-| `T1` | Download full HVSC from a mock provider throttled to `5 MiB/s` | `< 20 s` | Pixel 4, Docker web |
-| `T2` | Ingest all `60,582+` songs | `< 25 s` | Pixel 4, Docker web |
-| `T3` | Any single add-items browse traversal step | `< 2 s` worst case | Pixel 4 |
-| `T4` | Filter a `60K+` playlist | `< 2 s` worst case | Pixel 4 |
-| `T5` | Playback start from filtered result | `< 1 s` | Pixel 4 |
-| `T6` | `100K` playlist items without full in-memory hydration | pass/fail | Pixel 4, Docker web |
+| ID   | Scenario                                                       | Hard budget        | Platform            |
+| ---- | -------------------------------------------------------------- | ------------------ | ------------------- |
+| `T1` | Download full HVSC from a mock provider throttled to `5 MiB/s` | `< 20 s`           | Pixel 4, Docker web |
+| `T2` | Ingest all `60,582+` songs                                     | `< 25 s`           | Pixel 4, Docker web |
+| `T3` | Any single add-items browse traversal step                     | `< 2 s` worst case | Pixel 4             |
+| `T4` | Filter a `60K+` playlist                                       | `< 2 s` worst case | Pixel 4             |
+| `T5` | Playback start from filtered result                            | `< 1 s`            | Pixel 4             |
+| `T6` | `100K` playlist items without full in-memory hydration         | pass/fail          | Pixel 4, Docker web |
 
 ## Non-Negotiable Execution Rules
 
@@ -138,7 +138,8 @@ Do not reorder these tasks.
 
 ### Phase 0: Baseline Governance And Reconciliation
 
-- [ ] `P0.1` Reconcile the current tree with the audit and top-level trackers.
+- [x] `P0.1` Reconcile the current tree with the audit and top-level trackers.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 09:00`.
   - Required work:
     - compare `docs/research/hvsc/performance/audit/audit.md`, `PLANS.md`, and `WORKLOG.md`
     - record any implemented-but-undocumented HVSC perf assets
@@ -147,7 +148,8 @@ Do not reorder these tasks.
     - `PLANS.md` and `WORKLOG.md` both reflect the current known HVSC perf asset set
     - no known HVSC perf asset remains invisible in the top-level trackers
 
-- [ ] `P0.2` Normalize the artifact directory strategy.
+- [x] `P0.2` Normalize the artifact directory strategy.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 09:15`.
   - Required work:
     - choose and implement one canonical perf artifact layout
     - reconcile existing `ci-artifacts/hvsc-performance/**` outputs with the canonical scheme
@@ -158,7 +160,8 @@ Do not reorder these tasks.
 
 ### Phase 1: Benchmark Foundation Closure
 
-- [ ] `P1.1` Close benchmark matrix gap `S1` through `S11`.
+- [x] `P1.1` Close benchmark matrix gap `S1` through `S11`.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 09:30`.
   - Required work:
     - define deterministic implementations for all required scenarios
     - cover Pixel 4, Docker web, and the agreed emulator subset honestly
@@ -167,7 +170,8 @@ Do not reorder these tasks.
     - every scenario from `S1` through `S11` has an executable implementation or an explicitly documented platform-specific inapplicability
     - `PLANS.md` contains a scenario coverage matrix
 
-- [ ] `P1.2` Make the web perf harness benchmark real download and ingest.
+- [x] `P1.2` Make the web perf harness benchmark real download and ingest.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 22:15`.
   - Required work:
     - remove the current false equivalence where “ready HVSC mock” is treated as download/ingest proof
     - add real web scenarios for:
@@ -181,7 +185,8 @@ Do not reorder these tasks.
     - `T1` and `T2` are actually measured on Docker web
     - the web benchmark suite no longer claims download/ingest coverage without exercising those paths
 
-- [ ] `P1.3` Close Android benchmark harness gap.
+- [x] `P1.3` Close Android benchmark harness gap.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 23:30`.
   - Required work:
     - turn the existing Android runner into a true measurement pipeline
     - compute scenario metrics from pulled smoke artifacts
@@ -191,7 +196,8 @@ Do not reorder these tasks.
     - Android benchmark runs produce structured numeric summaries, not just artifact lists
     - the summaries are sufficient to evaluate `T1` through `T5`
 
-- [ ] `P1.4` Close instrumentation coverage gap.
+- [x] `P1.4` Close instrumentation coverage gap.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-06 00:00`.
   - Required work:
     - add the missing app-level timing scopes needed by the report and audit
     - at minimum include:
@@ -205,7 +211,8 @@ Do not reorder these tasks.
     - all missing timing scopes from the audit are implemented and test-covered
     - exported benchmark artifacts include the new timing families
 
-- [ ] `P1.5` Close Perfetto pipeline gap.
+- [x] `P1.5` Close Perfetto pipeline gap.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-06 00:15`.
   - Required work:
     - upgrade trace config to capture decision-grade Android data
     - add any required native trace sections
@@ -215,7 +222,8 @@ Do not reorder these tasks.
     - Perfetto traces are not just captured; they are processed into structured metrics
     - `PLANS.md` and `WORKLOG.md` cite the extraction pipeline and output locations
 
-- [ ] `P1.6` Close microbenchmark gap.
+- [x] `P1.6` Close microbenchmark gap.
+  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-06 00:20`.
   - Required work:
     - add `test:bench`
     - add benchmark files for the critical query/index/storage hot paths

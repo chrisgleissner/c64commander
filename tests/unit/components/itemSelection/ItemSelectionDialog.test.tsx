@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
+import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 
 vi.mock("@/lib/sourceNavigation/useSourceNavigator", () => ({
@@ -575,5 +576,47 @@ describe("ItemSelectionDialog archive source buttons", () => {
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
     expect(await screen.findByText("From CommoServe")).toBeVisible();
+    expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
+    expect(screen.getByTestId("archive-legal-notice")).toHaveTextContent(LEGAL_NOTICE);
+    expect(screen.getAllByText(LEGAL_NOTICE)).toHaveLength(1);
+  });
+
+  it("renders larger source icons in the interstitial and the selected-source icon in the browser header", async () => {
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={archiveSourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const interstitialIcon = screen
+      .getByTestId("import-option-commoserve")
+      .querySelector('[data-testid="file-origin-icon"]');
+    const commoserveGlyph = interstitialIcon?.querySelector("svg");
+    expect(interstitialIcon?.getAttribute("class")).toContain("h-8");
+    expect(interstitialIcon?.getAttribute("class")).toContain("w-8");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("h-[82%]");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("w-[82%]");
+
+    fireEvent.click(screen.getByTestId("import-option-commoserve"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
+    });
   });
 });

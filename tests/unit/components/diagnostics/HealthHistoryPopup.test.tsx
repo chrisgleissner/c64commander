@@ -101,9 +101,10 @@ describe("HealthHistoryPopup", () => {
 
     const overlay = screen.getByTestId("health-history-selection-overlay");
     expect(overlay).toBeInTheDocument();
-    expect(within(overlay).getByText("Unhealthy")).toBeInTheDocument();
+    expect(within(overlay).getAllByText("Unhealthy").length).toBeGreaterThanOrEqual(1);
     expect(within(overlay).getByTestId("health-history-selection-reason")).toHaveTextContent("REST timeout");
     expect(within(overlay).getByTestId("health-history-selection-subsystem")).toHaveTextContent("REST");
+    expect(within(overlay).getByTestId("health-history-event-list")).toHaveTextContent("Health checks in this range");
   });
 
   it("shows the worst event when a compressed mixed-state column is tapped", () => {
@@ -133,8 +134,8 @@ describe("HealthHistoryPopup", () => {
     fireEvent.click(segment!);
 
     const overlay = screen.getByTestId("health-history-selection-overlay");
-    expect(within(overlay).getByText(/Cause/i)).toBeInTheDocument();
-    expect(within(overlay).getByText(/Subsystem/i)).toBeInTheDocument();
+    expect(within(overlay).getByTestId("health-history-selection-reason")).toBeInTheDocument();
+    expect(within(overlay).getByTestId("health-history-selection-subsystem")).toBeInTheDocument();
   });
 
   it("shows the empty state when no health history is available", () => {
@@ -180,5 +181,37 @@ describe("HealthHistoryPopup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
 
     expect(screen.queryByTestId("health-history-selection-overlay")).not.toBeInTheDocument();
+  });
+
+  it("renders expandable health-check rows for the selected time range", () => {
+    vi.mocked(getHealthHistory).mockReturnValue([
+      makeEntry(80, "Healthy"),
+      makeEntry(60, "Degraded"),
+      makeEntry(58, "Degraded"),
+      makeEntry(56, "Unhealthy"),
+      makeEntry(20, "Healthy"),
+    ]);
+
+    render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
+
+    const selectedSegment = screen
+      .getAllByTestId(/health-history-segment-/)
+      .find((node) => node.getAttribute("data-state") === "Unhealthy");
+
+    expect(selectedSegment).toBeDefined();
+    fireEvent.click(selectedSegment!);
+
+    const rows = screen.getAllByTestId(/health-history-event-row-/);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+
+    const firstToggle = within(rows[0]!).getByRole("button");
+    expect(firstToggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(firstToggle);
+
+    expect(firstToggle).toHaveAttribute("aria-expanded", "true");
+    expect(within(rows[0]!).getByText(/p50/i)).toBeInTheDocument();
+    expect(screen.getAllByTestId(/health-history-event-probe-/).length).toBeGreaterThanOrEqual(6);
+    expect(screen.getByTestId("health-history-event-scroll")).toBeInTheDocument();
   });
 });
