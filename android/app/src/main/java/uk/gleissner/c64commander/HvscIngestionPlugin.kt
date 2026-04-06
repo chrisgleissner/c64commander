@@ -798,6 +798,65 @@ open class HvscIngestionPlugin : Plugin() {
     call.resolve()
   }
 
+  @PluginMethod
+  fun queryAllSongs(call: PluginCall) {
+    var dbHelper: HvscMetadataDbHelper? = null
+    var db: SQLiteDatabase? = null
+    try {
+      dbHelper = HvscMetadataDbHelper(this)
+      db = dbHelper.readableDatabase
+      val songs = JSArray()
+      db.rawQuery("SELECT virtual_path, file_name FROM hvsc_song_index ORDER BY virtual_path", null)
+              .use { cursor ->
+                val pathIdx = cursor.getColumnIndexOrThrow("virtual_path")
+                val nameIdx = cursor.getColumnIndexOrThrow("file_name")
+                while (cursor.moveToNext()) {
+                  val row = JSObject()
+                  row.put("virtualPath", cursor.getString(pathIdx))
+                  row.put("fileName", cursor.getString(nameIdx))
+                  songs.put(row)
+                }
+              }
+      val payload = JSObject()
+      payload.put("songs", songs)
+      payload.put("totalSongs", songs.length())
+      call.resolve(payload)
+    } catch (error: Exception) {
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Failed to query all HVSC songs",
+              "HvscIngestionPlugin",
+              error,
+              traceFields(call)
+      )
+      call.reject(error.message ?: "HVSC queryAllSongs failed", error)
+    } finally {
+      try {
+        db?.close()
+      } catch (error: Exception) {
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Failed to close HVSC metadata database after queryAllSongs",
+                "HvscIngestionPlugin",
+                error
+        )
+      }
+      try {
+        dbHelper?.close()
+      } catch (error: Exception) {
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Failed to close HVSC metadata db helper after queryAllSongs",
+                "HvscIngestionPlugin",
+                error
+        )
+      }
+    }
+  }
+
   override fun handleOnDestroy() {
     cancellationRequested.set(true)
     activeJob?.cancel(CancellationException("Plugin destroyed"))

@@ -8,17 +8,19 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
-import { getHvscFolderListing, getHvscFolderListingPaged } from "@/lib/hvsc";
+import { getHvscFolderListing, getHvscFolderListingPaged, getHvscSongsRecursive } from "@/lib/hvsc";
 
 vi.mock("@/lib/hvsc", () => ({
   getHvscFolderListing: vi.fn(),
   getHvscFolderListingPaged: vi.fn(),
+  getHvscSongsRecursive: vi.fn(),
 }));
 
 describe("hvscSourceAdapter", () => {
   beforeEach(() => {
     vi.mocked(getHvscFolderListing).mockReset();
     vi.mocked(getHvscFolderListingPaged).mockReset();
+    vi.mocked(getHvscSongsRecursive).mockReset();
   });
 
   it("lists folders and songs sorted by name", async () => {
@@ -349,5 +351,41 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/ROOT");
 
     await expect(source.listFilesRecursive("/ROOT", { signal: controller.signal })).rejects.toThrow("Aborted");
+  });
+
+  it("uses bulk recursive query from browse index when available", async () => {
+    vi.mocked(getHvscSongsRecursive).mockResolvedValue([
+      { virtualPath: "/DEMOS/a.sid", fileName: "a.sid", durationSeconds: 120 },
+      { virtualPath: "/DEMOS/Sub/b.sid", fileName: "b.sid" },
+    ]);
+
+    const source = createHvscSourceLocation("/DEMOS");
+    const entries = await source.listFilesRecursive("/DEMOS");
+
+    expect(entries).toEqual([
+      { type: "file", name: "a.sid", path: "/DEMOS/a.sid", durationMs: 120_000 },
+      { type: "file", name: "b.sid", path: "/DEMOS/Sub/b.sid" },
+    ]);
+    // Should NOT fall back to paged BFS
+    expect(getHvscFolderListingPaged).not.toHaveBeenCalled();
+  });
+
+  it("falls back to paged BFS when bulk recursive query returns null", async () => {
+    vi.mocked(getHvscSongsRecursive).mockResolvedValue(null);
+    vi.mocked(getHvscFolderListingPaged).mockResolvedValue({
+      path: "/DEMOS",
+      folders: [],
+      songs: [{ virtualPath: "/DEMOS/c.sid", fileName: "c.sid" }],
+      totalFolders: 0,
+      totalSongs: 1,
+      offset: 0,
+      limit: 200,
+    });
+
+    const source = createHvscSourceLocation("/DEMOS");
+    const entries = await source.listFilesRecursive("/DEMOS");
+
+    expect(entries).toEqual([{ type: "file", name: "c.sid", path: "/DEMOS/c.sid" }]);
+    expect(getHvscFolderListingPaged).toHaveBeenCalled();
   });
 });

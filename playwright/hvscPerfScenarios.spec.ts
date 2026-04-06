@@ -210,14 +210,15 @@ const resetHvscPerfTimings = async (page: Page) => {
 
 const waitForHvscDownloadComplete = async (page: Page) => {
   const controls = page.getByTestId("hvsc-controls");
-  const ingestButton = page.locator("#hvsc-ingest");
+  const stopButton = page.getByTestId("hvsc-stop");
   await expect
     .poll(
       async () => {
         const text = (await controls.textContent()) ?? "";
+        const installStillRunning = await stopButton.isVisible().catch(() => false);
+        if (installStillRunning || /Status: (Downloading|Extracting|Indexing)/i.test(text)) return "";
         if (/Installed version|Status: Ready/i.test(text)) return "ready";
-        const ingestReady = await ingestButton.isEnabled().catch(() => false);
-        if (ingestReady && /Run Ingest HVSC|HVSC archives are cached/i.test(text)) return "cached";
+        if (/HVSC ready|Run Ingest HVSC|HVSC archives are cached|Files extracted:/i.test(text)) return "cached";
         return "";
       },
       { timeout: 600_000 },
@@ -356,10 +357,20 @@ test.describe("HVSC perf scenarios S1-S11", () => {
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
 
     let controlsText = (await page.getByTestId("hvsc-controls").textContent()) ?? "";
-    if (!controlsText.match(/Installed version|Status: Ready|Run Ingest HVSC|HVSC archives are cached/i)) {
+    const stopVisible = await page
+      .getByTestId("hvsc-stop")
+      .isVisible()
+      .catch(() => false);
+    if (
+      stopVisible ||
+      controlsText.match(/Status: (Downloading|Extracting|Indexing)/i) ||
+      !controlsText.match(/Installed version|Status: Ready|Run Ingest HVSC|HVSC archives are cached/i)
+    ) {
       const downloadButton = page.locator("#hvsc-download");
       await expect(downloadButton).toBeVisible();
-      await downloadButton.click();
+      if (!stopVisible) {
+        await downloadButton.click();
+      }
       controlsText = await waitForHvscDownloadComplete(page);
     }
 

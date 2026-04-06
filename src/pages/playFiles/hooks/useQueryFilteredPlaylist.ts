@@ -24,6 +24,14 @@ const matchesPlaylistQuery = (item: PlaylistItem, query: string) => {
   return haystack.includes(trimmed);
 };
 
+const resolvePlaylistFilterScenario = (totalMatchCount: number) => {
+  if (totalMatchCount <= 0) return "playlist-filter-zero";
+  if (totalMatchCount <= 10) return "playlist-filter-low";
+  return "playlist-filter-high";
+};
+
+const roundDurationMs = (durationMs: number) => Math.round(durationMs * 100) / 100;
+
 export const useQueryFilteredPlaylist = ({
   playlist,
   playlistStorageKey,
@@ -76,8 +84,14 @@ export const useQueryFilteredPlaylist = ({
         categoryFilters: playlistTypeFilters,
         repositoryPhase: repositorySnapshot.phase,
       });
+      const filterStartedAt = performance.now();
 
       const finalizeFilterScope = (metadata: Record<string, unknown>) => {
+        const feedbackVisibleWithinMs = roundDurationMs(performance.now() - filterStartedAt);
+        const totalMatchCount =
+          typeof metadata.totalMatchCount === "number" && Number.isFinite(metadata.totalMatchCount)
+            ? metadata.totalMatchCount
+            : null;
         endHvscPerfScope(filterScope, {
           playlistId: playlistStorageKey,
           query,
@@ -88,16 +102,21 @@ export const useQueryFilteredPlaylist = ({
         });
         if (query.trim().length > 0) {
           void recordSmokeBenchmarkSnapshot({
-            scenario: "playlist-filter",
+            scenario: totalMatchCount === null ? "playlist-filter" : resolvePlaylistFilterScenario(totalMatchCount),
             state: typeof metadata.outcome === "string" ? metadata.outcome : "complete",
             metadata: {
+              ...metadata,
               playlistId: playlistStorageKey,
               query,
               viewAllLimit,
               playlistSize: currentPlaylist.length,
               categoryFilters: playlistTypeFilters,
               repositoryPhase: repositorySnapshot.phase,
-              ...metadata,
+              queryEngine: typeof metadata.source === "string" ? metadata.source : null,
+              playlistOwnership: "react-state",
+              feedbackKind: typeof metadata.feedbackKind === "string" ? metadata.feedbackKind : "result",
+              feedbackVisibleWithinMs,
+              feedbackWithinBudget: feedbackVisibleWithinMs <= 2_000,
             },
           });
         }

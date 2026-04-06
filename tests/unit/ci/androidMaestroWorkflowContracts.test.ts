@@ -21,10 +21,11 @@ describe("Android Maestro workflow contracts", () => {
     expect(flow).toContain('visible: "Run Ingest HVSC"');
     expect(flow).toContain('id: "hvsc-ingest"');
     expect(flow).toContain('visible: "Indexed "');
-    expect(flow).toContain('id: "import-option-hvsc"');
-    expect(flow).toContain('visible: "From HVSC"');
+    expect(flow).toContain('assertVisible: "Playlist"');
+    expect(flow).toContain("runFlow: perf-hvsc-setup-playlist.yaml");
     expect(flow).toContain('text: "Done"');
     expect(flow).toContain('text: "Retry connection"');
+    expect(flow).not.toContain("10_Orbyte.sid");
   });
 
   it("covers deep HVSC browse traversal scenarios with explicit Hubbard_Rob navigation", () => {
@@ -47,11 +48,12 @@ describe("Android Maestro workflow contracts", () => {
 
     expect(playlistFlow).toContain('visible: "Open DEMOS"');
     expect(playlistFlow).toContain('point: "9%, 45%"');
+    expect(playlistFlow).toContain('point: "9%, 51%"');
     expect(playlistFlow).toContain('point: "9%, 57%"');
-    expect(playlistFlow).toContain('point: "9%, 62%"');
     expect(playlistFlow).toContain('tapOn: "Add to playlist"');
     expect(playlistFlow).toContain('text: "Root"');
-    expect(playlistFlow).toContain("hvsc-perf-setup");
+    expect(playlistFlow).toContain("hvsc-perf-playlist");
+    expect(playlistFlow).not.toContain("hvsc-perf-setup");
     expect(filterHighFlow).toContain('inputText: "hubbard"');
     expect(filterZeroFlow).toContain('inputText: "xyzzy123"');
     expect(filterLowFlow).toContain('inputText: "Commando"');
@@ -71,14 +73,16 @@ describe("Android Maestro workflow contracts", () => {
     expect(script).toContain("MEASURED_SMOKE_FILES");
   });
 
-  it("Android budget assertion script exists with T1-T5 coverage", () => {
+  it("Android budget assertion script exists with UX1 and T1-T6 coverage", () => {
     const script = readRepoFile("scripts", "hvsc", "assert-android-perf-budgets.mjs");
     expect(script).toContain("targetEvidence");
+    expect(script).toContain("UX1");
     expect(script).toContain("T1");
     expect(script).toContain("T2");
     expect(script).toContain("T3");
     expect(script).toContain("T4");
     expect(script).toContain("T5");
+    expect(script).toContain("T6");
     expect(script).toContain("HVSC_ANDROID_BUDGET_ENFORCE");
     expect(script).toContain("observation-only");
   });
@@ -97,5 +101,44 @@ describe("Android Maestro workflow contracts", () => {
     // launch-warm must not stop the app
     expect(launchWarm).toContain("stopApp: false");
     expect(launchWarm).not.toContain("stopApp: true");
+  });
+
+  it("5K lane baseline flow uses 5K playlist setup and correct tags", () => {
+    const baseline5k = readRepoFile(".maestro", "perf-hvsc-baseline-5k.yaml");
+    expect(baseline5k).toContain("hvsc-perf-5k");
+    expect(baseline5k).toContain("hvsc-perf-5k-setup");
+    expect(baseline5k).toContain("runFlow: perf-hvsc-setup-playlist-5k.yaml");
+    expect(baseline5k).toContain('visible: "Status: Ready"');
+    expect(baseline5k).toContain('assertVisible: "HVSC ready"');
+    expect(baseline5k).not.toContain("runFlow: perf-hvsc-setup-playlist.yaml");
+  });
+
+  it("5K lane playlist setup selects only DEMOS and GAMES (not MUSICIANS)", () => {
+    const playlist5k = readRepoFile(".maestro", "perf-hvsc-setup-playlist-5k.yaml");
+    expect(playlist5k).toContain("hvsc-perf-playlist-5k");
+    expect(playlist5k).toContain('visible: "Open DEMOS"');
+    // DEMOS checkbox at 9%, 45%
+    expect(playlist5k).toContain('point: "9%, 45%"');
+    // GAMES checkbox at 9%, 51%
+    expect(playlist5k).toContain('point: "9%, 51%"');
+    // Must NOT include MUSICIANS checkbox at 9%, 57%
+    expect(playlist5k).not.toContain('point: "9%, 57%"');
+    expect(playlist5k).toContain('tapOn: "Add to playlist"');
+    expect(playlist5k).toContain('visible: "Items added"');
+  });
+
+  it("benchmark runner supports --lane parameter for 5K and full lanes", () => {
+    const script = readRepoFile("scripts", "run-hvsc-android-benchmark.sh");
+    expect(script).toContain("--lane");
+    expect(script).toContain('LANE="${LANE:-full}"');
+    expect(script).toContain('"$LANE" == "5k"');
+    expect(script).toContain("hvsc-perf-5k-setup");
+    expect(script).toContain('--lane="$LANE"');
+  });
+
+  it("summary writer records the lane in output", () => {
+    const writer = readRepoFile("scripts", "hvsc", "write-android-perf-summary.mjs");
+    expect(writer).toContain("--lane");
+    expect(writer).toContain("lane");
   });
 });

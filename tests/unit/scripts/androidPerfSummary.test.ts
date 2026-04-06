@@ -59,7 +59,7 @@ describe("androidPerfSummary", () => {
           { scope: "ingest:extract", durationMs: 8000 },
           { scope: "ingest:index-build", durationMs: 9000 },
         ],
-        metadata: { totalSongs: 60582 },
+        metadata: { totalSongs: 60582, feedbackKind: "progress", feedbackVisibleWithinMs: 0 },
       }),
     );
     writeFileSync(
@@ -109,6 +109,7 @@ describe("androidPerfSummary", () => {
     expect(summary.targetEvidence.T1.status).toBe("pass");
     expect(summary.targetEvidence.T2.status).toBe("pass");
     expect(summary.targetEvidence.T5.actualMs).toBe(620);
+    expect(summary.feedbackEvidence.download?.withinBudget).toBe(true);
     expect(summary.telemetry.processes["uk.gleissner.c64commander"].metrics.cpu_percent.p95).toBe(24);
     expect(summary.perfetto.traceCaptured).toBe(true);
     expect(summary.perfetto.traceSizeBytes).toBeGreaterThan(0);
@@ -151,17 +152,38 @@ describe("androidPerfSummary", () => {
         {
           scenario: "playlist-filter-high",
           hvscPerfTimings: [{ scope: "playlist:filter", durationMs: 800 }],
-          metadata: { windowMs: 900 },
+          metadata: {
+            windowMs: 900,
+            playlistSize: 5500,
+            queryEngine: "repository",
+            playlistOwnership: "react-state",
+            feedbackKind: "result",
+            feedbackVisibleWithinMs: 900,
+          },
         },
         {
           scenario: "playlist-filter-zero",
           hvscPerfTimings: [{ scope: "playlist:filter", durationMs: 1200 }],
-          metadata: { windowMs: 1400 },
+          metadata: {
+            windowMs: 1400,
+            playlistSize: 5500,
+            queryEngine: "repository",
+            playlistOwnership: "react-state",
+            feedbackKind: "result",
+            feedbackVisibleWithinMs: 1400,
+          },
         },
         {
           scenario: "playlist-filter-low",
           hvscPerfTimings: [{ scope: "playlist:filter", durationMs: 600 }],
-          metadata: { windowMs: 700 },
+          metadata: {
+            windowMs: 700,
+            playlistSize: 5500,
+            queryEngine: "repository",
+            playlistOwnership: "react-state",
+            feedbackKind: "result",
+            feedbackVisibleWithinMs: 700,
+          },
         },
       ],
       telemetryCsvPath: null,
@@ -173,6 +195,9 @@ describe("androidPerfSummary", () => {
     expect(summary.targetEvidence.T4.status).toBe("pass");
     expect(summary.targetEvidence.T4.actualMs).toBe(1200);
     expect(summary.targetEvidence.T4.budgetMs).toBe(2_000);
+    expect(summary.feedbackEvidence.playlistFilter?.playlistSize).toBe(5500);
+    expect(summary.feedbackEvidence.playlistFilter?.withinBudget).toBe(true);
+    expect(summary.targetEvidence.T6.status).toBe("unmeasured");
   });
 
   it("reports T4 as unmeasured when no filter scenarios exist", () => {
@@ -192,5 +217,79 @@ describe("androidPerfSummary", () => {
 
     expect(summary.targetEvidence.T4.status).toBe("unmeasured");
     expect(summary.targetEvidence.T4.actualMs).toBeNull();
+  });
+
+  it("reports UX1 as pass when every visible workflow stage surfaces progress or a result within 2s", () => {
+    const summary = summarizeAndroidBenchmarkArtifacts({
+      smokeDir: [
+        {
+          scenario: "install",
+          hvscPerfTimings: [{ scope: "download", durationMs: 15000 }],
+          metadata: { feedbackKind: "progress", feedbackVisibleWithinMs: 0 },
+        },
+        {
+          scenario: "ingest",
+          hvscPerfTimings: [{ scope: "ingest:index-build", durationMs: 18000 }],
+          metadata: { feedbackKind: "progress", feedbackVisibleWithinMs: 0 },
+        },
+        {
+          scenario: "playlist-add",
+          hvscPerfTimings: [],
+          metadata: { feedbackKind: "progress", feedbackVisibleWithinMs: 0, playlistSize: 60582 },
+        },
+        {
+          scenario: "playlist-filter-high",
+          hvscPerfTimings: [{ scope: "playlist:filter", durationMs: 900 }],
+          metadata: {
+            feedbackKind: "result",
+            feedbackVisibleWithinMs: 900,
+            playlistSize: 60582,
+            queryEngine: "repository",
+            playlistOwnership: "react-state",
+          },
+        },
+        {
+          scenario: "playback-start",
+          hvscPerfTimings: [{ scope: "playback:first-audio", durationMs: 700 }],
+          metadata: { feedbackKind: "result", playlistSize: 60582 },
+        },
+      ],
+      telemetryCsvPath: null,
+      telemetryMetaPath: null,
+      perfettoPath: null,
+      perfettoLogPath: null,
+    });
+
+    expect(summary.targetEvidence.UX1.status).toBe("pass");
+    expect(summary.targetEvidence.UX1.actualMs).toBe(900);
+    expect(summary.targetEvidence.UX1.stageResults.addToPlaylist.withinBudget).toBe(true);
+    expect(summary.targetEvidence.UX1.stageResults.playbackStart.visibleWithinMs).toBe(700);
+  });
+
+  it("reports T6 as fail when target-scale filtering still depends on React-owned playlist state", () => {
+    const summary = summarizeAndroidBenchmarkArtifacts({
+      smokeDir: [
+        {
+          scenario: "playlist-filter-high",
+          hvscPerfTimings: [{ scope: "playlist:filter", durationMs: 1400 }],
+          metadata: {
+            playlistSize: 100000,
+            queryEngine: "repository",
+            playlistOwnership: "react-state",
+            feedbackKind: "result",
+            feedbackVisibleWithinMs: 1400,
+          },
+        },
+      ],
+      telemetryCsvPath: null,
+      telemetryMetaPath: null,
+      perfettoPath: null,
+      perfettoLogPath: null,
+    });
+
+    expect(summary.targetEvidence.T6.status).toBe("fail");
+    expect(summary.targetEvidence.T6.actualCount).toBe(100000);
+    expect(summary.targetEvidence.T6.queryEngines).toEqual(["repository"]);
+    expect(summary.targetEvidence.T6.playlistOwnership).toEqual(["react-state"]);
   });
 });

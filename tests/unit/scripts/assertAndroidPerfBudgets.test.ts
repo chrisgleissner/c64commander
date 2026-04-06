@@ -20,6 +20,35 @@ afterEach(() => {
 
 const scriptPath = path.resolve(process.cwd(), "scripts/hvsc/assert-android-perf-budgets.mjs");
 
+const createPassingTargetEvidence = () => ({
+  UX1: {
+    status: "pass",
+    actualMs: 900,
+    budgetMs: 2000,
+    source: "feedbackEvidence",
+    stageResults: {
+      download: { withinBudget: true, visibleWithinMs: 0 },
+      ingest: { withinBudget: true, visibleWithinMs: 0 },
+      addToPlaylist: { withinBudget: true, visibleWithinMs: 0 },
+      playlistFilter: { withinBudget: true, visibleWithinMs: 900 },
+      playbackStart: { withinBudget: true, visibleWithinMs: 700 },
+    },
+  },
+  T1: { status: "pass", actualMs: 15000, budgetMs: 20000, source: "test" },
+  T2: { status: "pass", actualMs: 20000, budgetMs: 25000, source: "test" },
+  T3: { status: "pass", actualMs: 1500, budgetMs: 2000, source: "test" },
+  T4: { status: "pass", actualMs: 1800, budgetMs: 2000, source: "test" },
+  T5: { status: "pass", actualMs: 800, budgetMs: 1000, source: "test" },
+  T6: {
+    status: "pass",
+    actualCount: 100000,
+    budgetCount: 100000,
+    source: "test",
+    queryEngines: ["repository"],
+    playlistOwnership: ["repository"],
+  },
+});
+
 const runAssert = (summaryPath: string, env: Record<string, string> = {}) => {
   try {
     const stdout = execFileSync("node", [scriptPath, `--file=${summaryPath}`], {
@@ -46,13 +75,7 @@ describe("assert-android-perf-budgets", () => {
       JSON.stringify({
         loops: 3,
         warmup: 1,
-        targetEvidence: {
-          T1: { status: "pass", actualMs: 15000, budgetMs: 20000, source: "test" },
-          T2: { status: "pass", actualMs: 20000, budgetMs: 25000, source: "test" },
-          T3: { status: "pass", actualMs: 1500, budgetMs: 2000, source: "test" },
-          T4: { status: "pass", actualMs: 1800, budgetMs: 2000, source: "test" },
-          T5: { status: "pass", actualMs: 800, budgetMs: 1000, source: "test" },
-        },
+        targetEvidence: createPassingTargetEvidence(),
       }),
     );
 
@@ -70,11 +93,8 @@ describe("assert-android-perf-budgets", () => {
         loops: 3,
         warmup: 1,
         targetEvidence: {
+          ...createPassingTargetEvidence(),
           T1: { status: "fail", actualMs: 25000, budgetMs: 20000, source: "test" },
-          T2: { status: "pass", actualMs: 20000, budgetMs: 25000, source: "test" },
-          T3: { status: "pass", actualMs: 1500, budgetMs: 2000, source: "test" },
-          T4: { status: "pass", actualMs: 1800, budgetMs: 2000, source: "test" },
-          T5: { status: "pass", actualMs: 800, budgetMs: 1000, source: "test" },
         },
       }),
     );
@@ -94,11 +114,8 @@ describe("assert-android-perf-budgets", () => {
         loops: 3,
         warmup: 1,
         targetEvidence: {
+          ...createPassingTargetEvidence(),
           T1: { status: "unmeasured", actualMs: null, budgetMs: 20000, source: "test" },
-          T2: { status: "pass", actualMs: 20000, budgetMs: 25000, source: "test" },
-          T3: { status: "pass", actualMs: 1500, budgetMs: 2000, source: "test" },
-          T4: { status: "pass", actualMs: 1800, budgetMs: 2000, source: "test" },
-          T5: { status: "pass", actualMs: 800, budgetMs: 1000, source: "test" },
         },
       }),
     );
@@ -117,13 +134,7 @@ describe("assert-android-perf-budgets", () => {
       JSON.stringify({
         loops: 3,
         warmup: 1,
-        targetEvidence: {
-          T1: { status: "pass", actualMs: 15000, budgetMs: 20000, source: "test" },
-          T2: { status: "pass", actualMs: 20000, budgetMs: 25000, source: "test" },
-          T3: { status: "pass", actualMs: 1500, budgetMs: 2000, source: "test" },
-          T4: { status: "pass", actualMs: 1800, budgetMs: 2000, source: "test" },
-          T5: { status: "pass", actualMs: 800, budgetMs: 1000, source: "test" },
-        },
+        targetEvidence: createPassingTargetEvidence(),
       }),
     );
 
@@ -140,13 +151,7 @@ describe("assert-android-perf-budgets", () => {
       JSON.stringify({
         loops: 5,
         warmup: 2,
-        targetEvidence: {
-          T1: { status: "pass", actualMs: 15000, budgetMs: 20000, source: "test" },
-          T2: { status: "pass", actualMs: 20000, budgetMs: 25000, source: "test" },
-          T3: { status: "pass", actualMs: 1500, budgetMs: 2000, source: "test" },
-          T4: { status: "pass", actualMs: 1800, budgetMs: 2000, source: "test" },
-          T5: { status: "pass", actualMs: 800, budgetMs: 1000, source: "test" },
-        },
+        targetEvidence: createPassingTargetEvidence(),
       }),
     );
 

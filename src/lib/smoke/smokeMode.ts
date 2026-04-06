@@ -274,6 +274,11 @@ export const recordSmokeStatus = async (status: { state: string; mode?: string; 
   }
 };
 
+/** Per-scenario write throttle: prevents flooding the Capacitor bridge
+ *  with hundreds of 500 KB snapshot writes during bulk operations. */
+const lastSnapshotWriteMs = new Map<string, number>();
+const SMOKE_SNAPSHOT_THROTTLE_MS = 2_000;
+
 export const recordSmokeBenchmarkSnapshot = async (input: {
   scenario: string;
   state?: string;
@@ -282,6 +287,11 @@ export const recordSmokeBenchmarkSnapshot = async (input: {
   if (!cachedSmokeConfig || !Capacitor.isNativePlatform()) return;
   const scenario = sanitizeSmokeScenario(input.scenario);
   if (!scenario) return;
+
+  const now = Date.now();
+  const lastWrite = lastSnapshotWriteMs.get(scenario) ?? 0;
+  if (now - lastWrite < SMOKE_SNAPSHOT_THROTTLE_MS) return;
+  lastSnapshotWriteMs.set(scenario, now);
 
   const snapshot: SmokeBenchmarkSnapshot = {
     scenario,

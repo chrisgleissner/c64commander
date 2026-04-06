@@ -1,5 +1,205 @@
 # HVSC Performance Worklog
 
+## [2026-04-06 18:00] ANDROID-PILOT-BLOCKER-003: Perfetto stream capture fix landed; Pixel 4 pilot still blocked in playlist setup
+
+Repaired the Android runner's invalid Perfetto file path assumption, then ran a real-device pilot to validate the full baseline path.
+
+What changed:
+
+- Updated `scripts/run-hvsc-android-benchmark.sh` to stream Perfetto traces over stdout into `perfetto/hvsc-baseline.pftrace` instead of attempting to write and later pull an on-device trace file that the Pixel 4 could not create.
+- Added a guard so the runner now fails immediately if the local Perfetto trace file was not written.
+- Added a regression contract in `tests/unit/ci/perfettoPipelineContracts.test.ts` that locks the new stdout-based Perfetto capture path and prevents the old `adb pull "$PERFETTO_REMOTE_PATH"` flow from returning.
+
+Validation executed:
+
+- Targeted regressions: passed
+  - `tests/unit/ci/perfettoPipelineContracts.test.ts`
+- `bash -n scripts/run-hvsc-android-benchmark.sh`: passed
+- `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 497 test files
+  - 5647 tests
+  - 91.14% branch coverage
+
+Pilot execution and observed blocker:
+
+- Pilot run command:
+  - `./scripts/run-hvsc-android-benchmark.sh --loops 1 --warmup 0 --perfetto-duration-sec 1200 --benchmark-run-id 20260406T1730Z-hvsc-android-pilot`
+- Real target selection:
+  - device: `9B081FFAZ001WX` (Pixel 4)
+  - host: `192.168.1.13` resolved from `u64`
+- Result:
+  - Maestro setup flow `perf-hvsc-baseline` failed after `14m 5s`
+  - failure: `Assertion is false: "Items added" is visible`
+  - the run never progressed into the measured flows
+- Artifacts captured before failure:
+  - `smoke/loop-1/c64u-smoke-benchmark-install.json` shows HVSC install completed with `60572` songs ingested on the device during setup
+  - `smoke/loop-1/c64u-smoke-benchmark-browse-query.json` shows browse work was still active during setup, including `/MUSICIANS/D/Demosic` with `windowMs: 2726.1`
+- Remaining blocker details:
+  - `perfetto/perfetto.log` shows the stdout capture connected to the tracing service with `TTL: 1200s`
+  - `perfetto/hvsc-baseline.pftrace` ended up zero bytes in the failed pilot
+  - after the run, `adb devices` returned no attached devices, so the phone disconnected before a clean rerun was possible
+
+Decision:
+
+- Keep the Perfetto runner fix.
+- Do not claim Android baseline closure from `20260406T1730Z-hvsc-android-pilot`.
+- The next required step is to diagnose why large-playlist setup never reaches `Items added` on the Pixel 4 and why the device/trace session collapses before a valid Perfetto artifact is written.
+
+## [2026-04-06 16:15] WEB-NIGHTLY-HONESTY-002: fail fast on unsupported hybrid web nightly evidence
+
+Stopped the web nightly scenarios lane from overstating what it measures.
+
+What changed:
+
+- Added `scripts/hvsc/webPerfEvidence.mjs` to classify web perf runs by evidence quality rather than only by requested inputs.
+- Reclassified the scenario suite in real-archive mode as `hybrid-real-download-fixture-browse-web` because:
+  - `S1` and `S2` attempt the real archive download/ingest path
+  - `S3` through `S11` still run via `installReadyHvscMock` fixture data
+- Updated `scripts/hvsc/webPerfSummary.mjs` so fixture or hybrid web scenario runs now mark `targetEvidence.T1` through `T5` as `unmeasured` with an explicit reason instead of incorrectly returning `pass`.
+- Updated `scripts/hvsc/collect-web-perf.mjs` so `npm run test:perf:nightly` now fails fast for the unsupported hybrid scenario suite and writes an explicit blocker artifact instead of spending 10 minutes timing out inside Playwright.
+- Captured the honest blocker artifact at `ci-artifacts/hvsc-performance/web/web-full-nightly.json` with:
+  - `status: "unsupported"`
+  - `mode: "hybrid-real-download-fixture-browse-web"`
+  - real archive paths recorded
+  - `targetEvidence.T1` through `T5` all `unmeasured`
+
+Validation executed:
+
+- Focused regressions: passed
+  - `tests/unit/scripts/webPerfSummary.test.ts`
+  - `tests/unit/scripts/webPerfEvidence.test.ts`
+- `npm run test:perf:nightly`: exits quickly with the unsupported blocker artifact instead of hanging in `S1`/`S2`
+- `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 497 test files
+  - 5647 tests
+  - 91.14% branch coverage
+
+Decision:
+
+- Keep the honesty fix.
+- Do not claim any web `T1`-`T5` closure from the current nightly scenario artifact.
+- Continue the convergence pass with the real Pixel 4 Android baseline, which remains the next honest target-evidence path.
+
+## [2026-04-06 14:55] HARNESS-ANDROID-SCALE-001: large-playlist Android harness evidence and summary contract
+
+Implemented the Android harness changes needed before honest Pixel 4 closure work can proceed.
+
+What changed:
+
+- Removed the single-track `10_Orbyte.sid` dependency from `.maestro/perf-hvsc-baseline.yaml`.
+  - The baseline flow now stops after HVSC download/ingest readiness and hands large-playlist setup to `.maestro/perf-hvsc-setup-playlist.yaml`.
+- Extended smoke benchmark metadata so the measured Android run can record:
+  - playlist size after add-to-playlist
+  - playlist size at filter and playback-start
+  - explicit feedback evidence for download, ingest, add-to-playlist, filter, and playback-start
+- Changed playlist filter smoke snapshots to emit distinct scenario names:
+  - `playlist-filter-high`
+  - `playlist-filter-low`
+  - `playlist-filter-zero`
+    This avoids overwriting one generic `playlist-filter` artifact per loop.
+- Threaded playback benchmark metadata from the Play page controller into `playback-start` smoke snapshots so Android playback evidence now carries playlist scale.
+- Extended `scripts/hvsc/androidPerfSummary.mjs` to summarize:
+  - `feedbackEvidence`
+  - `targetEvidence.UX1`
+  - `targetEvidence.T6`
+  - playlist-size and query-engine metadata for filter/playback analysis
+- Extended `scripts/hvsc/assert-android-perf-budgets.mjs` so the Android summary contract now reports `UX1` and `T6` in addition to `T1` through `T5`.
+
+Validation executed:
+
+- Focused regressions: passed
+  - `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`
+  - `tests/unit/scripts/androidPerfSummary.test.ts`
+  - `tests/unit/scripts/androidPerfMultiLoop.test.ts`
+  - `tests/unit/scripts/assertAndroidPerfBudgets.test.ts`
+  - `tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx`
+  - `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`
+  - `tests/unit/playbackRouter.test.ts`
+  - `tests/unit/playFiles/useHvscLibrary.test.tsx`
+- `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 496 test files
+  - 5642 tests
+  - 91.15% branch coverage
+
+Environment checks completed before measurement:
+
+- adb device present: `9B081FFAZ001WX` (Pixel 4)
+- preferred real host reachable: `u64`
+- fallback real host `c64u`: unreachable at probe time
+- real web perf archives available locally under `~/.cache/c64commander/hvsc/`
+
+Decision:
+
+- Keep the harness change.
+- Proceed to real Docker web and Pixel 4 baseline measurement with the updated artifact contract.
+
+## [2026-04-06 13:58] Follow-up convergence verification: Add Items chooser and Play import screenshot hygiene
+
+Verified the live tree still matches the already-landed Play import follow-up work.
+
+What changed:
+
+- Re-read `src/components/FileOriginIcon.tsx` and `src/components/itemSelection/ItemSelectionDialog.tsx`.
+- Verified the current chooser still uses the shared `h-8 w-8` icon slot contract for Local, C64U, HVSC, and CommoServe.
+- Re-checked `tests/unit/components/FileOriginIcon.test.tsx` and `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`.
+- Re-checked the README import screenshot references and the current import screenshots under `docs/img/app/play/import/`.
+
+Validation executed:
+
+- Targeted chooser regressions: 21 passed, 0 failed
+  - `tests/unit/components/FileOriginIcon.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+- Verified `README.md` still references:
+  - `docs/img/app/play/import/01-import-interstitial.png`
+  - `docs/img/app/play/import/02-c64u-file-picker.png`
+  - `docs/img/app/play/import/03-local-file-picker.png`
+  - `docs/img/app/play/import/04-commoserve-search.png`
+  - `docs/img/app/play/import/05-commoserve-results-selected.png`
+- Verified all five referenced screenshot files exist in the repo.
+
+Decision:
+
+- Keep the current chooser implementation.
+- Keep the current Play import screenshots.
+- No UI code change was required.
+- No screenshot regeneration was required.
+
+## [2026-04-06 13:58] Follow-up convergence closure: tracker sync, audit refresh, and remaining-work prompt rewrite
+
+Updated the tracker and HVSC performance docs so they now reflect the live tree instead of the stale 2026-04-05 audit state.
+
+What changed:
+
+- Recorded this pass as `DOC_ONLY` in `PLANS.md`, with the validation scope stated before doc edits.
+- Refreshed `docs/research/hvsc/performance/audit/audit.md` to account for the live implementation state:
+  - web S1-S11 harness is present and evidenced by `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+  - Android runner, summary writer, budget assertion, Perfetto SQL extraction, and Kotlin `Trace` hooks are present in the tree
+  - microbenchmarks and quick/nightly web CI wiring are present in the tree
+  - the remaining gap is honest required-platform closure, not missing scaffolding
+- Replaced `docs/research/hvsc/performance/audit/convergence-prompt.md` so it preserves the closed UI/foundation work and only orders the real remaining execution work.
+- Added a follow-up convergence status block to `PLANS.md` so the current repo state is explicit.
+
+Validation executed:
+
+- Verified the current perf artifact roots exist:
+  - `ci-artifacts/hvsc-performance/web/`
+  - `ci-artifacts/hvsc-performance/android/`
+- Verified the current web summary artifact exists at `ci-artifacts/hvsc-performance/web/web-full-quick.json`.
+- Verified the current Android artifact tree contains committed run directories, raw smoke snapshots, telemetry output, Maestro output, and Perfetto logs.
+- Verified the latest committed Android measurement attempt still records unresolved measurement-flow failures in `ci-artifacts/hvsc-performance/android/v13-benchmark.log`.
+
+Decision:
+
+- Keep this follow-up as `DOC_ONLY`.
+- Do not reopen chooser code or import screenshot regeneration unless the live tree changes.
+- Carry forward only the remaining HVSC execution work that is still evidence-backed open.
+
 ## [2026-04-06 14:45] UI/docs follow-up: source chooser alignment and diagnostics analysis screenshot realism
 
 Closed the remaining UI and documentation screenshot follow-up items after the HVSC convergence closeout.

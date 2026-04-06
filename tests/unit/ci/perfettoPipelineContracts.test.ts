@@ -67,11 +67,16 @@ describe("Perfetto pipeline contracts", () => {
     expect(script).toContain("--sql-dir=");
   });
 
-  it("runner script wires extraction after trace pull", () => {
+  it("runner script streams Perfetto traces locally before extraction", () => {
     const script = readRepoFile("scripts", "run-hvsc-android-benchmark.sh");
+    expect(script).toContain("shell 'perfetto --txt -o - -c -'");
+    expect(script).toContain('> "$PERFETTO_LOCAL_PATH"');
+    expect(script).toContain('2> "$PERFETTO_LOG_PATH"');
+    expect(script).toContain('if [[ ! -s "$PERFETTO_LOCAL_PATH" ]]');
     expect(script).toContain("extract-perfetto-metrics.mjs");
     expect(script).toContain("PERFETTO_METRICS_PATH");
     expect(script).toContain("--perfetto-metrics=");
+    expect(script).not.toContain('adb -s "$DEVICE_ID" pull "$PERFETTO_REMOTE_PATH"');
   });
 
   it("summary writer includes Perfetto extraction metadata", () => {

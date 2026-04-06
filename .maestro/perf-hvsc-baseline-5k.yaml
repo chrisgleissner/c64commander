@@ -1,13 +1,16 @@
 appId: uk.gleissner.c64commander
 tags:
-  - hvsc-perf
-  - hvsc-perf-setup
+  - hvsc-perf-5k
+  - hvsc-perf-5k-setup
   - device
 env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "30000"}
 ---
+# 5K-lane variant of perf-hvsc-baseline.yaml.
+# Identical download/ingest phase, but builds a ~4540-item playlist
+# (DEMOS + GAMES only) instead of the full ~60K corpus.
 - runFlow: subflows/launch-and-wait.yaml
 - retry:
     maxRetries: 3
@@ -28,8 +31,6 @@ env:
           visible: "Playlist"
           timeout: ${TIMEOUT}
 # Clear any leftover search filter from previous test runs.
-# Scroll down from top to reveal the filter area (below the player controls)
-# using safe coordinates that stay above the native tab bar (top at y=2010).
 - repeat:
     times: 3
     commands:
@@ -43,12 +44,10 @@ env:
     text: "Clear filter"
     optional: true
 - waitForAnimationToEnd
-# Re-select the Play tab in case the Clear-filter tap hit the tab bar
 - tapOn:
     id: "tab-play"
 - waitForAnimationToEnd
-# Scroll to find HVSC download. Continue from current position — the 3 swipes
-# above already moved us partway down. Each retry scrolls one more screenfull.
+# Scroll to find HVSC download.
 - retry:
     maxRetries: 15
     commands:
@@ -75,8 +74,7 @@ env:
           visible: "Indexed "
           timeout: ${LONG_TIMEOUT}
       - assertVisible: "HVSC ready"
-# Scroll back to top so the playlist controls start from a known state before
-# the large-playlist setup flow runs in the same warm app session.
+# Scroll back to top so the playlist controls start from a known state.
 - repeat:
     times: 6
     commands:
@@ -87,6 +85,5 @@ env:
           waitToSettleTimeoutMs: 300
       - waitForAnimationToEnd
 - assertVisible: "Playlist"
-# Large-playlist setup moved out of this file to keep the baseline readable, but
-# it still runs as part of the same setup phase via an explicit subflow call.
-- runFlow: perf-hvsc-setup-playlist.yaml
+# 5K playlist setup: adds DEMOS + GAMES (~4540 items) instead of full corpus.
+- runFlow: perf-hvsc-setup-playlist-5k.yaml

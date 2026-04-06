@@ -26,6 +26,7 @@ const smokeFilesArg = args.get("--smoke-files") || "";
 const telemetryDir = args.get("--telemetry-dir") || "";
 const loops = Number(args.get("--loops") || "1");
 const warmup = Number(args.get("--warmup") || "0");
+const lane = args.get("--lane") || "full";
 
 if (!summaryPath) {
   process.stderr.write("Missing required argument: --summary=...\n");
@@ -70,6 +71,7 @@ const summary = {
   hvscBaseUrl: hvscBaseUrl || null,
   loops,
   warmup,
+  lane,
   maestroStatus,
   perfettoTrace: perfettoPath ? path.relative(path.dirname(summaryPath), perfettoPath) : null,
   perfettoLog: perfettoLogPath ? path.relative(path.dirname(summaryPath), perfettoLogPath) : null,

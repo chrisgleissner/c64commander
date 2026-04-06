@@ -369,7 +369,10 @@ export function usePlaybackController({
   );
 
   const playItem = useCallback(
-    async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean; playlistIndex?: number }) => {
+    async (
+      item: PlaylistItem,
+      options?: { rebootBeforePlay?: boolean; playlistIndex?: number; playlistSize?: number },
+    ) => {
       return enqueuePlayTransition(async () => {
         if (item.request.source === "commoserve" && !item.request.file) {
           try {
@@ -561,6 +564,10 @@ export function usePlaybackController({
         const executionOptions = {
           ...(shouldReboot ? { rebootBeforeMount: true } : {}),
           ...(applyPlaybackConfigBeforeLaunch ? { beforeLaunch: applyPlaybackConfigBeforeLaunch } : {}),
+          benchmarkMetadata: {
+            feedbackKind: "result",
+            ...(typeof options?.playlistSize === "number" ? { playlistSize: options.playlistSize } : {}),
+          },
         };
         const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
         addLog("info", "Playback request started", {
@@ -663,6 +670,7 @@ export function usePlaybackController({
       try {
         await playItem(resolvedItems[startIndex], {
           playlistIndex: startIndex,
+          playlistSize: resolvedItems.length,
         });
       } catch (error) {
         if (!isHandledUiError(error)) {
@@ -712,7 +720,7 @@ export function usePlaybackController({
           return;
         }
         cancelAutoAdvance();
-        await playItem(playlist[targetIndex], { playlistIndex: targetIndex });
+        await playItem(playlist[targetIndex], { playlistIndex: targetIndex, playlistSize: playlist.length });
       } catch (error) {
         if (!isHandledUiError(error)) {
           reportUserError({

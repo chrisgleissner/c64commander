@@ -24,6 +24,12 @@ if (!evidence) {
 
 const budgets = [
   {
+    id: "UX1",
+    env: "HVSC_BUDGET_FEEDBACK_P95",
+    defaultMs: 2_000,
+    label: "Visible feedback or result < 2s",
+  },
+  {
     id: "T1",
     env: "HVSC_BUDGET_DOWNLOAD_P95",
     defaultMs: 20_000,
@@ -53,6 +59,12 @@ const budgets = [
     defaultMs: 1_000,
     label: "Playback start < 1s",
   },
+  {
+    id: "T6",
+    env: "HVSC_BUDGET_PLAYLIST_SCALE_COUNT",
+    defaultMs: 100_000,
+    label: "100K playlist scale without React-owned hot path",
+  },
 ];
 
 const enforced = process.env.HVSC_ANDROID_BUDGET_ENFORCE === "1";
@@ -68,11 +80,30 @@ for (const budget of budgets) {
   }
   const budgetMs = process.env[budget.env] ? Number(process.env[budget.env]) : budget.defaultMs;
   const status = target.status;
-  const actualMs = target.actualMs;
-  const line = `  ${budget.id} ${budget.label}: ${status} (actual=${actualMs ?? "n/a"}ms, budget=${budgetMs}ms, source=${target.source})`;
+  const isCountTarget = budget.id === "T6";
+  const actualValue = isCountTarget ? target.actualCount : target.actualMs;
+  const unit = isCountTarget ? "items" : "ms";
+  const budgetLabel = isCountTarget ? "required" : "budget";
+  const line = `  ${budget.id} ${budget.label}: ${status} (actual=${actualValue ?? "n/a"}${unit}, ${budgetLabel}=${budgetMs}${unit}, source=${target.source})`;
   results.push(line);
+  if (budget.id === "UX1" && target.stageResults) {
+    const stageSummary = Object.entries(target.stageResults)
+      .map(([stage, stageResult]) => {
+        if (!stageResult || typeof stageResult !== "object") return `${stage}=unmeasured`;
+        const visibleWithinMs =
+          typeof stageResult.visibleWithinMs === "number" ? `${stageResult.visibleWithinMs}ms` : "n/a";
+        return `${stage}=${stageResult.withinBudget ? "pass" : "fail"}@${visibleWithinMs}`;
+      })
+      .join(", ");
+    results.push(`    stages: ${stageSummary}`);
+  }
+  if (budget.id === "T6") {
+    results.push(
+      `    queryEngines=${(target.queryEngines ?? []).join("|") || "n/a"}, playlistOwnership=${(target.playlistOwnership ?? []).join("|") || "n/a"}`,
+    );
+  }
   if (enforced && status === "fail") {
-    failures.push(`${budget.id}: actual ${actualMs}ms exceeds budget ${budgetMs}ms`);
+    failures.push(`${budget.id}: actual ${actualValue ?? "n/a"}${unit} exceeds ${budgetLabel} ${budgetMs}${unit}`);
   }
   if (enforced && status === "unmeasured") {
     failures.push(`${budget.id}: unmeasured`);

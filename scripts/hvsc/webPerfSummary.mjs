@@ -61,7 +61,22 @@ const maxFinite = (values) => {
   return finite.length ? Math.max(...finite) : null;
 };
 
-const buildTargetEvidence = (scenarioSummaries) => {
+const buildUnmeasuredBudgetResult = (budgetMs, source, reason) => ({
+  source,
+  budgetMs,
+  actualMs: null,
+  status: 'unmeasured',
+  reason,
+});
+
+const buildTargetEvidence = (scenarioSummaries, options = {}) => {
+  const evidenceClass = options.evidenceClass ?? 'full-scale';
+  const nonEligibleReason =
+    evidenceClass === 'fixture'
+      ? 'Fixture web scenario runs are mechanism proof only and are not target-eligible.'
+      : evidenceClass === 'hybrid'
+        ? 'Hybrid web scenario runs mix real downloads with fixture-backed browse/playback and are not target-eligible.'
+        : null;
   const downloadP95 = scenarioSummaries["S1-download"]?.wallClockMs?.p95 ?? null;
   const ingestP95 = scenarioSummaries["S2-ingest"]?.wallClockMs?.p95 ?? null;
   const browseP95 = maxFinite([
@@ -83,6 +98,16 @@ const buildTargetEvidence = (scenarioSummaries) => {
     status: Number.isFinite(actualMs) && actualMs >= 0 ? (actualMs <= budgetMs ? "pass" : "fail") : "unmeasured",
   });
 
+  if (nonEligibleReason) {
+    return {
+      T1: buildUnmeasuredBudgetResult(20_000, 'S1-download.wallClockMs.p95', nonEligibleReason),
+      T2: buildUnmeasuredBudgetResult(25_000, 'S2-ingest.wallClockMs.p95', nonEligibleReason),
+      T3: buildUnmeasuredBudgetResult(2_000, 'max(S3,S4,S5).wallClockMs.p95', nonEligibleReason),
+      T4: buildUnmeasuredBudgetResult(2_000, 'max(S8,S9,S10).wallClockMs.p95', nonEligibleReason),
+      T5: buildUnmeasuredBudgetResult(1_000, 'S11-playback-start.wallClockMs.p95', nonEligibleReason),
+    };
+  }
+
   return {
     T1: asBudgetResult(downloadP95, 20_000, "S1-download.wallClockMs.p95"),
     T2: asBudgetResult(ingestP95, 25_000, "S2-ingest.wallClockMs.p95"),
@@ -92,7 +117,7 @@ const buildTargetEvidence = (scenarioSummaries) => {
   };
 };
 
-export const summarizeScenarioIterations = (iterations) => {
+export const summarizeScenarioIterations = (iterations, options = {}) => {
   const scenarioNames = Array.from(
     new Set(iterations.flatMap((iteration) => (iteration.scenarios ?? []).map((scenario) => scenario.scenario))),
   ).sort((left, right) => left.localeCompare(right));
@@ -105,11 +130,12 @@ export const summarizeScenarioIterations = (iterations) => {
   );
 
   return {
+    evidenceClass: options.evidenceClass ?? 'full-scale',
     scenarioCoverage: scenarioNames.map((scenarioName) => ({
       scenario: scenarioName,
       sampleCount: scenarioSummaries[scenarioName]?.sampleCount ?? 0,
     })),
     scenarioSummaries,
-    targetEvidence: buildTargetEvidence(scenarioSummaries),
+    targetEvidence: buildTargetEvidence(scenarioSummaries, options),
   };
 };

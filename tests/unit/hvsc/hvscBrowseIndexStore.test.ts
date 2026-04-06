@@ -28,6 +28,7 @@ import {
   getHvscSongFromBrowseIndex,
   listFolderFromBrowseIndex,
   listHvscFolderTracks,
+  listSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
@@ -565,5 +566,83 @@ describe("listFolderFromBrowseIndex missing folder fallback", () => {
     expect(result.songs).toEqual([]);
     expect(result.totalFolders).toBe(0);
     expect(result.totalSongs).toBe(0);
+  });
+});
+
+describe("listSongsRecursiveFromBrowseIndex", () => {
+  it("returns all songs under a subtree", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" },
+      { path: "/DEMOS/A/Two.sid", name: "Two.sid", type: "sid" },
+      { path: "/DEMOS/B/Three.sid", name: "Three.sid", type: "sid" },
+      { path: "/GAMES/X/Four.sid", name: "Four.sid", type: "sid" },
+    ]);
+
+    const demoSongs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
+    expect(demoSongs).toHaveLength(3);
+    expect(demoSongs!.map((s) => s.fileName).sort()).toEqual(["One.sid", "Three.sid", "Two.sid"]);
+  });
+
+  it("returns songs from root traversing all folders", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" },
+      { path: "/GAMES/B/Two.sid", name: "Two.sid", type: "sid" },
+    ]);
+
+    const allSongs = listSongsRecursiveFromBrowseIndex(snapshot, "/");
+    expect(allSongs).toHaveLength(2);
+  });
+
+  it("returns null for non-existent folder (signals incomplete index)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/NONEXISTENT");
+    expect(songs).toBeNull();
+  });
+
+  it("returns null for empty snapshot (stale after native ingest clears index)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([]);
+
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS")).toBeNull();
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/GAMES")).toBeNull();
+    // Root "/" always exists in the folder map, but has 0 songs
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toEqual([]);
+  });
+
+  it("handles deeply nested folder hierarchy", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/MUSICIANS/A/B/C/Deep.sid", name: "Deep.sid", type: "sid" },
+      { path: "/MUSICIANS/A/Shallow.sid", name: "Shallow.sid", type: "sid" },
+    ]);
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/MUSICIANS");
+    expect(songs).toHaveLength(2);
+    expect(songs!.map((s) => s.fileName).sort()).toEqual(["Deep.sid", "Shallow.sid"]);
+  });
+
+  it("preserves song metadata (durationSeconds, sidMetadata, trackSubsongs)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      {
+        path: "/DEMOS/A/Meta.sid",
+        name: "Meta.sid",
+        type: "sid",
+        durationSeconds: 120,
+      },
+    ]);
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
+    expect(songs).toHaveLength(1);
+    expect(songs![0]!.fileName).toBe("Meta.sid");
+    expect(songs![0]!.durationSeconds).toBe(120);
+  });
+
+  it("does not revisit already-visited folders (cycle safety)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+    // Manually inject a circular reference in the test snapshot
+    snapshot.folders["/DEMOS"]!.folders.push("/DEMOS");
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
+    expect(songs).toHaveLength(1);
+    expect(songs![0]!.fileName).toBe("One.sid");
   });
 });

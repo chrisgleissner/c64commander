@@ -5,6 +5,51 @@
 - `CODE_CHANGE`
 - `UI_CHANGE`
 
+### 2026-04-06 device-scale harness execution
+
+- Classification: `CODE_CHANGE`
+- Current task: `HARNESS-ANDROID-SCALE-001`
+- Current dominant bottleneck: not selected yet; honest required-platform baselines remain the gate.
+- External prerequisites verified before implementation:
+  - preferred Pixel 4 attached over adb: `9B081FFAZ001WX`
+  - real C64U host reachable at `http://u64/v1/info`
+  - real web archive inputs present at `~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z` and `~/.cache/c64commander/hvsc/HVSC_Update_84.7z`
+- Harness changes now landed and validated:
+  - `.maestro/perf-hvsc-baseline.yaml` no longer seeds the measurement run with the single-track `10_Orbyte.sid` path
+  - `perf-hvsc-setup-playlist` remains the large-playlist setup phase
+  - smoke snapshots now record playlist size and feedback visibility metadata for download, ingest, add-to-playlist, filter, and playback-start
+  - playlist filter smoke artifacts now emit `playlist-filter-high`, `playlist-filter-low`, and `playlist-filter-zero` instead of collapsing into one overwritten `playlist-filter` file
+  - Android summary output now includes `feedbackEvidence`, `targetEvidence.UX1`, and `targetEvidence.T6`
+  - playback-start smoke artifacts now carry playlist-size context from the Play page controller
+- Validation completed for the harness change:
+  - targeted regressions passed for Android summary, Maestro contracts, playlist filtering, add-to-playlist smoke metadata, playback smoke metadata, and HVSC snapshot emitters
+  - `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+  - `npm run build`: passed
+  - `npm run test:coverage`: passed with 496 test files, 5642 tests, and 91.15% branch coverage
+- Remaining work on this execution path:
+  - keep `ci-artifacts/hvsc-performance/web/web-full-nightly.json` as an explicit unsupported blocker artifact until the web S1-S11 suite can run at full scale without fixture-backed browse/playback phases
+  - diagnose the Pixel 4 large-playlist setup failure seen in `20260406T1730Z-hvsc-android-pilot` before retrying the Android baseline; the pilot never reached `Items added`, ended with a zero-byte Perfetto trace, and the device dropped off adb afterward
+  - rerun the first honest Pixel 4 Android baseline with `summary.json`, a non-empty Perfetto trace, extracted metrics, playlist-size evidence, and UX feedback evidence once the setup failure is resolved
+  - update the target matrix only from those measured artifacts
+
+### 2026-04-06 follow-up convergence closure
+
+- Classification: `DOC_ONLY`
+- Scope of this follow-up: verify the live Add Items chooser and import screenshots, then refresh the stale HVSC audit and remaining-work prompt to match the current repository state.
+- Validation scope before implementation:
+  - run targeted chooser regressions in `tests/unit/components/FileOriginIcon.test.tsx` and `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - verify the referenced Play import screenshots exist and match the live UI before considering any regeneration
+  - re-read touched tracker and audit documents and verify every referenced repo path or artifact path exists
+- Constraint: do not reopen prior code or screenshot work unless the live tree disproves the existing implementation or documentation.
+
+## 2026-04-06 Follow-up Convergence Status
+
+- [x] `UI-SOURCE-001` Verified the live Add Items chooser against code, targeted regressions, and the current import screenshots; no code change required.
+- [x] `UI-DOC-002` Verified the README import screenshot references and the five referenced screenshot files; no screenshot regeneration required.
+- [x] `PERF-AUDIT-003` Refreshed `docs/research/hvsc/performance/audit/audit.md` against the current tree, trackers, workflows, and artifact roots.
+- [x] `PERF-PROMPT-004` Replaced `docs/research/hvsc/performance/audit/convergence-prompt.md` with the real remaining work only.
+- [x] `CLOSE-005` Rechecked the touched trackers and audit documents so the current repo state, evidence paths, and remaining-work prompt agree.
+
 ## Mission
 
 Restore deterministic playlist correctness for HVSC imports and large playlists. The import workflow must not declare completion until playlist persistence is complete, repository reads reflect the full dataset, and the UI can immediately render the correct playlist state without waiting for background sync.

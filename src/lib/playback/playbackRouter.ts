@@ -200,11 +200,16 @@ const withPlaybackFirstAudioScope = async <T>(plan: PlayPlan, mode: string, run:
   }
 };
 
-const recordPlaybackBenchmarkSnapshot = (plan: PlayPlan, mode: string) => {
+const recordPlaybackBenchmarkSnapshot = (
+  plan: PlayPlan,
+  mode: string,
+  benchmarkMetadata?: Record<string, unknown> | null,
+) => {
   void recordSmokeBenchmarkSnapshot({
     scenario: "playback-start",
     state: "complete",
     metadata: {
+      ...(benchmarkMetadata ?? {}),
       category: plan.category,
       source: plan.source,
       path: plan.path,
@@ -299,6 +304,7 @@ export type PlayExecutionOptions = {
   rebootBeforeMount?: boolean;
   diskAutostartMode?: DiskAutostartMode;
   beforeLaunch?: (() => Promise<void>) | null;
+  benchmarkMetadata?: Record<string, unknown> | null;
 };
 
 export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: PlayExecutionOptions = {}) => {
@@ -309,6 +315,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
   const resetDelayMs = 500;
   const diskAutostartMode = options.diskAutostartMode ?? loadDiskAutostartMode();
   const beforeLaunch = options.beforeLaunch ?? null;
+  const benchmarkMetadata = options.benchmarkMetadata ?? null;
 
   try {
     switch (plan.category) {
@@ -326,7 +333,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
               path: plan.path,
             });
             await withPlaybackFirstAudioScope(plan, "ultimate-direct", () => api.playSid(plan.path, plan.songNr));
-            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct");
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct", benchmarkMetadata);
             return;
           }
 
@@ -343,7 +350,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             await withPlaybackFirstAudioScope(plan, "ultimate-ssl-upload", () =>
               api.playSidUpload(ftpBlob, plan.songNr, sslBlob, { filename: plan.path }),
             );
-            recordPlaybackBenchmarkSnapshot(plan, "ultimate-ssl-upload");
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-ssl-upload", benchmarkMetadata);
             return;
           } catch (error) {
             propagationFailure = error as Error;
@@ -372,7 +379,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             await withPlaybackFirstAudioScope(plan, "ultimate-direct-fallback", () =>
               api.playSid(plan.path, plan.songNr),
             );
-            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct-fallback");
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct-fallback", benchmarkMetadata);
             return;
           } catch (fallbackError) {
             const err = fallbackError as Error;
@@ -398,7 +405,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         await withPlaybackFirstAudioScope(plan, "local-upload", () =>
           api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path }),
         );
-        recordPlaybackBenchmarkSnapshot(plan, "local-upload");
+        recordPlaybackBenchmarkSnapshot(plan, "local-upload", benchmarkMetadata);
         return;
       }
       case "mod": {

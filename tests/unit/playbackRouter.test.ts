@@ -227,6 +227,27 @@ describe("playbackRouter", () => {
     );
   });
 
+  it("merges playback benchmark metadata into smoke snapshots", async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: "ultimate", path: "/MUSIC/DEMO.SID" });
+    await executePlayPlan(api as any, plan, {
+      benchmarkMetadata: {
+        playlistSize: 60582,
+        feedbackKind: "result",
+      },
+    });
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playback-start",
+        metadata: expect.objectContaining({
+          mode: "ultimate-direct",
+          playlistSize: 60582,
+          feedbackKind: "result",
+        }),
+      }),
+    );
+  });
+
   it("records info-level no-duration signal when Ultimate SID has no songlength metadata", async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({

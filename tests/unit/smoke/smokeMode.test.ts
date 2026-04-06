@@ -548,4 +548,50 @@ describe("smokeMode", () => {
       error: undefined,
     });
   });
+
+  describe("snapshot write throttle", () => {
+    const initSmokeNative = async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      localStorage.setItem(
+        "c64u_smoke_config",
+        JSON.stringify({ target: "real", host: "u64", benchmarkRunId: "run-t" }),
+      );
+      await initializeSmokeMode();
+    };
+
+    it("throttles rapid writes for the same scenario", async () => {
+      vi.useFakeTimers({ now: 100_000 });
+      try {
+        await initSmokeNative();
+
+        await recordSmokeBenchmarkSnapshot({ scenario: "throttle-same" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(1);
+
+        // Second call within 2 s — should be suppressed
+        vi.advanceTimersByTime(500);
+        await recordSmokeBenchmarkSnapshot({ scenario: "throttle-same" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(1);
+
+        // Advance past the throttle window
+        vi.advanceTimersByTime(2_000);
+        await recordSmokeBenchmarkSnapshot({ scenario: "throttle-same" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("allows concurrent writes for different scenarios", async () => {
+      vi.useFakeTimers({ now: 200_000 });
+      try {
+        await initSmokeNative();
+
+        await recordSmokeBenchmarkSnapshot({ scenario: "scenario-a" });
+        await recordSmokeBenchmarkSnapshot({ scenario: "scenario-b" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

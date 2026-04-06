@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getHvscFolderListing, getHvscFolderListingPaged } from "@/lib/hvsc";
+import { getHvscFolderListing, getHvscFolderListingPaged, getHvscSongsRecursive } from "@/lib/hvsc";
 import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
 import type { SourceEntry, SourceEntryPage, SourceLocation } from "./types";
@@ -66,6 +66,19 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
   };
 
   const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
+    if (options?.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    // Fast path: synchronous bulk query from the in-memory browse index.
+    // Avoids the per-page async overhead, smoke-benchmark snapshots, and
+    // Capacitor bridge calls that made the old BFS path take minutes.
+    const bulkSongs = await getHvscSongsRecursive(path);
+    if (bulkSongs) {
+      return bulkSongs.map(songToEntry);
+    }
+
+    // Fallback: paged BFS when the browse index is not available.
     const queue = [normalizeHvscPath(path)];
     const visited = new Set<string>();
     const files: SourceEntry[] = [];

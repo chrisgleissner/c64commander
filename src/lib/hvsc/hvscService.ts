@@ -21,7 +21,12 @@ import { createHvscMediaIndex } from "./hvscMediaIndex";
 import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "./hvscBrowseIndexStore";
+import {
+  loadHvscBrowseIndexSnapshot,
+  verifyHvscBrowseIndexIntegrity,
+  buildHvscBrowseIndexFromEntries,
+  saveHvscBrowseIndexSnapshot,
+} from "./hvscBrowseIndexStore";
 import { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } from "./hvscPerformance";
 import { nextCorrelationId } from "@/lib/tracing/traceIds";
 import { recordHvscQueryTiming } from "./hvscStatusStore";
@@ -109,6 +114,38 @@ const migrateLegacyMediaIndex = async () => {
 
 export const isHvscBridgeAvailable = () => hasMockBridge() || hasRuntimeBridge();
 
+/**
+ * Rebuild the browse index snapshot from the native SQLite song index.
+ * Returns the snapshot on success, or null on failure / empty index.
+ */
+const rebuildBrowseIndexFromNative = async () => {
+  try {
+    const { HvscIngestion } = await import("@/lib/native/hvscIngestion");
+    const nativeSongs = await HvscIngestion.queryAllSongs();
+    if (nativeSongs.totalSongs === 0) return null;
+    const entries = nativeSongs.songs.map((s) => ({
+      path: s.virtualPath,
+      name: s.fileName,
+      type: "sid" as const,
+    }));
+    const snapshot = buildHvscBrowseIndexFromEntries(entries);
+    await saveHvscBrowseIndexSnapshot(snapshot);
+    addLog(
+      `Rebuilt HVSC browse index from native SQLite: ${nativeSongs.totalSongs} songs`,
+    );
+    return snapshot;
+  } catch (error) {
+    addErrorLog("Failed to rebuild HVSC browse index from native SQLite", {
+      error: {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+      },
+    });
+    return null;
+  }
+};
+
 export const getHvscStatus = async (): Promise<HvscStatus> => {
   const mock = getMockBridge();
   if (mock?.getHvscStatus) return mock.getHvscStatus();
@@ -161,6 +198,15 @@ const ensureHvscIndexReady = async () => {
     if (migrated) {
       browseSnapshot = await hvscIndex.loadBrowseSnapshot();
     }
+  }
+  // If the browse snapshot is still missing (e.g. after native ingest which
+  // clears it, or after an app update) or stale/empty (was rebuilt lazily with
+  // 0 entries from a prior cycle), try to rebuild from the native SQLite index.
+  const snapshotMissingOrEmpty =
+    !browseSnapshot ||
+    (browseSnapshot && Object.keys(browseSnapshot.songs).length === 0);
+  if (snapshotMissingOrEmpty && hasRuntimeBridge()) {
+    browseSnapshot = await rebuildBrowseIndexFromNative();
   }
   if (!browseSnapshot) return;
 
@@ -320,6 +366,18 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
     folders: page.folders,
     songs: page.songs,
   };
+};
+
+/**
+ * Fast synchronous bulk listing of all songs under a folder.
+ * Reads directly from the in-memory browse index — no async I/O,
+ * no per-page smoke snapshots. Returns null if the index is not loaded.
+ */
+export const getHvscSongsRecursive = async (
+  path: string,
+): Promise<ReturnType<typeof hvscIndex.querySongsRecursive>> => {
+  await ensureHvscIndexReady();
+  return hvscIndex.querySongsRecursive(path);
 };
 
 export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {

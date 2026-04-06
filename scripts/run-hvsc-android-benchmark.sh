@@ -15,6 +15,7 @@ MAESTRO_TAGS="${MAESTRO_TAGS:-hvsc-perf}"
 DEVICE_ID="${DEVICE_ID:-}"
 LOOPS="${LOOPS:-3}"
 WARMUP="${WARMUP:-1}"
+LANE="${LANE:-full}"
 
 usage() {
   cat <<EOF
@@ -32,6 +33,7 @@ Options:
   --maestro-tags <tags>           Maestro tag filter list (default: $MAESTRO_TAGS)
   --loops <n>                     Number of measured loops (default: $LOOPS)
   --warmup <n>                    Number of warm-up loops to discard (default: $WARMUP)
+  --lane <5k|full>                Benchmark lane: 5k (~4540 items) or full (~60K) (default: $LANE)
   -h, --help                      Show this help
 EOF
 }
@@ -161,6 +163,10 @@ while [[ $# -gt 0 ]]; do
       WARMUP="$2"
       shift 2
       ;;
+    --lane)
+      LANE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -189,7 +195,6 @@ SMOKE_DIR="$RUN_DIR/smoke"
 SUMMARY_PATH="$RUN_DIR/summary.json"
 mkdir -p "$MAESTRO_DIR" "$TELEMETRY_DIR" "$PERFETTO_DIR" "$SMOKE_DIR"
 
-PERFETTO_REMOTE_PATH="/data/local/tmp/${BENCHMARK_RUN_ID}.pftrace"
 PERFETTO_LOCAL_PATH="$PERFETTO_DIR/hvsc-baseline.pftrace"
 PERFETTO_LOG_PATH="$PERFETTO_DIR/perfetto.log"
 PERFETTO_CONFIG_PATH="$PERFETTO_DIR/perfetto-hvsc.cfg"
@@ -206,8 +211,10 @@ TELEMETRY_OUTPUT_DIR="$TELEMETRY_DIR" \
 TELEMETRY_PID=$!
 
 log "Starting Perfetto capture"
-adb -s "$DEVICE_ID" shell "rm -f '$PERFETTO_REMOTE_PATH'" >/dev/null 2>&1 || true
-adb -s "$DEVICE_ID" shell "perfetto --txt -o '$PERFETTO_REMOTE_PATH' -c -" < "$PERFETTO_CONFIG_PATH" > "$PERFETTO_LOG_PATH" 2>&1 &
+adb -s "$DEVICE_ID" shell 'perfetto --txt -o - -c -' \
+  < "$PERFETTO_CONFIG_PATH" \
+  > "$PERFETTO_LOCAL_PATH" \
+  2> "$PERFETTO_LOG_PATH" &
 PERFETTO_PID=$!
 
 TOTAL_LOOPS=$((WARMUP + LOOPS))
@@ -263,11 +270,21 @@ log "Starting multi-loop HVSC benchmark: $WARMUP warmup + $LOOPS measured loops"
 # Detect whether the tag set includes a setup phase.
 # When using hvsc-perf tags, we need to run the setup flow (hvsc-perf-setup)
 # first to download+ingest HVSC, then remaining flows in a separate pass.
+# The --lane parameter controls which setup flow variant runs:
+#   full  → hvsc-perf-setup  (baseline + full ~60K playlist)
+#   5k    → hvsc-perf-5k-setup (baseline-5k + DEMOS+GAMES ~4540 playlist)
 SETUP_TAGS=""
 REMAINING_TAGS=""
 if [[ "$MAESTRO_TAGS" == *"hvsc-perf"* ]]; then
-  SETUP_TAGS="hvsc-perf-setup"
-  REMAINING_TAGS="hvsc-perf,-hvsc-perf-setup"
+  if [[ "$LANE" == "5k" ]]; then
+    SETUP_TAGS="hvsc-perf-5k-setup"
+    REMAINING_TAGS="hvsc-perf,-hvsc-perf-setup"
+    log "Using 5K lane (DEMOS+GAMES ~4540 items)"
+  else
+    SETUP_TAGS="hvsc-perf-setup"
+    REMAINING_TAGS="hvsc-perf,-hvsc-perf-setup"
+    log "Using full lane (~60K items)"
+  fi
 fi
 
 for loop_index in $(seq 1 "$TOTAL_LOOPS"); do
@@ -338,13 +355,15 @@ log "Waiting for Perfetto capture to finish"
 wait "$PERFETTO_PID"
 unset PERFETTO_PID
 
+if [[ ! -s "$PERFETTO_LOCAL_PATH" ]]; then
+  echo "Perfetto trace capture failed: $PERFETTO_LOCAL_PATH was not written" >&2
+  exit 1
+fi
+
 log "Stopping Android telemetry capture"
 kill "$TELEMETRY_PID" >/dev/null 2>&1 || true
 wait "$TELEMETRY_PID" >/dev/null 2>&1 || true
 unset TELEMETRY_PID
-
-log "Pulling Perfetto trace"
-adb -s "$DEVICE_ID" pull "$PERFETTO_REMOTE_PATH" "$PERFETTO_LOCAL_PATH" >/dev/null
 
 log "Extracting Perfetto metrics"
 PERFETTO_METRICS_PATH="$PERFETTO_DIR/extracted-metrics.json"
@@ -389,7 +408,8 @@ node "$ROOT_DIR/scripts/hvsc/write-android-perf-summary.mjs" \
   --smoke-files="$SMOKE_FILES_ARG" \
   --telemetry-dir="$TELEMETRY_DIR" \
   --loops="$LOOPS" \
-  --warmup="$WARMUP"
+  --warmup="$WARMUP" \
+  --lane="$LANE"
 
 log "HVSC Android benchmark artifacts written to $RUN_DIR"
 log "Summary: $SUMMARY_PATH"

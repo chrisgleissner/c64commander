@@ -292,10 +292,13 @@ describe("useQueryFilteredPlaylist", () => {
 
     expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
-        scenario: "playlist-filter",
+        scenario: "playlist-filter-low",
         metadata: expect.objectContaining({
           query: "demo",
           source: "repository",
+          queryEngine: "repository",
+          playlistOwnership: "react-state",
+          feedbackKind: "result",
         }),
       }),
     );
@@ -366,10 +369,13 @@ describe("useQueryFilteredPlaylist", () => {
     );
     expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
-        scenario: "playlist-filter",
+        scenario: "playlist-filter-low",
         metadata: expect.objectContaining({
           query: "demo",
           source: "memory",
+          queryEngine: "memory",
+          playlistOwnership: "react-state",
+          feedbackKind: "result",
         }),
       }),
     );

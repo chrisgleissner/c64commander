@@ -79,6 +79,13 @@ describe("multi-loop Android benchmark aggregation", () => {
       {
         scenario: "playlist-filter-high",
         hvscPerfTimings: [{ scope: "playlist:filter", durationMs: 900 }],
+        metadata: {
+          playlistSize: 6000,
+          queryEngine: "repository",
+          playlistOwnership: "react-state",
+          feedbackKind: "result",
+          feedbackVisibleWithinMs: 900,
+        },
       },
       // Loop 2
       {
@@ -101,6 +108,13 @@ describe("multi-loop Android benchmark aggregation", () => {
       {
         scenario: "playlist-filter-high",
         hvscPerfTimings: [{ scope: "playlist:filter", durationMs: 850 }],
+        metadata: {
+          playlistSize: 6000,
+          queryEngine: "repository",
+          playlistOwnership: "react-state",
+          feedbackKind: "result",
+          feedbackVisibleWithinMs: 850,
+        },
       },
     ];
 
@@ -131,6 +145,7 @@ describe("multi-loop Android benchmark aggregation", () => {
     // T4: filter p95 from [900, 850]
     expect(summary.targetEvidence.T4.status).toBe("pass");
     expect(summary.targetEvidence.T4.actualMs).toBe(900);
+    expect(summary.feedbackEvidence.playlistFilter?.playlistSize).toBe(6000);
   });
 
   it("correctly identifies target failures when metrics exceed budgets", () => {

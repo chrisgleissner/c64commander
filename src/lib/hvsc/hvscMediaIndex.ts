@@ -13,9 +13,11 @@ import { listHvscFolder } from "./hvscFilesystem";
 import {
   buildHvscBrowseIndexFromEntries,
   listFolderFromBrowseIndex,
+  listSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   type HvscBrowseIndexSnapshot,
+  type HvscBrowseIndexedSong,
 } from "./hvscBrowseIndexStore";
 
 const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
@@ -181,6 +183,16 @@ export class HvscMediaIndexAdapter implements MediaIndex {
     const page = createFallbackFolderPage(entries, options.path, query, offset, limit);
     this.browseSnapshot = buildHvscBrowseIndexFromEntries(entries);
     return page;
+  }
+
+  /**
+   * Synchronous bulk recursive listing of all songs under a folder.
+   * Returns null when the browse snapshot is not loaded yet
+   * (caller should fall back to the paged BFS path).
+   */
+  querySongsRecursive(path: string): HvscBrowseIndexedSong[] | null {
+    if (!this.browseSnapshot) return null;
+    return listSongsRecursiveFromBrowseIndex(this.browseSnapshot, path);
   }
 }
 

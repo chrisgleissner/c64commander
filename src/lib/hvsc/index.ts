@@ -27,6 +27,7 @@ export {
   getHvscFolderListing,
   getHvscFolderListingPaged,
   getHvscSong,
+  getHvscSongsRecursive,
   getHvscStatus,
   ingestCachedHvsc,
   installOrUpdateHvsc,

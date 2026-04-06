@@ -196,6 +196,9 @@ describe("addFileSelections batching", () => {
           sourceType: "hvsc",
           selectionCount: 1,
           playableCount: 1,
+          playlistSize: 1,
+          feedbackKind: "progress",
+          feedbackVisibleWithinMs: 0,
         }),
       }),
     );

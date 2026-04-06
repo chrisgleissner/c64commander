@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { summarizeScenarioIterations, summarizeSecondaryIterations } from './webPerfSummary.mjs';
 import { loadPerfIterationArtifact } from './webPerfArtifacts.mjs';
+import { resolveWebPerfRunProfile } from './webPerfEvidence.mjs';
 
 const args = new Map(
     process.argv.slice(2).map((arg) => {
@@ -58,9 +59,37 @@ if (useRealArchives && (!baselineArchive || !updateArchive)) {
     process.exit(1);
 }
 
+const runProfile = resolveWebPerfRunProfile({ suite, useRealArchives });
+
 await rm(tmpDir, { recursive: true, force: true });
 await mkdir(tmpDir, { recursive: true });
 mkdirSync(path.dirname(outFile), { recursive: true });
+
+if (!runProfile.supported) {
+    const summary = {
+        generatedAt: new Date().toISOString(),
+        scenario: suite === 'scenarios' ? 'web-hvsc-s1-s11' : 'web-browse-playback-secondary',
+        suite,
+        loops,
+        project,
+        bytesPerSecond: Number(bytesPerSecond),
+        mode: runProfile.mode,
+        evidenceClass: runProfile.evidenceClass,
+        limitations: runProfile.limitations,
+        archives: {
+            baselineArchive,
+            updateArchive,
+        },
+        status: 'unsupported',
+        runnerExitCode: 1,
+        ...summarizeScenarioIterations([], { evidenceClass: runProfile.evidenceClass }),
+        iterations: [],
+    };
+
+    writeFileSync(outFile, JSON.stringify(summary, null, 2), 'utf8');
+    process.stdout.write(`${path.resolve(outFile)}\n`);
+    process.exit(1);
+}
 
 const iterations = [];
 let overallExitCode = 0;
@@ -97,7 +126,7 @@ for (let index = 0; index < loops; index += 1) {
 }
 
 const suiteSummary = suite === 'scenarios'
-    ? summarizeScenarioIterations(iterations)
+    ? summarizeScenarioIterations(iterations, { evidenceClass: runProfile.evidenceClass })
     : { metrics: summarizeSecondaryIterations(iterations) };
 
 const summary = {
@@ -107,13 +136,9 @@ const summary = {
     loops,
     project,
     bytesPerSecond: Number(bytesPerSecond),
-    mode: useRealArchives
-        ? suite === 'scenarios'
-            ? 'real-archive-s1-s11-web'
-            : 'real-archive-secondary-web'
-        : suite === 'scenarios'
-            ? 'fixture-s1-s11-web'
-            : 'fixture-secondary-web',
+    mode: runProfile.mode,
+    evidenceClass: runProfile.evidenceClass,
+    limitations: runProfile.limitations,
     archives: {
         baselineArchive,
         updateArchive,

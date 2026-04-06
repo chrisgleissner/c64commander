@@ -428,6 +428,43 @@ export const listFolderFromBrowseIndex = (
   };
 };
 
+/**
+ * Synchronous recursive listing of all songs under a folder path.
+ * Traverses the in-memory browse index without any I/O, async overhead,
+ * or smoke-benchmark recording — designed for bulk playlist operations.
+ *
+ * Returns null when the root folder is not present in the snapshot,
+ * signaling an incomplete or stale index (callers should fall back
+ * to the paged BFS path).
+ */
+export const listSongsRecursiveFromBrowseIndex = (
+  snapshot: HvscBrowseIndexSnapshot,
+  folderPath: string,
+): HvscBrowseIndexedSong[] | null => {
+  const normalizedRoot = normalizeFolderPath(folderPath);
+  if (!snapshot.folders[normalizedRoot]) return null;
+  const queue = [normalizedRoot];
+  const visited = new Set<string>();
+  const songs: HvscBrowseIndexedSong[] = [];
+
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const row = snapshot.folders[current];
+    if (!row) continue;
+    for (const childFolder of row.folders) {
+      queue.push(childFolder);
+    }
+    for (const songPath of row.songs) {
+      const song = snapshot.songs[songPath];
+      if (song) songs.push(song);
+    }
+  }
+
+  return songs;
+};
+
 export const verifyHvscBrowseIndexIntegrity = async (snapshot: HvscBrowseIndexSnapshot, sampleSize = 12) => {
   const paths = Object.keys(snapshot.songs);
   if (!paths.length) {

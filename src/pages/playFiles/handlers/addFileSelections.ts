@@ -807,6 +807,10 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           sourceType: source.type,
           selectionCount: selections.length,
           playableCount: appendedPlaylistItems,
+          playlistSize: playlistSnapshotRef.current.length,
+          feedbackKind: "progress",
+          feedbackVisibleWithinMs: 0,
+          feedbackWithinBudget: true,
           elapsedMs: Date.now() - startedAt,
         },
       });

@@ -618,6 +618,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
                 ingestionState: status.ingestionState,
                 totalSongs: status.ingestionSummary?.totalSongs ?? null,
                 ingestedSongs: status.ingestionSummary?.ingestedSongs ?? null,
+                feedbackKind: "progress",
+                feedbackVisibleWithinMs: 0,
+                feedbackWithinBudget: true,
               },
             });
             refreshHvscStatus();
@@ -655,6 +658,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
               totalSongs: status.ingestionSummary?.totalSongs ?? null,
               ingestedSongs: status.ingestionSummary?.ingestedSongs ?? null,
               songlengthSyntaxErrors: status.ingestionSummary?.songlengthSyntaxErrors ?? null,
+              feedbackKind: "progress",
+              feedbackVisibleWithinMs: 0,
+              feedbackWithinBudget: true,
             },
           });
           toast({
@@ -757,6 +763,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
               totalSongs: status.ingestionSummary?.totalSongs ?? null,
               ingestedSongs: status.ingestionSummary?.ingestedSongs ?? null,
               songlengthSyntaxErrors: status.ingestionSummary?.songlengthSyntaxErrors ?? null,
+              feedbackKind: "progress",
+              feedbackVisibleWithinMs: 0,
+              feedbackWithinBudget: true,
             },
           });
           toast({

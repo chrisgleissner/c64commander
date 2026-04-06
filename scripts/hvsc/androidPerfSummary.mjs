@@ -26,6 +26,22 @@ const readJsonIfExists = (filePath) => {
   return JSON.parse(readFileSync(filePath, "utf8"));
 };
 
+const summarizeNumericMetadata = (entries, key) => {
+  const samples = entries
+    .map((entry) => entry.metadata?.[key])
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  return samples.length ? summarizeMetric(samples) : null;
+};
+
+const collectStringMetadataValues = (entries, key) =>
+  Array.from(
+    new Set(
+      entries
+        .map((entry) => entry.metadata?.[key])
+        .filter((value) => typeof value === "string" && value.length > 0),
+    ),
+  ).sort();
+
 const summarizeTimingScopes = (snapshots) => {
   const scopes = new Map();
   snapshots.forEach((snapshot) => {
@@ -76,6 +92,14 @@ const summarizeSmokeSnapshots = (snapshots) => {
         if (ingestSamples.some((value) => value > 0)) {
           derivedMetrics.ingestMs = summarizeMetric(ingestSamples);
         }
+        const playlistSize = summarizeNumericMetadata(entries, "playlistSize");
+        if (playlistSize) {
+          derivedMetrics.playlistSize = playlistSize;
+        }
+        const feedbackVisibleWithinMs = summarizeNumericMetadata(entries, "feedbackVisibleWithinMs");
+        if (feedbackVisibleWithinMs) {
+          derivedMetrics.feedbackVisibleWithinMs = feedbackVisibleWithinMs;
+        }
         return [
           scenario,
           {
@@ -83,6 +107,11 @@ const summarizeSmokeSnapshots = (snapshots) => {
             scopeMetrics: summarizeTimingScopes(entries),
             derivedMetrics,
             latestMetadata: entries[entries.length - 1]?.metadata ?? null,
+            metadataValues: {
+              feedbackKinds: collectStringMetadataValues(entries, "feedbackKind"),
+              playlistOwnership: collectStringMetadataValues(entries, "playlistOwnership"),
+              queryEngines: collectStringMetadataValues(entries, "queryEngine"),
+            },
           },
         ];
       }),
@@ -161,13 +190,177 @@ const maxFiniteFromSummaries = (summaries, accessor) => {
   return values.length ? Math.max(...values) : null;
 };
 
+const getFilterScenarioSummaries = (scenarioSummaries) => {
+  const explicit = ["playlist-filter-high", "playlist-filter-zero", "playlist-filter-low"]
+    .map((key) => scenarioSummaries[key])
+    .filter(Boolean);
+  if (explicit.length) {
+    return explicit;
+  }
+  return scenarioSummaries["playlist-filter"] ? [scenarioSummaries["playlist-filter"]] : [];
+};
+
+const getSummaryMetadataNumber = (summary, key) => {
+  const value = summary?.latestMetadata?.[key];
+  return Number.isFinite(value) && value >= 0 ? value : null;
+};
+
+const getSummaryMetadataString = (summary, key) => {
+  const value = summary?.latestMetadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const buildFeedbackStageResult = ({
+  summary,
+  fallbackVisibleWithinMs = null,
+  source,
+  playlistSize = null,
+  queryEngines = [],
+  playlistOwnership = [],
+}) => {
+  if (!summary && !Number.isFinite(fallbackVisibleWithinMs)) return null;
+  const visibleWithinMs =
+    getSummaryMetadataNumber(summary, "feedbackVisibleWithinMs") ??
+    (Number.isFinite(fallbackVisibleWithinMs) && fallbackVisibleWithinMs >= 0 ? fallbackVisibleWithinMs : null);
+  const kind =
+    getSummaryMetadataString(summary, "feedbackKind") ?? (Number.isFinite(visibleWithinMs) ? "result" : null);
+  return {
+    source,
+    kind,
+    visibleWithinMs,
+    withinBudget: Number.isFinite(visibleWithinMs) ? visibleWithinMs <= 2_000 : false,
+    playlistSize,
+    queryEngines,
+    playlistOwnership,
+  };
+};
+
+const buildFeedbackEvidence = (scenarioSummaries) => {
+  const install = scenarioSummaries.install ?? null;
+  const ingest = scenarioSummaries.ingest ?? null;
+  const playlistAdd = scenarioSummaries["playlist-add"] ?? null;
+  const playback = scenarioSummaries["playback-start"] ?? null;
+  const filterSummaries = getFilterScenarioSummaries(scenarioSummaries);
+
+  const filterVisibleWithinMs = maxFiniteFromSummaries(
+    filterSummaries,
+    (summary) =>
+      summary.derivedMetrics?.feedbackVisibleWithinMs?.p95 ??
+      summary.derivedMetrics?.windowMs?.p95 ??
+      summary.scopeMetrics?.["playlist:filter"]?.p95 ??
+      null,
+  );
+  const filterPlaylistSize = maxFiniteFromSummaries(
+    filterSummaries,
+    (summary) => summary.derivedMetrics?.playlistSize?.p95 ?? null,
+  );
+  const filterQueryEngines = Array.from(
+    new Set(filterSummaries.flatMap((summary) => summary.metadataValues?.queryEngines ?? [])),
+  ).sort();
+  const filterPlaylistOwnership = Array.from(
+    new Set(filterSummaries.flatMap((summary) => summary.metadataValues?.playlistOwnership ?? [])),
+  ).sort();
+
+  const playbackVisibleWithinMs =
+    getSummaryMetadataNumber(playback, "feedbackVisibleWithinMs") ??
+    playback?.scopeMetrics?.["playback:first-audio"]?.p95 ??
+    playback?.scopeMetrics?.["playback:load-sid"]?.p95 ??
+    null;
+
+  return {
+    download: buildFeedbackStageResult({
+      summary: install,
+      source: "install.metadata.feedbackVisibleWithinMs",
+    }),
+    ingest: buildFeedbackStageResult({
+      summary: ingest ?? install,
+      source: ingest ? "ingest.metadata.feedbackVisibleWithinMs" : "install.metadata.feedbackVisibleWithinMs",
+    }),
+    addToPlaylist: buildFeedbackStageResult({
+      summary: playlistAdd,
+      source: "playlist-add.metadata.feedbackVisibleWithinMs",
+      playlistSize: getSummaryMetadataNumber(playlistAdd, "playlistSize"),
+    }),
+    playlistFilter: buildFeedbackStageResult({
+      summary: filterSummaries[0] ?? null,
+      fallbackVisibleWithinMs: filterVisibleWithinMs,
+      source:
+        filterSummaries.length > 1
+          ? "max(playlist-filter-high,playlist-filter-zero,playlist-filter-low).feedbackVisibleWithinMs"
+          : "playlist-filter.feedbackVisibleWithinMs",
+      playlistSize: filterPlaylistSize,
+      queryEngines: filterQueryEngines,
+      playlistOwnership: filterPlaylistOwnership,
+    }),
+    playbackStart: buildFeedbackStageResult({
+      summary: playback,
+      fallbackVisibleWithinMs: playbackVisibleWithinMs,
+      source: "playback-start.scopeMetrics.playback:first-audio.p95",
+      playlistSize: getSummaryMetadataNumber(playback, "playlistSize"),
+    }),
+  };
+};
+
+const buildUx1Evidence = (feedbackEvidence) => {
+  const stages = [
+    feedbackEvidence.download,
+    feedbackEvidence.ingest,
+    feedbackEvidence.addToPlaylist,
+    feedbackEvidence.playlistFilter,
+    feedbackEvidence.playbackStart,
+  ].filter(Boolean);
+  const measuredStages = stages.filter((stage) => Number.isFinite(stage.visibleWithinMs));
+  const actualMs = measuredStages.length
+    ? Math.max(...measuredStages.map((stage) => stage.visibleWithinMs))
+    : null;
+  const hasFailure = stages.some((stage) => stage.withinBudget === false);
+  const allMeasured = stages.length === 5 && measuredStages.length === 5;
+  return {
+    source: "feedbackEvidence",
+    budgetMs: 2_000,
+    actualMs,
+    measuredStageCount: measuredStages.length,
+    status: hasFailure ? "fail" : allMeasured ? "pass" : "unmeasured",
+    stageResults: feedbackEvidence,
+  };
+};
+
+const buildT6Evidence = (filterSummaries) => {
+  const actualPlaylistSize = maxFiniteFromSummaries(filterSummaries, (summary) => summary.derivedMetrics?.playlistSize?.p95 ?? null);
+  const queryEngines = Array.from(
+    new Set(filterSummaries.flatMap((summary) => summary.metadataValues?.queryEngines ?? [])),
+  ).sort();
+  const playlistOwnership = Array.from(
+    new Set(filterSummaries.flatMap((summary) => summary.metadataValues?.playlistOwnership ?? [])),
+  ).sort();
+  if (!Number.isFinite(actualPlaylistSize) || actualPlaylistSize < 100_000) {
+    return {
+      source: "max(filter.metadata.playlistSize)",
+      budgetCount: 100_000,
+      actualCount: actualPlaylistSize,
+      queryEngines,
+      playlistOwnership,
+      status: "unmeasured",
+    };
+  }
+  const repositoryBacked = queryEngines.length > 0 && queryEngines.every((value) => value === "repository");
+  const offReactState = playlistOwnership.length > 0 && playlistOwnership.every((value) => value !== "react-state");
+  return {
+    source: "max(filter.metadata.playlistSize)",
+    budgetCount: 100_000,
+    actualCount: actualPlaylistSize,
+    queryEngines,
+    playlistOwnership,
+    status: repositoryBacked && offReactState ? "pass" : "fail",
+  };
+};
+
 const buildTargetEvidence = (scenarioSummaries) => {
   const install = scenarioSummaries.install ?? null;
   const browse = scenarioSummaries["browse-query"] ?? null;
   const playback = scenarioSummaries["playback-start"] ?? null;
-  const filterHigh = scenarioSummaries["playlist-filter-high"] ?? null;
-  const filterZero = scenarioSummaries["playlist-filter-zero"] ?? null;
-  const filterLow = scenarioSummaries["playlist-filter-low"] ?? null;
+  const filterSummaries = getFilterScenarioSummaries(scenarioSummaries);
+  const feedbackEvidence = buildFeedbackEvidence(scenarioSummaries);
   const asBudgetResult = (actualMs, budgetMs, source) => ({
     source,
     budgetMs,
@@ -176,11 +369,12 @@ const buildTargetEvidence = (scenarioSummaries) => {
   });
 
   const filterP95 = maxFiniteFromSummaries(
-    [filterHigh, filterZero, filterLow].filter(Boolean),
+    filterSummaries,
     (s) => s.scopeMetrics?.["playlist:filter"]?.p95 ?? s.derivedMetrics?.windowMs?.p95 ?? null,
   );
 
   return {
+    UX1: buildUx1Evidence(feedbackEvidence),
     T1: asBudgetResult(
       install?.derivedMetrics?.downloadMs?.p95 ?? null,
       20_000,
@@ -195,11 +389,12 @@ const buildTargetEvidence = (scenarioSummaries) => {
     T4: asBudgetResult(filterP95, 2_000, "max(playlist-filter-high,zero,low).p95"),
     T5: asBudgetResult(
       playback?.scopeMetrics?.["playback:first-audio"]?.p95 ??
-        playback?.scopeMetrics?.["playback:load-sid"]?.p95 ??
-        null,
+      playback?.scopeMetrics?.["playback:load-sid"]?.p95 ??
+      null,
       1_000,
       "playback-start.scopeMetrics.playback:first-audio.p95",
     ),
+    T6: buildT6Evidence(filterSummaries),
   };
 };
 
@@ -220,6 +415,7 @@ export const summarizeAndroidBenchmarkArtifacts = ({
   return {
     smokeSnapshotCount: smokeSnapshots.length,
     scenarioSummaries,
+    feedbackEvidence: buildFeedbackEvidence(scenarioSummaries),
     targetEvidence: buildTargetEvidence(scenarioSummaries),
     telemetry: {
       metadata: readJsonIfExists(telemetryMetaPath),

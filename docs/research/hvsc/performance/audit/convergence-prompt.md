@@ -1,386 +1,309 @@
-# HVSC Performance Audit Convergence Prompt
+# HVSC Performance Remaining-Work Convergence Prompt
 
-Date: 2026-04-05
-Type: Execution convergence prompt
+Date: 2026-04-06
+Type: Strict execution prompt
 Primary input: `docs/research/hvsc/performance/audit/audit.md`
 Classification: `CODE_CHANGE`
 
 ## Mission
 
-Converge the HVSC performance program to an honest production-ready state by resolving every issue identified in `docs/research/hvsc/performance/audit/audit.md`.
+Close only the evidence-backed remaining HVSC performance work identified in the updated audit. The foundation work is already landed. The remaining gaps are honest baseline capture, target-matrix closure, measured bottleneck cycles, and CI scope alignment.
 
 This is not a research pass.
-This is not a partial scaffolding pass.
-This is not a “make progress” pass.
+This is not a rewrite of the already-closed foundation work.
+This is not a partial-progress pass.
 
-This is a convergence pass with hard sequential gating.
+## Closed Items To Preserve
 
-You are not done until:
+- `UI-SOURCE-001` is already verified.
+  - Evidence: `src/components/FileOriginIcon.tsx`, `src/components/itemSelection/ItemSelectionDialog.tsx`, `tests/unit/components/FileOriginIcon.test.tsx`, `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+- `UI-DOC-002` is already verified.
+  - Evidence: `README.md`, `docs/img/app/play/import/01-import-interstitial.png`, `docs/img/app/play/import/02-c64u-file-picker.png`, `docs/img/app/play/import/03-local-file-picker.png`, `docs/img/app/play/import/04-commoserve-search.png`, `docs/img/app/play/import/05-commoserve-results-selected.png`
+- `P0.1` through `P1.6` are landed in the live tree.
+  - Evidence: `PLANS.md`, `WORKLOG.md`, `package.json`, `playwright/hvscPerfScenarios.spec.ts`, `scripts/run-hvsc-android-benchmark.sh`, `scripts/hvsc/extract-perfetto-metrics.mjs`, `tests/benchmarks/hvscHotPaths.bench.ts`
 
-1. every audit gap is either closed with source-backed evidence or blocked by a precisely evidenced external constraint,
-2. every target `T1` through `T6` has an explicit measured status,
-3. no task in the plan remains unticked,
-4. no later task has been started before all earlier tasks are fully completed and ticked off.
+Do not reopen these tasks unless the live tree regresses and the regression is recorded with evidence in `PLANS.md` and `WORKLOG.md`.
 
-## Authoritative Inputs
+## Current Starting Evidence
 
-Read and follow, in this order:
-
-1. `.github/copilot-instructions.md`
-2. `AGENTS.md`
-3. `README.md`
-4. `docs/research/hvsc/performance/audit/audit.md`
-5. `docs/research/hvsc/performance/hvsc-performance-research-report-2026-04-05.md`
-6. `docs/research/hvsc/performance/hvsc-performance-convergence-prompt-2026-04-05.md`
-7. `PLANS.md`
-8. `WORKLOG.md`
-
-## Hard Targets
-
-All targets must be measured on the required platforms. A target is not closed by inference.
-
-| ID   | Scenario                                                       | Hard budget        | Platform            |
-| ---- | -------------------------------------------------------------- | ------------------ | ------------------- |
-| `T1` | Download full HVSC from a mock provider throttled to `5 MiB/s` | `< 20 s`           | Pixel 4, Docker web |
-| `T2` | Ingest all `60,582+` songs                                     | `< 25 s`           | Pixel 4, Docker web |
-| `T3` | Any single add-items browse traversal step                     | `< 2 s` worst case | Pixel 4             |
-| `T4` | Filter a `60K+` playlist                                       | `< 2 s` worst case | Pixel 4             |
-| `T5` | Playback start from filtered result                            | `< 1 s`            | Pixel 4             |
-| `T6` | `100K` playlist items without full in-memory hydration         | pass/fail          | Pixel 4, Docker web |
+- Web quick fixture summary: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+- Android raw run directories: `ci-artifacts/hvsc-performance/android/**`
+- Latest committed Android measurement failure log: `ci-artifacts/hvsc-performance/android/v13-benchmark.log`
 
 ## Non-Negotiable Execution Rules
 
-### 1. Sequential-only convergence
-
-Tasks must be completed in order.
-
-- Do not skip tasks.
-- Do not partially complete a task and move on.
-- Do not start a later task because it seems easier.
-- Do not defer validation of a task to a later phase.
-
-If a task is blocked:
-
-- stop,
-- record the blocker in `PLANS.md` and `WORKLOG.md`,
-- explain exactly what is missing,
-- do not start the next task until the blocker is resolved or formally accepted as external.
-
-### 2. Checkbox discipline
-
-This file is the execution ledger.
-
-- Every task below starts unchecked.
-- A task may be changed to `[x]` only when its completion gate is fully satisfied.
-- Every checked task must cite concrete evidence paths in `PLANS.md` and `WORKLOG.md`.
-- Never pre-check or “effectively done” a task.
-
-### 3. No optimistic status claims
-
-Do not claim any of the following unless actual evidence exists in the repo:
-
-- target passes
-- benchmark lane exists
-- Android proof exists
-- nightly perf coverage exists
-- CI regression protection exists
-- architectural bottleneck is resolved
-
-### 4. One optimization cycle at a time
-
-After the benchmark foundation is complete:
-
-- identify one dominant bottleneck,
-- implement one coherent optimization cycle,
-- remeasure,
-- keep or discard,
-- then move to the next cycle.
-
-Do not batch multiple major bottleneck fixes before remeasurement.
-
-### 5. Mandatory tracking files
-
-Keep these files current throughout execution:
-
-- `PLANS.md`
-- `WORKLOG.md`
-
-`PLANS.md` must reflect:
-
-- current target status
-- current dominant bottleneck
-- current phase/task
-- remaining gaps
-- benchmark infrastructure state
-
-`WORKLOG.md` must record:
-
-- every command of consequence
-- every measurement run
-- every artifact path
-- every keep/discard decision
-- every blocker
-
-## Required Deliverables
-
-By the end of the full convergence pass, the repo must contain:
-
-1. complete benchmark scenario coverage for the required matrix,
-2. measured target status for `T1` through `T6`,
-3. Android and web artifact sets in a stable directory layout,
-4. CI quick and nightly perf coverage aligned to the honest implemented scope,
-5. closed or explicitly blocked audit issues,
-6. enough optimization work to either meet the targets or prove why a given target remains blocked.
-
-## Completion Ledger
-
-Do not reorder these tasks.
-
-### Phase 0: Baseline Governance And Reconciliation
-
-- [x] `P0.1` Reconcile the current tree with the audit and top-level trackers.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 09:00`.
-  - Required work:
-    - compare `docs/research/hvsc/performance/audit/audit.md`, `PLANS.md`, and `WORKLOG.md`
-    - record any implemented-but-undocumented HVSC perf assets
-    - explicitly call out dirty-worktree files that affect HVSC perf work
-  - Completion gate:
-    - `PLANS.md` and `WORKLOG.md` both reflect the current known HVSC perf asset set
-    - no known HVSC perf asset remains invisible in the top-level trackers
-
-- [x] `P0.2` Normalize the artifact directory strategy.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 09:15`.
-  - Required work:
-    - choose and implement one canonical perf artifact layout
-    - reconcile existing `ci-artifacts/hvsc-performance/**` outputs with the canonical scheme
-    - ensure Android, web, traces, summaries, and comparisons have stable homes
-  - Completion gate:
-    - artifact directories are consistent in scripts and workflows
-    - `PLANS.md` documents the actual artifact layout in use
-
-### Phase 1: Benchmark Foundation Closure
-
-- [x] `P1.1` Close benchmark matrix gap `S1` through `S11`.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 09:30`.
-  - Required work:
-    - define deterministic implementations for all required scenarios
-    - cover Pixel 4, Docker web, and the agreed emulator subset honestly
-    - encode preconditions, warm-up, run counts, outputs, and failure signatures
-  - Completion gate:
-    - every scenario from `S1` through `S11` has an executable implementation or an explicitly documented platform-specific inapplicability
-    - `PLANS.md` contains a scenario coverage matrix
-
-- [x] `P1.2` Make the web perf harness benchmark real download and ingest.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 22:15`.
-  - Required work:
-    - remove the current false equivalence where “ready HVSC mock” is treated as download/ingest proof
-    - add real web scenarios for:
-      - download
-      - ingest
-      - browse traversal
-      - filter
-      - playback start
-    - preserve the existing narrow secondary lane only if it remains clearly labeled as narrow
-  - Completion gate:
-    - `T1` and `T2` are actually measured on Docker web
-    - the web benchmark suite no longer claims download/ingest coverage without exercising those paths
-
-- [x] `P1.3` Close Android benchmark harness gap.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-05 23:30`.
-  - Required work:
-    - turn the existing Android runner into a true measurement pipeline
-    - compute scenario metrics from pulled smoke artifacts
-    - generate p50/p95 summaries
-    - connect metrics to target IDs
-  - Completion gate:
-    - Android benchmark runs produce structured numeric summaries, not just artifact lists
-    - the summaries are sufficient to evaluate `T1` through `T5`
-
-- [x] `P1.4` Close instrumentation coverage gap.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-06 00:00`.
-  - Required work:
-    - add the missing app-level timing scopes needed by the report and audit
-    - at minimum include:
-      - `browse:render`
-      - `playlist:add-batch`
-      - `playlist:filter`
-      - `playlist:repo-sync`
-      - `playback:first-audio`
-    - ensure export surfaces include the new timings
-  - Completion gate:
-    - all missing timing scopes from the audit are implemented and test-covered
-    - exported benchmark artifacts include the new timing families
-
-- [x] `P1.5` Close Perfetto pipeline gap.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-06 00:15`.
-  - Required work:
-    - upgrade trace config to capture decision-grade Android data
-    - add any required native trace sections
-    - implement trace post-processing
-    - extract at least CPU, memory, and jank-relevant metrics where applicable
-  - Completion gate:
-    - Perfetto traces are not just captured; they are processed into structured metrics
-    - `PLANS.md` and `WORKLOG.md` cite the extraction pipeline and output locations
-
-- [x] `P1.6` Close microbenchmark gap.
-  - Evidence: `PLANS.md` -> `Audit Reconciliation Snapshot`; `WORKLOG.md` entry `2026-04-06 00:20`.
-  - Required work:
-    - add `test:bench`
-    - add benchmark files for the critical query/index/storage hot paths
-    - define CI-safe thresholds
-  - Completion gate:
-    - `package.json` contains `test:bench`
-    - benchmark files exist
-    - CI invokes them
-
-### Phase 2: Honest Baseline Capture
-
-- [ ] `P2.1` Capture the first honest full baseline.
-  - Required work:
-    - run the complete required benchmark set on Docker web
-    - run the complete required benchmark set on Pixel 4 with real U64
-    - record the measured status of each target `T1` through `T6`
-  - Completion gate:
-    - every target has an explicit measured status
-    - no target remains “unmeasured”
-    - baseline artifacts exist and are linked from `WORKLOG.md`
-
-- [ ] `P2.2` Build the first pass/fail matrix.
-  - Required work:
-    - summarize current results by target
-    - identify the dominant failing bottleneck with evidence
-  - Completion gate:
-    - `PLANS.md` has a current pass/fail table for `T1` through `T6`
-    - one dominant bottleneck is selected for the first optimization cycle
-
-### Phase 3: Bottleneck Convergence Cycles
-
-Run these subtasks as repeated cycles. Each cycle must be fully completed before the next cycle begins.
-
-- [ ] `P3.1` Execute Cycle 1 against the single dominant bottleneck.
-  - Required work:
-    - choose one bottleneck from the measured baseline
-    - make the smallest coherent optimization
-    - add regression coverage
-    - rerun the affected benchmarks
-    - compare before/after
-    - keep or discard with data
-  - Completion gate:
-    - `WORKLOG.md` records before/after values
-    - the cycle is either kept or discarded explicitly
-    - `PLANS.md` updates the target matrix and next dominant bottleneck
-
-- [ ] `P3.2` Repeat optimization cycles until every target is either passing or formally blocked.
-  - Required work:
-    - continue single-bottleneck cycles
-    - remeasure after every kept or discarded change
-    - update CI regression coverage for every real win worth protecting
-  - Completion gate:
-    - no target remains in an ambiguous state
-    - all surviving optimizations have measured justification
-
-### Phase 4: CI Convergence
-
-- [ ] `P4.1` Close quick-CI gap.
-  - Required work:
-    - ensure the per-build perf lane matches the actually implemented benchmark scope
-    - include microbenchmarks
-    - include quick wall-clock perf checks
-    - fail honestly on real regressions
-  - Completion gate:
-    - CI quick perf jobs reflect the real implemented benchmark set
-    - no placeholder lane is being presented as broader than it is
-
-- [ ] `P4.2` Close nightly-CI gap.
-  - Required work:
-    - ensure nightly runs the honest deeper perf suite
-    - retain artifacts
-    - distinguish hard fail from trend-only reporting where appropriate
-  - Completion gate:
-    - nightly perf coverage exists and matches the actual deep suite
-    - artifact retention and result interpretation are documented
-
-### Phase 5: Final Audit Closure
-
-- [ ] `P5.1` Re-audit against `docs/research/hvsc/performance/audit/audit.md`.
-  - Required work:
-    - revisit every audit gap
-    - mark each as closed or externally blocked
-    - produce a final closure summary
-  - Completion gate:
-    - every audit gap has an explicit final status
-    - no audit issue is left implied or unstated
-
-- [ ] `P5.2` Produce final convergence record.
-  - Required work:
-    - summarize final target status
-    - summarize closed gaps
-    - summarize remaining external blockers, if any
-  - Completion gate:
-    - `PLANS.md` and `WORKLOG.md` are complete
-    - final repo state is honest and internally consistent
-
-## Task Dependency Graph
-
-This dependency graph is mandatory:
-
-- `P0.1` before all other tasks
-- `P0.2` before any benchmark or CI work
-- `P1.1` before `P1.2`, `P1.3`, `P2.1`
-- `P1.2`, `P1.3`, `P1.4`, `P1.5`, `P1.6` before `P2.1`
-- `P2.1` before `P2.2`
-- `P2.2` before `P3.1`
-- `P3.1` before `P3.2`
-- `P3.2` before `P4.1`
-- `P4.1` before `P4.2`
-- `P4.2` before `P5.1`
-- `P5.1` before `P5.2`
-
-No exceptions.
-
-## Required Evidence Per Task
-
-Every task must leave all of the following behind:
-
-1. source changes where applicable,
-2. tests where applicable,
-3. executed command log entries in `WORKLOG.md`,
-4. updated status in `PLANS.md`,
-5. artifact paths where measurements were captured,
-6. a clear statement of whether the task closed a specific audit gap.
-
-If any of the above is missing, the task is not complete and must not be ticked off.
+1. `PLANS.md` is the source of truth for current target status, current bottleneck, and current task.
+2. `WORKLOG.md` gets a timestamped entry after every meaningful action, validation run, measurement run, keep/discard decision, or blocker.
+3. Do not create `audit2/`, new artifact roots, or parallel prompt trees.
+4. Do not reopen `UI-SOURCE-001`, `UI-DOC-002`, or P0/P1 foundation work unless the live tree disproves the current evidence.
+5. Do not claim `T1` or `T2` from fixture-mode web summaries where `mode` is `fixture-s1-s11-web` or `archives.baselineArchive` is null.
+6. Do not claim Android closure from raw smoke JSON files unless the matching run directory also contains `summary.json`.
+7. If a task changes code, run the smallest honest code validation for the touched layer, including `npm run test:coverage` with branch coverage `>= 91%`.
+8. If a task does not change code, do not run builds, coverage, or screenshots for ceremony.
+9. Regenerate screenshots only if a visible UI change makes an existing documented image inaccurate.
+10. Stop and record a blocker instead of continuing on inference.
 
 ## Blocking Rules
 
-If any of these occur, stop and resolve before moving on:
+- If the real HVSC archive or update cache needed for a full web baseline is unavailable, stop, record the missing path, and do not mark the web baseline task done.
+- If no adb-attached Pixel 4 or reachable real C64U host (`u64` first, then `c64u`) is available, stop, record the blocker, and do not mark Android baseline or target-closure tasks done.
+- If Perfetto capture or `trace_processor_shell` extraction degrades, record the degraded status and keep the Android baseline task open unless the blocker is explicitly accepted as external.
+- If Maestro measurement flows fail, fix the flow or runtime cause, or record a blocker with logs before moving on.
 
-- benchmark scenario cannot be reproduced deterministically
-- target data is missing or inconsistent
-- Android device or U64 host is unreachable and the task depends on them
-- traces are captured but not parsable
-- timing instrumentation is present but not exported
-- a CI lane claims coverage broader than what it actually runs
-- a “passing” target has only indirect or surrogate evidence
+## Open Execution Ledger
 
-## Quality Bar
+### [ ] `BASELINE-WEB-001` Capture the first honest full-size Docker web baseline
 
-A task is complete only when another engineer can inspect the repo and answer all of these with “yes”:
+Dependencies: none
 
-1. Is the task visibly implemented in code or docs?
-2. Is the task reflected in `PLANS.md`?
-3. Is the task reflected in `WORKLOG.md`?
-4. Is the task backed by tests or artifacts where required?
-5. Is the task status honest rather than optimistic?
-6. Was every prerequisite task already completed first?
+Implementation steps:
 
-If any answer is “no”, the task remains open.
+1. Run the full S1-S11 web suite against real archives, not fixture mode.
+2. Use the existing harness and artifact location already wired in the repo.
+3. Persist the measured summary to the existing nightly artifact path.
+4. Copy exact T1-T5 web values into `PLANS.md` and `WORKLOG.md`.
 
-## Final Stop Condition
+Required tests or measurement runs:
 
-You may terminate only when one of these is true:
+1. `npm run test:perf:nightly`
+2. `npm run test:perf:assert:web`
 
-1. all tasks `P0.1` through `P5.2` are checked `[x]`, all targets `T1` through `T6` have final measured status, and all audit issues are closed, or
-2. execution is blocked by a verified external constraint and the exact blocker is recorded in `PLANS.md`, `WORKLOG.md`, and the final closure record, with all prior tasks completed and ticked.
+Required artifact paths:
 
-Anything else is incomplete.
+- `ci-artifacts/hvsc-performance/web/web-full-nightly.json`
+- `ci-artifacts/hvsc-performance/web/web-secondary-nightly.json` if the secondary suite is run alongside it
+
+Measurable success criteria:
+
+- `web-full-nightly.json` exists
+- `scenarioCoverage` includes `S1` through `S11`
+- the run is not fixture-only: `archives.baselineArchive` is set or the worklog records the real archive path used
+- T1 through T5 have explicit web-side measured values in `PLANS.md`
+
+Explicit failure conditions:
+
+- the output is still fixture mode
+- the summary file is missing
+- one or more scenarios are absent
+- the worklog records a failing run but no blocker
+
+Proof required before changing `[ ]` to `[x]`:
+
+- `WORKLOG.md` entry with command, archive path, run id, and extracted T1-T5 web values
+- `PLANS.md` target table updated with the new web evidence path
+
+### [ ] `BASELINE-ANDROID-002` Capture a successful Pixel 4 baseline with normalized summary and Perfetto outputs
+
+Dependencies: `BASELINE-WEB-001`
+
+Implementation steps:
+
+1. Run the existing Android benchmark runner on the preferred adb device (`9B0*` first) against a reachable real C64U host.
+2. Keep the current artifact layout under `ci-artifacts/hvsc-performance/android/<run-id>/`.
+3. If Maestro measurement flows fail, fix the flow or runtime cause before retrying.
+4. Do not mark the task complete until the runner writes the normalized summary and extracted Perfetto metrics.
+
+Required tests or measurement runs:
+
+1. `scripts/run-hvsc-android-benchmark.sh --loops=<n> --warmup=<n>`
+2. Any targeted regression tests needed for touched Maestro flows, runner scripts, or Android summary scripts
+3. If code changes, `npm run test:coverage`, `npm run lint`, and `npm run build`
+
+Required artifact paths:
+
+- `ci-artifacts/hvsc-performance/android/<run-id>/summary.json`
+- `ci-artifacts/hvsc-performance/android/<run-id>/smoke/`
+- `ci-artifacts/hvsc-performance/android/<run-id>/telemetry/`
+- `ci-artifacts/hvsc-performance/android/<run-id>/maestro/`
+- `ci-artifacts/hvsc-performance/android/<run-id>/perfetto/hvsc-baseline.pftrace`
+- `ci-artifacts/hvsc-performance/android/<run-id>/perfetto/extracted-metrics.json`
+
+Measurable success criteria:
+
+- the measurement flows complete without unresolved Maestro failures
+- `summary.json` exists and includes `targetEvidence`
+- `perfettoExtraction` is present in `summary.json`
+- the run id and target values are recorded in `PLANS.md`
+
+Explicit failure conditions:
+
+- `summary.json` is missing
+- the run directory has no Perfetto trace or extracted metrics file
+- Maestro failures are logged but not fixed or blocked
+- Android target values are inferred from raw smoke files without a summary
+
+Proof required before changing `[ ]` to `[x]`:
+
+- `WORKLOG.md` entry with the exact run id, device id, chosen C64U host, pass/fail flow list, and target values
+- `PLANS.md` target table updated with the Android evidence path
+
+### [ ] `TARGET-MATRIX-003` Build the first honest pass/fail matrix and select the dominant bottleneck
+
+Dependencies: `BASELINE-WEB-001`, `BASELINE-ANDROID-002`
+
+Implementation steps:
+
+1. Update `PLANS.md` so every target `T1` through `T6` has one of `PASS`, `FAIL`, `PARTIAL`, or `BLOCKED`.
+2. Cite the exact web and Android artifact paths for each target.
+3. Select one dominant bottleneck based on the measured evidence only.
+4. Record the reasoning in both `PLANS.md` and `WORKLOG.md`.
+
+Required tests or measurement runs:
+
+1. No new build or test run unless tracker updates reveal missing evidence.
+2. Re-run a measurement only if a target would otherwise be based on inference.
+
+Required artifact paths:
+
+- `ci-artifacts/hvsc-performance/web/web-full-nightly.json`
+- `ci-artifacts/hvsc-performance/android/<run-id>/summary.json`
+- any secondary or supporting artifact explicitly cited in the matrix
+
+Measurable success criteria:
+
+- no target remains `unmeasured`
+- each target cites a real artifact path
+- one dominant bottleneck is named with measured evidence
+
+Explicit failure conditions:
+
+- a target is inferred from fixture-mode web results
+- a target is inferred from Android raw smoke files without a summary
+- more than one bottleneck is selected
+
+Proof required before changing `[ ]` to `[x]`:
+
+- `PLANS.md` target matrix shows explicit statuses and evidence paths for `T1` through `T6`
+- `WORKLOG.md` records the chosen bottleneck and why it dominates
+
+### [ ] `OPTIMIZE-004` Execute one measured bottleneck cycle
+
+Dependencies: `TARGET-MATRIX-003`
+
+Implementation steps:
+
+1. Choose the single dominant bottleneck from `TARGET-MATRIX-003`.
+2. Make the smallest coherent code change that addresses it.
+3. Add a regression or contract test that fails before and passes after.
+4. Re-run only the affected web and Android measurements.
+5. Keep or discard the change using before/after data.
+
+Required tests or measurement runs:
+
+1. Targeted unit or integration tests for the changed surface
+2. `npm run test:coverage`
+3. `npm run lint`
+4. `npm run build`
+5. Only the perf runs needed to measure the affected target(s)
+
+Required artifact paths:
+
+- a new web summary under `ci-artifacts/hvsc-performance/web/`
+- a new Android run directory under `ci-artifacts/hvsc-performance/android/` if the bottleneck affects Android
+- updated `PLANS.md` and `WORKLOG.md` entries with before/after values
+
+Measurable success criteria:
+
+- exactly one bottleneck cycle is executed
+- before/after values are recorded for the affected target metrics
+- the change is explicitly kept or discarded
+
+Explicit failure conditions:
+
+- more than one independent bottleneck is changed
+- no regression test is added for a kept code change
+- there is no before/after measurement data
+
+Proof required before changing `[ ]` to `[x]`:
+
+- `WORKLOG.md` records the keep/discard decision with measured deltas
+- `PLANS.md` updates the current target status and next dominant bottleneck
+
+### [ ] `CI-SCOPE-005` Align quick and nightly CI with the honest implemented scope
+
+Dependencies: `OPTIMIZE-004`
+
+Implementation steps:
+
+1. Decide whether Android perf remains manual or becomes a CI lane.
+2. Update workflow files, scripts, and documentation so quick and nightly jobs claim only the scope they really execute.
+3. Preserve the existing `ci-artifacts/hvsc-performance/**` artifact layout.
+
+Required tests or measurement runs:
+
+1. Targeted workflow or contract tests for any changed CI scripts
+2. If code changes, the normal code-change validation for the touched files
+
+Required artifact paths:
+
+- `.github/workflows/android.yaml`
+- `.github/workflows/perf-nightly.yaml`
+- any supporting script or contract-test file changed to enforce the new scope
+
+Measurable success criteria:
+
+- quick and nightly CI descriptions match the implemented lanes
+- no workflow or prompt text claims broader coverage than the code provides
+- artifact upload paths stay consistent
+
+Explicit failure conditions:
+
+- web-only CI is described as multi-platform closure
+- Android CI claims are added without runnable evidence
+- artifact roots are renamed or split without updating all call sites
+
+Proof required before changing `[ ]` to `[x]`:
+
+- `WORKLOG.md` entry describing the chosen CI scope and why
+- `PLANS.md` CI status section updated to match the workflows
+
+### [ ] `CLOSE-006` Produce the final convergence record
+
+Dependencies: `CI-SCOPE-005`
+
+Implementation steps:
+
+1. Re-audit the live tree against `docs/research/hvsc/performance/audit/audit.md`.
+2. Update the audit and this prompt only if the live tree changed during execution.
+3. Record the final state of each audit gap and each target in `PLANS.md` and `WORKLOG.md`.
+
+Required tests or measurement runs:
+
+1. No new builds or tests unless the final re-audit reveals uncited or stale evidence.
+2. Re-run only the minimum measurement needed to resolve any last ambiguous target.
+
+Required artifact paths:
+
+- `docs/research/hvsc/performance/audit/audit.md`
+- `docs/research/hvsc/performance/audit/convergence-prompt.md`
+- final web and Android perf artifact paths cited in the closure record
+
+Measurable success criteria:
+
+- every audit gap is `DONE` or `BLOCKED`
+- every target `T1` through `T6` has an explicit final status
+- `PLANS.md`, `WORKLOG.md`, the audit, and this prompt all agree
+
+Explicit failure conditions:
+
+- a target remains ambiguous
+- the audit and prompt disagree
+- the closure record cites non-existent evidence
+
+Proof required before changing `[ ]` to `[x]`:
+
+- final `PLANS.md` target matrix and gap-status table
+- final `WORKLOG.md` closure entry with the exact artifact paths
+
+## Dependency Graph
+
+- `BASELINE-WEB-001` before `BASELINE-ANDROID-002`
+- `BASELINE-ANDROID-002` before `TARGET-MATRIX-003`
+- `TARGET-MATRIX-003` before `OPTIMIZE-004`
+- `OPTIMIZE-004` before `CI-SCOPE-005`
+- `CI-SCOPE-005` before `CLOSE-006`
+
+## Termination Conditions
+
+- Stop only when every remaining task above is checked with proof, or when an external blocker is fully evidenced in `PLANS.md` and `WORKLOG.md`.
+- If a blocker is recorded, stop at that task. Do not skip ahead and do not mark later tasks complete.
