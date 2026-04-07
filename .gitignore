@@ -15,6 +15,7 @@ node_modules/
 .cache/hvsc/
 android/app/src/test/fixtures/HVSC_Update_84.7z
 .tools
+ource /home/chris/dev/c64/c64commander/.venv/bin/activate
 
 # Build output
 .gradle/
@@ -41,6 +42,7 @@ test-results/
 .cov-current/
 .cov-native-fresh/
 .cov-new/
+.cov-node/
 .cov-unit/
 .cov-unit-single/
 
