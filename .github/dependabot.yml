@@ -18,6 +18,13 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     open-pull-requests-limit: 1
     ignore:
       - dependency-name: "*"
@@ -29,6 +36,13 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     open-pull-requests-limit: 1
     ignore:
       - dependency-name: actions/setup-python
@@ -44,6 +58,13 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     open-pull-requests-limit: 1
     ignore:
       - dependency-name: "*"

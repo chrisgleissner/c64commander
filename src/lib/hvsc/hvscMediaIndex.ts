@@ -102,7 +102,7 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   constructor(
     private readonly index: MediaIndex,
     private readonly listFolder: (path: string) => Promise<HvscFolderListing>,
-  ) { }
+  ) {}
 
   async load(): Promise<void> {
     await this.index.load();

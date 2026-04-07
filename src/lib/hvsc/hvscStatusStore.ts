@@ -193,10 +193,10 @@ export const applyHvscProgressEventToSummary = (
       download:
         summary.download.status === "in-progress"
           ? {
-            ...summary.download,
-            status: "success",
-            finishedAt: summary.download.finishedAt ?? now,
-          }
+              ...summary.download,
+              status: "success",
+              finishedAt: summary.download.finishedAt ?? now,
+            }
           : summary.download,
       extraction: {
         ...summary.extraction,
@@ -219,9 +219,9 @@ export const applyHvscProgressEventToSummary = (
     const stateToken =
       event.statusToken ??
       (typeof event.processedCount === "number" &&
-        typeof event.totalCount === "number" &&
-        event.totalCount > 0 &&
-        event.processedCount >= event.totalCount
+      typeof event.totalCount === "number" &&
+      event.totalCount > 0 &&
+      event.processedCount >= event.totalCount
         ? "done"
         : "running");
     const percent =

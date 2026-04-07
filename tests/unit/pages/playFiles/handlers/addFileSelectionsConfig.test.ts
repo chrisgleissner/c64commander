@@ -38,21 +38,21 @@ const { discoverConfigCandidates, resolvePlaybackConfig } = vi.hoisted(() => ({
           ref:
             input.sourceType === "local"
               ? {
-                kind: "local" as const,
-                fileName: entry.name,
-                path: entry.path,
-                sourceId: input.sourceId ?? null,
-                uri: input.localEntriesBySourceId?.get(input.sourceId ?? "")?.get(entry.path)?.uri ?? null,
-                modifiedAt: entry.modifiedAt ?? null,
-                sizeBytes: entry.sizeBytes ?? null,
-              }
+                  kind: "local" as const,
+                  fileName: entry.name,
+                  path: entry.path,
+                  sourceId: input.sourceId ?? null,
+                  uri: input.localEntriesBySourceId?.get(input.sourceId ?? "")?.get(entry.path)?.uri ?? null,
+                  modifiedAt: entry.modifiedAt ?? null,
+                  sizeBytes: entry.sizeBytes ?? null,
+                }
               : {
-                kind: "ultimate" as const,
-                fileName: entry.name,
-                path: entry.path,
-                modifiedAt: entry.modifiedAt ?? null,
-                sizeBytes: entry.sizeBytes ?? null,
-              },
+                  kind: "ultimate" as const,
+                  fileName: entry.name,
+                  path: entry.path,
+                  modifiedAt: entry.modifiedAt ?? null,
+                  sizeBytes: entry.sizeBytes ?? null,
+                },
           strategy: entry.name.replace(/\.[^.]+$/, "").toLowerCase() === baseName ? "exact-name" : "directory",
           distance: 0,
           confidence: entry.name.replace(/\.[^.]+$/, "").toLowerCase() === baseName ? "high" : "medium",
