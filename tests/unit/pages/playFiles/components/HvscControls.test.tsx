@@ -16,6 +16,7 @@ const buildProps = (overrides: Partial<HvscControlsProps> = {}): HvscControlsPro
   hvscInstalledVersion: null,
   hvscAvailable: true,
   hvscUpdating: false,
+  hvscInProgress: false,
   hvscCanIngest: false,
   hvscPreparationState: "NOT_PRESENT",
   hvscPreparationStatusLabel: "Not installed",
@@ -31,18 +32,44 @@ const buildProps = (overrides: Partial<HvscControlsProps> = {}): HvscControlsPro
   hvscSonglengthSyntaxErrors: 0,
   formatHvscDuration: () => "0:00",
   formatHvscTimestamp: () => "never",
+  onInstall: vi.fn(),
+  onIngest: vi.fn(),
+  onCancel: vi.fn(),
   onReindex: vi.fn(),
   onReset: vi.fn(),
   ...overrides,
 });
 
 describe("HvscControls", () => {
-  it("exposes stable ids for the summary and advanced actions", () => {
+  it("exposes stable ids for the primary and advanced actions", () => {
     render(<HvscControls {...buildProps({ hvscCanIngest: true })} />);
 
     expect(screen.getByTestId("hvsc-controls").getAttribute("id")).toBe("hvsc-controls");
+    expect(screen.getByRole("button", { name: "Download HVSC" }).getAttribute("id")).toBe("hvsc-download");
+    expect(screen.getByRole("button", { name: "Ingest HVSC" }).getAttribute("id")).toBe("hvsc-ingest");
     expect(screen.getByRole("button", { name: "Reindex HVSC" }).getAttribute("id")).toBe("hvsc-reindex");
     expect(screen.getByRole("button", { name: "Reset HVSC" }).getAttribute("id")).toBe("hvsc-reset");
+  });
+
+  it("restores the explicit download and ingest controls", () => {
+    const onInstall = vi.fn();
+    const onIngest = vi.fn();
+
+    render(
+      <HvscControls
+        {...buildProps({
+          hvscCanIngest: true,
+          onInstall,
+          onIngest,
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Download HVSC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingest HVSC" }));
+
+    expect(onInstall).toHaveBeenCalledTimes(1);
+    expect(onIngest).toHaveBeenCalledTimes(1);
   });
 
   it("renders the ready summary and Add items browse guidance", () => {
@@ -94,6 +121,9 @@ describe("HvscControls", () => {
     expect(screen.getByText("HVSC summary")).toBeTruthy();
     expect(screen.getByText("67%")).toBeTruthy();
     expect(screen.getByTestId("hvsc-download-bytes")).toHaveTextContent("42 items/s");
+    expect(screen.getByRole("button", { name: "Download HVSC" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ingest HVSC" })).toBeDisabled();
+    expect(screen.getByTestId("hvsc-stop")).toBeVisible();
     expect(screen.getByRole("button", { name: "Reindex HVSC" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reset HVSC" })).toBeDisabled();
   });
@@ -117,6 +147,9 @@ describe("HvscControls", () => {
   });
 
   it("renders error details and dispatches advanced actions", () => {
+    const onInstall = vi.fn();
+    const onIngest = vi.fn();
+    const onCancel = vi.fn();
     const onReindex = vi.fn();
     const onReset = vi.fn();
 
@@ -127,6 +160,9 @@ describe("HvscControls", () => {
           hvscPreparationState: "ERROR",
           hvscPreparationStatusLabel: "Indexing failed",
           hvscPreparationErrorReason: "metadata parse failed",
+          onInstall,
+          onIngest,
+          onCancel,
           onReindex,
           onReset,
         })}
@@ -136,9 +172,14 @@ describe("HvscControls", () => {
     expect(screen.getByText("HVSC preparation failed")).toBeTruthy();
     expect(screen.getByText("metadata parse failed")).toBeTruthy();
 
+    fireEvent.click(screen.getByRole("button", { name: "Download HVSC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingest HVSC" }));
     fireEvent.click(screen.getByRole("button", { name: "Reindex HVSC" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset HVSC" }));
 
+    expect(onInstall).toHaveBeenCalledTimes(1);
+    expect(onIngest).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledTimes(0);
     expect(onReindex).toHaveBeenCalledTimes(1);
     expect(onReset).toHaveBeenCalledTimes(1);
   });

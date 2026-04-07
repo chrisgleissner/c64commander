@@ -18,9 +18,11 @@ describe("FileOriginIcon", () => {
     expect(icon.tagName).toBe("SPAN");
     expect(icon).toHaveAttribute("aria-label", "C64U file");
     expect(icon).toHaveAttribute("role", "img");
+    expect(icon).toHaveAttribute("class", expect.stringContaining("dark:invert"));
     expect(image).not.toBeNull();
     expect(image).toHaveAttribute("alt", "");
     expect(image).toHaveAttribute("aria-hidden", "true");
+    expect(image).toHaveAttribute("class", expect.not.stringContaining("dark:invert"));
   });
 
   it("renders the local icon as image", () => {

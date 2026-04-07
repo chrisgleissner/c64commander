@@ -15,6 +15,7 @@ export type HvscControlsProps = {
   hvscInstalledVersion?: number | string | null;
   hvscAvailable: boolean;
   hvscUpdating: boolean;
+  hvscInProgress: boolean;
   hvscCanIngest: boolean;
   hvscPreparationState: HvscPreparationState;
   hvscPreparationStatusLabel: string;
@@ -30,6 +31,9 @@ export type HvscControlsProps = {
   hvscSonglengthSyntaxErrors: number;
   formatHvscDuration: (durationMs?: number | null) => string;
   formatHvscTimestamp: (value?: string | null) => string;
+  onInstall: () => void;
+  onIngest: () => void;
+  onCancel: () => void;
   onReindex: () => void;
   onReset: () => void;
 };
@@ -38,6 +42,7 @@ export const HvscControls = ({
   hvscInstalledVersion,
   hvscAvailable,
   hvscUpdating,
+  hvscInProgress,
   hvscCanIngest,
   hvscPreparationState,
   hvscPreparationStatusLabel,
@@ -53,6 +58,9 @@ export const HvscControls = ({
   hvscSonglengthSyntaxErrors,
   formatHvscDuration,
   formatHvscTimestamp,
+  onInstall,
+  onIngest,
+  onCancel,
   onReindex,
   onReset,
 }: HvscControlsProps) => {
@@ -61,6 +69,8 @@ export const HvscControls = ({
   const isError = hvscPreparationState === "ERROR";
   const isPreparing = hvscPreparationState === "DOWNLOADING" || hvscPreparationState === "INGESTING";
   const isDownloaded = hvscPreparationState === "DOWNLOADED";
+  const canDownload = hvscAvailable && !hvscUpdating;
+  const canIngest = hvscAvailable && hvscCanIngest && !hvscUpdating;
 
   return (
     <div
@@ -77,6 +87,20 @@ export const HvscControls = ({
               : "HVSC will be prepared automatically the first time you choose Add items -> HVSC."}
           </p>
           <p className="text-[11px] text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <Button id="hvsc-download" variant="default" size="sm" onClick={onInstall} disabled={!canDownload}>
+            Download HVSC
+          </Button>
+          <Button id="hvsc-ingest" variant="outline" size="sm" onClick={onIngest} disabled={!canIngest}>
+            Ingest HVSC
+          </Button>
+          {hvscInProgress || isPreparing ? (
+            <Button variant="outline" size="sm" onClick={onCancel} data-testid="hvsc-stop">
+              Stop
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -134,6 +158,10 @@ export const HvscControls = ({
             : "HVSC controls are available on native builds or when a mock bridge is enabled."}
         </p>
       )}
+
+      {hvscAvailable && !hvscInstalledVersion && !hvscUpdating && !hvscCanIngest ? (
+        <p className="text-xs text-muted-foreground">Download HVSC to cache the archive set before ingesting it.</p>
+      ) : null}
 
       {hvscAvailable ? (
         <div className="rounded-lg border border-dashed border-border p-3 space-y-2">

@@ -67,13 +67,13 @@ export const FileOriginIcon = ({ origin, className, glyphClassName, label }: Fil
       aria-label={ariaLabel}
       data-testid="file-origin-icon"
       role="img"
-      className={cn("inline-flex items-center justify-center shrink-0 opacity-70", className)}
+      className={cn("inline-flex items-center justify-center shrink-0 opacity-70 dark:invert dark:brightness-0", className)}
     >
       <img
         src={resolveIconSource(origin)}
         alt=""
         aria-hidden="true"
-        className="h-full w-full dark:invert dark:brightness-0"
+        className="h-full w-full"
       />
     </span>
   );

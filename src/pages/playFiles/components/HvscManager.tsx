@@ -26,6 +26,7 @@ export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
       hvscInstalledVersion={hvsc.hvscStatus?.installedVersion ?? null}
       hvscAvailable={hvsc.hvscAvailable}
       hvscUpdating={hvsc.hvscUpdating}
+      hvscInProgress={hvsc.hvscInProgress}
       hvscCanIngest={hvsc.hvscCanIngest}
       hvscPreparationState={hvsc.hvscPreparationState}
       hvscPreparationStatusLabel={hvsc.hvscPreparationStatusLabel}
@@ -41,6 +42,9 @@ export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
       hvscSonglengthSyntaxErrors={hvsc.hvscSonglengthSyntaxErrors}
       formatHvscDuration={formatHvscDuration}
       formatHvscTimestamp={formatHvscTimestamp}
+      onInstall={() => void hvsc.handleHvscInstall()}
+      onIngest={() => void hvsc.handleHvscIngest()}
+      onCancel={() => void hvsc.handleHvscCancel()}
       onReindex={() => void hvsc.handleHvscReindex()}
       onReset={() => void hvsc.handleHvscReset()}
     />
