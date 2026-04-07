@@ -297,7 +297,7 @@ jobs:
     name: Web | E2E (sharded)
     runs-on: ubuntu-latest
     container:
-      image: mcr.microsoft.com/playwright:v1.57.0-noble
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     defaults:
       run:
         shell: bash
