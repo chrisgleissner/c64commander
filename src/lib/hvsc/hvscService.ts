@@ -368,12 +368,43 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
  * Fast synchronous bulk listing of all songs under a folder.
  * Reads directly from the in-memory browse index — no async I/O,
  * no per-page smoke snapshots. Returns null if the index is not loaded.
+ *
+ * Bypasses `ensureHvscIndexReady()` intentionally: the integrity check
+ * there stat-probes virtual paths that may not exist on disk (songs live
+ * in native SQLite, not as individual files). When the probe fails it
+ * destructively clears the browse snapshot, causing `querySongsRecursive`
+ * to return null and the adapter to fall back to a minutes-long paged BFS.
+ * The browse page recovers via `queryFolderPage`'s inline rebuild, but
+ * the recursive query path has no such rebuild —- so we load the snapshot
+ * directly and, if still missing, rebuild from native without the stat check.
  */
 export const getHvscSongsRecursive = async (
   path: string,
 ): Promise<ReturnType<typeof hvscIndex.querySongsRecursive>> => {
-  await ensureHvscIndexReady();
-  return hvscIndex.querySongsRecursive(path);
+  let snapshot = await hvscIndex.loadBrowseSnapshot();
+  const songCount = snapshot ? Object.keys(snapshot.songs).length : 0;
+  const folderCount = snapshot ? Object.keys(snapshot.folders).length : 0;
+  console.warn(`[hvsc-diag] getHvscSongsRecursive path=${path} snapshot=${!!snapshot} songs=${songCount} folders=${folderCount} hasRuntime=${hasRuntimeBridge()}`);
+  // The snapshot may exist but be empty (built from empty entriesSnapshot when
+  // the old media-index JSON has no entries — typical for natively-backed HVSC).
+  const snapshotUsable = snapshot && songCount > 0;
+  if (!snapshotUsable && hasRuntimeBridge()) {
+    console.warn(`[hvsc-diag] rebuilding: snapshotUsable=${snapshotUsable}`);
+    // Clear the stale/empty in-memory snapshot so the reload below reads the
+    // freshly-persisted file instead of returning the cached empty one.
+    hvscIndex.clearBrowseSnapshot();
+    snapshot = await rebuildBrowseIndexFromNative();
+    console.warn(`[hvsc-diag] rebuild done: snapshot=${!!snapshot} songs=${snapshot ? Object.keys(snapshot.songs).length : 0}`);
+    // rebuildBrowseIndexFromNative persists to disk but does not update the
+    // in-memory hvscIndex.browseSnapshot — reload so querySongsRecursive sees it.
+    if (snapshot) {
+      const reloaded = await hvscIndex.loadBrowseSnapshot();
+      console.warn(`[hvsc-diag] reloaded: ${!!reloaded} songs=${reloaded ? Object.keys(reloaded.songs).length : 0}`);
+    }
+  }
+  const result = hvscIndex.querySongsRecursive(path);
+  console.warn(`[hvsc-diag] querySongsRecursive result=${result ? result.length : 'null'}`);
+  return result;
 };
 
 export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {

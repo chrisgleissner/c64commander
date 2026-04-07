@@ -175,10 +175,18 @@ const persistSerializedPlaylist = async (
   serialized: { tracks: TrackRecord[]; playlistItems: PlaylistItemRecord[] },
   trackChunkSize: number,
 ) => {
+  const utT0 = Date.now();
   for (let index = 0; index < serialized.tracks.length; index += trackChunkSize) {
     await repository.upsertTracks(serialized.tracks.slice(index, index + trackChunkSize));
   }
+  console.info(
+    `[hvsc-perf] upsertTracks done chunks=${Math.ceil(serialized.tracks.length / trackChunkSize)} ms=${Date.now() - utT0}`,
+  );
+  const rpT0 = Date.now();
   await repository.replacePlaylistItems(playlistId, serialized.playlistItems);
+  console.info(
+    `[hvsc-perf] replacePlaylistItems done count=${serialized.playlistItems.length} ms=${Date.now() - rpT0}`,
+  );
 };
 
 export const commitPlaylistSnapshot = async ({
@@ -223,9 +231,21 @@ export const commitPlaylistSnapshot = async ({
   });
 
   const promise = (async () => {
+    const serT0 = Date.now();
     const serialized = serializePlaylistToRepository(items, playlistId);
+    console.info(
+      `[hvsc-perf] serialize done tracks=${serialized.tracks.length} items=${serialized.playlistItems.length} ms=${Date.now() - serT0}`,
+    );
+    const persT0 = Date.now();
     await persistSerializedPlaylist(repository, playlistId, serialized, trackChunkSize);
+    console.info(
+      `[hvsc-perf] persist done ms=${Date.now() - persT0}`,
+    );
+    const valT0 = Date.now();
     const committedCount = await repository.getPlaylistItemCount(playlistId);
+    console.info(
+      `[hvsc-perf] validate done committed=${committedCount} ms=${Date.now() - valT0}`,
+    );
     if (committedCount !== expectedCount) {
       throw new Error(
         `Playlist repository validation failed for ${playlistId}: expected ${expectedCount}, got ${committedCount}`,

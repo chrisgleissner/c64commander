@@ -437,6 +437,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
       const appendPlaylistBatch = async (batch: PlaylistItem[]) => {
         if (!batch.length) return;
+        const batchT0 = Date.now();
+        console.info(`[hvsc-perf] appendPlaylistBatch start count=${batch.length}`);
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "ingesting",
@@ -449,16 +451,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           source.type,
           batch.length,
           async () => {
+            const slT0 = Date.now();
             const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
               allowMd5Fallback: false,
             });
+            console.info(`[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`);
             appendedPlaylistItems += resolvedItems.length;
+            const spT0 = Date.now();
             setPlaylist((prev) => {
               const next = [...prev, ...resolvedItems];
               playlistSnapshotRef.current = next;
               return next;
             });
+            console.info(`[hvsc-perf] setPlaylist done ms=${Date.now() - spT0}`);
             await new Promise((resolve) => setTimeout(resolve, 0));
+            console.info(`[hvsc-perf] appendPlaylistBatch done total_ms=${Date.now() - batchT0}`);
           },
           {
             sourceId: source.id,
@@ -536,6 +543,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       };
 
       const recursiveSonglengthsEntries: SourceEntry[] = [];
+      const scanT0 = Date.now();
       for (const selection of selections) {
         if (selection.type === "dir") {
           if (recurseFolders) {
@@ -581,6 +589,10 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           updateProgress(1);
         }
       }
+
+      console.info(
+        `[hvsc-perf] scan done files=${selectedFiles.length} ms=${Date.now() - scanT0}`,
+      );
 
       if (source.type === "local") {
         const treeUri = localSourceTreeUris.get(source.id);
@@ -748,6 +760,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             })
           : null;
 
+      const buildT0 = Date.now();
       while (selectedFiles.length > 0) {
         const chunk = selectedFiles.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
         for (const file of chunk) {
@@ -756,6 +769,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         // Yield to the event loop so progress updates render on-screen.
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
+      console.info(
+        `[hvsc-perf] build-items done pending=${pendingPlaylistBatch.length} appended=${appendedPlaylistItems} ms=${Date.now() - buildT0}`,
+      );
 
       if (buildItemsScope) {
         endHvscPerfScope(buildItemsScope, {
@@ -817,10 +833,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       markPlaylistRepositoryPhase(playlistStorageKey, "COMMITTING", {
         expectedCount: playlistSnapshotRef.current.length,
       });
+      const commitT0 = Date.now();
+      console.info(
+        `[hvsc-perf] commitPlaylistSnapshot start count=${playlistSnapshotRef.current.length}`,
+      );
       await commitPlaylistSnapshot({
         playlistId: playlistStorageKey,
         items: playlistSnapshotRef.current,
       });
+      console.info(
+        `[hvsc-perf] commitPlaylistSnapshot done ms=${Date.now() - commitT0}`,
+      );
       toast({
         title: "Items added",
         description: `${appendedPlaylistItems} file(s) added to playlist.`,
@@ -840,6 +863,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         },
       });
+      console.info(
+        `[hvsc-perf] pipeline done total_ms=${Date.now() - startedAt} items=${appendedPlaylistItems}`,
+      );
       setAddItemsProgress((prev) => ({
         ...prev,
         status: "ready",
