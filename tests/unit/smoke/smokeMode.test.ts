@@ -146,8 +146,9 @@ describe("smokeMode", () => {
     expect(addLog).toHaveBeenCalledWith("info", "Smoke mode enabled", expect.any(Object));
   });
 
-  it("loads config from native storage when local storage is empty", async () => {
+  it("loads config from native storage when the bootstrap flag is enabled", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockResolvedValue({
       data: JSON.stringify({
         target: "mock",
@@ -167,8 +168,9 @@ describe("smokeMode", () => {
     expect(saveDebugLoggingEnabled).not.toHaveBeenCalled();
   });
 
-  it("reads native smoke config on a cold start without a bootstrap storage flag", async () => {
+  it("reads native smoke config on a cold start when the bootstrap flag is enabled", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockResolvedValue({
       data: JSON.stringify({
         target: "real",
@@ -452,7 +454,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error for missing file", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("File does not exist"));
 
     const config = await initializeSmokeMode();
@@ -462,7 +464,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error for generic error", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("Permission denied"));
 
     const config = await initializeSmokeMode();
@@ -499,7 +501,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error thrown as plain string", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     // Use a plain string rejection — exercises typeof error === 'string' in getErrorMessage
     vi.mocked(Filesystem.readFile).mockRejectedValue("File does not exist");
 
@@ -511,7 +513,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error as object with nested error string", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     // Object without .message but with .error — exercises the 'error' in error branch
     vi.mocked(Filesystem.readFile).mockRejectedValue({
       error: "File not found",
@@ -525,7 +527,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error as object with nested error.message", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     // Object with nested {error: {message: '...'}} — exercises the innermost message extraction
     vi.mocked(Filesystem.readFile).mockRejectedValue({
       error: { message: "no such file" },
@@ -538,7 +540,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error using string fallback conversion", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockRejectedValue(42);
 
     const config = await initializeSmokeMode();

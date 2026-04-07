@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   beginHvscPerfScope,
   collectHvscPerfTimings,
@@ -55,5 +55,48 @@ describe("hvscPerformance", () => {
         errorMessage: "load failed",
       }),
     );
+  });
+
+  it("uses unique performance mark names for overlapping scopes with the same name", () => {
+    const first = beginHvscPerfScope("browse:query");
+    const second = beginHvscPerfScope("browse:query");
+
+    expect(first.name).toBe(second.name);
+    expect(first.measureName).not.toBe(second.measureName);
+    expect(first.startMarkName).not.toBe(second.startMarkName);
+
+    const firstEntry = endHvscPerfScope(first);
+    const secondEntry = endHvscPerfScope(second);
+
+    expect(firstEntry.endMarkName).not.toBe(secondEntry.endMarkName);
+    expect(collectHvscPerfTimings()).toHaveLength(2);
+  });
+
+  it("warns once and falls back to wall clock timing when performance.measure throws", () => {
+    const measureSpy = vi.spyOn(performance, "measure").mockImplementation(() => {
+      throw new Error("measure buffer full");
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const first = beginHvscPerfScope("browse:query");
+    const second = beginHvscPerfScope("browse:query");
+
+    const firstEntry = endHvscPerfScope(first);
+    const secondEntry = endHvscPerfScope(second);
+
+    expect(firstEntry.durationMs).toBeGreaterThanOrEqual(0);
+    expect(secondEntry.durationMs).toBeGreaterThanOrEqual(0);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "HVSC performance API call failed; falling back to wall clock timing",
+      expect.objectContaining({
+        operation: "measure",
+        scopeName: "hvsc:perf:browse:query",
+        error: "measure buffer full",
+      }),
+    );
+
+    measureSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });

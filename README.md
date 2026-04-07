@@ -118,18 +118,19 @@ Build playlists for programs and songs sourced from the local device, C64U stora
 
 ### Browse & Import
 
-Choose an import source and then add local folders from your device, browse your C64U storage, prepare and browse HVSC from the same chooser, or search CommoServe and import the matching results.
+Choose an import source, browse its contents, then add files to your playlist or disk collection.
 
 <table>
   <tr>
     <td><img src="docs/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
+    <td><img src="docs/img/app/play/import/03-local-file-picker.png" alt="Local file browser" width="360"/></td>
     <td><img src="docs/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
-    <td><img src="docs/img/app/play/import/08-hvsc-browser.png" alt="HVSC browser after preparation" width="360"/></td>
+
   </tr>
   <tr>
+    <td><img src="docs/img/app/play/import/08-hvsc-browser.png" alt="HVSC browser after preparation" width="360"/></td>
     <td><img src="docs/img/app/play/import/04-commoserve-search.png" alt="CommoServe search form" width="360"/></td>
     <td><img src="docs/img/app/play/import/05-commoserve-results-selected.png" alt="CommoServe results with selection" width="360"/></td>
-    <td></td>
   </tr>
 </table>
 

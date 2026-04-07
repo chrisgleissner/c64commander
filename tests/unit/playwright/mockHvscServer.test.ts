@@ -59,4 +59,8 @@ describe("createMockHvscServer", () => {
     );
     expect(download?.durationMs ?? 0).toBeGreaterThan(0);
   });
+
+  it("rejects non-finite throttling rates", async () => {
+    expect(() => createMockHvscServer({ bytesPerSecond: Number.NaN })).toThrow("Invalid bytesPerSecond value: NaN");
+  });
 });

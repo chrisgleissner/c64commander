@@ -27,6 +27,10 @@ if (budgets.length === 0) {
 const failures = [];
 for (const [metricName, budgetValue] of budgets) {
     const budget = Number(budgetValue);
+    if (!Number.isFinite(budget)) {
+        failures.push(`${metricName}: invalid budget value ${String(budgetValue)}`);
+        continue;
+    }
     const actual = Number(summary.metrics?.[metricName]?.p95 ?? NaN);
     if (!Number.isFinite(actual)) {
         failures.push(`${metricName}: missing p95 sample`);

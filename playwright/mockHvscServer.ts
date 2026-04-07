@@ -106,7 +106,12 @@ const writeArchiveResponse = async (
   body: Buffer,
   options: { bytesPerSecond?: number; chunkSizeBytes?: number },
 ) => {
-  const bytesPerSecond = options.bytesPerSecond ?? 0;
+  const configuredBytesPerSecond = options.bytesPerSecond;
+  if (configuredBytesPerSecond !== undefined && !Number.isFinite(configuredBytesPerSecond)) {
+    throw new TypeError(`Invalid bytesPerSecond value: ${String(configuredBytesPerSecond)}`);
+  }
+
+  const bytesPerSecond = configuredBytesPerSecond ?? 0;
   if (!bytesPerSecond || bytesPerSecond <= 0 || body.byteLength === 0) {
     res.end(body);
     return body.byteLength;
@@ -137,6 +142,10 @@ const writeArchiveResponse = async (
 };
 
 export function createMockHvscServer(options: MockHvscServerOptions = {}): Promise<MockHvscServer> {
+  if (options.bytesPerSecond !== undefined && !Number.isFinite(options.bytesPerSecond)) {
+    throw new TypeError(`Invalid bytesPerSecond value: ${String(options.bytesPerSecond)}`);
+  }
+
   const baseline = readFixture<HvscFixture>(options.baselineFixtureName ?? "baseline.json");
   const update = readFixture<HvscFixture>(options.updateFixtureName ?? "update.json");
   const baselineArchive = readArchiveBuffer(options.baselineArchivePath, () => buildArchiveBody(baseline));

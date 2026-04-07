@@ -3,6 +3,7 @@ export type HvscPerfMetadata = Record<string, unknown>;
 export type HvscPerfScopeToken = {
   scope: string;
   name: string;
+  measureName: string;
   startMarkName: string;
   startedAt: string;
   startedAtMs: number;
@@ -25,8 +26,10 @@ export type HvscPerfTiming = {
 
 const MAX_HVSC_PERF_TIMINGS = 1000;
 
-let sequence = 0;
+let scopeSequence = 0;
+let timingSequence = 0;
 const timings: HvscPerfTiming[] = [];
+const warnedPerformanceFailures = new Set<string>();
 
 const getNow = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
@@ -38,16 +41,39 @@ const addTiming = (timing: HvscPerfTiming) => {
   return timing;
 };
 
-const markPerformance = (name: string) => {
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
+const warnPerformanceApiFailure = (
+  operation: "mark" | "measure",
+  scopeName: string,
+  targetName: string,
+  error: unknown,
+) => {
+  const errorMessage = getErrorMessage(error);
+  const key = `${operation}:${scopeName}:${errorMessage}`;
+  if (warnedPerformanceFailures.has(key)) return;
+  warnedPerformanceFailures.add(key);
+  console.warn("HVSC performance API call failed; falling back to wall clock timing", {
+    operation,
+    scopeName,
+    targetName,
+    error: errorMessage,
+  });
+};
+
+const markPerformance = (name: string, scopeName: string) => {
   if (typeof performance === "undefined" || typeof performance.mark !== "function") return;
   try {
     performance.mark(name);
-  } catch {
-    // Ignore environments that do not fully support the performance mark API.
+  } catch (error) {
+    warnPerformanceApiFailure("mark", scopeName, name, error);
   }
 };
 
-const measurePerformance = (name: string, startMarkName: string, endMarkName: string) => {
+const measurePerformance = (measureName: string, startMarkName: string, endMarkName: string, scopeName: string) => {
   if (
     typeof performance === "undefined" ||
     typeof performance.measure !== "function" ||
@@ -57,11 +83,12 @@ const measurePerformance = (name: string, startMarkName: string, endMarkName: st
   }
 
   try {
-    performance.measure(name, startMarkName, endMarkName);
-    const entries = performance.getEntriesByName(name, "measure");
+    performance.measure(measureName, startMarkName, endMarkName);
+    const entries = performance.getEntriesByName(measureName, "measure");
     const latest = entries[entries.length - 1];
     return latest?.duration ?? null;
-  } catch {
+  } catch (error) {
+    warnPerformanceApiFailure("measure", scopeName, measureName, error);
     return null;
   } finally {
     if (typeof performance.clearMarks === "function") {
@@ -69,37 +96,39 @@ const measurePerformance = (name: string, startMarkName: string, endMarkName: st
       performance.clearMarks(endMarkName);
     }
     if (typeof performance.clearMeasures === "function") {
-      performance.clearMeasures(name);
+      performance.clearMeasures(measureName);
     }
   }
 };
 
 export const beginHvscPerfScope = (scope: string, metadata?: HvscPerfMetadata): HvscPerfScopeToken => {
   const name = `hvsc:perf:${scope}`;
-  const startMarkName = `${name}:start`;
+  const measureName = `${name}:${String((scopeSequence += 1)).padStart(6, "0")}`;
+  const startMarkName = `${measureName}:start`;
   const token: HvscPerfScopeToken = {
     scope,
     name,
+    measureName,
     startMarkName,
     startedAt: new Date().toISOString(),
     startedAtMs: getNow(),
     metadata: metadata ?? null,
   };
 
-  markPerformance(startMarkName);
+  markPerformance(startMarkName, name);
   return token;
 };
 
 export const endHvscPerfScope = (token: HvscPerfScopeToken, metadata?: HvscPerfMetadata) => {
-  const endMarkName = `${token.name}:end`;
+  const endMarkName = `${token.measureName}:end`;
   const endedAt = new Date().toISOString();
   const endedAtMs = getNow();
 
-  markPerformance(endMarkName);
-  const measuredDurationMs = measurePerformance(token.name, token.startMarkName, endMarkName);
+  markPerformance(endMarkName, token.name);
+  const measuredDurationMs = measurePerformance(token.measureName, token.startMarkName, endMarkName, token.name);
 
   return addTiming({
-    id: `hvsc-perf-${String((sequence += 1)).padStart(6, "0")}`,
+    id: `hvsc-perf-${String((timingSequence += 1)).padStart(6, "0")}`,
     scope: token.scope,
     name: token.name,
     startMarkName: token.startMarkName,
@@ -141,5 +170,7 @@ export const collectHvscPerfTimings = () => timings.map((timing) => ({ ...timing
 
 export const resetHvscPerfTimings = () => {
   timings.splice(0, timings.length);
-  sequence = 0;
+  scopeSequence = 0;
+  timingSequence = 0;
+  warnedPerformanceFailures.clear();
 };

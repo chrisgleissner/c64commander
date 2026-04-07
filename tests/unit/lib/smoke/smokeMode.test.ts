@@ -125,7 +125,7 @@ describe("smokeMode", () => {
       expect(result).toBeNull();
     });
 
-    it("tries native smoke bootstrap when localStorage is unavailable on native platforms", async () => {
+    it("does not try native smoke bootstrap when localStorage is unavailable without explicit enablement", async () => {
       Object.defineProperty(global, "localStorage", {
         value: undefined,
         writable: true,
@@ -138,7 +138,7 @@ describe("smokeMode", () => {
       const result = await initializeSmokeMode();
 
       expect(result).toBeNull();
-      expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
+      expect(Filesystem.readFile).not.toHaveBeenCalled();
     });
 
     it("loads config from localStorage", async () => {
@@ -206,7 +206,7 @@ describe("smokeMode", () => {
       expect(updateC64APIConfig).toHaveBeenCalledWith("http://192.168.1.100", "secret", "192.168.1.100");
     });
 
-    it("reads the native smoke file on startup when running on native", async () => {
+    it("does not read the native smoke file on startup when running on native without explicit enablement", async () => {
       localStorageMock.getItem.mockImplementation((key: string) => {
         if (key === "c64u_smoke_config") return null;
         if (key === "c64u_smoke_mode_enabled") return null;
@@ -218,7 +218,35 @@ describe("smokeMode", () => {
       const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       await initializeSmokeMode();
 
+      expect(Filesystem.readFile).not.toHaveBeenCalled();
+    });
+
+    it("reads the native smoke file when the window bootstrap flag is enabled", async () => {
+      localStorageMock.getItem.mockImplementation((key: string) => {
+        if (key === "c64u_smoke_config") return null;
+        if (key === "c64u_smoke_mode_enabled") return null;
+        return null;
+      });
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      Object.defineProperty(global, "window", {
+        value: {
+          __c64uReadSmokeConfigFromFilesystem: true,
+        },
+        writable: true,
+        configurable: true,
+      });
+      vi.mocked(Filesystem.readFile).mockResolvedValue({
+        data: JSON.stringify({
+          target: "mock",
+          debugLogging: false,
+        }),
+      } as any);
+
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
+      const result = await initializeSmokeMode();
+
       expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
+      expect(result?.target).toBe("mock");
     });
 
     it("reads native smoke file when explicit bootstrap flag is enabled", async () => {
