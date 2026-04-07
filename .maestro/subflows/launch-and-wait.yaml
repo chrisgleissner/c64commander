@@ -58,11 +58,15 @@ tags:
       - extendedWaitUntil:
           visible: "Home"
           timeout: ${LONG_TIMEOUT}
-# Dismiss Android 16 "app compatibility" system dialog if it appeared after
-# the Home tab rendered.  The dialog blocks all WebView taps.
-- tapOn:
-    text: "Don't show again"
-    optional: true
-- tapOn:
-    text: "OK"
-    optional: true
+# Retry Android 16 "app compatibility" dialog dismissal because the modal can
+# appear a moment after the Home tab renders and will block all WebView taps.
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Don't show again"
+          optional: true
+      - tapOn:
+          text: "OK"
+          optional: true
+      - waitForAnimationToEnd

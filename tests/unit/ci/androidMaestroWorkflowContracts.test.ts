@@ -10,6 +10,7 @@ describe("Android Maestro workflow contracts", () => {
     expect(flow).toContain('visible: "Home"');
     expect(flow).toContain('text: "Don\'t show again"');
     expect(flow).toContain('text: "OK"');
+    expect(flow).toContain('Retry Android 16 "app compatibility" dialog dismissal');
     expect(flow).not.toContain('visible: "C64 Commander"');
     expect(flow).not.toContain('point: "8%,95%"');
   });
@@ -100,6 +101,9 @@ describe("Android Maestro workflow contracts", () => {
 
     // launch-warm must not stop the app
     expect(launchWarm).toContain("stopApp: false");
+    expect(launchWarm).toContain('Retry Android 16 "app compatibility" dialog dismissal');
+    expect(launchWarm).toContain('text: "Don\'t show again"');
+    expect(launchWarm).toContain('text: "OK"');
     expect(launchWarm).not.toContain("stopApp: true");
   });
 

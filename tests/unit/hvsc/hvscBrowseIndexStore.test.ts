@@ -13,6 +13,7 @@ vi.mock("@capacitor/filesystem", () => ({
   Filesystem: {
     stat: vi.fn(async () => ({ type: "file", size: 1 })),
     mkdir: vi.fn(async () => undefined),
+    deleteFile: vi.fn(async () => undefined),
     readFile: vi.fn(async () => {
       throw new Error("missing");
     }),
@@ -326,6 +327,73 @@ describe("hvscBrowseIndexStore", () => {
       expect(stored).not.toBeNull();
       localStorage.clear();
     }
+  });
+
+  it("persists only the compact media index when the browse snapshot is too large", async () => {
+    const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+
+    const entries = Array.from({ length: 10001 }, (_, index) => ({
+      path: `/HVSC/${index.toString().padStart(5, "0")}/Track_${index}.sid`,
+      name: `Track_${index}.sid`,
+      type: "sid" as const,
+    }));
+    const snapshot = build(entries);
+
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.deleteFile).mockResolvedValue(undefined as any);
+
+    await saveHvscBrowseIndexSnapshot(snapshot);
+
+    expect(vi.mocked(Filesystem.writeFile)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(Filesystem.writeFile).mock.calls[0]?.[0]).toMatchObject({
+      path: "hvsc/index/media-index-v2.json",
+    });
+    expect(vi.mocked(Filesystem.deleteFile)).toHaveBeenCalledWith({
+      directory: "DATA",
+      path: "hvsc/index/hvsc-browse-index-v1.json",
+    });
+  });
+
+  it("rebuilds the browse snapshot from the compact media index when the full snapshot is absent", async () => {
+    const { loadHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+
+    const snapshot = build([
+      { path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid", name: "Commando.sid", type: "sid", durationSeconds: 123 },
+      { path: "/GAMES/Last_Ninja.sid", name: "Last_Ninja.sid", type: "sid", durationSeconds: 95 },
+    ]);
+
+    if (typeof localStorage !== "undefined") {
+      localStorage.clear();
+      localStorage.setItem(
+        "c64u_media_index:v1",
+        JSON.stringify({
+          version: 1,
+          updatedAt: snapshot.updatedAt,
+          entries: Object.values(snapshot.songs).map((song) => ({
+            path: song.virtualPath,
+            name: song.fileName,
+            type: "sid",
+            durationSeconds: song.durationSeconds ?? null,
+          })),
+        }),
+      );
+    }
+
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("missing"));
+
+    const loaded = await loadHvscBrowseIndexSnapshot();
+
+    expect(loaded?.songs["/MUSICIANS/H/Hubbard_Rob/Commando.sid"]).toMatchObject({
+      fileName: "Commando.sid",
+      durationSeconds: 123,
+      metadataStatus: "seeded",
+    });
+    expect(loaded?.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain(
+      "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+    );
   });
 
   it("normalizeFolderPath treats empty string as root", () => {

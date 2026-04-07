@@ -19,6 +19,18 @@ const STORAGE_KEY = "c64u_hvsc_browse_index:v1";
 const MEDIA_INDEX_STORAGE_PATH = "hvsc/index/media-index-v2.json";
 const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 const SCHEMA_VERSION = 2;
+const MAX_PERSISTED_FULL_SNAPSHOT_SONGS = 10000;
+
+type PersistedMediaIndexSnapshot = {
+  version: number;
+  updatedAt: string;
+  entries: Array<{
+    path: string;
+    name: string;
+    type: "sid";
+    durationSeconds?: number | null;
+  }>;
+};
 
 export type HvscMetadataStatus = "seeded" | "queued" | "hydrating" | "hydrated" | "error";
 
@@ -150,9 +162,9 @@ const createSeededSong = (
     sidMetadata: null,
     trackSubsongs: normalizedDurations?.length
       ? normalizedDurations.map((_, index) => ({
-          songNr: index + 1,
-          isDefault: index === 0,
-        }))
+        songNr: index + 1,
+        isDefault: index === 0,
+      }))
       : null,
   };
   song.searchTextSeed = buildSeedSearchText(song);
@@ -338,6 +350,40 @@ const parseSnapshot = (raw: string | null) => {
   }
 };
 
+const parseMediaIndexSnapshot = (raw: string | null) => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as PersistedMediaIndexSnapshot;
+    if (!Array.isArray(parsed.entries)) return null;
+    return buildHvscBrowseIndexFromEntries(
+      parsed.entries
+        .filter((entry) => entry.type === "sid")
+        .map((entry) => ({
+          path: entry.path,
+          name: entry.name,
+          type: "sid" as const,
+          durationSeconds: entry.durationSeconds ?? null,
+        })),
+    );
+  } catch {
+    return null;
+  }
+};
+
+const buildPersistedMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot): PersistedMediaIndexSnapshot => ({
+  version: 1,
+  updatedAt: snapshot.updatedAt,
+  entries: Object.values(snapshot.songs).map((song) => ({
+    path: song.virtualPath,
+    name: song.fileName,
+    type: "sid" as const,
+    durationSeconds: song.durationSeconds ?? null,
+  })),
+});
+
+const shouldPersistFullSnapshot = (snapshot: HvscBrowseIndexSnapshot) =>
+  Object.keys(snapshot.songs).length <= MAX_PERSISTED_FULL_SNAPSHOT_SONGS;
+
 const readFilesystemSnapshot = async () => {
   try {
     const result = await Filesystem.readFile({
@@ -347,6 +393,29 @@ const readFilesystemSnapshot = async () => {
     return parseSnapshot(decodeUtf8Base64(result.data));
   } catch {
     return null;
+  }
+};
+
+const readFilesystemMediaIndexSnapshot = async () => {
+  try {
+    const result = await Filesystem.readFile({
+      directory: Directory.Data,
+      path: MEDIA_INDEX_STORAGE_PATH,
+    });
+    return parseMediaIndexSnapshot(decodeUtf8Base64(result.data));
+  } catch {
+    return null;
+  }
+};
+
+const deleteFilesystemFullSnapshot = async () => {
+  try {
+    await Filesystem.deleteFile({
+      directory: Directory.Data,
+      path: STORAGE_PATH,
+    });
+  } catch {
+    // Best effort cleanup of stale full snapshots.
   }
 };
 
@@ -395,12 +464,7 @@ const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
 };
 
 const writeFilesystemMediaIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
-  const entries = Object.values(snapshot.songs).map((song) => ({
-    path: song.virtualPath,
-    name: song.fileName,
-    type: "sid" as const,
-    durationSeconds: song.durationSeconds ?? null,
-  }));
+  const mediaIndexSnapshot = buildPersistedMediaIndexSnapshot(snapshot);
   await Filesystem.mkdir({
     directory: Directory.Data,
     path: "hvsc/index",
@@ -409,19 +473,23 @@ const writeFilesystemMediaIndexSnapshot = async (snapshot: HvscBrowseIndexSnapsh
   await Filesystem.writeFile({
     directory: Directory.Data,
     path: MEDIA_INDEX_STORAGE_PATH,
-    data: encodeUtf8Base64(
-      JSON.stringify({
-        version: 1,
-        updatedAt: snapshot.updatedAt,
-        entries,
-      }),
-    ),
+    data: encodeUtf8Base64(JSON.stringify(mediaIndexSnapshot)),
   });
 };
 
 const readLocalStorageSnapshot = () => {
   if (typeof localStorage === "undefined") return null;
   return parseSnapshot(localStorage.getItem(STORAGE_KEY));
+};
+
+const readLocalStorageMediaIndexSnapshot = () => {
+  if (typeof localStorage === "undefined") return null;
+  return parseMediaIndexSnapshot(localStorage.getItem(MEDIA_INDEX_STORAGE_KEY));
+};
+
+const deleteLocalStorageFullSnapshot = () => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.removeItem(STORAGE_KEY);
 };
 
 const writeLocalStorageSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
@@ -431,20 +499,7 @@ const writeLocalStorageSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
 
 const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
   if (typeof localStorage === "undefined") return;
-  const entries = Object.values(snapshot.songs).map((song) => ({
-    path: song.virtualPath,
-    name: song.fileName,
-    type: "sid" as const,
-    durationSeconds: song.durationSeconds ?? null,
-  }));
-  localStorage.setItem(
-    MEDIA_INDEX_STORAGE_KEY,
-    JSON.stringify({
-      version: 1,
-      updatedAt: snapshot.updatedAt,
-      entries,
-    }),
-  );
+  localStorage.setItem(MEDIA_INDEX_STORAGE_KEY, JSON.stringify(buildPersistedMediaIndexSnapshot(snapshot)));
 };
 
 export const loadHvscBrowseIndexSnapshot = async () => {
@@ -454,9 +509,11 @@ export const loadHvscBrowseIndexSnapshot = async () => {
       if (typeof window !== "undefined") {
         const filesystemSnapshot = await readFilesystemSnapshot();
         if (filesystemSnapshot) return filesystemSnapshot;
-        return readLocalStorageSnapshot();
+        const filesystemMediaIndexSnapshot = await readFilesystemMediaIndexSnapshot();
+        if (filesystemMediaIndexSnapshot) return filesystemMediaIndexSnapshot;
+        return readLocalStorageSnapshot() ?? readLocalStorageMediaIndexSnapshot();
       }
-      return readLocalStorageSnapshot();
+      return readLocalStorageSnapshot() ?? readLocalStorageMediaIndexSnapshot();
     },
     {
       platform: typeof window !== "undefined" ? "browser" : "node",
@@ -471,19 +528,42 @@ export const saveHvscBrowseIndexSnapshot = async (snapshot: HvscBrowseIndexSnaps
     songs: snapshot.songs,
     folders: buildFoldersFromSongs(snapshot.songs),
   };
+  const persistFullSnapshot = shouldPersistFullSnapshot(normalized);
   if (typeof window !== "undefined") {
     try {
-      await writeFilesystemSnapshot(normalized);
       await writeFilesystemMediaIndexSnapshot(normalized);
+      if (persistFullSnapshot) {
+        await writeFilesystemSnapshot(normalized);
+      } else {
+        await deleteFilesystemFullSnapshot();
+        addLog("info", "HVSC browse snapshot persistence downgraded to compact media index", {
+          path: STORAGE_PATH,
+          songCount: Object.keys(normalized.songs).length,
+          maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
+        });
+      }
       return;
     } catch {
-      writeLocalStorageSnapshot(normalized);
       writeLocalStorageMediaIndexSnapshot(normalized);
+      if (persistFullSnapshot) {
+        writeLocalStorageSnapshot(normalized);
+      } else if (typeof localStorage !== "undefined") {
+        deleteLocalStorageFullSnapshot();
+        addLog("info", "HVSC browse snapshot localStorage persistence downgraded to compact media index", {
+          storageKey: STORAGE_KEY,
+          songCount: Object.keys(normalized.songs).length,
+          maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
+        });
+      }
       return;
     }
   }
-  writeLocalStorageSnapshot(normalized);
   writeLocalStorageMediaIndexSnapshot(normalized);
+  if (persistFullSnapshot) {
+    writeLocalStorageSnapshot(normalized);
+  } else {
+    deleteLocalStorageFullSnapshot();
+  }
 };
 
 export const buildHvscBrowseIndexFromEntries = (entries: MediaEntry[]): HvscBrowseIndexSnapshot => {
