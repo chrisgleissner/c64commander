@@ -100,7 +100,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     applySonglengthsToItems,
     mergeSonglengthsFiles,
     collectSonglengthsCandidates,
-    buildHvscLocalPlayFile,
     archiveConfigs,
   } = deps;
 
@@ -497,7 +496,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
                 : undefined)
             : undefined;
-        const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
         const playbackConfig =
           source.type === "local" || source.type === "ultimate"
             ? resolvePlaybackConfig({
@@ -529,7 +527,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           songNr: file.songNr,
           subsongCount: file.subsongCount,
           sourceId: source.type === "local" || source.type === "hvsc" ? source.id : null,
-          file: hvscFile ?? localFile,
+          file: localFile,
           sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
           modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
         };

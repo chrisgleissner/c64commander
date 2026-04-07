@@ -12,9 +12,11 @@ import type {
   PlaylistQueryResult,
   PlaylistSessionRecord,
   RandomPlaySession,
+  SerializedPlaylistSnapshot,
   TrackRecord,
 } from "./types";
 import type { PlaylistDataRepository } from "./repository";
+import { buildPlaylistQueryIndex, queryPlaylistIndex, type PersistedPlaylistQueryIndex } from "./queryIndex";
 
 type Options = {
   preferDurableStorage: boolean;
@@ -28,11 +30,7 @@ type PersistedState = {
   randomSessionsByPlaylistId: Record<string, RandomPlaySession>;
 };
 
-type PlaylistOrderRecord = {
-  "playlist-position": string[];
-  title: string[];
-  path: string[];
-};
+type PlaylistOrderRecord = PersistedPlaylistQueryIndex["orderBy"];
 
 type StoredSchemaRecord = {
   version: 3;
@@ -69,56 +67,14 @@ const seededShuffle = <T>(items: T[], seed: number) => {
   return next;
 };
 
-const normalizeQuery = (value?: string) => value?.trim().toLowerCase() ?? "";
-
-const buildRowSearchText = (track: TrackRecord) => {
-  const parts = [
-    track.title,
-    track.author ?? "",
-    track.released ?? "",
-    track.path,
-    track.sourceKind,
-    track.sourceLocator,
-    track.category ?? "",
-  ];
-  return parts.join(" ").toLowerCase();
-};
-
-const sortRows = (
-  rows: Array<{ playlistItem: PlaylistItemRecord; track: TrackRecord }>,
-  sort: PlaylistQueryOptions["sort"],
-) => {
-  const next = [...rows];
-  next.sort((left, right) => {
-    if (sort === "title") {
-      const titleDiff = left.track.title.localeCompare(right.track.title);
-      if (titleDiff !== 0) return titleDiff;
-    }
-    if (sort === "path") {
-      const pathDiff = left.track.path.localeCompare(right.track.path);
-      if (pathDiff !== 0) return pathDiff;
-    }
-    return left.playlistItem.sortKey.localeCompare(right.playlistItem.sortKey);
-  });
-  return next;
-};
-
 const buildPlaylistOrders = (
   playlistItems: PlaylistItemRecord[],
   tracksById: Map<string, TrackRecord>,
-): PlaylistOrderRecord => {
-  const rows = playlistItems
-    .map((playlistItem) => {
-      const track = tracksById.get(playlistItem.trackId);
-      if (!track) return null;
-      return { playlistItem, track };
-    })
-    .filter((row): row is { playlistItem: PlaylistItemRecord; track: TrackRecord } => Boolean(row));
-
+): { orders: PlaylistOrderRecord; queryIndex: PersistedPlaylistQueryIndex } => {
+  const queryIndex = buildPlaylistQueryIndex(playlistItems, Object.fromEntries(Array.from(tracksById.entries())));
   return {
-    "playlist-position": sortRows(rows, "playlist-position").map((row) => row.playlistItem.playlistItemId),
-    title: sortRows(rows, "title").map((row) => row.playlistItem.playlistItemId),
-    path: sortRows(rows, "path").map((row) => row.playlistItem.playlistItemId),
+    orders: queryIndex.orderBy,
+    queryIndex,
   };
 };
 
@@ -148,6 +104,7 @@ const migrateState = (state: Record<string, unknown>): PersistedState => ({
 const trackKey = (trackId: string) => `track:${trackId}`;
 const playlistItemKey = (playlistId: string, playlistItemId: string) => `playlist-item:${playlistId}:${playlistItemId}`;
 const playlistOrderKey = (playlistId: string) => `playlist-order:${playlistId}`;
+const playlistQueryIndexKey = (playlistId: string) => `playlist-query-index:${playlistId}`;
 const sessionKey = (playlistId: string) => `session:${playlistId}`;
 const randomSessionKey = (playlistId: string) => `random-session:${playlistId}`;
 
@@ -270,10 +227,12 @@ const persistMigratedState = async (state: PersistedState) => {
         .filter((track): track is TrackRecord => Boolean(track))
         .map((track) => [track.trackId, track]),
     );
+    const { orders, queryIndex } = buildPlaylistOrders(sortedItems, tracksById);
     sortedItems.forEach((playlistItem) => {
       entries.push([playlistItemKey(playlistId, playlistItem.playlistItemId), playlistItem]);
     });
-    entries.push([playlistOrderKey(playlistId), buildPlaylistOrders(sortedItems, tracksById)]);
+    entries.push([playlistOrderKey(playlistId), orders]);
+    entries.push([playlistQueryIndexKey(playlistId), queryIndex]);
   });
 
   Object.values(state.sessionsByPlaylistId).forEach((session) => {
@@ -356,6 +315,19 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     await writeValues(tracks.map((track) => [trackKey(track.trackId), track]));
   }
 
+  async replacePlaylistSnapshot(playlistId: string, snapshot: SerializedPlaylistSnapshot): Promise<void> {
+    await this.ensureInitialized();
+    const sortedItems = [...snapshot.playlistItems].sort((left, right) => left.sortKey.localeCompare(right.sortKey));
+    const tracksById = new Map(snapshot.tracks.map((track) => [track.trackId, track] as const));
+    const { orders, queryIndex } = buildPlaylistOrders(sortedItems, tracksById);
+    await writeValues([
+      ...snapshot.tracks.map((track) => [trackKey(track.trackId), track] as [string, unknown]),
+      ...sortedItems.map((item) => [playlistItemKey(playlistId, item.playlistItemId), item] as [string, unknown]),
+      [playlistOrderKey(playlistId), orders],
+      [playlistQueryIndexKey(playlistId), queryIndex],
+    ]);
+  }
+
   async getTracksByIds(trackIds: string[]): Promise<Map<string, TrackRecord>> {
     await this.ensureInitialized();
     const values = await readValues(trackIds.map((trackId) => trackKey(trackId))).catch((error) => {
@@ -378,11 +350,40 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     await this.ensureInitialized();
     const sortedItems = [...items].sort((left, right) => left.sortKey.localeCompare(right.sortKey));
     const tracksById = await this.getTracksByIds([...new Set(sortedItems.map((item) => item.trackId))]);
-    const orders = buildPlaylistOrders(sortedItems, tracksById);
+    const { orders, queryIndex } = buildPlaylistOrders(sortedItems, tracksById);
     await writeValues([
       ...sortedItems.map((item) => [playlistItemKey(playlistId, item.playlistItemId), item] as [string, unknown]),
       [playlistOrderKey(playlistId), orders],
+      [playlistQueryIndexKey(playlistId), queryIndex],
     ]);
+  }
+
+  private async loadPlaylistQueryIndex(playlistId: string): Promise<PersistedPlaylistQueryIndex> {
+    const persistedIndex = await readValue<PersistedPlaylistQueryIndex>(playlistQueryIndexKey(playlistId)).catch(
+      (error) => {
+        if (isOpenFailure(error)) {
+          throw error;
+        }
+        return warnReadFailureAndReturn<PersistedPlaylistQueryIndex | null>(error, null);
+      },
+    );
+    if (persistedIndex) {
+      return persistedIndex;
+    }
+
+    const playlistItems = await this.getPlaylistItems(playlistId);
+    if (!playlistItems.length) {
+      return buildPlaylistQueryIndex([], {});
+    }
+    const tracksById = await this.getTracksByIds([...new Set(playlistItems.map((item) => item.trackId))]);
+    const rebuiltIndex = buildPlaylistQueryIndex(playlistItems, Object.fromEntries(Array.from(tracksById.entries())));
+    await writeValues([[playlistQueryIndexKey(playlistId), rebuiltIndex]]).catch((error) => {
+      if (isOpenFailure(error)) {
+        throw error;
+      }
+      return warnReadFailureAndReturn(error, undefined);
+    });
+    return rebuiltIndex;
   }
 
   async getPlaylistItems(playlistId: string): Promise<PlaylistItemRecord[]> {
@@ -437,67 +438,8 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
 
   async queryPlaylist(options: PlaylistQueryOptions): Promise<PlaylistQueryResult> {
     await this.ensureInitialized();
-    const orders = await readValue<PlaylistOrderRecord>(playlistOrderKey(options.playlistId)).catch((error) => {
-      if (isOpenFailure(error)) {
-        throw error;
-      }
-      return warnReadFailureAndReturn<PlaylistOrderRecord | null>(error, null);
-    });
-    const sort = options.sort ?? "playlist-position";
-    const orderedIds = orders?.[sort] ?? orders?.["playlist-position"] ?? [];
-    if (!orderedIds.length) {
-      return {
-        rows: [],
-        totalMatchCount: 0,
-      };
-    }
-
-    const normalizedQuery = normalizeQuery(options.query);
-    const categoryFilter = options.categoryFilter?.length ? new Set(options.categoryFilter) : null;
-    const offset = Math.max(0, options.offset);
-    const limit = Math.max(1, options.limit);
-    const rows: PlaylistQueryResult["rows"] = [];
-    let totalMatchCount = 0;
-    const chunkSize = 200;
-
-    for (let chunkStart = 0; chunkStart < orderedIds.length; chunkStart += chunkSize) {
-      const chunkIds = orderedIds.slice(chunkStart, chunkStart + chunkSize);
-      const itemValues = await readValues(
-        chunkIds.map((playlistItemId) => playlistItemKey(options.playlistId, playlistItemId)),
-      ).catch((error) => {
-        if (isOpenFailure(error)) {
-          throw error;
-        }
-        return warnReadFailureAndReturn(error, new Map<string, unknown>());
-      });
-      const playlistItems = chunkIds
-        .map(
-          (playlistItemId) =>
-            itemValues.get(playlistItemKey(options.playlistId, playlistItemId)) as PlaylistItemRecord | undefined,
-        )
-        .filter((item): item is PlaylistItemRecord => Boolean(item));
-      const tracks = await this.getTracksByIds([...new Set(playlistItems.map((item) => item.trackId))]);
-
-      playlistItems.forEach((playlistItem) => {
-        const track = tracks.get(playlistItem.trackId);
-        if (!track) return;
-        if (categoryFilter && !categoryFilter.has(track.category ?? "")) return;
-        if (normalizedQuery && !buildRowSearchText(track).includes(normalizedQuery)) return;
-        totalMatchCount += 1;
-        if (totalMatchCount <= offset || rows.length >= limit) {
-          return;
-        }
-        rows.push({
-          playlistItem,
-          track,
-        });
-      });
-    }
-
-    return {
-      rows,
-      totalMatchCount,
-    };
+    const queryIndex = await this.loadPlaylistQueryIndex(options.playlistId);
+    return queryPlaylistIndex(queryIndex, options);
   }
 
   async createSession(playlistId: string, orderedPlaylistItemIds: string[], seed?: number): Promise<RandomPlaySession> {

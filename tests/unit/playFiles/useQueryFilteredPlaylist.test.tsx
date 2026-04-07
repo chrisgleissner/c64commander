@@ -297,7 +297,7 @@ describe("useQueryFilteredPlaylist", () => {
           query: "demo",
           source: "repository",
           queryEngine: "repository",
-          playlistOwnership: "react-state",
+          playlistOwnership: "repository",
           feedbackKind: "result",
         }),
       }),
@@ -420,5 +420,62 @@ describe("useQueryFilteredPlaylist", () => {
     });
 
     expect(repository.queryPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("falls back to in-memory filtering when the repository query fails", async () => {
+    markReady();
+    repository.queryPlaylist.mockRejectedValueOnce(new Error("query failed"));
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => {
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "sid-1",
+      ]);
+    });
+
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playlist:filter" }),
+      expect.objectContaining({ outcome: "fallback-after-error", source: "memory", errorMessage: "query failed" }),
+    );
+  });
+
+  it("does not emit playlist filter benchmark snapshots for blank queries", async () => {
+    markReady();
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => {
+      expect(repository.queryPlaylist).toHaveBeenCalledTimes(1);
+    });
+
+    expect(recordSmokeBenchmarkSnapshot).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setQuery("   ");
+    });
+
+    await waitFor(() => {
+      expect(repository.queryPlaylist).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: "   ",
+        }),
+      );
+    });
+
+    expect(recordSmokeBenchmarkSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("returns empty results immediately for an empty playlist", async () => {
+    markReady(0);
+    const { result } = renderHook(() => useHarness([]));
+
+    await waitFor(() => {
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(0);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist).toEqual([]);
+      expect(result.current.queryFilteredPlaylist.previewPlaylist).toEqual([]);
+    });
+
+    expect(repository.queryPlaylist).not.toHaveBeenCalled();
+    expect(recordSmokeBenchmarkSnapshot).not.toHaveBeenCalled();
   });
 });

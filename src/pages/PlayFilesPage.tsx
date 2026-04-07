@@ -384,6 +384,7 @@ export default function PlayFilesPage() {
     repeatEnabled,
     localEntriesBySourceId,
     localSourceTreeUris,
+    buildHvscLocalPlayFile,
     deviceProduct: status.deviceInfo?.product ?? null,
     ensurePlaybackConnection,
     resolveSonglengthDurationMsForPath,

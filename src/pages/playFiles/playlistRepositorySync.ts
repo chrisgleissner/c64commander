@@ -141,25 +141,7 @@ export const usePlaylistRepositorySyncSnapshot = (playlistId: string) =>
 
 export const serializePlaylistToRepository = (items: PlaylistItem[], playlistId: string) => {
   const nowIso = new Date().toISOString();
-  const tracks: TrackRecord[] = items.map((item) => ({
-    trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
-    sourceKind: item.request.source,
-    sourceLocator: normalizeSourcePath(item.path),
-    sourceId: item.sourceId ?? null,
-    category: item.category,
-    title: item.label,
-    author: null,
-    released: null,
-    path: normalizeSourcePath(item.path),
-    archiveRef: item.archiveRef ?? null,
-    sizeBytes: item.sizeBytes ?? null,
-    modifiedAt: item.modifiedAt ?? null,
-    defaultDurationMs: item.durationMs ?? null,
-    subsongCount: item.subsongCount ?? null,
-    createdAt: item.addedAt ?? nowIso,
-    updatedAt: nowIso,
-    configRef: item.configRef ?? null,
-  }));
+  const tracksById = new Map<string, TrackRecord>();
   const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
     playlistItemId: item.id,
     playlistId,
@@ -174,7 +156,29 @@ export const serializePlaylistToRepository = (items: PlaylistItem[], playlistId:
     unavailableReason: item.unavailableReason ?? null,
     addedAt: item.addedAt ?? nowIso,
   }));
-  return { tracks, playlistItems };
+  items.forEach((item) => {
+    const trackId = buildTrackId(item.request.source, item.sourceId ?? null, item.path);
+    tracksById.set(trackId, {
+      trackId,
+      sourceKind: item.request.source,
+      sourceLocator: normalizeSourcePath(item.path),
+      sourceId: item.sourceId ?? null,
+      category: item.category,
+      title: item.label,
+      author: null,
+      released: null,
+      path: normalizeSourcePath(item.path),
+      archiveRef: item.archiveRef ?? null,
+      sizeBytes: item.sizeBytes ?? null,
+      modifiedAt: item.modifiedAt ?? null,
+      defaultDurationMs: item.durationMs ?? null,
+      subsongCount: item.subsongCount ?? null,
+      createdAt: item.addedAt ?? nowIso,
+      updatedAt: nowIso,
+      configRef: item.configRef ?? null,
+    });
+  });
+  return { tracks: Array.from(tracksById.values()), playlistItems };
 };
 
 const persistSerializedPlaylist = async (
@@ -183,6 +187,14 @@ const persistSerializedPlaylist = async (
   serialized: { tracks: TrackRecord[]; playlistItems: PlaylistItemRecord[] },
   trackChunkSize: number,
 ) => {
+  if (typeof repository.replacePlaylistSnapshot === "function") {
+    const commitT0 = Date.now();
+    await repository.replacePlaylistSnapshot(playlistId, serialized);
+    console.info(
+      `[hvsc-perf] replacePlaylistSnapshot done tracks=${serialized.tracks.length} items=${serialized.playlistItems.length} ms=${Date.now() - commitT0}`,
+    );
+    return;
+  }
   const utT0 = Date.now();
   for (let index = 0; index < serialized.tracks.length; index += trackChunkSize) {
     await repository.upsertTracks(serialized.tracks.slice(index, index + trackChunkSize));

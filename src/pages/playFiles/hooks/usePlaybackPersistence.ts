@@ -97,7 +97,6 @@ export function usePlaybackPersistence({
   playlistStorageKey,
   localEntriesBySourceId,
   localSourceTreeUris,
-  buildHvscLocalPlayFile,
   buildPlaylistItem,
   playedClockRef,
   trackStartedAtRef,
@@ -165,9 +164,7 @@ export function usePlaybackPersistence({
                       parseModifiedAt(localEntry?.modifiedAt),
                     )
                   : undefined)
-              : entry.source === "hvsc"
-                ? buildHvscLocalPlayFile(normalizedPath, entry.name)
-                : undefined,
+              : undefined,
           sizeBytes: localEntry?.sizeBytes ?? entry.sizeBytes ?? null,
           modifiedAt: localEntry?.modifiedAt ?? entry.modifiedAt ?? null,
         };
@@ -339,7 +336,6 @@ export function usePlaybackPersistence({
     resolvedDeviceId,
     localEntriesBySourceId,
     localSourceTreeUris,
-    buildHvscLocalPlayFile,
     buildPlaylistItem,
     setActivePlaylistQuery,
   ]);

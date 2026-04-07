@@ -162,9 +162,9 @@ const createSeededSong = (
     sidMetadata: null,
     trackSubsongs: normalizedDurations?.length
       ? normalizedDurations.map((_, index) => ({
-        songNr: index + 1,
-        isDefault: index === 0,
-      }))
+          songNr: index + 1,
+          isDefault: index === 0,
+        }))
       : null,
   };
   song.searchTextSeed = buildSeedSearchText(song);

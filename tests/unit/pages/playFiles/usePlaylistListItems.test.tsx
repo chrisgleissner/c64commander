@@ -254,4 +254,98 @@ describe("usePlaylistListItems", () => {
       }),
     );
   });
+
+  it("surfaces candidate and declined config states and wires row actions", () => {
+    const handlePlaylistSelect = vi.fn();
+    const onOpenConfig = vi.fn();
+    const startPlaylist = vi.fn();
+    const candidateItem: PlaylistItem = {
+      ...buildItem("commoserve", "/COMMOSERVE/Demos/Candidate.sid"),
+      configCandidates: [
+        {
+          ref: {
+            kind: "local",
+            fileName: "candidate.cfg",
+            path: "/Configs/candidate.cfg",
+            sourceId: "local-source",
+          },
+          strategy: "exact-name",
+          distance: 0,
+          confidence: "high",
+        },
+      ],
+    };
+    const declinedItem: PlaylistItem = {
+      ...buildItem("hvsc", "/MUSICIANS/Hubbard_Rob/Declined.sid"),
+      configOrigin: "manual-none",
+    };
+    const playlist = [candidateItem, declinedItem];
+
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading: false,
+        handlePlaylistSelect,
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onOpenConfig,
+        onRemoveConfig: vi.fn(),
+        startPlaylist,
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId: candidateItem.id,
+      }),
+    );
+
+    const rows = result.current.filter((entry) => entry.variant !== "header");
+    const candidateRow = rows.find((entry) => entry.id === candidateItem.id);
+    const declinedRow = rows.find((entry) => entry.id === declinedItem.id);
+
+    expect(candidateRow?.secondaryActionLabel).toBe("CFG?");
+    expect(candidateRow?.isPlaying).toBe(true);
+    expect(declinedRow?.secondaryActionLabel).toBe("No CFG");
+
+    const candidateStatuses = candidateRow?.menuItems?.filter(
+      (menu) => menu.type === "info" && menu.label === "Status",
+    );
+    const declinedStatuses = declinedRow?.menuItems?.filter((menu) => menu.type === "info" && menu.label === "Status");
+    expect(candidateStatuses?.[0]).toEqual({
+      type: "info",
+      label: "Status",
+      value: "Available",
+    });
+    expect(candidateStatuses?.[1]).toEqual({
+      type: "info",
+      label: "Status",
+      value: "Candidates found",
+    });
+    expect(declinedStatuses?.[1]).toEqual({
+      type: "info",
+      label: "Status",
+      value: "Declined",
+    });
+
+    candidateRow?.onSelectToggle?.(true);
+    candidateRow?.onAction?.();
+    candidateRow?.onSecondaryAction?.();
+    candidateRow?.onTitleClick?.();
+    declinedRow?.onRowClick?.();
+
+    expect(handlePlaylistSelect).toHaveBeenCalledWith(candidateItem, true);
+    expect(onOpenConfig).toHaveBeenCalledWith(candidateItem);
+    expect(startPlaylist).toHaveBeenNthCalledWith(1, playlist, 0);
+    expect(startPlaylist).toHaveBeenNthCalledWith(2, playlist, 0);
+    expect(startPlaylist).toHaveBeenNthCalledWith(3, playlist, 1);
+
+    const candidateMetaChildren = Array.isArray((candidateRow?.meta as any)?.props?.children)
+      ? (candidateRow?.meta as any).props.children
+      : [(candidateRow?.meta as any)?.props?.children];
+    expect(candidateMetaChildren[0]?.props?.origin).toBe("commoserve");
+  });
 });

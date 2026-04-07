@@ -54,8 +54,10 @@ export const usePlaylistListItems = ({
   formatDate,
   getParentPath,
   currentPlayingItemId,
-}: PlaylistListItemsOptions) =>
-  useMemo(() => {
+}: PlaylistListItemsOptions) => {
+  const playlistIndexById = useMemo(() => new Map(playlist.map((entry, index) => [entry.id, index])), [playlist]);
+
+  return useMemo(() => {
     const renderScope = beginHvscPerfScope("browse:render", {
       filteredCount: filteredPlaylist.length,
       playlistCount: playlist.length,
@@ -63,7 +65,6 @@ export const usePlaylistListItems = ({
       hvscItemCount: filteredPlaylist.filter((item) => item.request.source === "hvsc").length,
     });
     const items: ActionListItem[] = [];
-    const playlistIndexById = new Map(playlist.map((entry, index) => [entry.id, index]));
     let lastFolder: string | null = null;
     filteredPlaylist.forEach((item) => {
       const folderPath = getParentPath(item.path);
@@ -276,8 +277,10 @@ export const usePlaylistListItems = ({
     onRemoveConfig,
     isPlaylistLoading,
     playlist,
+    playlistIndexById,
     playlistItemDuration,
     selectedPlaylistIds,
     startPlaylist,
     currentPlayingItemId,
   ]);
+};

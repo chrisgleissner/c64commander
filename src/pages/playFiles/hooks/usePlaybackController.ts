@@ -110,6 +110,7 @@ interface UsePlaybackControllerProps {
     >
   >;
   localSourceTreeUris: Map<string, string | null>;
+  buildHvscLocalPlayFile?: (path: string, name: string) => LocalPlayFile | null | undefined;
   deviceProduct?: string | null;
   ensurePlaybackConnection: () => Promise<void>;
   resolveUnavailableConfigDecision?: (
@@ -184,6 +185,7 @@ export function usePlaybackController({
   repeatEnabled,
   localEntriesBySourceId,
   localSourceTreeUris,
+  buildHvscLocalPlayFile,
   deviceProduct,
   ensurePlaybackConnection,
   resolveUnavailableConfigDecision,
@@ -368,6 +370,21 @@ export function usePlaybackController({
     [archiveConfigs],
   );
 
+  const resolveHvscRuntimeFile = useCallback(
+    async (item: PlaylistItem) => {
+      if (item.request.source !== "hvsc" || item.request.file) return;
+      const normalizedPath = normalizeSourcePath(item.path);
+      const runtimeFile = buildHvscLocalPlayFile?.(normalizedPath, item.label);
+      if (!runtimeFile) {
+        throw new Error("HVSC file unavailable. Reinstall or re-add it to the playlist.");
+      }
+      item.request.file = runtimeFile;
+      item.request.path = normalizedPath;
+      item.path = normalizedPath;
+    },
+    [buildHvscLocalPlayFile],
+  );
+
   const playItem = useCallback(
     async (
       item: PlaylistItem,
@@ -387,6 +404,25 @@ export function usePlaybackController({
                 item: item.label,
                 sourceId: item.sourceId ?? null,
                 archivePath: item.archiveRef?.entryPath ?? item.path,
+              },
+            });
+            markHandledUiError(error);
+            throw error;
+          }
+        }
+        if (item.request.source === "hvsc" && !item.request.file) {
+          try {
+            await resolveHvscRuntimeFile(item);
+          } catch (error) {
+            reportUserError({
+              operation: "PLAYBACK_HVSC_RESOLVE",
+              title: "HVSC playback unavailable",
+              description: (error as Error).message,
+              error,
+              context: {
+                item: item.label,
+                sourceId: item.sourceId ?? null,
+                path: item.path,
               },
             });
             markHandledUiError(error);
@@ -630,9 +666,11 @@ export function usePlaybackController({
       ensurePlaybackConnection,
       resolveUnavailableConfigDecision,
       ensureUnmuted,
+      buildHvscLocalPlayFile,
       localEntriesBySourceId,
       localSourceTreeUris,
       resolveCommoServeRuntimeFile,
+      resolveHvscRuntimeFile,
       resolveSidMetadata,
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,

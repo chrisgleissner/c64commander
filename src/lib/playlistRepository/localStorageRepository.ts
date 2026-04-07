@@ -12,6 +12,7 @@ import type {
   PlaylistQueryResult,
   PlaylistSessionRecord,
   RandomPlaySession,
+  SerializedPlaylistSnapshot,
   TrackRecord,
 } from "./types";
 import type { PlaylistDataRepository } from "./repository";
@@ -181,6 +182,17 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
       this.state,
       tracks.map((track) => track.trackId),
     );
+    this.commit();
+  }
+
+  async replacePlaylistSnapshot(playlistId: string, snapshot: SerializedPlaylistSnapshot) {
+    snapshot.tracks.forEach((track) => {
+      this.state.tracks[track.trackId] = track;
+    });
+    this.state.playlistItemsByPlaylistId[playlistId] = [...snapshot.playlistItems].sort((left, right) =>
+      left.sortKey.localeCompare(right.sortKey),
+    );
+    rebuildPlaylistIndex(this.state, playlistId);
     this.commit();
   }
 

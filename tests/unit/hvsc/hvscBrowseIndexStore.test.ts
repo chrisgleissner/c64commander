@@ -391,9 +391,7 @@ describe("hvscBrowseIndexStore", () => {
       durationSeconds: 123,
       metadataStatus: "seeded",
     });
-    expect(loaded?.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain(
-      "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
-    );
+    expect(loaded?.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain("/MUSICIANS/H/Hubbard_Rob/Commando.sid");
   });
 
   it("normalizeFolderPath treats empty string as root", () => {

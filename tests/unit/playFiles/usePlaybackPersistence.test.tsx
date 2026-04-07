@@ -323,6 +323,7 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
+      expect(result.current.playlist[0].request.file).toBeUndefined();
       expect(result.current.playlist[0].subsongCount).toBe(4);
     });
   });
@@ -478,6 +479,7 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("repo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
+      expect(result.current.playlist[0].request.file).toBeUndefined();
       expect(result.current.playlist[0].subsongCount).toBe(1);
     });
   });

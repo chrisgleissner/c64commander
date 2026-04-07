@@ -118,4 +118,35 @@ describe("playlistRepositorySync", () => {
       expect.objectContaining({ outcome: "error", errorMessage: expect.stringContaining("expected 4, got 3") }),
     );
   });
+
+  it("uses repository atomic snapshot persistence when available", async () => {
+    const playlistId = buildPlaylistStorageKey("device-1");
+    const items = Array.from({ length: 2_500 }, (_, index) => buildPlaylistItem(index));
+    const repository = {
+      replacePlaylistSnapshot: vi.fn().mockResolvedValue(undefined),
+      upsertTracks: vi.fn().mockResolvedValue(undefined),
+      replacePlaylistItems: vi.fn().mockResolvedValue(undefined),
+      getPlaylistItems: vi.fn(),
+      getPlaylistItemCount: vi.fn().mockResolvedValue(items.length),
+      getTracksByIds: vi.fn(),
+      saveSession: vi.fn(),
+      getSession: vi.fn(),
+      queryPlaylist: vi.fn(),
+      createSession: vi.fn(),
+      next: vi.fn(),
+      getRandomSession: vi.fn(),
+      saveRandomSession: vi.fn(),
+    };
+
+    const result = await commitPlaylistSnapshot({
+      playlistId,
+      items,
+      repository: repository as any,
+    });
+
+    expect(result.committedCount).toBe(items.length);
+    expect(repository.replacePlaylistSnapshot).toHaveBeenCalledTimes(1);
+    expect(repository.upsertTracks).not.toHaveBeenCalled();
+    expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
+  });
 });

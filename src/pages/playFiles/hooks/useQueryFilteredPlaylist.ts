@@ -53,6 +53,7 @@ export const useQueryFilteredPlaylist = ({
   const [viewAllLimit, setViewAllLimit] = useState(initialViewAllLimit);
   const playlistRef = useRef(playlist);
   const queryRef = useRef(query);
+  const playlistItemsById = useMemo(() => new Map(playlist.map((item) => [item.id, item])), [playlist]);
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const repositoryReady = repositorySnapshot.phase === "READY" && repositorySnapshot.committedCount === playlist.length;
 
@@ -113,7 +114,7 @@ export const useQueryFilteredPlaylist = ({
               categoryFilters: playlistTypeFilters,
               repositoryPhase: repositorySnapshot.phase,
               queryEngine: typeof metadata.source === "string" ? metadata.source : null,
-              playlistOwnership: "react-state",
+              playlistOwnership: metadata.source === "repository" ? "repository" : "react-state",
               feedbackKind: typeof metadata.feedbackKind === "string" ? metadata.feedbackKind : "result",
               feedbackVisibleWithinMs,
               feedbackWithinBudget: feedbackVisibleWithinMs <= 2_000,
@@ -149,9 +150,8 @@ export const useQueryFilteredPlaylist = ({
         offset: 0,
         sort: "playlist-position",
       });
-      const byId = new Map(currentPlaylist.map((item) => [item.id, item]));
       const nextFiltered = result.rows
-        .map((row) => byId.get(row.playlistItem.playlistItemId) ?? null)
+        .map((row) => playlistItemsById.get(row.playlistItem.playlistItemId) ?? null)
         .filter((item): item is PlaylistItem => Boolean(item));
 
       finalizeFilterScope({
@@ -208,6 +208,7 @@ export const useQueryFilteredPlaylist = ({
     repositoryReady,
     repositorySnapshot.phase,
     repositorySnapshot.revision,
+    playlistItemsById,
     viewAllLimit,
   ]);
 
