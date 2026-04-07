@@ -26,6 +26,7 @@ import {
   writeLibraryFile,
   deleteLibraryFile,
   resetLibraryRoot,
+  resetHvscCache,
   resetSonglengthsCache,
   createLibraryStagingDir,
   writeStagingFile,
@@ -33,7 +34,7 @@ import {
   cleanupStaleStagingDir,
 } from "./hvscFilesystem";
 import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
-import { loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
+import { getDefaultHvscStatusSummary, loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -156,6 +157,33 @@ const isCorruptedArchiveError = (error: unknown) => {
 
 export const addHvscProgressListener = async (listener: (event: HvscProgressEvent) => void) => {
   return addProgressListener(listener);
+};
+
+export const resetHvscLibraryData = async (): Promise<void> => {
+  if (runtimeState.activeIngestionRunning) {
+    throw new Error("Cannot reset HVSC while preparation is running");
+  }
+
+  await cleanupStaleStagingDir();
+  await resetLibraryRoot();
+  await resetHvscCache();
+  await clearHvscBrowseIndexSnapshot();
+
+  updateHvscState({
+    installedBaselineVersion: null,
+    installedVersion: 0,
+    ingestionState: "idle",
+    ingestionError: null,
+    ingestionSummary: null,
+  });
+  saveHvscStatusSummary(getDefaultHvscStatusSummary());
+  resetHvscProgressSummaryStage();
+  resetCacheStatFailure();
+
+  addLog("info", "HVSC library reset", {
+    cacheCleared: true,
+    libraryCleared: true,
+  });
 };
 
 // ── Status/cache queries ─────────────────────────────────────────

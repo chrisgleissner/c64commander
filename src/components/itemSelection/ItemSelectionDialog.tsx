@@ -56,6 +56,7 @@ export type ItemSelectionDialogProps = {
   sourceGroups: SourceGroup[];
   onAddLocalSource: () => Promise<string | null>;
   onConfirm: (source: SourceLocation, selections: SelectedItem[]) => Promise<boolean>;
+  onSelectSource?: (source: SourceLocation) => Promise<boolean> | boolean;
   filterEntry?: (entry: SourceEntry) => boolean;
   allowFolderSelection?: boolean;
   selectionMode?: "single" | "multiple";
@@ -78,6 +79,7 @@ export const ItemSelectionDialog = ({
   sourceGroups,
   onAddLocalSource,
   onConfirm,
+  onSelectSource,
   filterEntry,
   allowFolderSelection = true,
   selectionMode = "multiple",
@@ -271,20 +273,20 @@ export const ItemSelectionDialog = ({
     }
     const selections: SelectedItem[] = isArchiveSource
       ? Array.from(archiveSelection.values()).map((result) => ({
-        type: "file" as const,
-        name: result.name,
-        path: `${result.id}/${result.category}`,
-      }))
+          type: "file" as const,
+          name: result.name,
+          path: `${result.id}/${result.category}`,
+        }))
       : Array.from(selection.values()).map((entry) => ({
-        type: entry.type,
-        name: entry.name,
-        path: entry.path,
-        durationMs: entry.durationMs,
-        songNr: entry.songNr,
-        subsongCount: entry.subsongCount,
-        sizeBytes: entry.sizeBytes ?? null,
-        modifiedAt: entry.modifiedAt ?? null,
-      }));
+          type: entry.type,
+          name: entry.name,
+          path: entry.path,
+          durationMs: entry.durationMs,
+          songNr: entry.songNr,
+          subsongCount: entry.subsongCount,
+          sizeBytes: entry.sizeBytes ?? null,
+          modifiedAt: entry.modifiedAt ?? null,
+        }));
     try {
       const success = await onConfirm(source, selections);
       if (success) {
@@ -331,6 +333,19 @@ export const ItemSelectionDialog = ({
       });
     }
   };
+
+  const handleSelectSource = useCallback(
+    async (nextSource: SourceLocation | null) => {
+      if (!nextSource) return;
+      const shouldOpen = (await onSelectSource?.(nextSource)) ?? true;
+      if (!shouldOpen) {
+        return;
+      }
+      setPendingLocalSource(false);
+      setSelectedSourceId(nextSource.id);
+    },
+    [onSelectSource],
+  );
 
   const interstitialGridClassName = profile === "expanded" ? "grid-cols-2" : "grid-cols-1";
   const interstitialButtonClassName = cn("justify-start min-w-0", profile === "medium" && "w-full min-h-16 px-4 py-3");
@@ -399,9 +414,7 @@ export const ItemSelectionDialog = ({
                   variant="outline"
                   className={interstitialButtonClassName}
                   onClick={() => {
-                    if (!c64UltimateSource) return;
-                    setPendingLocalSource(false);
-                    setSelectedSourceId(c64UltimateSource.id);
+                    void handleSelectSource(c64UltimateSource);
                   }}
                   disabled={!c64UltimateSource?.isAvailable}
                   id="import-option-c64u"
@@ -423,8 +436,7 @@ export const ItemSelectionDialog = ({
                     className={interstitialButtonClassName}
                     onClick={() => {
                       if (!hvscSource.isAvailable) return;
-                      setPendingLocalSource(false);
-                      setSelectedSourceId(hvscSource.id);
+                      void handleSelectSource(hvscSource);
                     }}
                     disabled={!hvscSource.isAvailable}
                     id="import-option-hvsc"
@@ -446,18 +458,14 @@ export const ItemSelectionDialog = ({
                     variant="outline"
                     className={interstitialButtonClassName}
                     onClick={() => {
-                      setPendingLocalSource(false);
-                      setSelectedSourceId(commoserveSource.id);
+                      void handleSelectSource(commoserveSource);
                     }}
                     id="import-option-commoserve"
                     data-testid="import-option-commoserve"
                     aria-label={`Search ${SOURCE_LABELS.commoserve}`}
                   >
                     <span className={interstitialOptionContentClassName} aria-hidden="true">
-                      <FileOriginIcon
-                        origin="commoserve"
-                        className={resolveInterstitialIconClassName("commoserve")}
-                      />
+                      <FileOriginIcon origin="commoserve" className={resolveInterstitialIconClassName("commoserve")} />
                       <span className={interstitialLabelClassName}>
                         <span className={cn("truncate font-medium", interstitialTextClassName)}>
                           {SOURCE_LABELS.commoserve}

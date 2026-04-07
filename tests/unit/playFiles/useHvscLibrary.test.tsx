@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   ingestCachedHvscMock: vi.fn(),
   installOrUpdateHvscMock: vi.fn(),
   isHvscBridgeAvailableMock: vi.fn(),
+  resetHvscLibraryDataMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
   recordSmokeBenchmarkSnapshotMock: vi.fn(),
 }));
@@ -47,25 +48,30 @@ vi.mock("@/lib/tracing/actionTrace", () => ({
   runWithActionTrace: (...args: unknown[]) => mocks.runWithActionTraceMock(...args),
 }));
 
-vi.mock("@/lib/hvsc", () => ({
-  addHvscProgressListener: (...args: unknown[]) => mocks.addHvscProgressListenerMock(...args),
-  cancelHvscInstall: (...args: unknown[]) => mocks.cancelHvscInstallMock(...args),
-  checkForHvscUpdates: (...args: unknown[]) => mocks.checkForHvscUpdatesMock(...args),
-  clearHvscStatusSummary: (...args: unknown[]) => mocks.clearHvscStatusSummaryMock(...args),
-  ensureHvscMetadataHydration: (...args: unknown[]) => mocks.ensureHvscMetadataHydrationMock(...args),
-  getDefaultHvscStatusSummary: (...args: unknown[]) => mocks.getDefaultHvscStatusSummaryMock(...args),
-  getHvscCacheStatus: (...args: unknown[]) => mocks.getHvscCacheStatusMock(...args),
-  getHvscFolderListing: (...args: unknown[]) => mocks.getHvscFolderListingMock(...args),
-  getHvscSong: (...args: unknown[]) => mocks.getHvscSongMock(...args),
-  getHvscStatus: (...args: unknown[]) => mocks.getHvscStatusMock(...args),
-  loadHvscRoot: (...args: unknown[]) => mocks.loadHvscRootMock(...args),
-  loadHvscStatusSummary: (...args: unknown[]) => mocks.loadHvscStatusSummaryMock(...args),
-  saveHvscStatusSummary: (...args: unknown[]) => mocks.saveHvscStatusSummaryMock(...args),
-  ingestCachedHvsc: (...args: unknown[]) => mocks.ingestCachedHvscMock(...args),
-  installOrUpdateHvsc: (...args: unknown[]) => mocks.installOrUpdateHvscMock(...args),
-  isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
-  recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
-}));
+vi.mock("@/lib/hvsc", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/hvsc")>("@/lib/hvsc");
+  return {
+    ...actual,
+    addHvscProgressListener: (...args: unknown[]) => mocks.addHvscProgressListenerMock(...args),
+    cancelHvscInstall: (...args: unknown[]) => mocks.cancelHvscInstallMock(...args),
+    checkForHvscUpdates: (...args: unknown[]) => mocks.checkForHvscUpdatesMock(...args),
+    clearHvscStatusSummary: (...args: unknown[]) => mocks.clearHvscStatusSummaryMock(...args),
+    ensureHvscMetadataHydration: (...args: unknown[]) => mocks.ensureHvscMetadataHydrationMock(...args),
+    getDefaultHvscStatusSummary: (...args: unknown[]) => mocks.getDefaultHvscStatusSummaryMock(...args),
+    getHvscCacheStatus: (...args: unknown[]) => mocks.getHvscCacheStatusMock(...args),
+    getHvscFolderListing: (...args: unknown[]) => mocks.getHvscFolderListingMock(...args),
+    getHvscSong: (...args: unknown[]) => mocks.getHvscSongMock(...args),
+    getHvscStatus: (...args: unknown[]) => mocks.getHvscStatusMock(...args),
+    loadHvscRoot: (...args: unknown[]) => mocks.loadHvscRootMock(...args),
+    loadHvscStatusSummary: (...args: unknown[]) => mocks.loadHvscStatusSummaryMock(...args),
+    saveHvscStatusSummary: (...args: unknown[]) => mocks.saveHvscStatusSummaryMock(...args),
+    ingestCachedHvsc: (...args: unknown[]) => mocks.ingestCachedHvscMock(...args),
+    installOrUpdateHvsc: (...args: unknown[]) => mocks.installOrUpdateHvscMock(...args),
+    isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
+    resetHvscLibraryData: (...args: unknown[]) => mocks.resetHvscLibraryDataMock(...args),
+    recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
+  };
+});
 
 vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot: (...args: unknown[]) => mocks.recordSmokeBenchmarkSnapshotMock(...args),
@@ -164,6 +170,7 @@ describe("useHvscLibrary", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.resetHvscLibraryDataMock.mockResolvedValue(undefined);
     mocks.recordSmokeBenchmarkSnapshotMock.mockReset();
   });
 
@@ -385,6 +392,57 @@ describe("useHvscLibrary", () => {
     );
   });
 
+  it("starts the full install flow when HVSC is first requested without cached data", async () => {
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await act(async () => {
+      await result.current.runHvscPreparation();
+    });
+
+    expect(mocks.installOrUpdateHvscMock).toHaveBeenCalledWith("hvsc-install");
+    expect(mocks.ingestCachedHvscMock).not.toHaveBeenCalled();
+  });
+
+  it("retries indexing from the cached archive after an ingest failure", async () => {
+    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
+    mocks.getHvscStatusMock.mockResolvedValue(
+      createStatus({
+        installedVersion: 0,
+        ingestionState: "error",
+        ingestionError: "metadata failed",
+      }),
+    );
+
+    const { result } = renderHook(() => useHvscLibrary());
+    await waitFor(() => expect(result.current.hvscPreparationState).toBe("ERROR"));
+
+    await act(async () => {
+      await result.current.retryHvscPreparation();
+    });
+
+    expect(mocks.ingestCachedHvscMock).toHaveBeenCalledWith("hvsc-ingest");
+    expect(mocks.installOrUpdateHvscMock).not.toHaveBeenCalled();
+  });
+
+  it("does not restart preparation after the library is already ready", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(
+      createStatus({
+        installedVersion: 7,
+        ingestionState: "ready",
+      }),
+    );
+
+    const { result } = renderHook(() => useHvscLibrary());
+    await waitFor(() => expect(result.current.hvscPreparationState).toBe("READY"));
+
+    await act(async () => {
+      await result.current.runHvscPreparation();
+    });
+
+    expect(mocks.installOrUpdateHvscMock).not.toHaveBeenCalled();
+    expect(mocks.ingestCachedHvscMock).not.toHaveBeenCalled();
+  });
+
   it("cancels in-progress work and tolerates status refresh failures afterwards", async () => {
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
@@ -428,7 +486,7 @@ describe("useHvscLibrary", () => {
     );
   });
 
-  it("resets persisted summary and transient progress state", async () => {
+  it("resets the cached library data and clears transient progress state", async () => {
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         download: { status: "failure", errorMessage: "old error" },
@@ -438,14 +496,23 @@ describe("useHvscLibrary", () => {
     );
     const { result } = renderHook(() => useHvscLibrary());
 
-    act(() => {
-      result.current.handleHvscReset();
+    await act(async () => {
+      await result.current.handleHvscReset();
     });
 
+    expect(mocks.resetHvscLibraryDataMock).toHaveBeenCalledTimes(1);
     expect(mocks.clearHvscStatusSummaryMock).toHaveBeenCalledTimes(1);
     expect(result.current.hvscDownloadStatus).toBe("idle");
     expect(result.current.hvscExtractionStatus).toBe("idle");
     expect(result.current.hvscInlineError).toBeNull();
+    expect(result.current.selectedHvscFolder).toBe("/");
+    expect(result.current.hvscSongs).toEqual([]);
+    expect(mocks.toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "HVSC reset",
+        description: "The cached HVSC archives and indexed library were removed.",
+      }),
+    );
   });
 
   it("derives download, extraction, and failure state from progress events", async () => {

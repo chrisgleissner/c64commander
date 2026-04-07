@@ -8,7 +8,6 @@
 
 import type { HvscLibraryState } from "../hooks/useHvscLibrary";
 import { HvscControls } from "./HvscControls";
-import { formatBytes } from "../playFilesUtils";
 
 interface HvscManagerProps {
   hvscControlsEnabled: boolean;
@@ -24,34 +23,26 @@ export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
 
   return (
     <HvscControls
-      hvscInstalled={hvsc.hvscInstalled}
+      hvscInstalledVersion={hvsc.hvscStatus?.installedVersion ?? null}
       hvscAvailable={hvsc.hvscAvailable}
       hvscUpdating={hvsc.hvscUpdating}
-      hvscInProgress={hvsc.hvscInProgress}
       hvscCanIngest={hvsc.hvscCanIngest}
-      hvscPhase={hvsc.hvscPhase}
-      hvscSummaryState={hvsc.hvscSummaryState}
+      hvscPreparationState={hvsc.hvscPreparationState}
+      hvscPreparationStatusLabel={hvsc.hvscPreparationStatusLabel}
+      hvscPreparationProgressPercent={hvsc.hvscPreparationProgressPercent}
+      hvscPreparationThroughputLabel={hvsc.hvscPreparationThroughputLabel}
+      hvscPreparationErrorReason={hvsc.hvscPreparationErrorReason}
+      hvscReadySongCount={hvsc.hvscReadySongCount}
       hvscSummaryFilesExtracted={hvsc.hvscSummaryFilesExtracted}
       hvscSummaryDurationMs={hvsc.hvscSummaryDurationMs}
       hvscSummaryUpdatedAt={hvsc.hvscSummaryUpdatedAt}
-      hvscSummaryFailureLabel={hvsc.hvscSummaryFailureLabel}
       hvscMetadataProgressLabel={hvsc.hvscMetadataProgressLabel}
       hvscMetadataUpdatedAt={hvsc.hvscMetadataUpdatedAt}
-      hvscIngestionTotalSongs={hvsc.hvscIngestionTotalSongs}
-      hvscIngestionIngestedSongs={hvsc.hvscIngestionIngestedSongs}
-      hvscIngestionFailedSongs={hvsc.hvscIngestionFailedSongs}
       hvscSonglengthSyntaxErrors={hvsc.hvscSonglengthSyntaxErrors}
-      hvscActionLabel={hvsc.hvscActionLabel}
-      hvscDownloadBytes={hvsc.hvscDownloadBytes}
-      hvscDownloadElapsedMs={hvsc.hvscDownloadElapsedMs}
-      hvscInlineError={hvsc.hvscInlineError}
-      formatBytes={formatBytes}
       formatHvscDuration={formatHvscDuration}
       formatHvscTimestamp={formatHvscTimestamp}
-      onInstall={() => void hvsc.handleHvscInstall()}
-      onIngest={() => void hvsc.handleHvscIngest()}
-      onCancel={() => void hvsc.handleHvscCancel()}
-      onReset={hvsc.handleHvscReset}
+      onReindex={() => void hvsc.handleHvscReindex()}
+      onReset={() => void hvsc.handleHvscReset()}
     />
   );
 }

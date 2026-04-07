@@ -73,6 +73,7 @@ import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackContr
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
+import { HvscPreparationSheet } from "@/pages/playFiles/components/HvscPreparationSheet";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
 import { shouldShowHvscControls } from "@/pages/playFiles/hvscControlsVisibility";
@@ -210,6 +211,8 @@ export default function PlayFilesPage() {
   const [recurseFolders, setRecurseFolders] = useState(true);
 
   const [songPickerOpen, setSongPickerOpen] = useState(false);
+  const [hvscPreparationOpen, setHvscPreparationOpen] = useState(false);
+  const [browserInitialSourceId, setBrowserInitialSourceId] = useState<string | null>(null);
   const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
     status: "idle",
     count: 0,
@@ -276,7 +279,7 @@ export default function PlayFilesPage() {
   const volumeMuted = volumeState.muted;
 
   const hvsc = useHvscLibrary();
-  const { hvscStatus, hvscRoot, hvscLibraryAvailable, buildHvscLocalPlayFile } = hvsc;
+  const { hvscStatus, hvscRoot, hvscAvailable, buildHvscLocalPlayFile } = hvsc;
 
   const { localEntriesBySourceId, localSourceTreeUris } = useLocalEntries(localSources);
 
@@ -515,7 +518,56 @@ export default function PlayFilesPage() {
     }
   }, [browserOpen]);
 
+  useEffect(() => {
+    if (!hvscPreparationOpen) return;
+    if (hvsc.hvscPreparationState === "READY") return;
+    if (hvsc.hvscUpdating) return;
+    void hvsc.runHvscPreparation();
+  }, [hvsc.hvscPreparationState, hvsc.hvscUpdating, hvsc.runHvscPreparation, hvscPreparationOpen]);
+
   useImportNavigationGuards(isImportNavigationBlocked);
+
+  const handleBrowserOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setBrowserInitialSourceId(null);
+    }
+    setBrowserOpen(open);
+  }, []);
+
+  const handleOpenAddItems = useCallback(() => {
+    setBrowserInitialSourceId(null);
+    setBrowserOpen(true);
+  }, []);
+
+  const handleHvscSourceSelection = useCallback(
+    async (source: SourceLocation) => {
+      if (source.type !== "hvsc") {
+        return true;
+      }
+      if (hvsc.hvscPreparationState === "READY") {
+        return true;
+      }
+
+      setBrowserOpen(false);
+      setBrowserInitialSourceId(null);
+      setHvscPreparationOpen(true);
+      return false;
+    },
+    [hvsc.hvscPreparationState],
+  );
+
+  const handleBrowsePreparedHvsc = useCallback(() => {
+    setHvscPreparationOpen(false);
+    setBrowserInitialSourceId("hvsc-library");
+    setBrowserOpen(true);
+  }, []);
+
+  const handleCancelHvscPreparation = useCallback(async () => {
+    if (hvsc.hvscPreparationState === "DOWNLOADING" || hvsc.hvscPreparationState === "INGESTING") {
+      await hvsc.handleHvscCancel();
+    }
+    setHvscPreparationOpen(false);
+  }, [hvsc]);
 
   const resolvedDeviceId = useResolvedPlaybackDeviceId(deviceInfoId);
   const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(resolvedDeviceId), [resolvedDeviceId]);
@@ -539,7 +591,7 @@ export default function PlayFilesPage() {
       { label: SOURCE_LABELS.local, sources: localGroupSources },
       { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
-    if (hvscLibraryAvailable) {
+    if (hvscAvailable) {
       groups.push({
         label: SOURCE_LABELS.hvsc,
         sources: [createHvscSourceLocation(hvscRoot.path)],
@@ -552,7 +604,7 @@ export default function PlayFilesPage() {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, hvscLibraryAvailable, hvscRoot.path, localSources]);
+  }, [archiveConfig, commoserveEnabled, hvscAvailable, hvscRoot.path, localSources]);
 
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {
@@ -576,12 +628,12 @@ export default function PlayFilesPage() {
         prev.map((item) =>
           item.id === itemId
             ? {
-              ...item,
-              configRef,
-              configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
-              configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
-              configCandidates: options?.candidates ?? item.configCandidates ?? null,
-            }
+                ...item,
+                configRef,
+                configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
+                configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
+                configCandidates: options?.candidates ?? item.configCandidates ?? null,
+              }
             : item,
         ),
       );
@@ -594,16 +646,16 @@ export default function PlayFilesPage() {
       prev.map((entry) =>
         entry.id === item.id
           ? {
-            ...entry,
-            configOverrides: overrides,
-            configOrigin: overrides?.length
-              ? "manual"
-              : entry.configRef
-                ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
-                : entry.configOrigin === "manual-none"
-                  ? "manual-none"
-                  : "none",
-          }
+              ...entry,
+              configOverrides: overrides,
+              configOrigin: overrides?.length
+                ? "manual"
+                : entry.configRef
+                  ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
+                  : entry.configOrigin === "manual-none"
+                    ? "manual-none"
+                    : "none",
+            }
           : entry,
       ),
     );
@@ -1482,7 +1534,7 @@ export default function PlayFilesPage() {
                 onToggleFilter={togglePlaylistTypeFilter}
                 formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
-                onAddItems={() => setBrowserOpen(true)}
+                onAddItems={handleOpenAddItems}
                 onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
                 playlistFilterText={playlistFilterInputText}
                 onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
@@ -1546,13 +1598,15 @@ export default function PlayFilesPage() {
 
           <ItemSelectionDialog
             open={browserOpen}
-            onOpenChange={setBrowserOpen}
+            onOpenChange={handleBrowserOpenChange}
             title="Add items"
             confirmLabel="Add to playlist"
+            initialSourceId={browserInitialSourceId}
             sourceGroups={sourceGroups}
             archiveConfigs={archiveConfigs}
             onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
             onConfirm={handleAddFileSelections}
+            onSelectSource={handleHvscSourceSelection}
             filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}
             allowFolderSelection
             isConfirming={isAddingItems}
@@ -1561,6 +1615,21 @@ export default function PlayFilesPage() {
             autoConfirmCloseBefore={isAndroid}
             onAutoConfirmStart={handleAutoConfirmStart}
             autoConfirmLocalSource
+          />
+
+          <HvscPreparationSheet
+            open={hvscPreparationOpen}
+            onOpenChange={setHvscPreparationOpen}
+            state={hvsc.hvscPreparationState}
+            statusLabel={hvsc.hvscPreparationStatusLabel}
+            failedPhase={hvsc.hvscPreparationFailedPhase}
+            progressPercent={hvsc.hvscPreparationProgressPercent}
+            throughputLabel={hvsc.hvscPreparationThroughputLabel}
+            readySongCount={hvsc.hvscReadySongCount}
+            errorReason={hvsc.hvscPreparationErrorReason}
+            onBrowse={handleBrowsePreparedHvsc}
+            onCancel={() => void handleCancelHvscPreparation()}
+            onRetry={() => void hvsc.retryHvscPreparation()}
           />
 
           <ItemSelectionDialog

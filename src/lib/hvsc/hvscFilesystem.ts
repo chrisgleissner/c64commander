@@ -354,6 +354,22 @@ export const resetLibraryRoot = async () => {
   await ensureDir(HVSC_LIBRARY_DIR);
 };
 
+export const resetHvscCache = async () => {
+  try {
+    await Filesystem.rmdir({
+      directory: Directory.Data,
+      path: HVSC_CACHE_DIR,
+      recursive: true,
+    });
+  } catch (error) {
+    logFilesystemWarning("Failed to remove HVSC cache directory", {
+      path: HVSC_CACHE_DIR,
+      error,
+    });
+  }
+  await ensureDir(HVSC_CACHE_DIR);
+};
+
 const removeDirSilently = async (path: string) => {
   try {
     await Filesystem.rmdir({

@@ -143,7 +143,7 @@ describe("ItemSelectionDialog display profiles", () => {
     vi.useRealTimers();
   });
 
-  it("keeps the browser as a sheet across profile changes while preserving selection and filter state", () => {
+  it("keeps the browser as a sheet across profile changes while preserving selection and filter state", async () => {
     localStorage.clear();
     setViewportWidth(360);
 
@@ -154,6 +154,10 @@ describe("ItemSelectionDialog display profiles", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("add-items-filter")).toBeVisible();
+    });
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
@@ -277,11 +281,13 @@ describe("ItemSelectionDialog display profiles", () => {
 
     fireEvent.click(screen.getByTestId("import-option-c64u"));
 
-    const dialog = await screen.findByRole("dialog");
+    const filterInput = await screen.findByTestId("add-items-filter");
+    const dialog = filterInput.closest('[role="dialog"]');
     const close = screen.getByRole("button", { name: "Close" });
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(dialog);
+      expect(dialog).not.toBeNull();
+      expect(dialog).toContainElement(document.activeElement);
     });
     expect(document.activeElement).not.toBe(close);
   });
@@ -359,6 +365,50 @@ describe("ItemSelectionDialog display profiles", () => {
         }),
       ]);
     });
+  });
+
+  it("lets onSelectSource intercept HVSC before the browser opens", async () => {
+    const onSelectSource = vi.fn(async () => false);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          onSelectSource={onSelectSource}
+          sourceGroups={[
+            {
+              label: "Sources",
+              sources: [
+                {
+                  id: "hvsc-1",
+                  type: "hvsc",
+                  name: "HVSC library",
+                  rootPath: "/hvsc",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-hvsc"));
+
+    await waitFor(() => {
+      expect(onSelectSource).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "hvsc-1", type: "hvsc", name: "HVSC library" }),
+      );
+    });
+    expect(screen.queryByText("From HVSC")).not.toBeInTheDocument();
+    expect(screen.getByTestId("import-selection-interstitial")).toBeVisible();
   });
 });
 
@@ -458,6 +508,9 @@ describe("ItemSelectionDialog archive source buttons", () => {
     );
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-selection-view-mock")).toBeVisible();
+    });
     fireEvent.click(screen.getByText("Toggle archive result"));
     fireEvent.click(screen.getByTestId("add-items-confirm"));
 
@@ -466,7 +519,7 @@ describe("ItemSelectionDialog archive source buttons", () => {
     ]);
   });
 
-  it("updates archive selection count for select-all and clear actions", () => {
+  it("updates archive selection count for select-all and clear actions", async () => {
     render(
       <DisplayProfileProvider>
         <ItemSelectionDialog
@@ -490,6 +543,9 @@ describe("ItemSelectionDialog archive source buttons", () => {
     );
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-selection-view-mock")).toBeVisible();
+    });
     expect(screen.getByTestId("archive-selection-size")).toHaveTextContent("0");
 
     fireEvent.click(screen.getByText("Select all archive results"));

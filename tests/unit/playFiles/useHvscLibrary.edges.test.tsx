@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   ingestCachedHvscMock: vi.fn(),
   installOrUpdateHvscMock: vi.fn(),
   isHvscBridgeAvailableMock: vi.fn(),
+  resetHvscLibraryDataMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
 }));
 
@@ -54,25 +55,30 @@ vi.mock("@/lib/tracing/actionTrace", () => ({
   runWithActionTrace: (...args: unknown[]) => mocks.runWithActionTraceMock(...args),
 }));
 
-vi.mock("@/lib/hvsc", () => ({
-  addHvscProgressListener: (...args: unknown[]) => mocks.addHvscProgressListenerMock(...args),
-  cancelHvscInstall: (...args: unknown[]) => mocks.cancelHvscInstallMock(...args),
-  checkForHvscUpdates: (...args: unknown[]) => mocks.checkForHvscUpdatesMock(...args),
-  clearHvscStatusSummary: (...args: unknown[]) => mocks.clearHvscStatusSummaryMock(...args),
-  ensureHvscMetadataHydration: (...args: unknown[]) => mocks.ensureHvscMetadataHydrationMock(...args),
-  getDefaultHvscStatusSummary: (...args: unknown[]) => mocks.getDefaultHvscStatusSummaryMock(...args),
-  getHvscCacheStatus: (...args: unknown[]) => mocks.getHvscCacheStatusMock(...args),
-  getHvscFolderListing: (...args: unknown[]) => mocks.getHvscFolderListingMock(...args),
-  getHvscSong: (...args: unknown[]) => mocks.getHvscSongMock(...args),
-  getHvscStatus: (...args: unknown[]) => mocks.getHvscStatusMock(...args),
-  loadHvscRoot: (...args: unknown[]) => mocks.loadHvscRootMock(...args),
-  loadHvscStatusSummary: (...args: unknown[]) => mocks.loadHvscStatusSummaryMock(...args),
-  saveHvscStatusSummary: (...args: unknown[]) => mocks.saveHvscStatusSummaryMock(...args),
-  ingestCachedHvsc: (...args: unknown[]) => mocks.ingestCachedHvscMock(...args),
-  installOrUpdateHvsc: (...args: unknown[]) => mocks.installOrUpdateHvscMock(...args),
-  isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
-  recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
-}));
+vi.mock("@/lib/hvsc", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/hvsc")>("@/lib/hvsc");
+  return {
+    ...actual,
+    addHvscProgressListener: (...args: unknown[]) => mocks.addHvscProgressListenerMock(...args),
+    cancelHvscInstall: (...args: unknown[]) => mocks.cancelHvscInstallMock(...args),
+    checkForHvscUpdates: (...args: unknown[]) => mocks.checkForHvscUpdatesMock(...args),
+    clearHvscStatusSummary: (...args: unknown[]) => mocks.clearHvscStatusSummaryMock(...args),
+    ensureHvscMetadataHydration: (...args: unknown[]) => mocks.ensureHvscMetadataHydrationMock(...args),
+    getDefaultHvscStatusSummary: (...args: unknown[]) => mocks.getDefaultHvscStatusSummaryMock(...args),
+    getHvscCacheStatus: (...args: unknown[]) => mocks.getHvscCacheStatusMock(...args),
+    getHvscFolderListing: (...args: unknown[]) => mocks.getHvscFolderListingMock(...args),
+    getHvscSong: (...args: unknown[]) => mocks.getHvscSongMock(...args),
+    getHvscStatus: (...args: unknown[]) => mocks.getHvscStatusMock(...args),
+    loadHvscRoot: (...args: unknown[]) => mocks.loadHvscRootMock(...args),
+    loadHvscStatusSummary: (...args: unknown[]) => mocks.loadHvscStatusSummaryMock(...args),
+    saveHvscStatusSummary: (...args: unknown[]) => mocks.saveHvscStatusSummaryMock(...args),
+    ingestCachedHvsc: (...args: unknown[]) => mocks.ingestCachedHvscMock(...args),
+    installOrUpdateHvsc: (...args: unknown[]) => mocks.installOrUpdateHvscMock(...args),
+    isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
+    resetHvscLibraryData: (...args: unknown[]) => mocks.resetHvscLibraryDataMock(...args),
+    recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
+  };
+});
 
 type SummaryStatus = "idle" | "in-progress" | "success" | "failure";
 
@@ -169,6 +175,7 @@ describe("useHvscLibrary edge cases", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.resetHvscLibraryDataMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

@@ -41,6 +41,7 @@ import {
   getHvscStatus as getRuntimeStatus,
   ingestCachedHvsc as ingestRuntimeCached,
   installOrUpdateHvsc as installRuntime,
+  resetHvscLibraryData as resetRuntimeLibraryData,
 } from "./hvscIngestionRuntime";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "./hvscSongLengthService";
 import { hydrateHvscMetadata } from "./hvscMetadataHydrator";
@@ -150,6 +151,14 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
   const mock = getMockBridge();
   if (mock?.cancelHvscInstall) return mock.cancelHvscInstall({ cancelToken });
   return cancelRuntimeInstall(cancelToken);
+};
+
+export const resetHvscLibraryData = async (): Promise<void> => {
+  const mock = getMockBridge();
+  if (mock?.resetHvscLibraryData) {
+    return mock.resetHvscLibraryData();
+  }
+  return resetRuntimeLibraryData();
 };
 
 export const addHvscProgressListener = async (listener: HvscProgressListener) => {
