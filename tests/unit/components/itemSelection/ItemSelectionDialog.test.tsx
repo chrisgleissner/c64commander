@@ -637,7 +637,7 @@ describe("ItemSelectionDialog archive source buttons", () => {
     expect(screen.getAllByText(LEGAL_NOTICE)).toHaveLength(1);
   });
 
-  it("renders larger source icons in the interstitial and the selected-source icon in the browser header", async () => {
+  it("keeps chooser labels aligned while enlarging the CommoServe interstitial icon", async () => {
     render(
       <DisplayProfileProvider>
         <ItemSelectionDialog
@@ -660,19 +660,35 @@ describe("ItemSelectionDialog archive source buttons", () => {
       </DisplayProfileProvider>,
     );
 
-    const interstitialIcon = screen
+    const c64uIcon = screen.getByTestId("import-option-c64u").querySelector('[data-testid="file-origin-icon"]');
+    const commoserveIcon = screen
       .getByTestId("import-option-commoserve")
       .querySelector('[data-testid="file-origin-icon"]');
-    const commoserveGlyph = interstitialIcon?.querySelector("svg");
-    expect(interstitialIcon?.getAttribute("class")).toContain("h-12");
-    expect(interstitialIcon?.getAttribute("class")).toContain("w-12");
-    expect(commoserveGlyph?.getAttribute("class")).toContain("h-[82%]");
-    expect(commoserveGlyph?.getAttribute("class")).toContain("w-[82%]");
+    const c64uIconSlot = c64uIcon?.parentElement;
+    const commoserveIconSlot = commoserveIcon?.parentElement;
+    const commoserveGlyph = commoserveIcon?.querySelector("svg");
+
+    expect(c64uIconSlot?.getAttribute("class")).toContain("h-12");
+    expect(c64uIconSlot?.getAttribute("class")).toContain("w-12");
+    expect(commoserveIconSlot?.getAttribute("class")).toContain("h-12");
+    expect(commoserveIconSlot?.getAttribute("class")).toContain("w-12");
+    expect(commoserveIcon?.getAttribute("class")).toContain("h-12");
+    expect(commoserveIcon?.getAttribute("class")).toContain("w-12");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("h-full");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("w-full");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("scale-[1.22]");
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
 
     await waitFor(() => {
       expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
     });
+
+    const selectionIcon = screen.getByTestId("add-items-selection-icon").querySelector('[data-testid="file-origin-icon"]');
+    const selectionGlyph = selectionIcon?.querySelector("svg");
+
+    expect(selectionIcon?.getAttribute("class")).toContain("h-5");
+    expect(selectionIcon?.getAttribute("class")).toContain("w-5");
+    expect(selectionGlyph?.getAttribute("class") ?? "").not.toContain("scale-[1.22]");
   });
 });

@@ -77,6 +77,224 @@ const SCREENSHOT_ARCHIVE_RESULTS = [
   { id: "100", category: 40, name: "Joyride", group: "Padua", year: 2024, updated: "2024-03-14" },
   { id: "101", category: 40, name: "Joyride Plus", group: "Onslaught", year: 2025, updated: "2025-01-11" },
 ];
+const SCREENSHOT_HVSC_MODE_KEY = "c64u_hvsc_screenshot_mode";
+
+const installHvscScreenshotMock = async (page: Page) => {
+  await page.addInitScript((modeKey: string) => {
+    type HvscScreenshotMode = "download-pending" | "ready";
+    type HvscSongEntry = {
+      id: number;
+      virtualPath: string;
+      fileName: string;
+      durationSeconds: number;
+    };
+
+    const listeners: Array<(event: Record<string, unknown>) => void> = [];
+    const cancelTokens = new Set<string>();
+    const folders = ["/MUSICIANS", "/MUSICIANS/A"];
+    const songs: HvscSongEntry[] = [
+      {
+        id: 1,
+        virtualPath: "/MUSICIANS/A/Agemixer/First_Step.sid",
+        fileName: "First_Step.sid",
+        durationSeconds: 143,
+      },
+      {
+        id: 2,
+        virtualPath: "/MUSICIANS/A/Agemixer/Second_Wave.sid",
+        fileName: "Second_Wave.sid",
+        durationSeconds: 201,
+      },
+    ];
+
+    const state = {
+      installedBaselineVersion: null as number | null,
+      installedVersion: 0,
+      ingestionState: "idle" as "idle" | "installing" | "ready" | "error",
+      ingestionError: null as string | null,
+      lastUpdateCheckUtcMs: null as number | null,
+      totalSongs: songs.length,
+    };
+
+    const readMode = (): HvscScreenshotMode => {
+      try {
+        return localStorage.getItem(modeKey) === "ready" ? "ready" : "download-pending";
+      } catch {
+        return "download-pending";
+      }
+    };
+
+    const emit = (event: Record<string, unknown>) => {
+      listeners.forEach((listener) => listener(event));
+    };
+
+    const buildStatus = () => ({
+      installedBaselineVersion: state.installedBaselineVersion,
+      installedVersion: state.installedVersion,
+      ingestionState: state.ingestionState,
+      lastUpdateCheckUtcMs: state.lastUpdateCheckUtcMs,
+      ingestionError: state.ingestionError,
+      ingestionSummary:
+        state.installedVersion > 0
+          ? {
+              totalSongs: state.totalSongs,
+              ingestedSongs: state.totalSongs,
+              failedSongs: 0,
+              songlengthSyntaxErrors: 0,
+            }
+          : null,
+    });
+
+    const emitDownloadStart = (ingestionId: string, startedAt: number) => {
+      emit({
+        ingestionId,
+        stage: "download",
+        message: "Downloading HVSC archive…",
+        percent: 28,
+        downloadedBytes: 7340032,
+        totalBytes: 26214400,
+        elapsedTimeMs: Date.now() - startedAt,
+      });
+    };
+
+    const emitIngestSuccess = (ingestionId: string, startedAt: number) => {
+      emit({
+        ingestionId,
+        stage: "archive_extraction",
+        message: "Extracting SID metadata…",
+        processedCount: 1,
+        totalCount: songs.length,
+        percent: 72,
+        elapsedTimeMs: Date.now() - startedAt,
+      });
+      emit({
+        ingestionId,
+        stage: "sid_metadata_hydration",
+        message: "Hydrating song metadata…",
+        processedCount: songs.length,
+        totalCount: songs.length,
+        percent: 94,
+        elapsedTimeMs: Date.now() - startedAt,
+      });
+      emit({
+        ingestionId,
+        stage: "complete",
+        message: "HVSC ingestion complete",
+        percent: 100,
+        elapsedTimeMs: Date.now() - startedAt,
+      });
+    };
+
+    const ensureNotCancelled = (cancelToken?: string) => {
+      if (cancelToken && cancelTokens.has(cancelToken)) {
+        state.ingestionState = "idle";
+        state.ingestionError = "Cancelled";
+        throw new Error("HVSC update cancelled");
+      }
+    };
+
+    window.__hvscMock__ = {
+      addListener: (_event: string, listener: (event: Record<string, unknown>) => void) => {
+        listeners.push(listener);
+        return { remove: async () => {} };
+      },
+      getHvscStatus: async () => buildStatus(),
+      getHvscCacheStatus: async () => ({
+        baselineVersion: null,
+        updateVersions: [],
+      }),
+      checkForHvscUpdates: async () => {
+        state.lastUpdateCheckUtcMs = Date.now();
+        return {
+          latestVersion: 84,
+          installedVersion: state.installedVersion,
+          baselineVersion: null,
+          requiredUpdates: state.installedVersion > 0 ? [] : [84],
+        };
+      },
+      installOrUpdateHvsc: async ({ cancelToken }: { cancelToken?: string } = {}) => {
+        const mode = readMode();
+        const startedAt = Date.now();
+        const ingestionId = `screenshot-${startedAt}`;
+        state.ingestionState = "installing";
+        state.ingestionError = null;
+        emit({ ingestionId, stage: "start", message: "HVSC ingestion started", percent: 0, elapsedTimeMs: 0 });
+        emitDownloadStart(ingestionId, startedAt);
+
+        if (mode === "download-pending") {
+          for (let index = 0; index < 60; index += 1) {
+            ensureNotCancelled(cancelToken);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
+
+        ensureNotCancelled(cancelToken);
+        await new Promise((resolve) => setTimeout(resolve, mode === "ready" ? 80 : 0));
+        ensureNotCancelled(cancelToken);
+
+        state.installedBaselineVersion = 84;
+        state.installedVersion = 84;
+        state.ingestionState = "ready";
+        state.ingestionError = null;
+        emitIngestSuccess(ingestionId, startedAt);
+        return buildStatus();
+      },
+      cancelHvscInstall: async ({ cancelToken }: { cancelToken?: string } = {}) => {
+        if (cancelToken) {
+          cancelTokens.add(cancelToken);
+        }
+        state.ingestionState = "idle";
+        state.ingestionError = "Cancelled";
+      },
+      ingestCachedHvsc: async () => buildStatus(),
+      getHvscFolderListing: async ({ path }: { path: string }) => {
+        const normalized = path || "/";
+        if (normalized === "/") {
+          return {
+            path: "/",
+            folders: ["/MUSICIANS"],
+            songs: [],
+          };
+        }
+        if (normalized === "/MUSICIANS") {
+          return {
+            path: normalized,
+            folders: ["/MUSICIANS/A"],
+            songs: [],
+          };
+        }
+        if (normalized === "/MUSICIANS/A") {
+          return {
+            path: normalized,
+            folders,
+            songs: songs.map((song) => ({
+              id: song.id,
+              virtualPath: song.virtualPath,
+              fileName: song.fileName,
+              durationSeconds: song.durationSeconds,
+            })),
+          };
+        }
+        return {
+          path: normalized,
+          folders: [],
+          songs: [],
+        };
+      },
+      getHvscSong: async ({ id, virtualPath }: { id?: number; virtualPath?: string } = {}) => {
+        const match = songs.find((song) => song.id === id || song.virtualPath === virtualPath);
+        if (!match) {
+          throw new Error("Song not found");
+        }
+        return {
+          ...match,
+          dataBase64: "",
+        };
+      },
+      getHvscDurationByMd5: async () => ({ durationSeconds: 143 }),
+    };
+  }, SCREENSHOT_HVSC_MODE_KEY);
+};
 
 const seedLiveDiagnosticsHealthProgress = async (page: Page) => {
   await page.waitForFunction(() => typeof window.__c64uDiagnosticsTestBridge?.seedOverlayState === "function");
@@ -349,6 +567,15 @@ const seedArchiveSearchMock = async (page: Page) => {
 
     await route.fulfill({ status: 404, headers, body: "not found" });
   });
+};
+
+const setHvscScreenshotMode = async (page: Page, mode: "download-pending" | "ready") => {
+  await page.addInitScript(
+    ({ key, value }) => {
+      localStorage.setItem(key, value);
+    },
+    { key: SCREENSHOT_HVSC_MODE_KEY, value: mode },
+  );
 };
 
 const waitForOverlaysToClear = async (page: Page) => {
@@ -1355,6 +1582,53 @@ test.describe("App screenshots", () => {
       await captureScreenshot(page, testInfo, "play/import/05-commoserve-results-selected.png", {
         skipFuzzyHeadRestore: true,
       });
+    },
+  );
+
+  test(
+    "capture hvsc import screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installHvscScreenshotMock(page);
+      await setHvscScreenshotMode(page, "download-pending");
+
+      await page.goto("/play");
+      await waitForConnected(page);
+      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+
+      const firstDialog = await openImportDialog(page);
+      expect(firstDialog, "Add items dialog should open before capturing the first HVSC state").not.toBeNull();
+      const firstInterstitial = await waitForImportInterstitial(firstDialog);
+      expect(firstInterstitial, "Import source interstitial should be visible before choosing HVSC").not.toBeNull();
+
+      await firstInterstitial.getByTestId("import-option-hvsc").click();
+      const preparingSheet = page.getByTestId("hvsc-preparation-sheet");
+      await expect(preparingSheet).toBeVisible();
+      await expect(page.getByTestId("hvsc-preparation-phase")).toHaveText(/Downloading/i);
+      await captureScreenshot(page, testInfo, "play/import/06-hvsc-preparing.png", { skipFuzzyHeadRestore: true });
+
+      await page.getByTestId("hvsc-preparation-cancel").click();
+      await expect(preparingSheet).not.toBeVisible();
+
+      await setHvscScreenshotMode(page, "ready");
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await waitForConnected(page);
+      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+
+      const readyDialog = await openImportDialog(page);
+      expect(readyDialog, "Add items dialog should reopen before capturing the ready HVSC state").not.toBeNull();
+      const readyInterstitial = await waitForImportInterstitial(readyDialog);
+      expect(readyInterstitial, "Import source interstitial should be visible before retrying HVSC").not.toBeNull();
+
+      await readyInterstitial.getByTestId("import-option-hvsc").click();
+      await expect(page.getByTestId("hvsc-preparation-sheet")).toBeVisible();
+      await expect(page.getByTestId("hvsc-preparation-browse")).toBeVisible();
+      await captureScreenshot(page, testInfo, "play/import/07-hvsc-ready.png", { skipFuzzyHeadRestore: true });
+
+      await page.getByTestId("hvsc-preparation-browse").click();
+      await expect(readyDialog.getByTestId("source-file-picker")).toBeVisible();
+      await expect(readyDialog.getByTestId("add-items-selection-heading")).toContainText("From HVSC");
+      await captureScreenshot(page, testInfo, "play/import/08-hvsc-browser.png", { skipFuzzyHeadRestore: true });
     },
   );
 

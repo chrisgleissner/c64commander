@@ -69,4 +69,11 @@ describe("FileOriginIcon", () => {
     const icon = screen.getByTestId("file-origin-icon");
     expect(icon).toHaveAttribute("aria-label", "My archive");
   });
+
+  it("applies a glyph class override to the commoserve svg only when requested", () => {
+    render(<FileOriginIcon origin="commoserve" glyphClassName="scale-[1.22]" />);
+    const glyph = screen.getByTestId("file-origin-icon").querySelector("svg");
+    expect(glyph).not.toBeNull();
+    expect(glyph).toHaveAttribute("class", expect.stringContaining("scale-[1.22]"));
+  });
 });

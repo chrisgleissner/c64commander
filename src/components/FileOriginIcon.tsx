@@ -14,6 +14,7 @@ type FileOrigin = "ultimate" | "local" | "hvsc" | "commoserve";
 type FileOriginIconProps = {
   origin: FileOrigin;
   className?: string;
+  glyphClassName?: string;
   label?: string;
 };
 
@@ -32,7 +33,7 @@ const resolveIconLabel = (origin: FileOrigin) =>
         ? "Online archive file"
         : "Local file";
 
-export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps) => {
+export const FileOriginIcon = ({ origin, className, glyphClassName, label }: FileOriginIconProps) => {
   const ariaLabel = label ?? resolveIconLabel(origin);
 
   if (origin === "hvsc") {
@@ -57,7 +58,7 @@ export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps
         role="img"
         className={cn("inline-flex items-center justify-center shrink-0 opacity-70", className)}
       >
-        <Library aria-hidden="true" className="h-[82%] w-[82%]" strokeWidth={1.9} />
+        <Library aria-hidden="true" className={cn("h-full w-full", glyphClassName)} strokeWidth={2.5} />
       </span>
     );
   }

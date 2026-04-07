@@ -4,6 +4,32 @@
 
 - `CODE_CHANGE`
 - `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+### 2026-04-07 HVSC first-use preparation flow and chooser polish
+
+- Classification: `CODE_CHANGE`, `UI_CHANGE`, `DOC_PLUS_CODE`
+- Scope of this pass:
+  - replace the manual HVSC download plus ingest flow with an automatic `Add items -> HVSC` preparation journey
+  - add the `Preparing HVSC library` sheet with deterministic progress, retry, cancel, and explicit `Browse HVSC` confirmation
+  - keep only summary plus advanced `Reindex HVSC` and `Reset HVSC` actions on the Play page
+  - align the `CommoServe` chooser row with the other source labels and enlarge the CommoServe mark without shifting the label baseline
+  - refresh the affected Play import screenshots after the chooser polish lands
+- Validation scope before completion:
+  - targeted HVSC hook, state-machine, chooser, and UI regressions
+  - `npm run build`
+  - attempt `npm run test:coverage` as the repository coverage gate and record blockers honestly if the environment fails before assertions do
+  - refresh only the Play import screenshots touched by the chooser surface
+
+## 2026-04-07 HVSC Preparation Status
+
+- [x] `HVSC-PREP-001` Added a user-facing HVSC preparation state machine and hooked it into the Play page flow.
+- [x] `HVSC-PREP-002` Added the `Preparing HVSC library` sheet and routed `Add items -> HVSC` through automatic preparation with retry and explicit browse confirmation.
+- [x] `HVSC-PREP-003` Replaced the Play page HVSC primary actions with summary plus advanced recovery controls.
+- [x] `HVSC-PREP-004` Added focused regression coverage for the hook, chooser interception, state machine, controls, and preparation sheet.
+- [x] `HVSC-PREP-005` Realigned the `CommoServe` source row in the chooser and increased the CommoServe mark size without reintroducing label drift.
+- [x] `HVSC-PREP-006` Regenerated the affected Play import screenshots under `docs/img/app/play/import/` and `docs/img/app/play/import/profiles/`.
+- [ ] `HVSC-PREP-007` Repository-wide lint and coverage gates still need a clean pass without unrelated formatting drift or environment OOMs.
 
 ### 2026-04-06 device-scale harness execution
 

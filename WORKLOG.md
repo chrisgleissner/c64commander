@@ -1,5 +1,51 @@
 # HVSC Performance Worklog
 
+## [2026-04-07 19:35] HVSC-PREP-FLOW: Automatic Add items -> HVSC preparation landed; chooser screenshots refreshed
+
+Completed the Play-page HVSC UX pass that removes the old manual first-use flow and folds HVSC preparation directly into the Add items chooser.
+
+What changed:
+
+- Added a user-facing HVSC preparation state machine with the required `NOT_PRESENT`, `DOWNLOADING`, `DOWNLOADED`, `INGESTING`, `READY`, and `ERROR` states.
+- Routed `Add items -> HVSC` through the new `Preparing HVSC library` sheet so first use now downloads plus indexes automatically, supports retry from the failed phase, and waits for explicit `Browse HVSC` confirmation before opening the library.
+- Reworked the Play-page HVSC card into a summary surface with advanced `Reindex HVSC` and `Reset HVSC` recovery controls instead of the old manual `Download HVSC` and `Ingest HVSC` actions.
+- Added a real HVSC reset path that clears the cached archives, indexed library, and persisted browse snapshots rather than only clearing the UI summary state.
+- Aligned the `CommoServe` chooser row with the other source labels by introducing a shared icon slot and enlarging the CommoServe mark inside that slot.
+
+Validation executed:
+
+- Targeted unit regressions passed for:
+  - `tests/unit/playFiles/useHvscLibrary.test.tsx`
+  - `tests/unit/playFiles/useHvscLibrary.edges.test.tsx`
+  - `tests/unit/playFiles/useHvscLibrary.progress.test.tsx`
+  - `tests/unit/lib/hvsc/hvscPreparationState.test.ts`
+  - `tests/unit/pages/playFiles/components/HvscControls.test.tsx`
+  - `tests/unit/pages/playFiles/components/HvscPreparationSheet.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/components/FileOriginIcon.test.tsx`
+- `npm run build`: passed
+- `npm run test:coverage`: attempted three times, but the workspace ran out of Node heap in the wider Vitest suite before completion; this was an environment failure, not an HVSC assertion failure.
+- `npm run lint`: still blocked by Prettier drift in unrelated repository files outside this change set.
+
+Screenshots refreshed:
+
+- `docs/img/app/play/import/01-import-interstitial.png`
+- `docs/img/app/play/import/02-c64u-file-picker.png`
+- `docs/img/app/play/import/03-local-file-picker.png`
+- `docs/img/app/play/import/04-commoserve-search.png`
+- `docs/img/app/play/import/05-commoserve-results-selected.png`
+- `docs/img/app/play/import/profiles/compact/01-import-interstitial.png`
+- `docs/img/app/play/import/profiles/compact/02-c64u-file-picker.png`
+- `docs/img/app/play/import/profiles/expanded/01-import-interstitial.png`
+- `docs/img/app/play/import/profiles/expanded/02-c64u-file-picker.png`
+- `docs/img/app/play/import/profiles/medium/01-import-interstitial.png`
+- `docs/img/app/play/import/profiles/medium/02-c64u-file-picker.png`
+
+Notes:
+
+- The screenshot harness groups the Play import screenshots together, so the interstitial alignment fix required refreshing the full import-flow capture set, not only the first image.
+- `npm run screenshots:prune-identical` kept all regenerated files, so each image changed relative to the previous capture.
+
 ## [2026-04-07 12:20] AUDIT3-CLOSURE: Tasks 2-7 closed and full validation green
 
 Completed the remaining audit3 implementation tasks after the Songlengths-seeded catalog landed and brought the full repository validation back to green.

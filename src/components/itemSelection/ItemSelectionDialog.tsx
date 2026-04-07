@@ -372,12 +372,12 @@ export const ItemSelectionDialog = ({
   const showArchiveLegalNotice = source?.type === "commoserve";
   const showCompactHeaderConfirm = profile === "compact" && !showArchiveLegalNotice;
   const interstitialOptionContentClassName = "flex min-w-0 w-full items-center justify-start gap-3";
+  const interstitialIconSlotClassName = "flex h-12 w-12 shrink-0 items-center justify-center self-center";
   const interstitialIconClassName = "h-8 w-8 shrink-0 self-center text-[1.75rem]";
   const selectionHeadingIconClassName = "h-5 w-5 shrink-0 text-[1.25rem]";
   const resolveInterstitialIconClassName = (origin: SourceLocation["type"]) =>
-    cn(interstitialIconClassName, origin === "commoserve" && "h-12 w-12 text-[3.5rem]");
-  const resolveSelectionHeadingIconClassName = (origin: SourceLocation["type"]) =>
-    cn(selectionHeadingIconClassName, origin === "commoserve" && "h-7 w-7 text-[1.75rem]");
+    cn(interstitialIconClassName, origin === "commoserve" && "h-12 w-12 text-[4rem]");
+  const resolveSelectionHeadingIconClassName = (_origin: SourceLocation["type"]) => selectionHeadingIconClassName;
 
   if (!source) {
     return (
@@ -402,7 +402,9 @@ export const ItemSelectionDialog = ({
                   aria-label="Add file / folder from Local"
                 >
                   <span className={interstitialOptionContentClassName} aria-hidden="true">
-                    <FileOriginIcon origin="local" className={resolveInterstitialIconClassName("local")} />
+                    <span className={interstitialIconSlotClassName}>
+                      <FileOriginIcon origin="local" className={resolveInterstitialIconClassName("local")} />
+                    </span>
                     <span className={interstitialLabelClassName}>
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {SOURCE_LABELS.local}
@@ -422,7 +424,9 @@ export const ItemSelectionDialog = ({
                   aria-label="Add file / folder from C64U"
                 >
                   <span className={interstitialOptionContentClassName} aria-hidden="true">
-                    <FileOriginIcon origin="ultimate" className={resolveInterstitialIconClassName("ultimate")} />
+                    <span className={interstitialIconSlotClassName}>
+                      <FileOriginIcon origin="ultimate" className={resolveInterstitialIconClassName("ultimate")} />
+                    </span>
                     <span className={interstitialLabelClassName}>
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {SOURCE_LABELS.c64u}
@@ -444,7 +448,9 @@ export const ItemSelectionDialog = ({
                     aria-label="Add file / folder from HVSC"
                   >
                     <span className={interstitialOptionContentClassName} aria-hidden="true">
-                      <FileOriginIcon origin="hvsc" className={resolveInterstitialIconClassName("hvsc")} />
+                      <span className={interstitialIconSlotClassName}>
+                        <FileOriginIcon origin="hvsc" className={resolveInterstitialIconClassName("hvsc")} />
+                      </span>
                       <span className={interstitialLabelClassName}>
                         <span className={cn("truncate font-medium", interstitialTextClassName)}>
                           {SOURCE_LABELS.hvsc}
@@ -465,7 +471,13 @@ export const ItemSelectionDialog = ({
                     aria-label={`Search ${SOURCE_LABELS.commoserve}`}
                   >
                     <span className={interstitialOptionContentClassName} aria-hidden="true">
-                      <FileOriginIcon origin="commoserve" className={resolveInterstitialIconClassName("commoserve")} />
+                      <span className={interstitialIconSlotClassName}>
+                        <FileOriginIcon
+                          origin="commoserve"
+                          className={resolveInterstitialIconClassName("commoserve")}
+                          glyphClassName="scale-[1.22]"
+                        />
+                      </span>
                       <span className={interstitialLabelClassName}>
                         <span className={cn("truncate font-medium", interstitialTextClassName)}>
                           {SOURCE_LABELS.commoserve}

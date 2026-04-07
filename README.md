@@ -108,6 +108,8 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
 
 Build playlists for programs and songs sourced from the local device, C64U storage, CommoServe, or HVSC. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.
 
+Choosing `Add items -> HVSC` now triggers the full first-use HVSC preparation flow automatically. The app opens a `Preparing HVSC library` sheet, downloads and indexes the library, lets you retry from the failed phase when something goes wrong, and only opens the HVSC browser after you confirm with `Browse HVSC`.
+
 <table>
   <tr>
     <td><img src="docs/img/app/play/01-overview.png" alt="Play overview" width="360"/></td>
@@ -118,12 +120,17 @@ Build playlists for programs and songs sourced from the local device, C64U stora
 
 ### Browse & Import
 
-Choose an import source from the same playlist workflow: add local folders from your device, browse your C64U storage, or search CommoServe and import the matching results.
+Choose an import source from the same playlist workflow: add local folders from your device, browse your C64U storage, prepare and browse HVSC from the same chooser, or search CommoServe and import the matching results.
 
 <table>
   <tr>
     <td><img src="docs/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
+    <td><img src="docs/img/app/play/import/06-hvsc-preparing.png" alt="HVSC preparation on first use" width="360"/></td>
     <td><img src="docs/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
+  </tr>
+  <tr>
+    <td><img src="docs/img/app/play/import/07-hvsc-ready.png" alt="HVSC preparation completed" width="360"/></td>
+    <td><img src="docs/img/app/play/import/08-hvsc-browser.png" alt="HVSC browser after preparation" width="360"/></td>
     <td><img src="docs/img/app/play/import/03-local-file-picker.png" alt="Local folder import" width="360"/></td>
   </tr>
   <tr>
@@ -380,6 +387,8 @@ Third-party notices: `npm run notices:generate` regenerates [THIRD_PARTY_NOTICES
 ### High Voltage SID Collection (HVSC)
 
 The [High Voltage SID Collection](https://hvsc.c64.org) is an archive of C64 SID music. C64 Commander integrates HVSC for browsing, searching, and playing SID tunes with metadata and song-length support.
+
+The primary HVSC entry point is now the Add items chooser. If the library is not ready yet, the app prepares it there instead of asking you to run separate manual download and ingest steps from the Play page. The Play page keeps only status, reindex, and reset controls for recovery.
 
 ### Commodore and the C64 Ultimate
 
