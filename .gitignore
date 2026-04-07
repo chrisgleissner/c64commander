@@ -43,6 +43,7 @@ test-results/
 .cov-native-fresh/
 .cov-new/
 .cov-node/
+.cov-shards/
 .cov-unit/
 .cov-unit-single/
 
