@@ -148,22 +148,22 @@ export function usePlaybackPersistence({
           file:
             entry.source === "local"
               ? resolveLocalRuntimeFile(entry.sourceId ?? "", normalizedPath) ||
-                (localEntry?.uri
-                  ? buildLocalPlayFileFromUri(
-                      entry.name,
-                      normalizedPath,
-                      localEntry.uri,
-                      parseModifiedAt(localEntry.modifiedAt),
-                    )
-                  : undefined) ||
-                (localTreeUri
-                  ? buildLocalPlayFileFromTree(
-                      entry.name,
-                      normalizedPath,
-                      localTreeUri,
-                      parseModifiedAt(localEntry?.modifiedAt),
-                    )
-                  : undefined)
+              (localEntry?.uri
+                ? buildLocalPlayFileFromUri(
+                  entry.name,
+                  normalizedPath,
+                  localEntry.uri,
+                  parseModifiedAt(localEntry.modifiedAt),
+                )
+                : undefined) ||
+              (localTreeUri
+                ? buildLocalPlayFileFromTree(
+                  entry.name,
+                  normalizedPath,
+                  localTreeUri,
+                  parseModifiedAt(localEntry?.modifiedAt),
+                )
+                : undefined)
               : undefined,
           sizeBytes: localEntry?.sizeBytes ?? entry.sizeBytes ?? null,
           modifiedAt: localEntry?.modifiedAt ?? entry.modifiedAt ?? null,

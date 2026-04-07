@@ -530,69 +530,69 @@ export function usePlaybackController({
         const applyPlaybackConfigBeforeLaunch =
           shouldApplyPlaybackConfig && nextPlaybackConfigSignature
             ? async () => {
-                if (lastAppliedPlaybackConfigSignatureRef.current === nextPlaybackConfigSignature) {
-                  addLog("info", "Skipping redundant playback config application", {
-                    itemId: item.id,
-                    label: item.label,
-                    configFile: item.configRef?.fileName ?? null,
-                    overrideCount: configOverrides?.length ?? 0,
+              if (lastAppliedPlaybackConfigSignatureRef.current === nextPlaybackConfigSignature) {
+                addLog("info", "Skipping redundant playback config application", {
+                  itemId: item.id,
+                  label: item.label,
+                  configFile: item.configRef?.fileName ?? null,
+                  overrideCount: configOverrides?.length ?? 0,
+                });
+                return;
+              }
+              try {
+                toast({
+                  title: item.configRef
+                    ? `Applying ${item.configRef.fileName}`
+                    : `Applying ${configOverrides?.length ?? 0} config override${configOverrides?.length === 1 ? "" : "s"}`,
+                });
+                await ensureConfigFileReferenceAccessible({
+                  configRef: item.configRef ?? null,
+                  localEntriesBySourceId,
+                  localSourceTreeUris,
+                });
+                await applyConfigFileReference({
+                  configRef: item.configRef ?? null,
+                  configOverrides,
+                  deviceProduct,
+                  localEntriesBySourceId,
+                  localSourceTreeUris,
+                });
+                sessionDeclinedPlaybackConfigRef.current.delete(item.id);
+                lastAppliedPlaybackConfigSignatureRef.current = nextPlaybackConfigSignature;
+              } catch (error) {
+                if (isConfigReferenceUnavailableError(error) && resolveUnavailableConfigDecision) {
+                  const decision = await resolveUnavailableConfigDecision(item, {
+                    configFileName: item.configRef?.fileName ?? null,
+                    reason: (error as Error).message,
                   });
-                  return;
-                }
-                try {
-                  toast({
-                    title: item.configRef
-                      ? `Applying ${item.configRef.fileName}`
-                      : `Applying ${configOverrides?.length ?? 0} config override${configOverrides?.length === 1 ? "" : "s"}`,
-                  });
-                  await ensureConfigFileReferenceAccessible({
-                    configRef: item.configRef ?? null,
-                    localEntriesBySourceId,
-                    localSourceTreeUris,
-                  });
-                  await applyConfigFileReference({
-                    configRef: item.configRef ?? null,
-                    configOverrides,
-                    deviceProduct,
-                    localEntriesBySourceId,
-                    localSourceTreeUris,
-                  });
-                  sessionDeclinedPlaybackConfigRef.current.delete(item.id);
-                  lastAppliedPlaybackConfigSignatureRef.current = nextPlaybackConfigSignature;
-                } catch (error) {
-                  if (isConfigReferenceUnavailableError(error) && resolveUnavailableConfigDecision) {
-                    const decision = await resolveUnavailableConfigDecision(item, {
-                      configFileName: item.configRef?.fileName ?? null,
-                      reason: (error as Error).message,
-                    });
-                    if (decision === "play-without-config") {
-                      sessionDeclinedPlaybackConfigRef.current.set(item.id, nextPlaybackConfigSignature);
-                      addLog("warn", "Playback config unavailable; continuing without config", {
-                        itemId: item.id,
-                        label: item.label,
-                        configFile: item.configRef?.fileName ?? null,
-                      });
-                      return;
-                    }
-                    markHandledUiError(error);
-                    throw error;
-                  }
-                  reportUserError({
-                    operation: "PLAYBACK_CONFIG_APPLY",
-                    title: "Config application failed",
-                    description: (error as Error).message,
-                    error,
-                    context: {
-                      item: item.label,
+                  if (decision === "play-without-config") {
+                    sessionDeclinedPlaybackConfigRef.current.set(item.id, nextPlaybackConfigSignature);
+                    addLog("warn", "Playback config unavailable; continuing without config", {
+                      itemId: item.id,
+                      label: item.label,
                       configFile: item.configRef?.fileName ?? null,
-                      configOrigin,
-                      overrideCount: configOverrides?.length ?? 0,
-                    },
-                  });
+                    });
+                    return;
+                  }
                   markHandledUiError(error);
                   throw error;
                 }
+                reportUserError({
+                  operation: "PLAYBACK_CONFIG_APPLY",
+                  title: "Config application failed",
+                  description: (error as Error).message,
+                  error,
+                  context: {
+                    item: item.label,
+                    configFile: item.configRef?.fileName ?? null,
+                    configOrigin,
+                    overrideCount: configOverrides?.length ?? 0,
+                  },
+                });
+                markHandledUiError(error);
+                throw error;
               }
+            }
             : null;
         if (item.category === "disk") {
           lastAppliedPlaybackConfigSignatureRef.current = null;
@@ -647,10 +647,10 @@ export function usePlaybackController({
             prev.map((entry) =>
               entry.id === item.id
                 ? {
-                    ...entry,
-                    durationMs: resolvedDuration,
-                    subsongCount: subsongCount ?? entry.subsongCount,
-                  }
+                  ...entry,
+                  durationMs: resolvedDuration,
+                  subsongCount: subsongCount ?? entry.subsongCount,
+                }
                 : entry,
             ),
           );
@@ -874,8 +874,8 @@ export function usePlaybackController({
               const wasMuted =
                 resumeSnapshot && resumeItems.length
                   ? resumeItems.every(
-                      (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
-                    )
+                    (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
+                  )
                   : false;
               if (!wasMuted) resumingFromPauseRef.current = true;
               await resumeMachineWithRetry(api);
