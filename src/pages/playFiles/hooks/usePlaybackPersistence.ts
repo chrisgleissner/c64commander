@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey, isSongCategory, parseModifiedAt } from "../playFilesUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -256,7 +256,7 @@ export function usePlaybackPersistence({
   }, []);
 
   // Restore Playlist (Local Storage)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof localStorage === "undefined") return;
     if (hydratedPlaylistKeyRef.current === playlistStorageKey) return;
     hydratedPlaylistKeyRef.current = playlistStorageKey;
@@ -283,24 +283,8 @@ export function usePlaybackPersistence({
           }
         }
 
-        console.info("[debug-playlist-hydrate]", {
-          playlistStorageKey,
-          resolvedDeviceId,
-          candidateKeys,
-          discoveredKeys: Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)).filter(
-            (key): key is string => Boolean(key?.startsWith("c64u_playlist:v1:")),
-          ),
-          candidateCount: candidates.length,
-        });
-
         if (!candidates.length) {
           const repositoryRestored = await hydrateFromRepository();
-          console.info("[debug-playlist-hydrate:repo]", {
-            playlistStorageKey,
-            resolvedDeviceId,
-            restoredCount: repositoryRestored.items.length,
-            activeQuery: repositoryRestored.activeQuery,
-          });
           if (setActivePlaylistQuery && repositoryRestored.activeQuery !== null) {
             setActivePlaylistQuery(repositoryRestored.activeQuery);
           }
@@ -313,13 +297,7 @@ export function usePlaybackPersistence({
 
         const preferred = candidates.find((entry) => entry.parsed?.items?.length) ?? candidates[0];
         const restored = hydrateStoredPlaylist(preferred.parsed);
-        console.info("[debug-playlist-hydrate:legacy]", {
-          playlistStorageKey,
-          resolvedDeviceId,
-          preferredKey: preferred.key,
-          restoredCount: restored.items.length,
-        });
-        if (hasPlaylistRef.current && restored.items.length === 0) {
+        if ((hasPlaylistRef.current || playlist.length > 0) && restored.items.length === 0) {
           return;
         }
         setPlaylist(restored.items);

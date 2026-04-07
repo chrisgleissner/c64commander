@@ -158,6 +158,36 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  it("hydrates persisted playlist items during the initial render before repository migration finishes", () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/immediate.sid",
+            name: "immediate.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    expect(result.current.playlist).toHaveLength(1);
+    expect(result.current.playlist[0].label).toBe("immediate.sid");
+  });
+
   it("rehydrates local playlist items from persisted SAF entry URIs", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(

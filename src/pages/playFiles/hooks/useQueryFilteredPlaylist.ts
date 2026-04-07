@@ -56,6 +56,14 @@ export const useQueryFilteredPlaylist = ({
   const playlistItemsById = useMemo(() => new Map(playlist.map((item) => [item.id, item])), [playlist]);
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const repositoryReady = repositorySnapshot.phase === "READY" && repositorySnapshot.committedCount === playlist.length;
+  const memoryFilteredPlaylist = useMemo(
+    () => playlist.filter((item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, query)),
+    [playlist, playlistTypeFilters, query],
+  );
+  const memoryViewAllPlaylist = useMemo(
+    () => memoryFilteredPlaylist.slice(0, viewAllLimit),
+    [memoryFilteredPlaylist, viewAllLimit],
+  );
 
   playlistRef.current = playlist;
   queryRef.current = query;
@@ -124,20 +132,13 @@ export const useQueryFilteredPlaylist = ({
       };
 
       if (!repositoryReady) {
-        const nextFiltered = currentPlaylist.filter(
-          (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
-        );
         finalizeFilterScope({
           outcome: "memory",
           source: "memory",
-          resultCount: Math.min(nextFiltered.length, viewAllLimit),
-          totalMatchCount: nextFiltered.length,
+          resultCount: Math.min(memoryFilteredPlaylist.length, viewAllLimit),
+          totalMatchCount: memoryFilteredPlaylist.length,
           repositoryPhase: repositorySnapshot.phase,
         });
-        if (!cancelled) {
-          setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
-          setTotalMatchCount(nextFiltered.length);
-        }
         return;
       }
 
@@ -208,20 +209,23 @@ export const useQueryFilteredPlaylist = ({
     repositoryReady,
     repositorySnapshot.phase,
     repositorySnapshot.revision,
+    memoryFilteredPlaylist,
     playlistItemsById,
     viewAllLimit,
   ]);
 
+  const activeViewAllPlaylist = repositoryReady ? queryFilteredPlaylist : memoryViewAllPlaylist;
+  const activeTotalMatchCount = repositoryReady ? totalMatchCount : memoryFilteredPlaylist.length;
   const previewPlaylist = useMemo(
-    () => queryFilteredPlaylist.slice(0, previewLimit),
-    [previewLimit, queryFilteredPlaylist],
+    () => activeViewAllPlaylist.slice(0, previewLimit),
+    [activeViewAllPlaylist, previewLimit],
   );
 
   return {
     previewPlaylist,
-    viewAllPlaylist: queryFilteredPlaylist,
-    totalMatchCount,
-    hasMoreViewAllResults: queryFilteredPlaylist.length < totalMatchCount,
+    viewAllPlaylist: activeViewAllPlaylist,
+    totalMatchCount: activeTotalMatchCount,
+    hasMoreViewAllResults: activeViewAllPlaylist.length < activeTotalMatchCount,
     loadMoreViewAllResults: () => setViewAllLimit((current) => current + viewAllPageSize),
   };
 };

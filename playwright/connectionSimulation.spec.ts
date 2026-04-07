@@ -530,9 +530,6 @@ test.describe("Deterministic Connectivity Simulation", () => {
   test("playback routes to demo then real after switching", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, "Expected probe failures during offline discovery.");
-    page.on("console", (message) => {
-      console.log(`[browser:${message.type()}]`, message.text());
-    });
 
     server = await createMockC64Server({});
     demoServer = await createMockC64Server({});
@@ -588,49 +585,6 @@ test.describe("Deterministic Connectivity Simulation", () => {
       }
     });
     await page.reload({ waitUntil: "domcontentloaded" });
-    console.log(
-      "[debug-playlist-after-reload]",
-      await page.evaluate(async () => {
-        const playlistKeys: Record<string, string | null> = {};
-        for (let index = 0; index < localStorage.length; index += 1) {
-          const key = localStorage.key(index);
-          if (key?.startsWith("c64u_playlist:v1:")) {
-            playlistKeys[key] = localStorage.getItem(key);
-          }
-        }
-
-        const dbState = await new Promise<Record<string, unknown>>((resolve) => {
-          const request = indexedDB.open("c64u-playlist-repository");
-          request.onerror = () => resolve({ error: request.error?.message ?? "open-failed" });
-          request.onsuccess = () => {
-            const db = request.result;
-            const tx = db.transaction("state", "readonly");
-            const getRequest = tx.objectStore("state").get("playlist-repository-state");
-            getRequest.onerror = () => resolve({ error: getRequest.error?.message ?? "read-failed" });
-            getRequest.onsuccess = () => {
-              const value = getRequest.result as
-                | {
-                    playlistItemsByPlaylistId?: Record<string, unknown[]>;
-                    sessionsByPlaylistId?: Record<string, unknown>;
-                    tracks?: Record<string, unknown>;
-                  }
-                | undefined;
-              resolve({
-                playlistIds: Object.keys(value?.playlistItemsByPlaylistId ?? {}),
-                sessionIds: Object.keys(value?.sessionsByPlaylistId ?? {}),
-                trackCount: Object.keys(value?.tracks ?? {}).length,
-              });
-            };
-          };
-        });
-
-        return {
-          lastDeviceId: localStorage.getItem("c64u_last_device_id"),
-          playlistKeys,
-          dbState,
-        };
-      }),
-    );
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
 
     const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();

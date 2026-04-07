@@ -342,6 +342,11 @@ describe("useQueryFilteredPlaylist", () => {
 
     const { result } = renderHook(() => useHarness());
 
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+    expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+      "sid-1",
+    ]);
+
     await waitFor(() => {
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
       expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
