@@ -128,7 +128,7 @@ describe("Android Maestro workflow contracts", () => {
     expect(playlist5k).toContain('tapOn: "Select DEMOS"');
     expect(playlist5k).toContain('assertVisible: "Select GAMES"');
     expect(playlist5k).toContain('tapOn: "Select GAMES"');
-    expect(playlist5k).not.toContain('Select MUSICIANS');
+    expect(playlist5k).not.toContain("Select MUSICIANS");
     expect(playlist5k).toContain('tapOn: "Add to playlist"');
     expect(playlist5k).toContain('visible: "Clear playlist"');
   });

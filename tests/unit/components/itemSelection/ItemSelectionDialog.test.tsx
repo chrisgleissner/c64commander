@@ -684,7 +684,9 @@ describe("ItemSelectionDialog archive source buttons", () => {
       expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
     });
 
-    const selectionIcon = screen.getByTestId("add-items-selection-icon").querySelector('[data-testid="file-origin-icon"]');
+    const selectionIcon = screen
+      .getByTestId("add-items-selection-icon")
+      .querySelector('[data-testid="file-origin-icon"]');
     const selectionGlyph = selectionIcon?.querySelector("svg");
 
     expect(selectionIcon?.getAttribute("class")).toContain("h-5");

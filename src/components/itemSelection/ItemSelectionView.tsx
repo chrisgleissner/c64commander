@@ -140,7 +140,9 @@ export const ItemSelectionView = ({
                   <div className="min-w-0">
                     <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
                     {entry.subtitle ? (
-                      <p className="text-[11px] text-muted-foreground break-words whitespace-normal">{entry.subtitle}</p>
+                      <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
+                        {entry.subtitle}
+                      </p>
                     ) : null}
                   </div>
                 </div>

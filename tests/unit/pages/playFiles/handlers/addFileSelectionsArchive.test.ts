@@ -627,14 +627,14 @@ describe("addFileSelections archive source handler", () => {
       ...createLocalSource(async (path) =>
         path === "/folder"
           ? [
-            {
-              type: "file",
-              name: "demo.prg",
-              path: "/folder/demo.prg",
-              sizeBytes: 1024,
-              modifiedAt: "2024-02-03T04:05:06.000Z",
-            },
-          ]
+              {
+                type: "file",
+                name: "demo.prg",
+                path: "/folder/demo.prg",
+                sizeBytes: 1024,
+                modifiedAt: "2024-02-03T04:05:06.000Z",
+              },
+            ]
           : [],
       ),
       listFilesRecursive: vi.fn(async () => []),

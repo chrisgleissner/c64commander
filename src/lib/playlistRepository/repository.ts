@@ -42,4 +42,4 @@ export interface RandomPlayRepository {
 }
 
 export interface PlaylistDataRepository
-  extends TrackRepository, PlaylistRepository, PlaylistQueryRepository, RandomPlayRepository { }
+  extends TrackRepository, PlaylistRepository, PlaylistQueryRepository, RandomPlayRepository {}

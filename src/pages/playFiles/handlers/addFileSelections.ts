@@ -11,11 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { createArchiveClient } from "@/lib/archive/client";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { streamHvscSongsRecursive } from "@/lib/hvsc";
-import {
-  getHvscDisplayAuthor,
-  getHvscDisplayTitle,
-  type HvscBrowseIndexedSong,
-} from "@/lib/hvsc/hvscBrowseIndexStore";
+import { getHvscDisplayAuthor, getHvscDisplayTitle, type HvscBrowseIndexedSong } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
@@ -482,8 +478,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               source.type === "hvsc"
                 ? batch
                 : await applySonglengthsToItems(batch, discoveredSonglengths, {
-                  allowMd5Fallback: false,
-                });
+                    allowMd5Fallback: false,
+                  });
             console.info(
               `[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`,
             );
@@ -519,32 +515,32 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const localFile =
           source.type === "local"
             ? resolveLocalRuntimeFile(source.id, normalizedPath) ||
-            (localEntry?.uri
-              ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
-              : undefined) ||
-            (localTreeUri
-              ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
-              : undefined)
+              (localEntry?.uri
+                ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
+                : undefined) ||
+              (localTreeUri
+                ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
+                : undefined)
             : undefined;
         const playbackConfig =
           source.type === "local" || source.type === "ultimate"
             ? resolvePlaybackConfig({
-              candidates: await discoverConfigCandidates({
-                sourceType: source.type,
-                sourceId: source.type === "local" ? source.id : null,
-                sourceRootPath: source.rootPath,
-                targetFile: file,
-                listEntries: source.listEntries,
-                prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
-                localEntriesBySourceId,
-              }),
-            })
+                candidates: await discoverConfigCandidates({
+                  sourceType: source.type,
+                  sourceId: source.type === "local" ? source.id : null,
+                  sourceRootPath: source.rootPath,
+                  targetFile: file,
+                  listEntries: source.listEntries,
+                  prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
+                  localEntriesBySourceId,
+                }),
+              })
             : {
-              configRef: null as ConfigFileReference | null,
-              configOrigin: "none" as const,
-              configCandidates: [],
-              configOverrides: null,
-            };
+                configRef: null as ConfigFileReference | null,
+                configOrigin: "none" as const,
+                configCandidates: [],
+                configOverrides: null,
+              };
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
           name: file.name,
@@ -810,9 +806,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       const buildItemsScope =
         source.type === "hvsc"
           ? beginHvscPerfScope("playlist:build-items", {
-            sourceType: source.type,
-            fileCount: selectedFiles.length,
-          })
+              sourceType: source.type,
+              fileCount: selectedFiles.length,
+            })
           : null;
 
       const buildT0 = Date.now();
