@@ -12,6 +12,7 @@ export type SourceEntry = {
   type: SourceEntryType;
   name: string;
   path: string;
+  subtitle?: string | null;
   durationMs?: number;
   songNr?: number;
   subsongCount?: number;

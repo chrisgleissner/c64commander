@@ -13,6 +13,63 @@ const { commitPlaylistSnapshot, markPlaylistRepositoryPhase } = vi.hoisted(() =>
   markPlaylistRepositoryPhase: vi.fn(),
 }));
 
+const { discoverConfigCandidates, resolvePlaybackConfig } = vi.hoisted(() => ({
+  discoverConfigCandidates: vi.fn(
+    async (input: {
+      sourceType: "local" | "ultimate";
+      sourceId?: string | null;
+      targetFile: { name: string; path: string };
+      listEntries: (
+        path: string,
+      ) => Promise<
+        Array<{ type: string; name: string; path: string; modifiedAt?: string | null; sizeBytes?: number | null }>
+      >;
+      localEntriesBySourceId?: Map<
+        string,
+        Map<string, { uri?: string | null; name: string; modifiedAt?: string | null; sizeBytes?: number | null }>
+      >;
+    }) => {
+      const parentPath = input.targetFile.path.slice(0, input.targetFile.path.lastIndexOf("/")) || "/";
+      const baseName = input.targetFile.name.replace(/\.[^.]+$/, "").toLowerCase();
+      const entries = await input.listEntries(parentPath);
+      return entries
+        .filter((entry) => entry.type === "file" && entry.name.toLowerCase().endsWith(".cfg"))
+        .map((entry) => ({
+          ref:
+            input.sourceType === "local"
+              ? {
+                kind: "local" as const,
+                fileName: entry.name,
+                path: entry.path,
+                sourceId: input.sourceId ?? null,
+                uri: input.localEntriesBySourceId?.get(input.sourceId ?? "")?.get(entry.path)?.uri ?? null,
+                modifiedAt: entry.modifiedAt ?? null,
+                sizeBytes: entry.sizeBytes ?? null,
+              }
+              : {
+                kind: "ultimate" as const,
+                fileName: entry.name,
+                path: entry.path,
+                modifiedAt: entry.modifiedAt ?? null,
+                sizeBytes: entry.sizeBytes ?? null,
+              },
+          strategy: entry.name.replace(/\.[^.]+$/, "").toLowerCase() === baseName ? "exact-name" : "directory",
+          distance: 0,
+          confidence: entry.name.replace(/\.[^.]+$/, "").toLowerCase() === baseName ? "high" : "medium",
+        }));
+    },
+  ),
+  resolvePlaybackConfig: vi.fn((input: { candidates?: Array<{ ref?: unknown }> }) => {
+    const configRef = input.candidates?.[0]?.ref ?? null;
+    return {
+      configRef,
+      configOrigin: configRef ? "resolved" : "none",
+      configCandidates: input.candidates ?? [],
+      configOverrides: null,
+    };
+  }),
+}));
+
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
@@ -45,6 +102,14 @@ vi.mock("@/lib/native/safUtils", () => ({
 
 vi.mock("@/lib/sid/songlengthsDiscovery", () => ({
   isSonglengthsFileName: vi.fn(() => false),
+}));
+
+vi.mock("@/lib/config/configDiscovery", () => ({
+  discoverConfigCandidates,
+}));
+
+vi.mock("@/lib/config/configResolution", () => ({
+  resolvePlaybackConfig,
 }));
 
 vi.mock("@/pages/playFiles/playlistRepositorySync", () => ({
@@ -125,6 +190,11 @@ const createDeps = () => {
 };
 
 describe("addFileSelections config discovery", () => {
+  beforeEach(() => {
+    discoverConfigCandidates.mockClear();
+    resolvePlaybackConfig.mockClear();
+  });
+
   it("associates a sibling local .cfg file with imported playlist items", async () => {
     const deps = createDeps();
     const source = createSource("local", async () => [
@@ -145,6 +215,8 @@ describe("addFileSelections config discovery", () => {
       modifiedAt: "2026-03-29T12:00:00Z",
       sizeBytes: 321,
     });
+    expect(discoverConfigCandidates).toHaveBeenCalledTimes(1);
+    expect(resolvePlaybackConfig).toHaveBeenCalledTimes(1);
   });
 
   it("associates a sibling ultimate .cfg file with imported playlist items", async () => {
@@ -176,6 +248,51 @@ describe("addFileSelections config discovery", () => {
       path: "/USB1/test-data/sid/demo.cfg",
       modifiedAt: "2026-03-29T12:01:00Z",
       sizeBytes: 456,
+    });
+    expect(discoverConfigCandidates).toHaveBeenCalledTimes(1);
+    expect(resolvePlaybackConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips config discovery for HVSC items and preserves null config fields", async () => {
+    const deps = createDeps();
+    deps.buildHvscLocalPlayFile = vi.fn(
+      () =>
+        ({
+          name: "Comic_Bakery.sid",
+          lastModified: 0,
+          arrayBuffer: vi.fn(async () => new ArrayBuffer(0)),
+        }) as any,
+    );
+    const source: SourceLocation = {
+      id: "hvsc-library",
+      type: "hvsc",
+      name: "HVSC",
+      rootPath: "/",
+      isAvailable: true,
+      listEntries: async () => [
+        {
+          type: "file",
+          name: "Comic_Bakery.sid",
+          path: "/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid",
+          durationMs: 90_000,
+          songNr: 1,
+          subsongCount: 2,
+        },
+      ],
+      listFilesRecursive: async () => [],
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [
+      { type: "file", name: "Comic_Bakery.sid", path: "/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid" },
+    ]);
+
+    expect(result).toBe(true);
+    expect(discoverConfigCandidates).not.toHaveBeenCalled();
+    expect(resolvePlaybackConfig).not.toHaveBeenCalled();
+    expect(deps._playlistItems[0] as any).toMatchObject({
+      configRef: null,
+      sourceId: "hvsc-library",
     });
   });
 });

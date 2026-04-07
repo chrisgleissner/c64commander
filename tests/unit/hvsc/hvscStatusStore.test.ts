@@ -77,6 +77,14 @@ describe("hvscStatusStore", () => {
           totalFiles: 120,
           recoveryHint: null,
         },
+        metadata: {
+          status: "success",
+          stateToken: "done",
+          processedSongs: 120,
+          totalSongs: 120,
+          percent: 100,
+          recoveryHint: null as never,
+        },
         lastUpdatedAt: "later",
       };
 
@@ -85,6 +93,23 @@ describe("hvscStatusStore", () => {
 
       clearHvscStatusSummary();
       expect(loadHvscStatusSummary()).toEqual(getDefaultHvscStatusSummary());
+    });
+
+    it("merges default metadata fields when older persisted summaries omit them", () => {
+      localStorage.setItem(
+        "c64u_hvsc_status:v1",
+        JSON.stringify({
+          download: { status: "success" },
+          extraction: { status: "idle" },
+        }),
+      );
+
+      expect(loadHvscStatusSummary()).toEqual({
+        ...getDefaultHvscStatusSummary(),
+        download: { status: "success" },
+        extraction: { status: "idle" },
+        metadata: { status: "idle", stateToken: null },
+      });
     });
 
     it("persists status updates from events", () => {
@@ -120,6 +145,17 @@ describe("hvscStatusStore", () => {
       localStorage.setItem("c64u_hvsc_status:v1", "{}");
       const loaded = loadHvscStatusSummary();
       expect(loaded).toEqual(getDefaultHvscStatusSummary());
+    });
+
+    it("handles missing localStorage safely", () => {
+      const originalLocalStorage = globalThis.localStorage;
+      Reflect.deleteProperty(globalThis, "localStorage");
+
+      expect(loadHvscStatusSummary()).toEqual(getDefaultHvscStatusSummary());
+      expect(() => saveHvscStatusSummary(getDefaultHvscStatusSummary())).not.toThrow();
+      expect(() => clearHvscStatusSummary()).not.toThrow();
+
+      globalThis.localStorage = originalLocalStorage;
     });
   });
 
@@ -200,6 +236,117 @@ describe("hvscStatusStore", () => {
       expect(next.extraction.status).toBe("failure");
       expect(next.extraction.archiveName).toBe("hvsc-update-85.7z");
       expect(next.extraction.recoveryHint).toContain("Delete the cached archive");
+    });
+
+    it("tracks metadata hydration progress with concise state tokens", () => {
+      const initial = getDefaultHvscStatusSummary();
+
+      const running = applyHvscProgressEventToSummary(initial, {
+        ingestionId: "meta-1",
+        stage: "sid_metadata_hydration",
+        statusToken: "running",
+        message: "HVSC META 12/60 running",
+        processedCount: 12,
+        totalCount: 60,
+        percent: 20,
+      });
+
+      expect(running.metadata.status).toBe("in-progress");
+      expect(running.metadata.stateToken).toBe("running");
+      expect(running.metadata.processedSongs).toBe(12);
+      expect(running.metadata.totalSongs).toBe(60);
+
+      const done = applyHvscProgressEventToSummary(running, {
+        ingestionId: "meta-1",
+        stage: "sid_metadata_hydration",
+        statusToken: "done",
+        message: "HVSC META 60/60 done",
+        processedCount: 60,
+        totalCount: 60,
+        percent: 100,
+      });
+
+      expect(done.metadata.status).toBe("success");
+      expect(done.metadata.stateToken).toBe("done");
+      expect(done.metadata.finishedAt).toBeTruthy();
+    });
+
+    it("infers metadata completion state and percent when the event omits them", () => {
+      const initial = getDefaultHvscStatusSummary();
+
+      const done = applyHvscProgressEventToSummary(initial, {
+        ingestionId: "meta-implicit",
+        stage: "sid_metadata_hydration",
+        message: "HVSC META 60/60 done",
+        processedCount: 60,
+        totalCount: 60,
+      });
+
+      expect(done.metadata.status).toBe("success");
+      expect(done.metadata.stateToken).toBe("done");
+      expect(done.metadata.percent).toBe(100);
+      expect(done.metadata.finishedAt).toBeTruthy();
+    });
+
+    it("infers running metadata state and percent for partial progress events", () => {
+      const initial = getDefaultHvscStatusSummary();
+
+      const running = applyHvscProgressEventToSummary(initial, {
+        ingestionId: "meta-implicit-running",
+        stage: "sid_metadata_hydration",
+        message: "HVSC META 12/60 running",
+        processedCount: 12,
+        totalCount: 60,
+      });
+
+      expect(running.metadata.status).toBe("in-progress");
+      expect(running.metadata.stateToken).toBe("running");
+      expect(running.metadata.percent).toBe(20);
+      expect(running.metadata.finishedAt).toBeNull();
+    });
+
+    it("treats metadata progress events with an explicit error token as failures", () => {
+      const initial = getDefaultHvscStatusSummary();
+
+      const failed = applyHvscProgressEventToSummary(initial, {
+        ingestionId: "meta-token-error",
+        stage: "sid_metadata_hydration",
+        statusToken: "error",
+        message: "HVSC META failed",
+        errorCause: "parse failed",
+        processedCount: 12,
+        totalCount: 60,
+        failedSongs: 3,
+      });
+
+      expect(failed.metadata.status).toBe("failure");
+      expect(failed.metadata.stateToken).toBe("error");
+      expect(failed.metadata.errorMessage).toBe("parse failed");
+      expect(failed.metadata.errorCount).toBe(3);
+      expect(failed.metadata.finishedAt).toBeTruthy();
+    });
+
+    it("records metadata hydration failures and falls back to the event message", () => {
+      const initial = getDefaultHvscStatusSummary();
+
+      const failed = applyHvscProgressEventToSummary(
+        initial,
+        {
+          ingestionId: "meta-2",
+          stage: "error",
+          message: "HVSC META failed",
+          processedCount: 12,
+          totalCount: 60,
+          failedSongs: 2,
+        },
+        "sid_metadata_hydration",
+      );
+
+      expect(failed.metadata.status).toBe("failure");
+      expect(failed.metadata.stateToken).toBe("error");
+      expect(failed.metadata.errorMessage).toBe("HVSC META failed");
+      expect(failed.metadata.errorCount).toBe(2);
+      expect(failed.metadata.finishedAt).toBeTruthy();
     });
 
     it("ignores non-complete events", () => {

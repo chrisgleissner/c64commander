@@ -7,7 +7,14 @@ import type { PlaylistDataRepository, PlaylistItemRecord, TrackRecord } from "@/
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { PlaylistItem } from "./types";
 
-export type PlaylistRepositoryPhase = "IDLE" | "SCANNING" | "INGESTING" | "COMMITTING" | "READY" | "ERROR";
+export type PlaylistRepositoryPhase =
+  | "IDLE"
+  | "SCANNING"
+  | "INGESTING"
+  | "COMMITTING"
+  | "BACKGROUND_COMMITTING"
+  | "READY"
+  | "ERROR";
 
 export type PlaylistRepositorySyncSnapshot = {
   playlistId: string;
@@ -32,6 +39,7 @@ type PlaylistCommitRequest = {
   items: PlaylistItem[];
   repository?: PlaylistDataRepository;
   trackChunkSize?: number;
+  initialPhase?: "COMMITTING" | "BACKGROUND_COMMITTING";
 };
 
 const defaultSnapshot = (playlistId: string): PlaylistRepositorySyncSnapshot => ({
@@ -194,6 +202,7 @@ export const commitPlaylistSnapshot = async ({
   items,
   repository = getPlaylistDataRepository(),
   trackChunkSize = 500,
+  initialPhase = "COMMITTING",
 }: PlaylistCommitRequest): Promise<PlaylistCommitResult> => {
   const snapshotKey = buildSnapshotKey(playlistId, items);
   const current = getSnapshot(playlistId);
@@ -213,7 +222,7 @@ export const commitPlaylistSnapshot = async ({
 
   const expectedCount = items.length;
   emitSnapshot(playlistId, {
-    phase: "COMMITTING",
+    phase: initialPhase,
     expectedCount,
     lastError: null,
   });
@@ -238,14 +247,10 @@ export const commitPlaylistSnapshot = async ({
     );
     const persT0 = Date.now();
     await persistSerializedPlaylist(repository, playlistId, serialized, trackChunkSize);
-    console.info(
-      `[hvsc-perf] persist done ms=${Date.now() - persT0}`,
-    );
+    console.info(`[hvsc-perf] persist done ms=${Date.now() - persT0}`);
     const valT0 = Date.now();
     const committedCount = await repository.getPlaylistItemCount(playlistId);
-    console.info(
-      `[hvsc-perf] validate done committed=${committedCount} ms=${Date.now() - valT0}`,
-    );
+    console.info(`[hvsc-perf] validate done committed=${committedCount} ms=${Date.now() - valT0}`);
     if (committedCount !== expectedCount) {
       throw new Error(
         `Playlist repository validation failed for ${playlistId}: expected ${expectedCount}, got ${committedCount}`,

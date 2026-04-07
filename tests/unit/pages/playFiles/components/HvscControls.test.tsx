@@ -138,6 +138,24 @@ describe("HvscControls", () => {
     expect(screen.queryByText("Browse and add HVSC songs from the shared “Add items” source chooser.")).toBeNull();
   });
 
+  it("renders metadata hydration details and pre-ingest guidance", () => {
+    render(
+      <HvscControls
+        {...buildProps({
+          hvscSummaryState: "success",
+          hvscMetadataProgressLabel: "HVSC META 12/60 running",
+          hvscMetadataUpdatedAt: "2026-03-29T18:05:00Z",
+          hvscSummaryUpdatedAt: "2026-03-29T18:00:00Z",
+          formatHvscTimestamp: (value?: string | null) => `at ${value}`,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("HVSC META 12/60 running")).toBeTruthy();
+    expect(screen.getByText("Metadata updated: at 2026-03-29T18:05:00Z")).toBeTruthy();
+    expect(screen.getByText("Download HVSC to cache the archive set before ingesting it.")).toBeTruthy();
+  });
+
   it("renders progress fallback text when download byte totals are unavailable", () => {
     render(
       <HvscControls
@@ -155,6 +173,25 @@ describe("HvscControls", () => {
     expect(screen.getByTestId("hvsc-progress")).toBeTruthy();
     expect(screen.getByText("Processing HVSC…")).toBeTruthy();
     expect(screen.getByTestId("hvsc-download-bytes").textContent).toBe("—");
+  });
+
+  it("renders download byte totals without elapsed duration when no timing is available", () => {
+    render(
+      <HvscControls
+        {...buildProps({
+          hvscUpdating: true,
+          hvscInProgress: true,
+          hvscPhase: "index",
+          hvscActionLabel: "Indexing library",
+          hvscDownloadBytes: 3 * 1024 * 1024,
+          hvscDownloadElapsedMs: null,
+          formatHvscDuration: (value?: number | null) => `${value ?? 0}ms`,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Status: Indexing")).toBeTruthy();
+    expect(screen.getByTestId("hvsc-download-bytes").textContent).toBe("3.0 MB");
   });
 
   it("shows reset controls for inline errors even when no summary card is visible", () => {
@@ -207,5 +244,18 @@ describe("HvscControls", () => {
     expect(
       screen.getByText("HVSC controls are available on native builds or when a mock bridge is enabled."),
     ).toBeTruthy();
+  });
+
+  it("falls back to an em dash when the installed version is unknown", () => {
+    render(
+      <HvscControls
+        {...buildProps({
+          hvscInstalled: true,
+          hvscInstalledVersion: null,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Installed version —")).toBeTruthy();
   });
 });

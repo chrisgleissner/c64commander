@@ -404,4 +404,21 @@ describe("useQueryFilteredPlaylist", () => {
       ]);
     });
   });
+
+  it("keeps filtering in memory while the repository is background committing", async () => {
+    markPlaylistRepositoryPhase(playlistId, "BACKGROUND_COMMITTING", {
+      expectedCount: playlist.length,
+    });
+
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => {
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+      expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+        "sid-1",
+      ]);
+    });
+
+    expect(repository.queryPlaylist).not.toHaveBeenCalled();
+  });
 });

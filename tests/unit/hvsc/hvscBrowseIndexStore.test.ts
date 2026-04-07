@@ -22,6 +22,7 @@ vi.mock("@capacitor/filesystem", () => ({
 
 import { Filesystem } from "@capacitor/filesystem";
 import {
+  buildHvscBrowseIndexFromSonglengthSnapshot,
   buildHvscBrowseIndexFromEntries,
   clearHvscBrowseIndexSnapshot,
   getHvscFoldersWithParent,
@@ -163,7 +164,13 @@ describe("hvscBrowseIndexStore", () => {
     expect(loaded).toMatchObject({
       schemaVersion: snapshot.schemaVersion,
       folders: snapshot.folders,
-      songs: snapshot.songs,
+      songs: {
+        "/test.sid": expect.objectContaining({
+          virtualPath: "/test.sid",
+          fileName: "test.sid",
+          metadataStatus: "seeded",
+        }),
+      },
     });
     expect(loaded?.updatedAt).toEqual(expect.any(String));
   });
@@ -181,9 +188,37 @@ describe("hvscBrowseIndexStore", () => {
   it("creates empty snapshot with correct schema", async () => {
     const { createEmptyHvscBrowseIndexSnapshot } = await import("@/lib/hvsc/hvscBrowseIndexStore");
     const empty = createEmptyHvscBrowseIndexSnapshot();
-    expect(empty.schemaVersion).toBe(1);
+    expect(empty.schemaVersion).toBe(2);
     expect(empty.folders["/"]).toBeDefined();
     expect(Object.keys(empty.songs)).toHaveLength(0);
+  });
+
+  it("builds seeded song rows from Songlengths snapshot data", () => {
+    const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot({
+      pathToSeconds: new Map([
+        ["/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid", [90, 120]],
+        ["/GAMES/Zap.sid", [45]],
+      ]),
+      md5ToSeconds: new Map(),
+    });
+
+    expect(snapshot.songs["/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid"]).toMatchObject({
+      fileName: "Comic_Bakery.sid",
+      displayTitleSeed: "Comic Bakery",
+      displayAuthorSeed: "Rob Hubbard",
+      durationSeconds: 90,
+      durationsSeconds: [90, 120],
+      subsongCount: 2,
+      defaultSong: 1,
+      metadataStatus: "seeded",
+    });
+    expect(snapshot.songs["/GAMES/Zap.sid"]).toMatchObject({
+      displayTitleSeed: "Zap",
+      displayAuthorSeed: null,
+      durationSeconds: 45,
+      subsongCount: 1,
+    });
+    expect(snapshot.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain("/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid");
   });
 
   it("creates mutable browse index for baseline", async () => {
@@ -336,7 +371,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
   it("normalizeSnapshot uses getFileName when song.fileName is empty (line 162)", async () => {
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
     const fakeSnapshot = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: new Date().toISOString(),
       songs: {
         "/DEMOS/test.sid": {
@@ -358,7 +393,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
   it("normalizeSnapshot treats null songs as empty object (line 180)", async () => {
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
     const fakeSnapshot = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: new Date().toISOString(),
       songs: null,
       folders: {},

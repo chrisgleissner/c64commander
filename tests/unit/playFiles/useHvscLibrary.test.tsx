@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getDefaultHvscStatusSummaryMock: vi.fn(),
   getHvscCacheStatusMock: vi.fn(),
   getHvscFolderListingMock: vi.fn(),
+  ensureHvscMetadataHydrationMock: vi.fn(),
   getHvscSongMock: vi.fn(),
   getHvscStatusMock: vi.fn(),
   loadHvscRootMock: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock("@/lib/hvsc", () => ({
   cancelHvscInstall: (...args: unknown[]) => mocks.cancelHvscInstallMock(...args),
   checkForHvscUpdates: (...args: unknown[]) => mocks.checkForHvscUpdatesMock(...args),
   clearHvscStatusSummary: (...args: unknown[]) => mocks.clearHvscStatusSummaryMock(...args),
+  ensureHvscMetadataHydration: (...args: unknown[]) => mocks.ensureHvscMetadataHydrationMock(...args),
   getDefaultHvscStatusSummary: (...args: unknown[]) => mocks.getDefaultHvscStatusSummaryMock(...args),
   getHvscCacheStatus: (...args: unknown[]) => mocks.getHvscCacheStatusMock(...args),
   getHvscFolderListing: (...args: unknown[]) => mocks.getHvscFolderListingMock(...args),
@@ -75,6 +77,7 @@ const createSummary = (
   overrides: Partial<{
     download: Record<string, unknown>;
     extraction: Record<string, unknown>;
+    metadata: Record<string, unknown>;
     lastUpdatedAt: string | null;
   }> = {},
 ) => ({
@@ -100,6 +103,20 @@ const createSummary = (
     filesExtracted: null,
     totalFiles: null,
     ...overrides.extraction,
+  },
+  metadata: {
+    status: "idle" as SummaryStatus,
+    stateToken: null,
+    startedAt: null,
+    finishedAt: null,
+    durationMs: null,
+    processedSongs: null,
+    totalSongs: null,
+    percent: null,
+    lastFile: null,
+    errorCount: null,
+    errorMessage: null,
+    ...overrides.metadata,
   },
   lastUpdatedAt: null,
   ...overrides,
@@ -140,6 +157,7 @@ describe("useHvscLibrary", () => {
     mocks.getDefaultHvscStatusSummaryMock.mockImplementation(() => createSummary());
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: null, updateVersions: [] });
     mocks.getHvscFolderListingMock.mockResolvedValue({ path: "/", folders: [], songs: [] });
+    mocks.ensureHvscMetadataHydrationMock.mockResolvedValue(undefined);
     mocks.getHvscStatusMock.mockResolvedValue(createStatus());
     mocks.loadHvscRootMock.mockReturnValue({ ready: false });
     mocks.loadHvscStatusSummaryMock.mockImplementation(() => createSummary());

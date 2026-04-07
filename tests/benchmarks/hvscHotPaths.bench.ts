@@ -1,7 +1,12 @@
 import { bench, describe } from "vitest";
 
 import type { MediaEntry } from "@/lib/media-index";
-import { buildHvscBrowseIndexFromEntries, listFolderFromBrowseIndex } from "@/lib/hvsc/hvscBrowseIndexStore";
+import {
+  buildHvscBrowseIndexFromEntries,
+  buildHvscBrowseIndexFromSonglengthSnapshot,
+  listFolderFromBrowseIndex,
+  listSongsRecursiveFromBrowseIndex,
+} from "@/lib/hvsc/hvscBrowseIndexStore";
 import { parseDeletionList } from "@/lib/hvsc/hvscDownload";
 import { archiveNameHash } from "@/lib/hvsc/hvscArchiveExtraction";
 
@@ -20,6 +25,11 @@ const createEntries = (count: number): MediaEntry[] =>
 const buildEntries = createEntries(50_000);
 const queryEntries = createEntries(100_000);
 const querySnapshot = buildHvscBrowseIndexFromEntries(queryEntries);
+const songlengthSeedSnapshot = {
+  pathToSeconds: new Map(queryEntries.map((entry) => [entry.path, [entry.durationSeconds ?? 0]])),
+  md5ToSeconds: new Map<string, number[]>(),
+};
+const songlengthProjection = buildHvscBrowseIndexFromSonglengthSnapshot(songlengthSeedSnapshot);
 const deletionList = queryEntries
   .slice(0, 20_000)
   .map((entry) => entry.path.slice(1))
@@ -39,6 +49,22 @@ describe("HVSC hot path microbenchmarks", () => {
     "query browse index page over 100k entries",
     () => {
       listFolderFromBrowseIndex(querySnapshot, "/MUSICIANS/Composer 042", "track_000", 0, 200);
+    },
+    { iterations: 10, warmupIterations: 2 },
+  );
+
+  bench(
+    "build Songlengths-seeded projection from 100k songs",
+    () => {
+      buildHvscBrowseIndexFromSonglengthSnapshot(songlengthSeedSnapshot);
+    },
+    { iterations: 5, warmupIterations: 1 },
+  );
+
+  bench(
+    "query Songlengths-seeded recursive listing over 100k entries",
+    () => {
+      listSongsRecursiveFromBrowseIndex(songlengthProjection, "/MUSICIANS/Composer 042");
     },
     { iterations: 10, warmupIterations: 2 },
   );

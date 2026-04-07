@@ -35,6 +35,8 @@ export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
       hvscSummaryDurationMs={hvsc.hvscSummaryDurationMs}
       hvscSummaryUpdatedAt={hvsc.hvscSummaryUpdatedAt}
       hvscSummaryFailureLabel={hvsc.hvscSummaryFailureLabel}
+      hvscMetadataProgressLabel={hvsc.hvscMetadataProgressLabel}
+      hvscMetadataUpdatedAt={hvsc.hvscMetadataUpdatedAt}
       hvscIngestionTotalSongs={hvsc.hvscIngestionTotalSongs}
       hvscIngestionIngestedSongs={hvsc.hvscIngestionIngestedSongs}
       hvscIngestionFailedSongs={hvsc.hvscIngestionFailedSongs}

@@ -38,12 +38,7 @@ import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./
 import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
-import {
-  clearHvscBrowseIndexSnapshot,
-  createHvscBrowseIndexMutable,
-  saveHvscBrowseIndexSnapshot,
-  buildHvscBrowseIndexFromEntries,
-} from "./hvscBrowseIndexStore";
+import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -723,31 +718,6 @@ const ingestArchivePathNative = async (options: {
           : { outcome: "success" },
       );
     }
-    await clearHvscBrowseIndexSnapshot();
-
-    // Rebuild the browse index from the native SQLite song index in a single
-    // bridge call. This eliminates the ~160-folder BFS walk that previously
-    // caused multi-minute delays when listing songs for playlist additions.
-    try {
-      const nativeSongs = await HvscIngestion.queryAllSongs();
-      if (nativeSongs.totalSongs > 0) {
-        const entries = nativeSongs.songs.map((s) => ({
-          path: s.virtualPath,
-          name: s.fileName,
-          type: "sid" as const,
-        }));
-        const snapshot = buildHvscBrowseIndexFromEntries(entries);
-        await saveHvscBrowseIndexSnapshot(snapshot);
-        addLog("info", "Rebuilt HVSC browse index after native ingest", {
-          totalSongs: nativeSongs.totalSongs,
-        });
-      }
-    } catch (rebuildError) {
-      addLog("warn", "Failed to rebuild HVSC browse index after native ingest", {
-        error: (rebuildError as Error).message,
-      });
-    }
-
     if (result.failedSongs > 0) {
       applyIngestionFailureAndThrow({
         archiveName,

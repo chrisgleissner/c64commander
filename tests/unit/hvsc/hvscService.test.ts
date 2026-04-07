@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mediaIndexMocks = vi.hoisted(() => ({
   load: vi.fn(async () => undefined),
   loadBrowseSnapshot: vi.fn(async () => ({
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: new Date().toISOString(),
     songs: {},
     folders: { "/": { path: "/", folders: [], songs: [] } },
@@ -117,7 +117,7 @@ vi.mock("@/lib/sourceNavigation/paths", () => ({
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
   loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: new Date().toISOString(),
     songs: {},
     folders: { "/": { path: "/", folders: [], songs: [] } },
@@ -187,7 +187,7 @@ describe("hvscService", () => {
     vi.clearAllMocks();
     mediaIndexMocks.load.mockResolvedValue(undefined);
     mediaIndexMocks.loadBrowseSnapshot.mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: new Date().toISOString(),
       songs: {},
       folders: { "/": { path: "/", folders: [], songs: [] } },

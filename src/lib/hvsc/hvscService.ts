@@ -23,13 +23,13 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import {
   loadHvscBrowseIndexSnapshot,
-  verifyHvscBrowseIndexIntegrity,
-  buildHvscBrowseIndexFromEntries,
   saveHvscBrowseIndexSnapshot,
+  verifyHvscBrowseIndexIntegrity,
 } from "./hvscBrowseIndexStore";
 import { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } from "./hvscPerformance";
 import { nextCorrelationId } from "@/lib/tracing/traceIds";
 import { recordHvscQueryTiming } from "./hvscStatusStore";
+import { createProgressEmitter } from "./hvscIngestionProgress";
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -42,7 +42,8 @@ import {
   ingestCachedHvsc as ingestRuntimeCached,
   installOrUpdateHvsc as installRuntime,
 } from "./hvscIngestionRuntime";
-import { resolveHvscSonglengthDuration } from "./hvscSongLengthService";
+import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "./hvscSongLengthService";
+import { hydrateHvscMetadata } from "./hvscMetadataHydrator";
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
@@ -71,6 +72,7 @@ const hasRuntimeBridge = () => {
 };
 
 const hvscIndex = createHvscMediaIndex();
+let hvscMetadataHydrationPromise: Promise<void> | null = null;
 
 const LEGACY_MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 
@@ -114,36 +116,6 @@ const migrateLegacyMediaIndex = async () => {
 
 export const isHvscBridgeAvailable = () => hasMockBridge() || hasRuntimeBridge();
 
-/**
- * Rebuild the browse index snapshot from the native SQLite song index.
- * Returns the snapshot on success, or null on failure / empty index.
- */
-const rebuildBrowseIndexFromNative = async () => {
-  try {
-    const { HvscIngestion } = await import("@/lib/native/hvscIngestion");
-    const nativeSongs = await HvscIngestion.queryAllSongs();
-    if (nativeSongs.totalSongs === 0) return null;
-    const entries = nativeSongs.songs.map((s) => ({
-      path: s.virtualPath,
-      name: s.fileName,
-      type: "sid" as const,
-    }));
-    const snapshot = buildHvscBrowseIndexFromEntries(entries);
-    await saveHvscBrowseIndexSnapshot(snapshot);
-    addLog(`Rebuilt HVSC browse index from native SQLite: ${nativeSongs.totalSongs} songs`);
-    return snapshot;
-  } catch (error) {
-    addErrorLog("Failed to rebuild HVSC browse index from native SQLite", {
-      error: {
-        name: (error as Error).name,
-        message: (error as Error).message,
-        stack: (error as Error).stack,
-      },
-    });
-    return null;
-  }
-};
-
 export const getHvscStatus = async (): Promise<HvscStatus> => {
   const mock = getMockBridge();
   if (mock?.getHvscStatus) return mock.getHvscStatus();
@@ -186,6 +158,60 @@ export const addHvscProgressListener = async (listener: HvscProgressListener) =>
   return addRuntimeListener(listener);
 };
 
+export const ensureHvscMetadataHydration = async () => {
+  if (hvscMetadataHydrationPromise) {
+    return hvscMetadataHydrationPromise;
+  }
+
+  hvscMetadataHydrationPromise = (async () => {
+    await ensureHvscSonglengthsReadyOnColdStart();
+    const snapshot = await hvscIndex.loadBrowseSnapshot();
+    if (!snapshot) {
+      return;
+    }
+
+    const pendingSongs = Object.values(snapshot.songs).filter(
+      (song) => song.metadataStatus !== "hydrated" && song.metadataStatus !== "error",
+    );
+    if (!pendingSongs.length) {
+      return;
+    }
+
+    const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
+    const hydratedSnapshot = await hydrateHvscMetadata({
+      snapshot,
+      readSong: async (virtualPath) => getHvscSong({ virtualPath }),
+      emitProgress,
+      onSnapshotUpdated: async (nextSnapshot) => {
+        hvscIndex.setBrowseSnapshot(nextSnapshot);
+        await saveHvscBrowseIndexSnapshot(nextSnapshot);
+      },
+    });
+    hvscIndex.setBrowseSnapshot(hydratedSnapshot);
+  })()
+    .catch((error) => {
+      const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
+      emitProgress({
+        stage: "sid_metadata_hydration",
+        statusToken: "error",
+        message: "HVSC META failed",
+        errorCause: (error as Error).message,
+      });
+      addErrorLog("HVSC metadata hydration failed", {
+        error: {
+          name: (error as Error).name,
+          message: (error as Error).message,
+          stack: (error as Error).stack,
+        },
+      });
+    })
+    .finally(() => {
+      hvscMetadataHydrationPromise = null;
+    });
+
+  return hvscMetadataHydrationPromise;
+};
+
 const ensureHvscIndexReady = async () => {
   // Root and folder browsing only need the persisted browse snapshot. Avoid
   // eagerly loading the full media-index JSON on the first browse because that
@@ -197,12 +223,10 @@ const ensureHvscIndexReady = async () => {
       browseSnapshot = await hvscIndex.loadBrowseSnapshot();
     }
   }
-  // If the browse snapshot is still missing (e.g. after native ingest which
-  // clears it, or after an app update) or stale/empty (was rebuilt lazily with
-  // 0 entries from a prior cycle), try to rebuild from the native SQLite index.
-  const snapshotMissingOrEmpty = !browseSnapshot || (browseSnapshot && Object.keys(browseSnapshot.songs).length === 0);
-  if (snapshotMissingOrEmpty && hasRuntimeBridge()) {
-    browseSnapshot = await rebuildBrowseIndexFromNative();
+  const snapshotMissingOrEmpty = !browseSnapshot || Object.keys(browseSnapshot.songs).length === 0;
+  if (snapshotMissingOrEmpty) {
+    await ensureHvscSonglengthsReadyOnColdStart();
+    browseSnapshot = await hvscIndex.loadBrowseSnapshot();
   }
   if (!browseSnapshot) return;
 
@@ -381,30 +405,10 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
 export const getHvscSongsRecursive = async (
   path: string,
 ): Promise<ReturnType<typeof hvscIndex.querySongsRecursive>> => {
-  let snapshot = await hvscIndex.loadBrowseSnapshot();
-  const songCount = snapshot ? Object.keys(snapshot.songs).length : 0;
-  const folderCount = snapshot ? Object.keys(snapshot.folders).length : 0;
-  console.warn(`[hvsc-diag] getHvscSongsRecursive path=${path} snapshot=${!!snapshot} songs=${songCount} folders=${folderCount} hasRuntime=${hasRuntimeBridge()}`);
-  // The snapshot may exist but be empty (built from empty entriesSnapshot when
-  // the old media-index JSON has no entries — typical for natively-backed HVSC).
-  const snapshotUsable = snapshot && songCount > 0;
-  if (!snapshotUsable && hasRuntimeBridge()) {
-    console.warn(`[hvsc-diag] rebuilding: snapshotUsable=${snapshotUsable}`);
-    // Clear the stale/empty in-memory snapshot so the reload below reads the
-    // freshly-persisted file instead of returning the cached empty one.
-    hvscIndex.clearBrowseSnapshot();
-    snapshot = await rebuildBrowseIndexFromNative();
-    console.warn(`[hvsc-diag] rebuild done: snapshot=${!!snapshot} songs=${snapshot ? Object.keys(snapshot.songs).length : 0}`);
-    // rebuildBrowseIndexFromNative persists to disk but does not update the
-    // in-memory hvscIndex.browseSnapshot — reload so querySongsRecursive sees it.
-    if (snapshot) {
-      const reloaded = await hvscIndex.loadBrowseSnapshot();
-      console.warn(`[hvsc-diag] reloaded: ${!!reloaded} songs=${reloaded ? Object.keys(reloaded.songs).length : 0}`);
-    }
-  }
-  const result = hvscIndex.querySongsRecursive(path);
-  console.warn(`[hvsc-diag] querySongsRecursive result=${result ? result.length : 'null'}`);
-  return result;
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!snapshot) return null;
+  return hvscIndex.querySongsRecursive(path);
 };
 
 export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {

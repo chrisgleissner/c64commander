@@ -133,7 +133,12 @@ export const ItemSelectionView = ({
                 ) : (
                   <span className="h-4 w-4 shrink-0" aria-hidden="true" />
                 )}
-                <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                  {entry.subtitle ? (
+                    <p className="text-[11px] text-muted-foreground break-words whitespace-normal">{entry.subtitle}</p>
+                  ) : null}
+                </div>
               </div>
               {isFolder ? (
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />

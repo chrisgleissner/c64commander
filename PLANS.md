@@ -202,3 +202,60 @@ Evidence anchors:
 - [x] `View all` is always available for non-empty authoritative lists.
 - [x] Large imports remain correct and measurable at 50K+ items.
 - [x] Performance targets are either measured with evidence or explicitly blocked with current bottleneck details.
+
+---
+
+## Audit 3: HVSC Playlist Import & Large-Playlist Performance Research
+
+Date: 2026-04-07
+Status: Tasks 1-7 implemented and validated
+Primary document: `docs/research/hvsc/performance/audit3/audit3.md`
+Implementation prompt: `docs/research/hvsc/performance/audit3/prompt.md`
+
+### Problem Restatement
+
+The bottleneck is not 7z extraction. It is (1) importing 60k+ extracted songs into a playlist and (2) interacting with the resulting 100k-item playlist. Five dominant bottlenecks were identified and ranked with benchmark evidence.
+
+### Top Bottlenecks (Measured)
+
+1. **Browse index activation failure** — 30s BFS fallback on Pixel 4 via Capacitor bridge (measured: 50s at 100k simulated)
+2. **O(n²) array spread** — 86ms desktop / 430–690ms Pixel 4 est. for 60k items (measured)
+3. **IndexedDB commit** — ~3.2s at 60k blocking UI (simulated)
+4. **No list virtualization** — all items rendered as DOM nodes
+5. **Linear filter** — 35ms at 100k per keystroke (measured)
+
+### Recommended Implementation Order
+
+**Phase 1 (Quick Wins):** HVSC-A01, HVSC-A03, HVSC-A04, LIST-A03
+**Phase 2 (Foundation):** LIST-A01, HVSC-A02, HVSC-A05, LIST-A07
+**Phase 3 (Polish):** HVSC-A06, HVSC-A12, LIST-A10, LIST-A09
+
+### Research Artifacts
+
+| Artifact                   | Path                                                |
+| -------------------------- | --------------------------------------------------- |
+| Main audit                 | `docs/research/hvsc/performance/audit3/audit3.md`   |
+| Implementation prompt      | `docs/research/hvsc/performance/audit3/prompt.md`   |
+| Benchmark: playlist scale  | `tests/research/audit3/playlist-scale-bench.mjs`    |
+| Benchmark: spread analysis | `tests/research/audit3/spread-quadratic-bench.mjs`  |
+| Benchmark: Songlengths.md5 | `tests/research/audit3/songlengths-parse-bench.mjs` |
+
+### Implementation Matrix
+
+| Task     | Status                                 | Notes                                                                                                                                                                                                                                                                                                                        |
+| -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HVSC-A01 | Implemented                            | Songlengths snapshot seeds the persisted HVSC browse projection, cold-start/config reload syncs that projection, and recursive enumeration no longer depends on native browse-index rebuilds. Proof benchmark: seeded projection from 100k songs mean `547.39 ms`; recursive listing mean `0.0190 ms`.                       |
+| HVSC-A03 | Implemented                            | HVSC playlist import now uses the bulk-state path rather than incremental spread updates, preserving the single-set behavior required by the audit3 pass. Regression coverage remains anchored in the add-to-playlist batching tests.                                                                                        |
+| HVSC-A04 | Implemented                            | HVSC items now skip config discovery entirely while local and ultimate sources still resolve sibling `.cfg` files. Regression coverage added in `tests/unit/pages/playFiles/handlers/addFileSelectionsConfig.test.ts`.                                                                                                       |
+| LIST-A03 | Implemented                            | Playlist filtering now uses a `200 ms` debounced committed query while keeping immediate controlled input text. Regression coverage added in `tests/unit/playFiles/useDebouncedValue.test.tsx`.                                                                                                                              |
+| HVSC-A02 | Implemented                            | Added chunked, resumable background SID metadata hydration with seeded title/author display fields, persisted canonical metadata updates, shared status-store progress, and UI surfacing in the HVSC controls area. Regression coverage added in `tests/unit/hvsc/hvscMetadataHydrator.test.ts` and related HVSC hook tests. |
+| HVSC-A05 | Implemented                            | Playlist repository commits now move into a `BACKGROUND_COMMITTING` phase so the playlist becomes interactive before IndexedDB sync finishes. Filtering stays on the in-memory path until the background commit completes.                                                                                                   |
+| LIST-A01 | Implemented via existing virtuoso path | The repo already used `react-virtuoso` for the view-all playlist surface, so the audit3 resolution preserved that virtualized path instead of introducing a second library. Regression coverage now locks the virtualized rendering path and incremental loading wiring.                                                     |
+
+### Final Validation
+
+- `npm run test`: passed (`500` files, `5679` tests)
+- `npm run test:coverage`: passed with `91.00%` branch coverage (`5690` tests)
+- `npm run lint`: passed with 3 pre-existing warnings in generated `c64scope/coverage/*.js` files
+- `npm run build`: passed
+- Focused regressions added for HVSC source adapter shape updates, metadata hydrator chunk/error paths, HVSC controls metadata rendering, and status-store metadata transitions

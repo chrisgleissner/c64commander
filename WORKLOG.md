@@ -1,5 +1,134 @@
 # HVSC Performance Worklog
 
+## [2026-04-07 12:20] AUDIT3-CLOSURE: Tasks 2-7 closed and full validation green
+
+Completed the remaining audit3 implementation tasks after the Songlengths-seeded catalog landed and brought the full repository validation back to green.
+
+What changed:
+
+- Closed `HVSC-A04` by short-circuiting HVSC config discovery while preserving sibling `.cfg` resolution for local and ultimate sources.
+- Closed `LIST-A03` by splitting the Play page filter into immediate input text plus a `200 ms` debounced committed query.
+- Closed `HVSC-A02` by adding chunked background SID metadata hydration, seeded title/author display fields, persisted canonical metadata updates, shared HVSC metadata progress state, and UI surfacing in the HVSC controls area.
+- Closed `HVSC-A05` by introducing the `BACKGROUND_COMMITTING` repository phase so add-to-playlist returns ready before IndexedDB commit completion while filtering stays on the in-memory path during the commit.
+- Closed `LIST-A01` by preserving the repo's existing `react-virtuoso` view-all virtualization path and adding regression coverage that locks the virtualized rendering route and incremental loading contract.
+- Updated related source-adapter, status-store, and control-surface tests so the expanded HVSC metadata shape is covered and stable.
+
+Validation executed:
+
+- `npm run test`: passed (`500` files, `5679` tests)
+- `npm run test:coverage`: passed (`5690` tests, `91.00%` branch coverage)
+- `npm run lint`: passed with 3 pre-existing warnings in generated `c64scope/coverage/*.js`
+- `npm run build`: passed
+
+Additional regression coverage added during closure:
+
+- `tests/unit/sourceNavigation/hvscSourceAdapter.test.ts`
+- `tests/unit/hvsc/hvscMetadataHydrator.test.ts`
+- `tests/unit/hvsc/hvscStatusStore.test.ts`
+- `tests/unit/pages/playFiles/components/HvscControls.test.tsx`
+- `tests/unit/playFiles/useDebouncedValue.test.tsx`
+- `tests/unit/components/lists/SelectableActionList.virtualization.test.tsx`
+
+Notes:
+
+- `npm run lint` is no longer blocked by formatting drift; the remaining warnings come from generated coverage artifacts outside the audit3 implementation scope.
+- No documentation screenshots were updated because no docs image became inaccurate during this pass.
+
+## [2026-04-07 10:45] HVSC-A01: Songlengths-seeded browse projection landed; Task 2 blocked on unrelated lint drift
+
+Completed the Task 1 implementation slice that removes HVSC recursive enumeration's dependency on native browse-index rebuilds and seeds the persisted browse projection from Songlengths data.
+
+What changed:
+
+- Extended `src/lib/hvsc/hvscBrowseIndexStore.ts` to store Songlengths-seeded title/author, durations, subsong counts, default song, metadata status, and normalized search text under schema version `2`.
+- Added `buildHvscBrowseIndexFromSonglengthSnapshot(...)` so the Songlengths snapshot can materialize the persisted browse projection directly.
+- Updated `src/lib/hvsc/hvscSongLengthService.ts` so cold-start load and config-change reload both sync the persisted browse projection immediately after Songlengths load.
+- Removed the native `queryAllSongs()` browse-index rebuild path from `src/lib/hvsc/hvscService.ts` and `src/lib/hvsc/hvscIngestionRuntime.ts`.
+- Updated `src/lib/sourceNavigation/hvscSourceAdapter.ts` to consume seeded `defaultSong`, `durationsSeconds`, and `subsongCount` values.
+- Added regression coverage for representative raw `Songlengths.md5` input and for seeded browse-row generation.
+
+Measured proof:
+
+- New benchmark: `build Songlengths-seeded projection from 100k songs`
+  - mean: `547.39 ms`
+  - min/max: `517.15 ms` / `613.49 ms`
+- New benchmark: `query Songlengths-seeded recursive listing over 100k entries`
+  - mean: `0.0190 ms`
+  - p99: `0.0246 ms`
+- Baseline bottleneck removed from the hot path: recursive HVSC enumeration no longer depends on native browse-index rebuild or BFS traversal.
+
+Validation executed:
+
+- Focused HVSC regressions: passed
+- `tests/unit/sid/songlengths.test.ts`: passed (`38` tests)
+- `npm run test`: passed (`497` files, `5670` tests)
+- `npm run test:coverage`: passed (`91.13%` branch coverage)
+- `npm run build`: passed
+- `npm run test:bench`: passed
+
+Blocker:
+
+- `npm run lint` is still blocked by pre-existing Prettier failures in unmodified files:
+  - `src/pages/playFiles/handlers/addFileSelections.ts`
+  - `src/pages/playFiles/playlistRepositorySync.ts`
+- Confirmed with `git diff` that neither file is part of the Task 1 diff.
+- Per the audit3 prompt's strict ordering rule, Task 2 has not started.
+
+## [2026-04-07 10:00] AUDIT-3-RESEARCH: HVSC playlist import and large-playlist performance research complete
+
+Completed a full performance research pass focused on playlist import and large-playlist interaction scaling to 100k items.
+
+### Research scope
+
+- Inspected all add-to-playlist code paths: HVSC, local, commoserve
+- Traced the browse index fast path and BFS fallback in hvscSourceAdapter/hvscService
+- Analyzed the playlist state model (React state + IndexedDB repository sync)
+- Reviewed the list rendering pipeline (usePlaylistListItems → SelectableActionList)
+- Confirmed no virtualization library is currently in use
+
+### Experiments executed
+
+1. `tests/research/audit3/playlist-scale-bench.mjs` — 13 operations measured at 1k/10k/60k/100k scale
+2. `tests/research/audit3/spread-quadratic-bench.mjs` — O(n²) spread append regression quantified
+3. `tests/research/audit3/songlengths-parse-bench.mjs` — Songlengths.md5 path extraction pipeline validated
+
+### Key measurements (desktop, Node.js v24.11.0)
+
+- Slow I/O BFS at 60k (0.5ms/call simulated): 30,027 ms
+- Songlengths.md5 parse + browse index build + item construction at 60k: 177 ms (184x faster)
+- O(n²) spread at 60k with batch=250: 86 ms desktop, est. 430–690 ms Pixel 4
+- Single bulk set at 60k: 0.3 ms (99% savings)
+- Linear filter at 100k: 35 ms desktop, est. 140 ms Pixel 4
+- IndexedDB commit simulation at 60k: 3,240 ms
+- Browse index construction at 60k: 99 ms
+
+### Bottleneck ranking
+
+1. Browse index activation failure (H1) — 30s fallback path
+2. O(n²) array spread (H2) — quadratic React state updates
+3. IndexedDB commit blocks UI (H4) — 3.2s at 60k
+4. No list virtualization — all items in DOM
+5. Linear filter per keystroke (H5) — 35ms at 100k
+
+### Deliverables produced
+
+- `docs/research/hvsc/performance/audit3/audit3.md` — full research document with 12 HVSC import approaches and 10 large-playlist approaches, all scored
+- `docs/research/hvsc/performance/audit3/prompt.md` — strict execution prompt for implementation agent
+- `PLANS.md` updated with Audit 3 section
+- 3 experiment scripts in `tests/research/audit3/`
+
+### Top 3 HVSC import recommendations
+
+1. HVSC-A01: Fix browse index activation (P0) — eliminate 30s BFS fallback
+2. HVSC-A03: Single bulk playlist state set (P0) — eliminate O(n²) spread
+3. HVSC-A02: Songlengths.md5 path extraction (P0) — bulletproof 184x-faster fallback
+
+### Top 3 large-playlist recommendations
+
+1. LIST-A01: Virtual scrolling with @tanstack/react-virtual (P0)
+2. LIST-A03: Debounce filter input (P1)
+3. LIST-A07: Background playlist hydration (P1)
+
 ## [2026-04-06 18:00] ANDROID-PILOT-BLOCKER-003: Perfetto stream capture fix landed; Pixel 4 pilot still blocked in playlist setup
 
 Repaired the Android runner's invalid Perfetto file path assumption, then ran a real-device pilot to validate the full baseline path.

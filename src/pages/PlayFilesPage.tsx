@@ -88,6 +88,7 @@ import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackContro
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
 import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
 import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
+import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
@@ -183,7 +184,9 @@ export default function PlayFilesPage() {
   const playlistSnapshotRef = useRef(playlist);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
+  const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
@@ -214,6 +217,19 @@ export default function PlayFilesPage() {
     total: null,
     message: null,
   });
+
+  useEffect(() => {
+    setPlaylistFilterText(debouncedPlaylistFilterText);
+  }, [debouncedPlaylistFilterText]);
+
+  const handlePlaylistFilterTextChange = useCallback((value: string) => {
+    setPlaylistFilterInputText(value);
+  }, []);
+
+  const restorePlaylistFilterText = useCallback((value: string) => {
+    setPlaylistFilterInputText(value);
+    setPlaylistFilterText(value);
+  }, []);
   const {
     addItemsOverlayActiveRef,
     addItemsOverlayStartedAtRef,
@@ -559,12 +575,12 @@ export default function PlayFilesPage() {
         prev.map((item) =>
           item.id === itemId
             ? {
-                ...item,
-                configRef,
-                configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
-                configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
-                configCandidates: options?.candidates ?? item.configCandidates ?? null,
-              }
+              ...item,
+              configRef,
+              configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
+              configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
+              configCandidates: options?.candidates ?? item.configCandidates ?? null,
+            }
             : item,
         ),
       );
@@ -577,16 +593,16 @@ export default function PlayFilesPage() {
       prev.map((entry) =>
         entry.id === item.id
           ? {
-              ...entry,
-              configOverrides: overrides,
-              configOrigin: overrides?.length
-                ? "manual"
-                : entry.configRef
-                  ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
-                  : entry.configOrigin === "manual-none"
-                    ? "manual-none"
-                    : "none",
-            }
+            ...entry,
+            configOverrides: overrides,
+            configOrigin: overrides?.length
+              ? "manual"
+              : entry.configRef
+                ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
+                : entry.configOrigin === "manual-none"
+                  ? "manual-none"
+                  : "none",
+          }
           : entry,
       ),
     );
@@ -1181,7 +1197,7 @@ export default function PlayFilesPage() {
     shuffleEnabled,
     repeatEnabled,
     activePlaylistQuery: playlistFilterText,
-    setActivePlaylistQuery: setPlaylistFilterText,
+    setActivePlaylistQuery: restorePlaylistFilterText,
     resolvedDeviceId,
     playlistStorageKey,
     localEntriesBySourceId,
@@ -1467,8 +1483,8 @@ export default function PlayFilesPage() {
                 hasPlaylist={hasPlaylist}
                 onAddItems={() => setBrowserOpen(true)}
                 onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
-                playlistFilterText={playlistFilterText}
-                onPlaylistFilterTextChange={setPlaylistFilterText}
+                playlistFilterText={playlistFilterInputText}
+                onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
                 hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
                 onViewAllEndReached={queryFilteredPlaylist.loadMoreViewAllResults}
               />

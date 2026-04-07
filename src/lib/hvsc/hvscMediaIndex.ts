@@ -102,7 +102,7 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   constructor(
     private readonly index: MediaIndex,
     private readonly listFolder: (path: string) => Promise<HvscFolderListing>,
-  ) {}
+  ) { }
 
   async load(): Promise<void> {
     await this.index.load();
@@ -119,6 +119,10 @@ export class HvscMediaIndexAdapter implements MediaIndex {
     if (!persistedBrowseSnapshot) return null;
     this.browseSnapshot = persistedBrowseSnapshot;
     return this.browseSnapshot;
+  }
+
+  setBrowseSnapshot(snapshot: HvscBrowseIndexSnapshot | null): void {
+    this.browseSnapshot = snapshot;
   }
 
   clearBrowseSnapshot(): void {

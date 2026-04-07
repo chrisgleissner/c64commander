@@ -9,6 +9,7 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
+import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
 import { resolveLibraryPath } from "./hvscFilesystem";
 import { runWithHvscPerfScope } from "./hvscPerformance";
@@ -17,12 +18,26 @@ const STORAGE_PATH = "hvsc/index/hvsc-browse-index-v1.json";
 const STORAGE_KEY = "c64u_hvsc_browse_index:v1";
 const MEDIA_INDEX_STORAGE_PATH = "hvsc/index/media-index-v2.json";
 const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+
+export type HvscMetadataStatus = "seeded" | "queued" | "hydrating" | "hydrated" | "error";
 
 export type HvscBrowseIndexedSong = {
   virtualPath: string;
   fileName: string;
+  displayTitleSeed?: string | null;
+  displayAuthorSeed?: string | null;
+  canonicalTitle?: string | null;
+  canonicalAuthor?: string | null;
+  released?: string | null;
   durationSeconds?: number | null;
+  durationsSeconds?: number[] | null;
+  subsongCount?: number | null;
+  defaultSong?: number | null;
+  metadataStatus?: HvscMetadataStatus | null;
+  metadataUpdatedAt?: string | null;
+  searchTextSeed?: string | null;
+  searchTextFull?: string | null;
   sidMetadata?: HvscSidMetadata | null;
   trackSubsongs?: HvscTrackSubsong[] | null;
 };
@@ -40,11 +55,109 @@ export type HvscBrowseIndexSnapshot = {
   folders: Record<string, HvscBrowseFolderRow>;
 };
 
+export const getHvscDisplayTitle = (
+  song: Pick<HvscBrowseIndexedSong, "fileName" | "displayTitleSeed" | "canonicalTitle">,
+) => normalizeDisplayValue(song.canonicalTitle) ?? normalizeDisplayValue(song.displayTitleSeed) ?? song.fileName;
+
+export const getHvscDisplayAuthor = (song: Pick<HvscBrowseIndexedSong, "displayAuthorSeed" | "canonicalAuthor">) =>
+  normalizeDisplayValue(song.canonicalAuthor) ?? normalizeDisplayValue(song.displayAuthorSeed) ?? null;
+
 const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 const normalizeFolderPath = (path: string) => {
   const normalized = normalizePath(path || "/");
   if (normalized.length > 1 && normalized.endsWith("/")) return normalized.slice(0, -1);
   return normalized;
+};
+
+const normalizeDisplayValue = (value: string | null | undefined) =>
+  value?.replace(/_/g, " ").replace(/\s+/g, " ").trim() || null;
+
+const stripSidExtension = (value: string) => value.replace(/\.sid$/i, "");
+
+const deriveSeedTitle = (fileName: string) => normalizeDisplayValue(stripSidExtension(fileName)) ?? fileName;
+
+const deriveSeedAuthor = (virtualPath: string) => {
+  const segments = normalizePath(virtualPath).split("/").filter(Boolean);
+  const musicianIndex = segments.findIndex((segment) => segment.toUpperCase() === "MUSICIANS");
+  if (musicianIndex < 0 || musicianIndex + 2 >= segments.length) return null;
+  const rawAuthor = segments[musicianIndex + 2];
+  const authorTokens = rawAuthor
+    .split("_")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (authorTokens.length > 1) {
+    return normalizeDisplayValue(authorTokens.reverse().join(" "));
+  }
+  return normalizeDisplayValue(rawAuthor);
+};
+
+const buildSeedSearchText = (
+  song: Pick<HvscBrowseIndexedSong, "virtualPath" | "fileName" | "displayTitleSeed" | "displayAuthorSeed">,
+) =>
+  [song.virtualPath, song.fileName, song.displayTitleSeed, song.displayAuthorSeed]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+
+const buildFullSearchText = (
+  song: Pick<
+    HvscBrowseIndexedSong,
+    | "virtualPath"
+    | "fileName"
+    | "displayTitleSeed"
+    | "displayAuthorSeed"
+    | "canonicalTitle"
+    | "canonicalAuthor"
+    | "released"
+  >,
+) =>
+  [
+    song.virtualPath,
+    song.fileName,
+    song.displayTitleSeed,
+    song.displayAuthorSeed,
+    song.canonicalTitle,
+    song.canonicalAuthor,
+    song.released,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+
+const createSeededSong = (
+  virtualPath: string,
+  durationsSeconds: number[] | null | undefined,
+): HvscBrowseIndexedSong => {
+  const normalizedPath = normalizePath(virtualPath);
+  const fileName = getFileName(normalizedPath);
+  const normalizedDurations = durationsSeconds?.length ? [...durationsSeconds] : null;
+  const displayTitleSeed = deriveSeedTitle(fileName);
+  const displayAuthorSeed = deriveSeedAuthor(normalizedPath);
+  const song: HvscBrowseIndexedSong = {
+    virtualPath: normalizedPath,
+    fileName,
+    displayTitleSeed,
+    displayAuthorSeed,
+    canonicalTitle: null,
+    canonicalAuthor: null,
+    released: null,
+    durationSeconds: normalizedDurations?.[0] ?? null,
+    durationsSeconds: normalizedDurations,
+    subsongCount: normalizedDurations?.length ?? null,
+    defaultSong: 1,
+    metadataStatus: "seeded",
+    metadataUpdatedAt: null,
+    sidMetadata: null,
+    trackSubsongs: normalizedDurations?.length
+      ? normalizedDurations.map((_, index) => ({
+        songNr: index + 1,
+        isDefault: index === 0,
+      }))
+      : null,
+  };
+  song.searchTextSeed = buildSeedSearchText(song);
+  song.searchTextFull = buildFullSearchText(song);
+  return song;
 };
 
 const encodeUtf8Base64 = (value: string) => {
@@ -94,9 +207,27 @@ const getFileName = (virtualPath: string) => {
 const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => ({
   virtualPath: normalizePath(entry.path),
   fileName: entry.name,
+  displayTitleSeed: deriveSeedTitle(entry.name),
+  displayAuthorSeed: deriveSeedAuthor(entry.path),
+  canonicalTitle: null,
+  canonicalAuthor: null,
+  released: null,
   durationSeconds: entry.durationSeconds ?? null,
+  durationsSeconds: entry.durationSeconds != null ? [entry.durationSeconds] : null,
+  subsongCount: entry.durationSeconds != null ? 1 : null,
+  defaultSong: 1,
+  metadataStatus: entry.durationSeconds != null ? "seeded" : null,
+  metadataUpdatedAt: null,
+  searchTextSeed: [entry.path, entry.name, deriveSeedTitle(entry.name), deriveSeedAuthor(entry.path)]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase(),
+  searchTextFull: [entry.path, entry.name, deriveSeedTitle(entry.name), deriveSeedAuthor(entry.path)]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase(),
   sidMetadata: null,
-  trackSubsongs: null,
+  trackSubsongs: entry.durationSeconds != null ? [{ songNr: 1, isDefault: true }] : null,
 });
 
 const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
@@ -157,13 +288,38 @@ const normalizeSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
   const songs: Record<string, HvscBrowseIndexedSong> = {};
   Object.entries(snapshot.songs ?? {}).forEach(([path, song]) => {
     const normalizedPath = normalizePath(path);
+    const fileName = song.fileName || getFileName(normalizedPath);
+    const normalizedDurations = song.durationsSeconds?.length
+      ? [...song.durationsSeconds]
+      : song.durationSeconds != null
+        ? [song.durationSeconds]
+        : null;
+    const seededSong = createSeededSong(normalizedPath, normalizedDurations);
     songs[normalizedPath] = {
-      virtualPath: normalizedPath,
-      fileName: song.fileName || getFileName(normalizedPath),
-      durationSeconds: song.durationSeconds ?? null,
+      ...seededSong,
+      fileName,
+      displayTitleSeed: normalizeDisplayValue(song.displayTitleSeed) ?? seededSong.displayTitleSeed,
+      displayAuthorSeed: normalizeDisplayValue(song.displayAuthorSeed) ?? seededSong.displayAuthorSeed,
+      canonicalTitle: normalizeDisplayValue(song.canonicalTitle),
+      canonicalAuthor: normalizeDisplayValue(song.canonicalAuthor),
+      released: song.released ?? null,
+      durationSeconds: song.durationSeconds ?? seededSong.durationSeconds ?? null,
+      durationsSeconds: normalizedDurations,
+      subsongCount: song.subsongCount ?? normalizedDurations?.length ?? seededSong.subsongCount ?? null,
+      defaultSong: song.defaultSong ?? song.sidMetadata?.startSong ?? seededSong.defaultSong ?? 1,
+      metadataStatus: song.metadataStatus ?? (song.sidMetadata ? "hydrated" : seededSong.metadataStatus),
+      metadataUpdatedAt: song.metadataUpdatedAt ?? null,
       sidMetadata: song.sidMetadata ?? null,
-      trackSubsongs: song.trackSubsongs ?? null,
+      trackSubsongs:
+        song.trackSubsongs ??
+        normalizedDurations?.map((_, index) => ({
+          songNr: index + 1,
+          isDefault: index + 1 === (song.defaultSong ?? song.sidMetadata?.startSong ?? 1),
+        })) ??
+        seededSong.trackSubsongs,
     };
+    songs[normalizedPath].searchTextSeed = song.searchTextSeed ?? buildSeedSearchText(songs[normalizedPath]);
+    songs[normalizedPath].searchTextFull = song.searchTextFull ?? buildFullSearchText(songs[normalizedPath]);
   });
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -235,7 +391,6 @@ const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
     directory: Directory.Data,
     path: STORAGE_PATH,
     data: encodeUtf8Base64(JSON.stringify(snapshot)),
-    recursive: true,
   });
 };
 
@@ -261,7 +416,6 @@ const writeFilesystemMediaIndexSnapshot = async (snapshot: HvscBrowseIndexSnapsh
         entries,
       }),
     ),
-    recursive: true,
   });
 };
 
@@ -347,6 +501,63 @@ export const buildHvscBrowseIndexFromEntries = (entries: MediaEntry[]): HvscBrow
   };
 };
 
+export const buildHvscBrowseIndexFromSonglengthSnapshot = (
+  snapshot: InMemorySongLengthSnapshot,
+): HvscBrowseIndexSnapshot => {
+  const songs = Object.fromEntries(
+    Array.from(snapshot.pathToSeconds.entries()).map(([virtualPath, durationsSeconds]) => {
+      const song = createSeededSong(virtualPath, durationsSeconds);
+      return [song.virtualPath, song];
+    }),
+  );
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    updatedAt: new Date().toISOString(),
+    songs,
+    folders: buildFoldersFromSongs(songs),
+  };
+};
+
+export const updateHvscBrowseSong = (
+  snapshot: HvscBrowseIndexSnapshot,
+  virtualPath: string,
+  updates: Partial<HvscBrowseIndexedSong>,
+) => {
+  const normalizedPath = normalizePath(virtualPath);
+  const existing = snapshot.songs[normalizedPath];
+  if (!existing) {
+    throw new Error(`HVSC browse song not found: ${normalizedPath}`);
+  }
+  const durationsSeconds = updates.durationsSeconds?.length
+    ? [...updates.durationsSeconds]
+    : updates.durationSeconds != null
+      ? [updates.durationSeconds]
+      : existing.durationsSeconds?.length
+        ? [...existing.durationsSeconds]
+        : null;
+  const next: HvscBrowseIndexedSong = {
+    ...existing,
+    ...updates,
+    virtualPath: normalizedPath,
+    fileName: updates.fileName || existing.fileName,
+    displayTitleSeed:
+      normalizeDisplayValue(updates.displayTitleSeed) ?? normalizeDisplayValue(existing.displayTitleSeed) ?? null,
+    displayAuthorSeed:
+      normalizeDisplayValue(updates.displayAuthorSeed) ?? normalizeDisplayValue(existing.displayAuthorSeed) ?? null,
+    canonicalTitle: normalizeDisplayValue(updates.canonicalTitle) ?? normalizeDisplayValue(existing.canonicalTitle),
+    canonicalAuthor: normalizeDisplayValue(updates.canonicalAuthor) ?? normalizeDisplayValue(existing.canonicalAuthor),
+    released: normalizeDisplayValue(updates.released) ?? normalizeDisplayValue(existing.released),
+    durationsSeconds,
+    durationSeconds: updates.durationSeconds ?? durationsSeconds?.[0] ?? existing.durationSeconds ?? null,
+    subsongCount: updates.subsongCount ?? durationsSeconds?.length ?? existing.subsongCount ?? null,
+    metadataUpdatedAt: updates.metadataUpdatedAt ?? new Date().toISOString(),
+  };
+  next.searchTextSeed = buildSeedSearchText(next);
+  next.searchTextFull = buildFullSearchText(next);
+  snapshot.songs[normalizedPath] = next;
+  return next;
+};
+
 export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") => {
   const snapshot =
     mode === "baseline"
@@ -400,8 +611,8 @@ export const listFolderFromBrowseIndex = (
     .filter((song) => {
       if (normalizedQuery.length === 0) return true;
       return (
-        song.fileName.toLowerCase().includes(normalizedQuery) ||
-        song.virtualPath.toLowerCase().includes(normalizedQuery) ||
+        (song.searchTextFull ?? "").includes(normalizedQuery) ||
+        (song.searchTextSeed ?? "").includes(normalizedQuery) ||
         (song.sidMetadata?.name ?? "").toLowerCase().includes(normalizedQuery) ||
         (song.sidMetadata?.author ?? "").toLowerCase().includes(normalizedQuery) ||
         (song.sidMetadata?.released ?? "").toLowerCase().includes(normalizedQuery)
@@ -416,7 +627,16 @@ export const listFolderFromBrowseIndex = (
       id: hashPath(song.virtualPath),
       virtualPath: song.virtualPath,
       fileName: song.fileName,
+      displayTitleSeed: song.displayTitleSeed ?? null,
+      displayAuthorSeed: song.displayAuthorSeed ?? null,
+      canonicalTitle: song.canonicalTitle ?? null,
+      canonicalAuthor: song.canonicalAuthor ?? null,
+      released: song.released ?? null,
+      metadataStatus: song.metadataStatus ?? null,
       durationSeconds: song.durationSeconds ?? null,
+      durationsSeconds: song.durationsSeconds ?? null,
+      subsongCount: song.subsongCount ?? null,
+      defaultSong: song.defaultSong ?? null,
       sidMetadata: song.sidMetadata ?? null,
       trackSubsongs: song.trackSubsongs ?? null,
     })),

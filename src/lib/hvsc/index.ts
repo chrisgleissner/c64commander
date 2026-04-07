@@ -26,6 +26,7 @@ export {
   getHvscDurationsByMd5Seconds,
   getHvscFolderListing,
   getHvscFolderListingPaged,
+  ensureHvscMetadataHydration,
   getHvscSong,
   getHvscSongsRecursive,
   getHvscStatus,
@@ -47,6 +48,7 @@ export type {
   HvscDownloadStatus,
   HvscExtractionStatus,
   HvscFailureCategory,
+  HvscMetadataHydrationStatus,
   HvscStatusSummary,
   HvscStepStatus,
 } from "./hvscStatusStore";

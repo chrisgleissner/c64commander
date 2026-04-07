@@ -22,6 +22,8 @@ export type HvscControlsProps = {
   hvscSummaryDurationMs?: number | null;
   hvscSummaryUpdatedAt?: string | null;
   hvscSummaryFailureLabel: string;
+  hvscMetadataProgressLabel?: string | null;
+  hvscMetadataUpdatedAt?: string | null;
   hvscIngestionTotalSongs: number;
   hvscIngestionIngestedSongs: number;
   hvscIngestionFailedSongs: number;
@@ -52,6 +54,8 @@ export const HvscControls = ({
   hvscSummaryDurationMs,
   hvscSummaryUpdatedAt,
   hvscSummaryFailureLabel,
+  hvscMetadataProgressLabel,
+  hvscMetadataUpdatedAt,
   hvscIngestionTotalSongs,
   hvscIngestionIngestedSongs,
   hvscIngestionFailedSongs,
@@ -162,8 +166,10 @@ export const HvscControls = ({
                 <p>HVSC archives are cached. Run Ingest HVSC to build the browseable library.</p>
               )}
               <p>Files extracted: {hvscSummaryFilesExtracted ?? "—"}</p>
+              {hvscMetadataProgressLabel ? <p>{hvscMetadataProgressLabel}</p> : null}
               <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
               <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
+              {hvscMetadataUpdatedAt ? <p>Metadata updated: {formatHvscTimestamp(hvscMetadataUpdatedAt)}</p> : null}
             </div>
           ) : (
             <div className="space-y-1">

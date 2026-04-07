@@ -7,11 +7,16 @@
  */
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
+import {
+  buildHvscBrowseIndexFromSonglengthSnapshot,
+  saveHvscBrowseIndexSnapshot,
+} from "@/lib/hvsc/hvscBrowseIndexStore";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
   InMemoryTextBackend,
   SongLengthServiceFacade,
+  type InMemorySongLengthSnapshot,
   type SongLengthResolveQuery,
   type SongLengthResolution,
   type SongLengthSourceFile,
@@ -228,6 +233,20 @@ const loadInternal = async (trigger: "cold-start" | "config-change") => {
   } else {
     await facade.reloadOnConfigChange(HVSC_LIBRARY_DIR, discoverSonglengthFiles, "hvsc-library");
   }
+  await syncHvscBrowseProjection(trigger);
+};
+
+const exportSonglengthSnapshot = (): InMemorySongLengthSnapshot => backend.exportSnapshot();
+
+const syncHvscBrowseProjection = async (trigger: "cold-start" | "config-change") => {
+  const snapshot = exportSonglengthSnapshot();
+  const projection = buildHvscBrowseIndexFromSonglengthSnapshot(snapshot);
+  await saveHvscBrowseIndexSnapshot(projection);
+  addLog("info", "HVSC browse projection synced from Songlengths", {
+    service: "hvsc-songlengths",
+    trigger,
+    songCount: snapshot.pathToSeconds.size,
+  });
 };
 
 const runLoad = async (trigger: "cold-start" | "config-change") => {
@@ -258,6 +277,11 @@ export const resolveHvscSonglengthDuration = async (query: SongLengthResolveQuer
 
 export const getHvscSonglengthsStats = () => facade.stats();
 
+export const exportHvscSonglengthsSnapshot = async () => {
+  await ensureHvscSonglengthsReadyOnColdStart();
+  return exportSonglengthSnapshot();
+};
+
 export const resetHvscSonglengths = (reason = "manual-reset") => {
   hasAttemptedColdStartLoad = false;
   facade.reset(reason);
@@ -266,7 +290,9 @@ export const resetHvscSonglengths = (reason = "manual-reset") => {
 export const __test__ = {
   decodeBase64Text,
   discoverSonglengthFiles,
+  exportSonglengthSnapshot,
   ensureSonglengthDirectory,
   isReadableFile,
   isMissingPathError,
+  syncHvscBrowseProjection,
 };

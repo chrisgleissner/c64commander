@@ -53,7 +53,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/");
     const entries = await source.listEntries("/");
 
-    expect(entries).toEqual([
+    expect(entries).toMatchObject([
       { type: "dir", name: "/", path: "/" },
       { type: "file", name: "demo.sid", path: "/ROOT/A/demo.sid" },
       { type: "file", name: "demo.sid", path: "/ROOT/B/demo.sid" },
@@ -90,7 +90,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/ROOT");
     const entries = await source.listFilesRecursive("/ROOT");
 
-    expect(entries).toEqual([
+    expect(entries).toMatchObject([
       { type: "file", name: "root.sid", path: "/ROOT/root.sid" },
       { type: "file", name: "deep.sid", path: "/ROOT/Sub/deep.sid" },
     ]);
@@ -140,7 +140,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/ROOT");
     const page = await source.listEntriesPage?.({ path: "/ROOT", query: "demo", offset: 0, limit: 50 });
 
-    expect(page).toEqual({
+    expect(page).toMatchObject({
       entries: [
         { type: "dir", name: "Collections", path: "/ROOT/Collections" },
         {
@@ -177,7 +177,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/ROOT");
     const page = await source.listEntriesPage?.({ path: "/ROOT", offset: 0, limit: 50 });
 
-    expect(page?.entries).toEqual([
+    expect(page?.entries).toMatchObject([
       {
         type: "file",
         name: "silent.sid",
@@ -214,7 +214,7 @@ describe("hvscSourceAdapter", () => {
     const page = await source.listEntriesPage?.({ path: "/ROOT", offset: 0, limit: 50 });
 
     expect(source.rootPath).toBe("/");
-    expect(page).toEqual({
+    expect(page).toMatchObject({
       entries: [
         {
           type: "file",
@@ -254,7 +254,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/ROOT");
     const page = await source.listEntriesPage?.({ path: "/ROOT", offset: 0, limit: 50 });
 
-    expect(page?.entries).toEqual([
+    expect(page?.entries).toMatchObject([
       {
         type: "file",
         name: "metadata-only.sid",
@@ -308,7 +308,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/ROOT");
     const entries = await source.listFilesRecursive("/ROOT");
 
-    expect(entries).toEqual([
+    expect(entries).toMatchObject([
       { type: "file", name: "root-a.sid", path: "/ROOT/root-a.sid" },
       { type: "file", name: "root-b.sid", path: "/ROOT/root-b.sid" },
       { type: "file", name: "deep.sid", path: "/ROOT/Sub/deep.sid" },
@@ -362,7 +362,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/DEMOS");
     const entries = await source.listFilesRecursive("/DEMOS");
 
-    expect(entries).toEqual([
+    expect(entries).toMatchObject([
       { type: "file", name: "a.sid", path: "/DEMOS/a.sid", durationMs: 120_000 },
       { type: "file", name: "b.sid", path: "/DEMOS/Sub/b.sid" },
     ]);
@@ -385,7 +385,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/DEMOS");
     const entries = await source.listFilesRecursive("/DEMOS");
 
-    expect(entries).toEqual([{ type: "file", name: "c.sid", path: "/DEMOS/c.sid" }]);
+    expect(entries).toMatchObject([{ type: "file", name: "c.sid", path: "/DEMOS/c.sid" }]);
     expect(getHvscFolderListingPaged).toHaveBeenCalled();
   });
 });

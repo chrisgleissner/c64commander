@@ -11,7 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { createArchiveClient } from "@/lib/archive/client";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
-import { addLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
@@ -356,19 +356,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
 
         await flushArchiveBatch();
-        setAddItemsProgress((prev) => ({
-          ...prev,
-          status: "committing",
-          count: appendedArchiveItems,
-          message: "Validating playlist visibility…",
-        }));
-        markPlaylistRepositoryPhase(playlistStorageKey, "COMMITTING", {
-          expectedCount: playlistSnapshotRef.current.length,
-        });
-        await commitPlaylistSnapshot({
-          playlistId: playlistStorageKey,
-          items: playlistSnapshotRef.current,
-        });
         toast({
           title: "Items added",
           description: `${appendedArchiveItems} archive result(s) added to playlist.`,
@@ -379,6 +366,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           count: appendedArchiveItems,
           message: "Playlist ready",
         }));
+        void commitPlaylistSnapshot({
+          playlistId: playlistStorageKey,
+          items: playlistSnapshotRef.current,
+          initialPhase: "BACKGROUND_COMMITTING",
+        }).catch((error) => {
+          addErrorLog("Background playlist repository commit failed", {
+            playlistStorageKey,
+            sourceType: source.type,
+            error: {
+              name: (error as Error).name,
+              message: (error as Error).message,
+              stack: (error as Error).stack,
+            },
+          });
+        });
         return true;
       }
 
@@ -455,7 +457,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
               allowMd5Fallback: false,
             });
-            console.info(`[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`);
+            console.info(
+              `[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`,
+            );
             appendedPlaylistItems += resolvedItems.length;
             const spT0 = Date.now();
             setPlaylist((prev) => {
@@ -486,33 +490,33 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const localFile =
           source.type === "local"
             ? resolveLocalRuntimeFile(source.id, normalizedPath) ||
-              (localEntry?.uri
-                ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
-                : undefined) ||
-              (localTreeUri
-                ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
-                : undefined)
+            (localEntry?.uri
+              ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified)
+              : undefined) ||
+            (localTreeUri
+              ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
+              : undefined)
             : undefined;
         const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
         const playbackConfig =
           source.type === "local" || source.type === "ultimate"
             ? resolvePlaybackConfig({
-                candidates: await discoverConfigCandidates({
-                  sourceType: source.type,
-                  sourceId: source.type === "local" ? source.id : null,
-                  sourceRootPath: source.rootPath,
-                  targetFile: file,
-                  listEntries: source.listEntries,
-                  prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
-                  localEntriesBySourceId,
-                }),
-              })
+              candidates: await discoverConfigCandidates({
+                sourceType: source.type,
+                sourceId: source.type === "local" ? source.id : null,
+                sourceRootPath: source.rootPath,
+                targetFile: file,
+                listEntries: source.listEntries,
+                prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
+                localEntriesBySourceId,
+              }),
+            })
             : {
-                configRef: null as ConfigFileReference | null,
-                configOrigin: "none" as const,
-                configCandidates: [],
-                configOverrides: null,
-              };
+              configRef: null as ConfigFileReference | null,
+              configOrigin: "none" as const,
+              configCandidates: [],
+              configOverrides: null,
+            };
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
           name: file.name,
@@ -533,8 +537,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         if (!item) return;
         pendingPlaylistBatch.push(item);
         discoveredPlayableItems += 1;
-        const effectiveBatchSize =
-          source.type === "hvsc" ? HVSC_BULK_BATCH_THRESHOLD : PLAYLIST_APPEND_BATCH_SIZE;
+        const effectiveBatchSize = source.type === "hvsc" ? HVSC_BULK_BATCH_THRESHOLD : PLAYLIST_APPEND_BATCH_SIZE;
         if (pendingPlaylistBatch.length >= effectiveBatchSize) {
           const batch = pendingPlaylistBatch;
           pendingPlaylistBatch = [];
@@ -590,9 +593,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
       }
 
-      console.info(
-        `[hvsc-perf] scan done files=${selectedFiles.length} ms=${Date.now() - scanT0}`,
-      );
+      console.info(`[hvsc-perf] scan done files=${selectedFiles.length} ms=${Date.now() - scanT0}`);
 
       if (source.type === "local") {
         const treeUri = localSourceTreeUris.get(source.id);
@@ -755,9 +756,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       const buildItemsScope =
         source.type === "hvsc"
           ? beginHvscPerfScope("playlist:build-items", {
-              sourceType: source.type,
-              fileCount: selectedFiles.length,
-            })
+            sourceType: source.type,
+            fileCount: selectedFiles.length,
+          })
           : null;
 
       const buildT0 = Date.now();
@@ -825,25 +826,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
-      setAddItemsProgress((prev) => ({
-        ...prev,
-        status: "committing",
-        message: "Validating playlist visibility…",
-      }));
-      markPlaylistRepositoryPhase(playlistStorageKey, "COMMITTING", {
-        expectedCount: playlistSnapshotRef.current.length,
-      });
-      const commitT0 = Date.now();
-      console.info(
-        `[hvsc-perf] commitPlaylistSnapshot start count=${playlistSnapshotRef.current.length}`,
-      );
-      await commitPlaylistSnapshot({
-        playlistId: playlistStorageKey,
-        items: playlistSnapshotRef.current,
-      });
-      console.info(
-        `[hvsc-perf] commitPlaylistSnapshot done ms=${Date.now() - commitT0}`,
-      );
       toast({
         title: "Items added",
         description: `${appendedPlaylistItems} file(s) added to playlist.`,
@@ -863,14 +845,27 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         },
       });
-      console.info(
-        `[hvsc-perf] pipeline done total_ms=${Date.now() - startedAt} items=${appendedPlaylistItems}`,
-      );
+      console.info(`[hvsc-perf] pipeline done total_ms=${Date.now() - startedAt} items=${appendedPlaylistItems}`);
       setAddItemsProgress((prev) => ({
         ...prev,
         status: "ready",
         message: "Playlist ready",
       }));
+      void commitPlaylistSnapshot({
+        playlistId: playlistStorageKey,
+        items: playlistSnapshotRef.current,
+        initialPhase: "BACKGROUND_COMMITTING",
+      }).catch((error) => {
+        addErrorLog("Background playlist repository commit failed", {
+          playlistStorageKey,
+          sourceType: source.type,
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
+        });
+      });
       return true;
     } catch (error) {
       const err = error as Error;

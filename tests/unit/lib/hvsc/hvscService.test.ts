@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   mockIndex: {
     load: vi.fn(),
     loadBrowseSnapshot: vi.fn().mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: new Date().toISOString(),
       songs: {},
       folders: { "/": { path: "/", folders: [], songs: [] } },
@@ -76,7 +76,7 @@ vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
   loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: new Date().toISOString(),
     songs: {},
     folders: { "/": { path: "/", folders: [], songs: [] } },
@@ -86,13 +86,6 @@ vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
     sampled: 0,
     missingPaths: [],
   })),
-  buildHvscBrowseIndexFromEntries: vi.fn((entries: any[]) => ({
-    schemaVersion: 1,
-    updatedAt: new Date().toISOString(),
-    songs: Object.fromEntries(entries.map((e: any) => [e.path, { virtualPath: e.path, fileName: e.name }])),
-    folders: {},
-  })),
-  saveHvscBrowseIndexSnapshot: vi.fn(),
 }));
 
 vi.mock("@/lib/native/hvscIngestion", () => ({
@@ -120,7 +113,7 @@ describe("hvscService", () => {
     vi.resetAllMocks();
     vi.unstubAllGlobals();
     mocks.mockIndex.loadBrowseSnapshot.mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: new Date().toISOString(),
       songs: {},
       folders: { "/": { path: "/", folders: [], songs: [] } },
@@ -308,7 +301,7 @@ describe("hvscService", () => {
   describe("getHvscSongsRecursive", () => {
     it("returns songs from the browse snapshot without running integrity check", async () => {
       const snapshot = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         updatedAt: new Date().toISOString(),
         songs: { "/DEMOS/a.sid": { virtualPath: "/DEMOS/a.sid", fileName: "a.sid" } },
         folders: {
@@ -344,44 +337,28 @@ describe("hvscService", () => {
       const result = await hvscService.getHvscSongsRecursive("/DEMOS");
 
       expect(mocks.mockIndex.loadBrowseSnapshot).toHaveBeenCalled();
-      expect(mocks.mockIndex.clearBrowseSnapshot).toHaveBeenCalled();
+      expect(mocks.mockIndex.clearBrowseSnapshot).not.toHaveBeenCalled();
       expect(result).toBeNull();
     });
 
-    it("rebuilds when browse snapshot is empty (natively-backed HVSC with no media-index entries)", async () => {
-      // Simulate the actual bug: queryFolderPage rebuilt the browse snapshot
-      // from an empty entriesSnapshot, so songs/folders are empty objects.
+    it("returns null when browse snapshot remains empty after songlength bootstrap", async () => {
       const emptySnapshot = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         updatedAt: new Date().toISOString(),
         songs: {},
         folders: {},
       };
-      mocks.mockIndex.loadBrowseSnapshot
-        .mockResolvedValueOnce(emptySnapshot)
-        // After rebuild + save + reload, the persisted snapshot has real data
-        .mockResolvedValueOnce({
-          schemaVersion: 1,
-          updatedAt: new Date().toISOString(),
-          songs: { "/DEMOS/a.sid": { virtualPath: "/DEMOS/a.sid", fileName: "a.sid" } },
-          folders: {
-            "/": { path: "/", folders: ["/DEMOS"], songs: [] },
-            "/DEMOS/": { path: "/DEMOS/", folders: [], songs: ["/DEMOS/a.sid"] },
-          },
-        });
-      const expectedSongs = [{ virtualPath: "/DEMOS/a.sid", fileName: "a.sid" }];
-      mocks.mockIndex.querySongsRecursive.mockReturnValue(expectedSongs);
+      mocks.mockIndex.loadBrowseSnapshot.mockResolvedValue(emptySnapshot);
+      mocks.mockIndex.querySongsRecursive.mockReturnValue(null);
 
       stubWindow({});
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
 
       const result = await hvscService.getHvscSongsRecursive("/DEMOS");
 
-      // Must have cleared the empty snapshot before rebuilding
-      expect(mocks.mockIndex.clearBrowseSnapshot).toHaveBeenCalled();
-      // Must have reloaded the snapshot after rebuild
-      expect(mocks.mockIndex.loadBrowseSnapshot).toHaveBeenCalledTimes(2);
-      expect(result).toBe(expectedSongs);
+      expect(mocks.mockIndex.clearBrowseSnapshot).not.toHaveBeenCalled();
+      expect(mocks.mockIndex.loadBrowseSnapshot).toHaveBeenCalled();
+      expect(result).toBeNull();
     });
   });
 });

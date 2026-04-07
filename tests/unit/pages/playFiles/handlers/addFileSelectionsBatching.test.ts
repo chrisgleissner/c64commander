@@ -244,7 +244,7 @@ describe("addFileSelections batching", () => {
     expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
   });
 
-  it("does not report playlist readiness before the repository commit resolves", async () => {
+  it("returns a ready playlist before the background repository commit resolves", async () => {
     const deps = createDeps();
     let resolveCommit: ((value: unknown) => void) | null = null;
     commitPlaylistSnapshot.mockImplementation(
@@ -262,18 +262,16 @@ describe("addFileSelections batching", () => {
     ]);
     const handler = createAddFileSelectionsHandler(deps as any);
 
-    const pending = handler(source, [{ type: "dir", name: "Test", path: "/MUSICIANS/Test" }]);
+    const result = await handler(source, [{ type: "dir", name: "Test", path: "/MUSICIANS/Test" }]);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
+    expect(result).toBe(true);
     expect(deps.setAddItemsProgress).toHaveBeenCalledWith(expect.any(Function));
-    await waitFor(() => {
-      expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
-    });
-    expect(markPlaylistRepositoryPhase).toHaveBeenCalledWith(
-      buildPlaylistStorageKey("device-1"),
-      "COMMITTING",
-      expect.objectContaining({ expectedCount: 1 }),
+    expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
+    expect(commitPlaylistSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playlistId: buildPlaylistStorageKey("device-1"),
+        initialPhase: "BACKGROUND_COMMITTING",
+      }),
     );
     expect(
       deps.setAddItemsProgress.mock.calls.some(([updater]: [unknown]) => {
@@ -289,13 +287,10 @@ describe("addFileSelections batching", () => {
         } as any) as { status: string };
         return next.status === "ready";
       }),
-    ).toBe(false);
+    ).toBe(true);
 
     resolveCommit?.({ committedCount: 1, expectedCount: 1, revision: 2, snapshotKey: "ready" });
-    const result = await pending;
-
-    expect(result).toBe(true);
-    expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1));
   });
 
   it("streams recursive local folders into playlist batches before traversal completes", async () => {
