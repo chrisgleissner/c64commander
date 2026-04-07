@@ -283,8 +283,24 @@ export function usePlaybackPersistence({
           }
         }
 
+        console.info("[debug-playlist-hydrate]", {
+          playlistStorageKey,
+          resolvedDeviceId,
+          candidateKeys,
+          discoveredKeys: Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)).filter(
+            (key): key is string => Boolean(key?.startsWith("c64u_playlist:v1:")),
+          ),
+          candidateCount: candidates.length,
+        });
+
         if (!candidates.length) {
           const repositoryRestored = await hydrateFromRepository();
+          console.info("[debug-playlist-hydrate:repo]", {
+            playlistStorageKey,
+            resolvedDeviceId,
+            restoredCount: repositoryRestored.items.length,
+            activeQuery: repositoryRestored.activeQuery,
+          });
           if (setActivePlaylistQuery && repositoryRestored.activeQuery !== null) {
             setActivePlaylistQuery(repositoryRestored.activeQuery);
           }
@@ -297,6 +313,12 @@ export function usePlaybackPersistence({
 
         const preferred = candidates.find((entry) => entry.parsed?.items?.length) ?? candidates[0];
         const restored = hydrateStoredPlaylist(preferred.parsed);
+        console.info("[debug-playlist-hydrate:legacy]", {
+          playlistStorageKey,
+          resolvedDeviceId,
+          preferredKey: preferred.key,
+          restoredCount: restored.items.length,
+        });
         if (hasPlaylistRef.current && restored.items.length === 0) {
           return;
         }
