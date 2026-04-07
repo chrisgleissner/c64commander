@@ -73,6 +73,7 @@ export const HvscControls = ({
   onReset,
 }: HvscControlsProps) => {
   const hvscLibraryReady = hvscInstalled || hvscIngestionTotalSongs > 0;
+  const readyToUseLabel = "Ready to use: Add items -> HVSC.";
   const phaseLabel = (() => {
     switch (hvscPhase) {
       case "download":
@@ -153,6 +154,9 @@ export const HvscControls = ({
               <p className="text-sm font-medium">HVSC ready</p>
               {hvscLibraryReady ? (
                 <>
+                  <p className="text-sm font-medium text-foreground" data-testid="hvsc-ready-source-hint">
+                    {readyToUseLabel}
+                  </p>
                   <p>
                     Indexed {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.
                   </p>
@@ -208,9 +212,7 @@ export const HvscControls = ({
       {hvscInlineError && <p className="text-xs text-destructive">{hvscInlineError}</p>}
       {hvscInstalled && hvscAvailable ? (
         <div className="rounded-lg border border-border bg-muted/30 p-3">
-          <p className="text-xs text-muted-foreground">
-            Browse and add HVSC songs from the shared “Add items” source chooser.
-          </p>
+          <p className="text-xs font-medium text-foreground">{readyToUseLabel}</p>
         </div>
       ) : null}
     </div>

@@ -10,6 +10,12 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "@/hooks/use-toast";
 import { createArchiveClient } from "@/lib/archive/client";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
+import { streamHvscSongsRecursive } from "@/lib/hvsc";
+import {
+  getHvscDisplayAuthor,
+  getHvscDisplayTitle,
+  type HvscBrowseIndexedSong,
+} from "@/lib/hvsc/hvscBrowseIndexStore";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
@@ -160,6 +166,25 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       throw error;
     }
   };
+
+  const mapHvscSongToEntry = (song: HvscBrowseIndexedSong): SourceEntry => ({
+    type: "file",
+    name: getHvscDisplayTitle(song),
+    path: normalizeSourcePath(song.virtualPath),
+    subtitle: getHvscDisplayAuthor(song),
+    durationMs: song.durationSeconds != null ? song.durationSeconds * 1000 : undefined,
+    songNr:
+      song.trackSubsongs?.find((entry) => entry.isDefault)?.songNr ??
+      song.defaultSong ??
+      song.sidMetadata?.startSong ??
+      undefined,
+    subsongCount:
+      song.trackSubsongs?.length ??
+      song.subsongCount ??
+      song.durationsSeconds?.length ??
+      song.sidMetadata?.songs ??
+      undefined,
+  });
 
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
@@ -453,16 +478,19 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           batch.length,
           async () => {
             const slT0 = Date.now();
-            const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
-              allowMd5Fallback: false,
-            });
+            const resolvedItems =
+              source.type === "hvsc"
+                ? batch
+                : await applySonglengthsToItems(batch, discoveredSonglengths, {
+                  allowMd5Fallback: false,
+                });
             console.info(
               `[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`,
             );
             appendedPlaylistItems += resolvedItems.length;
             const spT0 = Date.now();
             setPlaylist((prev) => {
-              const next = [...prev, ...resolvedItems];
+              const next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
               playlistSnapshotRef.current = next;
               return next;
             });
@@ -480,7 +508,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       let pendingPlaylistBatch: PlaylistItem[] = [];
       const appendPlayableFile = async (file: SourceEntry) => {
         if (!getPlayCategory(file.path)) return;
-        registerSelectedFile(file);
+        if (source.type !== "hvsc") {
+          registerSelectedFile(file);
+        }
         const normalizedPath = normalizeSourcePath(file.path);
         const localEntry = source.type === "local" ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
         const entryModified = localEntry?.modifiedAt
@@ -548,6 +578,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       for (const selection of selections) {
         if (selection.type === "dir") {
           if (recurseFolders) {
+            if (source.type === "hvsc") {
+              const streamed = await streamHvscSongsRecursive(selection.path, {
+                chunkSize: PLAYLIST_APPEND_BATCH_SIZE,
+                onChunk: async (songs) => {
+                  updateProgress(songs.length);
+                  for (const song of songs) {
+                    await appendPlayableFile(mapHvscSongToEntry(song));
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 0));
+                },
+              });
+              if (streamed) {
+                continue;
+              }
+            }
             if (source.type === "local") {
               await collectRecursive(selection.path, async (batch) => {
                 for (const file of batch) {
@@ -560,8 +605,19 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               });
             } else {
               const nested = await source.listFilesRecursive(selection.path);
-              selectedFiles.push(...nested);
-              updateProgress(nested.length);
+              if (source.type === "hvsc") {
+                while (nested.length > 0) {
+                  const chunk = nested.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
+                  updateProgress(chunk.length);
+                  for (const file of chunk) {
+                    await appendPlayableFile(file);
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+              } else {
+                selectedFiles.push(...nested);
+                updateProgress(nested.length);
+              }
             }
           } else {
             const entries = await source.listEntries(selection.path);

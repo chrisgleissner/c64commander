@@ -352,7 +352,7 @@ describe("useHvscLibrary edge cases", () => {
     expect(mocks.toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "HVSC ready",
-        description: expect.stringContaining("49 of 50"),
+        description: "Ready to use: Add items -> HVSC.",
       }),
     );
   });

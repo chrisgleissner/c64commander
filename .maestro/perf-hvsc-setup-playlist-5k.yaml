@@ -56,22 +56,17 @@ env:
     timeout: ${LONG_TIMEOUT}
 # Select ONLY DEMOS and GAMES (5K lane: ~4540 items).
 # Skip DOCUMENTS (non-music) and MUSICIANS (~56K items).
-# Row bounds from Maestro hierarchy on Pixel 4 (1080x2280):
-#   DEMOS      [66,981][1012,1089]   → checkbox ≈ (9%, 45.4%)
-#   DOCUMENTS  [66,1108][1012,1218]  → checkbox ≈ (9%, 51.0%)  [skip]
-#   GAMES      [66,1237][1012,1347]  → checkbox ≈ (9%, 56.7%)
-#   MUSICIANS  [66,1366][1012,1476]  → checkbox ≈ (9%, 62.3%)  [skip]
-- tapOn:
-    point: "9%, 45%"
-- tapOn:
-    point: "9%, 57%"
+- assertVisible: "Select DEMOS"
+- tapOn: "Select DEMOS"
+- assertVisible: "Select GAMES"
+- tapOn: "Select GAMES"
 - waitForAnimationToEnd
 - tapOn: "Add to playlist"
 # The fast path completes in sub-second, so the "Items added" toast
 # vanishes before Maestro can catch it. Assert the persistent UI instead:
-# "Add more items" only appears when the playlist has tracks.
+# "Clear playlist" only appears when the playlist has tracks.
 - extendedWaitUntil:
-    visible: "Add more items"
+    visible: "Clear playlist"
     timeout: ${LONG_TIMEOUT}
 - waitForAnimationToEnd
 # Give the app time to persist the bulk playlist to IndexedDB

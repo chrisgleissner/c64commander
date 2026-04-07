@@ -14,6 +14,7 @@ import {
   buildHvscBrowseIndexFromEntries,
   listFolderFromBrowseIndex,
   listSongsRecursiveFromBrowseIndex,
+  streamSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   type HvscBrowseIndexSnapshot,
@@ -102,7 +103,7 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   constructor(
     private readonly index: MediaIndex,
     private readonly listFolder: (path: string) => Promise<HvscFolderListing>,
-  ) {}
+  ) { }
 
   async load(): Promise<void> {
     await this.index.load();
@@ -197,6 +198,17 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   querySongsRecursive(path: string): HvscBrowseIndexedSong[] | null {
     if (!this.browseSnapshot) return null;
     return listSongsRecursiveFromBrowseIndex(this.browseSnapshot, path);
+  }
+
+  async streamSongsRecursive(
+    path: string,
+    options: {
+      chunkSize?: number;
+      onChunk: (songs: HvscBrowseIndexedSong[]) => Promise<void> | void;
+    },
+  ): Promise<{ totalSongs: number } | null> {
+    if (!this.browseSnapshot) return null;
+    return streamSongsRecursiveFromBrowseIndex(this.browseSnapshot, path, options);
   }
 }
 

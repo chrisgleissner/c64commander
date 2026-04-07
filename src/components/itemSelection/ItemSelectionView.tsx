@@ -94,28 +94,13 @@ export const ItemSelectionView = ({
           const canSelect = entry.type === "file" || showFolderSelect;
           const isFolder = entry.type === "dir";
           const canNavigateFolder = isFolder && !isLoading;
+          const folderLabel = `Open ${entry.name}`;
           return (
             <div
               key={entry.path}
               className="flex items-center gap-2 min-w-0 border-b border-border/50 py-[0.44rem]"
               data-testid="source-entry-row"
               data-entry-type={entry.type}
-              role={isFolder ? "button" : undefined}
-              tabIndex={isFolder ? 0 : undefined}
-              aria-label={isFolder ? `Open ${entry.name}` : undefined}
-              aria-disabled={isFolder && isLoading ? "true" : undefined}
-              onClick={() => {
-                if (!canNavigateFolder) return;
-                onOpen(entry.path);
-              }}
-              onKeyDown={(event) => {
-                if (!canNavigateFolder) return;
-                if (event.target !== event.currentTarget) return;
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpen(entry.path);
-                }
-              }}
             >
               <div className="shrink-0">
                 <Checkbox
@@ -127,19 +112,39 @@ export const ItemSelectionView = ({
                   aria-label={`Select ${entry.name}`}
                 />
               </div>
-              <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                {isFolder ? (
+              {isFolder ? (
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  aria-label={folderLabel}
+                  aria-disabled={isLoading ? "true" : undefined}
+                  disabled={!canNavigateFolder}
+                  onClick={() => {
+                    if (!canNavigateFolder) return;
+                    onOpen(entry.path);
+                  }}
+                >
                   <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                ) : (
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                    {entry.subtitle ? (
+                      <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
+                        {entry.subtitle}
+                      </p>
+                    ) : null}
+                  </div>
+                </button>
+              ) : (
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
                   <span className="h-4 w-4 shrink-0" aria-hidden="true" />
-                )}
-                <div className="min-w-0">
-                  <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
-                  {entry.subtitle ? (
-                    <p className="text-[11px] text-muted-foreground break-words whitespace-normal">{entry.subtitle}</p>
-                  ) : null}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                    {entry.subtitle ? (
+                      <p className="text-[11px] text-muted-foreground break-words whitespace-normal">{entry.subtitle}</p>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              )}
               {isFolder ? (
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
               ) : null}

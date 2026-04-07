@@ -411,6 +411,19 @@ export const getHvscSongsRecursive = async (
   return hvscIndex.querySongsRecursive(path);
 };
 
+export const streamHvscSongsRecursive = async (
+  path: string,
+  options: {
+    chunkSize?: number;
+    onChunk: (songs: NonNullable<ReturnType<typeof hvscIndex.querySongsRecursive>>) => Promise<void> | void;
+  },
+) => {
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!snapshot) return null;
+  return hvscIndex.streamSongsRecursive(path, options);
+};
+
 export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {
   return runWithHvscPerfScope(
     "playback:load-sid",

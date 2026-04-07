@@ -16,6 +16,10 @@ const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   endHvscPerfScope: vi.fn(),
 }));
 
+const { streamHvscSongsRecursive } = vi.hoisted(() => ({
+  streamHvscSongsRecursive: vi.fn(async () => null),
+}));
+
 const { recordSmokeBenchmarkSnapshot } = vi.hoisted(() => ({
   recordSmokeBenchmarkSnapshot: vi.fn(),
 }));
@@ -80,6 +84,10 @@ vi.mock("@/lib/config/configResolution", () => ({
 vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   beginHvscPerfScope,
   endHvscPerfScope,
+}));
+
+vi.mock("@/lib/hvsc", () => ({
+  streamHvscSongsRecursive,
 }));
 
 vi.mock("@/lib/smoke/smokeMode", () => ({
@@ -162,6 +170,7 @@ describe("addFileSelections batching", () => {
   beforeEach(() => {
     beginHvscPerfScope.mockClear();
     endHvscPerfScope.mockClear();
+    streamHvscSongsRecursive.mockClear();
     recordSmokeBenchmarkSnapshot.mockClear();
     commitPlaylistSnapshot.mockClear();
     markPlaylistRepositoryPhase.mockClear();
@@ -224,9 +233,8 @@ describe("addFileSelections batching", () => {
     expect(result).toBe(true);
     expect(deps._playlistItems).toHaveLength(600);
     // HVSC uses a bulk batch threshold — all items flush in one batch.
-    expect(deps.applySonglengthsToItems).toHaveBeenCalledTimes(1);
+    expect(deps.applySonglengthsToItems).not.toHaveBeenCalled();
     expect(deps.setPlaylist).toHaveBeenCalledTimes(1);
-    expect(deps.applySonglengthsToItems.mock.calls.map(([items]: [unknown[]]) => items.length)).toEqual([600]);
     // playlist:build-items scope + one playlist:add-batch scope
     expect(beginHvscPerfScope).toHaveBeenCalledTimes(2);
     expect(beginHvscPerfScope).toHaveBeenCalledWith(
@@ -242,6 +250,45 @@ describe("addFileSelections batching", () => {
       expect.objectContaining({ outcome: "success", sourceType: "hvsc" }),
     );
     expect(commitPlaylistSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("streams recursive HVSC folders from the browse index without songlength reprocessing", async () => {
+    const deps = createDeps();
+    const hvscSource = {
+      ...createHvscSource([]),
+      listFilesRecursive: vi.fn(async () => []),
+    };
+    streamHvscSongsRecursive.mockImplementationOnce(async (_path, options) => {
+      await options.onChunk([
+        {
+          virtualPath: "/MUSICIANS/Test/track-1.sid",
+          fileName: "track-1.sid",
+          durationSeconds: 61,
+          defaultSong: 1,
+          trackSubsongs: [{ songNr: 1, isDefault: true }],
+        },
+        {
+          virtualPath: "/MUSICIANS/Test/track-2.sid",
+          fileName: "track-2.sid",
+          durationSeconds: 62,
+          defaultSong: 1,
+          trackSubsongs: [{ songNr: 1, isDefault: true }],
+        },
+      ]);
+      return { totalSongs: 2 };
+    });
+    const handler = createAddFileSelectionsHandler({ ...deps, recurseFolders: true } as any);
+
+    const result = await handler(hvscSource as any, [{ type: "dir", name: "Test", path: "/MUSICIANS/Test" }]);
+
+    expect(result).toBe(true);
+    expect(streamHvscSongsRecursive).toHaveBeenCalledWith(
+      "/MUSICIANS/Test",
+      expect.objectContaining({ chunkSize: 250 }),
+    );
+    expect(hvscSource.listFilesRecursive).not.toHaveBeenCalled();
+    expect(deps.applySonglengthsToItems).not.toHaveBeenCalled();
+    expect(deps._playlistItems).toHaveLength(2);
   });
 
   it("returns a ready playlist before the background repository commit resolves", async () => {
@@ -457,7 +504,6 @@ describe("addFileSelections batching", () => {
     expect(deps._playlistItems).toHaveLength(totalFiles);
     // HVSC uses a bulk batch threshold — all items flush in one batch.
     expect(deps.setPlaylist).toHaveBeenCalledTimes(1);
-    expect(deps.applySonglengthsToItems).toHaveBeenCalledTimes(1);
-    expect(deps.applySonglengthsToItems.mock.calls[0]![0]).toHaveLength(totalFiles);
+    expect(deps.applySonglengthsToItems).not.toHaveBeenCalled();
   }, 60_000);
 });

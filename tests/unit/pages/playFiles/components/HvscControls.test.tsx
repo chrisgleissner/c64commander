@@ -76,13 +76,13 @@ describe("HvscControls", () => {
     expect(screen.getByText("Installed version 84")).toBeTruthy();
     expect(screen.getByText("Status: Ready")).toBeTruthy();
     expect(screen.getByText("HVSC ready")).toBeTruthy();
+    expect(screen.getAllByText("Ready to use: Add items -> HVSC.").length).toBeGreaterThan(0);
     expect(screen.getByText("Indexed 118 of 120 songs.")).toBeTruthy();
     expect(screen.getByText("2 songlength entries had syntax errors and were ignored.")).toBeTruthy();
     expect(screen.getByText("Files extracted: 12")).toBeTruthy();
     expect(screen.getByText("Duration: 5400ms")).toBeTruthy();
     expect(screen.getByText("Last updated: at 2026-03-29T18:00:00Z")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reset status" })).toBeTruthy();
-    expect(screen.getByText("Browse and add HVSC songs from the shared “Add items” source chooser.")).toBeTruthy();
   });
 
   it("renders failure, progress, and inline error details while ingestion is active", () => {
@@ -135,7 +135,7 @@ describe("HvscControls", () => {
 
     expect(screen.getByText("HVSC ready")).toBeTruthy();
     expect(screen.getByText("HVSC archives are cached. Run Ingest HVSC to build the browseable library.")).toBeTruthy();
-    expect(screen.queryByText("Browse and add HVSC songs from the shared “Add items” source chooser.")).toBeNull();
+    expect(screen.queryByText("Ready to use: Add items -> HVSC.")).toBeNull();
   });
 
   it("renders metadata hydration details and pre-ingest guidance", () => {

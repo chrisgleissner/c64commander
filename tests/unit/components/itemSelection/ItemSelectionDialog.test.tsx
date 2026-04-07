@@ -608,8 +608,8 @@ describe("ItemSelectionDialog archive source buttons", () => {
       .getByTestId("import-option-commoserve")
       .querySelector('[data-testid="file-origin-icon"]');
     const commoserveGlyph = interstitialIcon?.querySelector("svg");
-    expect(interstitialIcon?.getAttribute("class")).toContain("h-8");
-    expect(interstitialIcon?.getAttribute("class")).toContain("w-8");
+    expect(interstitialIcon?.getAttribute("class")).toContain("h-12");
+    expect(interstitialIcon?.getAttribute("class")).toContain("w-12");
     expect(commoserveGlyph?.getAttribute("class")).toContain("h-[82%]");
     expect(commoserveGlyph?.getAttribute("class")).toContain("w-[82%]");
 

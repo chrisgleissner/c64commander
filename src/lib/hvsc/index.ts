@@ -29,6 +29,7 @@ export {
   ensureHvscMetadataHydration,
   getHvscSong,
   getHvscSongsRecursive,
+  streamHvscSongsRecursive,
   getHvscStatus,
   ingestCachedHvsc,
   installOrUpdateHvsc,

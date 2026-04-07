@@ -312,7 +312,7 @@ describe("useHvscLibrary", () => {
     expect(mocks.toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "HVSC ready",
-        description: expect.stringContaining("Ingested 98 of 100 songs"),
+        description: "Ready to use: Add items -> HVSC.",
       }),
     );
     expect(mocks.recordSmokeBenchmarkSnapshotMock).toHaveBeenCalledWith(
@@ -377,7 +377,9 @@ describe("useHvscLibrary", () => {
     });
 
     expect(mocks.ingestCachedHvscMock).toHaveBeenCalledWith("hvsc-ingest");
-    expect(mocks.toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "HVSC ready" }));
+    expect(mocks.toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "HVSC ready", description: "Ready to use: Add items -> HVSC." }),
+    );
     expect(mocks.recordSmokeBenchmarkSnapshotMock).toHaveBeenCalledWith(
       expect.objectContaining({ scenario: "ingest", state: "complete" }),
     );

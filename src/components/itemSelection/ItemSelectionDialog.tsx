@@ -271,20 +271,20 @@ export const ItemSelectionDialog = ({
     }
     const selections: SelectedItem[] = isArchiveSource
       ? Array.from(archiveSelection.values()).map((result) => ({
-          type: "file" as const,
-          name: result.name,
-          path: `${result.id}/${result.category}`,
-        }))
+        type: "file" as const,
+        name: result.name,
+        path: `${result.id}/${result.category}`,
+      }))
       : Array.from(selection.values()).map((entry) => ({
-          type: entry.type,
-          name: entry.name,
-          path: entry.path,
-          durationMs: entry.durationMs,
-          songNr: entry.songNr,
-          subsongCount: entry.subsongCount,
-          sizeBytes: entry.sizeBytes ?? null,
-          modifiedAt: entry.modifiedAt ?? null,
-        }));
+        type: entry.type,
+        name: entry.name,
+        path: entry.path,
+        durationMs: entry.durationMs,
+        songNr: entry.songNr,
+        subsongCount: entry.subsongCount,
+        sizeBytes: entry.sizeBytes ?? null,
+        modifiedAt: entry.modifiedAt ?? null,
+      }));
     try {
       const success = await onConfirm(source, selections);
       if (success) {
@@ -359,6 +359,10 @@ export const ItemSelectionDialog = ({
   const interstitialOptionContentClassName = "flex min-w-0 w-full items-center justify-start gap-3";
   const interstitialIconClassName = "h-8 w-8 shrink-0 self-center text-[1.75rem]";
   const selectionHeadingIconClassName = "h-5 w-5 shrink-0 text-[1.25rem]";
+  const resolveInterstitialIconClassName = (origin: SourceLocation["type"]) =>
+    cn(interstitialIconClassName, origin === "commoserve" && "h-12 w-12 text-[3.5rem]");
+  const resolveSelectionHeadingIconClassName = (origin: SourceLocation["type"]) =>
+    cn(selectionHeadingIconClassName, origin === "commoserve" && "h-7 w-7 text-[1.75rem]");
 
   if (!source) {
     return (
@@ -383,7 +387,7 @@ export const ItemSelectionDialog = ({
                   aria-label="Add file / folder from Local"
                 >
                   <span className={interstitialOptionContentClassName} aria-hidden="true">
-                    <FileOriginIcon origin="local" className={interstitialIconClassName} />
+                    <FileOriginIcon origin="local" className={resolveInterstitialIconClassName("local")} />
                     <span className={interstitialLabelClassName}>
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {SOURCE_LABELS.local}
@@ -405,7 +409,7 @@ export const ItemSelectionDialog = ({
                   aria-label="Add file / folder from C64U"
                 >
                   <span className={interstitialOptionContentClassName} aria-hidden="true">
-                    <FileOriginIcon origin="ultimate" className={interstitialIconClassName} />
+                    <FileOriginIcon origin="ultimate" className={resolveInterstitialIconClassName("ultimate")} />
                     <span className={interstitialLabelClassName}>
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {SOURCE_LABELS.c64u}
@@ -428,7 +432,7 @@ export const ItemSelectionDialog = ({
                     aria-label="Add file / folder from HVSC"
                   >
                     <span className={interstitialOptionContentClassName} aria-hidden="true">
-                      <FileOriginIcon origin="hvsc" className={interstitialIconClassName} />
+                      <FileOriginIcon origin="hvsc" className={resolveInterstitialIconClassName("hvsc")} />
                       <span className={interstitialLabelClassName}>
                         <span className={cn("truncate font-medium", interstitialTextClassName)}>
                           {SOURCE_LABELS.hvsc}
@@ -450,7 +454,10 @@ export const ItemSelectionDialog = ({
                     aria-label={`Search ${SOURCE_LABELS.commoserve}`}
                   >
                     <span className={interstitialOptionContentClassName} aria-hidden="true">
-                      <FileOriginIcon origin="commoserve" className={interstitialIconClassName} />
+                      <FileOriginIcon
+                        origin="commoserve"
+                        className={resolveInterstitialIconClassName("commoserve")}
+                      />
                       <span className={interstitialLabelClassName}>
                         <span className={cn("truncate font-medium", interstitialTextClassName)}>
                           {SOURCE_LABELS.commoserve}
@@ -494,7 +501,10 @@ export const ItemSelectionDialog = ({
                       <span>{`From ${selectedSourceLabel}`}</span>
                       {selectedSourceOrigin ? (
                         <span aria-hidden="true" data-testid="add-items-selection-icon">
-                          <FileOriginIcon origin={selectedSourceOrigin} className={selectionHeadingIconClassName} />
+                          <FileOriginIcon
+                            origin={selectedSourceOrigin}
+                            className={resolveSelectionHeadingIconClassName(selectedSourceOrigin)}
+                          />
                         </span>
                       ) : null}
                     </span>

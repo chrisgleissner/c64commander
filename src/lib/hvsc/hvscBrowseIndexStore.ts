@@ -162,9 +162,9 @@ const createSeededSong = (
     sidMetadata: null,
     trackSubsongs: normalizedDurations?.length
       ? normalizedDurations.map((_, index) => ({
-          songNr: index + 1,
-          isDefault: index === 0,
-        }))
+        songNr: index + 1,
+        isDefault: index === 0,
+      }))
       : null,
   };
   song.searchTextSeed = buildSeedSearchText(song);
@@ -763,6 +763,56 @@ export const listSongsRecursiveFromBrowseIndex = (
   }
 
   return songs;
+};
+
+export const streamSongsRecursiveFromBrowseIndex = async (
+  snapshot: HvscBrowseIndexSnapshot,
+  folderPath: string,
+  options: {
+    chunkSize?: number;
+    onChunk: (songs: HvscBrowseIndexedSong[]) => Promise<void> | void;
+  },
+): Promise<{ totalSongs: number } | null> => {
+  const normalizedRoot = normalizeFolderPath(folderPath);
+  if (!snapshot.folders[normalizedRoot]) return null;
+
+  const chunkSize = Math.max(1, Math.floor(options.chunkSize ?? 250));
+  const queue = [normalizedRoot];
+  const visited = new Set<string>();
+  let pendingChunk: HvscBrowseIndexedSong[] = [];
+  let totalSongs = 0;
+
+  const flush = async () => {
+    if (!pendingChunk.length) return;
+    const nextChunk = pendingChunk;
+    pendingChunk = [];
+    await options.onChunk(nextChunk);
+  };
+
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const row = snapshot.folders[current];
+    if (!row) continue;
+
+    for (const childFolder of row.folders) {
+      queue.push(childFolder);
+    }
+
+    for (const songPath of row.songs) {
+      const song = snapshot.songs[songPath];
+      if (!song) continue;
+      pendingChunk.push(song);
+      totalSongs += 1;
+      if (pendingChunk.length >= chunkSize) {
+        await flush();
+      }
+    }
+  }
+
+  await flush();
+  return { totalSongs };
 };
 
 export const verifyHvscBrowseIndexIntegrity = async (snapshot: HvscBrowseIndexSnapshot, sampleSize = 12) => {

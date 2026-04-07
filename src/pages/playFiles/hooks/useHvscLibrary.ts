@@ -104,6 +104,8 @@ const HVSC_EXTRACTION_STAGES = new Set([
   "sid_metadata_parsing",
 ]);
 
+const HVSC_READY_MESSAGE = "Ready to use: Add items -> HVSC.";
+
 export const useHvscLibrary = (): HvscLibraryState => {
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
   const [hvscStatusSummary, setHvscStatusSummary] = useState<HvscStatusSummary>(() => loadHvscStatusSummary());
@@ -279,22 +281,22 @@ export const useHvscLibrary = (): HvscLibraryState => {
       download:
         prev.download.status === "in-progress"
           ? {
-              ...prev.download,
-              status: "failure",
-              finishedAt: now,
-              errorCategory: prev.download.errorCategory ?? "unknown",
-              errorMessage: prev.download.errorMessage ?? "Interrupted",
-            }
+            ...prev.download,
+            status: "failure",
+            finishedAt: now,
+            errorCategory: prev.download.errorCategory ?? "unknown",
+            errorMessage: prev.download.errorMessage ?? "Interrupted",
+          }
           : prev.download,
       extraction:
         prev.extraction.status === "in-progress"
           ? {
-              ...prev.extraction,
-              status: "failure",
-              finishedAt: now,
-              errorCategory: prev.extraction.errorCategory ?? "unknown",
-              errorMessage: prev.extraction.errorMessage ?? "Interrupted",
-            }
+            ...prev.extraction,
+            status: "failure",
+            finishedAt: now,
+            errorCategory: prev.extraction.errorCategory ?? "unknown",
+            errorMessage: prev.extraction.errorMessage ?? "Interrupted",
+          }
           : prev.extraction,
       lastUpdatedAt: now,
     }));
@@ -447,10 +449,10 @@ export const useHvscLibrary = (): HvscLibraryState => {
             download:
               prev.download.status === "in-progress"
                 ? {
-                    ...prev.download,
-                    status: "success",
-                    finishedAt: prev.download.finishedAt ?? now,
-                  }
+                  ...prev.download,
+                  status: "success",
+                  finishedAt: prev.download.finishedAt ?? now,
+                }
                 : prev.download,
             extraction: {
               ...prev.extraction,
@@ -701,9 +703,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
           });
           toast({
             title: "HVSC ready",
-            description: status.ingestionSummary
-              ? `Ingested ${status.ingestionSummary.ingestedSongs} of ${status.ingestionSummary.totalSongs} songs. ${status.ingestionSummary.songlengthSyntaxErrors} songlength parsing errors.`
-              : `Version ${status.installedVersion} installed.`,
+            description: HVSC_READY_MESSAGE,
           });
         } catch (error) {
           if (/cancelled/i.test((error as Error).message)) {
@@ -806,9 +806,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
           });
           toast({
             title: "HVSC ready",
-            description: status.ingestionSummary
-              ? `Ingested ${status.ingestionSummary.ingestedSongs} of ${status.ingestionSummary.totalSongs} songs. ${status.ingestionSummary.songlengthSyntaxErrors} songlength parsing errors.`
-              : `Version ${status.installedVersion} installed.`,
+            description: HVSC_READY_MESSAGE,
           });
         } catch (error) {
           if (/cancelled/i.test((error as Error).message)) {
@@ -860,29 +858,29 @@ export const useHvscLibrary = (): HvscLibraryState => {
         download:
           prev.download.status === "in-progress"
             ? {
-                ...prev.download,
-                status: "idle",
-                finishedAt: stoppedAt,
-                durationMs: null,
-                downloadedBytes: null,
-                totalBytes: null,
-                sizeBytes: null,
-                errorCategory: null,
-                errorMessage: "Cancelled",
-              }
+              ...prev.download,
+              status: "idle",
+              finishedAt: stoppedAt,
+              durationMs: null,
+              downloadedBytes: null,
+              totalBytes: null,
+              sizeBytes: null,
+              errorCategory: null,
+              errorMessage: "Cancelled",
+            }
             : prev.download,
         extraction:
           prev.extraction.status === "in-progress"
             ? {
-                ...prev.extraction,
-                status: "idle",
-                finishedAt: stoppedAt,
-                durationMs: null,
-                filesExtracted: null,
-                totalFiles: null,
-                errorCategory: null,
-                errorMessage: "Cancelled",
-              }
+              ...prev.extraction,
+              status: "idle",
+              finishedAt: stoppedAt,
+              durationMs: null,
+              filesExtracted: null,
+              totalFiles: null,
+              errorCategory: null,
+              errorMessage: "Cancelled",
+            }
             : prev.extraction,
         lastUpdatedAt: stoppedAt,
       }));

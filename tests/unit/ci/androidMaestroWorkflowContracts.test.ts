@@ -48,9 +48,12 @@ describe("Android Maestro workflow contracts", () => {
     const playbackFlow = readRepoFile(".maestro", "perf-hvsc-playback.yaml");
 
     expect(playlistFlow).toContain('visible: "Open DEMOS"');
-    expect(playlistFlow).toContain('point: "9%, 45%"');
-    expect(playlistFlow).toContain('point: "9%, 57%"');
-    expect(playlistFlow).toContain('point: "9%, 62%"');
+    expect(playlistFlow).toContain('assertVisible: "Select DEMOS"');
+    expect(playlistFlow).toContain('tapOn: "Select DEMOS"');
+    expect(playlistFlow).toContain('assertVisible: "Select GAMES"');
+    expect(playlistFlow).toContain('tapOn: "Select GAMES"');
+    expect(playlistFlow).toContain('assertVisible: "Select MUSICIANS"');
+    expect(playlistFlow).toContain('tapOn: "Select MUSICIANS"');
     expect(playlistFlow).toContain('tapOn: "Add to playlist"');
     expect(playlistFlow).toContain('text: "Root"');
     expect(playlistFlow).toContain("hvsc-perf-playlist");
@@ -121,14 +124,13 @@ describe("Android Maestro workflow contracts", () => {
     const playlist5k = readRepoFile(".maestro", "perf-hvsc-setup-playlist-5k.yaml");
     expect(playlist5k).toContain("hvsc-perf-playlist-5k");
     expect(playlist5k).toContain('visible: "Open DEMOS"');
-    // DEMOS checkbox at 9%, 45%
-    expect(playlist5k).toContain('point: "9%, 45%"');
-    // GAMES checkbox at 9%, 57%
-    expect(playlist5k).toContain('point: "9%, 57%"');
-    // Must NOT include MUSICIANS checkbox at 9%, 62%
-    expect(playlist5k).not.toContain('point: "9%, 62%"');
+    expect(playlist5k).toContain('assertVisible: "Select DEMOS"');
+    expect(playlist5k).toContain('tapOn: "Select DEMOS"');
+    expect(playlist5k).toContain('assertVisible: "Select GAMES"');
+    expect(playlist5k).toContain('tapOn: "Select GAMES"');
+    expect(playlist5k).not.toContain('Select MUSICIANS');
     expect(playlist5k).toContain('tapOn: "Add to playlist"');
-    expect(playlist5k).toContain('visible: "Add more items"');
+    expect(playlist5k).toContain('visible: "Clear playlist"');
   });
 
   it("benchmark runner supports --lane parameter for 5K and full lanes", () => {

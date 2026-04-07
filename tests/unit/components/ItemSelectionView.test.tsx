@@ -64,6 +64,7 @@ describe("ItemSelectionView", () => {
     expect(screen.queryByRole("button", { name: /^open$/i })).not.toBeInTheDocument();
     expect(screen.getByTestId("source-path-label")).toHaveTextContent("/music");
     expect(screen.queryByText(/^Path:/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Select Demos")).toBeInTheDocument();
   });
 
   it("disables selection and navigation at root when loading", () => {
