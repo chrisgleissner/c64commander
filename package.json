@@ -34,7 +34,7 @@
     "test:web-server": "vitest run tests/unit/web/webServer.test.ts",
     "test:web-platform": "npm run test:web-server",
     "test:watch": "vitest",
-    "test:coverage": "node -e \"const fs=require('fs');for (const p of ['coverage','.cov-unit','.nyc_output']) {fs.rmSync(p,{recursive:true,force:true,maxRetries:20,retryDelay:100});}\" && mkdir -p .cov-unit && node --max-old-space-size=6144 ./node_modules/vitest/vitest.mjs run --coverage --coverage.reportsDirectory=.cov-unit --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.lines=0 && node -e \"const fs=require('fs');fs.rmSync('coverage',{recursive:true,force:true,maxRetries:20,retryDelay:100});fs.cpSync('.cov-unit','coverage',{recursive:true});\"",
+    "test:coverage": "node scripts/run-unit-coverage.mjs",
     "coverage:gate": "npm run test:coverage:all && COVERAGE_MIN=91 COVERAGE_MIN_BRANCH=91 COVERAGE_FILE=coverage/lcov-merged.info node scripts/check-coverage-threshold.mjs",
     "test:agents": "bash -c 'if [ -f .venv/bin/python3 ]; then PYTHON=$(pwd)/.venv/bin/python3; else PYTHON=python3; fi; cd agents && $PYTHON -m pytest --cov=openhands --cov-branch --cov-report=term-missing --cov-report=xml:coverage-agents.xml tests/'",
     "test:coverage:all": "./scripts/collect-coverage.sh",
