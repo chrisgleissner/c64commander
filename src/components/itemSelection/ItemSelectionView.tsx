@@ -101,6 +101,20 @@ export const ItemSelectionView = ({
               className="flex items-center gap-2 min-w-0 border-b border-border/50 py-[0.44rem]"
               data-testid="source-entry-row"
               data-entry-type={entry.type}
+              tabIndex={canNavigateFolder ? 0 : undefined}
+              onKeyDown={
+                canNavigateFolder
+                  ? (event: React.KeyboardEvent) => {
+                      if (
+                        event.key === 'Enter' &&
+                        !(event.target as HTMLElement).closest('[role="checkbox"]')
+                      ) {
+                        event.preventDefault();
+                        onOpen(entry.path);
+                      }
+                    }
+                  : undefined
+              }
             >
               <div className="shrink-0">
                 <Checkbox
@@ -122,11 +136,6 @@ export const ItemSelectionView = ({
                   onClick={() => {
                     if (!canNavigateFolder) return;
                     onOpen(entry.path);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && canNavigateFolder) {
-                      onOpen(entry.path);
-                    }
                   }}
                 >
                   <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

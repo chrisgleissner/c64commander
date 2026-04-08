@@ -87,6 +87,16 @@ export const resolveHvscPreparationSnapshot = (input: HvscPreparationStateInput)
     };
   }
 
+  if (input.installedVersion > 0 && input.ingestionState === "ready") {
+    return {
+      state: "READY",
+      phase: null,
+      failedPhase: null,
+      statusLabel: "Ready",
+      errorReason: null,
+    };
+  }
+
   if (errorReason || input.ingestionState === "error") {
     const failedPhase = resolveFailedPhase(input);
     return {
@@ -95,16 +105,6 @@ export const resolveHvscPreparationSnapshot = (input: HvscPreparationStateInput)
       failedPhase,
       statusLabel: failedPhase === "ingest" ? "Indexing failed" : "Download failed",
       errorReason: errorReason ?? "HVSC preparation failed",
-    };
-  }
-
-  if (input.installedVersion > 0 && input.ingestionState === "ready") {
-    return {
-      state: "READY",
-      phase: null,
-      failedPhase: null,
-      statusLabel: "Ready",
-      errorReason: null,
     };
   }
 

@@ -637,6 +637,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
               errorCategory: null,
               errorMessage: null,
             },
+            lastUpdatedAt: startedAt,
           }));
           const updateStatus = await checkForHvscUpdates();
           if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
@@ -724,6 +725,18 @@ export const useHvscLibrary = (): HvscLibraryState => {
           });
         } catch (error) {
           if (/cancelled/i.test((error as Error).message)) {
+            const cancelledAt = new Date().toISOString();
+            updateHvscSummary((prev) => ({
+              ...prev,
+              download: {
+                ...prev.download,
+                status: "failure",
+                finishedAt: cancelledAt,
+                errorCategory: null,
+                errorMessage: null,
+              },
+              lastUpdatedAt: cancelledAt,
+            }));
             return;
           }
           const failedAt = new Date().toISOString();
@@ -791,6 +804,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
               errorCategory: null,
               errorMessage: null,
             },
+            lastUpdatedAt: startedAt,
           }));
           await ingestCachedHvsc("hvsc-ingest");
           const status = await getHvscStatus();
@@ -827,6 +841,18 @@ export const useHvscLibrary = (): HvscLibraryState => {
           });
         } catch (error) {
           if (/cancelled/i.test((error as Error).message)) {
+            const cancelledAt = new Date().toISOString();
+            updateHvscSummary((prev) => ({
+              ...prev,
+              extraction: {
+                ...prev.extraction,
+                status: "failure",
+                finishedAt: cancelledAt,
+                errorCategory: null,
+                errorMessage: null,
+              },
+              lastUpdatedAt: cancelledAt,
+            }));
             return;
           }
           const failedAt = new Date().toISOString();
