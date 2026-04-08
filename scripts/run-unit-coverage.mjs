@@ -3,9 +3,20 @@ import { cpSync, existsSync, globSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const jsdomChunkCount = 24;
+export const jsdomChunkCount = 32;
+
+export const dedicatedJsdomCoverageFiles = [
+  "tests/unit/hooks/useLightingStudio.test.tsx",
+  "tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx",
+  "tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx",
+];
 
 export const unitCoverageRuns = [
+  ...dedicatedJsdomCoverageFiles.map((filePath) => ({
+    projectName: "unit-jsdom",
+    reportKey: `jsdom-dedicated-${path.basename(filePath, path.extname(filePath))}`,
+    files: [filePath],
+  })),
   ...Array.from({ length: jsdomChunkCount }, (_value, chunkIndex) => ({
     projectName: "unit-jsdom",
     reportKey: `jsdom-${chunkIndex + 1}`,
@@ -84,12 +95,21 @@ export function collectJsdomCoverageFiles(rootDir) {
   return includedFiles.filter((file) => !excludedFiles.has(file));
 }
 
+export function collectSharedJsdomCoverageFiles(rootDir) {
+  const dedicatedFiles = new Set(dedicatedJsdomCoverageFiles);
+  return collectJsdomCoverageFiles(rootDir).filter((file) => !dedicatedFiles.has(file));
+}
+
 export function getProjectFilesForRun(rootDir, runConfig) {
   if (runConfig.projectName !== "unit-jsdom") {
     return [];
   }
 
-  const chunks = splitFilesIntoChunks(collectJsdomCoverageFiles(rootDir), runConfig.chunkCount ?? 1);
+  if (Array.isArray(runConfig.files) && runConfig.files.length > 0) {
+    return runConfig.files;
+  }
+
+  const chunks = splitFilesIntoChunks(collectSharedJsdomCoverageFiles(rootDir), runConfig.chunkCount ?? 1);
   return chunks[runConfig.chunkIndex ?? 0] ?? [];
 }
 
