@@ -8,25 +8,21 @@ import {
   getProjectFilesForRun,
   getNycReportArgs,
   getVitestCoverageArgs,
+  jsdomChunkCount,
   splitFilesIntoChunks,
   unitCoverageRuns,
 } from "../../../scripts/run-unit-coverage.mjs";
 
 describe("run-unit-coverage", () => {
   it("locks unit coverage to split jsdom shards and node project runs", () => {
+    expect(jsdomChunkCount).toBe(24);
     expect(unitCoverageRuns).toEqual([
-      { projectName: "unit-jsdom", reportKey: "jsdom-1", chunkIndex: 0, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-2", chunkIndex: 1, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-3", chunkIndex: 2, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-4", chunkIndex: 3, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-5", chunkIndex: 4, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-6", chunkIndex: 5, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-7", chunkIndex: 6, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-8", chunkIndex: 7, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-9", chunkIndex: 8, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-10", chunkIndex: 9, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-11", chunkIndex: 10, chunkCount: 12 },
-      { projectName: "unit-jsdom", reportKey: "jsdom-12", chunkIndex: 11, chunkCount: 12 },
+      ...Array.from({ length: jsdomChunkCount }, (_value, chunkIndex) => ({
+        projectName: "unit-jsdom",
+        reportKey: `jsdom-${chunkIndex + 1}`,
+        chunkIndex,
+        chunkCount: jsdomChunkCount,
+      })),
       { projectName: "unit-node", reportKey: "node" },
     ]);
   });
@@ -40,7 +36,7 @@ describe("run-unit-coverage", () => {
     const plan = createCoveragePlan(rootDir);
 
     const jsdomArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns[0], plan.projectReports["jsdom-1"]);
-    const nodeArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns[12], plan.projectReports.node);
+    const nodeArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns.at(-1), plan.projectReports.node);
     const jsdomFiles = collectJsdomCoverageFiles(rootDir);
     const firstChunkFiles = getProjectFilesForRun(rootDir, unitCoverageRuns[0]);
 
@@ -50,6 +46,9 @@ describe("run-unit-coverage", () => {
     expect(jsdomArgs).toContain(`--coverage.reportsDirectory=${plan.projectReports["jsdom-1"]}`);
     expect(jsdomArgs).toContain("--coverage.provider=istanbul");
     expect(jsdomArgs).toContain("--coverage.reporter=json");
+    expect(jsdomArgs).toContain("--maxWorkers=1");
+    expect(jsdomArgs).toContain("--minWorkers=1");
+    expect(jsdomArgs).toContain("--no-file-parallelism");
     expect(jsdomFiles.length).toBeGreaterThan(0);
     expect(firstChunkFiles.length).toBeGreaterThan(0);
     expect(jsdomArgs).toContain(firstChunkFiles[0]);

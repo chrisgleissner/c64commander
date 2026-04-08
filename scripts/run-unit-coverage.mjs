@@ -3,19 +3,15 @@ import { cpSync, existsSync, globSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+export const jsdomChunkCount = 24;
+
 export const unitCoverageRuns = [
-  { projectName: "unit-jsdom", reportKey: "jsdom-1", chunkIndex: 0, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-2", chunkIndex: 1, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-3", chunkIndex: 2, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-4", chunkIndex: 3, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-5", chunkIndex: 4, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-6", chunkIndex: 5, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-7", chunkIndex: 6, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-8", chunkIndex: 7, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-9", chunkIndex: 8, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-10", chunkIndex: 9, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-11", chunkIndex: 10, chunkCount: 12 },
-  { projectName: "unit-jsdom", reportKey: "jsdom-12", chunkIndex: 11, chunkCount: 12 },
+  ...Array.from({ length: jsdomChunkCount }, (_value, chunkIndex) => ({
+    projectName: "unit-jsdom",
+    reportKey: `jsdom-${chunkIndex + 1}`,
+    chunkIndex,
+    chunkCount: jsdomChunkCount,
+  })),
   { projectName: "unit-node", reportKey: "node" },
 ];
 
@@ -112,6 +108,9 @@ export function getVitestCoverageArgs(rootDir, runConfig, reportsDirectory) {
     "--coverage.thresholds.branches=0",
     "--coverage.thresholds.functions=0",
     "--coverage.thresholds.lines=0",
+    "--maxWorkers=1",
+    "--minWorkers=1",
+    "--no-file-parallelism",
     "--reporter=dot",
   ];
 
@@ -204,6 +203,6 @@ export function runUnitCoverage(rootDir = process.cwd()) {
   ensureFileExists(plan.coverageArtifacts.json, "JSON coverage report");
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runUnitCoverage();
 }
