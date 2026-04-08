@@ -105,10 +105,7 @@ export const ItemSelectionView = ({
               onKeyDown={
                 canNavigateFolder
                   ? (event: React.KeyboardEvent) => {
-                      if (
-                        event.key === 'Enter' &&
-                        !(event.target as HTMLElement).closest('[role="checkbox"]')
-                      ) {
+                      if (event.key === "Enter" && !(event.target as HTMLElement).closest('[role="checkbox"]')) {
                         event.preventDefault();
                         onOpen(entry.path);
                       }

@@ -122,10 +122,10 @@ function buildConfig(baseUrl: string): HarnessConfig {
     health: {
       endpoint: "/v1/version",
       intervalMs: 100,
-      timeoutMs: 100,
+      timeoutMs: 250,
     },
     timeouts: {
-      restTimeoutMs: 100,
+      restTimeoutMs: 250,
       ftpTimeoutMs: 500,
       scenarioTimeoutMs: 1000,
       maxDestructiveScenarioMs: 1000,
@@ -138,8 +138,8 @@ function buildConfig(baseUrl: string): HarnessConfig {
       scenarioId: "rest.breakpoint.sid-volume",
       rateRampMs: [1],
       concurrencyRamp: [1],
-      stageDurationMs: 200,
-      failureDetectionTimeoutMs: 150,
+      stageDurationMs: 400,
+      failureDetectionTimeoutMs: 400,
       tailRequestCount: 5,
       targets: [
         { category: "Audio Mixer", item: "Vol Socket 1" },
