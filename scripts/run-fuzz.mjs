@@ -14,6 +14,7 @@ import {
   remapMergedIssueExamples,
   removeMergedShardDirectories,
   resolveMergedSessionArtifactPath,
+  resolveMergedShardArtifactPath,
 } from './fuzzArtifactMergeUtils.mjs';
 
 const args = process.argv.slice(2);
@@ -605,12 +606,16 @@ const mergeReports = async () => {
             : (group.examples || []).map((example) => ({
                 ...example,
                 shardIndex: shard,
-                video: example.video
-                  ? `shard-${shard}/${example.video}`
-                  : example.video,
-                screenshot: example.screenshot
-                  ? `shard-${shard}/${example.screenshot}`
-                  : example.screenshot,
+                video: resolveMergedShardArtifactPath(
+                  example.video,
+                  shard,
+                  concurrency,
+                ),
+                screenshot: resolveMergedShardArtifactPath(
+                  example.screenshot,
+                  shard,
+                  concurrency,
+                ),
               }));
         if (!existing) {
           issueGroups.set(group.issue_group_id, {

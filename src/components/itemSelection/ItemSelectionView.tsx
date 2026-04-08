@@ -123,6 +123,11 @@ export const ItemSelectionView = ({
                     if (!canNavigateFolder) return;
                     onOpen(entry.path);
                   }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && canNavigateFolder) {
+                      onOpen(entry.path);
+                    }
+                  }}
                 >
                   <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <div className="min-w-0">
