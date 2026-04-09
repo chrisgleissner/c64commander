@@ -1,0 +1,21 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf
+  - hvsc-perf-filter
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    text: "Play"
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${LONG_TIMEOUT}
+- tapOn:
+    text: "Filter files..."
+- eraseText
+- inputText: "xyzzy123"
+- waitForAnimationToEnd

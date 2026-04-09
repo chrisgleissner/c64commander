@@ -1,4 +1,11 @@
 appId: uk.gleissner.c64commander
 ---
 - tapOn:
+    id: "add-items-to-playlist"
+    optional: true
+- tapOn:
+    text: "Add items to playlist"
+    optional: true
+- tapOn:
     text: "Add more items"
+    optional: true

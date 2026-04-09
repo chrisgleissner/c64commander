@@ -1,0 +1,87 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf-playlist
+env:
+  # The 60K-item playlist build is a long-running setup step (~15-20 min on Pixel 4).
+  # Phase 1 must pass a LONG_TIMEOUT of at least 1800000 (30 min).
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "1800000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+# Warm launch: preserve in-memory HVSC browse index from the setup phase.
+# The 60K-entry browse index is too large for the Capacitor FS bridge to persist,
+# so we must not restart the app (stopApp: true would destroy it).
+- runFlow: subflows/launch-warm.yaml
+- tapOn:
+    text: "Play"
+# Scroll to top first — the warm launch preserves Phase 1's ending scroll
+# position, and Maestro can only find WebView text that is on-screen.
+# The add-items-to-playlist button is in the toolbar ABOVE the filter,
+# so it is visible after scroll-to-top regardless of any active filter.
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "add-items-to-playlist"
+- extendedWaitUntil:
+    visible: "Choose source"
+    timeout: ${TIMEOUT}
+- retry:
+    maxRetries: 6
+    commands:
+      - tapOn:
+          id: "import-option-hvsc"
+          optional: true
+      - tapOn:
+          text: "Add file / folder from HVSC"
+          optional: true
+      - tapOn:
+          text: "HVSC"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "From HVSC"
+          timeout: ${TIMEOUT}
+# Navigate to HVSC root in case the browser retained a previous position
+- tapOn:
+    text: "Root"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Open DEMOS"
+    timeout: ${LONG_TIMEOUT}
+# Select the playable top-level corpora using stable checkbox labels.
+- assertVisible: "Select DEMOS"
+- tapOn: "Select DEMOS"
+- assertVisible: "Select GAMES"
+- tapOn: "Select GAMES"
+- assertVisible: "Select MUSICIANS"
+- tapOn: "Select MUSICIANS"
+- waitForAnimationToEnd
+- tapOn: "Add to playlist"
+# The fast path completes in sub-second, so the "Items added" toast
+# vanishes before Maestro can catch it. Assert the persistent UI instead:
+# "Clear playlist" only appears when the playlist has tracks.
+- extendedWaitUntil:
+    visible: "Clear playlist"
+    timeout: ${LONG_TIMEOUT}
+- waitForAnimationToEnd
+# Give the app time to persist the bulk playlist to IndexedDB
+- swipe:
+    start: 50%, 50%
+    end: 50%, 30%
+    duration: 500
+- swipe:
+    start: 50%, 50%
+    end: 50%, 70%
+    duration: 500
+- assertVisible: "Playlist"

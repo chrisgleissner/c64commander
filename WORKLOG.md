@@ -1,3 +1,862 @@
+# HVSC Performance Worklog
+
+## [2026-04-07 19:35] HVSC-PREP-FLOW: Automatic Add items -> HVSC preparation landed; chooser screenshots refreshed
+
+Completed the Play-page HVSC UX pass that removes the old manual first-use flow and folds HVSC preparation directly into the Add items chooser.
+
+What changed:
+
+- Added a user-facing HVSC preparation state machine with the required `NOT_PRESENT`, `DOWNLOADING`, `DOWNLOADED`, `INGESTING`, `READY`, and `ERROR` states.
+- Routed `Add items -> HVSC` through the new `Preparing HVSC library` sheet so first use now downloads plus indexes automatically, supports retry from the failed phase, and waits for explicit `Browse HVSC` confirmation before opening the library.
+- Reworked the Play-page HVSC card into a summary surface with advanced `Reindex HVSC` and `Reset HVSC` recovery controls instead of the old manual `Download HVSC` and `Ingest HVSC` actions.
+- Added a real HVSC reset path that clears the cached archives, indexed library, and persisted browse snapshots rather than only clearing the UI summary state.
+- Aligned the `CommoServe` chooser row with the other source labels by introducing a shared icon slot and enlarging the CommoServe mark inside that slot.
+
+Validation executed:
+
+- Targeted unit regressions passed for:
+  - `tests/unit/playFiles/useHvscLibrary.test.tsx`
+  - `tests/unit/playFiles/useHvscLibrary.edges.test.tsx`
+  - `tests/unit/playFiles/useHvscLibrary.progress.test.tsx`
+  - `tests/unit/lib/hvsc/hvscPreparationState.test.ts`
+  - `tests/unit/pages/playFiles/components/HvscControls.test.tsx`
+  - `tests/unit/pages/playFiles/components/HvscPreparationSheet.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/components/FileOriginIcon.test.tsx`
+- `npm run build`: passed
+- `npm run test:coverage`: attempted three times, but the workspace ran out of Node heap in the wider Vitest suite before completion; this was an environment failure, not an HVSC assertion failure.
+- `npm run lint`: still blocked by Prettier drift in unrelated repository files outside this change set.
+
+Screenshots refreshed:
+
+- `docs/img/app/play/import/01-import-interstitial.png`
+- `docs/img/app/play/import/02-c64u-file-picker.png`
+- `docs/img/app/play/import/03-local-file-picker.png`
+- `docs/img/app/play/import/04-commoserve-search.png`
+- `docs/img/app/play/import/05-commoserve-results-selected.png`
+- `docs/img/app/play/import/profiles/compact/01-import-interstitial.png`
+- `docs/img/app/play/import/profiles/compact/02-c64u-file-picker.png`
+- `docs/img/app/play/import/profiles/expanded/01-import-interstitial.png`
+- `docs/img/app/play/import/profiles/expanded/02-c64u-file-picker.png`
+- `docs/img/app/play/import/profiles/medium/01-import-interstitial.png`
+- `docs/img/app/play/import/profiles/medium/02-c64u-file-picker.png`
+
+Notes:
+
+- The screenshot harness groups the Play import screenshots together, so the interstitial alignment fix required refreshing the full import-flow capture set, not only the first image.
+- `npm run screenshots:prune-identical` kept all regenerated files, so each image changed relative to the previous capture.
+
+## [2026-04-07 12:20] AUDIT3-CLOSURE: Tasks 2-7 closed and full validation green
+
+Completed the remaining audit3 implementation tasks after the Songlengths-seeded catalog landed and brought the full repository validation back to green.
+
+What changed:
+
+- Closed `HVSC-A04` by short-circuiting HVSC config discovery while preserving sibling `.cfg` resolution for local and ultimate sources.
+- Closed `LIST-A03` by splitting the Play page filter into immediate input text plus a `200 ms` debounced committed query.
+- Closed `HVSC-A02` by adding chunked background SID metadata hydration, seeded title/author display fields, persisted canonical metadata updates, shared HVSC metadata progress state, and UI surfacing in the HVSC controls area.
+- Closed `HVSC-A05` by introducing the `BACKGROUND_COMMITTING` repository phase so add-to-playlist returns ready before IndexedDB commit completion while filtering stays on the in-memory path during the commit.
+- Closed `LIST-A01` by preserving the repo's existing `react-virtuoso` view-all virtualization path and adding regression coverage that locks the virtualized rendering route and incremental loading contract.
+- Updated related source-adapter, status-store, and control-surface tests so the expanded HVSC metadata shape is covered and stable.
+
+Validation executed:
+
+- `npm run test`: passed (`500` files, `5679` tests)
+- `npm run test:coverage`: passed (`5690` tests, `91.00%` branch coverage)
+- `npm run lint`: passed with 3 pre-existing warnings in generated `c64scope/coverage/*.js`
+- `npm run build`: passed
+
+Additional regression coverage added during closure:
+
+- `tests/unit/sourceNavigation/hvscSourceAdapter.test.ts`
+- `tests/unit/hvsc/hvscMetadataHydrator.test.ts`
+- `tests/unit/hvsc/hvscStatusStore.test.ts`
+- `tests/unit/pages/playFiles/components/HvscControls.test.tsx`
+- `tests/unit/playFiles/useDebouncedValue.test.tsx`
+- `tests/unit/components/lists/SelectableActionList.virtualization.test.tsx`
+
+Notes:
+
+- `npm run lint` is no longer blocked by formatting drift; the remaining warnings come from generated coverage artifacts outside the audit3 implementation scope.
+- No documentation screenshots were updated because no docs image became inaccurate during this pass.
+
+## [2026-04-07 10:45] HVSC-A01: Songlengths-seeded browse projection landed; Task 2 blocked on unrelated lint drift
+
+Completed the Task 1 implementation slice that removes HVSC recursive enumeration's dependency on native browse-index rebuilds and seeds the persisted browse projection from Songlengths data.
+
+What changed:
+
+- Extended `src/lib/hvsc/hvscBrowseIndexStore.ts` to store Songlengths-seeded title/author, durations, subsong counts, default song, metadata status, and normalized search text under schema version `2`.
+- Added `buildHvscBrowseIndexFromSonglengthSnapshot(...)` so the Songlengths snapshot can materialize the persisted browse projection directly.
+- Updated `src/lib/hvsc/hvscSongLengthService.ts` so cold-start load and config-change reload both sync the persisted browse projection immediately after Songlengths load.
+- Removed the native `queryAllSongs()` browse-index rebuild path from `src/lib/hvsc/hvscService.ts` and `src/lib/hvsc/hvscIngestionRuntime.ts`.
+- Updated `src/lib/sourceNavigation/hvscSourceAdapter.ts` to consume seeded `defaultSong`, `durationsSeconds`, and `subsongCount` values.
+- Added regression coverage for representative raw `Songlengths.md5` input and for seeded browse-row generation.
+
+Measured proof:
+
+- New benchmark: `build Songlengths-seeded projection from 100k songs`
+  - mean: `547.39 ms`
+  - min/max: `517.15 ms` / `613.49 ms`
+- New benchmark: `query Songlengths-seeded recursive listing over 100k entries`
+  - mean: `0.0190 ms`
+  - p99: `0.0246 ms`
+- Baseline bottleneck removed from the hot path: recursive HVSC enumeration no longer depends on native browse-index rebuild or BFS traversal.
+
+Validation executed:
+
+- Focused HVSC regressions: passed
+- `tests/unit/sid/songlengths.test.ts`: passed (`38` tests)
+- `npm run test`: passed (`497` files, `5670` tests)
+- `npm run test:coverage`: passed (`91.13%` branch coverage)
+- `npm run build`: passed
+- `npm run test:bench`: passed
+
+Blocker:
+
+- `npm run lint` is still blocked by pre-existing Prettier failures in unmodified files:
+  - `src/pages/playFiles/handlers/addFileSelections.ts`
+  - `src/pages/playFiles/playlistRepositorySync.ts`
+- Confirmed with `git diff` that neither file is part of the Task 1 diff.
+- Per the audit3 prompt's strict ordering rule, Task 2 has not started.
+
+## [2026-04-07 10:00] AUDIT-3-RESEARCH: HVSC playlist import and large-playlist performance research complete
+
+Completed a full performance research pass focused on playlist import and large-playlist interaction scaling to 100k items.
+
+### Research scope
+
+- Inspected all add-to-playlist code paths: HVSC, local, commoserve
+- Traced the browse index fast path and BFS fallback in hvscSourceAdapter/hvscService
+- Analyzed the playlist state model (React state + IndexedDB repository sync)
+- Reviewed the list rendering pipeline (usePlaylistListItems → SelectableActionList)
+- Confirmed no virtualization library is currently in use
+
+### Experiments executed
+
+1. `tests/research/audit3/playlist-scale-bench.mjs` — 13 operations measured at 1k/10k/60k/100k scale
+2. `tests/research/audit3/spread-quadratic-bench.mjs` — O(n²) spread append regression quantified
+3. `tests/research/audit3/songlengths-parse-bench.mjs` — Songlengths.md5 path extraction pipeline validated
+
+### Key measurements (desktop, Node.js v24.11.0)
+
+- Slow I/O BFS at 60k (0.5ms/call simulated): 30,027 ms
+- Songlengths.md5 parse + browse index build + item construction at 60k: 177 ms (184x faster)
+- O(n²) spread at 60k with batch=250: 86 ms desktop, est. 430–690 ms Pixel 4
+- Single bulk set at 60k: 0.3 ms (99% savings)
+- Linear filter at 100k: 35 ms desktop, est. 140 ms Pixel 4
+- IndexedDB commit simulation at 60k: 3,240 ms
+- Browse index construction at 60k: 99 ms
+
+### Bottleneck ranking
+
+1. Browse index activation failure (H1) — 30s fallback path
+2. O(n²) array spread (H2) — quadratic React state updates
+3. IndexedDB commit blocks UI (H4) — 3.2s at 60k
+4. No list virtualization — all items in DOM
+5. Linear filter per keystroke (H5) — 35ms at 100k
+
+### Deliverables produced
+
+- `docs/research/hvsc/performance/audit3/audit3.md` — full research document with 12 HVSC import approaches and 10 large-playlist approaches, all scored
+- `docs/research/hvsc/performance/audit3/prompt.md` — strict execution prompt for implementation agent
+- `PLANS.md` updated with Audit 3 section
+- 3 experiment scripts in `tests/research/audit3/`
+
+### Top 3 HVSC import recommendations
+
+1. HVSC-A01: Fix browse index activation (P0) — eliminate 30s BFS fallback
+2. HVSC-A03: Single bulk playlist state set (P0) — eliminate O(n²) spread
+3. HVSC-A02: Songlengths.md5 path extraction (P0) — bulletproof 184x-faster fallback
+
+### Top 3 large-playlist recommendations
+
+1. LIST-A01: Virtual scrolling with @tanstack/react-virtual (P0)
+2. LIST-A03: Debounce filter input (P1)
+3. LIST-A07: Background playlist hydration (P1)
+
+## [2026-04-06 18:00] ANDROID-PILOT-BLOCKER-003: Perfetto stream capture fix landed; Pixel 4 pilot still blocked in playlist setup
+
+Repaired the Android runner's invalid Perfetto file path assumption, then ran a real-device pilot to validate the full baseline path.
+
+What changed:
+
+- Updated `scripts/run-hvsc-android-benchmark.sh` to stream Perfetto traces over stdout into `perfetto/hvsc-baseline.pftrace` instead of attempting to write and later pull an on-device trace file that the Pixel 4 could not create.
+- Added a guard so the runner now fails immediately if the local Perfetto trace file was not written.
+- Added a regression contract in `tests/unit/ci/perfettoPipelineContracts.test.ts` that locks the new stdout-based Perfetto capture path and prevents the old `adb pull "$PERFETTO_REMOTE_PATH"` flow from returning.
+
+Validation executed:
+
+- Targeted regressions: passed
+  - `tests/unit/ci/perfettoPipelineContracts.test.ts`
+- `bash -n scripts/run-hvsc-android-benchmark.sh`: passed
+- `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 497 test files
+  - 5647 tests
+  - 91.14% branch coverage
+
+Pilot execution and observed blocker:
+
+- Pilot run command:
+  - `./scripts/run-hvsc-android-benchmark.sh --loops 1 --warmup 0 --perfetto-duration-sec 1200 --benchmark-run-id 20260406T1730Z-hvsc-android-pilot`
+- Real target selection:
+  - device: `9B081FFAZ001WX` (Pixel 4)
+  - host: `192.168.1.13` resolved from `u64`
+- Result:
+  - Maestro setup flow `perf-hvsc-baseline` failed after `14m 5s`
+  - failure: `Assertion is false: "Items added" is visible`
+  - the run never progressed into the measured flows
+- Artifacts captured before failure:
+  - `smoke/loop-1/c64u-smoke-benchmark-install.json` shows HVSC install completed with `60572` songs ingested on the device during setup
+  - `smoke/loop-1/c64u-smoke-benchmark-browse-query.json` shows browse work was still active during setup, including `/MUSICIANS/D/Demosic` with `windowMs: 2726.1`
+- Remaining blocker details:
+  - `perfetto/perfetto.log` shows the stdout capture connected to the tracing service with `TTL: 1200s`
+  - `perfetto/hvsc-baseline.pftrace` ended up zero bytes in the failed pilot
+  - after the run, `adb devices` returned no attached devices, so the phone disconnected before a clean rerun was possible
+
+Decision:
+
+- Keep the Perfetto runner fix.
+- Do not claim Android baseline closure from `20260406T1730Z-hvsc-android-pilot`.
+- The next required step is to diagnose why large-playlist setup never reaches `Items added` on the Pixel 4 and why the device/trace session collapses before a valid Perfetto artifact is written.
+
+## [2026-04-06 16:15] WEB-NIGHTLY-HONESTY-002: fail fast on unsupported hybrid web nightly evidence
+
+Stopped the web nightly scenarios lane from overstating what it measures.
+
+What changed:
+
+- Added `scripts/hvsc/webPerfEvidence.mjs` to classify web perf runs by evidence quality rather than only by requested inputs.
+- Reclassified the scenario suite in real-archive mode as `hybrid-real-download-fixture-browse-web` because:
+  - `S1` and `S2` attempt the real archive download/ingest path
+  - `S3` through `S11` still run via `installReadyHvscMock` fixture data
+- Updated `scripts/hvsc/webPerfSummary.mjs` so fixture or hybrid web scenario runs now mark `targetEvidence.T1` through `T5` as `unmeasured` with an explicit reason instead of incorrectly returning `pass`.
+- Updated `scripts/hvsc/collect-web-perf.mjs` so `npm run test:perf:nightly` now fails fast for the unsupported hybrid scenario suite and writes an explicit blocker artifact instead of spending 10 minutes timing out inside Playwright.
+- Captured the honest blocker artifact at `ci-artifacts/hvsc-performance/web/web-full-nightly.json` with:
+  - `status: "unsupported"`
+  - `mode: "hybrid-real-download-fixture-browse-web"`
+  - real archive paths recorded
+  - `targetEvidence.T1` through `T5` all `unmeasured`
+
+Validation executed:
+
+- Focused regressions: passed
+  - `tests/unit/scripts/webPerfSummary.test.ts`
+  - `tests/unit/scripts/webPerfEvidence.test.ts`
+- `npm run test:perf:nightly`: exits quickly with the unsupported blocker artifact instead of hanging in `S1`/`S2`
+- `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 497 test files
+  - 5647 tests
+  - 91.14% branch coverage
+
+Decision:
+
+- Keep the honesty fix.
+- Do not claim any web `T1`-`T5` closure from the current nightly scenario artifact.
+- Continue the convergence pass with the real Pixel 4 Android baseline, which remains the next honest target-evidence path.
+
+## [2026-04-06 14:55] HARNESS-ANDROID-SCALE-001: large-playlist Android harness evidence and summary contract
+
+Implemented the Android harness changes needed before honest Pixel 4 closure work can proceed.
+
+What changed:
+
+- Removed the single-track `10_Orbyte.sid` dependency from `.maestro/perf-hvsc-baseline.yaml`.
+  - The baseline flow now stops after HVSC download/ingest readiness and hands large-playlist setup to `.maestro/perf-hvsc-setup-playlist.yaml`.
+- Extended smoke benchmark metadata so the measured Android run can record:
+  - playlist size after add-to-playlist
+  - playlist size at filter and playback-start
+  - explicit feedback evidence for download, ingest, add-to-playlist, filter, and playback-start
+- Changed playlist filter smoke snapshots to emit distinct scenario names:
+  - `playlist-filter-high`
+  - `playlist-filter-low`
+  - `playlist-filter-zero`
+    This avoids overwriting one generic `playlist-filter` artifact per loop.
+- Threaded playback benchmark metadata from the Play page controller into `playback-start` smoke snapshots so Android playback evidence now carries playlist scale.
+- Extended `scripts/hvsc/androidPerfSummary.mjs` to summarize:
+  - `feedbackEvidence`
+  - `targetEvidence.UX1`
+  - `targetEvidence.T6`
+  - playlist-size and query-engine metadata for filter/playback analysis
+- Extended `scripts/hvsc/assert-android-perf-budgets.mjs` so the Android summary contract now reports `UX1` and `T6` in addition to `T1` through `T5`.
+
+Validation executed:
+
+- Focused regressions: passed
+  - `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`
+  - `tests/unit/scripts/androidPerfSummary.test.ts`
+  - `tests/unit/scripts/androidPerfMultiLoop.test.ts`
+  - `tests/unit/scripts/assertAndroidPerfBudgets.test.ts`
+  - `tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx`
+  - `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`
+  - `tests/unit/playbackRouter.test.ts`
+  - `tests/unit/playFiles/useHvscLibrary.test.tsx`
+- `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 496 test files
+  - 5642 tests
+  - 91.15% branch coverage
+
+Environment checks completed before measurement:
+
+- adb device present: `9B081FFAZ001WX` (Pixel 4)
+- preferred real host reachable: `u64`
+- fallback real host `c64u`: unreachable at probe time
+- real web perf archives available locally under `~/.cache/c64commander/hvsc/`
+
+Decision:
+
+- Keep the harness change.
+- Proceed to real Docker web and Pixel 4 baseline measurement with the updated artifact contract.
+
+## [2026-04-06 13:58] Follow-up convergence verification: Add Items chooser and Play import screenshot hygiene
+
+Verified the live tree still matches the already-landed Play import follow-up work.
+
+What changed:
+
+- Re-read `src/components/FileOriginIcon.tsx` and `src/components/itemSelection/ItemSelectionDialog.tsx`.
+- Verified the current chooser still uses the shared `h-8 w-8` icon slot contract for Local, C64U, HVSC, and CommoServe.
+- Re-checked `tests/unit/components/FileOriginIcon.test.tsx` and `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`.
+- Re-checked the README import screenshot references and the current import screenshots under `docs/img/app/play/import/`.
+
+Validation executed:
+
+- Targeted chooser regressions: 21 passed, 0 failed
+  - `tests/unit/components/FileOriginIcon.test.tsx`
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+- Verified `README.md` still references:
+  - `docs/img/app/play/import/01-import-interstitial.png`
+  - `docs/img/app/play/import/02-c64u-file-picker.png`
+  - `docs/img/app/play/import/03-local-file-picker.png`
+  - `docs/img/app/play/import/04-commoserve-search.png`
+  - `docs/img/app/play/import/05-commoserve-results-selected.png`
+- Verified all five referenced screenshot files exist in the repo.
+
+Decision:
+
+- Keep the current chooser implementation.
+- Keep the current Play import screenshots.
+- No UI code change was required.
+- No screenshot regeneration was required.
+
+## [2026-04-06 13:58] Follow-up convergence closure: tracker sync, audit refresh, and remaining-work prompt rewrite
+
+Updated the tracker and HVSC performance docs so they now reflect the live tree instead of the stale 2026-04-05 audit state.
+
+What changed:
+
+- Recorded this pass as `DOC_ONLY` in `PLANS.md`, with the validation scope stated before doc edits.
+- Refreshed `docs/research/hvsc/performance/audit/audit.md` to account for the live implementation state:
+  - web S1-S11 harness is present and evidenced by `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+  - Android runner, summary writer, budget assertion, Perfetto SQL extraction, and Kotlin `Trace` hooks are present in the tree
+  - microbenchmarks and quick/nightly web CI wiring are present in the tree
+  - the remaining gap is honest required-platform closure, not missing scaffolding
+- Replaced `docs/research/hvsc/performance/audit/convergence-prompt.md` so it preserves the closed UI/foundation work and only orders the real remaining execution work.
+- Added a follow-up convergence status block to `PLANS.md` so the current repo state is explicit.
+
+Validation executed:
+
+- Verified the current perf artifact roots exist:
+  - `ci-artifacts/hvsc-performance/web/`
+  - `ci-artifacts/hvsc-performance/android/`
+- Verified the current web summary artifact exists at `ci-artifacts/hvsc-performance/web/web-full-quick.json`.
+- Verified the current Android artifact tree contains committed run directories, raw smoke snapshots, telemetry output, Maestro output, and Perfetto logs.
+- Verified the latest committed Android measurement attempt still records unresolved measurement-flow failures in `ci-artifacts/hvsc-performance/android/v13-benchmark.log`.
+
+Decision:
+
+- Keep this follow-up as `DOC_ONLY`.
+- Do not reopen chooser code or import screenshot regeneration unless the live tree changes.
+- Carry forward only the remaining HVSC execution work that is still evidence-backed open.
+
+## [2026-04-06 14:45] UI/docs follow-up: source chooser alignment and diagnostics analysis screenshot realism
+
+Closed the remaining UI and documentation screenshot follow-up items after the HVSC convergence closeout.
+
+What changed:
+
+- Normalized `FileOriginIcon` to render every source inside a shared outer icon slot.
+  - The CommoServe icon now uses a larger inner glyph while preserving the same outer width as Local, C64U, and HVSC.
+  - This fixes the Add Items interstitial alignment issue across compact, medium, and expanded display profiles.
+- Added regression coverage for the chooser/icon changes in:
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `tests/unit/components/FileOriginIcon.test.tsx`
+- Extended the diagnostics health-history analysis popup so the selected timeline segment now drives a scrollable health-check list beneath the history bar.
+  - Selected timeline bands receive an explicit highlight border.
+  - The detail list shows timestamp, overall status, percentile latency, and expandable per-probe details.
+- Added diagnostics regression coverage in:
+  - `tests/unit/components/diagnostics/HealthHistoryPopup.test.tsx`
+  - `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`
+- Updated `playwright/screenshots.spec.ts` so the history analysis screenshot explicitly selects a non-healthy timeline band and expands a detail row before capture.
+
+Screenshot regeneration executed:
+
+- Targeted diagnostics subset:
+  - `docs/img/app/diagnostics/**`
+- Full screenshot corpus:
+  - `npm run screenshots`
+  - 21 screenshot tests passed
+  - 148 PNGs scanned, 148 kept, 0 reverted, 0 deleted
+
+Validation executed:
+
+- Focused unit regressions:
+  - `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`: passed
+  - `tests/unit/components/diagnostics/HealthHistoryPopup.test.tsx`: passed
+  - `tests/unit/components/FileOriginIcon.test.tsx`: passed
+  - `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`: passed
+- `npm run lint`: passed
+  - with 3 non-fatal warnings in generated `c64scope/coverage/*` files
+- `npm run build`: passed
+- `npm run test:coverage`: passed
+  - 496 test files
+  - 5639 tests
+  - 91.17% branch coverage
+
+Decision:
+
+- Keep the icon-slot normalization and diagnostics history-detail extension.
+- The documentation screenshots now reflect the denser diagnostics seed data and the selected-range health-check timeline.
+
+## [2026-04-06 13:35] HVSC convergence closeout: repo-wide CI green
+
+Closed the remaining repo-wide blockers after the playlist convergence architecture fix.
+
+What changed:
+
+- Fixed a real delayed-hydration regression in `usePlaybackPersistence.ts`.
+  - Playlist restore now retries when the storage key changes from `c64u_playlist:v1:default` to the resolved device key.
+  - Persistence/session effects now wait for the restore revision associated with the active playlist key.
+- Added a regression test in `tests/unit/playFiles/usePlaybackPersistence.test.tsx` that proves device-specific playlist restore still works when the device id resolves after the page mounts.
+- Updated stale repo-wide test expectations:
+  - `tests/unit/maestro/launchAndWaitFlow.test.ts`
+  - `tests/unit/lib/smoke/smokeMode.test.ts`
+  - `playwright/homeInteractivity.spec.ts`
+  - `playwright/layoutOverflow.spec.ts`
+- Ran Prettier on the files that were blocking repo-wide lint.
+
+Validation executed:
+
+- `npm run lint`: passed (with 3 non-fatal warnings in generated `c64scope/coverage/*` files)
+- `npm run test:coverage`: passed
+  - 495 test files
+  - 5635 tests
+  - 91.19% branch coverage
+- `npm run test:ci`: passed end-to-end
+  - screenshots
+  - Playwright E2E
+  - evidence validation
+  - trace comparison
+  - production build
+
+Decision:
+
+- The HVSC playlist convergence pass is complete.
+- CI is green.
+
+## [2026-04-06 10:20] HVSC playlist convergence: commit barrier, ready-state truth, and post-fix validation
+
+Implemented the playlist correctness convergence pass requested for the HVSC import and large-playlist flow.
+
+What changed:
+
+- Added `src/pages/playFiles/playlistRepositorySync.ts` as the shared repository commit barrier and ready-state store.
+  - Tracks `IDLE`, `SCANNING`, `INGESTING`, `COMMITTING`, `READY`, and `ERROR`.
+  - Deduplicates in-flight snapshot commits by content hash.
+  - Validates repository write completion with `getPlaylistItemCount()` before declaring readiness.
+- Extended the playlist repository contract with `getPlaylistItemCount()` and implemented it in both IndexedDB and localStorage repositories.
+- Removed the old async full-playlist repository mirroring from `useQueryFilteredPlaylist.ts`.
+  - Repository-backed filtering now activates only after a committed ready snapshot is visible.
+  - Until then, filtering stays in-memory instead of waiting on background rewrites.
+- Rewired `usePlaybackPersistence.ts` to use the shared commit barrier and to avoid background repository churn while imports are actively scanning, ingesting, or committing.
+- Upgraded `addFileSelections.ts` to a hard completion barrier.
+  - Import success now waits for repository commit and read-back validation.
+  - The UI transitions through `SCANNING -> INGESTING -> COMMITTING -> READY`.
+  - Failures now mark the repository sync state as `ERROR` instead of silently continuing.
+- Updated shared list behavior so `View all` can be shown for authoritative non-empty lists even when the preview itself does not overflow.
+  - Applied to both `PlaylistPanel.tsx` and `HomeDiskManager.tsx`.
+
+Regression coverage added or updated:
+
+- `tests/unit/playFiles/playlistRepositorySync.test.ts`
+- `tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx`
+- `tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx`
+- `tests/unit/playFiles/usePlaybackPersistence.repositorySession.test.tsx`
+- `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`
+- `tests/unit/pages/playFiles/handlers/addFileSelectionsArchive.test.ts`
+- `tests/unit/pages/playFiles/handlers/addFileSelectionsConfig.test.ts`
+- `tests/unit/components/lists/SelectableActionList.test.tsx`
+
+Validation executed:
+
+- Focused regression run: 95 passed, 0 failed.
+- `npm run build`: passed.
+- `npm run lint`: blocked before ESLint by pre-existing unrelated Prettier failures in untouched files.
+- `npm run test:coverage`: rerun after fixes; no remaining playlist-convergence regressions, but the suite still fails on unrelated existing tests:
+  - `tests/unit/maestro/launchAndWaitFlow.test.ts`
+  - `tests/unit/lib/smoke/smokeMode.test.ts`
+
+Focused coverage note:
+
+- Focused coverage over the touched playlist regression surface passed with 95 tests, 0 failures.
+- The repo does not currently expose diff-only branch coverage for exactly the changed lines, so the only repo-wide coverage gate remains the full `npm run test:coverage` run above.
+
+Post-fix web perf remeasurement:
+
+- Artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+- Command: `npm run test:perf:quick`
+- Budget assertion command: `npm run test:perf:assert:web` (observation-only; no web secondary thresholds configured)
+- Fresh scenario timings from the quick fixture run:
+  - S6 add to playlist: `1613.72 ms` wall clock, `playlist:add-batch` p95 `17.2 ms`, `playlist:repo-sync` p95 `21.1 ms`
+  - S7 render playlist: `6.75 ms` wall clock
+  - S8 filter high match: `545.53 ms` wall clock, `playlist:filter` p95 `17.2 ms`
+  - S9 filter zero match: `544.06 ms` wall clock, `playlist:filter` p95 `16.6 ms`
+  - S10 filter low match: `550.23 ms` wall clock, `playlist:filter` p95 `13.9 ms`
+- Target evidence from the same run:
+  - T2 ingest: `228.4 ms` pass
+  - T3 browse: `334.64 ms` pass
+  - T4 filter: `550.23 ms` pass
+
+Decision:
+
+- Keep this convergence pass.
+- The original correctness regression is fixed at the architecture level: completion now means repository-visible truth, not eventual background consistency.
+- Remaining repo-wide lint and full-coverage blockers are unrelated pre-existing failures outside the playlist convergence surface.
+
+## [2026-04-06 00:20] P1.6 Close microbenchmark gap — already complete
+
+All three completion gates verified satisfied without additional changes:
+
+1. `package.json` contains `test:bench` (line 48): `vitest bench tests/benchmarks/hvscHotPaths.bench.ts --project unit-node --run`
+2. Benchmark file exists: `tests/benchmarks/hvscHotPaths.bench.ts` with 4 benchmarks covering browse index build (50k entries), browse index query (100k entries), deletion list parsing (20k entries), archive name hashing (5k names)
+3. CI invokes them: `.github/workflows/android.yaml:151` and `.github/workflows/perf-nightly.yaml:46` both run `npm run test:bench`
+
+No code changes required.
+
+## [2026-04-06 00:15] P1.5 Close Perfetto pipeline gap
+
+Upgraded Perfetto from capture-only to a structured metric extraction pipeline.
+
+Files changed:
+
+- `ci/telemetry/android/perfetto-hvsc.cfg`: Buffer 20 MiB → 64 MiB. Added `linux.ftrace` data source with `sched/sched_switch`, `sched/sched_waking`, `power/cpu_frequency`, `power/suspend_resume` events. Added atrace categories `view`, `gfx`, `am`, `dalvik` and `atrace_apps: "uk.gleissner.c64commander"` for app-level trace sections.
+- `android/app/src/main/java/uk/gleissner/c64commander/hvsc/HvscArchiveExtractor.kt`: Added `import android.os.Trace`. Instrumented `probe()`, `extract()`, `extractSevenZipToRawTree()`, `extractZipToRawTree()`, `materializeRelevantFiles()` with `Trace.beginSection("hvsc:...")`/`Trace.endSection()` in try/finally blocks.
+- `android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt`: Added `import android.os.Trace`. Instrumented `ingestHvsc()`, `flushSongBatch()`, `applyDeletionRows()` with `Trace.beginSection("hvsc:...")`/`Trace.endSection()`.
+- `ci/telemetry/android/perfetto-sql/`: Created 5 SQL extraction queries: `cpu_usage.sql`, `memory_rss.sql`, `app_trace_sections.sql`, `frame_jank.sql`, `scheduling_latency.sql`. All target the c64commander process.
+- `scripts/hvsc/extract-perfetto-metrics.mjs`: New. Runs SQL queries via `trace_processor_shell` against a `.pftrace` file. Outputs structured JSON. Gracefully degrades if processor is absent (`no-processor` status) or trace is missing (`no-trace` status).
+- `scripts/run-hvsc-android-benchmark.sh`: Wired extraction after trace pull. Added `--perfetto-metrics` parameter to summary writer invocation.
+- `scripts/hvsc/write-android-perf-summary.mjs`: Added `--perfetto-metrics` parameter. Summary JSON now includes `perfettoMetrics` path and `perfettoExtraction` object with status, app trace sections, and frame jank data.
+- `scripts/hvsc/androidPerfSummary.mjs`: Updated `summarizePerfettoArtifacts` extraction mode from `telemetry-plus-artifact-metadata` to `trace-processor-sql` with `sqlQueriesAvailable: true`, `jankMetricsAvailable: true`.
+
+Tests added:
+
+- `tests/unit/ci/perfettoPipelineContracts.test.ts`: 11 tests covering Perfetto config richness, buffer size, SQL query completeness, extraction script structure, runner wiring, summary integration, and Kotlin trace instrumentation (begin/end pairing).
+
+Tests fixed:
+
+- `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`: Updated pre-existing test to match current Maestro flow (removed stale `point:` assertions).
+
+Validation: 24 targeted tests pass (17 contract + 7 summary tests). All existing androidPerfSummary and budget assertion tests unchanged and passing.
+
+## [2026-04-06 00:00] P1.4 Close instrumentation coverage gap
+
+All 5 previously-missing instrumentation scopes confirmed landed with proper begin/end pairing and regression test coverage:
+
+- `browse:render` in `src/pages/playFiles/hooks/usePlaylistListItems.tsx` — tested in `usePlaylistListItems.test.tsx`
+- `playlist:add-batch` in `src/pages/playFiles/handlers/addFileSelections.ts` — tested in `addFileSelectionsBatching.test.ts`
+- `playlist:filter` in `src/pages/playFiles/hooks/useQueryFilteredPlaylist.ts` — tested in `webPerfSummary.test.ts`, `androidPerfMultiLoop.test.ts`, `androidPerfSummary.test.ts`
+- `playlist:repo-sync` in `src/pages/playFiles/hooks/useQueryFilteredPlaylist.ts` — tested in `useQueryFilteredPlaylist.test.tsx`
+- `playback:first-audio` in `src/lib/playback/playbackRouter.ts` — tested in `webPerfSummary.test.ts`, `androidPerfMultiLoop.test.ts`, `androidPerfSummary.test.ts`
+
+No code changes required — scopes were already implemented by prior work. Verified all scopes propagate to Android bundled assets.
+
+## [2026-04-05 23:30] P1.3 Close Android benchmark harness gap
+
+Extended the Android benchmark runner to a closed multi-loop measurement system with warm-up discard, per-loop smoke snapshot isolation, and budget assertion.
+
+Files changed:
+
+- `scripts/run-hvsc-android-benchmark.sh`: Added `--loops` (default 3) and `--warmup` (default 1). Runner now executes `WARMUP + LOOPS` total Maestro flow iterations, clears smoke snapshots between iterations, stores per-loop artifacts in separate subdirectories (`warmup-N` / `loop-N`), and passes only measured (non-warmup) smoke files to the summary writer.
+- `scripts/hvsc/write-android-perf-summary.mjs`: Added `--smoke-files` (comma-separated file list), `--loops`, and `--warmup` parameters. Supports both legacy `--smoke-dir` and new `--smoke-files` input. Summary JSON now includes `loops` and `warmup` metadata.
+- `scripts/hvsc/assert-android-perf-budgets.mjs`: New script. Reads Android summary JSON, checks T1-T5 against budget thresholds, supports both observation-only (default) and enforced modes (`HVSC_ANDROID_BUDGET_ENFORCE=1`). Budget thresholds configurable via environment variables.
+- `package.json`: Added `test:perf:assert:android` script.
+
+Tests added:
+
+- `tests/unit/scripts/androidPerfMultiLoop.test.ts`: 4 tests covering multi-loop aggregation, target evidence from multiple scenarios, budget failure detection, and warmup exclusion.
+- `tests/unit/scripts/assertAndroidPerfBudgets.test.ts`: 4 tests covering observation-only mode, enforced pass, enforced fail, unmeasured rejection, and loop metadata display.
+- `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`: 2 new tests verifying runner multi-loop parameters and budget assertion script existence.
+
+Validation:
+
+- 22 targeted tests pass (0 failures)
+- `npm run build`: passed
+- Prettier-compliant after format pass
+
+Decision: Keep. The Android runner is now a closed multi-loop measurement system. Budget-scale evidence capture deferred to P2.1.
+
+## [2026-04-05 09:00] P0.1 Reconcile tree with audit and top-level trackers
+
+Reconciled the full HVSC performance asset inventory against `docs/research/hvsc/performance/audit/audit.md`.
+
+Worktree state: clean (no dirty files).
+
+Previously undocumented assets now recorded in `PLANS.md`:
+
+- `.maestro/perf-hvsc-baseline.yaml` (Android Maestro flow tagged `hvsc-perf`)
+- `scripts/run-hvsc-android-benchmark.sh` (Android benchmark orchestrator)
+- `ci/telemetry/android/perfetto-hvsc.cfg` (Perfetto capture config)
+- Smoke benchmark snapshot plumbing in `useHvscLibrary.ts`, `hvscService.ts`, `playbackRouter.ts`
+- All 5 perf-related test files now listed
+- All 4 research documents now listed
+
+Added to `PLANS.md`:
+
+- Full asset inventory table (16 files across runtime, web, Android, CI, tests, artifacts, and research)
+- Explicit target status matrix showing all T1-T6 as `UNMEASURED`
+- Convergence phase status table showing P0.1 `DONE`, all others `NOT STARTED`
+- Honest description of the secondary web baseline lane's narrow scope
+- Listed the 5 missing instrumentation scopes from audit Gap 5
+
+Audit gaps confirmed as open:
+
+- Gap 1: S1-S11 benchmark matrix not implemented
+- Gap 2: Web harness does not benchmark download or ingest
+- Gap 3: Android harness is scaffolding, not a closed measurement system
+- Gap 4: Perfetto support is thin (no sched, no FrameTimeline, no SQL extraction)
+- Gap 5: Five instrumentation scopes missing
+- Gap 6: CI perf implementation is narrower than convergence prompt requires
+- Gap 7: No bottleneck B1-B5 has been performance-optimized
+
+Decision: P0.1 gate is satisfied. Proceeding to P0.2 artifact directory normalization.
+
+## [2026-04-05 09:15] P0.2 Normalize artifact directory strategy
+
+Implemented one canonical perf artifact layout under `ci-artifacts/hvsc-performance/` with `web/`, `android/`, and `bench/` subdirectories.
+
+Files changed:
+
+- `package.json`: `test:perf:quick` and `test:perf:nightly` output to `web/` subdirectory
+- `scripts/hvsc/collect-web-perf.mjs`: default output path → `ci-artifacts/hvsc-performance/web/`
+- `scripts/hvsc/assert-web-perf-budgets.mjs`: default file path → `ci-artifacts/hvsc-performance/web/`
+- `scripts/run-hvsc-android-benchmark.sh`: default output root → `ci-artifacts/hvsc-performance/android/`
+- `.github/workflows/perf-nightly.yaml`: summary file env var updated to `web/` path
+- Moved existing `web-secondary-quick.json` into `web/` subdirectory
+
+`ci-artifacts/` is gitignored so the directory structure is ephemeral. Scripts ensure dirs at runtime. `.github/workflows/android.yaml` upload glob covers all subdirectories.
+
+Decision: P0.2 gate is satisfied. Proceeding to P1.1 benchmark matrix closure.
+
+## [2026-04-05 09:30] P1.1 Close benchmark matrix gap S1-S11
+
+Created `playwright/hvscPerfScenarios.spec.ts` — a comprehensive Playwright spec that implements all 11 performance scenarios (S1–S11) for the web platform.
+
+File added:
+
+- `playwright/hvscPerfScenarios.spec.ts` (330 lines): 11 individual test cases, one per scenario
+
+Scenarios implemented:
+
+| Scenario | Test name                           | What it exercises                                                          |
+| -------- | ----------------------------------- | -------------------------------------------------------------------------- |
+| S1       | `S1 download HVSC from mock server` | Real download path (no `__hvscMock__`), clicks `#hvsc-download`            |
+| S2       | `S2 ingest HVSC`                    | Captures `ingest:*` scoped timings from download+ingest flow               |
+| S3       | `S3 open HVSC source browser`       | Opens add-items dialog → selects HVSC → waits for `source-entry-row`       |
+| S4       | `S4 traverse down into folders`     | Navigates into DEMOS, 0-9, MUSICIANS via `source-entry-row` clicks         |
+| S5       | `S5 traverse back up to root`       | Uses back/navigate-up button to return to HVSC root                        |
+| S6       | `S6 add songs to playlist`          | Selects all songs via `Select *` labels, confirms with `add-items-confirm` |
+| S7       | `S7 render playlist`                | Waits for `playlist-item` rows to appear                                   |
+| S8       | `S8 filter playlist high-match`     | Types "Orbyte" into `list-filter-input`                                    |
+| S9       | `S9 filter playlist zero-match`     | Types "xyzzy_no_match_123" into `list-filter-input`                        |
+| S10      | `S10 filter playlist low-match`     | Types "Commando" into `list-filter-input`                                  |
+| S11      | `S11 start playback from playlist`  | Clicks Play on first `playlist-item`, waits for SID play request           |
+
+Architecture decisions:
+
+- S1-S2 run without `__hvscMock__` injection to exercise the real download/ingest code path against the mock HVSC HTTP server. On web with fixtures this proves mechanism only (3 songs).
+- S3-S11 use `installReadyHvscMock()` (pre-installed state) for deterministic HVSC state.
+- Each scenario records both wall-clock timing and any captured perf scope timings.
+- Results are written to `HVSC_PERF_SCENARIOS_OUTPUT_FILE` as structured JSON.
+- `playlist:filter` perf scope not yet instrumented — S8-S10 record wall-clock only. Tracked for P1.4.
+
+Platform coverage matrix added to PLANS.md documenting which scenarios are actionable per platform and what gaps remain (real-archive web blocked by `MAX_BRIDGE_READ_BYTES`, Android S4/S5/S7-S10 not covered by Maestro, missing perf scopes P1.4).
+
+Validation: spec compiles clean (0 TS errors), Prettier-compliant.
+
+## [2026-04-05 20:30] P1.1 Android scenario surface closed and validated
+
+Extended the Android perf surface so the Maestro suite now has explicit scenario coverage for the benchmark matrix entries that were previously missing.
+
+What changed:
+
+- Added smoke benchmark snapshots for:
+  - `playlist-add`
+  - `playlist-render`
+  - `playlist-filter`
+- Added Maestro flows:
+  - `.maestro/perf-hvsc-browse-traversal.yaml`
+  - `.maestro/perf-hvsc-playlist-build.yaml`
+  - `.maestro/perf-hvsc-filter-high.yaml`
+  - `.maestro/perf-hvsc-filter-zero.yaml`
+  - `.maestro/perf-hvsc-filter-low.yaml`
+  - `.maestro/perf-hvsc-playback.yaml`
+- Added regression coverage in:
+  - `tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts`
+  - `tests/unit/pages/playFiles/usePlaylistListItems.test.tsx`
+  - `tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx`
+  - `tests/unit/ci/androidMaestroWorkflowContracts.test.ts`
+
+Validation results:
+
+- Focused test run: 18 passed, 0 failed
+- `npm run build`: passed
+- `npm run lint`: failed before ESLint due pre-existing unrelated Prettier debt in 13 files outside this cycle
+- `npm run test:coverage`: failed in existing unrelated smoke-mode suites:
+  - `tests/unit/smoke/smokeMode.test.ts`
+  - `tests/unit/lib/smoke/smokeMode.test.ts`
+
+Decision:
+
+- Keep this cycle. It closes the scripted Android scenario gap without introducing new targeted test failures.
+- Proceeding sequentially to P1.2: close the real-download and real-ingest web harness gap.
+
+## [2026-04-05 22:15] P1.2 Web harness real download and ingest closed
+
+Fixed the S1 download scenario to reliably exercise the HVSC download path on web. Previously S1 used `locator.isVisible()` which is an instant snapshot check; replaced with `expect(locator).toBeVisible()` which retries until the HVSC controls render (gated by feature flag async load).
+
+Also fixed the web perf summary evidence builder to correctly treat negative wallClockMs values (-1 = unmeasured) as `unmeasured` rather than `pass`.
+
+Files changed:
+
+- `playwright/hvscPerfScenarios.spec.ts`: S1 now waits for `hvsc-controls` via `expect().toBeVisible({ timeout: 30_000 })`
+- `scripts/hvsc/webPerfSummary.mjs`: `toFiniteNumbers` rejects negative values; `asBudgetResult` rejects negative actualMs
+- `tests/unit/scripts/webPerfSummary.test.ts`: regression test for negative wall clock → unmeasured
+
+Validation:
+
+- 3-loop fixture baseline captured:
+  - S1 download p95: `1254 ms` (tiny fixture archive, not budget-scale)
+  - S2 ingest p95: `381 ms` (3 songs, not budget-scale)
+  - T3 browse p95: `535 ms`
+  - T4 filter p95: `607 ms`
+  - T5 playback p95: `247 ms`
+- All 11 S1-S11 scenarios pass with timing evidence
+- Artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
+- `npm run build`: passed
+- Unit tests: 489 files pass, 2 pre-existing failures (smokeMode) unchanged
+- `webPerfSummary.test.ts`: 3/3 pass
+
+Command to reproduce: `PLAYWRIGHT_DEVICES=web PLAYWRIGHT_SKIP_BUILD=1 PLAYWRIGHT_REUSE_SERVER=1 CI=true node scripts/hvsc/collect-web-perf.mjs --suite=scenarios --loops=3 --out=ci-artifacts/hvsc-performance/web/web-full-quick.json`
+
+Decision: Keep. S1/S2 now exercise the real download+ingest code paths on web. Fixture-mode metrics are mechanism proof only; budget-scale evidence requires Android.
+
+## [2026-04-05 07:50] Phase 0 environment and infrastructure gap scan
+
+Started the HVSC performance convergence pass and recorded the execution prerequisites before code changes.
+
+Measured environment facts:
+
+- Cache directory `/home/chris/.cache/c64commander/hvsc` contains:
+  - `HVSC_84-all-of-them.7z`
+  - `HVSC_Update_84.7z`
+- Real hardware probe:
+  - `http://u64/v1/info` responded successfully with `Ultimate 64 Elite`, firmware `3.14d`
+- Device tooling reported:
+  - Android device `9B081FFAZ001WX`
+  - model `Pixel 4`
+  - platform `android`
+  - version `16`
+
+Measured repository gaps:
+
+- no source-level `hvsc:perf:*` timing implementation in `src/lib/hvsc/**`
+- no `test:bench`, `test:perf`, or `test:perf:nightly` scripts in `package.json`
+- no `playwright/perf/` directory
+- no `test/benchmarks/` directory
+- no `perf-benchmark-quick` job in `.github/workflows/android.yaml`
+- no `.github/workflows/perf-nightly.yaml`
+
+Decision:
+
+- The first implementation cycle will build the measurement foundation instead of attempting an optimization guess.
+- Immediate scope: HVSC perf ring buffer, diagnostics/trace export integration, first source-level instrumentation points, and a benchmark-capable mock server mode.
+
+## [2026-04-05 08:10] Phase 0 measurement foundation implemented
+
+Implemented the first benchmark-grade measurement layer for the HVSC workflow.
+
+What changed:
+
+- Added `src/lib/hvsc/hvscPerformance.ts` with an exportable ring buffer, scope helpers, and `performance.mark()` / `performance.measure()` integration.
+- Exposed HVSC perf timings through `src/lib/tracing/traceBridge.ts` and included them in diagnostics exports from `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`.
+- Instrumented first high-value runtime phases:
+  - `browse:load-snapshot`
+  - `browse:query`
+  - `playback:load-sid`
+  - `download`
+  - `download:checksum`
+  - `ingest:extract`
+  - `ingest:songlengths`
+  - `ingest:index-build`
+- Extended `playwright/mockHvscServer.ts` to support disk-backed archives, throttled transfer, `HEAD`, and request timing logs.
+- Added focused regression coverage for the new timing and mock-server behavior.
+- Added the first secondary-web perf harness and CI entry points:
+  - `playwright/hvscPerf.spec.ts`
+  - `scripts/hvsc/collect-web-perf.mjs`
+  - `scripts/hvsc/assert-web-perf-budgets.mjs`
+  - `package.json` perf scripts
+  - `.github/workflows/android.yaml` quick perf job
+  - `.github/workflows/perf-nightly.yaml`
+
+Decision:
+
+- Keep this cycle. It does not close any target budget yet, but it replaces the earlier instrumentation gap with runnable capture paths and exportable evidence.
+
+## [2026-04-05 08:22] Validation complete and first secondary web quick baseline captured
+
+Validated the new measurement foundation and recorded the first quick-run baseline on the secondary web lane.
+
+Validation run summary:
+
+- `npm run lint`: passed for the changed code; only pre-existing warnings remained under `c64scope/coverage/*.js`
+- `npm run build`: passed after repairing syntax/helper regressions introduced while instrumenting `src/lib/hvsc/hvscDownload.ts` and `playwright/mockHvscServer.ts`
+- `npm run test:coverage`: completed with the normal coverage report output
+- `npm run test:perf:quick`: passed after fixing the Playwright project selection, enabling `PLAYWRIGHT_DEVICES=web`, and switching the perf spec to the existing HVSC source-selection helper
+- `npm run test:perf:assert:web`: passed after correcting the default summary path; result is observation-only because no web perf budget environment variables are configured
+
+Measured artifact:
+
+- Summary file: `/home/chris/dev/c64/c64commander/ci-artifacts/hvsc-performance/web-secondary-quick.json`
+- Scenario: `web-browse-playback-secondary`
+- Mode: `fixture-secondary-web`
+- Loops: `3`
+- Throttle: `5242880 B/s` (5 MiB/s)
+
+Measured p95 values from the quick lane:
+
+- `browseLoadSnapshotMs`: `3.6 ms`
+- `browseInitialQueryMs`: `118.1 ms`
+- `browseSearchQueryMs`: `13.2 ms`
+- `playbackLoadSidMs`: `0.2 ms`
+
+Interpretation:
+
+- The secondary web browse/playback lane is working and exporting timings correctly.
+- This is not yet evidence for `T1`-`T6` because it does not measure real-device install, ingest, large-playlist filter, or end-to-end playback start.
+
+Decision:
+
+- Keep the new perf infrastructure and quick lane.
+- Next step is real Pixel 4 + real U64 baseline capture with Maestro + Perfetto rather than additional secondary web plumbing.
+
+---
+
 # Playback Configuration System - Execution Worklog
 
 ## 2026-04-04T10:05:00Z - HVSC decompression convergence pass started

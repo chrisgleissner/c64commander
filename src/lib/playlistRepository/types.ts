@@ -83,6 +83,11 @@ export type PlaylistQueryResult = {
   totalMatchCount: number;
 };
 
+export type SerializedPlaylistSnapshot = {
+  tracks: TrackRecord[];
+  playlistItems: PlaylistItemRecord[];
+};
+
 export type RandomPlaySession = {
   playlistId: string;
   seed: number;

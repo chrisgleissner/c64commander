@@ -8,11 +8,35 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const mediaIndexMocks = vi.hoisted(() => ({
+  load: vi.fn(async () => undefined),
+  loadBrowseSnapshot: vi.fn(async () => ({
+    schemaVersion: 2,
+    updatedAt: new Date().toISOString(),
+    songs: {},
+    folders: { "/": { path: "/", folders: [], songs: [] } },
+  })),
+  clearBrowseSnapshot: vi.fn(),
+  getAll: vi.fn(() => []),
+  scan: vi.fn(async () => undefined),
+  queryFolderPage: vi.fn(() => ({
+    path: "/",
+    folders: [],
+    songs: [],
+    totalFolders: 0,
+    totalSongs: 0,
+    offset: 0,
+    limit: 200,
+    query: "",
+  })),
+}));
+
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
     isNativePlatform: vi.fn(() => false),
     isPluginAvailable: vi.fn(() => false),
   },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
@@ -61,23 +85,17 @@ vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
     ingestionError: null,
     installedVersion: 84,
   })),
+  resetHvscLibraryData: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscMediaIndex", () => ({
   createHvscMediaIndex: vi.fn(() => ({
-    load: vi.fn(async () => undefined),
-    getAll: vi.fn(() => []),
-    scan: vi.fn(async () => undefined),
-    queryFolderPage: vi.fn(() => ({
-      path: "/",
-      folders: [],
-      songs: [],
-      totalFolders: 0,
-      totalSongs: 0,
-      offset: 0,
-      limit: 200,
-      query: "",
-    })),
+    load: mediaIndexMocks.load,
+    loadBrowseSnapshot: mediaIndexMocks.loadBrowseSnapshot,
+    clearBrowseSnapshot: mediaIndexMocks.clearBrowseSnapshot,
+    getAll: mediaIndexMocks.getAll,
+    scan: mediaIndexMocks.scan,
+    queryFolderPage: mediaIndexMocks.queryFolderPage,
   })),
 }));
 
@@ -100,7 +118,7 @@ vi.mock("@/lib/sourceNavigation/paths", () => ({
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
   loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: new Date().toISOString(),
     songs: {},
     folders: { "/": { path: "/", folders: [], songs: [] } },
@@ -112,9 +130,31 @@ vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
   })),
 }));
 
+const { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } = vi.hoisted(() => ({
+  beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
+    scope,
+    name: `hvsc:perf:${scope}`,
+    startMarkName: `hvsc:perf:${scope}:start`,
+    startedAt: "2026-04-05T07:50:46.000Z",
+    startedAtMs: 0,
+    metadata: metadata ?? null,
+  })),
+  endHvscPerfScope: vi.fn(),
+  runWithHvscPerfScope: vi.fn(async (_scope: string, run: () => unknown) => await run()),
+}));
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  beginHvscPerfScope,
+  endHvscPerfScope,
+  runWithHvscPerfScope,
+}));
+
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
+}));
+
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  recordSmokeBenchmarkSnapshot: vi.fn(),
 }));
 
 import { Capacitor } from "@capacitor/core";
@@ -133,18 +173,43 @@ import {
   getHvscDurationByMd5Seconds,
   getHvscDurationsByMd5Seconds,
   resolveHvscSonglength,
+  resetHvscLibraryData,
+  streamHvscSongsRecursive,
+  ensureHvscMetadataHydration,
   __test__,
 } from "@/lib/hvsc/hvscService";
 import {
   getHvscStatus as getRuntimeStatus,
   getHvscFolderListing as getRuntimeFolderListing,
+  resetHvscLibraryData as runtimeResetHvscLibraryData,
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 
 describe("hvscService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mediaIndexMocks.load.mockResolvedValue(undefined);
+    mediaIndexMocks.loadBrowseSnapshot.mockResolvedValue({
+      schemaVersion: 2,
+      updatedAt: new Date().toISOString(),
+      songs: {},
+      folders: { "/": { path: "/", folders: [], songs: [] } },
+    });
+    mediaIndexMocks.clearBrowseSnapshot.mockReset();
+    mediaIndexMocks.getAll.mockReturnValue([]);
+    mediaIndexMocks.scan.mockResolvedValue(undefined);
+    mediaIndexMocks.queryFolderPage.mockReturnValue({
+      path: "/",
+      folders: [],
+      songs: [],
+      totalFolders: 0,
+      totalSongs: 0,
+      offset: 0,
+      limit: 200,
+      query: "",
+    });
     // Remove mock bridge if present
     delete (window as any).__hvscMock__;
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
@@ -207,6 +272,11 @@ describe("hvscService", () => {
     it("getHvscSong delegates to runtime", async () => {
       const song = await getHvscSong({ virtualPath: "/test.sid" });
       expect(song.fileName).toBe("test.sid");
+      expect(runWithHvscPerfScope).toHaveBeenCalledWith(
+        "playback:load-sid",
+        expect.any(Function),
+        expect.objectContaining({ virtualPath: "/test.sid" }),
+      );
     });
 
     it("getHvscDurationByMd5Seconds delegates to runtime", async () => {
@@ -252,6 +322,17 @@ describe("hvscService", () => {
       expect(getRuntimeFolderListing).not.toHaveBeenCalled();
       expect(result).toEqual({ path: "/", folders: [], songs: [] });
     });
+
+    it("skips a full cold-library scan before falling back to runtime listing", async () => {
+      vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+      vi.mocked(loadHvscBrowseIndexSnapshot).mockResolvedValueOnce(null);
+
+      const result = await getHvscFolderListing("/");
+
+      expect(mediaIndexMocks.scan).not.toHaveBeenCalled();
+      expect(getRuntimeFolderListing).toHaveBeenCalledWith("/");
+      expect(result).toEqual({ path: "/", folders: [], songs: [] });
+    });
   });
 
   describe("paged listing", () => {
@@ -264,6 +345,17 @@ describe("hvscService", () => {
       expect(page.limit).toBeGreaterThanOrEqual(10);
       expect(page.offset).toBe(0);
       expect(page.totalSongs).toBe(0);
+      expect(beginHvscPerfScope).toHaveBeenCalledWith(
+        "browse:query",
+        expect.objectContaining({ path: "/", limit: 10, offset: 0 }),
+      );
+      expect(endHvscPerfScope).toHaveBeenCalled();
+      expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scenario: "browse-query",
+          metadata: expect.objectContaining({ path: "/", limit: 10, offset: 0 }),
+        }),
+      );
     });
 
     it("maps paged results into compatibility listing", async () => {
@@ -296,6 +388,7 @@ describe("hvscService", () => {
         durationSeconds: 42,
         durations: [42, 55],
         subsongCount: 2,
+        strategy: "md5",
       });
 
       const result = await getHvscDurationsByMd5Seconds("abc123");
@@ -307,6 +400,7 @@ describe("hvscService", () => {
         durationSeconds: 42,
         durations: null,
         subsongCount: null,
+        strategy: "md5",
       });
 
       const result = await getHvscDurationsByMd5Seconds("abc123");
@@ -318,6 +412,7 @@ describe("hvscService", () => {
         durationSeconds: null,
         durations: null,
         subsongCount: null,
+        strategy: "not-found",
       });
 
       const result = await getHvscDurationsByMd5Seconds("abc123");
@@ -339,6 +434,7 @@ describe("hvscService", () => {
         durationSeconds: 42,
         durations: null,
         subsongCount: null,
+        strategy: "full-path",
       });
 
       const result = await resolveHvscSonglength({ virtualPath: "/test.sid" });
@@ -466,13 +562,14 @@ describe("hvscService", () => {
   });
 
   describe("ensureHvscIndexReady", () => {
-    it("scans index when browse snapshot is null (line 153)", async () => {
-      vi.mocked(loadHvscBrowseIndexSnapshot).mockResolvedValueOnce(null);
+    it("falls through to runtime listing when browse snapshot is null", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce(null);
       const page = await getHvscFolderListingPaged({ path: "/" });
       expect(page.totalSongs).toBe(0);
+      expect(mediaIndexMocks.load).not.toHaveBeenCalled();
     });
 
-    it("rescans when index integrity is invalid (line 160)", async () => {
+    it("drops invalid browse snapshots without loading the full media index", async () => {
       vi.mocked(verifyHvscBrowseIndexIntegrity).mockResolvedValueOnce({
         isValid: false,
         sampled: 0,
@@ -480,6 +577,27 @@ describe("hvscService", () => {
       });
       const page = await getHvscFolderListingPaged({ path: "/" });
       expect(page.totalSongs).toBe(0);
+      expect(mediaIndexMocks.clearBrowseSnapshot).toHaveBeenCalled();
+      expect(mediaIndexMocks.load).not.toHaveBeenCalled();
+    });
+
+    it("uses the browse snapshot path without eagerly loading the full media index", async () => {
+      mediaIndexMocks.queryFolderPage.mockReturnValueOnce({
+        path: "/",
+        folders: ["/DEMOS"],
+        songs: [],
+        totalFolders: 1,
+        totalSongs: 0,
+        offset: 0,
+        limit: 200,
+        query: "",
+      });
+
+      const page = await getHvscFolderListingPaged({ path: "/" });
+
+      expect(page.folders).toEqual(["/DEMOS"]);
+      expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalled();
+      expect(mediaIndexMocks.load).not.toHaveBeenCalled();
     });
   });
 
@@ -514,6 +632,46 @@ describe("hvscService", () => {
       (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
       const result = await getHvscDurationsByMd5Seconds("abc");
       expect(result).toBeNull();
+    });
+  });
+
+  describe("streamHvscSongsRecursive null snapshot (L431)", () => {
+    it("returns null when loadBrowseSnapshot returns null", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce(null);
+      const result = await streamHvscSongsRecursive("/", { onChunk: vi.fn() });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("resetHvscLibraryData mock bridge branch (L158)", () => {
+    it("delegates to mock bridge when bridge has resetHvscLibraryData (L158 TRUE)", async () => {
+      const mockReset = vi.fn().mockResolvedValue(undefined);
+      (window as any).__hvscMock__ = { resetHvscLibraryData: mockReset };
+      await resetHvscLibraryData();
+      expect(mockReset).toHaveBeenCalled();
+    });
+
+    it("calls runtime when no mock bridge has resetHvscLibraryData (L158 FALSE)", async () => {
+      await resetHvscLibraryData();
+      expect(vi.mocked(runtimeResetHvscLibraryData)).toHaveBeenCalled();
+    });
+  });
+
+  describe("ensureHvscMetadataHydration branches (L171, L178)", () => {
+    it("returns early when snapshot is null (L178 TRUE)", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce(null);
+      await ensureHvscMetadataHydration();
+      expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns memoized promise on concurrent second call (L171 TRUE)", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(null), 10)),
+      );
+      const p1 = ensureHvscMetadataHydration();
+      const p2 = ensureHvscMetadataHydration(); // hits L171 TRUE
+      await Promise.all([p1, p2]);
+      expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(1);
     });
   });
 });

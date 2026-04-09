@@ -49,9 +49,17 @@ const openAddItemsDialog = async (page: Page) => {
   await expect(page.getByRole("dialog")).toBeVisible();
 };
 
+const waitForFtpIdle = async (page: Page) => {
+  const loading = page.getByTestId("ftp-loading");
+  if (await loading.count()) {
+    await expect(loading).toBeHidden({ timeout: 15000 });
+  }
+};
+
 const getDiskList = (page: Page) => page.getByTestId("disk-list");
 
 const openRemoteFolder = async (page: Page, name: string) => {
+  await waitForFtpIdle(page);
   const row = page.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
   await row.click();
 };
@@ -74,7 +82,9 @@ const openDiskMenu = async (page: Page, name: string) => {
 };
 
 const selectEntryCheckbox = async (page: Page, name: string) => {
-  const row = page.getByText(name, { exact: true }).locator("..").locator("..");
+  await waitForFtpIdle(page);
+  const row = page.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  await expect(row).toBeVisible({ timeout: 10000 });
   await row.getByRole("checkbox").click();
 };
 

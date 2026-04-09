@@ -138,6 +138,14 @@ describe("assertNoShardLocalArtifactPaths", () => {
       /README.md contains shard-local artifact paths/,
     );
   });
+
+  it("rejects shard-directory prefix but accepts canonical shard-filename prefix", () => {
+    const brokenPath = `shard-0/videos/session-0001.webm`;
+    const canonicalPath = resolveMergedShardArtifactPath("videos/session-0001.webm", 0, 2);
+    expect(canonicalPath).toBe("videos/shard-0-session-0001.webm");
+    expect(() => assertNoShardLocalArtifactPaths(brokenPath, "example")).toThrow(/shard-local artifact paths/);
+    expect(() => assertNoShardLocalArtifactPaths(canonicalPath, "example")).not.toThrow();
+  });
 });
 
 describe("removeMergedShardDirectories", () => {

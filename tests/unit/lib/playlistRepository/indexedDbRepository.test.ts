@@ -90,6 +90,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
       });
       return request;
     },
+    __stores: stores,
   } as IDBFactory;
 };
 
@@ -239,6 +240,85 @@ describe("indexedDB playlist repository", () => {
 
     expect(page.totalMatchCount).toBe(1);
     expect(page.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-hvsc"]);
+  });
+
+  it("queries playlists persisted through the atomic snapshot path", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [
+        buildTrack({
+          trackId: "track-a",
+          title: "Alpha Tune",
+          path: "/MUSICIANS/A/Alpha.sid",
+          sourceLocator: "/MUSICIANS/A/Alpha.sid",
+          sourceKind: "hvsc",
+          category: "song",
+        }),
+        buildTrack({
+          trackId: "track-b",
+          title: "Beta Demo",
+          path: "/DEMOS/B/Beta.sid",
+          sourceLocator: "/DEMOS/B/Beta.sid",
+          sourceKind: "hvsc",
+          category: "song",
+        }),
+      ],
+      playlistItems: [buildItem("item-a", "track-a", "0001"), buildItem("item-b", "track-b", "0002")],
+    });
+
+    const page = await repository.queryPlaylist({
+      playlistId: "playlist-default",
+      query: "beta",
+      limit: 10,
+      offset: 0,
+      sort: "playlist-position",
+    });
+
+    expect(page.totalMatchCount).toBe(1);
+    expect(page.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-b"]);
+  });
+
+  it("rebuilds a missing persisted query index from stored playlist rows", async () => {
+    const factory = createFakeIndexedDb();
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: factory,
+      configurable: true,
+      writable: true,
+    });
+
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+
+    await repository.upsertTracks([
+      buildTrack({
+        trackId: "track-a",
+        title: "Alpha Tune",
+        path: "/MUSICIANS/A/Alpha.sid",
+        sourceLocator: "/MUSICIANS/A/Alpha.sid",
+        sourceKind: "hvsc",
+        category: "song",
+      }),
+    ]);
+    await repository.replacePlaylistItems("playlist-default", [buildItem("item-a", "track-a", "0001")]);
+
+    const stateStore = (factory as IDBFactory & { __stores: Map<string, Map<string, unknown>> }).__stores.get("state");
+    stateStore?.delete("playlist-query-index:playlist-default");
+
+    const page = await repository.queryPlaylist({
+      playlistId: "playlist-default",
+      query: "alpha",
+      limit: 10,
+      offset: 0,
+      sort: "playlist-position",
+    });
+
+    expect(page.totalMatchCount).toBe(1);
+    expect(page.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-a"]);
+    expect(stateStore?.has("playlist-query-index:playlist-default")).toBe(true);
   });
 
   it("creates random sessions, advances cursor, and wraps around", async () => {

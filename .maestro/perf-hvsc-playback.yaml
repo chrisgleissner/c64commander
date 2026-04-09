@@ -1,0 +1,38 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf
+  - hvsc-perf-playback
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    text: "Play"
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${LONG_TIMEOUT}
+- tapOn:
+    text: "Filter files..."
+- eraseText
+- inputText: "Commando"
+- waitForAnimationToEnd
+- hideKeyboard
+# Scroll to top — the keyboard and filter input focus push the play button
+# above the viewport, and Maestro can only find on-screen WebView elements.
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- tapOn:
+    id: "playlist-play"
+- extendedWaitUntil:
+    visible: "Pause"
+    timeout: ${LONG_TIMEOUT}

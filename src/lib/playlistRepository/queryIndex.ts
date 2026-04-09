@@ -39,6 +39,7 @@ const buildRowSearchText = (row: PlaylistQueryRow) => {
     row.track.author ?? "",
     row.track.released ?? "",
     row.track.path,
+    row.track.sourceKind,
     row.track.sourceLocator,
     row.track.category ?? "",
   ];

@@ -15,6 +15,8 @@ import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
+import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { AUTOSTART_SEQUENCE, buildAutostartSequence, injectAutostart } from "./autostart";
 import {
   formatPlayCategory,
@@ -160,6 +162,64 @@ const emitDurationPropagationEvent = (payload: {
   }
 };
 
+const withPlaybackFirstAudioScope = async <T>(plan: PlayPlan, mode: string, run: () => Promise<T>) => {
+  const scope = beginHvscPerfScope("playback:first-audio", {
+    category: plan.category,
+    source: plan.source,
+    path: plan.path,
+    songNr: plan.songNr ?? null,
+    durationMs: plan.durationMs ?? null,
+    mode,
+  });
+  try {
+    const result = await run();
+    endHvscPerfScope(scope, {
+      outcome: "success",
+      category: plan.category,
+      source: plan.source,
+      path: plan.path,
+      songNr: plan.songNr ?? null,
+      durationMs: plan.durationMs ?? null,
+      mode,
+    });
+    return result;
+  } catch (error) {
+    const err = error as Error;
+    endHvscPerfScope(scope, {
+      outcome: "error",
+      category: plan.category,
+      source: plan.source,
+      path: plan.path,
+      songNr: plan.songNr ?? null,
+      durationMs: plan.durationMs ?? null,
+      mode,
+      errorName: err.name,
+      errorMessage: err.message,
+    });
+    throw error;
+  }
+};
+
+const recordPlaybackBenchmarkSnapshot = (
+  plan: PlayPlan,
+  mode: string,
+  benchmarkMetadata?: Record<string, unknown> | null,
+) => {
+  void recordSmokeBenchmarkSnapshot({
+    scenario: "playback-start",
+    state: "complete",
+    metadata: {
+      ...(benchmarkMetadata ?? {}),
+      category: plan.category,
+      source: plan.source,
+      path: plan.path,
+      songNr: plan.songNr ?? null,
+      durationMs: plan.durationMs ?? null,
+      mode,
+    },
+  });
+};
+
 export const tryFetchUltimateSidBlob = async (path: string) => {
   const normalizedPath = normalizeUltimatePath(path);
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
@@ -244,6 +304,7 @@ export type PlayExecutionOptions = {
   rebootBeforeMount?: boolean;
   diskAutostartMode?: DiskAutostartMode;
   beforeLaunch?: (() => Promise<void>) | null;
+  benchmarkMetadata?: Record<string, unknown> | null;
 };
 
 export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: PlayExecutionOptions = {}) => {
@@ -254,6 +315,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
   const resetDelayMs = 500;
   const diskAutostartMode = options.diskAutostartMode ?? loadDiskAutostartMode();
   const beforeLaunch = options.beforeLaunch ?? null;
+  const benchmarkMetadata = options.benchmarkMetadata ?? null;
 
   try {
     switch (plan.category) {
@@ -270,7 +332,8 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
               reason: "no-songlength-entry",
               path: plan.path,
             });
-            await api.playSid(plan.path, plan.songNr);
+            await withPlaybackFirstAudioScope(plan, "ultimate-direct", () => api.playSid(plan.path, plan.songNr));
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct", benchmarkMetadata);
             return;
           }
 
@@ -280,11 +343,14 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             if (!ftpBlob) {
               throw new Error("SID FTP fetch failed for SSL propagation");
             }
-            const sslPayload = createSslPayload(plan.durationMs);
+            const sslPayload = createSslPayload(plan.durationMs as number);
             const sslBlob = new Blob([sslPayload], {
               type: "application/octet-stream",
             });
-            await api.playSidUpload(ftpBlob, plan.songNr, sslBlob, { filename: plan.path });
+            await withPlaybackFirstAudioScope(plan, "ultimate-ssl-upload", () =>
+              api.playSidUpload(ftpBlob, plan.songNr, sslBlob, { filename: plan.path }),
+            );
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-ssl-upload", benchmarkMetadata);
             return;
           } catch (error) {
             propagationFailure = error as Error;
@@ -310,7 +376,10 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           }
 
           try {
-            await api.playSid(plan.path, plan.songNr);
+            await withPlaybackFirstAudioScope(plan, "ultimate-direct-fallback", () =>
+              api.playSid(plan.path, plan.songNr),
+            );
+            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct-fallback", benchmarkMetadata);
             return;
           } catch (fallbackError) {
             const err = fallbackError as Error;
@@ -333,7 +402,10 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
                 type: "application/octet-stream",
               })
             : undefined;
-        await api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path });
+        await withPlaybackFirstAudioScope(plan, "local-upload", () =>
+          api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path }),
+        );
+        recordPlaybackBenchmarkSnapshot(plan, "local-upload", benchmarkMetadata);
         return;
       }
       case "mod": {
@@ -425,7 +497,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           (diskType === "d64" || diskType === "d71" || diskType === "d81") &&
           localBlob;
 
-        if (dmaEligible) {
+        if (dmaEligible && localBlob) {
           const image = new Uint8Array(await localBlob.arrayBuffer());
           await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
         } else if (

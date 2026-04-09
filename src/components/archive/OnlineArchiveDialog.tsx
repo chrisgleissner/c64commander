@@ -72,7 +72,7 @@ const formatEntryMeta = (size?: number, date?: number) => {
 
 const getPresetMap = (presets: ArchivePreset[]) => new Map(presets.map((preset) => [preset.type, preset]));
 
-const LEGAL_NOTICE = "You agree you have a necessary license or rights to download any software.";
+export const LEGAL_NOTICE = "You agree you have a necessary license or rights to download any software.";
 
 export type OnlineArchiveDialogProps = {
   open: boolean;

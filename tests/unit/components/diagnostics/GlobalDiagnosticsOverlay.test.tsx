@@ -92,6 +92,10 @@ vi.mock("@/lib/diagnostics/diagnosticsExport", () => ({
   shareDiagnosticsZip: vi.fn(),
 }));
 
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  collectHvscPerfTimings: vi.fn(() => [{ id: "hvsc-perf-000001", scope: "browse:query" }]),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsReconciler", () => ({
   runDiagnosticsReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
   runPlaybackReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
@@ -202,6 +206,11 @@ describe("GlobalDiagnosticsOverlay", () => {
         logs: expect.any(Array),
         traces: expect.any(Array),
         actions: expect.any(Array),
+        supplemental: expect.objectContaining({
+          hvscPerfTimings: expect.arrayContaining([
+            expect.objectContaining({ id: "hvsc-perf-000001", scope: "browse:query" }),
+          ]),
+        }),
       }),
     );
   }, 10_000);

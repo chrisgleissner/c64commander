@@ -72,6 +72,12 @@ export type HvscFolderListing = {
     id: number;
     virtualPath: string;
     fileName: string;
+    displayTitleSeed?: string | null;
+    displayAuthorSeed?: string | null;
+    canonicalTitle?: string | null;
+    canonicalAuthor?: string | null;
+    released?: string | null;
+    metadataStatus?: "seeded" | "queued" | "hydrating" | "hydrated" | "error" | null;
     durationSeconds?: number | null;
     durationsSeconds?: number[] | null;
     subsongCount?: number | null;
@@ -85,7 +91,16 @@ export type HvscFolderListingPage = {
     id: number;
     virtualPath: string;
     fileName: string;
+    displayTitleSeed?: string | null;
+    displayAuthorSeed?: string | null;
+    canonicalTitle?: string | null;
+    canonicalAuthor?: string | null;
+    released?: string | null;
+    metadataStatus?: "seeded" | "queued" | "hydrating" | "hydrated" | "error" | null;
     durationSeconds?: number | null;
+    durationsSeconds?: number[] | null;
+    subsongCount?: number | null;
+    defaultSong?: number | null;
     sidMetadata?: HvscSidMetadata | null;
     trackSubsongs?: HvscTrackSubsong[] | null;
   }>;
@@ -111,6 +126,7 @@ export type HvscProgressEvent = {
   ingestionId: string;
   stage: string;
   message: string;
+  statusToken?: "queued" | "running" | "paused" | "done" | "error";
   archiveName?: string;
   currentFile?: string;
   processedCount?: number;

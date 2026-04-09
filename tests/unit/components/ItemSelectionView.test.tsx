@@ -53,7 +53,7 @@ describe("ItemSelectionView", () => {
 
     const openDemosRow = screen.getByRole("button", { name: /open demos/i });
     fireEvent.click(openDemosRow);
-    fireEvent.keyDown(openDemosRow, { key: "Enter" });
+    fireEvent.keyDown(screen.getAllByTestId("source-entry-row")[1], { key: "Enter" });
 
     expect(onNavigateRoot).toHaveBeenCalledTimes(1);
     expect(onNavigateUp).toHaveBeenCalledTimes(1);
@@ -64,6 +64,7 @@ describe("ItemSelectionView", () => {
     expect(screen.queryByRole("button", { name: /^open$/i })).not.toBeInTheDocument();
     expect(screen.getByTestId("source-path-label")).toHaveTextContent("/music");
     expect(screen.queryByText(/^Path:/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Select Demos")).toBeInTheDocument();
   });
 
   it("disables selection and navigation at root when loading", () => {

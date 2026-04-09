@@ -132,6 +132,7 @@ const renderPlaybackController = (
     snapshotToUpdates?: ReturnType<typeof vi.fn>;
     archiveConfigs?: Record<string, { id: string; name: string; baseUrl: string; enabled: boolean }>;
     resolveUnavailableConfigDecision?: ReturnType<typeof vi.fn>;
+    buildHvscLocalPlayFile?: ReturnType<typeof vi.fn>;
   },
 ) =>
   renderHook(() =>
@@ -155,6 +156,7 @@ const renderPlaybackController = (
       repeatEnabled: options?.repeatEnabled ?? false,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
+      buildHvscLocalPlayFile: options?.buildHvscLocalPlayFile,
       deviceProduct: "C64 Ultimate",
       ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
       resolveUnavailableConfigDecision: options?.resolveUnavailableConfigDecision,
@@ -1395,6 +1397,40 @@ describe("usePlaybackController", () => {
       "Local file unavailable. Re-add it to the playlist.",
     );
     expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("lazily resolves HVSC files only when playback starts", async () => {
+    const hvscFile = {
+      name: "demo.sid",
+      webkitRelativePath: "/MUSICIANS/Test/demo.sid",
+      lastModified: 0,
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(8)),
+    };
+    const buildHvscLocalPlayFile = vi.fn(() => hvscFile as any);
+    const hvscItem = createPlaylistItem({
+      category: "sid",
+      label: "demo.sid",
+      path: "/MUSICIANS/Test/demo.sid",
+      request: { source: "hvsc", path: "/MUSICIANS/Test/demo.sid" },
+      sourceId: "hvsc-library",
+      durationMs: 1_000,
+      subsongCount: 1,
+    });
+    const { result } = renderPlaybackController([hvscItem], { buildHvscLocalPlayFile });
+
+    await result.current.playItem(hvscItem, { playlistIndex: 0 });
+
+    expect(buildHvscLocalPlayFile).toHaveBeenCalledWith("/MUSICIANS/Test/demo.sid", "demo.sid");
+    expect(hvscItem.request.file).toBe(hvscFile);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: "hvsc",
+        path: "/MUSICIANS/Test/demo.sid",
+        file: hvscFile,
+      }),
+      expect.anything(),
+    );
   });
 
   it("reports connection failures before playback starts", async () => {

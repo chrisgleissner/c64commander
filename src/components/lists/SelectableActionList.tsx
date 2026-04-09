@@ -108,6 +108,7 @@ export type SelectableActionListProps = {
   onViewAllEndReached?: () => void;
   showSelectionControls?: boolean;
   selectionLabel?: string;
+  viewAllMode?: "overflow" | "non-empty";
 };
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -321,6 +322,7 @@ export const SelectableActionList = ({
   onViewAllEndReached,
   showSelectionControls = true,
   selectionLabel,
+  viewAllMode = "overflow",
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
@@ -411,8 +413,11 @@ export const SelectableActionList = ({
   );
   const effectiveTotalItemCount =
     disableClientFiltering && typeof totalItemCount === "number" ? totalItemCount : filteredVisibleCount;
+  const shouldShowViewAll =
+    Boolean(viewAllTitle) &&
+    (viewAllMode === "non-empty" ? effectiveTotalItemCount > 0 : effectiveTotalItemCount > maxVisible);
 
-  const { visibleItems, hasMore } = useMemo(() => {
+  const { visibleItems } = useMemo(() => {
     const list: ActionListItem[] = [];
     let pendingHeader: ActionListItem | null = null;
     let remaining = maxVisible;
@@ -429,8 +434,8 @@ export const SelectableActionList = ({
       list.push(item);
       remaining -= 1;
     }
-    return { visibleItems: list, hasMore: effectiveTotalItemCount > maxVisible };
-  }, [effectiveTotalItemCount, filteredItems, maxVisible]);
+    return { visibleItems: list };
+  }, [filteredItems, maxVisible]);
 
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
@@ -455,7 +460,7 @@ export const SelectableActionList = ({
         </div>
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           {headerActions}
-          {hasMore && (
+          {shouldShowViewAll && (
             <Button variant="outline" size="sm" onClick={() => setViewAllOpen(true)}>
               {viewAllLabel}
             </Button>

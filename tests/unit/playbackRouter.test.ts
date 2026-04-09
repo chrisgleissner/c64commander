@@ -17,6 +17,19 @@ import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
 import { loadDiskAutostartMode } from "@/lib/config/appSettings";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
+
+const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
+  beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
+    scope,
+    name: `hvsc:perf:${scope}`,
+    startMarkName: `${scope}:start`,
+    startedAt: "2026-04-05T00:00:00.000Z",
+    startedAtMs: 0,
+    metadata: metadata ?? null,
+  })),
+  endHvscPerfScope: vi.fn(),
+}));
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -91,6 +104,15 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadDiskAutostartMode: vi.fn().mockReturnValue("kernal"),
 }));
 
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  recordSmokeBenchmarkSnapshot: vi.fn(),
+}));
+
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  beginHvscPerfScope,
+  endHvscPerfScope,
+}));
+
 beforeEach(() => {
   vi.mocked(injectAutostart).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
@@ -104,6 +126,9 @@ beforeEach(() => {
     password: "",
   } as any);
   vi.mocked(recordDeviceGuard).mockReset();
+  vi.mocked(recordSmokeBenchmarkSnapshot).mockReset();
+  beginHvscPerfScope.mockReset();
+  endHvscPerfScope.mockReset();
   vi.mocked(getActiveAction).mockReturnValue({
     correlationId: "test-correlation",
     origin: "ui",
@@ -136,6 +161,20 @@ describe("playbackRouter", () => {
     const plan = buildPlayPlan({ source: "ultimate", path: "/MUSIC/DEMO.SID" });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith("/MUSIC/DEMO.SID", undefined);
+    expect(beginHvscPerfScope).toHaveBeenCalledWith(
+      "playback:first-audio",
+      expect.objectContaining({ mode: "ultimate-direct", path: "/MUSIC/DEMO.SID" }),
+    );
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playback:first-audio" }),
+      expect.objectContaining({ outcome: "success", mode: "ultimate-direct" }),
+    );
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playback-start",
+        metadata: expect.objectContaining({ mode: "ultimate-direct", path: "/MUSIC/DEMO.SID" }),
+      }),
+    );
   });
 
   it("uses FTP + upload when Ultimate SID has duration and download succeeds", async () => {
@@ -154,6 +193,12 @@ describe("playbackRouter", () => {
     await executePlayPlan(api as any, plan);
     expect(api.playSidUpload).toHaveBeenCalledTimes(1);
     expect(api.playSid).not.toHaveBeenCalled();
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playback-start",
+        metadata: expect.objectContaining({ mode: "ultimate-ssl-upload", durationMs: 120000 }),
+      }),
+    );
   });
 
   it("falls back to PUT when Ultimate SID FTP download fails", async () => {
@@ -166,12 +211,39 @@ describe("playbackRouter", () => {
     });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith("/MUSIC/DEMO.SID", undefined);
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playback-start",
+        metadata: expect.objectContaining({ mode: "ultimate-direct-fallback", path: "/MUSIC/DEMO.SID" }),
+      }),
+    );
     expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         type: "ssl-propagation-failure",
         level: "error",
         reason: "ftp-fetch-failed",
+      }),
+    );
+  });
+
+  it("merges playback benchmark metadata into smoke snapshots", async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: "ultimate", path: "/MUSIC/DEMO.SID" });
+    await executePlayPlan(api as any, plan, {
+      benchmarkMetadata: {
+        playlistSize: 60582,
+        feedbackKind: "result",
+      },
+    });
+    expect(recordSmokeBenchmarkSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: "playback-start",
+        metadata: expect.objectContaining({
+          mode: "ultimate-direct",
+          playlistSize: 60582,
+          feedbackKind: "result",
+        }),
       }),
     );
   });

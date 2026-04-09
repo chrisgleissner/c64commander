@@ -1,0 +1,89 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf-5k
+  - hvsc-perf-5k-setup
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+# 5K-lane variant of perf-hvsc-baseline.yaml.
+# Identical download/ingest phase, but builds a ~4540-item playlist
+# (DEMOS + GAMES only) instead of the full ~60K corpus.
+- runFlow: subflows/launch-and-wait.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Retry connection"
+          optional: true
+      - tapOn:
+          text: "Save & Retry"
+          optional: true
+      - tapOn:
+          text: "Done"
+          optional: true
+      - tapOn:
+          text: "Play"
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Playlist"
+          timeout: ${TIMEOUT}
+# Clear any leftover search filter from previous test runs.
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- tapOn:
+    text: "Clear filter"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    id: "tab-play"
+- waitForAnimationToEnd
+# Scroll to find HVSC download.
+- retry:
+    maxRetries: 15
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+      - waitForAnimationToEnd
+      - assertVisible:
+          id: "hvsc-download"
+- tapOn:
+    id: "hvsc-download"
+- extendedWaitUntil:
+    visible: "Status: Ready"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "HVSC ready"
+- runFlow:
+    when:
+      visible: "Run Ingest HVSC"
+    commands:
+      - tapOn:
+          id: "hvsc-ingest"
+      - extendedWaitUntil:
+          visible: "Indexed "
+          timeout: ${LONG_TIMEOUT}
+      - assertVisible: "HVSC ready"
+# Scroll back to top so the playlist controls start from a known state.
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- assertVisible: "Playlist"
+# 5K playlist setup: adds DEMOS + GAMES (~4540 items) instead of full corpus.
+- runFlow: perf-hvsc-setup-playlist-5k.yaml

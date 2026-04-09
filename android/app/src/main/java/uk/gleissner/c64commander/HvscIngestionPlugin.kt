@@ -14,6 +14,7 @@ import android.content.ContentValues
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.os.Trace
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -236,6 +237,7 @@ open class HvscIngestionPlugin : Plugin() {
 
   private fun flushSongBatch(db: SQLiteDatabase, batch: MutableList<SongUpsertRow>): Int {
     if (batch.isEmpty()) return 0
+    Trace.beginSection("hvsc:flushSongBatch")
     var applied = 0
     db.beginTransaction()
     try {
@@ -258,11 +260,13 @@ open class HvscIngestionPlugin : Plugin() {
       return applied
     } finally {
       db.endTransaction()
+      Trace.endSection()
     }
   }
 
   private fun applyDeletionRows(db: SQLiteDatabase, paths: List<String>): Int {
     if (paths.isEmpty()) return 0
+    Trace.beginSection("hvsc:applyDeletionRows")
     var deleted = 0
     db.beginTransaction()
     try {
@@ -274,6 +278,7 @@ open class HvscIngestionPlugin : Plugin() {
       return deleted
     } finally {
       db.endTransaction()
+      Trace.endSection()
     }
   }
 
@@ -396,6 +401,7 @@ open class HvscIngestionPlugin : Plugin() {
     cancellationRequested.set(false)
     activeJob =
             scope.launch {
+              Trace.beginSection("hvsc:ingestHvsc")
               var dbHelper: HvscMetadataDbHelper? = null
               var db: SQLiteDatabase? = null
               val filesDir = context.filesDir
@@ -667,6 +673,7 @@ open class HvscIngestionPlugin : Plugin() {
                           error
                   )
                 }
+                Trace.endSection()
               }
             }
   }
@@ -789,6 +796,65 @@ open class HvscIngestionPlugin : Plugin() {
     cancellationRequested.set(true)
     activeJob?.cancel(CancellationException("Cancelled by request"))
     call.resolve()
+  }
+
+  @PluginMethod
+  fun queryAllSongs(call: PluginCall) {
+    var dbHelper: HvscMetadataDbHelper? = null
+    var db: SQLiteDatabase? = null
+    try {
+      dbHelper = HvscMetadataDbHelper(this)
+      db = dbHelper.readableDatabase
+      val songs = JSArray()
+      db.rawQuery("SELECT virtual_path, file_name FROM hvsc_song_index ORDER BY virtual_path", null)
+              .use { cursor ->
+                val pathIdx = cursor.getColumnIndexOrThrow("virtual_path")
+                val nameIdx = cursor.getColumnIndexOrThrow("file_name")
+                while (cursor.moveToNext()) {
+                  val row = JSObject()
+                  row.put("virtualPath", cursor.getString(pathIdx))
+                  row.put("fileName", cursor.getString(nameIdx))
+                  songs.put(row)
+                }
+              }
+      val payload = JSObject()
+      payload.put("songs", songs)
+      payload.put("totalSongs", songs.length())
+      call.resolve(payload)
+    } catch (error: Exception) {
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Failed to query all HVSC songs",
+              "HvscIngestionPlugin",
+              error,
+              traceFields(call)
+      )
+      call.reject(error.message ?: "HVSC queryAllSongs failed", error)
+    } finally {
+      try {
+        db?.close()
+      } catch (error: Exception) {
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Failed to close HVSC metadata database after queryAllSongs",
+                "HvscIngestionPlugin",
+                error
+        )
+      }
+      try {
+        dbHelper?.close()
+      } catch (error: Exception) {
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Failed to close HVSC metadata db helper after queryAllSongs",
+                "HvscIngestionPlugin",
+                error
+        )
+      }
+    }
   }
 
   override fun handleOnDestroy() {

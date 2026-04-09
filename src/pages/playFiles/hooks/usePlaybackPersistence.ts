@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey, isSongCategory, parseModifiedAt } from "../playFilesUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -16,8 +16,9 @@ import type { PlaybackClock } from "@/lib/playback/playbackClock";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { addErrorLog } from "@/lib/logging";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
-import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
+import type { PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
+import { commitPlaylistSnapshot, usePlaylistRepositorySyncSnapshot } from "@/pages/playFiles/playlistRepositorySync";
 
 interface UsePlaybackPersistenceProps {
   playlist: PlaylistItem[];
@@ -96,7 +97,6 @@ export function usePlaybackPersistence({
   playlistStorageKey,
   localEntriesBySourceId,
   localSourceTreeUris,
-  buildHvscLocalPlayFile,
   buildPlaylistItem,
   playedClockRef,
   trackStartedAtRef,
@@ -106,11 +106,17 @@ export function usePlaybackPersistence({
   setAutoAdvanceDueAtMs,
 }: UsePlaybackPersistenceProps) {
   const playlistRepository = getPlaylistDataRepository();
+  const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
-  const hasHydratedPlaylistRef = useRef(false);
+  const hydratedPlaylistKeyRef = useRef<string | null>(null);
+  const completedInitialRestoreKeyRef = useRef<string | null>(null);
   const hasPlaylistRef = useRef(false);
-  const [hasCompletedInitialRestore, setHasCompletedInitialRestore] = useState(false);
+  const [restoreVersion, setRestoreVersion] = useState(0);
   const currentPlaylistItemId = currentIndex >= 0 ? (playlist[currentIndex]?.id ?? null) : null;
+
+  if (completedInitialRestoreKeyRef.current && completedInitialRestoreKeyRef.current !== playlistStorageKey) {
+    completedInitialRestoreKeyRef.current = null;
+  }
 
   useEffect(() => {
     hasPlaylistRef.current = playlist.length > 0;
@@ -158,9 +164,7 @@ export function usePlaybackPersistence({
                       parseModifiedAt(localEntry?.modifiedAt),
                     )
                   : undefined)
-              : entry.source === "hvsc"
-                ? buildHvscLocalPlayFile(normalizedPath, entry.name)
-                : undefined,
+              : undefined,
           sizeBytes: localEntry?.sizeBytes ?? entry.sizeBytes ?? null,
           modifiedAt: localEntry?.modifiedAt ?? entry.modifiedAt ?? null,
         };
@@ -169,9 +173,6 @@ export function usePlaybackPersistence({
       .filter((item): item is PlaylistItem => Boolean(item));
     return { items: hydrated, index: stored.currentIndex ?? -1 };
   };
-
-  const buildTrackId = (source: string, sourceId: string | null | undefined, path: string) =>
-    `${source}:${sourceId ?? ""}:${normalizeSourcePath(path)}`;
 
   const resolveHydratedLocalSourceId = (track: TrackRecord) => {
     if (track.sourceKind !== "local") return null;
@@ -183,54 +184,6 @@ export function usePlaybackPersistence({
     if (separatorIndex < 0) return null;
     const legacySourceId = track.trackId.slice(legacyPrefix.length, separatorIndex);
     return legacySourceId || null;
-  };
-
-  const serializePlaylistToRepository = (items: PlaylistItem[], playlistId: string) => {
-    const nowIso = new Date().toISOString();
-    const tracks: TrackRecord[] = items.map((item) => ({
-      trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
-      sourceKind: item.request.source,
-      sourceLocator: normalizeSourcePath(item.path),
-      sourceId: item.sourceId ?? null,
-      category: item.category,
-      title: item.label,
-      author: null,
-      released: null,
-      path: normalizeSourcePath(item.path),
-      archiveRef: item.archiveRef ?? null,
-      sizeBytes: item.sizeBytes ?? null,
-      modifiedAt: item.modifiedAt ?? null,
-      defaultDurationMs: item.durationMs ?? null,
-      subsongCount: item.subsongCount ?? null,
-      createdAt: item.addedAt ?? nowIso,
-      updatedAt: nowIso,
-    }));
-    const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
-      playlistItemId: item.id,
-      playlistId,
-      trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
-      configRef: item.configRef ?? null,
-      configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
-      configOverrides: item.configOverrides ?? null,
-      songNr: item.request.songNr ?? 1,
-      sortKey: String(index).padStart(8, "0"),
-      durationOverrideMs: item.durationMs ?? null,
-      status: item.status ?? "ready",
-      unavailableReason: item.unavailableReason ?? null,
-      addedAt: item.addedAt ?? nowIso,
-    }));
-    return { tracks, playlistItems };
-  };
-
-  const persistSerializedPlaylist = async (
-    serialized: { tracks: TrackRecord[]; playlistItems: PlaylistItemRecord[] },
-    chunkSize = 500,
-  ) => {
-    for (let index = 0; index < serialized.tracks.length; index += chunkSize) {
-      const chunk = serialized.tracks.slice(index, index + chunkSize);
-      await playlistRepository.upsertTracks(chunk);
-    }
-    await playlistRepository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
   };
 
   const hydrateFromRepository = async () => {
@@ -303,10 +256,10 @@ export function usePlaybackPersistence({
   }, []);
 
   // Restore Playlist (Local Storage)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof localStorage === "undefined") return;
-    if (hasHydratedPlaylistRef.current) return;
-    hasHydratedPlaylistRef.current = true;
+    if (hydratedPlaylistKeyRef.current === playlistStorageKey) return;
+    hydratedPlaylistKeyRef.current = playlistStorageKey;
     (async () => {
       try {
         const defaultKey = buildPlaylistStorageKey("default");
@@ -344,14 +297,17 @@ export function usePlaybackPersistence({
 
         const preferred = candidates.find((entry) => entry.parsed?.items?.length) ?? candidates[0];
         const restored = hydrateStoredPlaylist(preferred.parsed);
-        if (hasPlaylistRef.current && restored.items.length === 0) {
+        if ((hasPlaylistRef.current || playlist.length > 0) && restored.items.length === 0) {
           return;
         }
         setPlaylist(restored.items);
         setCurrentIndex(restored.index);
         if (restored.items.length) {
-          const serialized = serializePlaylistToRepository(restored.items, playlistStorageKey);
-          await persistSerializedPlaylist(serialized);
+          await commitPlaylistSnapshot({
+            playlistId: playlistStorageKey,
+            items: restored.items,
+            repository: playlistRepository,
+          });
         }
         // Clean up legacy localStorage blobs after migration to repository
         for (const { key } of candidates) {
@@ -364,21 +320,22 @@ export function usePlaybackPersistence({
           error: (error as Error).message,
         });
       } finally {
-        setHasCompletedInitialRestore(true);
+        completedInitialRestoreKeyRef.current = playlistStorageKey;
+        setRestoreVersion((version) => version + 1);
       }
     })().catch((error) => {
       addErrorLog("Playlist hydration task failed", {
         playlistStorageKey,
         error: (error as Error).message,
       });
-      setHasCompletedInitialRestore(true);
+      completedInitialRestoreKeyRef.current = playlistStorageKey;
+      setRestoreVersion((version) => version + 1);
     });
   }, [
     playlistStorageKey,
     resolvedDeviceId,
     localEntriesBySourceId,
     localSourceTreeUris,
-    buildHvscLocalPlayFile,
     buildPlaylistItem,
     setActivePlaylistQuery,
   ]);
@@ -441,15 +398,26 @@ export function usePlaybackPersistence({
   // Persist Playlist
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
-    if (!hasCompletedInitialRestore) return;
+    if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
+    if (
+      repositorySnapshot.phase === "SCANNING" ||
+      repositorySnapshot.phase === "INGESTING" ||
+      repositorySnapshot.phase === "COMMITTING" ||
+      repositorySnapshot.phase === "BACKGROUND_COMMITTING"
+    ) {
+      return;
+    }
     try {
       // Clean up any legacy localStorage blobs — production persistence is repository-only
       localStorage.removeItem(playlistStorageKey);
       const defaultKey = buildPlaylistStorageKey("default");
       localStorage.removeItem(defaultKey);
 
-      const serialized = serializePlaylistToRepository(playlist, playlistStorageKey);
-      void persistSerializedPlaylist(serialized).catch((error) => {
+      void commitPlaylistSnapshot({
+        playlistId: playlistStorageKey,
+        items: playlist,
+        repository: playlistRepository,
+      }).catch((error) => {
         addErrorLog("Failed to persist playlist repository state", {
           playlistStorageKey,
           error: (error as Error).message,
@@ -461,11 +429,11 @@ export function usePlaybackPersistence({
         error: (error as Error).message,
       });
     }
-  }, [hasCompletedInitialRestore, playlist, playlistStorageKey]);
+  }, [playlist, playlistRepository, playlistStorageKey, repositorySnapshot.phase, restoreVersion]);
 
   // Persist Repository Session
   useEffect(() => {
-    if (!hasCompletedInitialRestore) return;
+    if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
     const session: PlaylistSessionRecord = {
       playlistId: playlistStorageKey,
       currentPlaylistItemId,
@@ -491,13 +459,13 @@ export function usePlaybackPersistence({
     activePlaylistQuery,
     currentPlaylistItemId,
     elapsedMs,
-    hasCompletedInitialRestore,
     isPaused,
     isPlaying,
     playedMs,
     playlistRepository,
     playlistStorageKey,
     repeatEnabled,
+    restoreVersion,
     shuffleEnabled,
   ]);
 

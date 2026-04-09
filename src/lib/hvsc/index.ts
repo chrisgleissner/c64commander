@@ -26,15 +26,26 @@ export {
   getHvscDurationsByMd5Seconds,
   getHvscFolderListing,
   getHvscFolderListingPaged,
+  ensureHvscMetadataHydration,
   getHvscSong,
+  getHvscSongsRecursive,
+  streamHvscSongsRecursive,
   getHvscStatus,
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  resetHvscLibraryData,
   resolveHvscSonglength,
 } from "./hvscService";
 export { recoverStaleIngestionState } from "./hvscIngestionRuntime";
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from "./hvscMediaIndex";
+export { describeHvscPreparationTransition, resolveHvscPreparationSnapshot } from "./hvscPreparationState";
+export type {
+  HvscPreparationPhase,
+  HvscPreparationSnapshot,
+  HvscPreparationState,
+  HvscPreparationStateInput,
+} from "./hvscPreparationState";
 export { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from "./hvscRootLocator";
 export {
   clearHvscStatusSummary,
@@ -46,6 +57,7 @@ export type {
   HvscDownloadStatus,
   HvscExtractionStatus,
   HvscFailureCategory,
+  HvscMetadataHydrationStatus,
   HvscStatusSummary,
   HvscStepStatus,
 } from "./hvscStatusStore";

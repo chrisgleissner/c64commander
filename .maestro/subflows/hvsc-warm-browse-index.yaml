@@ -1,0 +1,38 @@
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+tags:
+  - subflow
+---
+# Warms the in-memory HVSC browse index by running a quick re-ingest.
+# Needed after app restart because the 60K-entry browse index snapshot
+# is too large for the Capacitor filesystem bridge to persist.
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          start: 50%, 82%
+          end: 50%, 24%
+          duration: 900
+          waitToSettleTimeoutMs: 500
+      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Ingest HVSC"
+    direction: DOWN
+    timeout: ${LONG_TIMEOUT}
+- tapOn: "Ingest HVSC"
+- extendedWaitUntil:
+    visible: "Indexed "
+    timeout: ${LONG_TIMEOUT}
+# Scroll back up to restore the view
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 900
+          waitToSettleTimeoutMs: 500
+      - waitForAnimationToEnd

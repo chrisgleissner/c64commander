@@ -1,0 +1,88 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf
+  - hvsc-perf-browse
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+# Warm launch: preserve in-memory HVSC browse index from the setup phase.
+# The 60K-entry browse index is too large for the Capacitor FS bridge to persist,
+# so we must not restart the app (stopApp: true would destroy it).
+- runFlow: subflows/launch-warm.yaml
+- tapOn:
+    text: "Play"
+# Scroll to top first — the warm launch preserves Phase 1's ending scroll
+# position, and Maestro can only find WebView text that is on-screen.
+# The add-items-to-playlist button is in the toolbar ABOVE the filter,
+# so it is visible after scroll-to-top regardless of any active filter.
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- retry:
+    maxRetries: 6
+    commands:
+      - tapOn:
+          id: "add-items-to-playlist"
+      - extendedWaitUntil:
+          visible: "Choose source"
+          timeout: ${TIMEOUT}
+      - tapOn:
+          id: "import-option-hvsc"
+          optional: true
+      - tapOn:
+          text: "Add file / folder from HVSC"
+          optional: true
+      - tapOn:
+          text: "HVSC"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "From HVSC"
+          timeout: ${TIMEOUT}
+# Navigate to root in case the browser retained a previous position
+- tapOn:
+    text: "Root"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Open MUSICIANS"
+    timeout: ${LONG_TIMEOUT}
+- tapOn: "Open MUSICIANS"
+- extendedWaitUntil:
+    visible: "Open H"
+    timeout: ${TIMEOUT}
+- tapOn: "Open H"
+# Hubbard_Rob may be below the fold in the H folder. Scroll within the dialog
+# (stay above the Cancel/Add buttons at ~87% screen height) to find it.
+- retry:
+    maxRetries: 10
+    commands:
+      - swipe:
+          start: 50%, 60%
+          end: 50%, 30%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Open Hubbard_Rob"
+          timeout: ${SHORT_TIMEOUT}
+- tapOn: "Open Hubbard_Rob"
+- tapOn: "Root"
+- extendedWaitUntil:
+    visible: "Open MUSICIANS"
+    timeout: ${TIMEOUT}
+- tapOn:
+    text: "Cancel"
+    optional: true

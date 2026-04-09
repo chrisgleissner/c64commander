@@ -8,7 +8,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { hasInjectedBuildVersion, normalizeReleaseVersion, resolveBuildAppVersion } from "@/lib/buildVersion";
+import {
+  hasInjectedBuildVersion,
+  normalizeReleaseVersion,
+  resolveBuildAppVersion,
+  resolveBuildTagName,
+} from "@/lib/buildVersion";
 
 describe("buildVersion", () => {
   describe("normalizeReleaseVersion", () => {
@@ -108,6 +113,30 @@ describe("buildVersion", () => {
           APP_VERSION: "0.6.4-web",
         }),
       ).toBe(true);
+    });
+
+    it("detects no injected build version when called without arguments", () => {
+      expect(hasInjectedBuildVersion()).toBe(false);
+    });
+  });
+
+  describe("resolveBuildTagName", () => {
+    it("returns empty string when called without arguments", () => {
+      expect(resolveBuildTagName()).toBe("");
+    });
+
+    it("returns empty string when GITHUB_REF_TYPE is tag but GITHUB_REF_NAME is absent", () => {
+      expect(resolveBuildTagName({ GITHUB_REF_TYPE: "tag" })).toBe("");
+    });
+
+    it("returns empty string when GITHUB_REF_TYPE is tag but GITHUB_REF_NAME is empty", () => {
+      expect(resolveBuildTagName({ GITHUB_REF_TYPE: "tag", GITHUB_REF_NAME: "" })).toBe("");
+    });
+  });
+
+  describe("resolveBuildAppVersion", () => {
+    it("returns empty string when called with an empty object using all defaults", () => {
+      expect(resolveBuildAppVersion({})).toBe("");
     });
   });
 });

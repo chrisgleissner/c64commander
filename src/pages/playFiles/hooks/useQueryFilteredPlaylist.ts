@@ -8,51 +8,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
-import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
+import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addErrorLog } from "@/lib/logging";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
-import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
-import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-
-const buildTrackId = (source: string, sourceId: string | null | undefined, path: string) =>
-  `${source}:${sourceId ?? ""}:${normalizeSourcePath(path)}`;
-
-const serializePlaylistToQueryRepository = (items: PlaylistItem[], playlistId: string) => {
-  const nowIso = new Date().toISOString();
-  const tracks: TrackRecord[] = items.map((item) => ({
-    trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
-    sourceKind: item.request.source,
-    sourceLocator: normalizeSourcePath(item.path),
-    sourceId: item.sourceId ?? null,
-    category: item.category,
-    title: item.label,
-    author: null,
-    released: null,
-    path: normalizeSourcePath(item.path),
-    sizeBytes: item.sizeBytes ?? null,
-    modifiedAt: item.modifiedAt ?? null,
-    defaultDurationMs: item.durationMs ?? null,
-    subsongCount: item.subsongCount ?? null,
-    createdAt: item.addedAt ?? nowIso,
-    updatedAt: nowIso,
-  }));
-  const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
-    playlistItemId: item.id,
-    playlistId,
-    trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
-    configRef: item.configRef ?? null,
-    configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
-    configOverrides: item.configOverrides ?? null,
-    songNr: item.request.songNr ?? 1,
-    sortKey: String(index).padStart(8, "0"),
-    durationOverrideMs: item.durationMs ?? null,
-    status: item.status ?? "ready",
-    unavailableReason: item.unavailableReason ?? null,
-    addedAt: item.addedAt ?? nowIso,
-  }));
-  return { tracks, playlistItems };
-};
+import { usePlaylistRepositorySyncSnapshot } from "@/pages/playFiles/playlistRepositorySync";
 
 const matchesPlaylistQuery = (item: PlaylistItem, query: string) => {
   const trimmed = query.trim().toLowerCase();
@@ -62,6 +23,14 @@ const matchesPlaylistQuery = (item: PlaylistItem, query: string) => {
     .toLowerCase();
   return haystack.includes(trimmed);
 };
+
+const resolvePlaylistFilterScenario = (totalMatchCount: number) => {
+  if (totalMatchCount <= 0) return "playlist-filter-zero";
+  if (totalMatchCount <= 10) return "playlist-filter-low";
+  return "playlist-filter-high";
+};
+
+const roundDurationMs = (durationMs: number) => Math.round(durationMs * 100) / 100;
 
 export const useQueryFilteredPlaylist = ({
   playlist,
@@ -81,68 +50,27 @@ export const useQueryFilteredPlaylist = ({
   const initialViewAllLimit = Math.max(previewLimit, viewAllPageSize);
   const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
   const [totalMatchCount, setTotalMatchCount] = useState(0);
-  const [syncedRevision, setSyncedRevision] = useState(0);
-  const [repositorySyncFailed, setRepositorySyncFailed] = useState(false);
   const [viewAllLimit, setViewAllLimit] = useState(initialViewAllLimit);
   const playlistRef = useRef(playlist);
-  const filtersRef = useRef(playlistTypeFilters);
   const queryRef = useRef(query);
-  const latestSyncRequestRef = useRef(0);
+  const playlistItemsById = useMemo(() => new Map(playlist.map((item) => [item.id, item])), [playlist]);
+  const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
+  const repositoryReady = repositorySnapshot.phase === "READY" && repositorySnapshot.committedCount === playlist.length;
+  const memoryFilteredPlaylist = useMemo(
+    () => playlist.filter((item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, query)),
+    [playlist, playlistTypeFilters, query],
+  );
+  const memoryViewAllPlaylist = useMemo(
+    () => memoryFilteredPlaylist.slice(0, viewAllLimit),
+    [memoryFilteredPlaylist, viewAllLimit],
+  );
 
   playlistRef.current = playlist;
-  filtersRef.current = playlistTypeFilters;
   queryRef.current = query;
 
   useEffect(() => {
     setViewAllLimit(initialViewAllLimit);
   }, [initialViewAllLimit, playlistStorageKey, playlistTypeFilters, query]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const syncRequestId = latestSyncRequestRef.current + 1;
-    latestSyncRequestRef.current = syncRequestId;
-
-    const run = async () => {
-      if (!playlist.length) {
-        if (!cancelled) {
-          setQueryFilteredPlaylist([]);
-          setTotalMatchCount(0);
-          setRepositorySyncFailed(false);
-          setSyncedRevision(syncRequestId);
-        }
-        return;
-      }
-
-      const repository = getPlaylistDataRepository();
-      const serialized = serializePlaylistToQueryRepository(playlist, playlistStorageKey);
-      await repository.upsertTracks(serialized.tracks);
-      await repository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
-      if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
-        setRepositorySyncFailed(false);
-        setSyncedRevision(syncRequestId);
-      }
-    };
-
-    run().catch((error) => {
-      addErrorLog("Failed to sync playlist query repository", {
-        playlistStorageKey,
-        error: (error as Error).message,
-      });
-      if (!cancelled && latestSyncRequestRef.current === syncRequestId) {
-        const filteredPlaylist = playlist.filter(
-          (item) => filtersRef.current.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
-        );
-        setQueryFilteredPlaylist(filteredPlaylist.slice(0, viewAllLimit));
-        setTotalMatchCount(filteredPlaylist.length);
-        setRepositorySyncFailed(true);
-        setSyncedRevision(syncRequestId);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playlist, playlistStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,16 +85,60 @@ export const useQueryFilteredPlaylist = ({
         return;
       }
 
-      if (syncedRevision === 0) return;
+      const filterScope = beginHvscPerfScope("playlist:filter", {
+        playlistId: playlistStorageKey,
+        query,
+        viewAllLimit,
+        playlistSize: currentPlaylist.length,
+        categoryFilters: playlistTypeFilters,
+        repositoryPhase: repositorySnapshot.phase,
+      });
+      const filterStartedAt = performance.now();
 
-      if (repositorySyncFailed) {
-        const nextFiltered = currentPlaylist.filter(
-          (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
-        );
-        if (!cancelled) {
-          setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
-          setTotalMatchCount(nextFiltered.length);
+      const finalizeFilterScope = (metadata: Record<string, unknown>) => {
+        const feedbackVisibleWithinMs = roundDurationMs(performance.now() - filterStartedAt);
+        const totalMatchCount =
+          typeof metadata.totalMatchCount === "number" && Number.isFinite(metadata.totalMatchCount)
+            ? metadata.totalMatchCount
+            : null;
+        endHvscPerfScope(filterScope, {
+          playlistId: playlistStorageKey,
+          query,
+          viewAllLimit,
+          playlistSize: currentPlaylist.length,
+          categoryFilters: playlistTypeFilters,
+          ...metadata,
+        });
+        if (query.trim().length > 0) {
+          void recordSmokeBenchmarkSnapshot({
+            scenario: totalMatchCount === null ? "playlist-filter" : resolvePlaylistFilterScenario(totalMatchCount),
+            state: typeof metadata.outcome === "string" ? metadata.outcome : "complete",
+            metadata: {
+              ...metadata,
+              playlistId: playlistStorageKey,
+              query,
+              viewAllLimit,
+              playlistSize: currentPlaylist.length,
+              categoryFilters: playlistTypeFilters,
+              repositoryPhase: repositorySnapshot.phase,
+              queryEngine: typeof metadata.source === "string" ? metadata.source : null,
+              playlistOwnership: metadata.source === "repository" ? "repository" : "react-state",
+              feedbackKind: typeof metadata.feedbackKind === "string" ? metadata.feedbackKind : "result",
+              feedbackVisibleWithinMs,
+              feedbackWithinBudget: feedbackVisibleWithinMs <= 2_000,
+            },
+          });
         }
+      };
+
+      if (!repositoryReady) {
+        finalizeFilterScope({
+          outcome: "memory",
+          source: "memory",
+          resultCount: Math.min(memoryFilteredPlaylist.length, viewAllLimit),
+          totalMatchCount: memoryFilteredPlaylist.length,
+          repositoryPhase: repositorySnapshot.phase,
+        });
         return;
       }
 
@@ -179,10 +151,17 @@ export const useQueryFilteredPlaylist = ({
         offset: 0,
         sort: "playlist-position",
       });
-      const byId = new Map(currentPlaylist.map((item) => [item.id, item]));
       const nextFiltered = result.rows
-        .map((row) => byId.get(row.playlistItem.playlistItemId) ?? null)
+        .map((row) => playlistItemsById.get(row.playlistItem.playlistItemId) ?? null)
         .filter((item): item is PlaylistItem => Boolean(item));
+
+      finalizeFilterScope({
+        outcome: "success",
+        source: "repository",
+        resultCount: nextFiltered.length,
+        totalMatchCount: result.totalMatchCount,
+        repositoryRevision: repositorySnapshot.revision,
+      });
 
       if (!cancelled) {
         setQueryFilteredPlaylist(nextFiltered);
@@ -199,6 +178,21 @@ export const useQueryFilteredPlaylist = ({
         const nextFiltered = playlistRef.current.filter(
           (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
         );
+        const fallbackScope = beginHvscPerfScope("playlist:filter", {
+          playlistId: playlistStorageKey,
+          query,
+          viewAllLimit,
+          playlistSize: playlistRef.current.length,
+          categoryFilters: playlistTypeFilters,
+        });
+        endHvscPerfScope(fallbackScope, {
+          outcome: "fallback-after-error",
+          source: "memory",
+          resultCount: Math.min(nextFiltered.length, viewAllLimit),
+          totalMatchCount: nextFiltered.length,
+          errorName: (error as Error).name,
+          errorMessage: (error as Error).message,
+        });
         setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
         setTotalMatchCount(nextFiltered.length);
       }
@@ -207,18 +201,31 @@ export const useQueryFilteredPlaylist = ({
     return () => {
       cancelled = true;
     };
-  }, [playlistStorageKey, playlistTypeFilters, query, repositorySyncFailed, syncedRevision, viewAllLimit]);
+  }, [
+    playlist,
+    playlistStorageKey,
+    playlistTypeFilters,
+    query,
+    repositoryReady,
+    repositorySnapshot.phase,
+    repositorySnapshot.revision,
+    memoryFilteredPlaylist,
+    playlistItemsById,
+    viewAllLimit,
+  ]);
 
+  const activeViewAllPlaylist = repositoryReady ? queryFilteredPlaylist : memoryViewAllPlaylist;
+  const activeTotalMatchCount = repositoryReady ? totalMatchCount : memoryFilteredPlaylist.length;
   const previewPlaylist = useMemo(
-    () => queryFilteredPlaylist.slice(0, previewLimit),
-    [previewLimit, queryFilteredPlaylist],
+    () => activeViewAllPlaylist.slice(0, previewLimit),
+    [activeViewAllPlaylist, previewLimit],
   );
 
   return {
     previewPlaylist,
-    viewAllPlaylist: queryFilteredPlaylist,
-    totalMatchCount,
-    hasMoreViewAllResults: queryFilteredPlaylist.length < totalMatchCount,
+    viewAllPlaylist: activeViewAllPlaylist,
+    totalMatchCount: activeTotalMatchCount,
+    hasMoreViewAllResults: activeViewAllPlaylist.length < activeTotalMatchCount,
     loadMoreViewAllResults: () => setViewAllLimit((current) => current + viewAllPageSize),
   };
 };

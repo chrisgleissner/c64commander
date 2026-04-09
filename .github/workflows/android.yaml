@@ -119,6 +119,53 @@ jobs:
             coverage/lcov.info
             coverage/coverage-final.json
 
+  perf-benchmark-quick:
+    name: Perf | Quick HVSC web benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run HVSC microbenchmarks
+        run: npm run test:bench
+
+      - name: Collect quick HVSC full scenario summary
+        run: npm run test:perf:quick
+
+      - name: Collect quick HVSC secondary summary
+        run: npm run test:perf:secondary:quick
+
+      - name: Apply optional perf budgets
+        run: npm run test:perf:assert:web
+
+      - name: Upload perf artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hvsc-perf-quick
+          path: ci-artifacts/hvsc-performance/**
+
   web-screenshots:
     name: Web | Screenshots
     runs-on: ubuntu-latest
@@ -250,7 +297,7 @@ jobs:
     name: Web | E2E (sharded)
     runs-on: ubuntu-latest
     container:
-      image: mcr.microsoft.com/playwright:v1.57.0-noble
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     defaults:
       run:
         shell: bash
@@ -587,6 +634,13 @@ jobs:
           npm run cap:build
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cache upstream 7-zip built binaries
+        id: cache-upstream-7zip
+        uses: actions/cache@v4
+        with:
+          path: android/app/build/generated/jniLibs/upstream7zip
+          key: upstream-7zip-${{ runner.os }}-3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16
 
       - name: Verify Android assemble path (dry-run)
         run: |

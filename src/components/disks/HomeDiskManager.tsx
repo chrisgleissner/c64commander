@@ -127,6 +127,11 @@ import {
 const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 const isTestEnvironment =
   typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
+  "scanning",
+  "ingesting",
+  "committing",
+]);
 
 /** Yields control back to the renderer for one event loop tick. */
 const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -333,7 +338,7 @@ export const HomeDiskManager = () => {
   }, [toast]);
 
   useEffect(() => {
-    if (addItemsProgress.status !== "scanning") return undefined;
+    if (!ACTIVE_ADD_ITEMS_PROGRESS_STATES.has(addItemsProgress.status)) return undefined;
     const interval = window.setInterval(() => {
       const startedAt = addItemsStartedAtRef.current ?? Date.now();
       setAddItemsProgress((prev) => ({
@@ -352,7 +357,7 @@ export const HomeDiskManager = () => {
 
   useEffect(() => {
     if (browserOpen) return;
-    if (addItemsProgress.status === "scanning") return;
+    if (ACTIVE_ADD_ITEMS_PROGRESS_STATES.has(addItemsProgress.status)) return;
     setAddItemsProgress({
       status: "idle",
       count: 0,
@@ -1860,6 +1865,7 @@ export const HomeDiskManager = () => {
               filterPlaceholder="Filter disks..."
               listTestId="disk-list"
               rowTestId="disk-row"
+              viewAllMode="non-empty"
               headerActions={
                 <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
                   {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
@@ -1912,6 +1918,7 @@ export const HomeDiskManager = () => {
               onToggleSelectAll={() => undefined}
               maxVisible={listPreviewLimit}
               viewAllTitle="All disks"
+              viewAllMode="non-empty"
               showSelectionControls={false}
             />
           </AppSheetBody>

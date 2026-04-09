@@ -411,4 +411,79 @@ describe("parseTelnetScreen additional coverage", () => {
     const screen = parseTelnetScreen(data);
     expect(screen.cells[3][1].char).toBe("X");
   });
+
+  it("handles escape at end of input without panic (line 114)", () => {
+    // ESC byte at end triggers the len-guard (state.pos >= len) in parseEscape
+    const screen = parseTelnetScreen(encode("\x1b"));
+    expect(screen.cells[0][0].char).toBe(" ");
+  });
+
+  it("ignores unknown escape sequences other than [ ( c (line 133)", () => {
+    // \x1bX is not [ ( c — hits the else branch and advances pos without crashing
+    const screen = parseTelnetScreen(encode("\x1bXHi"));
+    expect(screen.cells[0][0].char).toBe("H");
+    expect(screen.cells[0][1].char).toBe("i");
+  });
+
+  it("treats empty CSI param before semicolon as zero (line 169)", () => {
+    // \x1b[;5H — first param is empty, should become 0 → row 0-1=-1 → clamped to 0
+    const screen = parseTelnetScreen(encode("\x1b[;5HX"));
+    expect(screen.cells[0][4].char).toBe("X");
+  });
+
+  it("cursors to home when CSI H has no params (lines 191/192)", () => {
+    // \x1b[H with no params uses the || 1 fallback → row=0, col=0
+    const screen = parseTelnetScreen(encode("ABC\x1b[HX"));
+    expect(screen.cells[0][0].char).toBe("X");
+  });
+
+  it("cursor A/B/C/D with no params default to 1 (lines 199/205/211/217)", () => {
+    // Start at 5,5, then move up/down/forward/backward each by default (1)
+    const screen = parseTelnetScreen(encode("\x1b[5;5H\x1b[AX"));
+    expect(screen.cells[3][4].char).toBe("X");
+
+    const screen2 = parseTelnetScreen(encode("\x1b[5;5H\x1b[BX"));
+    expect(screen2.cells[5][4].char).toBe("X");
+
+    const screen3 = parseTelnetScreen(encode("\x1b[5;5H\x1b[CX"));
+    expect(screen3.cells[4][5].char).toBe("X");
+
+    const screen4 = parseTelnetScreen(encode("\x1b[5;5H\x1b[DX"));
+    expect(screen4.cells[4][3].char).toBe("X");
+  });
+
+  it("SGR with no params inserts a zero param (line 223)", () => {
+    // \x1b[m — empty SGR → params.length===0 → pushes 0 → reset command
+    const screen = parseTelnetScreen(encode("\x1b[7m\x1b[mX"));
+    expect(screen.cells[0][0].reverse).toBe(false);
+  });
+
+  it("handles function key tilde sequence without error (line 241)", () => {
+    // \x1b[5~ is a VT function key (e.g. page up) — parser ignores it
+    const screen = parseTelnetScreen(encode("\x1b[5~Hi"));
+    expect(screen.cells[0][0].char).toBe("H");
+    expect(screen.cells[0][1].char).toBe("i");
+  });
+
+  it("ignores unknown CSI command (line 250)", () => {
+    // CSI G is not a handled command — hits default switch case
+    const screen = parseTelnetScreen(encode("\x1b[5GHi"));
+    expect(screen.cells[0][0].char).toBe("H");
+  });
+
+  it("handles IAC at end of byte stream (line 362)", () => {
+    // A lone 0xFF at end means skipTelnetCommand hits the pos>=len guard
+    const bytes = new Uint8Array([0x48, 0x69, 0xff]); // "Hi" + IAC
+    const screen = parseTelnetScreen(bytes);
+    expect(screen.cells[0][0].char).toBe("H");
+    expect(screen.cells[0][1].char).toBe("i");
+  });
+
+  it("classifies menu with File Search title as search_form (line 518)", () => {
+    // Build a bordered menu box; the row after the top border must contain "File Search"
+    // Use short lines (< TELNET_SCREEN_WIDTH) to avoid auto-wrap distorting placement
+    const raw = "lqqqqqqqqqqqqk\r\n" + "x File Search x\r\n" + "mqqqqqqqqqqqqj";
+    const screen = parseTelnetScreen(encode(raw));
+    expect(screen.screenType).toBe("search_form");
+  });
 });

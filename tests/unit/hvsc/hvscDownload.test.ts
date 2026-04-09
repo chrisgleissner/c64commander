@@ -444,13 +444,18 @@ describe("hvscDownload", () => {
       expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
     });
 
-    it("throws when stat.size exceeds MAX_BRIDGE_READ_BYTES (BRDA:340)", async () => {
+    it("allows large non-native archive reads through the dedicated HVSC path", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
         size: 10 * 1024 * 1024,
       } as any);
-      await expect(readArchiveBuffer("hvsc-baseline-84.7z")).rejects.toThrow(
-        "requires the native ingestion plugin on this platform",
-      );
+      vi.mocked(Filesystem.readFile).mockResolvedValue({
+        data: "AQIDBA==",
+      } as any);
+
+      const decoded = await readArchiveBuffer("hvsc-baseline-84.7z");
+
+      expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
+      expect(Filesystem.readFile).toHaveBeenCalled();
     });
 
     it("continues when stat throws during size check (BRDA:334)", async () => {
@@ -749,15 +754,22 @@ describe("hvscDownload", () => {
       await expect(downloadArchive(makeOptions({ cancelTokens: tokens }))).rejects.toThrow("HVSC update cancelled");
     });
 
-    it("fails early when non-native download content length exceeds the bridge budget", async () => {
+    it("allows large non-native downloads when the content length exceeds MAX_BRIDGE_READ_BYTES", async () => {
+      const payloadSize = 5 * 1024 * 1024 + 1;
+      const payload = new Uint8Array(payloadSize).fill(7);
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        headers: { get: (name: string) => (name === "content-length" ? String(10 * 1024 * 1024) : null) },
+        headers: { get: (name: string) => (name === "content-length" ? String(payloadSize) : null) },
+        body: null,
+        arrayBuffer: async () => payload.buffer,
       });
 
-      await expect(downloadArchive(makeOptions())).rejects.toThrow(
-        "requires the native ingestion plugin on this platform",
-      );
+      const result = await downloadArchive(makeOptions({ retainInMemoryBuffer: true }));
+
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(result.byteLength).toBe(payloadSize);
+      expect(result[0]).toBe(7);
+      expect(result[result.length - 1]).toBe(7);
       expect(Filesystem.downloadFile).not.toHaveBeenCalled();
     });
 

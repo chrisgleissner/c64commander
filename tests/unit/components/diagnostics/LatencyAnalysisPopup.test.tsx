@@ -83,6 +83,27 @@ describe("LatencyAnalysisPopup", () => {
     expect(screen.getByTestId("latency-chart-panel")).toBeVisible();
   });
 
+  it("recomputes samples when the popup opens after latency data is seeded", () => {
+    const { rerender } = render(
+      <DisplayProfileProvider>
+        <LatencyAnalysisPopup open={false} onClose={() => {}} />
+      </DisplayProfileProvider>,
+    );
+
+    recordLatencySample("REST", "/v1/info", 40);
+    recordLatencySample("REST", "/v1/configs", 80);
+    recordLatencySample("FTP", "/v1/ftp/read", 110);
+
+    rerender(
+      <DisplayProfileProvider>
+        <LatencyAnalysisPopup open onClose={() => {}} />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("latency-sample-count")).toHaveTextContent("3 samples");
+    expect(screen.getByTestId("latency-summary-metrics")).toHaveTextContent("P50");
+  });
+
   it("covers endpoint filter selection and transport toggle interactions", () => {
     recordLatencySample("REST", "/v1/info", 40);
     recordLatencySample("FTP", "/v1/ftp/list", 80);

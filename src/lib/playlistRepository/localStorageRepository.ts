@@ -12,6 +12,7 @@ import type {
   PlaylistQueryResult,
   PlaylistSessionRecord,
   RandomPlaySession,
+  SerializedPlaylistSnapshot,
   TrackRecord,
 } from "./types";
 import type { PlaylistDataRepository } from "./repository";
@@ -184,6 +185,17 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
     this.commit();
   }
 
+  async replacePlaylistSnapshot(playlistId: string, snapshot: SerializedPlaylistSnapshot) {
+    snapshot.tracks.forEach((track) => {
+      this.state.tracks[track.trackId] = track;
+    });
+    this.state.playlistItemsByPlaylistId[playlistId] = [...snapshot.playlistItems].sort((left, right) =>
+      left.sortKey.localeCompare(right.sortKey),
+    );
+    rebuildPlaylistIndex(this.state, playlistId);
+    this.commit();
+  }
+
   async getTracksByIds(trackIds: string[]) {
     const map = new Map<string, TrackRecord>();
     trackIds.forEach((trackId) => {
@@ -205,6 +217,10 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
     return [...(this.state.playlistItemsByPlaylistId[playlistId] ?? [])].sort((left, right) =>
       left.sortKey.localeCompare(right.sortKey),
     );
+  }
+
+  async getPlaylistItemCount(playlistId: string) {
+    return this.state.playlistItemsByPlaylistId[playlistId]?.length ?? 0;
   }
 
   async saveSession(session: PlaylistSessionRecord) {

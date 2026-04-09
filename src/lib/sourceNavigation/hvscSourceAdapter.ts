@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getHvscFolderListing, getHvscFolderListingPaged } from "@/lib/hvsc";
+import { getHvscFolderListing, getHvscFolderListingPaged, getHvscSongsRecursive } from "@/lib/hvsc";
+import { getHvscDisplayAuthor, getHvscDisplayTitle } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
 import type { SourceEntry, SourceEntryPage, SourceLocation } from "./types";
@@ -25,17 +26,34 @@ const folderToEntry = (path: string): SourceEntry => ({
 const songToEntry = (song: {
   virtualPath: string;
   fileName: string;
+  displayTitleSeed?: string | null;
+  displayAuthorSeed?: string | null;
+  canonicalTitle?: string | null;
+  canonicalAuthor?: string | null;
+  released?: string | null;
   durationSeconds?: number | null;
+  durationsSeconds?: number[] | null;
+  defaultSong?: number | null;
   sidMetadata?: { songs?: number; startSong?: number } | null;
   trackSubsongs?: Array<{ songNr: number; isDefault: boolean }> | null;
   subsongCount?: number | null;
 }): SourceEntry => ({
   type: "file",
-  name: song.fileName,
+  name: getHvscDisplayTitle(song),
   path: normalizeHvscPath(song.virtualPath),
+  subtitle: getHvscDisplayAuthor(song),
   durationMs: song.durationSeconds != null ? song.durationSeconds * 1000 : undefined,
-  songNr: song.trackSubsongs?.find((entry) => entry.isDefault)?.songNr ?? song.sidMetadata?.startSong ?? undefined,
-  subsongCount: song.trackSubsongs?.length ?? song.subsongCount ?? song.sidMetadata?.songs ?? undefined,
+  songNr:
+    song.trackSubsongs?.find((entry) => entry.isDefault)?.songNr ??
+    song.defaultSong ??
+    song.sidMetadata?.startSong ??
+    undefined,
+  subsongCount:
+    song.trackSubsongs?.length ??
+    song.subsongCount ??
+    song.durationsSeconds?.length ??
+    song.sidMetadata?.songs ??
+    undefined,
 });
 
 const mapListingEntries = (folders: string[], songs: Parameters<typeof songToEntry>[0][]) =>
@@ -66,6 +84,19 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
   };
 
   const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
+    if (options?.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    // Fast path: synchronous bulk query from the in-memory browse index.
+    // Avoids the per-page async overhead, smoke-benchmark snapshots, and
+    // Capacitor bridge calls that made the old BFS path take minutes.
+    const bulkSongs = await getHvscSongsRecursive(path);
+    if (bulkSongs) {
+      return bulkSongs.map(songToEntry);
+    }
+
+    // Fallback: paged BFS when the browse index is not available.
     const queue = [normalizeHvscPath(path)];
     const visited = new Set<string>();
     const files: SourceEntry[] = [];

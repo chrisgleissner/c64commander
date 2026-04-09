@@ -51,6 +51,7 @@ import type {
 import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import type { DiagnosticsPanelKey } from "@/lib/diagnostics/diagnosticsOverlay";
+import type { HealthHistoryEntry } from "@/lib/diagnostics/healthHistory";
 import {
   resolveActionSeverity,
   resolveLogSeverity,
@@ -96,6 +97,7 @@ type Props = {
   onRunHealthCheck?: () => void;
   lastHealthCheckResult?: HealthCheckRunResult | null;
   liveHealthCheckProbes?: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
+  healthHistory?: Readonly<HealthHistoryEntry[]>;
   requestedPanel?: DiagnosticsPanelKey | null;
   repairRunning?: boolean;
   onRepair?: () => void | Promise<void>;
@@ -915,6 +917,7 @@ export function DiagnosticsDialog({
   onRunHealthCheck,
   lastHealthCheckResult = null,
   liveHealthCheckProbes = null,
+  healthHistory,
   requestedPanel = null,
   repairRunning = false,
   onRepair,
@@ -1519,8 +1522,10 @@ export function DiagnosticsDialog({
         onRepair={onRepair}
         actionSummaries={actionSummaries}
       />
-      <LatencyAnalysisPopup open={open && latencyOpen} onClose={() => setLatencyOpen(false)} />
-      <HealthHistoryPopup open={open && historyOpen} onClose={() => setHistoryOpen(false)} />
+      {open && latencyOpen ? <LatencyAnalysisPopup open onClose={() => setLatencyOpen(false)} /> : null}
+      {open && historyOpen ? (
+        <HealthHistoryPopup open onClose={() => setHistoryOpen(false)} history={healthHistory} />
+      ) : null}
       <HeatMapPopup
         open={open && heatMapVariant !== null}
         onClose={() => setHeatMapVariant(null)}

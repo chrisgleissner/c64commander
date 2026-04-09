@@ -555,36 +555,44 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
-    await page.evaluate(() => {
-      const payload = {
-        items: [
-          {
-            source: "ultimate",
-            path: "/Usb0/Demos/demo.sid",
-            name: "demo.sid",
-            durationMs: 60000,
-          },
-        ],
-        currentIndex: -1,
-      };
-      const serialized = JSON.stringify(payload);
-      const playlistKeys = new Set<string>(["c64u_playlist:v1:default", "c64u_playlist:v1:TEST-123"]);
-      const lastDeviceId = localStorage.getItem("c64u_last_device_id");
-      if (lastDeviceId) {
-        playlistKeys.add(`c64u_playlist:v1:${lastDeviceId}`);
-      }
-      for (let index = 0; index < localStorage.length; index += 1) {
-        const key = localStorage.key(index);
-        if (key?.startsWith("c64u_playlist:v1:")) {
-          playlistKeys.add(key);
+    await page.addInitScript(
+      ({ serialized }: { serialized: string }) => {
+        const playlistKeys = new Set<string>(["c64u_playlist:v1:default", "c64u_playlist:v1:TEST-123"]);
+        const lastDeviceId = localStorage.getItem("c64u_last_device_id");
+        if (lastDeviceId) {
+          playlistKeys.add(`c64u_playlist:v1:${lastDeviceId}`);
         }
-      }
-      playlistKeys.forEach((key) => localStorage.setItem(key, serialized));
-      if (!lastDeviceId) {
-        localStorage.setItem("c64u_last_device_id", "TEST-123");
-      }
-    });
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (key?.startsWith("c64u_playlist:v1:")) {
+            playlistKeys.add(key);
+          }
+        }
+        playlistKeys.forEach((key) => localStorage.setItem(key, serialized));
+        if (!lastDeviceId) {
+          localStorage.setItem("c64u_last_device_id", "TEST-123");
+        }
+      },
+      {
+        serialized: JSON.stringify({
+          items: [
+            {
+              source: "ultimate",
+              path: "/Usb0/Demos/demo.sid",
+              name: "demo.sid",
+              durationMs: 60000,
+            },
+          ],
+          currentIndex: -1,
+        }),
+      },
+    );
     await page.reload({ waitUntil: "domcontentloaded" });
+    await expect
+      .poll(() => indicator.getAttribute("data-connection-state"), {
+        timeout: 15000,
+      })
+      .toBe("DEMO_ACTIVE");
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
 
     const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();

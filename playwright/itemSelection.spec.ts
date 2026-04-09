@@ -86,7 +86,9 @@ const openRemoteFolder = async (container: Page, name: string) => {
 };
 
 const selectEntryCheckbox = async (container: Page, name: string) => {
+  await waitForFtpIdle(container);
   const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  await expect(row).toBeVisible({ timeout: 10000 });
   await row.getByRole("checkbox").click();
 };
 

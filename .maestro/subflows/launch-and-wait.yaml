@@ -6,6 +6,9 @@ env:
 tags:
   - subflow
 ---
+# Press Home first to dismiss any lingering notification shade or system overlay
+# that may have been left by a previous Maestro run or ANR dialog.
+- pressKey: Home
 - launchApp:
     stopApp: true
 - retry:
@@ -17,6 +20,15 @@ tags:
           file: continue-demo.yaml
       - tapOn:
           text: "Continue in Demo Mode"
+          optional: true
+      - tapOn:
+          text: "Retry connection"
+          optional: true
+      - tapOn:
+          text: "Save & Retry"
+          optional: true
+      - tapOn:
+          text: "Done"
           optional: true
       - tapOn:
           text: "Got it"
@@ -36,16 +48,25 @@ tags:
       - tapOn:
           text: "Allow only while using the app"
           optional: true
-      - waitForAnimationToEnd
-      # Initial iOS launch does not always expose the Home tab label reliably.
-      # Anchor on the home page content before returning control to callers.
       - tapOn:
-          text: "Home"
+          text: "Don't show again"
           optional: true
       - tapOn:
-          point: "8%,95%"
+          text: "OK"
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "C64 Commander"
+          visible: "Home"
           timeout: ${LONG_TIMEOUT}
+# Retry Android 16 "app compatibility" dialog dismissal because the modal can
+# appear a moment after the Home tab renders and will block all WebView taps.
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Don't show again"
+          optional: true
+      - tapOn:
+          text: "OK"
+          optional: true
+      - waitForAnimationToEnd

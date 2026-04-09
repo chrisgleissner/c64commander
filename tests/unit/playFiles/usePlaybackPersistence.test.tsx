@@ -15,10 +15,12 @@ import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 
 const usePlaybackPersistenceHarness = ({
+  resolvedDeviceId = "device-1",
   playlistStorageKey,
   localEntriesBySourceId,
   localSourceTreeUris,
 }: {
+  resolvedDeviceId?: string | null;
   playlistStorageKey: string;
   localEntriesBySourceId: Map<
     string,
@@ -67,7 +69,7 @@ const usePlaybackPersistenceHarness = ({
     setDurationMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
-    resolvedDeviceId: "device-1",
+    resolvedDeviceId,
     playlistStorageKey,
     localEntriesBySourceId,
     localSourceTreeUris,
@@ -154,6 +156,36 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].status).toBe("ready");
     });
+  });
+
+  it("hydrates persisted playlist items during the initial render before repository migration finishes", () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/immediate.sid",
+            name: "immediate.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    expect(result.current.playlist).toHaveLength(1);
+    expect(result.current.playlist[0].label).toBe("immediate.sid");
   });
 
   it("rehydrates local playlist items from persisted SAF entry URIs", async () => {
@@ -321,7 +353,57 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
+      expect(result.current.playlist[0].request.file).toBeUndefined();
       expect(result.current.playlist[0].subsongCount).toBe(4);
+    });
+  });
+
+  it("rehydrates the device-specific playlist after the resolved device id replaces the default key", async () => {
+    const devicePlaylistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      devicePlaylistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/delayed.sid",
+            name: "delayed.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ resolvedDeviceId, playlistStorageKey }) =>
+        usePlaybackPersistenceHarness({
+          resolvedDeviceId,
+          playlistStorageKey,
+          localEntriesBySourceId: new Map(),
+          localSourceTreeUris: new Map(),
+        }),
+      {
+        initialProps: {
+          resolvedDeviceId: null as string | null,
+          playlistStorageKey: buildPlaylistStorageKey("default"),
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(0);
+    });
+
+    rerender({
+      resolvedDeviceId: "device-1",
+      playlistStorageKey: devicePlaylistStorageKey,
+    });
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].label).toBe("delayed.sid");
     });
   });
 
@@ -427,6 +509,7 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("repo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
+      expect(result.current.playlist[0].request.file).toBeUndefined();
       expect(result.current.playlist[0].subsongCount).toBe(1);
     });
   });

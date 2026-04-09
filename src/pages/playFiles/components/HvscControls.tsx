@@ -8,83 +8,69 @@
 
 import { Capacitor } from "@capacitor/core";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import type { HvscPreparationState } from "@/lib/hvsc";
 
 export type HvscControlsProps = {
-  hvscInstalled: boolean;
   hvscInstalledVersion?: number | string | null;
   hvscAvailable: boolean;
   hvscUpdating: boolean;
   hvscInProgress: boolean;
   hvscCanIngest: boolean;
-  hvscPhase: "idle" | "download" | "extract" | "index" | "ready" | "failed";
-  hvscSummaryState: "idle" | "success" | "failure";
+  hvscPreparationState: HvscPreparationState;
+  hvscPreparationStatusLabel: string;
+  hvscPreparationProgressPercent: number | null;
+  hvscPreparationThroughputLabel: string | null;
+  hvscPreparationErrorReason: string | null;
+  hvscReadySongCount: number;
   hvscSummaryFilesExtracted?: number | null;
   hvscSummaryDurationMs?: number | null;
   hvscSummaryUpdatedAt?: string | null;
-  hvscSummaryFailureLabel: string;
-  hvscIngestionTotalSongs: number;
-  hvscIngestionIngestedSongs: number;
-  hvscIngestionFailedSongs: number;
+  hvscMetadataProgressLabel?: string | null;
+  hvscMetadataUpdatedAt?: string | null;
   hvscSonglengthSyntaxErrors: number;
-  hvscActionLabel: string | null;
-  hvscDownloadBytes: number | null;
-  hvscDownloadElapsedMs: number | null | undefined;
-  hvscInlineError: string | null;
   formatHvscDuration: (durationMs?: number | null) => string;
   formatHvscTimestamp: (value?: string | null) => string;
-  formatBytes: (bytes?: number | null) => string;
   onInstall: () => void;
   onIngest: () => void;
   onCancel: () => void;
+  onReindex: () => void;
   onReset: () => void;
 };
 
 export const HvscControls = ({
-  hvscInstalled,
   hvscInstalledVersion,
   hvscAvailable,
   hvscUpdating,
   hvscInProgress,
   hvscCanIngest,
-  hvscPhase,
-  hvscSummaryState,
+  hvscPreparationState,
+  hvscPreparationStatusLabel,
+  hvscPreparationProgressPercent,
+  hvscPreparationThroughputLabel,
+  hvscPreparationErrorReason,
+  hvscReadySongCount,
   hvscSummaryFilesExtracted,
   hvscSummaryDurationMs,
   hvscSummaryUpdatedAt,
-  hvscSummaryFailureLabel,
-  hvscIngestionTotalSongs,
-  hvscIngestionIngestedSongs,
-  hvscIngestionFailedSongs,
+  hvscMetadataProgressLabel,
+  hvscMetadataUpdatedAt,
   hvscSonglengthSyntaxErrors,
-  hvscActionLabel,
-  hvscDownloadBytes,
-  hvscDownloadElapsedMs,
-  hvscInlineError,
   formatHvscDuration,
   formatHvscTimestamp,
-  formatBytes,
   onInstall,
   onIngest,
   onCancel,
+  onReindex,
   onReset,
 }: HvscControlsProps) => {
-  const hvscLibraryReady = hvscInstalled || hvscIngestionTotalSongs > 0;
-  const phaseLabel = (() => {
-    switch (hvscPhase) {
-      case "download":
-        return "Downloading";
-      case "extract":
-        return "Extracting";
-      case "index":
-        return "Indexing";
-      case "ready":
-        return "Ready";
-      case "failed":
-        return "Failed";
-      default:
-        return "Idle";
-    }
-  })();
+  const readyToUseLabel = "Ready to use: Add items -> HVSC.";
+  const isReady = hvscPreparationState === "READY";
+  const isError = hvscPreparationState === "ERROR";
+  const isPreparing = hvscPreparationState === "DOWNLOADING" || hvscPreparationState === "INGESTING";
+  const isDownloaded = hvscPreparationState === "DOWNLOADED";
+  const canDownload = hvscAvailable && !hvscUpdating;
+  const canIngest = hvscAvailable && hvscCanIngest && !hvscUpdating;
 
   return (
     <div
@@ -96,86 +82,74 @@ export const HvscControls = ({
         <div>
           <p className="text-sm font-medium">HVSC</p>
           <p className="text-xs text-muted-foreground">
-            {hvscInstalled
-              ? `Installed version ${hvscInstalledVersion ?? "—"}`
-              : "Download HVSC to cache the archive set, then ingest it to browse songs."}
+            {hvscInstalledVersion
+              ? `Installed version ${hvscInstalledVersion}`
+              : "HVSC will be prepared automatically the first time you choose Add items -> HVSC."}
           </p>
-          <p className="text-[11px] text-muted-foreground">Status: {phaseLabel}</p>
+          <p className="text-[11px] text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
         </div>
+
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <Button
-            id="hvsc-download"
-            variant="default"
-            size="sm"
-            onClick={onInstall}
-            disabled={hvscUpdating || !hvscAvailable}
-            className="whitespace-normal"
-          >
+          <Button id="hvsc-download" variant="default" size="sm" onClick={onInstall} disabled={!canDownload}>
             Download HVSC
           </Button>
-          <Button
-            id="hvsc-ingest"
-            variant="outline"
-            size="sm"
-            onClick={onIngest}
-            disabled={hvscUpdating || !hvscAvailable || !hvscCanIngest}
-            className="whitespace-normal"
-          >
+          <Button id="hvsc-ingest" variant="outline" size="sm" onClick={onIngest} disabled={!canIngest}>
             Ingest HVSC
           </Button>
-          {(hvscSummaryState !== "idle" || hvscInlineError) && (
-            <Button variant="ghost" size="sm" onClick={onReset} disabled={hvscUpdating} className="whitespace-normal">
-              Reset status
-            </Button>
-          )}
-          {hvscInProgress && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onCancel}
-              className="whitespace-normal"
-              data-testid="hvsc-stop"
-            >
+          {hvscInProgress || isPreparing ? (
+            <Button variant="outline" size="sm" onClick={onCancel} data-testid="hvsc-stop">
               Stop
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {hvscSummaryState !== "idle" && (
-        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs" data-testid="hvsc-summary">
-          {hvscSummaryState === "success" ? (
-            <div className="space-y-1">
-              <p className="text-sm font-medium">HVSC ready</p>
-              {hvscLibraryReady ? (
-                <>
-                  <p>
-                    Indexed {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.
-                  </p>
-                  {hvscSonglengthSyntaxErrors > 0 && (
-                    <p className="text-amber-700 dark:text-amber-400">
-                      {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p>HVSC archives are cached. Run Ingest HVSC to build the browseable library.</p>
-              )}
-              <p>Files extracted: {hvscSummaryFilesExtracted ?? "—"}</p>
-              <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
-              <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
+      <div
+        className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-xs space-y-2"
+        data-testid="hvsc-summary"
+      >
+        {isReady ? <p className="text-sm font-medium">HVSC ready</p> : null}
+        {isError ? <p className="text-sm font-medium">HVSC preparation failed</p> : null}
+        {!isReady && !isError ? <p className="text-sm font-medium">HVSC summary</p> : null}
+
+        {isReady ? (
+          <>
+            <p className="text-sm font-medium text-foreground" data-testid="hvsc-ready-source-hint">
+              {readyToUseLabel}
+            </p>
+            <p>{hvscReadySongCount.toLocaleString()} songs indexed.</p>
+          </>
+        ) : null}
+
+        {isDownloaded ? <p>The archive download is complete. Advanced reindex uses the cached archive.</p> : null}
+
+        {isPreparing ? (
+          <div className="space-y-2" data-testid="hvsc-progress">
+            <div className="flex items-center justify-between gap-2">
+              <span>{hvscPreparationStatusLabel}</span>
+              <span>{Math.round(hvscPreparationProgressPercent ?? 0)}%</span>
             </div>
-          ) : (
-            <div className="space-y-1">
-              <p className="text-sm font-medium">HVSC update failed</p>
-              <p>{hvscSummaryFailureLabel}</p>
-              {hvscIngestionFailedSongs > 0 && (
-                <p>{hvscIngestionFailedSongs} songs could not be imported. Check diagnostics logs for details.</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+            <Progress value={hvscPreparationProgressPercent ?? 0} />
+            {hvscPreparationThroughputLabel ? (
+              <p className="text-[11px] text-muted-foreground" data-testid="hvsc-download-bytes">
+                {hvscPreparationThroughputLabel}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {hvscPreparationErrorReason ? <p className="text-destructive">{hvscPreparationErrorReason}</p> : null}
+        {hvscSonglengthSyntaxErrors > 0 ? (
+          <p className="text-amber-700 dark:text-amber-400">
+            {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
+          </p>
+        ) : null}
+        <p>Files extracted: {hvscSummaryFilesExtracted ?? "—"}</p>
+        {hvscMetadataProgressLabel ? <p>{hvscMetadataProgressLabel}</p> : null}
+        <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
+        <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
+        {hvscMetadataUpdatedAt ? <p>Metadata updated: {formatHvscTimestamp(hvscMetadataUpdatedAt)}</p> : null}
+      </div>
 
       {!hvscAvailable && (
         <p className="text-xs text-muted-foreground">
@@ -184,27 +158,28 @@ export const HvscControls = ({
             : "HVSC controls are available on native builds or when a mock bridge is enabled."}
         </p>
       )}
-      {hvscAvailable && !hvscInstalled && !hvscUpdating && !hvscCanIngest && (
+
+      {hvscAvailable && !hvscInstalledVersion && !hvscUpdating && !hvscCanIngest ? (
         <p className="text-xs text-muted-foreground">Download HVSC to cache the archive set before ingesting it.</p>
-      )}
+      ) : null}
 
-      {(hvscPhase === "download" || hvscPhase === "extract" || hvscPhase === "index") && (
-        <div className="space-y-1" data-testid="hvsc-progress">
-          <p className="text-xs text-muted-foreground">{hvscActionLabel || "Processing HVSC…"}</p>
-          <p className="text-[11px] text-muted-foreground" data-testid="hvsc-download-bytes">
-            {hvscDownloadBytes
-              ? `${(hvscDownloadBytes / 1024 / 1024).toFixed(1)} MB${hvscDownloadElapsedMs ? ` · ${formatHvscDuration(hvscDownloadElapsedMs)}` : ""}`
-              : "—"}
-          </p>
-        </div>
-      )}
-
-      {hvscInlineError && <p className="text-xs text-destructive">{hvscInlineError}</p>}
-      {hvscInstalled && hvscAvailable ? (
-        <div className="rounded-lg border border-border bg-muted/30 p-3">
-          <p className="text-xs text-muted-foreground">
-            Browse and add HVSC songs from the shared “Add items” source chooser.
-          </p>
+      {hvscAvailable ? (
+        <div className="rounded-lg border border-dashed border-border p-3 space-y-2">
+          <p className="text-xs font-medium text-foreground">Advanced</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              id="hvsc-reindex"
+              variant="outline"
+              size="sm"
+              onClick={onReindex}
+              disabled={hvscUpdating || !hvscCanIngest}
+            >
+              Reindex HVSC
+            </Button>
+            <Button id="hvsc-reset" variant="ghost" size="sm" onClick={onReset} disabled={hvscUpdating}>
+              Reset HVSC
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>

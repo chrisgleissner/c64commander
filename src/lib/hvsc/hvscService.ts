@@ -18,12 +18,18 @@ import type {
 import { Capacitor } from "@capacitor/core";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { createHvscMediaIndex } from "./hvscMediaIndex";
-import { loadHvscRoot } from "./hvscRootLocator";
 import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "./hvscBrowseIndexStore";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
+import {
+  loadHvscBrowseIndexSnapshot,
+  saveHvscBrowseIndexSnapshot,
+  verifyHvscBrowseIndexIntegrity,
+} from "./hvscBrowseIndexStore";
+import { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } from "./hvscPerformance";
 import { nextCorrelationId } from "@/lib/tracing/traceIds";
 import { recordHvscQueryTiming } from "./hvscStatusStore";
+import { createProgressEmitter } from "./hvscIngestionProgress";
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -35,8 +41,10 @@ import {
   getHvscStatus as getRuntimeStatus,
   ingestCachedHvsc as ingestRuntimeCached,
   installOrUpdateHvsc as installRuntime,
+  resetHvscLibraryData as resetRuntimeLibraryData,
 } from "./hvscIngestionRuntime";
-import { resolveHvscSonglengthDuration } from "./hvscSongLengthService";
+import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "./hvscSongLengthService";
+import { hydrateHvscMetadata } from "./hvscMetadataHydrator";
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
@@ -65,6 +73,7 @@ const hasRuntimeBridge = () => {
 };
 
 const hvscIndex = createHvscMediaIndex();
+let hvscMetadataHydrationPromise: Promise<void> | null = null;
 
 const LEGACY_MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 
@@ -144,39 +153,95 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
   return cancelRuntimeInstall(cancelToken);
 };
 
+export const resetHvscLibraryData = async (): Promise<void> => {
+  const mock = getMockBridge();
+  if (mock?.resetHvscLibraryData) {
+    return mock.resetHvscLibraryData();
+  }
+  return resetRuntimeLibraryData();
+};
+
 export const addHvscProgressListener = async (listener: HvscProgressListener) => {
   const mock = getMockBridge();
   if (mock?.addListener) return mock.addListener("progress", listener);
   return addRuntimeListener(listener);
 };
 
-const ensureHvscIndexReady = async () => {
-  await hvscIndex.load();
-  if (!hvscIndex.getAll().length) {
-    const migrated = await migrateLegacyMediaIndex();
-    if (!migrated) {
-      const root = loadHvscRoot();
-      await hvscIndex.scan([root.path]);
-    }
+export const ensureHvscMetadataHydration = async () => {
+  if (hvscMetadataHydrationPromise) {
+    return hvscMetadataHydrationPromise;
   }
 
-  const browseSnapshot = await loadHvscBrowseIndexSnapshot();
+  hvscMetadataHydrationPromise = (async () => {
+    await ensureHvscSonglengthsReadyOnColdStart();
+    const snapshot = await hvscIndex.loadBrowseSnapshot();
+    if (!snapshot) {
+      return;
+    }
+
+    const pendingSongs = Object.values(snapshot.songs).filter(
+      (song) => song.metadataStatus !== "hydrated" && song.metadataStatus !== "error",
+    );
+    if (!pendingSongs.length) {
+      return;
+    }
+
+    const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
+    const hydratedSnapshot = await hydrateHvscMetadata({
+      snapshot,
+      readSong: async (virtualPath) => getHvscSong({ virtualPath }),
+      emitProgress,
+      onSnapshotUpdated: async (nextSnapshot) => {
+        hvscIndex.setBrowseSnapshot(nextSnapshot);
+        await saveHvscBrowseIndexSnapshot(nextSnapshot);
+      },
+    });
+    hvscIndex.setBrowseSnapshot(hydratedSnapshot);
+  })()
+    .catch((error) => {
+      const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
+      emitProgress({
+        stage: "sid_metadata_hydration",
+        statusToken: "error",
+        message: "HVSC META failed",
+        errorCause: (error as Error).message,
+      });
+      addErrorLog("HVSC metadata hydration failed", {
+        error: {
+          name: (error as Error).name,
+          message: (error as Error).message,
+          stack: (error as Error).stack,
+        },
+      });
+    })
+    .finally(() => {
+      hvscMetadataHydrationPromise = null;
+    });
+
+  return hvscMetadataHydrationPromise;
+};
+
+const ensureHvscIndexReady = async () => {
+  // Root and folder browsing only need the persisted browse snapshot. Avoid
+  // eagerly loading the full media-index JSON on the first browse because that
+  // blocks large real-HVSC libraries before any folder rows can render.
+  let browseSnapshot = await hvscIndex.loadBrowseSnapshot();
   if (!browseSnapshot) {
-    const root = loadHvscRoot();
-    await hvscIndex.scan([root.path]);
-    return;
+    const migrated = await migrateLegacyMediaIndex();
+    if (migrated) {
+      browseSnapshot = await hvscIndex.loadBrowseSnapshot();
+    }
   }
+  const snapshotMissingOrEmpty = !browseSnapshot || Object.keys(browseSnapshot.songs).length === 0;
+  if (snapshotMissingOrEmpty) {
+    await ensureHvscSonglengthsReadyOnColdStart();
+    browseSnapshot = await hvscIndex.loadBrowseSnapshot();
+  }
+  if (!browseSnapshot) return;
 
   const integrity = await verifyHvscBrowseIndexIntegrity(browseSnapshot);
   if (!integrity.isValid) {
-    const root = loadHvscRoot();
-    await hvscIndex.scan([root.path]);
-    return;
-  }
-
-  const root = loadHvscRoot();
-  if (!hvscIndex.getAll().length) {
-    await hvscIndex.scan([root.path]);
+    hvscIndex.clearBrowseSnapshot();
   }
 };
 
@@ -222,8 +287,28 @@ export const getHvscFolderListingPaged = async (options: {
   const limit = Math.max(1, Math.floor(options.limit ?? 200));
   const correlationId = nextCorrelationId();
   const queryStartMs = performance.now();
+  const queryPerfScope = beginHvscPerfScope("browse:query", {
+    correlationId,
+    path,
+    query,
+    offset,
+    limit,
+  });
 
-  const recordTiming = (page: HvscFolderListingPage, phase: string) => {
+  const finalizePage = (page: HvscFolderListingPage, phase: string) => {
+    const resultCount = page.songs.length + page.folders.length;
+    const windowMs = Math.round((performance.now() - queryStartMs) * 100) / 100;
+    endHvscPerfScope(queryPerfScope, {
+      phase,
+      correlationId,
+      path,
+      query,
+      offset,
+      limit,
+      resultCount,
+      totalSongs: page.totalSongs,
+      totalFolders: page.totalFolders,
+    });
     recordHvscQueryTiming({
       correlationId,
       phase,
@@ -231,10 +316,26 @@ export const getHvscFolderListingPaged = async (options: {
       query,
       offset,
       limit,
-      resultCount: page.songs.length + page.folders.length,
-      windowMs: Math.round((performance.now() - queryStartMs) * 100) / 100,
+      resultCount,
+      windowMs,
       timestamp: new Date().toISOString(),
     });
+    void recordSmokeBenchmarkSnapshot({
+      scenario: "browse-query",
+      state: phase,
+      metadata: {
+        correlationId,
+        path,
+        query,
+        offset,
+        limit,
+        resultCount,
+        totalSongs: page.totalSongs,
+        totalFolders: page.totalFolders,
+        windowMs,
+      },
+    });
+    return page;
   };
 
   try {
@@ -246,20 +347,17 @@ export const getHvscFolderListingPaged = async (options: {
       limit,
     });
     if (page.totalFolders > 0 || page.totalSongs > 0 || !isHvscBridgeAvailable()) {
-      recordTiming(page, "index");
-      return page;
+      return finalizePage(page, "index");
     }
     const mock = getMockBridge();
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
       const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-      recordTiming(result, "mock-runtime");
-      return result;
+      return finalizePage(result, "mock-runtime");
     }
     const runtimeListing = await getRuntimeFolderListing(path);
     const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-    recordTiming(result, "runtime");
-    return result;
+    return finalizePage(result, "runtime");
   } catch (error) {
     const err = error as Error;
     addLog("info", "HVSC paged folder listing failed; falling back to runtime", {
@@ -278,13 +376,11 @@ export const getHvscFolderListingPaged = async (options: {
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
       const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-      recordTiming(result, "mock-runtime-fallback");
-      return result;
+      return finalizePage(result, "mock-runtime-fallback");
     }
     const runtimeListing = await getRuntimeFolderListing(path);
     const result = pageRuntimeListing(runtimeListing, query, offset, limit);
-    recordTiming(result, "runtime-fallback");
-    return result;
+    return finalizePage(result, "runtime-fallback");
   }
 };
 
@@ -301,10 +397,55 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
   };
 };
 
+/**
+ * Fast synchronous bulk listing of all songs under a folder.
+ * Reads directly from the in-memory browse index — no async I/O,
+ * no per-page smoke snapshots. Returns null if the index is not loaded.
+ *
+ * Bypasses `ensureHvscIndexReady()` intentionally: the integrity check
+ * there stat-probes virtual paths that may not exist on disk (songs live
+ * in native SQLite, not as individual files). When the probe fails it
+ * destructively clears the browse snapshot, causing `querySongsRecursive`
+ * to return null and the adapter to fall back to a minutes-long paged BFS.
+ * The browse page recovers via `queryFolderPage`'s inline rebuild, but
+ * the recursive query path has no such rebuild —- so we load the snapshot
+ * directly and, if still missing, rebuild from native without the stat check.
+ */
+export const getHvscSongsRecursive = async (
+  path: string,
+): Promise<ReturnType<typeof hvscIndex.querySongsRecursive>> => {
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!snapshot) return null;
+  return hvscIndex.querySongsRecursive(path);
+};
+
+export const streamHvscSongsRecursive = async (
+  path: string,
+  options: {
+    chunkSize?: number;
+    onChunk: (songs: NonNullable<ReturnType<typeof hvscIndex.querySongsRecursive>>) => Promise<void> | void;
+  },
+) => {
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!snapshot) return null;
+  return hvscIndex.streamSongsRecursive(path, options);
+};
+
 export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {
-  const mock = getMockBridge();
-  if (mock?.getHvscSong) return mock.getHvscSong(options);
-  return getRuntimeSong(options);
+  return runWithHvscPerfScope(
+    "playback:load-sid",
+    async () => {
+      const mock = getMockBridge();
+      if (mock?.getHvscSong) return mock.getHvscSong(options);
+      return getRuntimeSong(options);
+    },
+    {
+      id: options.id ?? null,
+      virtualPath: options.virtualPath ?? null,
+    },
+  );
 };
 
 export const getHvscDurationByMd5Seconds = async (md5: string) => {

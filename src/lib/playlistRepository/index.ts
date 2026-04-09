@@ -14,6 +14,7 @@ export type {
   PlaylistQueryOptions,
   PlaylistQueryResult,
   PlaylistQueryRow,
+  SerializedPlaylistSnapshot,
   RandomPlaySession,
 } from "./types";
 

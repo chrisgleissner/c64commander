@@ -11,6 +11,8 @@ import type { AddItemsProgressState } from "@/components/itemSelection/AddItemsP
 
 type AddItemsSurface = "dialog" | "page";
 
+const ACTIVE_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>(["scanning", "ingesting", "committing"]);
+
 export function useAddItemsOverlayState({
   browserOpen,
   addItemsProgressStatus,
@@ -23,7 +25,7 @@ export function useAddItemsOverlayState({
   const [addItemsSurface, setAddItemsSurface] = useState<AddItemsSurface>("dialog");
   const addItemsOverlayStartedAtRef = useRef<number | null>(null);
   const addItemsOverlayActiveRef = useRef(false);
-  const isImportNavigationBlocked = isAddingItems || addItemsProgressStatus === "scanning";
+  const isImportNavigationBlocked = isAddingItems || ACTIVE_PROGRESS_STATES.has(addItemsProgressStatus);
 
   const handleAutoConfirmStart = useCallback(() => {
     setAddItemsSurface("page");
@@ -41,14 +43,14 @@ export function useAddItemsOverlayState({
 
   useEffect(() => {
     if (browserOpen) return;
-    if (addItemsProgressStatus !== "scanning") return;
+    if (!ACTIVE_PROGRESS_STATES.has(addItemsProgressStatus)) return;
     if (addItemsSurface !== "page") {
       setAddItemsSurface("page");
     }
   }, [addItemsProgressStatus, addItemsSurface, browserOpen]);
 
   useEffect(() => {
-    if (addItemsProgressStatus === "scanning") return;
+    if (ACTIVE_PROGRESS_STATES.has(addItemsProgressStatus)) return;
     if (addItemsSurface === "page" && isAddingItems) return;
     if (addItemsSurface !== "dialog") {
       setAddItemsSurface("dialog");

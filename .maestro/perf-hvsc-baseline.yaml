@@ -1,0 +1,92 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf
+  - hvsc-perf-setup
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "180000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Retry connection"
+          optional: true
+      - tapOn:
+          text: "Save & Retry"
+          optional: true
+      - tapOn:
+          text: "Done"
+          optional: true
+      - tapOn:
+          text: "Play"
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Playlist"
+          timeout: ${TIMEOUT}
+# Clear any leftover search filter from previous test runs.
+# Scroll down from top to reveal the filter area (below the player controls)
+# using safe coordinates that stay above the native tab bar (top at y=2010).
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- tapOn:
+    text: "Clear filter"
+    optional: true
+- waitForAnimationToEnd
+# Re-select the Play tab in case the Clear-filter tap hit the tab bar
+- tapOn:
+    id: "tab-play"
+- waitForAnimationToEnd
+# Scroll to find HVSC download. Continue from current position — the 3 swipes
+# above already moved us partway down. Each retry scrolls one more screenfull.
+- retry:
+    maxRetries: 15
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 20%
+          duration: 500
+      - waitForAnimationToEnd
+      - assertVisible:
+          id: "hvsc-download"
+- tapOn:
+    id: "hvsc-download"
+- extendedWaitUntil:
+    visible: "Status: Ready"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "HVSC ready"
+- runFlow:
+    when:
+      visible: "Run Ingest HVSC"
+    commands:
+      - tapOn:
+          id: "hvsc-ingest"
+      - extendedWaitUntil:
+          visible: "Indexed "
+          timeout: ${LONG_TIMEOUT}
+      - assertVisible: "HVSC ready"
+# Scroll back to top so the playlist controls start from a known state before
+# the large-playlist setup flow runs in the same warm app session.
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- assertVisible: "Playlist"
+# Large-playlist setup moved out of this file to keep the baseline readable, but
+# it still runs as part of the same setup phase via an explicit subflow call.
+- runFlow: perf-hvsc-setup-playlist.yaml

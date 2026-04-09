@@ -198,4 +198,40 @@ describe("diagnosticsReconciler", () => {
       detail: "confidence degradation failed",
     });
   });
+
+  it("formats diagnostics failure detail as String when error is a non-null non-Error", async () => {
+    recoverStaleHealthCheckRunMock.mockImplementation(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "string_error";
+    });
+    await expect(runDiagnosticsReconciler("poll")).rejects.toBe("string_error");
+    expect(getDecisionStateSnapshot().reconcilers.diagnostics?.detail).toBe("string_error");
+  });
+
+  it("uses default message when diagnostics reconciler catches a null throw", async () => {
+    recoverStaleHealthCheckRunMock.mockImplementation(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw null;
+    });
+    await expect(runDiagnosticsReconciler("poll")).rejects.toBeNull();
+    expect(getDecisionStateSnapshot().reconcilers.diagnostics?.detail).toBe("Diagnostics reconciliation failed");
+  });
+
+  it("uses default message when config reconciler catches a null throw", async () => {
+    invalidateForVisibilityResumeMock.mockImplementation(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw null;
+    });
+    await expect(runConfigReconciler({} as never, "/", "test")).rejects.toBeNull();
+    expect(getDecisionStateSnapshot().reconcilers.config?.detail).toBe("Config reconciliation failed");
+  });
+
+  it("uses default message when playback reconciler catches a null throw", async () => {
+    vi.spyOn(decisionState, "degradePlaybackConfidence").mockImplementationOnce(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw null;
+    });
+    await expect(runPlaybackReconciler("test")).rejects.toBeNull();
+    expect(getDecisionStateSnapshot().reconcilers.playback?.detail).toBe("Playback reconciliation failed");
+  });
 });

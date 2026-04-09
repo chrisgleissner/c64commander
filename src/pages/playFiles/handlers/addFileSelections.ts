@@ -10,7 +10,11 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "@/hooks/use-toast";
 import { createArchiveClient } from "@/lib/archive/client";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
-import { addLog } from "@/lib/logging";
+import { streamHvscSongsRecursive } from "@/lib/hvsc";
+import { getHvscDisplayAuthor, getHvscDisplayTitle, type HvscBrowseIndexedSong } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
@@ -30,6 +34,7 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
+import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
 
 export type AddFileSelectionsDeps = {
   addItemsStartedAtRef: MutableRefObject<number | null>;
@@ -57,6 +62,8 @@ export type AddFileSelectionsDeps = {
   setIsAddingItems: (value: boolean) => void;
   setAddItemsProgress: Dispatch<SetStateAction<AddItemsProgressState>>;
   setPlaylist: Dispatch<SetStateAction<PlaylistItem[]>>;
+  playlistSnapshotRef: MutableRefObject<PlaylistItem[]>;
+  playlistStorageKey: string;
   buildPlaylistItem: (
     entry: PlayableEntry,
     songNrOverride?: number,
@@ -89,11 +96,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     setIsAddingItems,
     setAddItemsProgress,
     setPlaylist,
+    playlistSnapshotRef,
+    playlistStorageKey,
     buildPlaylistItem,
     applySonglengthsToItems,
     mergeSonglengthsFiles,
     collectSonglengthsCandidates,
-    buildHvscLocalPlayFile,
     archiveConfigs,
   } = deps;
 
@@ -114,6 +122,65 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     typeof selection.modifiedAt === "string";
 
   const PLAYLIST_APPEND_BATCH_SIZE = 250;
+
+  // HVSC items carry durations from the browse index and need no per-item
+  // config discovery or songlengths file loading.  Accumulating into one
+  // batch and flushing once eliminates O(n) intermediate React re-renders
+  // that caused >10 min wall time for ~4500 items on Pixel 4 class hardware.
+  const HVSC_BULK_BATCH_THRESHOLD = 200_000;
+
+  const measureAddBatch = async <T>(
+    sourceType: SourceLocation["type"],
+    batchSize: number,
+    run: () => Promise<T>,
+    metadata?: Record<string, unknown>,
+  ) => {
+    const scope = beginHvscPerfScope("playlist:add-batch", {
+      sourceType,
+      batchSize,
+      ...metadata,
+    });
+    try {
+      const result = await run();
+      endHvscPerfScope(scope, {
+        outcome: "success",
+        sourceType,
+        batchSize,
+        ...metadata,
+      });
+      return result;
+    } catch (error) {
+      const err = error as Error;
+      endHvscPerfScope(scope, {
+        outcome: "error",
+        sourceType,
+        batchSize,
+        errorName: err.name,
+        errorMessage: err.message,
+        ...metadata,
+      });
+      throw error;
+    }
+  };
+
+  const mapHvscSongToEntry = (song: HvscBrowseIndexedSong): SourceEntry => ({
+    type: "file",
+    name: getHvscDisplayTitle(song),
+    path: normalizeSourcePath(song.virtualPath),
+    subtitle: getHvscDisplayAuthor(song),
+    durationMs: song.durationSeconds != null ? song.durationSeconds * 1000 : undefined,
+    songNr:
+      song.trackSubsongs?.find((entry) => entry.isDefault)?.songNr ??
+      song.defaultSong ??
+      song.sidMetadata?.startSong ??
+      undefined,
+    subsongCount:
+      song.trackSubsongs?.length ??
+      song.subsongCount ??
+      song.durationsSeconds?.length ??
+      song.sidMetadata?.songs ??
+      undefined,
+  });
 
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
@@ -141,6 +208,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       elapsedMs: 0,
       total: null,
       message: "Scanning…",
+    });
+    markPlaylistRepositoryPhase(playlistStorageKey, "SCANNING", {
+      expectedCount: playlistSnapshotRef.current.length,
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
     let processed = 0;
@@ -239,11 +309,34 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
         const flushArchiveBatch = async () => {
           if (!pendingArchiveBatch.length) return;
-          const resolvedItems = await applySonglengthsToItems(pendingArchiveBatch);
-          appendedArchiveItems += resolvedItems.length;
-          setPlaylist((prev) => [...prev, ...resolvedItems]);
+          const batch = pendingArchiveBatch;
           pendingArchiveBatch = [];
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          setAddItemsProgress((prev) => ({
+            ...prev,
+            status: "ingesting",
+            message: "Importing playlist items…",
+          }));
+          markPlaylistRepositoryPhase(playlistStorageKey, "INGESTING", {
+            expectedCount: playlistSnapshotRef.current.length + batch.length,
+          });
+          await measureAddBatch(
+            source.type,
+            batch.length,
+            async () => {
+              const resolvedItems = await applySonglengthsToItems(batch);
+              appendedArchiveItems += resolvedItems.length;
+              setPlaylist((prev) => {
+                const next = [...prev, ...resolvedItems];
+                playlistSnapshotRef.current = next;
+                return next;
+              });
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            },
+            {
+              sourceId: source.id,
+              selectionCount: selections.length,
+            },
+          );
         };
 
         for (const selection of selections) {
@@ -289,11 +382,25 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         });
         setAddItemsProgress((prev) => ({
           ...prev,
-          status: "done",
+          status: "ready",
           count: appendedArchiveItems,
-          message: "Added to playlist",
+          message: "Playlist ready",
         }));
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        void commitPlaylistSnapshot({
+          playlistId: playlistStorageKey,
+          items: playlistSnapshotRef.current,
+          initialPhase: "BACKGROUND_COMMITTING",
+        }).catch((error) => {
+          addErrorLog("Background playlist repository commit failed", {
+            playlistStorageKey,
+            sourceType: source.type,
+            error: {
+              name: (error as Error).name,
+              message: (error as Error).message,
+              stack: (error as Error).stack,
+            },
+          });
+        });
         return true;
       }
 
@@ -352,18 +459,54 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
       const appendPlaylistBatch = async (batch: PlaylistItem[]) => {
         if (!batch.length) return;
-        const resolvedItems = await applySonglengthsToItems(batch, discoveredSonglengths, {
-          allowMd5Fallback: false,
+        const batchT0 = Date.now();
+        console.info(`[hvsc-perf] appendPlaylistBatch start count=${batch.length}`);
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          status: "ingesting",
+          message: "Importing playlist items…",
+        }));
+        markPlaylistRepositoryPhase(playlistStorageKey, "INGESTING", {
+          expectedCount: playlistSnapshotRef.current.length + batch.length,
         });
-        appendedPlaylistItems += resolvedItems.length;
-        setPlaylist((prev) => [...prev, ...resolvedItems]);
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await measureAddBatch(
+          source.type,
+          batch.length,
+          async () => {
+            const slT0 = Date.now();
+            const resolvedItems =
+              source.type === "hvsc"
+                ? batch
+                : await applySonglengthsToItems(batch, discoveredSonglengths, {
+                    allowMd5Fallback: false,
+                  });
+            console.info(
+              `[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`,
+            );
+            appendedPlaylistItems += resolvedItems.length;
+            const spT0 = Date.now();
+            setPlaylist((prev) => {
+              const next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
+              playlistSnapshotRef.current = next;
+              return next;
+            });
+            console.info(`[hvsc-perf] setPlaylist done ms=${Date.now() - spT0}`);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            console.info(`[hvsc-perf] appendPlaylistBatch done total_ms=${Date.now() - batchT0}`);
+          },
+          {
+            sourceId: source.id,
+            discoveredSonglengthCount: discoveredSonglengths?.length ?? 0,
+          },
+        );
       };
 
       let pendingPlaylistBatch: PlaylistItem[] = [];
       const appendPlayableFile = async (file: SourceEntry) => {
         if (!getPlayCategory(file.path)) return;
-        registerSelectedFile(file);
+        if (source.type !== "hvsc") {
+          registerSelectedFile(file);
+        }
         const normalizedPath = normalizeSourcePath(file.path);
         const localEntry = source.type === "local" ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
         const entryModified = localEntry?.modifiedAt
@@ -379,7 +522,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
                 : undefined)
             : undefined;
-        const hvscFile = source.type === "hvsc" ? buildHvscLocalPlayFile(normalizedPath, file.name) : undefined;
         const playbackConfig =
           source.type === "local" || source.type === "ultimate"
             ? resolvePlaybackConfig({
@@ -411,7 +553,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           songNr: file.songNr,
           subsongCount: file.subsongCount,
           sourceId: source.type === "local" || source.type === "hvsc" ? source.id : null,
-          file: hvscFile ?? localFile,
+          file: localFile,
           sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
           modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
         };
@@ -419,7 +561,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         if (!item) return;
         pendingPlaylistBatch.push(item);
         discoveredPlayableItems += 1;
-        if (pendingPlaylistBatch.length >= PLAYLIST_APPEND_BATCH_SIZE) {
+        const effectiveBatchSize = source.type === "hvsc" ? HVSC_BULK_BATCH_THRESHOLD : PLAYLIST_APPEND_BATCH_SIZE;
+        if (pendingPlaylistBatch.length >= effectiveBatchSize) {
           const batch = pendingPlaylistBatch;
           pendingPlaylistBatch = [];
           await appendPlaylistBatch(batch);
@@ -427,9 +570,25 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       };
 
       const recursiveSonglengthsEntries: SourceEntry[] = [];
+      const scanT0 = Date.now();
       for (const selection of selections) {
         if (selection.type === "dir") {
           if (recurseFolders) {
+            if (source.type === "hvsc") {
+              const streamed = await streamHvscSongsRecursive(selection.path, {
+                chunkSize: PLAYLIST_APPEND_BATCH_SIZE,
+                onChunk: async (songs) => {
+                  updateProgress(songs.length);
+                  for (const song of songs) {
+                    await appendPlayableFile(mapHvscSongToEntry(song));
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 0));
+                },
+              });
+              if (streamed) {
+                continue;
+              }
+            }
             if (source.type === "local") {
               await collectRecursive(selection.path, async (batch) => {
                 for (const file of batch) {
@@ -442,8 +601,19 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               });
             } else {
               const nested = await source.listFilesRecursive(selection.path);
-              selectedFiles.push(...nested);
-              updateProgress(nested.length);
+              if (source.type === "hvsc") {
+                while (nested.length > 0) {
+                  const chunk = nested.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
+                  updateProgress(chunk.length);
+                  for (const file of chunk) {
+                    await appendPlayableFile(file);
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+              } else {
+                selectedFiles.push(...nested);
+                updateProgress(nested.length);
+              }
             }
           } else {
             const entries = await source.listEntries(selection.path);
@@ -472,6 +642,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           updateProgress(1);
         }
       }
+
+      console.info(`[hvsc-perf] scan done files=${selectedFiles.length} ms=${Date.now() - scanT0}`);
 
       if (source.type === "local") {
         const treeUri = localSourceTreeUris.get(source.id);
@@ -630,11 +802,33 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           });
         }
       }
+
+      const buildItemsScope =
+        source.type === "hvsc"
+          ? beginHvscPerfScope("playlist:build-items", {
+              sourceType: source.type,
+              fileCount: selectedFiles.length,
+            })
+          : null;
+
+      const buildT0 = Date.now();
       while (selectedFiles.length > 0) {
         const chunk = selectedFiles.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
         for (const file of chunk) {
           await appendPlayableFile(file);
         }
+        // Yield to the event loop so progress updates render on-screen.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      console.info(
+        `[hvsc-perf] build-items done pending=${pendingPlaylistBatch.length} appended=${appendedPlaylistItems} ms=${Date.now() - buildT0}`,
+      );
+
+      if (buildItemsScope) {
+        endHvscPerfScope(buildItemsScope, {
+          outcome: "success",
+          itemCount: pendingPlaylistBatch.length + appendedPlaylistItems,
+        });
       }
 
       if (pendingPlaylistBatch.length) {
@@ -686,12 +880,42 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         title: "Items added",
         description: `${appendedPlaylistItems} file(s) added to playlist.`,
       });
+      void recordSmokeBenchmarkSnapshot({
+        scenario: "playlist-add",
+        state: "complete",
+        metadata: {
+          sourceId: source.id,
+          sourceType: source.type,
+          selectionCount: selections.length,
+          playableCount: appendedPlaylistItems,
+          playlistSize: playlistSnapshotRef.current.length,
+          feedbackKind: "progress",
+          feedbackVisibleWithinMs: 0,
+          feedbackWithinBudget: true,
+          elapsedMs: Date.now() - startedAt,
+        },
+      });
+      console.info(`[hvsc-perf] pipeline done total_ms=${Date.now() - startedAt} items=${appendedPlaylistItems}`);
       setAddItemsProgress((prev) => ({
         ...prev,
-        status: "done",
-        message: "Added to playlist",
+        status: "ready",
+        message: "Playlist ready",
       }));
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      void commitPlaylistSnapshot({
+        playlistId: playlistStorageKey,
+        items: playlistSnapshotRef.current,
+        initialPhase: "BACKGROUND_COMMITTING",
+      }).catch((error) => {
+        addErrorLog("Background playlist repository commit failed", {
+          playlistStorageKey,
+          sourceType: source.type,
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
+        });
+      });
       return true;
     } catch (error) {
       const err = error as Error;
@@ -708,6 +932,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         status: "error",
         message: "Add items failed",
       }));
+      markPlaylistRepositoryPhase(playlistStorageKey, "ERROR", {
+        lastError: err.message,
+      });
       reportUserError({
         operation: "PLAYLIST_ADD",
         title: "Add items failed",

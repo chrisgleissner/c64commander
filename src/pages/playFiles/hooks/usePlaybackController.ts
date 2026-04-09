@@ -110,6 +110,7 @@ interface UsePlaybackControllerProps {
     >
   >;
   localSourceTreeUris: Map<string, string | null>;
+  buildHvscLocalPlayFile?: (path: string, name: string) => LocalPlayFile | null | undefined;
   deviceProduct?: string | null;
   ensurePlaybackConnection: () => Promise<void>;
   resolveUnavailableConfigDecision?: (
@@ -184,6 +185,7 @@ export function usePlaybackController({
   repeatEnabled,
   localEntriesBySourceId,
   localSourceTreeUris,
+  buildHvscLocalPlayFile,
   deviceProduct,
   ensurePlaybackConnection,
   resolveUnavailableConfigDecision,
@@ -368,8 +370,26 @@ export function usePlaybackController({
     [archiveConfigs],
   );
 
+  const resolveHvscRuntimeFile = useCallback(
+    async (item: PlaylistItem) => {
+      if (item.request.source !== "hvsc" || item.request.file) return;
+      const normalizedPath = normalizeSourcePath(item.path);
+      const runtimeFile = buildHvscLocalPlayFile?.(normalizedPath, item.label);
+      if (!runtimeFile) {
+        throw new Error("HVSC file unavailable. Reinstall or re-add it to the playlist.");
+      }
+      item.request.file = runtimeFile;
+      item.request.path = normalizedPath;
+      item.path = normalizedPath;
+    },
+    [buildHvscLocalPlayFile],
+  );
+
   const playItem = useCallback(
-    async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean; playlistIndex?: number }) => {
+    async (
+      item: PlaylistItem,
+      options?: { rebootBeforePlay?: boolean; playlistIndex?: number; playlistSize?: number },
+    ) => {
       return enqueuePlayTransition(async () => {
         if (item.request.source === "commoserve" && !item.request.file) {
           try {
@@ -384,6 +404,25 @@ export function usePlaybackController({
                 item: item.label,
                 sourceId: item.sourceId ?? null,
                 archivePath: item.archiveRef?.entryPath ?? item.path,
+              },
+            });
+            markHandledUiError(error);
+            throw error;
+          }
+        }
+        if (item.request.source === "hvsc" && !item.request.file) {
+          try {
+            await resolveHvscRuntimeFile(item);
+          } catch (error) {
+            reportUserError({
+              operation: "PLAYBACK_HVSC_RESOLVE",
+              title: "HVSC playback unavailable",
+              description: (error as Error).message,
+              error,
+              context: {
+                item: item.label,
+                sourceId: item.sourceId ?? null,
+                path: item.path,
               },
             });
             markHandledUiError(error);
@@ -561,6 +600,10 @@ export function usePlaybackController({
         const executionOptions = {
           ...(shouldReboot ? { rebootBeforeMount: true } : {}),
           ...(applyPlaybackConfigBeforeLaunch ? { beforeLaunch: applyPlaybackConfigBeforeLaunch } : {}),
+          benchmarkMetadata: {
+            feedbackKind: "result",
+            ...(typeof options?.playlistSize === "number" ? { playlistSize: options.playlistSize } : {}),
+          },
         };
         const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
         addLog("info", "Playback request started", {
@@ -623,9 +666,11 @@ export function usePlaybackController({
       ensurePlaybackConnection,
       resolveUnavailableConfigDecision,
       ensureUnmuted,
+      buildHvscLocalPlayFile,
       localEntriesBySourceId,
       localSourceTreeUris,
       resolveCommoServeRuntimeFile,
+      resolveHvscRuntimeFile,
       resolveSidMetadata,
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,
@@ -663,6 +708,7 @@ export function usePlaybackController({
       try {
         await playItem(resolvedItems[startIndex], {
           playlistIndex: startIndex,
+          playlistSize: resolvedItems.length,
         });
       } catch (error) {
         if (!isHandledUiError(error)) {
@@ -712,7 +758,7 @@ export function usePlaybackController({
           return;
         }
         cancelAutoAdvance();
-        await playItem(playlist[targetIndex], { playlistIndex: targetIndex });
+        await playItem(playlist[targetIndex], { playlistIndex: targetIndex, playlistSize: playlist.length });
       } catch (error) {
         if (!isHandledUiError(error)) {
           reportUserError({

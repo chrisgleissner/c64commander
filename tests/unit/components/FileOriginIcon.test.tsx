@@ -14,15 +14,25 @@ describe("FileOriginIcon", () => {
   it("renders the ultimate icon as image", () => {
     render(<FileOriginIcon origin="ultimate" />);
     const icon = screen.getByTestId("file-origin-icon");
-    expect(icon.tagName).toBe("IMG");
-    expect(icon).toHaveAttribute("alt", "C64U file");
+    const image = icon.querySelector("img");
+    expect(icon.tagName).toBe("SPAN");
+    expect(icon).toHaveAttribute("aria-label", "C64U file");
+    expect(icon).toHaveAttribute("role", "img");
+    expect(icon).toHaveAttribute("class", expect.stringContaining("dark:invert"));
+    expect(image).not.toBeNull();
+    expect(image).toHaveAttribute("alt", "");
+    expect(image).toHaveAttribute("aria-hidden", "true");
+    expect(image).toHaveAttribute("class", expect.not.stringContaining("dark:invert"));
   });
 
   it("renders the local icon as image", () => {
     render(<FileOriginIcon origin="local" />);
     const icon = screen.getByTestId("file-origin-icon");
-    expect(icon.tagName).toBe("IMG");
-    expect(icon).toHaveAttribute("alt", "Local file");
+    const image = icon.querySelector("img");
+    expect(icon.tagName).toBe("SPAN");
+    expect(icon).toHaveAttribute("aria-label", "Local file");
+    expect(icon).toHaveAttribute("role", "img");
+    expect(image).not.toBeNull();
   });
 
   it("renders the hvsc icon as music notes symbol ♫", () => {
@@ -37,15 +47,17 @@ describe("FileOriginIcon", () => {
   it("renders the commoserve icon as stacked-records svg", () => {
     render(<FileOriginIcon origin="commoserve" />);
     const icon = screen.getByTestId("file-origin-icon");
-    expect(icon.tagName).toBe("svg");
+    const glyph = icon.querySelector("svg");
+    expect(icon.tagName).toBe("SPAN");
     expect(icon).toHaveAttribute("aria-label", "Online archive file");
+    expect(glyph).not.toBeNull();
     expect(screen.getByLabelText("Online archive file")).toBeVisible();
   });
 
   it("accepts a custom label override for ultimate", () => {
     render(<FileOriginIcon origin="ultimate" label="Custom label" />);
     const icon = screen.getByTestId("file-origin-icon");
-    expect(icon).toHaveAttribute("alt", "Custom label");
+    expect(icon).toHaveAttribute("aria-label", "Custom label");
   });
 
   it("accepts a custom label override for hvsc", () => {
@@ -58,5 +70,12 @@ describe("FileOriginIcon", () => {
     render(<FileOriginIcon origin="commoserve" label="My archive" />);
     const icon = screen.getByTestId("file-origin-icon");
     expect(icon).toHaveAttribute("aria-label", "My archive");
+  });
+
+  it("applies a glyph class override to the commoserve svg only when requested", () => {
+    render(<FileOriginIcon origin="commoserve" glyphClassName="scale-[1.22]" />);
+    const glyph = screen.getByTestId("file-origin-icon").querySelector("svg");
+    expect(glyph).not.toBeNull();
+    expect(glyph).toHaveAttribute("class", expect.stringContaining("scale-[1.22]"));
   });
 });

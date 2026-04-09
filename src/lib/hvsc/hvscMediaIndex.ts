@@ -13,9 +13,12 @@ import { listHvscFolder } from "./hvscFilesystem";
 import {
   buildHvscBrowseIndexFromEntries,
   listFolderFromBrowseIndex,
+  listSongsRecursiveFromBrowseIndex,
+  streamSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   type HvscBrowseIndexSnapshot,
+  type HvscBrowseIndexedSong,
 } from "./hvscBrowseIndexStore";
 
 const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
@@ -105,13 +108,26 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   async load(): Promise<void> {
     await this.index.load();
     this.entriesSnapshot = this.index.getAll();
-    const persistedBrowseSnapshot = await loadHvscBrowseIndexSnapshot();
-    if (persistedBrowseSnapshot) {
-      this.browseSnapshot = persistedBrowseSnapshot;
-      return;
-    }
+    const persistedBrowseSnapshot = await this.loadBrowseSnapshot();
+    if (persistedBrowseSnapshot) return;
     this.browseSnapshot = buildHvscBrowseIndexFromEntries(this.entriesSnapshot);
     await saveHvscBrowseIndexSnapshot(this.browseSnapshot);
+  }
+
+  async loadBrowseSnapshot(): Promise<HvscBrowseIndexSnapshot | null> {
+    if (this.browseSnapshot) return this.browseSnapshot;
+    const persistedBrowseSnapshot = await loadHvscBrowseIndexSnapshot();
+    if (!persistedBrowseSnapshot) return null;
+    this.browseSnapshot = persistedBrowseSnapshot;
+    return this.browseSnapshot;
+  }
+
+  setBrowseSnapshot(snapshot: HvscBrowseIndexSnapshot | null): void {
+    this.browseSnapshot = snapshot;
+  }
+
+  clearBrowseSnapshot(): void {
+    this.browseSnapshot = null;
   }
 
   async save(): Promise<void> {
@@ -172,6 +188,27 @@ export class HvscMediaIndexAdapter implements MediaIndex {
     const page = createFallbackFolderPage(entries, options.path, query, offset, limit);
     this.browseSnapshot = buildHvscBrowseIndexFromEntries(entries);
     return page;
+  }
+
+  /**
+   * Synchronous bulk recursive listing of all songs under a folder.
+   * Returns null when the browse snapshot is not loaded yet
+   * (caller should fall back to the paged BFS path).
+   */
+  querySongsRecursive(path: string): HvscBrowseIndexedSong[] | null {
+    if (!this.browseSnapshot) return null;
+    return listSongsRecursiveFromBrowseIndex(this.browseSnapshot, path);
+  }
+
+  async streamSongsRecursive(
+    path: string,
+    options: {
+      chunkSize?: number;
+      onChunk: (songs: HvscBrowseIndexedSong[]) => Promise<void> | void;
+    },
+  ): Promise<{ totalSongs: number } | null> {
+    if (!this.browseSnapshot) return null;
+    return streamSongsRecursiveFromBrowseIndex(this.browseSnapshot, path, options);
   }
 }
 

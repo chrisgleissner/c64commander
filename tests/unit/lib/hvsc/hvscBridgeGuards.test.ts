@@ -19,9 +19,9 @@ describe("HVSC bridge guardrails", () => {
     expect(runtime).toContain("HvscIngestion.ingestHvsc");
   });
 
-  it("blocks large Filesystem.readFile archive bridge reads", () => {
-    const download = readWorkspaceFile("src/lib/hvsc/hvscDownload.ts");
-    expect(download).toContain("requires the native ingestion plugin on this platform");
+  it("keeps the generic filesystem large-file guard outside the dedicated archive path", () => {
+    const filesystem = readWorkspaceFile("src/lib/hvsc/hvscFilesystem.ts");
+    expect(filesystem).toContain("HVSC Filesystem.readFile blocked for large file");
   });
 
   it("does not use eager cached archive read in cached native path", () => {

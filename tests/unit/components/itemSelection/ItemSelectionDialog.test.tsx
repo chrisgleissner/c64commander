@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
+import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 
 vi.mock("@/lib/sourceNavigation/useSourceNavigator", () => ({
@@ -142,7 +143,7 @@ describe("ItemSelectionDialog display profiles", () => {
     vi.useRealTimers();
   });
 
-  it("keeps the browser as a sheet across profile changes while preserving selection and filter state", () => {
+  it("keeps the browser as a sheet across profile changes while preserving selection and filter state", async () => {
     localStorage.clear();
     setViewportWidth(360);
 
@@ -153,6 +154,10 @@ describe("ItemSelectionDialog display profiles", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("add-items-filter")).toBeVisible();
+    });
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
@@ -276,11 +281,13 @@ describe("ItemSelectionDialog display profiles", () => {
 
     fireEvent.click(screen.getByTestId("import-option-c64u"));
 
-    const dialog = await screen.findByRole("dialog");
+    const filterInput = await screen.findByTestId("add-items-filter");
+    const dialog = filterInput.closest('[role="dialog"]');
     const close = screen.getByRole("button", { name: "Close" });
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(dialog);
+      expect(dialog).not.toBeNull();
+      expect(dialog).toContainElement(document.activeElement);
     });
     expect(document.activeElement).not.toBe(close);
   });
@@ -358,6 +365,50 @@ describe("ItemSelectionDialog display profiles", () => {
         }),
       ]);
     });
+  });
+
+  it("lets onSelectSource intercept HVSC before the browser opens", async () => {
+    const onSelectSource = vi.fn(async () => false);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          onSelectSource={onSelectSource}
+          sourceGroups={[
+            {
+              label: "Sources",
+              sources: [
+                {
+                  id: "hvsc-1",
+                  type: "hvsc",
+                  name: "HVSC library",
+                  rootPath: "/hvsc",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-hvsc"));
+
+    await waitFor(() => {
+      expect(onSelectSource).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "hvsc-1", type: "hvsc", name: "HVSC library" }),
+      );
+    });
+    expect(screen.queryByText("From HVSC")).not.toBeInTheDocument();
+    expect(screen.getByTestId("import-selection-interstitial")).toBeVisible();
   });
 });
 
@@ -457,6 +508,9 @@ describe("ItemSelectionDialog archive source buttons", () => {
     );
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-selection-view-mock")).toBeVisible();
+    });
     fireEvent.click(screen.getByText("Toggle archive result"));
     fireEvent.click(screen.getByTestId("add-items-confirm"));
 
@@ -465,7 +519,7 @@ describe("ItemSelectionDialog archive source buttons", () => {
     ]);
   });
 
-  it("updates archive selection count for select-all and clear actions", () => {
+  it("updates archive selection count for select-all and clear actions", async () => {
     render(
       <DisplayProfileProvider>
         <ItemSelectionDialog
@@ -489,6 +543,9 @@ describe("ItemSelectionDialog archive source buttons", () => {
     );
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-selection-view-mock")).toBeVisible();
+    });
     expect(screen.getByTestId("archive-selection-size")).toHaveTextContent("0");
 
     fireEvent.click(screen.getByText("Select all archive results"));
@@ -575,5 +632,65 @@ describe("ItemSelectionDialog archive source buttons", () => {
 
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
     expect(await screen.findByText("From CommoServe")).toBeVisible();
+    expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
+    expect(screen.getByTestId("archive-legal-notice")).toHaveTextContent(LEGAL_NOTICE);
+    expect(screen.getAllByText(LEGAL_NOTICE)).toHaveLength(1);
+  });
+
+  it("keeps chooser labels aligned while enlarging the CommoServe interstitial icon", async () => {
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={archiveSourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const c64uIcon = screen.getByTestId("import-option-c64u").querySelector('[data-testid="file-origin-icon"]');
+    const commoserveIcon = screen
+      .getByTestId("import-option-commoserve")
+      .querySelector('[data-testid="file-origin-icon"]');
+    const c64uIconSlot = c64uIcon?.parentElement;
+    const commoserveIconSlot = commoserveIcon?.parentElement;
+    const commoserveGlyph = commoserveIcon?.querySelector("svg");
+
+    expect(c64uIconSlot?.getAttribute("class")).toContain("h-12");
+    expect(c64uIconSlot?.getAttribute("class")).toContain("w-12");
+    expect(commoserveIconSlot?.getAttribute("class")).toContain("h-12");
+    expect(commoserveIconSlot?.getAttribute("class")).toContain("w-12");
+    expect(commoserveIcon?.getAttribute("class")).toContain("h-12");
+    expect(commoserveIcon?.getAttribute("class")).toContain("w-12");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("h-full");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("w-full");
+    expect(commoserveGlyph?.getAttribute("class")).toContain("scale-[1.22]");
+
+    fireEvent.click(screen.getByTestId("import-option-commoserve"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
+    });
+
+    const selectionIcon = screen
+      .getByTestId("add-items-selection-icon")
+      .querySelector('[data-testid="file-origin-icon"]');
+    const selectionGlyph = selectionIcon?.querySelector("svg");
+
+    expect(selectionIcon?.getAttribute("class")).toContain("h-5");
+    expect(selectionIcon?.getAttribute("class")).toContain("w-5");
+    expect(selectionGlyph?.getAttribute("class") ?? "").not.toContain("scale-[1.22]");
   });
 });

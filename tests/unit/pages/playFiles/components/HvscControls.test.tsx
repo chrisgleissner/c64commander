@@ -7,65 +7,83 @@
  */
 
 import { Capacitor } from "@capacitor/core";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { HvscControls, type HvscControlsProps } from "@/pages/playFiles/components/HvscControls";
 
 const buildProps = (overrides: Partial<HvscControlsProps> = {}): HvscControlsProps => ({
-  hvscInstalled: false,
   hvscInstalledVersion: null,
   hvscAvailable: true,
   hvscUpdating: false,
   hvscInProgress: false,
   hvscCanIngest: false,
-  hvscPhase: "idle",
-  hvscSummaryState: "idle",
+  hvscPreparationState: "NOT_PRESENT",
+  hvscPreparationStatusLabel: "Not installed",
+  hvscPreparationProgressPercent: null,
+  hvscPreparationThroughputLabel: null,
+  hvscPreparationErrorReason: null,
+  hvscReadySongCount: 0,
   hvscSummaryFilesExtracted: null,
   hvscSummaryDurationMs: null,
   hvscSummaryUpdatedAt: null,
-  hvscSummaryFailureLabel: "",
-  hvscIngestionTotalSongs: 0,
-  hvscIngestionIngestedSongs: 0,
-  hvscIngestionFailedSongs: 0,
+  hvscMetadataProgressLabel: null,
+  hvscMetadataUpdatedAt: null,
   hvscSonglengthSyntaxErrors: 0,
-  hvscActionLabel: null,
-  hvscDownloadBytes: null,
-  hvscDownloadElapsedMs: null,
-  hvscInlineError: null,
-  formatHvscDuration: () => "0s",
+  formatHvscDuration: () => "0:00",
   formatHvscTimestamp: () => "never",
-  formatBytes: () => "0 B",
   onInstall: vi.fn(),
   onIngest: vi.fn(),
   onCancel: vi.fn(),
+  onReindex: vi.fn(),
   onReset: vi.fn(),
   ...overrides,
 });
 
 describe("HvscControls", () => {
-  it("exposes stable ids for maestro hvsc smoke selectors", () => {
-    render(<HvscControls {...buildProps()} />);
+  it("exposes stable ids for the primary and advanced actions", () => {
+    render(<HvscControls {...buildProps({ hvscCanIngest: true })} />);
 
     expect(screen.getByTestId("hvsc-controls").getAttribute("id")).toBe("hvsc-controls");
     expect(screen.getByRole("button", { name: "Download HVSC" }).getAttribute("id")).toBe("hvsc-download");
     expect(screen.getByRole("button", { name: "Ingest HVSC" }).getAttribute("id")).toBe("hvsc-ingest");
+    expect(screen.getByRole("button", { name: "Reindex HVSC" }).getAttribute("id")).toBe("hvsc-reindex");
+    expect(screen.getByRole("button", { name: "Reset HVSC" }).getAttribute("id")).toBe("hvsc-reset");
   });
 
-  it("renders installed success state details and browse guidance", () => {
+  it("restores the explicit download and ingest controls", () => {
+    const onInstall = vi.fn();
+    const onIngest = vi.fn();
+
     render(
       <HvscControls
         {...buildProps({
-          hvscInstalled: true,
+          hvscCanIngest: true,
+          onInstall,
+          onIngest,
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Download HVSC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingest HVSC" }));
+
+    expect(onInstall).toHaveBeenCalledTimes(1);
+    expect(onIngest).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the ready summary and Add items browse guidance", () => {
+    render(
+      <HvscControls
+        {...buildProps({
           hvscInstalledVersion: 84,
           hvscCanIngest: true,
-          hvscPhase: "ready",
-          hvscSummaryState: "success",
+          hvscPreparationState: "READY",
+          hvscPreparationStatusLabel: "Ready",
+          hvscReadySongCount: 118,
           hvscSummaryFilesExtracted: 12,
           hvscSummaryDurationMs: 5400,
           hvscSummaryUpdatedAt: "2026-03-29T18:00:00Z",
-          hvscIngestionTotalSongs: 120,
-          hvscIngestionIngestedSongs: 118,
           hvscSonglengthSyntaxErrors: 2,
           formatHvscDuration: (value?: number | null) => `${value ?? 0}ms`,
           formatHvscTimestamp: (value?: string | null) => `at ${value}`,
@@ -76,123 +94,102 @@ describe("HvscControls", () => {
     expect(screen.getByText("Installed version 84")).toBeTruthy();
     expect(screen.getByText("Status: Ready")).toBeTruthy();
     expect(screen.getByText("HVSC ready")).toBeTruthy();
-    expect(screen.getByText("Indexed 118 of 120 songs.")).toBeTruthy();
+    expect(screen.getByTestId("hvsc-ready-source-hint")).toHaveTextContent("Ready to use: Add items -> HVSC.");
+    expect(screen.getByText("118 songs indexed.")).toBeTruthy();
     expect(screen.getByText("2 songlength entries had syntax errors and were ignored.")).toBeTruthy();
     expect(screen.getByText("Files extracted: 12")).toBeTruthy();
     expect(screen.getByText("Duration: 5400ms")).toBeTruthy();
     expect(screen.getByText("Last updated: at 2026-03-29T18:00:00Z")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Reset status" })).toBeTruthy();
-    expect(screen.getByText("Browse and add HVSC songs from the shared “Add items” source chooser.")).toBeTruthy();
   });
 
-  it("renders failure, progress, and inline error details while ingestion is active", () => {
+  it("renders preparation progress with throughput while indexing is active", () => {
     render(
       <HvscControls
         {...buildProps({
           hvscUpdating: true,
-          hvscInProgress: true,
           hvscCanIngest: true,
-          hvscPhase: "extract",
-          hvscSummaryState: "failure",
-          hvscSummaryFailureLabel: "Archive checksum mismatch",
-          hvscIngestionFailedSongs: 3,
-          hvscActionLabel: "Extracting archive",
-          hvscDownloadBytes: 6 * 1024 * 1024,
-          hvscDownloadElapsedMs: 3200,
-          hvscInlineError: "Temporary HVSC bridge error",
-          formatHvscDuration: (value?: number | null) => `${value ?? 0}ms`,
-        })}
-      />,
-    );
-
-    expect(screen.getByText("Status: Extracting")).toBeTruthy();
-    expect(screen.getByText("HVSC update failed")).toBeTruthy();
-    expect(screen.getByText("Archive checksum mismatch")).toBeTruthy();
-    expect(screen.getByText("3 songs could not be imported. Check diagnostics logs for details.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Reset status" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByTestId("hvsc-stop")).toBeTruthy();
-    expect(screen.getByTestId("hvsc-progress")).toBeTruthy();
-    expect(screen.getByText("Extracting archive")).toBeTruthy();
-    expect(screen.getByTestId("hvsc-download-bytes").textContent).toContain("6.0 MB · 3200ms");
-    expect(screen.getByText("Temporary HVSC bridge error")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Download HVSC" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: "Ingest HVSC" }).hasAttribute("disabled")).toBe(true);
-  });
-
-  it("renders cache-only success guidance before the library has been ingested", () => {
-    render(
-      <HvscControls
-        {...buildProps({
-          hvscSummaryState: "success",
-          hvscSummaryFilesExtracted: 12,
-          hvscSummaryDurationMs: 5400,
-          hvscSummaryUpdatedAt: "2026-03-29T18:00:00Z",
-          formatHvscDuration: (value?: number | null) => `${value ?? 0}ms`,
-          formatHvscTimestamp: (value?: string | null) => `at ${value}`,
-        })}
-      />,
-    );
-
-    expect(screen.getByText("HVSC ready")).toBeTruthy();
-    expect(screen.getByText("HVSC archives are cached. Run Ingest HVSC to build the browseable library.")).toBeTruthy();
-    expect(screen.queryByText("Browse and add HVSC songs from the shared “Add items” source chooser.")).toBeNull();
-  });
-
-  it("renders progress fallback text when download byte totals are unavailable", () => {
-    render(
-      <HvscControls
-        {...buildProps({
-          hvscUpdating: true,
-          hvscInProgress: true,
-          hvscPhase: "download",
-          hvscActionLabel: null,
-          hvscDownloadBytes: null,
-          hvscDownloadElapsedMs: null,
+          hvscPreparationState: "INGESTING",
+          hvscPreparationStatusLabel: "Indexing",
+          hvscPreparationProgressPercent: 67,
+          hvscPreparationThroughputLabel: "42 items/s",
         })}
       />,
     );
 
     expect(screen.getByTestId("hvsc-progress")).toBeTruthy();
-    expect(screen.getByText("Processing HVSC…")).toBeTruthy();
-    expect(screen.getByTestId("hvsc-download-bytes").textContent).toBe("—");
+    expect(screen.getByText("Status: Indexing")).toBeTruthy();
+    expect(screen.getByText("HVSC summary")).toBeTruthy();
+    expect(screen.getByText("67%")).toBeTruthy();
+    expect(screen.getByTestId("hvsc-download-bytes")).toHaveTextContent("42 items/s");
+    expect(screen.getByRole("button", { name: "Download HVSC" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ingest HVSC" })).toBeDisabled();
+    expect(screen.getByTestId("hvsc-stop")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reindex HVSC" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reset HVSC" })).toBeDisabled();
   });
 
-  it("shows reset controls for inline errors even when no summary card is visible", () => {
+  it("renders cached-download guidance before reindexing", () => {
     render(
       <HvscControls
         {...buildProps({
-          hvscInlineError: "Temporary HVSC bridge error",
+          hvscCanIngest: true,
+          hvscPreparationState: "DOWNLOADED",
+          hvscPreparationStatusLabel: "Downloaded",
         })}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Reset status" })).toBeTruthy();
-    expect(screen.queryByTestId("hvsc-summary")).toBeNull();
-    expect(screen.getByText("Temporary HVSC bridge error")).toBeTruthy();
+    expect(screen.getByText("Status: Downloaded")).toBeTruthy();
+    expect(
+      screen.getByText("The archive download is complete. Advanced reindex uses the cached archive."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reindex HVSC" })).toBeEnabled();
   });
 
-  it("omits failed-song details when a failure summary has no import failures", () => {
+  it("renders error details and dispatches advanced actions", () => {
+    const onInstall = vi.fn();
+    const onIngest = vi.fn();
+    const onCancel = vi.fn();
+    const onReindex = vi.fn();
+    const onReset = vi.fn();
+
     render(
       <HvscControls
         {...buildProps({
-          hvscSummaryState: "failure",
-          hvscSummaryFailureLabel: "Archive checksum mismatch",
-          hvscIngestionFailedSongs: 0,
+          hvscCanIngest: true,
+          hvscPreparationState: "ERROR",
+          hvscPreparationStatusLabel: "Indexing failed",
+          hvscPreparationErrorReason: "metadata parse failed",
+          onInstall,
+          onIngest,
+          onCancel,
+          onReindex,
+          onReset,
         })}
       />,
     );
 
-    expect(screen.getByText("HVSC update failed")).toBeTruthy();
-    expect(screen.getByText("Archive checksum mismatch")).toBeTruthy();
-    expect(screen.queryByText(/songs could not be imported/i)).toBeNull();
+    expect(screen.getByText("HVSC preparation failed")).toBeTruthy();
+    expect(screen.getByText("metadata parse failed")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Download HVSC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingest HVSC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reindex HVSC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset HVSC" }));
+
+    expect(onInstall).toHaveBeenCalledTimes(1);
+    expect(onIngest).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledTimes(0);
+    expect(onReindex).toHaveBeenCalledTimes(1);
+    expect(onReset).toHaveBeenCalledTimes(1);
   });
 
   it("renders the web-specific unavailable guidance", () => {
     vi.spyOn(Capacitor, "getPlatform").mockReturnValue("web");
 
-    render(<HvscControls {...buildProps({ hvscAvailable: false, hvscPhase: "failed" })} />);
+    render(<HvscControls {...buildProps({ hvscAvailable: false })} />);
 
-    expect(screen.getByText("Status: Failed")).toBeTruthy();
+    expect(screen.getByText("Status: Not installed")).toBeTruthy();
     expect(
       screen.getByText("HVSC is not available in web browsers. Install the Android or iOS app to use HVSC."),
     ).toBeTruthy();
@@ -201,9 +198,9 @@ describe("HvscControls", () => {
   it("renders the native unavailable guidance", () => {
     vi.spyOn(Capacitor, "getPlatform").mockReturnValue("android");
 
-    render(<HvscControls {...buildProps({ hvscAvailable: false, hvscPhase: "download" })} />);
+    render(<HvscControls {...buildProps({ hvscAvailable: false })} />);
 
-    expect(screen.getByText("Status: Downloading")).toBeTruthy();
+    expect(screen.getByText("Status: Not installed")).toBeTruthy();
     expect(
       screen.getByText("HVSC controls are available on native builds or when a mock bridge is enabled."),
     ).toBeTruthy();

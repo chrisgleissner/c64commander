@@ -13,6 +13,7 @@ import {
   isSmokeModeEnabled,
   isSmokeReadOnlyEnabled,
   recordSmokeStatus,
+  recordSmokeBenchmarkSnapshot,
 } from "@/lib/smoke/smokeMode";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
@@ -20,6 +21,14 @@ import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
+
+const smokeDeps = vi.hoisted(() => ({
+  collectHvscPerfTimingsMock: vi.fn(() => [{ scope: "browse:query", durationMs: 12.3 }]),
+  setHvscBaseUrlOverrideMock: vi.fn(),
+  buildBaseUrlFromDeviceHostMock: vi.fn((host: string) => `http://${host}`),
+  getC64APIConfigSnapshotMock: vi.fn(() => ({ password: "smoke-secret" })),
+  updateC64APIConfigMock: vi.fn(),
+}));
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
@@ -62,6 +71,26 @@ vi.mock("@/lib/native/featureFlags", () => ({
   },
 }));
 
+vi.mock("@/lib/hvsc/hvscPerformance", () => ({
+  collectHvscPerfTimings: (...args: unknown[]) => smokeDeps.collectHvscPerfTimingsMock(...args),
+}));
+
+vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
+  setHvscBaseUrlOverride: (...args: unknown[]) => smokeDeps.setHvscBaseUrlOverrideMock(...args),
+}));
+
+vi.mock("@/lib/c64api", () => ({
+  normalizeDeviceHost: (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, ""),
+  buildBaseUrlFromDeviceHost: (...args: unknown[]) => smokeDeps.buildBaseUrlFromDeviceHostMock(...args),
+  getC64APIConfigSnapshot: (...args: unknown[]) => smokeDeps.getC64APIConfigSnapshotMock(...args),
+  updateC64APIConfig: (...args: unknown[]) => smokeDeps.updateC64APIConfigMock(...args),
+}));
+
 describe("smokeMode", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -70,6 +99,16 @@ describe("smokeMode", () => {
     vi.mocked(saveDebugLoggingEnabled).mockClear();
     vi.mocked(featureFlagManager.reload).mockClear();
     vi.mocked(FeatureFlagsPlugin.setFlag).mockClear();
+    smokeDeps.collectHvscPerfTimingsMock.mockClear();
+    smokeDeps.setHvscBaseUrlOverrideMock.mockClear();
+    smokeDeps.buildBaseUrlFromDeviceHostMock.mockClear();
+    smokeDeps.getC64APIConfigSnapshotMock.mockClear();
+    smokeDeps.updateC64APIConfigMock.mockClear();
+    smokeDeps.updateC64APIConfigMock.mockImplementation((_: string, __: string | undefined, deviceHost?: string) => {
+      if (deviceHost) {
+        localStorage.setItem("c64u_device_host", deviceHost);
+      }
+    });
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(Filesystem.readFile).mockReset();
     vi.mocked(Filesystem.writeFile).mockReset();
@@ -100,11 +139,14 @@ describe("smokeMode", () => {
     expect(isSmokeReadOnlyEnabled()).toBe(false);
     expect(localStorage.getItem("c64u_device_host")).toBe("example.com");
     expect(localStorage.getItem("c64u_smoke_mode_enabled")).toBe("1");
+    expect(smokeDeps.buildBaseUrlFromDeviceHostMock).toHaveBeenCalledWith("example.com");
+    expect(smokeDeps.getC64APIConfigSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(smokeDeps.updateC64APIConfigMock).toHaveBeenCalledWith("http://example.com", "smoke-secret", "example.com");
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
     expect(addLog).toHaveBeenCalledWith("info", "Smoke mode enabled", expect.any(Object));
   });
 
-  it("loads config from native storage when local storage is empty", async () => {
+  it("loads config from native storage when the bootstrap flag is enabled", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockResolvedValue({
@@ -124,6 +166,33 @@ describe("smokeMode", () => {
       debugLogging: false,
     });
     expect(saveDebugLoggingEnabled).not.toHaveBeenCalled();
+  });
+
+  it("reads native smoke config on a cold start when the bootstrap flag is enabled", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
+    vi.mocked(Filesystem.readFile).mockResolvedValue({
+      data: JSON.stringify({
+        target: "real",
+        host: "192.168.1.13",
+        readOnly: true,
+        debugLogging: false,
+      }),
+    });
+
+    const config = await initializeSmokeMode();
+
+    expect(config).toEqual({
+      target: "real",
+      host: "192.168.1.13",
+      readOnly: true,
+      debugLogging: false,
+    });
+    expect(Filesystem.readFile).toHaveBeenCalledWith({
+      path: "c64u-smoke.json",
+      directory: Directory.Data,
+      encoding: Encoding.UTF8,
+    });
   });
 
   it("applies smoke feature flags to plugin and storage during initialization", async () => {
@@ -238,6 +307,64 @@ describe("smokeMode", () => {
     });
   });
 
+  it("applies an HVSC base URL override during initialization", async () => {
+    localStorage.setItem(
+      "c64u_smoke_config",
+      JSON.stringify({
+        target: "real",
+        host: "u64",
+        hvscBaseUrl: "https://example.invalid/hvsc/",
+      }),
+    );
+
+    await initializeSmokeMode();
+
+    expect(smokeDeps.setHvscBaseUrlOverrideMock).toHaveBeenCalledWith("https://example.invalid/hvsc/");
+  });
+
+  it("records smoke benchmark snapshots with timings and benchmark metadata", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem(
+      "c64u_smoke_config",
+      JSON.stringify({
+        target: "real",
+        host: "u64",
+        hvscBaseUrl: "https://example.invalid/hvsc/",
+        benchmarkRunId: "run-123",
+      }),
+    );
+
+    await initializeSmokeMode();
+    await recordSmokeBenchmarkSnapshot({
+      scenario: "Browse Query",
+      state: "complete",
+      metadata: {
+        path: "/DEMOS/0-9",
+      },
+    });
+
+    expect(Filesystem.writeFile).toHaveBeenCalledWith({
+      path: "c64u-smoke-benchmark-browse-query.json",
+      directory: Directory.Data,
+      data: expect.any(String),
+      encoding: Encoding.UTF8,
+    });
+
+    const payload = JSON.parse(vi.mocked(Filesystem.writeFile).mock.calls[0]?.[0]?.data as string);
+    expect(payload).toEqual(
+      expect.objectContaining({
+        scenario: "browse-query",
+        state: "complete",
+        target: "real",
+        host: "u64",
+        hvscBaseUrl: "https://example.invalid/hvsc/",
+        benchmarkRunId: "run-123",
+        metadata: { path: "/DEMOS/0-9" },
+        hvscPerfTimings: [{ scope: "browse:query", durationMs: 12.3 }],
+      }),
+    );
+  });
+
   it("returns null for invalid config target", async () => {
     localStorage.setItem(
       "c64u_smoke_config",
@@ -327,7 +454,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error for missing file", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("File does not exist"));
 
     const config = await initializeSmokeMode();
@@ -337,7 +464,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error for generic error", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("Permission denied"));
 
     const config = await initializeSmokeMode();
@@ -374,7 +501,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error thrown as plain string", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     // Use a plain string rejection — exercises typeof error === 'string' in getErrorMessage
     vi.mocked(Filesystem.readFile).mockRejectedValue("File does not exist");
 
@@ -386,7 +513,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error as object with nested error string", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     // Object without .message but with .error — exercises the 'error' in error branch
     vi.mocked(Filesystem.readFile).mockRejectedValue({
       error: "File not found",
@@ -400,7 +527,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error as object with nested error.message", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     // Object with nested {error: {message: '...'}} — exercises the innermost message extraction
     vi.mocked(Filesystem.readFile).mockRejectedValue({
       error: { message: "no such file" },
@@ -413,7 +540,7 @@ describe("smokeMode", () => {
 
   it("handles filesystem read error using string fallback conversion", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem("c64u_smoke_mode_enabled", "1");
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockRejectedValue(42);
 
     const config = await initializeSmokeMode();
@@ -421,6 +548,52 @@ describe("smokeMode", () => {
     expect(config).toBeNull();
     expect(addLog).toHaveBeenCalledWith("warn", "Failed to read smoke config from filesystem", {
       error: undefined,
+    });
+  });
+
+  describe("snapshot write throttle", () => {
+    const initSmokeNative = async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      localStorage.setItem(
+        "c64u_smoke_config",
+        JSON.stringify({ target: "real", host: "u64", benchmarkRunId: "run-t" }),
+      );
+      await initializeSmokeMode();
+    };
+
+    it("throttles rapid writes for the same scenario", async () => {
+      vi.useFakeTimers({ now: 100_000 });
+      try {
+        await initSmokeNative();
+
+        await recordSmokeBenchmarkSnapshot({ scenario: "throttle-same" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(1);
+
+        // Second call within 2 s — should be suppressed
+        vi.advanceTimersByTime(500);
+        await recordSmokeBenchmarkSnapshot({ scenario: "throttle-same" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(1);
+
+        // Advance past the throttle window
+        vi.advanceTimersByTime(2_000);
+        await recordSmokeBenchmarkSnapshot({ scenario: "throttle-same" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("allows concurrent writes for different scenarios", async () => {
+      vi.useFakeTimers({ now: 200_000 });
+      try {
+        await initSmokeNative();
+
+        await recordSmokeBenchmarkSnapshot({ scenario: "scenario-a" });
+        await recordSmokeBenchmarkSnapshot({ scenario: "scenario-b" });
+        expect(Filesystem.writeFile).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

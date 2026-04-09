@@ -1,0 +1,81 @@
+appId: uk.gleissner.c64commander
+tags:
+  - hvsc-perf-playlist-5k
+env:
+  # The 5K playlist build (~4540 items from DEMOS+GAMES) should complete in
+  # under 10 minutes even on constrained hardware (Pixel 4 class).
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "600000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+---
+# Warm launch: preserve in-memory HVSC browse index from the setup phase.
+- runFlow: subflows/launch-warm.yaml
+- tapOn:
+    text: "Play"
+# Scroll to top first
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: 50%, 24%
+          end: 50%, 82%
+          duration: 500
+          waitToSettleTimeoutMs: 300
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "add-items-to-playlist"
+- extendedWaitUntil:
+    visible: "Choose source"
+    timeout: ${TIMEOUT}
+- retry:
+    maxRetries: 6
+    commands:
+      - tapOn:
+          id: "import-option-hvsc"
+          optional: true
+      - tapOn:
+          text: "Add file / folder from HVSC"
+          optional: true
+      - tapOn:
+          text: "HVSC"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "From HVSC"
+          timeout: ${TIMEOUT}
+# Navigate to HVSC root
+- tapOn:
+    text: "Root"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Open DEMOS"
+    timeout: ${LONG_TIMEOUT}
+# Select ONLY DEMOS and GAMES (5K lane: ~4540 items).
+# Skip DOCUMENTS (non-music) and MUSICIANS (~56K items).
+- assertVisible: "Select DEMOS"
+- tapOn: "Select DEMOS"
+- assertVisible: "Select GAMES"
+- tapOn: "Select GAMES"
+- waitForAnimationToEnd
+- tapOn: "Add to playlist"
+# The fast path completes in sub-second, so the "Items added" toast
+# vanishes before Maestro can catch it. Assert the persistent UI instead:
+# "Clear playlist" only appears when the playlist has tracks.
+- extendedWaitUntil:
+    visible: "Clear playlist"
+    timeout: ${LONG_TIMEOUT}
+- waitForAnimationToEnd
+# Give the app time to persist the bulk playlist to IndexedDB
+- swipe:
+    start: 50%, 50%
+    end: 50%, 30%
+    duration: 500
+- swipe:
+    start: 50%, 50%
+    end: 50%, 70%
+    duration: 500
+- assertVisible: "Playlist"

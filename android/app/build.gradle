@@ -258,6 +258,7 @@ tasks.register('buildUpstream7zipAndroidBinaries', Exec) {
 
     inputs.file(upstream7zipBuildScript)
     outputs.dir(upstream7zipGeneratedJniLibsDir)
+    outputs.cacheIf { true }
 
     doFirst {
         if (!upstream7zipBuildScript.exists()) {

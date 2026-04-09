@@ -52,9 +52,25 @@ export type HvscExtractionStatus = {
   recoveryHint?: string | null;
 };
 
+export type HvscMetadataHydrationStatus = {
+  status: HvscStepStatus;
+  ingestionId?: string | null;
+  stateToken?: "queued" | "running" | "paused" | "done" | "error" | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+  processedSongs?: number | null;
+  totalSongs?: number | null;
+  percent?: number | null;
+  lastFile?: string | null;
+  errorCount?: number | null;
+  errorMessage?: string | null;
+};
+
 export type HvscStatusSummary = {
   download: HvscDownloadStatus;
   extraction: HvscExtractionStatus;
+  metadata: HvscMetadataHydrationStatus;
   lastUpdatedAt?: string | null;
 };
 
@@ -63,6 +79,7 @@ const STORAGE_KEY = "c64u_hvsc_status:v1";
 export const getDefaultHvscStatusSummary = (): HvscStatusSummary => ({
   download: { status: "idle" },
   extraction: { status: "idle" },
+  metadata: { status: "idle", stateToken: null },
   lastUpdatedAt: null,
 });
 
@@ -73,7 +90,14 @@ export const loadHvscStatusSummary = (): HvscStatusSummary => {
   try {
     const parsed = JSON.parse(raw) as HvscStatusSummary;
     if (!parsed?.download || !parsed?.extraction) return getDefaultHvscStatusSummary();
-    return parsed;
+    return {
+      ...getDefaultHvscStatusSummary(),
+      ...parsed,
+      metadata: {
+        ...getDefaultHvscStatusSummary().metadata,
+        ...(parsed.metadata ?? {}),
+      },
+    };
   } catch (error) {
     addLog("warn", "Failed to load HVSC status summary", {
       storageKey: STORAGE_KEY,
@@ -191,6 +215,42 @@ export const applyHvscProgressEventToSummary = (
     };
   }
 
+  if (event.stage === "sid_metadata_hydration") {
+    const stateToken =
+      event.statusToken ??
+      (typeof event.processedCount === "number" &&
+      typeof event.totalCount === "number" &&
+      event.totalCount > 0 &&
+      event.processedCount >= event.totalCount
+        ? "done"
+        : "running");
+    const percent =
+      typeof event.percent === "number"
+        ? event.percent
+        : typeof event.processedCount === "number" && typeof event.totalCount === "number" && event.totalCount > 0
+          ? Math.min(100, (event.processedCount / event.totalCount) * 100)
+          : (summary.metadata.percent ?? null);
+    return {
+      ...summary,
+      metadata: {
+        ...summary.metadata,
+        status: stateToken === "done" ? "success" : stateToken === "error" ? "failure" : "in-progress",
+        ingestionId: event.ingestionId,
+        stateToken,
+        startedAt: summary.metadata.startedAt ?? now,
+        finishedAt: stateToken === "done" || stateToken === "error" ? (summary.metadata.finishedAt ?? now) : null,
+        durationMs: event.elapsedTimeMs ?? summary.metadata.durationMs ?? null,
+        processedSongs: event.processedCount ?? summary.metadata.processedSongs ?? null,
+        totalSongs: event.totalCount ?? summary.metadata.totalSongs ?? null,
+        percent,
+        lastFile: event.currentFile ?? summary.metadata.lastFile ?? null,
+        errorCount: event.failedSongs ?? summary.metadata.errorCount ?? null,
+        errorMessage: stateToken === "error" ? (event.errorCause ?? event.message ?? null) : null,
+      },
+      lastUpdatedAt: now,
+    };
+  }
+
   if (event.stage === "complete") {
     return {
       ...summary,
@@ -219,6 +279,26 @@ export const applyHvscProgressEventToSummary = (
   if (event.stage === "error") {
     const category = resolveFailureCategory(event, lastStage ?? null);
     const errorMessage = event.errorCause ?? event.message ?? null;
+    if (lastStage === "sid_metadata_hydration") {
+      return {
+        ...summary,
+        metadata: {
+          ...summary.metadata,
+          status: "failure",
+          ingestionId: event.ingestionId,
+          stateToken: "error",
+          finishedAt: now,
+          durationMs: event.elapsedTimeMs ?? summary.metadata.durationMs ?? null,
+          processedSongs: event.processedCount ?? summary.metadata.processedSongs ?? null,
+          totalSongs: event.totalCount ?? summary.metadata.totalSongs ?? null,
+          percent: event.percent ?? summary.metadata.percent ?? null,
+          lastFile: event.currentFile ?? summary.metadata.lastFile ?? null,
+          errorCount: event.failedSongs ?? summary.metadata.errorCount ?? null,
+          errorMessage,
+        },
+        lastUpdatedAt: now,
+      };
+    }
     if (lastStage === "download") {
       return {
         ...summary,

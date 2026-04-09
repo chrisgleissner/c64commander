@@ -17,6 +17,7 @@ const repository = {
   upsertTracks: vi.fn().mockResolvedValue(undefined),
   replacePlaylistItems: vi.fn().mockResolvedValue(undefined),
   getPlaylistItems: vi.fn().mockResolvedValue([]),
+  getPlaylistItemCount: vi.fn().mockResolvedValue(2),
   getTracksByIds: vi.fn().mockResolvedValue(new Map()),
   saveSession: vi.fn().mockResolvedValue(undefined),
   getSession: vi.fn().mockResolvedValue(null),
@@ -133,6 +134,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
       }
     });
     repository.getPlaylistItems.mockResolvedValue([]);
+    repository.getPlaylistItemCount.mockResolvedValue(2);
     repository.getTracksByIds.mockResolvedValue(new Map());
     repository.getSession.mockResolvedValue(null);
     repository.upsertTracks.mockResolvedValue(undefined);

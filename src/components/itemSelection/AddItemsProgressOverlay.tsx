@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 
 export type AddItemsProgressState = {
-  status: "idle" | "scanning" | "error" | "done";
+  status: "idle" | "scanning" | "ingesting" | "committing" | "ready" | "error" | "done";
   count: number;
   elapsedMs: number;
   total: number | null;
@@ -40,6 +40,17 @@ const formatElapsed = (ms: number) => {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 };
 
+const ACTIVE_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>(["scanning", "ingesting", "committing"]);
+
+const resolveTitle = (title: string, status: AddItemsProgressState["status"]) => {
+  if (title !== "Scanning…") return title;
+  if (status === "ingesting") return "Importing…";
+  if (status === "committing") return "Committing…";
+  if (status === "ready") return "Ready";
+  if (status === "error") return "Import failed";
+  return title;
+};
+
 export const AddItemsProgressOverlay = ({
   progress,
   title = "Scanning…",
@@ -47,7 +58,7 @@ export const AddItemsProgressOverlay = ({
   visible,
   onCancel,
 }: AddItemsProgressOverlayProps) => {
-  const isVisible = visible === true || (visible !== false && progress.status === "scanning");
+  const isVisible = visible === true || (visible !== false && ACTIVE_PROGRESS_STATES.has(progress.status));
   const layer = useRegisterInterstitial("progress", isVisible);
 
   if (!isVisible) return null;
@@ -76,7 +87,7 @@ export const AddItemsProgressOverlay = ({
         style={{ zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
       >
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold">{title}</p>
+          <p className="text-sm font-semibold">{resolveTitle(title, progress.status)}</p>
           <span className="text-xs text-muted-foreground">{formatElapsed(progress.elapsedMs)}</span>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">

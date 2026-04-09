@@ -8,6 +8,10 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildHvscBrowseIndexFromSonglengthSnapshot,
+  listSongsRecursiveFromBrowseIndex,
+} from "@/lib/hvsc/hvscBrowseIndexStore";
+import {
   countSonglengthsEntries,
   parseSonglengths,
   resolveSonglengthsDurationMs,
@@ -32,6 +36,35 @@ describe("parseSonglengths", () => {
     expect(data.pathToSeconds.get("/HVSC/Demos/demo2.sid")).toEqual([75]);
     expect(data.md5ToSeconds.get("c0ffeec0ffeec0ffeec0ffeec0ffee00")).toEqual([30, 40]);
     expect(data.md5ToSeconds.get("c0c0anutc0c0anutc0c0anutc0c0anut")).toEqual([75]);
+  });
+
+  it("builds seeded catalog rows and folder hierarchy from a representative Songlengths.md5 fragment", () => {
+    const data = parseSonglengths(`
+      ; /MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid
+      aa11aa11aa11aa11aa11aa11aa11aa11=1:30 2:00
+      ; /GAMES/Zap.sid
+      bb22bb22bb22bb22bb22bb22bb22bb22=0:45
+    `);
+
+    const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot(data);
+    const seededSong = snapshot.songs["/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid"];
+
+    expect(seededSong).toMatchObject({
+      fileName: "Comic_Bakery.sid",
+      displayTitleSeed: "Comic Bakery",
+      displayAuthorSeed: "Rob Hubbard",
+      durationSeconds: 90,
+      durationsSeconds: [90, 120],
+      subsongCount: 2,
+      defaultSong: 1,
+      metadataStatus: "seeded",
+    });
+    expect(snapshot.folders["/MUSICIANS/H/Hubbard_Rob"]).toMatchObject({
+      path: "/MUSICIANS/H/Hubbard_Rob",
+      songs: ["/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid"],
+    });
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/MUSICIANS")).toHaveLength(1);
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/GAMES")).toHaveLength(1);
   });
 
   it("parses legacy songlengths.txt path entries", () => {

@@ -246,7 +246,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
     if (filters.transports.size > 0) options.transports = filters.transports;
     if (filters.endpoints.size > 0) options.endpoints = filters.endpoints;
     return getLatencySamples(options);
-  }, [filters]);
+  }, [filters, open]);
 
   const timePoints = useMemo(() => buildTimePoints(filteredSamples), [filteredSamples]);
 
@@ -256,7 +256,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
     if (filters.transports.size > 0) options.transports = filters.transports;
     if (filters.endpoints.size > 0) options.endpoints = filters.endpoints;
     return computeLatencyPercentiles(options);
-  }, [filters]);
+  }, [filters, open]);
 
   const isEmpty = filteredSamples.length === 0;
 

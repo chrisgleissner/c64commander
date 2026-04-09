@@ -14,6 +14,7 @@ type FileOrigin = "ultimate" | "local" | "hvsc" | "commoserve";
 type FileOriginIconProps = {
   origin: FileOrigin;
   className?: string;
+  glyphClassName?: string;
   label?: string;
 };
 
@@ -32,38 +33,46 @@ const resolveIconLabel = (origin: FileOrigin) =>
         ? "Online archive file"
         : "Local file";
 
-export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps) => {
+export const FileOriginIcon = ({ origin, className, glyphClassName, label }: FileOriginIconProps) => {
+  const ariaLabel = label ?? resolveIconLabel(origin);
+
   if (origin === "hvsc") {
     return (
       <span
-        aria-label={label ?? resolveIconLabel(origin)}
+        aria-label={ariaLabel}
         data-testid="file-origin-icon"
         role="img"
-        className={cn(
-          "inline-flex items-center justify-center h-4 w-4 text-xs leading-none shrink-0 opacity-70 select-none",
-          className,
-        )}
+        className={cn("inline-flex items-center justify-center shrink-0 opacity-70 select-none", className)}
       >
-        ♫
+        <span aria-hidden="true" className="text-[0.9em] leading-none">
+          ♫
+        </span>
       </span>
     );
   }
   if (origin === "commoserve") {
     return (
-      <Library
-        aria-label={label ?? resolveIconLabel(origin)}
+      <span
+        aria-label={ariaLabel}
         data-testid="file-origin-icon"
-        className={cn("h-4 w-4 shrink-0 opacity-70", className)}
-      />
+        role="img"
+        className={cn("inline-flex items-center justify-center shrink-0 opacity-70", className)}
+      >
+        <Library aria-hidden="true" className={cn("h-full w-full", glyphClassName)} strokeWidth={2.5} />
+      </span>
     );
   }
   return (
-    <img
-      src={resolveIconSource(origin)}
-      alt={label ?? resolveIconLabel(origin)}
-      aria-label={label ?? resolveIconLabel(origin)}
+    <span
+      aria-label={ariaLabel}
       data-testid="file-origin-icon"
-      className={cn("h-4 w-4 shrink-0 opacity-70 dark:invert dark:brightness-0", className)}
-    />
+      role="img"
+      className={cn(
+        "inline-flex items-center justify-center shrink-0 opacity-70 dark:invert dark:brightness-0",
+        className,
+      )}
+    >
+      <img src={resolveIconSource(origin)} alt="" aria-hidden="true" className="h-full w-full" />
+    </span>
   );
 };

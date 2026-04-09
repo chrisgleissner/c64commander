@@ -118,18 +118,19 @@ Build playlists for programs and songs sourced from the local device, C64U stora
 
 ### Browse & Import
 
-Import files to playlists or disk collections from your local device, C64U storage, HVSC, or CommoServe.
+Choose an import source, browse its contents, then add files to your playlist or disk collection.
 
 <table>
   <tr>
     <td><img src="docs/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
+    <td><img src="docs/img/app/play/import/03-local-file-picker.png" alt="Local file browser" width="360"/></td>
     <td><img src="docs/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
-    <td><img src="docs/img/app/play/import/03-local-file-picker.png" alt="Local folder import" width="360"/></td>
+
   </tr>
   <tr>
+    <td><img src="docs/img/app/play/import/08-hvsc-browser.png" alt="HVSC browser after preparation" width="360"/></td>
     <td><img src="docs/img/app/play/import/04-commoserve-search.png" alt="CommoServe search form" width="360"/></td>
     <td><img src="docs/img/app/play/import/05-commoserve-results-selected.png" alt="CommoServe results with selection" width="360"/></td>
-    <td></td>
   </tr>
 </table>
 
@@ -380,6 +381,8 @@ Third-party notices: `npm run notices:generate` regenerates [THIRD_PARTY_NOTICES
 ### High Voltage SID Collection (HVSC)
 
 The [High Voltage SID Collection](https://hvsc.c64.org) is an archive of C64 SID music. C64 Commander integrates HVSC for browsing, searching, and playing SID tunes with metadata and song-length support.
+
+The primary HVSC entry point is now the Add items chooser. If the library is not ready yet, the app prepares it there instead of asking you to run separate manual download and ingest steps from the Play page. The Play page keeps only status, reindex, and reset controls for recovery.
 
 ### Commodore and the C64 Ultimate
 

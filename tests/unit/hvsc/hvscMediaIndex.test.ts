@@ -474,4 +474,74 @@ describe("HvscMediaIndexAdapter", () => {
     // Should not throw, just skip saveHvscBrowseIndexSnapshot
     await expect(adapter.save()).resolves.toBeUndefined();
   });
+
+  it("querySongsRecursive returns songs from in-memory browse snapshot", async () => {
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
+    adapter.setEntries([
+      { path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" },
+      { path: "/DEMOS/B/Two.sid", name: "Two.sid", type: "sid" },
+      { path: "/GAMES/X/Three.sid", name: "Three.sid", type: "sid" },
+    ]);
+
+    const demoSongs = adapter.querySongsRecursive("/DEMOS");
+    expect(demoSongs).not.toBeNull();
+    expect(demoSongs).toHaveLength(2);
+    expect(demoSongs!.map((s) => s.fileName).sort()).toEqual(["One.sid", "Two.sid"]);
+  });
+
+  it("querySongsRecursive returns null when browse snapshot is not loaded", async () => {
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
+    // No setEntries or load — browseSnapshot is null
+    const result = adapter.querySongsRecursive("/DEMOS");
+    expect(result).toBeNull();
+  });
+
+  it("streamSongsRecursive returns null when browse snapshot is not loaded", async () => {
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
+    const result = await adapter.streamSongsRecursive("/DEMOS", { onChunk: async () => {} });
+    expect(result).toBeNull();
+  });
+
+  it("queryFolderPage fallback skips entries not under the requested path", async () => {
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
+    adapter.setEntries([
+      { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 },
+      { path: "/OTHER/b.sid", name: "b.sid", type: "sid", durationSeconds: 5 },
+    ]);
+    (adapter as any).browseSnapshot = null;
+    const page = adapter.queryFolderPage({ path: "/DEMOS", offset: 0, limit: 50 });
+    expect(page.totalSongs).toBe(1);
+    expect(page.songs[0]?.fileName).toBe("a.sid");
+  });
+
+  it("queryFolderPage fallback handles root-level entry with no durationSeconds", async () => {
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
+    // "/root.sid": lastIndexOf("/")=0 → substring(0,0)="" → "||"→"/" dir (covers binary-expr at L57)
+    // no durationSeconds → covers ?? null at L66 and L89
+    adapter.setEntries([{ path: "/root.sid", name: "root.sid", type: "sid" }]);
+    (adapter as any).browseSnapshot = null;
+    const page = adapter.queryFolderPage({ path: "/", offset: 0, limit: 50 });
+    expect(page.totalSongs).toBe(1);
+    expect(page.songs[0]?.durationSeconds).toBeNull();
+  });
 });

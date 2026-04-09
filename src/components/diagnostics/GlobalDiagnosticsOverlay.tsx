@@ -19,6 +19,7 @@ import {
 } from "@/lib/diagnostics/healthCheckState";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
+import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
 import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -45,6 +46,7 @@ import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTra
 import { recordRestResponse } from "@/lib/tracing/traceSession";
 import { getRecoveryEvidence, clearRecoveryEvidence, recordRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
 import {
+  DIAGNOSTICS_TEST_ANALYTICS_EVENT,
   DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT,
   type DiagnosticsOverlaySeedState,
 } from "@/lib/diagnostics/diagnosticsTestBridge";
@@ -111,6 +113,7 @@ export const GlobalDiagnosticsOverlay = () => {
   const trace = useActionTrace("GlobalDiagnosticsOverlay");
   const scrollRestoreRef = useRef<number | null>(null);
   const [overlayOpen, setOverlayOpen] = useState(false);
+  const [, setAnalyticsRevision] = useState(0);
   const [requestedPanel, setRequestedPanel] = useState<DiagnosticsPanelKey | null>(null);
   const [repairRunning, setRepairRunning] = useState(false);
   const healthState = useHealthState();
@@ -233,6 +236,15 @@ export const GlobalDiagnosticsOverlay = () => {
       window.removeEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlaySeedState as EventListener);
   }, []);
 
+  useEffect(() => {
+    const handleAnalyticsSeed = () => {
+      setAnalyticsRevision((revision) => revision + 1);
+    };
+
+    window.addEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed as EventListener);
+    return () => window.removeEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed as EventListener);
+  }, []);
+
   const diagnosticsExportData = useMemo(
     () => ({
       "error-logs": errorLogs,
@@ -243,6 +255,7 @@ export const GlobalDiagnosticsOverlay = () => {
         healthSnapshot: healthState,
         lastHealthCheckResult: healthCheckState.latestResult,
         healthHistory: getHealthHistorySnapshot(),
+        hvscPerfTimings: collectHvscPerfTimings(),
         latencySamples: getAllLatencySamples(),
         recoveryEvidence: getRecoveryEvidence(),
       },
@@ -484,6 +497,7 @@ export const GlobalDiagnosticsOverlay = () => {
       healthCheckRunning={healthCheckState.running}
       lastHealthCheckResult={healthCheckState.latestResult}
       liveHealthCheckProbes={healthCheckState.liveProbes}
+      healthHistory={getHealthHistorySnapshot()}
       requestedPanel={requestedPanel}
       repairRunning={repairRunning}
       onRepair={handleRepair}

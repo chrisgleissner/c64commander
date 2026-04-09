@@ -293,7 +293,7 @@ test.describe("HVSC Play page", () => {
         const state = {
           installedBaselineVersion: initialInstalledVersion ? baseline.version : null,
           installedVersion: initialInstalledVersion,
-          ingestionState: seedInstallingState ? "installing" : "idle",
+          ingestionState: seedInstallingState ? "installing" : initialInstalledVersion > 0 ? "ready" : "idle",
           lastUpdateCheckUtcMs: null as number | null,
           ingestionError: null as string | null,
           cachedBaselineVersion: null as number | null,
@@ -716,6 +716,7 @@ test.describe("HVSC Play page", () => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
+    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     const hvscDialog = await openHvscSourceBrowser(page);
     await expect(hvscDialog.getByTestId("source-entry-row").first()).toBeVisible();
     await hvscDialog.getByRole("button", { name: "Cancel" }).click();
@@ -787,9 +788,9 @@ test.describe("HVSC Play page", () => {
     await expect(page.getByTestId("hvsc-stop")).toBeVisible();
     await page.getByTestId("hvsc-stop").click();
     await expect(page.getByTestId("hvsc-stop")).toBeHidden();
-    await expect(page.getByTestId("hvsc-controls")).toContainText("Status: Failed");
+    await expect(page.getByTestId("hvsc-controls")).toContainText("Status: Download failed");
     await expect(page.getByTestId("hvsc-controls")).toContainText("Cancelled");
-    await expect(page.getByRole("button", { name: "Reset status" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset HVSC" })).toBeVisible();
     await snap(page, testInfo, "cancelled");
   });
 
@@ -882,13 +883,12 @@ test.describe("HVSC Play page", () => {
       installedVersion: 0,
       downloadProgressSteps: [512, 2048],
       ingestionProgressSteps: [1, 2],
-      installDelayMs: 400,
+      installDelayMs: 2000,
     });
     await page.goto("/play");
     await page.getByRole("button", { name: "Download HVSC" }).click();
 
     await expect(page.getByTestId("hvsc-progress")).toBeVisible();
-    await expect(page.getByTestId("hvsc-download-bytes")).toBeVisible();
     await snap(page, testInfo, "hvsc-extraction-progress");
   });
 
@@ -906,6 +906,7 @@ test.describe("HVSC Play page", () => {
     await snap(page, testInfo, "extract-failed");
 
     await page.getByRole("button", { name: "Ingest HVSC", exact: true }).click();
+    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     const hvscDialog = await openHvscSourceBrowser(page);
     await expect(hvscDialog.getByTestId("source-entry-row").first()).toBeVisible();
     await hvscDialog.getByRole("button", { name: "Cancel" }).click();

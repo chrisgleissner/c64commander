@@ -12,6 +12,7 @@ import type {
   PlaylistQueryResult,
   PlaylistSessionRecord,
   RandomPlaySession,
+  SerializedPlaylistSnapshot,
   TrackRecord,
 } from "./types";
 
@@ -21,8 +22,10 @@ export interface TrackRepository {
 }
 
 export interface PlaylistRepository {
+  replacePlaylistSnapshot?(playlistId: string, snapshot: SerializedPlaylistSnapshot): Promise<void>;
   replacePlaylistItems(playlistId: string, items: PlaylistItemRecord[]): Promise<void>;
   getPlaylistItems(playlistId: string): Promise<PlaylistItemRecord[]>;
+  getPlaylistItemCount(playlistId: string): Promise<number>;
   saveSession(session: PlaylistSessionRecord): Promise<void>;
   getSession(playlistId: string): Promise<PlaylistSessionRecord | null>;
 }

@@ -927,67 +927,114 @@ const HEALTH_CHECK_RESULT_SEED: HealthCheckRunResult = {
   },
 };
 
-const HEALTH_HISTORY_SEED = Array.from({ length: 13 }, (_, index) => {
-  const states = [
-    "Healthy",
-    "Healthy",
-    "Degraded",
-    "Unhealthy",
-    "Degraded",
-    "Healthy",
-    "Healthy",
-    "Degraded",
-    "Healthy",
-    "Healthy",
-    "Degraded",
-    "Healthy",
-    "Healthy",
-  ] as const;
-  const state = states[index] ?? "Healthy";
-  const minutesAgo = 240 - index * 20;
-  const durationMs = 320 + index * 23;
-  return {
-    timestamp: isoMinutesAgo(minutesAgo),
-    overallHealth: state,
-    durationMs,
-    probes: {
-      rest: { outcome: state === "Unhealthy" ? "Fail" : "Success", durationMs: 54 + index * 2, reason: null },
-      telnet: { outcome: state === "Unhealthy" ? "Fail" : "Success", durationMs: 63 + index * 2, reason: null },
-      jiffy: { outcome: state === "Degraded" ? "Partial" : "Success", durationMs: 68 + index * 3, reason: null },
-      raster: { outcome: "Skipped", durationMs: null, reason: "Unavailable in simulation" },
-      config: { outcome: "Success", durationMs: 92 + index * 4, reason: null },
-      ftp: {
-        outcome: index === 3 || index === 7 ? "Fail" : "Success",
-        durationMs: 125 + index * 5,
-        reason: index === 3 || index === 7 ? "Command timeout" : null,
-      },
-    },
-    latency: {
-      p50: 46 + index * 3,
-      p90: 88 + index * 5,
-      p99: 140 + index * 8,
-    },
-  };
-});
+const DIAGNOSTICS_HEALTH_WINDOW_MINUTES = 240;
+const DIAGNOSTICS_HEALTH_SAMPLE_INTERVAL_MINUTES = 2;
+const LATENCY_SAMPLE_WINDOW_MINUTES = 5;
 
-const LATENCY_SAMPLE_SEED = [
-  { minutesAgo: 4.7, transport: "REST", path: "/v1/info", durationMs: 58 },
-  { minutesAgo: 4.4, transport: "REST", path: "/v1/configs", durationMs: 212 },
-  { minutesAgo: 4.1, transport: "FTP", path: "/", durationMs: 168 },
-  { minutesAgo: 3.8, transport: "REST", path: "/v1/drives", durationMs: 124 },
-  { minutesAgo: 3.5, transport: "REST", path: "/v1/configs/Audio/Volume", durationMs: 132 },
-  { minutesAgo: 3.2, transport: "FTP", path: "/v1/ftp/read/Usb0/Games", durationMs: 226 },
-  { minutesAgo: 2.9, transport: "REST", path: "/v1/machine/reset", durationMs: 402 },
-  { minutesAgo: 2.6, transport: "REST", path: "/v1/info", durationMs: 61 },
-  { minutesAgo: 2.3, transport: "FTP", path: "/", durationMs: 178 },
-  { minutesAgo: 2.0, transport: "REST", path: "/v1/configs/Video/Palette", durationMs: 146 },
-  { minutesAgo: 1.7, transport: "REST", path: "/v1/configs/Drives/DefaultPath", durationMs: 188 },
-  { minutesAgo: 1.4, transport: "REST", path: "/v1/drives", durationMs: 138 },
-  { minutesAgo: 1.1, transport: "FTP", path: "/v1/ftp/read/Usb0/Config", durationMs: 214 },
-  { minutesAgo: 0.8, transport: "REST", path: "/v1/info", durationMs: 57 },
-  { minutesAgo: 0.5, transport: "REST", path: "/v1/configs", durationMs: 198 },
-  { minutesAgo: 0.2, transport: "REST", path: "/v1/machine/reset", durationMs: 365 },
+export const DIAGNOSTICS_HEALTH_HISTORY_SAMPLE_COUNT =
+  DIAGNOSTICS_HEALTH_WINDOW_MINUTES / DIAGNOSTICS_HEALTH_SAMPLE_INTERVAL_MINUTES + 1;
+export const DIAGNOSTICS_LATENCY_SAMPLE_COUNT = 120;
+
+const HEALTH_HISTORY_STATE_BANDS = [
+  { endIndexExclusive: 18, state: "Healthy" },
+  { endIndexExclusive: 30, state: "Degraded" },
+  { endIndexExclusive: 36, state: "Unhealthy" },
+  { endIndexExclusive: 58, state: "Healthy" },
+  { endIndexExclusive: 72, state: "Degraded" },
+  { endIndexExclusive: 78, state: "Unhealthy" },
+  { endIndexExclusive: 96, state: "Healthy" },
+  { endIndexExclusive: 108, state: "Degraded" },
+  { endIndexExclusive: 114, state: "Unhealthy" },
 ] as const;
+
+const LATENCY_SAMPLE_PROFILES = [
+  { transport: "REST", path: "/v1/info", baseDurationMs: 54 },
+  { transport: "REST", path: "/v1/configs", baseDurationMs: 126 },
+  { transport: "FTP", path: "/", baseDurationMs: 142 },
+  { transport: "REST", path: "/v1/drives", baseDurationMs: 92 },
+  { transport: "REST", path: "/v1/configs/Audio/Volume", baseDurationMs: 104 },
+  { transport: "FTP", path: "/v1/ftp/read/Usb0/Games", baseDurationMs: 174 },
+  { transport: "REST", path: "/v1/machine/reset", baseDurationMs: 208 },
+  { transport: "REST", path: "/v1/configs/Video/Palette", baseDurationMs: 118 },
+  { transport: "REST", path: "/v1/configs/Drives/DefaultPath", baseDurationMs: 134 },
+  { transport: "FTP", path: "/v1/ftp/read/Usb0/Config", baseDurationMs: 166 },
+] as const;
+
+const getHealthHistoryState = (index: number) =>
+  HEALTH_HISTORY_STATE_BANDS.find((band) => index < band.endIndexExclusive)?.state ?? "Healthy";
+
+const buildHealthHistorySeed = () =>
+  Array.from({ length: DIAGNOSTICS_HEALTH_HISTORY_SAMPLE_COUNT }, (_, index) => {
+    const minutesAgo = DIAGNOSTICS_HEALTH_WINDOW_MINUTES - index * DIAGNOSTICS_HEALTH_SAMPLE_INTERVAL_MINUTES;
+    const state = getHealthHistoryState(index);
+    const restFailed = state === "Unhealthy" && index % 2 === 0;
+    const ftpFailed = state === "Unhealthy" && !restFailed;
+    const durationMs = 260 + (index % 11) * 9;
+    const p50 = 38 + (index % 17) * 2 + (state === "Degraded" ? 10 : state === "Unhealthy" ? 22 : 0);
+    const p90 = p50 + 34 + (index % 5) * 6;
+    const p99 = p90 + 24 + (index % 4) * 8;
+    return {
+      minutesAgo,
+      timestamp: isoMinutesAgo(minutesAgo),
+      overallHealth: state,
+      durationMs,
+      probes: {
+        rest: {
+          outcome: restFailed ? "Fail" : "Success",
+          durationMs: 44 + (index % 9) * 3,
+          reason: restFailed ? "REST timeout" : null,
+        },
+        telnet: {
+          outcome: "Success",
+          durationMs: 31 + (index % 7) * 2,
+          reason: null,
+        },
+        jiffy: {
+          outcome: state === "Degraded" ? "Partial" : "Success",
+          durationMs: 28 + (index % 8) * 2,
+          reason: state === "Degraded" ? "Jiffy variance" : null,
+        },
+        raster: {
+          outcome: "Success",
+          durationMs: 22 + (index % 6) * 2,
+          reason: null,
+        },
+        config: {
+          outcome: "Success",
+          durationMs: 53 + (index % 10) * 3,
+          reason: null,
+        },
+        ftp: {
+          outcome: ftpFailed ? "Fail" : "Success",
+          durationMs: 72 + (index % 12) * 4,
+          reason: ftpFailed ? "FTP reconnect timeout" : null,
+        },
+      },
+      latency: {
+        p50,
+        p90,
+        p99,
+      },
+    };
+  });
+
+const buildLatencySampleSeed = () => {
+  const stepMinutes = LATENCY_SAMPLE_WINDOW_MINUTES / DIAGNOSTICS_LATENCY_SAMPLE_COUNT;
+  return Array.from({ length: DIAGNOSTICS_LATENCY_SAMPLE_COUNT }, (_, index) => {
+    const profile = LATENCY_SAMPLE_PROFILES[index % LATENCY_SAMPLE_PROFILES.length]!;
+    const minutesAgo = Number((LATENCY_SAMPLE_WINDOW_MINUTES - index * stepMinutes).toFixed(3));
+    const burstMs = index % 18 === 0 ? 96 : index % 9 === 0 ? 52 : 0;
+    return {
+      minutesAgo,
+      transport: profile.transport,
+      path: profile.path,
+      durationMs: profile.baseDurationMs + (index % 7) * 11 + burstMs,
+    };
+  });
+};
+
+const HEALTH_HISTORY_SEED = buildHealthHistorySeed();
+const LATENCY_SAMPLE_SEED = buildLatencySampleSeed();
 
 const RECOVERY_EVIDENCE_SEED = [
   {
@@ -1031,6 +1078,16 @@ const RECOVERY_EVIDENCE_SEED = [
     message: "Health check Healthy",
   },
 ] as const;
+
+export const buildDiagnosticsAnalyticsSeed = () => ({
+  healthHistory: HEALTH_HISTORY_SEED.map((entry) => ({ ...entry })),
+  latencySamples: LATENCY_SAMPLE_SEED.map((sample) => ({
+    ...sample,
+    timestampMs: FIXED_NOW_MS - sample.minutesAgo * 60_000,
+  })),
+  recoveryEvents: RECOVERY_EVIDENCE_SEED.map((event) => ({ ...event })),
+  lastHealthCheckResult: HEALTH_CHECK_RESULT_SEED,
+});
 
 export const TRACE_SEED: TraceEvent[] = buildTraceSeed();
 
@@ -1265,49 +1322,61 @@ export const seedDiagnosticsAnalytics = async (page: Page) => {
     return typeof bridge?.seedAnalytics === "function" && typeof bridge?.seedOverlayState === "function";
   });
 
-  await page.evaluate(
-    (seed) => {
+  const seed = buildDiagnosticsAnalyticsSeed();
+
+  await page.evaluate((seed) => {
+    const bridge = (
+      window as Window & {
+        __c64uDiagnosticsTestBridge?: {
+          seedAnalytics?: (payload: {
+            healthHistory: unknown[];
+            latencySamples: unknown[];
+            recoveryEvents: unknown[];
+          }) => void;
+          seedOverlayState?: (payload: {
+            lastHealthCheckResult: unknown;
+            healthCheckRunning: boolean;
+            liveHealthCheckProbes: null;
+          }) => void;
+        };
+      }
+    ).__c64uDiagnosticsTestBridge;
+    // Remap health history timestamps to be relative to the browser's current time so
+    // the health history chart shows its full dataset regardless of when screenshots run.
+    const browserNow = Date.now();
+    const liveHealthHistory = seed.healthHistory.map((entry: { minutesAgo: number } & Record<string, unknown>) => ({
+      ...entry,
+      timestamp: new Date(browserNow - entry.minutesAgo * 60_000).toISOString(),
+    }));
+    bridge?.seedAnalytics?.({ ...seed, healthHistory: liveHealthHistory });
+    bridge?.seedOverlayState?.({
+      lastHealthCheckResult: seed.lastHealthCheckResult,
+      healthCheckRunning: false,
+      liveHealthCheckProbes: null,
+    });
+  }, seed);
+
+  await page.waitForFunction(
+    ({ expectedHealthHistoryCount, expectedLatencySampleCount }) => {
       const bridge = (
         window as Window & {
           __c64uDiagnosticsTestBridge?: {
-            seedAnalytics?: (payload: {
+            getAnalyticsSnapshot?: () => {
               healthHistory: unknown[];
               latencySamples: unknown[];
-              recoveryEvents: unknown[];
-            }) => void;
-            seedOverlayState?: (payload: {
-              lastHealthCheckResult: unknown;
-              healthCheckRunning: boolean;
-              liveHealthCheckProbes: null;
-            }) => void;
+            };
           };
         }
       ).__c64uDiagnosticsTestBridge;
-      // Remap health history timestamps to be relative to the browser's current time so
-      // the health history chart shows its full dataset regardless of when screenshots run.
-      const browserNow = Date.now();
-      const liveHealthHistory = seed.healthHistory.map((entry: { minutesAgo: number } & Record<string, unknown>) => ({
-        ...entry,
-        timestamp: new Date(browserNow - entry.minutesAgo * 60_000).toISOString(),
-      }));
-      bridge?.seedAnalytics?.({ ...seed, healthHistory: liveHealthHistory });
-      bridge?.seedOverlayState?.({
-        lastHealthCheckResult: seed.lastHealthCheckResult,
-        healthCheckRunning: false,
-        liveHealthCheckProbes: null,
-      });
+      const snapshot = bridge?.getAnalyticsSnapshot?.();
+      return (
+        (snapshot?.healthHistory?.length ?? 0) >= expectedHealthHistoryCount &&
+        (snapshot?.latencySamples?.length ?? 0) >= expectedLatencySampleCount
+      );
     },
     {
-      healthHistory: HEALTH_HISTORY_SEED.map((entry, index) => ({
-        ...entry,
-        minutesAgo: 240 - index * 20,
-      })),
-      latencySamples: LATENCY_SAMPLE_SEED.map((sample) => ({
-        ...sample,
-        timestampMs: FIXED_NOW_MS - sample.minutesAgo * 60_000,
-      })),
-      recoveryEvents: RECOVERY_EVIDENCE_SEED,
-      lastHealthCheckResult: HEALTH_CHECK_RESULT_SEED,
+      expectedHealthHistoryCount: DIAGNOSTICS_HEALTH_HISTORY_SAMPLE_COUNT,
+      expectedLatencySampleCount: DIAGNOSTICS_LATENCY_SAMPLE_COUNT,
     },
   );
 };

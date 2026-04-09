@@ -23,6 +23,26 @@ vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
+const browseIndexMocks = vi.hoisted(() => ({
+  buildHvscBrowseIndexFromSonglengthSnapshot: vi.fn((snapshot) => ({
+    schemaVersion: 2,
+    updatedAt: new Date().toISOString(),
+    songs: Object.fromEntries(
+      Array.from(snapshot.pathToSeconds.entries()).map(([path, durations]) => [
+        path,
+        {
+          virtualPath: path,
+          fileName: path.split("/").pop() ?? path,
+          durationSeconds: durations[0] ?? null,
+          durationsSeconds: durations,
+        },
+      ]),
+    ),
+    folders: { "/": { path: "/", folders: [], songs: Array.from(snapshot.pathToSeconds.keys()) } },
+  })),
+  saveHvscBrowseIndexSnapshot: vi.fn(async () => undefined),
+}));
+
 vi.mock("@/lib/sid/sidUtils", () => ({
   base64ToUint8: vi.fn((str: string) => new TextEncoder().encode(atob(str))),
 }));
@@ -39,17 +59,28 @@ const mockFacade = vi.hoisted(() => ({
   reset: vi.fn(),
 }));
 
+const backendMock = vi.hoisted(() => ({
+  exportSnapshot: vi.fn(() => ({
+    pathToSeconds: new Map<string, number[]>(),
+    md5ToSeconds: new Map<string, number[]>(),
+  })),
+}));
+
 vi.mock("@/lib/songlengths", () => ({
-  InMemoryTextBackend: vi.fn(() => ({})),
+  InMemoryTextBackend: vi.fn(() => backendMock),
   SongLengthServiceFacade: vi.fn(() => mockFacade),
 }));
+
+vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => browseIndexMocks);
 
 import { Filesystem } from "@capacitor/filesystem";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { InMemoryTextBackend } from "@/lib/songlengths";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { saveHvscBrowseIndexSnapshot } from "@/lib/hvsc/hvscBrowseIndexStore";
 import {
   ensureHvscSonglengthsReadyOnColdStart,
+  exportHvscSonglengthsSnapshot,
   reloadHvscSonglengthsOnConfigChange,
   resolveHvscSonglengthDuration,
   getHvscSonglengthsStats,
@@ -91,6 +122,7 @@ describe("hvscSongLengthService", () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
       await ensureHvscSonglengthsReadyOnColdStart();
       expect(mockFacade.loadOnColdStart).toHaveBeenCalledTimes(1);
+      expect(saveHvscBrowseIndexSnapshot).toHaveBeenCalledTimes(1);
     });
 
     it("is idempotent on second invocation", async () => {
@@ -307,6 +339,19 @@ describe("hvscSongLengthService", () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
       await reloadHvscSonglengthsOnConfigChange();
       expect(mockFacade.reloadOnConfigChange).toHaveBeenCalledTimes(1);
+      expect(saveHvscBrowseIndexSnapshot).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("exportHvscSonglengthsSnapshot", () => {
+    it("returns the backend snapshot after ensuring cold-start readiness", async () => {
+      vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+      vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
+
+      const snapshot = await exportHvscSonglengthsSnapshot();
+
+      expect(snapshot.pathToSeconds).toBeInstanceOf(Map);
+      expect(snapshot.md5ToSeconds).toBeInstanceOf(Map);
     });
   });
 

@@ -1,0 +1,70 @@
+name: perf-nightly
+
+on:
+  schedule:
+    - cron: "15 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: perf-nightly
+  cancel-in-progress: true
+
+jobs:
+  hvsc-web-nightly:
+    name: Perf | Nightly HVSC web benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Cache HVSC archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/hvsc
+          key: hvsc-nightly-${{ runner.os }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run HVSC microbenchmarks
+        run: npm run test:bench
+
+      - name: Collect nightly HVSC full scenario summary
+        env:
+          HVSC_ARCHIVE_PATH: ${{ github.workspace }}/.cache/hvsc/HVSC_84-all-of-them.7z
+          HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
+        run: npm run test:perf:nightly
+
+      - name: Collect nightly HVSC secondary summary
+        env:
+          HVSC_ARCHIVE_PATH: ${{ github.workspace }}/.cache/hvsc/HVSC_84-all-of-them.7z
+          HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
+        run: npm run test:perf:secondary:nightly
+
+      - name: Apply optional perf budgets
+        env:
+          HVSC_PERF_SUMMARY_FILE: ci-artifacts/hvsc-performance/web/web-secondary-nightly.json
+        run: npm run test:perf:assert:web
+
+      - name: Upload perf artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hvsc-perf-nightly
+          path: ci-artifacts/hvsc-performance/**

@@ -13,6 +13,7 @@ vi.mock("@capacitor/filesystem", () => ({
   Filesystem: {
     stat: vi.fn(async () => ({ type: "file", size: 1 })),
     mkdir: vi.fn(async () => undefined),
+    deleteFile: vi.fn(async () => undefined),
     readFile: vi.fn(async () => {
       throw new Error("missing");
     }),
@@ -22,12 +23,14 @@ vi.mock("@capacitor/filesystem", () => ({
 
 import { Filesystem } from "@capacitor/filesystem";
 import {
+  buildHvscBrowseIndexFromSonglengthSnapshot,
   buildHvscBrowseIndexFromEntries,
   clearHvscBrowseIndexSnapshot,
   getHvscFoldersWithParent,
   getHvscSongFromBrowseIndex,
   listFolderFromBrowseIndex,
   listHvscFolderTracks,
+  listSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
@@ -162,7 +165,13 @@ describe("hvscBrowseIndexStore", () => {
     expect(loaded).toMatchObject({
       schemaVersion: snapshot.schemaVersion,
       folders: snapshot.folders,
-      songs: snapshot.songs,
+      songs: {
+        "/test.sid": expect.objectContaining({
+          virtualPath: "/test.sid",
+          fileName: "test.sid",
+          metadataStatus: "seeded",
+        }),
+      },
     });
     expect(loaded?.updatedAt).toEqual(expect.any(String));
   });
@@ -180,9 +189,37 @@ describe("hvscBrowseIndexStore", () => {
   it("creates empty snapshot with correct schema", async () => {
     const { createEmptyHvscBrowseIndexSnapshot } = await import("@/lib/hvsc/hvscBrowseIndexStore");
     const empty = createEmptyHvscBrowseIndexSnapshot();
-    expect(empty.schemaVersion).toBe(1);
+    expect(empty.schemaVersion).toBe(2);
     expect(empty.folders["/"]).toBeDefined();
     expect(Object.keys(empty.songs)).toHaveLength(0);
+  });
+
+  it("builds seeded song rows from Songlengths snapshot data", () => {
+    const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot({
+      pathToSeconds: new Map([
+        ["/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid", [90, 120]],
+        ["/GAMES/Zap.sid", [45]],
+      ]),
+      md5ToSeconds: new Map(),
+    });
+
+    expect(snapshot.songs["/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid"]).toMatchObject({
+      fileName: "Comic_Bakery.sid",
+      displayTitleSeed: "Comic Bakery",
+      displayAuthorSeed: "Rob Hubbard",
+      durationSeconds: 90,
+      durationsSeconds: [90, 120],
+      subsongCount: 2,
+      defaultSong: 1,
+      metadataStatus: "seeded",
+    });
+    expect(snapshot.songs["/GAMES/Zap.sid"]).toMatchObject({
+      displayTitleSeed: "Zap",
+      displayAuthorSeed: null,
+      durationSeconds: 45,
+      subsongCount: 1,
+    });
+    expect(snapshot.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain("/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid");
   });
 
   it("creates mutable browse index for baseline", async () => {
@@ -292,6 +329,71 @@ describe("hvscBrowseIndexStore", () => {
     }
   });
 
+  it("persists only the compact media index when the browse snapshot is too large", async () => {
+    const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+
+    const entries = Array.from({ length: 10001 }, (_, index) => ({
+      path: `/HVSC/${index.toString().padStart(5, "0")}/Track_${index}.sid`,
+      name: `Track_${index}.sid`,
+      type: "sid" as const,
+    }));
+    const snapshot = build(entries);
+
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.deleteFile).mockResolvedValue(undefined as any);
+
+    await saveHvscBrowseIndexSnapshot(snapshot);
+
+    expect(vi.mocked(Filesystem.writeFile)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(Filesystem.writeFile).mock.calls[0]?.[0]).toMatchObject({
+      path: "hvsc/index/media-index-v2.json",
+    });
+    expect(vi.mocked(Filesystem.deleteFile)).toHaveBeenCalledWith({
+      directory: "DATA",
+      path: "hvsc/index/hvsc-browse-index-v1.json",
+    });
+  });
+
+  it("rebuilds the browse snapshot from the compact media index when the full snapshot is absent", async () => {
+    const { loadHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+
+    const snapshot = build([
+      { path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid", name: "Commando.sid", type: "sid", durationSeconds: 123 },
+      { path: "/GAMES/Last_Ninja.sid", name: "Last_Ninja.sid", type: "sid", durationSeconds: 95 },
+    ]);
+
+    if (typeof localStorage !== "undefined") {
+      localStorage.clear();
+      localStorage.setItem(
+        "c64u_media_index:v1",
+        JSON.stringify({
+          version: 1,
+          updatedAt: snapshot.updatedAt,
+          entries: Object.values(snapshot.songs).map((song) => ({
+            path: song.virtualPath,
+            name: song.fileName,
+            type: "sid",
+            durationSeconds: song.durationSeconds ?? null,
+          })),
+        }),
+      );
+    }
+
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("missing"));
+
+    const loaded = await loadHvscBrowseIndexSnapshot();
+
+    expect(loaded?.songs["/MUSICIANS/H/Hubbard_Rob/Commando.sid"]).toMatchObject({
+      fileName: "Commando.sid",
+      durationSeconds: 123,
+      metadataStatus: "seeded",
+    });
+    expect(loaded?.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain("/MUSICIANS/H/Hubbard_Rob/Commando.sid");
+  });
+
   it("normalizeFolderPath treats empty string as root", () => {
     // Call via listFolderFromBrowseIndex with empty folderPath
     const snapshot = buildHvscBrowseIndexFromEntries([{ path: "/song.sid", name: "song.sid", type: "sid" }]);
@@ -335,7 +437,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
   it("normalizeSnapshot uses getFileName when song.fileName is empty (line 162)", async () => {
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
     const fakeSnapshot = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: new Date().toISOString(),
       songs: {
         "/DEMOS/test.sid": {
@@ -357,7 +459,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
   it("normalizeSnapshot treats null songs as empty object (line 180)", async () => {
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
     const fakeSnapshot = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: new Date().toISOString(),
       songs: null,
       folders: {},
@@ -565,5 +667,83 @@ describe("listFolderFromBrowseIndex missing folder fallback", () => {
     expect(result.songs).toEqual([]);
     expect(result.totalFolders).toBe(0);
     expect(result.totalSongs).toBe(0);
+  });
+});
+
+describe("listSongsRecursiveFromBrowseIndex", () => {
+  it("returns all songs under a subtree", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" },
+      { path: "/DEMOS/A/Two.sid", name: "Two.sid", type: "sid" },
+      { path: "/DEMOS/B/Three.sid", name: "Three.sid", type: "sid" },
+      { path: "/GAMES/X/Four.sid", name: "Four.sid", type: "sid" },
+    ]);
+
+    const demoSongs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
+    expect(demoSongs).toHaveLength(3);
+    expect(demoSongs!.map((s) => s.fileName).sort()).toEqual(["One.sid", "Three.sid", "Two.sid"]);
+  });
+
+  it("returns songs from root traversing all folders", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" },
+      { path: "/GAMES/B/Two.sid", name: "Two.sid", type: "sid" },
+    ]);
+
+    const allSongs = listSongsRecursiveFromBrowseIndex(snapshot, "/");
+    expect(allSongs).toHaveLength(2);
+  });
+
+  it("returns null for non-existent folder (signals incomplete index)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/NONEXISTENT");
+    expect(songs).toBeNull();
+  });
+
+  it("returns null for empty snapshot (stale after native ingest clears index)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([]);
+
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS")).toBeNull();
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/GAMES")).toBeNull();
+    // Root "/" always exists in the folder map, but has 0 songs
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toEqual([]);
+  });
+
+  it("handles deeply nested folder hierarchy", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/MUSICIANS/A/B/C/Deep.sid", name: "Deep.sid", type: "sid" },
+      { path: "/MUSICIANS/A/Shallow.sid", name: "Shallow.sid", type: "sid" },
+    ]);
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/MUSICIANS");
+    expect(songs).toHaveLength(2);
+    expect(songs!.map((s) => s.fileName).sort()).toEqual(["Deep.sid", "Shallow.sid"]);
+  });
+
+  it("preserves song metadata (durationSeconds, sidMetadata, trackSubsongs)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      {
+        path: "/DEMOS/A/Meta.sid",
+        name: "Meta.sid",
+        type: "sid",
+        durationSeconds: 120,
+      },
+    ]);
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
+    expect(songs).toHaveLength(1);
+    expect(songs![0]!.fileName).toBe("Meta.sid");
+    expect(songs![0]!.durationSeconds).toBe(120);
+  });
+
+  it("does not revisit already-visited folders (cycle safety)", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+    // Manually inject a circular reference in the test snapshot
+    snapshot.folders["/DEMOS"]!.folders.push("/DEMOS");
+
+    const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
+    expect(songs).toHaveLength(1);
+    expect(songs![0]!.fileName).toBe("One.sid");
   });
 });

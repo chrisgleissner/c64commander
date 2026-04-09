@@ -41,14 +41,22 @@ const openAddItemsDialog = async (page: Page) => {
   await expect(page.getByRole("dialog")).toBeVisible();
 };
 
+const waitForFtpIdle = async (container: Page | Locator) => {
+  const loading = container.getByTestId("ftp-loading");
+  if (await loading.count()) {
+    await expect(loading).toBeHidden({ timeout: 15000 });
+  }
+};
+
 const selectEntryCheckbox = async (container: Page | Locator, name: string) => {
-  const row = container.getByText(name, { exact: true }).locator("..").locator("..");
-  const checkbox = row.getByRole("checkbox");
-  await checkbox.scrollIntoViewIfNeeded();
-  await checkbox.click({ force: true });
+  await waitForFtpIdle(container);
+  const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  await expect(row).toBeVisible({ timeout: 10000 });
+  await row.getByRole("checkbox").click();
 };
 
 const openRemoteFolder = async (container: Page | Locator, name: string) => {
+  await waitForFtpIdle(container);
   const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
   await row.click();
 };
@@ -57,6 +65,7 @@ const ensureRemoteRoot = async (container: Page | Locator) => {
   const rootButton = container.getByTestId("navigate-root");
   const visible = await rootButton.isVisible().catch(() => false);
   if (!visible) return;
+  await waitForFtpIdle(container);
   const disabledAttr = await rootButton.getAttribute("disabled").catch((): null => null);
   const ariaDisabled = await rootButton.getAttribute("aria-disabled").catch((): null => null);
   if (disabledAttr !== null || ariaDisabled === "true") return;

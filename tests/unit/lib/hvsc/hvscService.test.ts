@@ -12,6 +12,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   mockIndex: {
     load: vi.fn(),
+    loadBrowseSnapshot: vi.fn().mockResolvedValue({
+      schemaVersion: 2,
+      updatedAt: new Date().toISOString(),
+      songs: {},
+      folders: { "/": { path: "/", folders: [], songs: [] } },
+    }),
+    clearBrowseSnapshot: vi.fn(),
     getAll: vi.fn().mockReturnValue([]),
     scan: vi.fn(),
     queryFolderPage: vi.fn().mockReturnValue({
@@ -24,6 +31,7 @@ const mocks = vi.hoisted(() => ({
       limit: 200,
       query: "",
     }),
+    querySongsRecursive: vi.fn().mockReturnValue(null),
   },
 }));
 
@@ -37,6 +45,7 @@ vi.mock("@capacitor/core", () => ({
     isNativePlatform: vi.fn(),
     isPluginAvailable: vi.fn(),
   },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
@@ -67,7 +76,7 @@ vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
   loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: new Date().toISOString(),
     songs: {},
     folders: { "/": { path: "/", folders: [], songs: [] } },
@@ -77,6 +86,15 @@ vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
     sampled: 0,
     missingPaths: [],
   })),
+}));
+
+vi.mock("@/lib/native/hvscIngestion", () => ({
+  HvscIngestion: {
+    queryAllSongs: vi.fn(async () => ({
+      totalSongs: 1,
+      songs: [{ virtualPath: "/DEMOS/a.sid", fileName: "a.sid" }],
+    })),
+  },
 }));
 
 describe("hvscService", () => {
@@ -94,6 +112,12 @@ describe("hvscService", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.unstubAllGlobals();
+    mocks.mockIndex.loadBrowseSnapshot.mockResolvedValue({
+      schemaVersion: 2,
+      updatedAt: new Date().toISOString(),
+      songs: {},
+      folders: { "/": { path: "/", folders: [], songs: [] } },
+    });
   });
 
   describe("isHvscBridgeAvailable", () => {
@@ -144,8 +168,7 @@ describe("hvscService", () => {
   });
 
   describe("getHvscFolderListing", () => {
-    it("uses index if entries found", async () => {
-      mocks.mockIndex.getAll.mockReturnValue([{ path: "/HVSC/foo.sid", name: "foo.sid" }]);
+    it("uses the browse snapshot path without eagerly loading the full media index", async () => {
       mocks.mockIndex.queryFolderPage.mockReturnValue({
         path: "/HVSC",
         folders: [],
@@ -161,7 +184,8 @@ describe("hvscService", () => {
 
       expect(result.songs).toHaveLength(1);
       expect(result.songs[0].fileName).toBe("foo.sid");
-      expect(mocks.mockIndex.load).toHaveBeenCalled();
+      expect(mocks.mockIndex.loadBrowseSnapshot).toHaveBeenCalled();
+      expect(mocks.mockIndex.load).not.toHaveBeenCalled();
       // Should NOT call runtime
       expect(runtime.getHvscFolderListing).not.toHaveBeenCalled();
     });
@@ -189,7 +213,7 @@ describe("hvscService", () => {
     });
 
     it("falls back to runtime if index empty and no mock bridge", async () => {
-      mocks.mockIndex.getAll.mockReturnValue([]);
+      mocks.mockIndex.loadBrowseSnapshot.mockResolvedValue(null);
       mocks.mockIndex.queryFolderPage.mockReturnValue({
         path: "/path",
         folders: [],
@@ -210,6 +234,35 @@ describe("hvscService", () => {
 
       const result = await hvscService.getHvscFolderListing("/path");
       expect(result).toEqual({ path: "/path", folders: [], songs: [] });
+    });
+
+    it("clears invalid browse snapshots before falling back", async () => {
+      const { verifyHvscBrowseIndexIntegrity } = await import("@/lib/hvsc/hvscBrowseIndexStore");
+      vi.mocked(verifyHvscBrowseIndexIntegrity).mockResolvedValueOnce({
+        isValid: false,
+        sampled: 0,
+        missingPaths: [],
+      });
+      mocks.mockIndex.queryFolderPage.mockReturnValue({
+        path: "/path",
+        folders: [],
+        songs: [],
+        totalFolders: 0,
+        totalSongs: 0,
+        offset: 0,
+        limit: 200,
+        query: "",
+      });
+      stubWindow({
+        __hvscMock__: {
+          getHvscFolderListing: vi.fn().mockReturnValue({ path: "/path", folders: [], songs: [] }),
+        },
+      });
+
+      await hvscService.getHvscFolderListing("/path");
+
+      expect(mocks.mockIndex.clearBrowseSnapshot).toHaveBeenCalled();
+      expect(mocks.mockIndex.load).not.toHaveBeenCalled();
     });
   });
 
@@ -242,6 +295,70 @@ describe("hvscService", () => {
       expect(page.path).toBe("/HVSC/DEMOS");
       expect(page.totalSongs).toBe(1);
       expect(page.songs[0]?.fileName).toBe("beta.sid");
+    });
+  });
+
+  describe("getHvscSongsRecursive", () => {
+    it("returns songs from the browse snapshot without running integrity check", async () => {
+      const snapshot = {
+        schemaVersion: 2,
+        updatedAt: new Date().toISOString(),
+        songs: { "/DEMOS/a.sid": { virtualPath: "/DEMOS/a.sid", fileName: "a.sid" } },
+        folders: {
+          "/": { path: "/", folders: ["/DEMOS"], songs: [] },
+          "/DEMOS/": { path: "/DEMOS/", folders: [], songs: ["/DEMOS/a.sid"] },
+        },
+      };
+      mocks.mockIndex.loadBrowseSnapshot.mockResolvedValue(snapshot);
+      const expectedSongs = [{ virtualPath: "/DEMOS/a.sid", fileName: "a.sid" }];
+      mocks.mockIndex.querySongsRecursive.mockReturnValue(expectedSongs);
+
+      stubWindow({});
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+      const result = await hvscService.getHvscSongsRecursive("/DEMOS");
+
+      expect(mocks.mockIndex.loadBrowseSnapshot).toHaveBeenCalled();
+      expect(mocks.mockIndex.querySongsRecursive).toHaveBeenCalledWith("/DEMOS");
+      expect(result).toBe(expectedSongs);
+      // The integrity check must NOT have cleared the snapshot — that would
+      // cause querySongsRecursive to return null and trigger a minutes-long
+      // BFS fallback instead of the sub-second bulk query.
+      expect(mocks.mockIndex.clearBrowseSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("rebuilds browse snapshot from native when snapshot is missing", async () => {
+      mocks.mockIndex.loadBrowseSnapshot.mockResolvedValue(null);
+      mocks.mockIndex.querySongsRecursive.mockReturnValue(null);
+
+      stubWindow({});
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+      const result = await hvscService.getHvscSongsRecursive("/DEMOS");
+
+      expect(mocks.mockIndex.loadBrowseSnapshot).toHaveBeenCalled();
+      expect(mocks.mockIndex.clearBrowseSnapshot).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+
+    it("returns null when browse snapshot remains empty after songlength bootstrap", async () => {
+      const emptySnapshot = {
+        schemaVersion: 2,
+        updatedAt: new Date().toISOString(),
+        songs: {},
+        folders: {},
+      };
+      mocks.mockIndex.loadBrowseSnapshot.mockResolvedValue(emptySnapshot);
+      mocks.mockIndex.querySongsRecursive.mockReturnValue(null);
+
+      stubWindow({});
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+      const result = await hvscService.getHvscSongsRecursive("/DEMOS");
+
+      expect(mocks.mockIndex.clearBrowseSnapshot).not.toHaveBeenCalled();
+      expect(mocks.mockIndex.loadBrowseSnapshot).toHaveBeenCalled();
+      expect(result).toBeNull();
     });
   });
 });
