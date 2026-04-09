@@ -26,7 +26,7 @@ Documents reviewed in full:
 Screenshots reviewed:
 
 - `docs/img/app/home/profiles/medium/01-overview.png`
-- `docs/img/app/diagnostics/devices/01-expanded.png`
+- `docs/img/app/diagnostics/switch-device/01-picker.png`
 - `docs/img/app/diagnostics/01-overview.png`
 - `docs/img/app/settings/sections/02-connection.png`
 

@@ -788,7 +788,9 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <Label className="text-sm font-medium">Saved devices</Label>
-                      <p className="text-xs text-muted-foreground">Select a device here or switch from diagnostics.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Manage devices here. Long press the header badge to switch quickly.
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={handleAddSavedDevice}>

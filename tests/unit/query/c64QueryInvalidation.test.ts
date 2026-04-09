@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import {
   getRouteInvalidationPrefixes,
+  getSavedDeviceSwitchPrefixes,
   invalidateForConnectionSettingsChange,
   invalidateForConnectionStateTransition,
   invalidateForRouteChange,
+  invalidateForSavedDeviceSwitch,
   invalidateForVisibilityResume,
 } from "@/lib/query/c64QueryInvalidation";
 
@@ -41,6 +43,13 @@ describe("c64QueryInvalidation", () => {
     expect(getRouteInvalidationPrefixes("/config")).toContain("c64-config-item");
     expect(getRouteInvalidationPrefixes("/config")).toContain("c64-config-items");
     expect(getRouteInvalidationPrefixes("/config")).toContain("c64-info");
+  });
+
+  it("excludes c64-all-config from saved-device switch prefixes on config routes", () => {
+    expect(getSavedDeviceSwitchPrefixes("/config")).toContain("c64-info");
+    expect(getSavedDeviceSwitchPrefixes("/config")).toContain("c64-config-item");
+    expect(getSavedDeviceSwitchPrefixes("/config")).toContain("c64-config-items");
+    expect(getSavedDeviceSwitchPrefixes("/config")).not.toContain("c64-all-config");
   });
 
   it("invalidates route prefixes using query keys instead of broad predicates", () => {
@@ -96,6 +105,23 @@ describe("c64QueryInvalidation", () => {
     expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"], type: "active" });
     expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"], type: "active" });
     expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"], type: "active" });
+  });
+
+  it("saved-device switch invalidates and refetches only the active-route prefixes", () => {
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const refetchSpy = vi.spyOn(queryClient, "refetchQueries");
+
+    invalidateForSavedDeviceSwitch(queryClient, "/config");
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ["c64-all-config"] });
+    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"], type: "active" });
+    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item"], type: "active" });
+    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"], type: "active" });
+    expect(refetchSpy).not.toHaveBeenCalledWith({ queryKey: ["c64-all-config"], type: "active" });
   });
 
   it("invalidates on meaningful connection state transitions only", () => {

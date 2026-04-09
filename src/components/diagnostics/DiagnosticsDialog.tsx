@@ -40,8 +40,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { useSavedDevices } from "@/hooks/useSavedDevices";
-import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
@@ -65,12 +63,6 @@ import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
 import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
-import {
-  buildSavedDevicePrimaryLabel,
-  getSavedDeviceSwitchStatus,
-  type DeviceSwitchStatus,
-  type SavedDevice,
-} from "@/lib/savedDevices/store";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
@@ -361,34 +353,6 @@ const FilterChip = ({ label }: { label: string }) => (
     {label}
   </span>
 );
-
-const DEVICE_SWITCH_STATUS_LABEL: Record<DeviceSwitchStatus, string> = {
-  connected: "Connected",
-  verifying: "Verifying",
-  offline: "Offline",
-  mismatch: "Mismatch",
-  "last-known": "Last known",
-};
-
-const formatUniqueIdFragment = (value?: string | null) => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  return trimmed.length <= 6 ? trimmed : trimmed.slice(-6);
-};
-
-const buildDeviceSecondaryLine = (
-  device: SavedDevice,
-  verifiedProduct: string | null,
-  verifiedHostname: string | null,
-  verifiedUniqueId: string | null,
-) => {
-  const parts = [verifiedProduct ?? device.lastKnownProduct ?? "C64U", device.host];
-  const uniqueFragment = formatUniqueIdFragment(verifiedUniqueId ?? device.lastKnownUniqueId);
-  if (uniqueFragment) {
-    parts.push(uniqueFragment);
-  }
-  return parts.join(" · ");
-};
 
 const FilterToggleChip = ({
   label,
@@ -960,8 +924,6 @@ export function DiagnosticsDialog({
   onRepair,
 }: Props) {
   const navigate = useNavigate();
-  const savedDevices = useSavedDevices();
-  const switchSavedDevice = useSavedDeviceSwitching();
   const { profile } = useDisplayProfile();
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);
@@ -969,7 +931,6 @@ export function DiagnosticsDialog({
   const [contributor, setContributor] = useState<ContributorFilter>("All");
   const [severity, setSeverity] = useState<SeverityFilter>("All");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [devicesExpanded, setDevicesExpanded] = useState(false);
   const [connectionMode, setConnectionMode] = useState<"view" | "edit">("view");
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [connectionDraft, setConnectionDraft] = useState<ConnectionDraft>({
@@ -1072,7 +1033,6 @@ export function DiagnosticsDialog({
     setContributor("All");
     setSeverity("All");
     setFiltersOpen(false);
-    setDevicesExpanded(false);
     setConnectionOpen(false);
     setConnectionMode("view");
     setConnectionError(null);
@@ -1235,14 +1195,6 @@ export function DiagnosticsDialog({
     navigate("/settings");
   }, [navigate, onOpenChange]);
 
-  const handleSwitchDevice = useCallback(
-    async (deviceId: string) => {
-      await switchSavedDevice(deviceId);
-      onOpenChange(false);
-    },
-    [onOpenChange, switchSavedDevice],
-  );
-
   return (
     <>
       <AppSheet open={open} onOpenChange={onOpenChange}>
@@ -1273,6 +1225,29 @@ export function DiagnosticsDialog({
                     <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Views
                     </p>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        openConnectionView();
+                      }}
+                      data-testid="diagnostics-connection-details-action"
+                    >
+                      Connection details
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        handleManageDevices();
+                      }}
+                      data-testid="diagnostics-manage-devices-action"
+                    >
+                      Manage devices
+                    </button>
+                    <div className="my-1 border-t border-border" />
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
@@ -1488,80 +1463,9 @@ export function DiagnosticsDialog({
               ) : null}
             </section>
 
-            <section
-              className="mt-3 shrink-0 rounded-xl border border-border/70 bg-card p-3"
-              data-testid="diagnostics-devices"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  className="flex min-w-0 items-center gap-2 text-left"
-                  onClick={() => setDevicesExpanded((current) => !current)}
-                  data-testid="diagnostics-devices-toggle"
-                  aria-expanded={devicesExpanded}
-                  aria-controls="diagnostics-devices-list"
-                >
-                  {devicesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  <p className="text-sm font-semibold text-foreground">Devices</p>
-                </button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleManageDevices}
-                  data-testid="manage-devices-button"
-                >
-                  Manage
-                </Button>
-              </div>
-              {devicesExpanded ? (
-                <div id="diagnostics-devices-list" className="mt-2 space-y-2" data-testid="diagnostics-devices-list">
-                  {savedDevices.devices.map((device) => {
-                    const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
-                    const status =
-                      device.id === savedDevices.selectedDeviceId
-                        ? getSavedDeviceSwitchStatus(device.id)
-                        : "last-known";
-                    const isSelected = device.id === savedDevices.selectedDeviceId;
-                    return (
-                      <button
-                        key={device.id}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
-                          isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
-                        )}
-                        onClick={() => {
-                          void handleSwitchDevice(device.id);
-                        }}
-                        data-testid={`diagnostics-device-row-${device.id}`}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {buildSavedDevicePrimaryLabel(device, verified)}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {buildDeviceSecondaryLine(
-                              device,
-                              verified?.product ?? null,
-                              verified?.hostname ?? null,
-                              verified?.uniqueId ?? null,
-                            )}
-                          </p>
-                        </div>
-                        <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          {DEVICE_SWITCH_STATUS_LABEL[status]}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </section>
-
             {/* Phase 3: Unified filter bar */}
             <div
-              className="mt-2 flex items-center gap-1.5 overflow-hidden rounded-full border border-border/70 bg-card px-2.5 py-1.5 text-xs"
+              className="mt-3 flex items-center gap-1.5 overflow-hidden rounded-full border border-border/70 bg-card px-2.5 py-1.5 text-xs"
               data-testid="filters-collapsed-bar"
             >
               <span className="shrink-0 font-semibold text-foreground">Filters</span>

@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
 // Mock health state hook
@@ -32,6 +32,53 @@ const mockConnectionStatus = {
   state: "REAL_CONNECTED",
   deviceInfo: { product: "C64 Ultimate", errors: [] as string[] },
 };
+const mockSavedDevices = {
+  devices: [
+    {
+      id: "device-office",
+      nickname: "Office U64",
+      shortLabel: "Office",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "office-u64",
+      lastKnownUniqueId: "UID-OFFICE",
+    },
+    {
+      id: "device-backup",
+      nickname: "Backup Lab",
+      shortLabel: "Backup",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+    },
+  ],
+  selectedDeviceId: "device-office",
+  verifiedByDeviceId: {
+    "device-office": {
+      product: "U64",
+      hostname: "office-u64",
+      unique_id: "UID-OFFICE",
+    },
+    "device-backup": {
+      product: "U64E",
+      hostname: "backup-lab",
+      unique_id: "UID-BACKUP",
+    },
+  },
+  switchSummaryByDeviceId: {},
+  summaryOrder: [],
+};
+const mockSwitchSavedDevice = vi.fn();
+const mockRequestDiagnosticsOpen = vi.fn();
 
 vi.mock("@/hooks/useHealthState", () => ({
   useHealthState: () => mockHealthState,
@@ -47,8 +94,16 @@ vi.mock("@/hooks/useC64Connection", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useSavedDevices", () => ({
+  useSavedDevices: () => mockSavedDevices,
+}));
+
+vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
+  useSavedDeviceSwitching: () => mockSwitchSavedDevice,
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
-  requestDiagnosticsOpen: vi.fn(),
+  requestDiagnosticsOpen: mockRequestDiagnosticsOpen,
 }));
 
 describe("UnifiedHealthBadge", () => {
@@ -60,6 +115,13 @@ describe("UnifiedHealthBadge", () => {
     mockHealthState.problemCount = 3;
     mockConnectionStatus.state = "REAL_CONNECTED";
     mockConnectionStatus.deviceInfo = { product: "C64 Ultimate", errors: [] };
+    mockSavedDevices.selectedDeviceId = "device-office";
+    mockSwitchSavedDevice.mockReset();
+    mockRequestDiagnosticsOpen.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders capped counts exactly once on compact and medium profiles", () => {
@@ -210,13 +272,47 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.getByTestId("unified-health-badge").textContent).toBe("Not connected ○");
   });
 
-  it("clicking the badge calls requestDiagnosticsOpen with 'header'", async () => {
-    const { requestDiagnosticsOpen } = await import("@/lib/diagnostics/diagnosticsOverlay");
+  it("clicking the badge calls requestDiagnosticsOpen with 'header'", () => {
     currentProfile = "compact";
     render(<UnifiedHealthBadge />);
 
     fireEvent.click(screen.getByTestId("unified-health-badge"));
 
-    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
+    expect(mockRequestDiagnosticsOpen).toHaveBeenCalledWith("header");
+  });
+
+  it("opens the switch picker on long press without also opening diagnostics", async () => {
+    vi.useFakeTimers();
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    expect(screen.getByTestId("switch-device-dialog")).toBeVisible();
+
+    fireEvent.pointerUp(badge);
+    fireEvent.click(badge);
+
+    expect(mockRequestDiagnosticsOpen).not.toHaveBeenCalled();
+  });
+
+  it("switches devices from the picker and closes the dialog", async () => {
+    vi.useFakeTimers();
+    mockSwitchSavedDevice.mockResolvedValueOnce(undefined);
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+
+    await waitFor(() => {
+      expect(mockSwitchSavedDevice).toHaveBeenCalledWith("device-backup");
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+    });
   });
 });

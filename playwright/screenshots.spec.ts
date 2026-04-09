@@ -1749,6 +1749,73 @@ test.describe("App screenshots", () => {
     "capture diagnostics screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await page.addInitScript(() => {
+        localStorage.setItem(
+          "c64u_saved_devices:v1",
+          JSON.stringify({
+            version: 1,
+            selectedDeviceId: "device-office",
+            devices: [
+              {
+                id: "device-office",
+                nickname: "Office U64",
+                shortLabel: "Office",
+                host: "c64u",
+                httpPort: 80,
+                ftpPort: 21,
+                telnetPort: 23,
+                lastKnownProduct: "U64",
+                lastKnownHostname: "office-u64",
+                lastKnownUniqueId: "UID-OFFICE",
+                lastSuccessfulConnectionAt: "2026-04-09T12:00:00.000Z",
+                lastUsedAt: "2026-04-09T12:00:00.000Z",
+                hasPassword: false,
+              },
+              {
+                id: "device-backup",
+                nickname: "Backup Lab",
+                shortLabel: "Backup",
+                host: "backup-c64",
+                httpPort: 8080,
+                ftpPort: 2021,
+                telnetPort: 2323,
+                lastKnownProduct: "U64E",
+                lastKnownHostname: "backup-lab",
+                lastKnownUniqueId: "UID-BACKUP",
+                lastSuccessfulConnectionAt: "2026-04-09T11:55:00.000Z",
+                lastUsedAt: null,
+                hasPassword: false,
+              },
+            ],
+            summaries: {
+              "device-office": {
+                deviceId: "device-office",
+                verifiedAt: "2026-04-09T12:00:00.000Z",
+                lastHealthState: "Healthy",
+                lastConnectivityState: "Online",
+                lastProbeSucceededAt: "2026-04-09T12:00:00.000Z",
+                lastProbeFailedAt: null,
+                lastVerifiedProduct: "U64",
+                lastVerifiedHostname: "office-u64",
+                lastVerifiedUniqueId: "UID-OFFICE",
+              },
+              "device-backup": {
+                deviceId: "device-backup",
+                verifiedAt: "2026-04-09T11:55:00.000Z",
+                lastHealthState: "Healthy",
+                lastConnectivityState: "Online",
+                lastProbeSucceededAt: "2026-04-09T11:55:00.000Z",
+                lastProbeFailedAt: null,
+                lastVerifiedProduct: "U64E",
+                lastVerifiedHostname: "backup-lab",
+                lastVerifiedUniqueId: "UID-BACKUP",
+              },
+            },
+            summaryLru: ["device-office", "device-backup"],
+          }),
+        );
+      });
+
       const openDiagnostics = async () => {
         await page.goto("/");
         await applyDisplayProfileViewport(page, "medium");
@@ -1766,6 +1833,17 @@ test.describe("App screenshots", () => {
         }
 
         const diagnosticsButton = page.getByTestId("unified-health-badge");
+        await diagnosticsButton.dispatchEvent("pointerdown");
+        await page.waitForTimeout(500);
+        const switchDeviceDialog = page.getByTestId("switch-device-dialog");
+        await expect(switchDeviceDialog).toBeVisible();
+        await diagnosticsButton.dispatchEvent("pointerup");
+        await captureScreenshot(page, testInfo, "diagnostics/switch-device/01-picker.png", {
+          locator: switchDeviceDialog,
+        });
+        await switchDeviceDialog.getByRole("button", { name: "Cancel" }).click();
+        await expect(switchDeviceDialog).toBeHidden();
+
         await diagnosticsButton.scrollIntoViewIfNeeded();
         await diagnosticsButton.click();
         await expect(dialog).toBeVisible();
@@ -2030,12 +2108,6 @@ test.describe("App screenshots", () => {
       });
 
       await captureDiagnosticsScreenshot(page, testInfo, "filters/01-summary-bar.png");
-
-      await dialog.getByTestId("diagnostics-devices-toggle").click();
-      await expect(dialog.getByTestId("diagnostics-devices-list")).toBeVisible();
-      await captureScreenshot(page, testInfo, "diagnostics/devices/01-expanded.png", {
-        locator: dialog.getByTestId("diagnostics-devices"),
-      });
 
       await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerdown");
       await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerup");
