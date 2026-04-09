@@ -1803,9 +1803,13 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
   localStorage.setItem("c64u_device_host", resolvedDeviceHost);
   localStorage.removeItem("c64u_password");
   if (password) {
-    void storePassword(password);
+    storePassword(password).catch((error) => {
+      addErrorLog("Failed to persist password to secure storage", { error: (error as Error).message });
+    });
   } else {
-    void clearStoredPassword();
+    clearStoredPassword().catch((error) => {
+      addErrorLog("Failed to clear password from secure storage", { error: (error as Error).message });
+    });
   }
 
   addLog("info", "API routing updated (persisted)", {

@@ -99,4 +99,75 @@ describe("hvscPerformance", () => {
     measureSpy.mockRestore();
     warnSpy.mockRestore();
   });
+
+  it("falls back to Date.now and skips mark/measure guards when performance API is unavailable", () => {
+    vi.stubGlobal("performance", undefined);
+    try {
+      const token = beginHvscPerfScope("browse:no-perf");
+      const entry = endHvscPerfScope(token);
+      expect(entry.durationMs).toBeGreaterThanOrEqual(0);
+      expect(collectHvscPerfTimings()).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("falls back to wall clock timing when measurePerformance guard triggers due to missing getEntriesByName", () => {
+    const origFn = (performance as Record<string, unknown>).getEntriesByName;
+    (performance as Record<string, unknown>).getEntriesByName = undefined;
+    try {
+      const token = beginHvscPerfScope("browse:no-get-entries");
+      const entry = endHvscPerfScope(token);
+      expect(entry.durationMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      (performance as Record<string, unknown>).getEntriesByName = origFn;
+    }
+  });
+
+  it("falls back to wall clock timing when getEntriesByName returns empty array", () => {
+    vi.spyOn(performance, "getEntriesByName").mockReturnValue([]);
+    const token = beginHvscPerfScope("browse:empty-entries");
+    const entry = endHvscPerfScope(token);
+    expect(entry.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("uses String() for non-Error values thrown by performance.mark", () => {
+    const markSpy = vi.spyOn(performance, "mark").mockImplementation(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "quota_exceeded_string";
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const token = beginHvscPerfScope("browse:mark-non-error");
+    endHvscPerfScope(token);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "HVSC performance API call failed; falling back to wall clock timing",
+      expect.objectContaining({ operation: "mark", error: "quota_exceeded_string" }),
+    );
+    markSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it("skips clearMarks cleanup when performance.clearMarks is not a function", () => {
+    const origClearMarks = (performance as Record<string, unknown>).clearMarks;
+    (performance as Record<string, unknown>).clearMarks = undefined;
+    try {
+      const token = beginHvscPerfScope("browse:no-clear-marks");
+      expect(() => endHvscPerfScope(token)).not.toThrow();
+      expect(collectHvscPerfTimings()).toHaveLength(1);
+    } finally {
+      (performance as Record<string, unknown>).clearMarks = origClearMarks;
+    }
+  });
+
+  it("skips clearMeasures cleanup when performance.clearMeasures is not a function", () => {
+    const origClearMeasures = (performance as Record<string, unknown>).clearMeasures;
+    (performance as Record<string, unknown>).clearMeasures = undefined;
+    try {
+      const token = beginHvscPerfScope("browse:no-clear-measures");
+      expect(() => endHvscPerfScope(token)).not.toThrow();
+      expect(collectHvscPerfTimings()).toHaveLength(1);
+    } finally {
+      (performance as Record<string, unknown>).clearMeasures = origClearMeasures;
+    }
+  });
 });

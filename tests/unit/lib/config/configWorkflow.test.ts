@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as logging from "@/lib/logging";
 import { createConfigWorkflow, detectUpdatedTempConfigFile, waitForTempConfigFile } from "@/lib/config/configWorkflow";
+import type { ConfigSnapshotFileLocation } from "@/lib/config/configSnapshotTypes";
 
 const addLogSpy = vi.spyOn(logging, "addLog").mockImplementation(() => undefined);
 const addErrorLogSpy = vi.spyOn(logging, "addErrorLog").mockImplementation(() => undefined);
@@ -202,5 +203,113 @@ describe("configWorkflow", () => {
       "Config workflow failed",
       expect.objectContaining({ operation: "apply-remote", status: "error" }),
     );
+  });
+
+  it("uses android-tree displayPath when persistLocalSnapshot returns one", async () => {
+    const androidStorage: ConfigSnapshotFileLocation = {
+      kind: "android-tree",
+      treeUri: "content://com.example/tree/docs",
+      path: "raw/c64u-config-2026-01-01T00-00-00Z.cfg",
+      displayPath: "Documents/c64u-config-2026-01-01T00-00-00Z.cfg",
+    };
+    const persistLocalSnapshot = vi.fn().mockResolvedValue(androidStorage);
+    const workflow = createConfigWorkflow({
+      ensureLocalSnapshotStorage: vi.fn().mockResolvedValue(undefined),
+      listRemoteTempFiles: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { name: "capture.cfg", path: "/Temp/capture.cfg", modifiedAt: "2026-01-01T00:00:00Z" },
+        ]),
+      runSaveRemoteConfig: vi.fn().mockResolvedValue(undefined),
+      readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      persistLocalSnapshot,
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const entry = await workflow.saveSnapshot();
+
+    expect(entry.storage).toEqual(androidStorage);
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "info",
+      "Config workflow complete",
+      expect.objectContaining({ localPath: "Documents/c64u-config-2026-01-01T00-00-00Z.cfg" }),
+    );
+  });
+
+  it("uses android-tree path when displayPath is null", async () => {
+    const androidStorage: ConfigSnapshotFileLocation = {
+      kind: "android-tree",
+      treeUri: "content://com.example/tree/docs",
+      path: "raw/snapshot.cfg",
+      displayPath: null,
+    };
+    const persistLocalSnapshot = vi.fn().mockResolvedValue(androidStorage);
+    const workflow = createConfigWorkflow({
+      ensureLocalSnapshotStorage: vi.fn().mockResolvedValue(undefined),
+      listRemoteTempFiles: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { name: "snap.cfg", path: "/Temp/snap.cfg", modifiedAt: "2026-01-01T00:00:00Z" },
+        ]),
+      runSaveRemoteConfig: vi.fn().mockResolvedValue(undefined),
+      readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array([1])),
+      persistLocalSnapshot,
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const entry = await workflow.saveSnapshot();
+
+    expect(entry.storage).toEqual(androidStorage);
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "info",
+      "Config workflow complete",
+      expect.objectContaining({ localPath: "raw/snapshot.cfg" }),
+    );
+  });
+
+  it("normalizes applyLocalSnapshot filename without .cfg extension", async () => {
+    const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
+    const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
+    const workflow = createConfigWorkflow({ writeRemoteFile, runApplyRemoteConfig });
+
+    await workflow.applyLocalSnapshot("test-config", new Uint8Array([1]));
+
+    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/test-config.cfg", expect.any(Uint8Array));
+    expect(runApplyRemoteConfig).toHaveBeenCalledWith("test-config.cfg");
+  });
+
+  it("normalizes applyLocalSnapshot with all-whitespace filename to config.cfg", async () => {
+    const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
+    const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
+    const workflow = createConfigWorkflow({ writeRemoteFile, runApplyRemoteConfig });
+
+    await workflow.applyLocalSnapshot("   ", new Uint8Array([1]));
+
+    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/config.cfg", expect.any(Uint8Array));
+    expect(runApplyRemoteConfig).toHaveBeenCalledWith("config.cfg");
+  });
+
+  it("handles null modifiedAt on both entries when sorting multiple changed cfg files", () => {
+    const file = detectUpdatedTempConfigFile(
+      [],
+      [
+        { name: "a.cfg", path: "/Temp/a.cfg" },
+        { name: "b.cfg", path: "/Temp/b.cfg" },
+      ],
+    );
+    expect(file).not.toBeNull();
+  });
+
+  it("handles null size in before-map construction", () => {
+    const file = detectUpdatedTempConfigFile(
+      [{ name: "a.cfg", path: "/Temp/a.cfg" }],
+      [
+        { name: "a.cfg", path: "/Temp/a.cfg" },
+        { name: "b.cfg", path: "/Temp/b.cfg" },
+      ],
+    );
+    expect(file?.name).toBe("b.cfg");
   });
 });
