@@ -67,7 +67,6 @@ import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
 import {
   buildSavedDevicePrimaryLabel,
-  deriveSavedDeviceShortLabel,
   getSavedDeviceSwitchStatus,
   type DeviceSwitchStatus,
   type SavedDevice,
@@ -970,6 +969,7 @@ export function DiagnosticsDialog({
   const [contributor, setContributor] = useState<ContributorFilter>("All");
   const [severity, setSeverity] = useState<SeverityFilter>("All");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [devicesExpanded, setDevicesExpanded] = useState(false);
   const [connectionMode, setConnectionMode] = useState<"view" | "edit">("view");
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [connectionDraft, setConnectionDraft] = useState<ConnectionDraft>({
@@ -1072,6 +1072,7 @@ export function DiagnosticsDialog({
     setContributor("All");
     setSeverity("All");
     setFiltersOpen(false);
+    setDevicesExpanded(false);
     setConnectionOpen(false);
     setConnectionMode("view");
     setConnectionError(null);
@@ -1145,10 +1146,6 @@ export function DiagnosticsDialog({
   const healthDetailAvailable =
     headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
   const connectionLabel = `${healthState.connectedDeviceLabel ?? "C64U"} · ${connectionDraft.host}:${connectionDraft.httpPort}`;
-  const selectedSavedDevice =
-    savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
-    savedDevices.devices[0] ??
-    null;
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (severity !== "All") labels.push(severity);
@@ -1495,11 +1492,18 @@ export function DiagnosticsDialog({
               className="mt-3 shrink-0 rounded-xl border border-border/70 bg-card p-3"
               data-testid="diagnostics-devices"
             >
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div>
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-2 text-left"
+                  onClick={() => setDevicesExpanded((current) => !current)}
+                  data-testid="diagnostics-devices-toggle"
+                  aria-expanded={devicesExpanded}
+                  aria-controls="diagnostics-devices-list"
+                >
+                  {devicesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                   <p className="text-sm font-semibold text-foreground">Devices</p>
-                  <p className="text-xs text-muted-foreground">Switch saved devices from diagnostics.</p>
-                </div>
+                </button>
                 <Button
                   type="button"
                   variant="outline"
@@ -1507,61 +1511,51 @@ export function DiagnosticsDialog({
                   onClick={handleManageDevices}
                   data-testid="manage-devices-button"
                 >
-                  Manage devices
+                  Manage
                 </Button>
               </div>
-              <div className="space-y-2">
-                {savedDevices.devices.map((device) => {
-                  const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
-                  const status =
-                    device.id === savedDevices.selectedDeviceId ? getSavedDeviceSwitchStatus(device.id) : "last-known";
-                  const isSelected = device.id === savedDevices.selectedDeviceId;
-                  return (
-                    <button
-                      key={device.id}
-                      type="button"
-                      className={cn(
-                        "flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
-                        isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
-                      )}
-                      onClick={() => {
-                        void handleSwitchDevice(device.id);
-                      }}
-                      data-testid={`diagnostics-device-row-${device.id}`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {buildSavedDevicePrimaryLabel(device, verified)}
-                          {isSelected ? (
-                            <span className="ml-2 text-xs text-primary">
-                              {deriveSavedDeviceShortLabel(device, savedDevices.devices)}
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {buildDeviceSecondaryLine(
-                            device,
-                            verified?.product ?? null,
-                            verified?.hostname ?? null,
-                            verified?.uniqueId ?? null,
-                          )}
-                        </p>
-                      </div>
-                      <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {DEVICE_SWITCH_STATUS_LABEL[status]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedSavedDevice ? (
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Selected:{" "}
-                  {buildSavedDevicePrimaryLabel(
-                    selectedSavedDevice,
-                    savedDevices.verifiedByDeviceId[selectedSavedDevice.id] ?? null,
-                  )}
-                </p>
+              {devicesExpanded ? (
+                <div id="diagnostics-devices-list" className="mt-2 space-y-2" data-testid="diagnostics-devices-list">
+                  {savedDevices.devices.map((device) => {
+                    const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
+                    const status =
+                      device.id === savedDevices.selectedDeviceId
+                        ? getSavedDeviceSwitchStatus(device.id)
+                        : "last-known";
+                    const isSelected = device.id === savedDevices.selectedDeviceId;
+                    return (
+                      <button
+                        key={device.id}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
+                          isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
+                        )}
+                        onClick={() => {
+                          void handleSwitchDevice(device.id);
+                        }}
+                        data-testid={`diagnostics-device-row-${device.id}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {buildSavedDevicePrimaryLabel(device, verified)}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {buildDeviceSecondaryLine(
+                              device,
+                              verified?.product ?? null,
+                              verified?.hostname ?? null,
+                              verified?.uniqueId ?? null,
+                            )}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {DEVICE_SWITCH_STATUS_LABEL[status]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               ) : null}
             </section>
 

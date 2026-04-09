@@ -161,6 +161,9 @@ describe("DiagnosticsDialog saved-device switching", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("diagnostics-devices-toggle"));
+    expect(screen.getByTestId("diagnostics-devices-list")).toBeVisible();
+
     const backupRow = screen.getByTestId(`diagnostics-device-row-${backupDeviceId}`);
     expect(within(backupRow).getByText("Backup Lab")).toBeVisible();
     expect(backupRow).toHaveTextContent("Last known");

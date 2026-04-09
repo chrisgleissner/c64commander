@@ -2031,6 +2031,12 @@ test.describe("App screenshots", () => {
 
       await captureDiagnosticsScreenshot(page, testInfo, "filters/01-summary-bar.png");
 
+      await dialog.getByTestId("diagnostics-devices-toggle").click();
+      await expect(dialog.getByTestId("diagnostics-devices-list")).toBeVisible();
+      await captureScreenshot(page, testInfo, "diagnostics/devices/01-expanded.png", {
+        locator: dialog.getByTestId("diagnostics-devices"),
+      });
+
       await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerdown");
       await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerup");
       await expect(page.getByTestId("connection-view-surface")).toBeVisible();

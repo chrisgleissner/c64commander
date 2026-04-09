@@ -10,7 +10,7 @@ This document defines the target behavior for multi-device switching in C64 Comm
 
 The feature allows a user to save multiple C64 Ultimate-family devices and switch between them quickly from anywhere in the app without editing connection fields during routine use.
 
-This is an implementation specification, not a research log. It is written to be executable by an LLM or human engineer with minimal interpretation.
+This specification is fully aligned with the v2 UX direction in `docs/research/device-switcher/v2/ux-recommendations-2026-04-09.md`.
 
 It also defines how existing playlists and disk collections continue to work when some items were originally imported from a different saved C64 device than the one currently selected.
 
@@ -26,9 +26,7 @@ The app MUST support fast switching between multiple configured devices while pr
 
 Primary user outcome:
 
-- from any main page, routine device switching requires exactly 2 taps:
-  1. tap the unified health badge
-  2. tap a target device row in diagnostics
+- from any main page, routine device switching is initiated by long pressing the unified health badge and then tapping a target device in the picker
 
 Primary system outcome:
 
@@ -42,23 +40,25 @@ Primary system outcome:
 This feature does not:
 
 - add a new top-level tab
-- move switching controls into the shared app header beyond the existing badge
+- add a new persistent header control beyond the existing badge
 - make Settings the primary switch flow
+- make Diagnostics the primary routine switch flow
 - keep full multi-device working sets resident in memory
 - silently clone complete remote libraries into app-owned local storage
 - fetch `c64-all-config` during switching
-- redefine the broader diagnostics architecture
+- redefine the broader diagnostics architecture beyond removing it from the primary switching path
 
 ## 5. Fixed Constraints
 
 The implementation MUST preserve all of the following:
 
 - `UnifiedHealthBadge` remains in the shared top-right header
-- tapping the badge still opens diagnostics
+- tapping the badge still opens Diagnostics
+- long press on the badge becomes the routine switch entry point when multiple saved devices exist
 - no additional persistent header chips are introduced
 - host, HTTP port, FTP port, and Telnet port remain configurable per saved device
 - deep editing remains secondary to fast switching
-- device type remains legible in diagnostics and settings
+- device type remains legible in diagnostics details and settings
 - fast switching is the default behavior
 - only memory-pressure handling may intentionally reduce retained switch context
 
@@ -109,7 +109,8 @@ Component: `UnifiedHealthBadge`
 Requirements:
 
 - MUST remain the persistent top-right connectivity indicator
-- MUST continue opening diagnostics when tapped
+- MUST continue opening Diagnostics when tapped
+- MUST open the device picker when long pressed and two or more saved devices exist
 - MUST show a badge-safe device label, not the full primary label
 - MUST keep the existing health glyph and health wording behavior
 - MUST fit the device label within 8 visible characters
@@ -127,34 +128,47 @@ Examples of valid badge labels:
 - `LabU64`
 - `C64U`
 
-### 7.2 Diagnostics
+### 7.2 Device Picker
+
+Surface type: decision interstitial
+
+Requirements:
+
+- MUST be invoked from badge long press, not from a persistent Diagnostics section
+- MUST be compact and decision-only
+- MUST show a vertical list of saved devices
+- MUST use name-first rows in the healthy idle state
+- MUST NOT include CRUD controls or management actions
+- MUST NOT render hostname, product-family code, or unique-id text by default in healthy idle rows
+- MUST allow tapping a row to begin switching immediately
+
+Picker title:
+
+- `Switch device`
+
+Picker row content in the healthy idle state:
+
+- device name
+- selected indicator when applicable
+
+Allowed additional transient row states:
+
+- `Verifying`
+- `Offline`
+- `Mismatch`
+
+### 7.3 Diagnostics
 
 Component: `DiagnosticsDialog`
 
-New required body section:
+Requirements:
 
-- section title: `Devices`
+- MUST remain the tap destination from the badge
+- MUST NOT contain a persistent Devices switcher section
+- MUST remain focused on current device health, current device details, activity, and diagnostics-related secondary actions
+- MAY expose `Connection details` and management navigation through overflow actions
 
-Placement:
-
-- MUST appear directly below the existing compact diagnostics header card
-
-Contents:
-
-- saved-device switcher list
-- `Manage devices` action
-
-Restrictions:
-
-- switching controls MUST remain inside diagnostics, not the shared app header
-
-Per-device row content:
-
-- primary text: full device label
-- secondary text: canonical product-family code + configured host + optional short unique-id fragment
-- status text: one of `Connected`, `Verifying`, `Offline`, `Mismatch`, or `Last known`
-
-### 7.3 Settings
+### 7.4 Settings
 
 Surface: connection management area on `SettingsPage`
 
@@ -169,38 +183,44 @@ Requirements:
 
 ### 8.1 Routine switch from any main page
 
-1. User taps `UnifiedHealthBadge`.
-2. App opens `DiagnosticsDialog`.
-3. User taps a saved device row in `Devices`.
+1. User long presses `UnifiedHealthBadge`.
+2. App opens the `Switch device` picker.
+3. User taps a saved device row.
 4. App immediately updates selected-device UI from local metadata.
 5. App performs `/v1/info` verification in the background.
 6. On success, app refreshes only the active-route essential data.
-7. On failure, app keeps the selection but presents the target as offline.
+7. On failure, app keeps the selection but presents the target as offline or mismatch as appropriate.
 
-### 8.2 Deep editing
+### 8.2 Current status inspection
+
+1. User taps `UnifiedHealthBadge`.
+2. App opens `DiagnosticsDialog`.
+3. User inspects health, current device details, recent activity, and secondary actions.
+
+### 8.3 Deep editing
 
 1. User opens `SettingsPage`.
 2. User adds, edits, renames, or deletes saved devices.
 3. Edits affect future switching immediately after persistence.
 
-### 8.3 Offline selection
+### 8.4 Offline selection
 
-1. User selects a saved device.
+1. User long presses the badge and selects a saved device.
 2. Immediate UI updates to that device's local metadata.
 3. `/v1/info` fails.
 4. App keeps the selected device active in local state.
-5. Diagnostics shows `Offline`.
+5. Badge and relevant detail surfaces show `Offline`.
 6. UI retains last-known summary data separately from live verification state.
 
-### 8.4 Mismatch detection
+### 8.5 Mismatch detection
 
-1. User selects saved device A.
+1. User long presses the badge and selects saved device A.
 2. `/v1/info` succeeds but returns identity inconsistent with saved device A.
 3. App enters `Mismatch`.
 4. Diagnostics shows both selected target and actual verified device identity when known.
 5. Saved device records remain intact until user resolves the mismatch.
 
-### 8.5 Playback or mount after switching away from the origin device
+### 8.6 Playback or mount after switching away from the origin device
 
 1. User imports a playlist item or disk entry from saved device A.
 2. User switches to saved device B.
@@ -216,7 +236,7 @@ Requirements:
 ### 9.1 Persisted records
 
 ```ts
-type ProductFamilyCode = 'C64U' | 'U64' | 'U64E' | 'U64E2';
+type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
 
 type SavedDevice = {
   id: string;
@@ -248,12 +268,7 @@ Rules:
 ### 9.2 Compact per-device switch summary
 
 ```ts
-type DeviceSwitchStatus =
-  | 'connected'
-  | 'verifying'
-  | 'offline'
-  | 'mismatch'
-  | 'last-known';
+type DeviceSwitchStatus = "connected" | "verifying" | "offline" | "mismatch" | "last-known";
 
 type DeviceSwitchSummary = {
   deviceId: string;
@@ -285,7 +300,7 @@ Minimum required fields:
 
 ```ts
 type DeviceBoundContentOrigin = {
-  sourceKind: 'ultimate';
+  sourceKind: "ultimate";
   originDeviceId: string;
   originDeviceLastKnownUniqueId: string | null;
   originPath: string;
@@ -325,10 +340,11 @@ Valid codes:
 
 Requirements:
 
-- diagnostics device rows MUST show the canonical product-family code
 - settings saved-device rows MUST show the canonical product-family code
 - diagnostics detail MUST show the canonical product-family code
+- `Connection details` surfaces MUST show the canonical product-family code
 - the badge does not need to show both custom label and product code together
+- the picker does not need to show canonical product-family code in healthy idle rows
 
 ### 10.2 Primary label
 
@@ -338,7 +354,7 @@ Primary label resolution order:
 2. verified hostname
 3. configured host
 
-This label is used for rows and detailed displays, not for the compact badge.
+This label is used for picker rows, settings rows, and detailed displays.
 
 ### 10.3 Badge label
 
@@ -390,21 +406,22 @@ The expected identity for a saved device is derived from:
 
 ## 12. Switch Status Model
 
-The switcher UI and badge MUST derive from a compact status model.
+The badge, picker, and relevant detail surfaces MUST derive from a compact status model.
 
-| State | Meaning | Typical source |
-| --- | --- | --- |
-| `Connected` | selected device was verified successfully | latest `/v1/info` success |
-| `Verifying` | switch handshake is in progress | local selection updated, probe not finished |
-| `Offline` | selected device could not be verified | latest `/v1/info` failed |
-| `Mismatch` | selected target and verified device disagree | `/v1/info` identity conflict |
-| `Last known` | stale summary shown while live verification is absent or pending | cached `DeviceSwitchSummary` |
+| State        | Meaning                                                          | Typical source                              |
+| ------------ | ---------------------------------------------------------------- | ------------------------------------------- |
+| `Connected`  | selected device was verified successfully                        | latest `/v1/info` success                   |
+| `Verifying`  | switch handshake is in progress                                  | local selection updated, probe not finished |
+| `Offline`    | selected device could not be verified                            | latest `/v1/info` failed                    |
+| `Mismatch`   | selected target and verified device disagree                     | `/v1/info` identity conflict                |
+| `Last known` | stale summary shown while live verification is absent or pending | cached `DeviceSwitchSummary`                |
 
 Rules:
 
 - `Verifying` MUST appear immediately after selection and before probe completion
 - `Last known` MAY be shown alongside stale metadata, but MUST NOT be represented as live connectivity
 - `Mismatch` takes precedence over `Connected`
+- healthy idle picker rows SHOULD remain name-first and minimal
 
 ## 13. Switch Algorithm
 
@@ -416,7 +433,7 @@ Required sequence:
 2. persist `selectedDeviceId`
 3. update `lastUsedAt` for the selected device
 4. project selected host and ports into the existing runtime connection path
-5. update badge and diagnostics immediately from saved metadata
+5. update badge, picker state, and relevant details immediately from saved metadata
 6. render `DeviceSwitchSummary` for that device as `Last known`, if available
 7. mark the selected device as `Verifying`
 8. start lightweight verification using `/v1/info`
@@ -430,10 +447,11 @@ Required sequence:
    - resolve final state as `Connected` or `Mismatch`
    - refresh only active-route essential data
 10. if verification fails:
-   - keep `selectedDeviceId`
-   - update summary failure timestamps
-   - mark device as `Offline`
-   - preserve last-known metadata separately from live state
+
+- keep `selectedDeviceId`
+- update summary failure timestamps
+- mark device as `Offline`
+- preserve last-known metadata separately from live state
 
 Handshake restrictions:
 
@@ -671,8 +689,7 @@ When switching devices:
 
 - keep selection on the chosen device
 - badge shows selected badge label with offline state
-- diagnostics row shows `Offline`
-- switcher UI MUST expose `Retry`
+- picker or relevant detail surfaces show `Offline`
 - management surface MUST expose `Edit`
 
 ### 19.2 Mismatch
@@ -774,6 +791,7 @@ New modules likely required:
 - device-switch summary cache
 - switch orchestration logic
 - badge-label derivation helper
+- device picker surface
 - origin-device content resolver
 - device-bound transfer coordinator
 
@@ -781,10 +799,13 @@ New modules likely required:
 
 The implementation is complete only when all of the following are true:
 
-- switching between saved devices requires exactly 2 taps from any main page
 - badge tap still opens diagnostics
+- badge long press opens the picker when multiple saved devices exist
+- the one-device case shows no redundant switching UI
 - badge device label fits within 8 visible characters
-- diagnostics and settings always show canonical product-family codes
+- picker rows are name-first in the healthy idle state
+- hostnames, product-family codes, and identity fragments are not rendered by default in healthy picker rows
+- settings and diagnostics detail surfaces show canonical product-family codes where appropriate
 - selecting a device updates visible identity immediately from local metadata
 - live status is then verified using `/v1/info`
 - switching never triggers automatic full-config reload
@@ -792,6 +813,7 @@ The implementation is complete only when all of the following are true:
 - only active-route essential data reloads after successful verification
 - per-device switch caching stores only bounded `DeviceSwitchSummary` data
 - full per-device working sets are not retained in memory across multiple devices by default
+- Diagnostics no longer contains a persistent Devices switcher section
 - playlist items and disk entries imported from one saved C64 device still work after switching to another saved C64 device
 - when the selected device differs from the item's origin device, the app reacquires bytes from the origin device and executes the current-device upload path
 - origin-device reacquisition never changes `selectedDeviceId`
@@ -805,10 +827,11 @@ The implementation is complete only when all of the following are true:
 An implementation SHOULD proceed in this order:
 
 1. saved-device data model and migration
-2. switch orchestration and `/v1/info` verification
-3. device-bound collection origin metadata and transfer resolution
-4. diagnostics device switcher
-5. settings saved-device management
-6. active-route reload and invalidation behavior
-7. cache bounding and memory-pressure handling
-8. regression tests and documentation alignment
+2. badge long press and picker shell
+3. switch orchestration and `/v1/info` verification
+4. diagnostics simplification and settings alignment
+5. device-bound collection origin metadata and transfer resolution
+6. multi-device mock and harness support
+7. active-route reload and invalidation behavior
+8. cache bounding and memory-pressure handling
+9. regression tests and documentation alignment

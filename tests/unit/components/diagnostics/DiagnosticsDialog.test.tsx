@@ -272,6 +272,23 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/ago/i);
   });
 
+  it("keeps the devices card collapsed by default and expands it on demand", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    expect(screen.getByTestId("diagnostics-devices-toggle")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("diagnostics-devices-list")).toBeNull();
+    expect(screen.getByTestId("manage-devices-button")).toHaveTextContent("Manage");
+    expect(screen.queryByText("Manage devices")).toBeNull();
+    expect(screen.queryByText("Switch saved devices from diagnostics.")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("diagnostics-devices-toggle"));
+
+    expect(screen.getByTestId("diagnostics-devices-toggle")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("diagnostics-devices-list")).toBeVisible();
+  });
+
   it("opens connection view on tap and connection edit on long press", async () => {
     setViewportWidth(600);
     vi.useFakeTimers();
