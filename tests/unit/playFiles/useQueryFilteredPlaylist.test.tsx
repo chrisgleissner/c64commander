@@ -77,6 +77,8 @@ const playlist = [
   }),
 ];
 
+const emptyPlaylist: PlaylistItem[] = [];
+
 const queryRows = [
   {
     playlistItem: {
@@ -472,7 +474,7 @@ describe("useQueryFilteredPlaylist", () => {
 
   it("returns empty results immediately for an empty playlist", async () => {
     markReady(0);
-    const { result } = renderHook(() => useHarness([]));
+    const { result } = renderHook(() => useHarness(emptyPlaylist));
 
     await waitFor(() => {
       expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(0);
