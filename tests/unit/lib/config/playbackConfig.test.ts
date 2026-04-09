@@ -50,16 +50,26 @@ describe("areConfigReferencesEqual", () => {
   });
 
   it("compares ultimate refs by normalized path", () => {
-    expect(areConfigReferencesEqual(ultimateRef("//Configs/a.cfg", "a.cfg"), ultimateRef("/Configs/a.cfg", "a.cfg"))).toBe(true);
+    expect(
+      areConfigReferencesEqual(ultimateRef("//Configs/a.cfg", "a.cfg"), ultimateRef("/Configs/a.cfg", "a.cfg")),
+    ).toBe(true);
     expect(areConfigReferencesEqual(ultimateRef("/x.cfg", "a.cfg"), ultimateRef("/y.cfg", "a.cfg"))).toBe(false);
   });
 
   it("compares local refs by path, sourceId, and uri", () => {
     const base = localRef("a.cfg", { path: "/local/a.cfg", sourceId: "s1", uri: "file://a" });
-    expect(areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/a.cfg", sourceId: "s1", uri: "file://a" }))).toBe(true);
-    expect(areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/b.cfg", sourceId: "s1", uri: "file://a" }))).toBe(false);
-    expect(areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/a.cfg", sourceId: "s2", uri: "file://a" }))).toBe(false);
-    expect(areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/a.cfg", sourceId: "s1", uri: "file://b" }))).toBe(false);
+    expect(
+      areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/a.cfg", sourceId: "s1", uri: "file://a" })),
+    ).toBe(true);
+    expect(
+      areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/b.cfg", sourceId: "s1", uri: "file://a" })),
+    ).toBe(false);
+    expect(
+      areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/a.cfg", sourceId: "s2", uri: "file://a" })),
+    ).toBe(false);
+    expect(
+      areConfigReferencesEqual(base, localRef("a.cfg", { path: "/local/a.cfg", sourceId: "s1", uri: "file://b" })),
+    ).toBe(false);
   });
 
   it("uses fileName as fallback when local path is absent", () => {
@@ -97,7 +107,11 @@ describe("buildConfigReferenceKey", () => {
 });
 
 describe("compareConfigCandidates", () => {
-  const makeCandidate = (strategy: "exact-name" | "directory" | "parent-directory", distance: number, path = "/a.cfg") => ({
+  const makeCandidate = (
+    strategy: "exact-name" | "directory" | "parent-directory",
+    distance: number,
+    path = "/a.cfg",
+  ) => ({
     ref: ultimateRef(path, "a.cfg"),
     strategy,
     distance,
@@ -130,16 +144,36 @@ describe("compareConfigCandidates", () => {
 
 describe("dedupeConfigCandidates", () => {
   it("removes duplicate refs keeping the best-ranked one", () => {
-    const a1 = { ref: ultimateRef("/a.cfg", "a.cfg"), strategy: "exact-name" as const, distance: 0, confidence: "high" as const };
-    const a2 = { ref: ultimateRef("/a.cfg", "a.cfg"), strategy: "directory" as const, distance: 1, confidence: "medium" as const };
+    const a1 = {
+      ref: ultimateRef("/a.cfg", "a.cfg"),
+      strategy: "exact-name" as const,
+      distance: 0,
+      confidence: "high" as const,
+    };
+    const a2 = {
+      ref: ultimateRef("/a.cfg", "a.cfg"),
+      strategy: "directory" as const,
+      distance: 1,
+      confidence: "medium" as const,
+    };
     const result = dedupeConfigCandidates([a2, a1]);
     expect(result).toHaveLength(1);
     expect(result[0].strategy).toBe("exact-name");
   });
 
   it("keeps distinct refs", () => {
-    const a = { ref: ultimateRef("/a.cfg", "a.cfg"), strategy: "exact-name" as const, distance: 0, confidence: "high" as const };
-    const b = { ref: ultimateRef("/b.cfg", "b.cfg"), strategy: "exact-name" as const, distance: 0, confidence: "high" as const };
+    const a = {
+      ref: ultimateRef("/a.cfg", "a.cfg"),
+      strategy: "exact-name" as const,
+      distance: 0,
+      confidence: "high" as const,
+    };
+    const b = {
+      ref: ultimateRef("/b.cfg", "b.cfg"),
+      strategy: "exact-name" as const,
+      distance: 0,
+      confidence: "high" as const,
+    };
     expect(dedupeConfigCandidates([a, b])).toHaveLength(2);
   });
 
@@ -167,25 +201,72 @@ describe("resolveStoredConfigOrigin", () => {
 
 describe("resolvePlaybackConfigUiState", () => {
   it("returns declined for manual-none origin", () => {
-    expect(resolvePlaybackConfigUiState({ configRef: null, configOrigin: "manual-none", configOverrides: null, configCandidates: null })).toBe("declined");
+    expect(
+      resolvePlaybackConfigUiState({
+        configRef: null,
+        configOrigin: "manual-none",
+        configOverrides: null,
+        configCandidates: null,
+      }),
+    ).toBe("declined");
   });
 
   it("returns edited when overrides are set", () => {
-    expect(resolvePlaybackConfigUiState({ configRef: null, configOrigin: "none", configOverrides: [{ category: "a", item: "b", value: 1 }], configCandidates: null })).toBe("edited");
+    expect(
+      resolvePlaybackConfigUiState({
+        configRef: null,
+        configOrigin: "none",
+        configOverrides: [{ category: "a", item: "b", value: 1 }],
+        configCandidates: null,
+      }),
+    ).toBe("edited");
   });
 
   it("returns resolved when configRef is set", () => {
-    expect(resolvePlaybackConfigUiState({ configRef: ultimateRef("/a.cfg"), configOrigin: "auto-exact", configOverrides: null, configCandidates: null })).toBe("resolved");
+    expect(
+      resolvePlaybackConfigUiState({
+        configRef: ultimateRef("/a.cfg"),
+        configOrigin: "auto-exact",
+        configOverrides: null,
+        configCandidates: null,
+      }),
+    ).toBe("resolved");
   });
 
   it("returns candidates when candidates list is non-empty", () => {
-    const candidate = { ref: ultimateRef("/a.cfg", "a.cfg"), strategy: "exact-name" as const, distance: 0, confidence: "high" as const };
-    expect(resolvePlaybackConfigUiState({ configRef: null, configOrigin: "none", configOverrides: null, configCandidates: [candidate] })).toBe("candidates");
+    const candidate = {
+      ref: ultimateRef("/a.cfg", "a.cfg"),
+      strategy: "exact-name" as const,
+      distance: 0,
+      confidence: "high" as const,
+    };
+    expect(
+      resolvePlaybackConfigUiState({
+        configRef: null,
+        configOrigin: "none",
+        configOverrides: null,
+        configCandidates: [candidate],
+      }),
+    ).toBe("candidates");
   });
 
   it("returns none for empty state", () => {
-    expect(resolvePlaybackConfigUiState({ configRef: null, configOrigin: "none", configOverrides: null, configCandidates: null })).toBe("none");
-    expect(resolvePlaybackConfigUiState({ configRef: null, configOrigin: "none", configOverrides: [], configCandidates: [] })).toBe("none");
+    expect(
+      resolvePlaybackConfigUiState({
+        configRef: null,
+        configOrigin: "none",
+        configOverrides: null,
+        configCandidates: null,
+      }),
+    ).toBe("none");
+    expect(
+      resolvePlaybackConfigUiState({
+        configRef: null,
+        configOrigin: "none",
+        configOverrides: [],
+        configCandidates: [],
+      }),
+    ).toBe("none");
   });
 });
 

@@ -453,4 +453,158 @@ describe("diskFirstPrg DMA loader", () => {
     const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
     expect(result.loadAddress).toBe(0x0801);
   });
+
+  it("throws when directory entry has out-of-range track", async () => {
+    const api: ApiMock = { writeMemoryBlock: vi.fn() };
+    const size = totalSectors1541(35) * 256;
+    const image = new Uint8Array(size);
+    const dirOffset = tsOffset(18, 1);
+    image[dirOffset] = 0;
+    image[dirOffset + 1] = 0;
+    const entryOffset = dirOffset + 2;
+    image[entryOffset] = 0x82; // PRG type
+    image[entryOffset + 1] = 36; // track 36 > max 35 for D64
+    image[entryOffset + 2] = 0; // sector 0
+    await expect(loadFirstDiskPrgViaDma(api as any, image, "d64")).rejects.toThrow("Track out of range");
+  });
+
+  it("throws when directory entry has out-of-range sector", async () => {
+    const api: ApiMock = { writeMemoryBlock: vi.fn() };
+    const size = totalSectors1541(35) * 256;
+    const image = new Uint8Array(size);
+    const dirOffset = tsOffset(18, 1);
+    image[dirOffset] = 0;
+    image[dirOffset + 1] = 0;
+    const entryOffset = dirOffset + 2;
+    image[entryOffset] = 0x82; // PRG type
+    image[entryOffset + 1] = 1; // track 1 (valid)
+    image[entryOffset + 2] = 100; // sector 100 > max 21 for track 1
+    await expect(loadFirstDiskPrgViaDma(api as any, image, "d64")).rejects.toThrow("Sector out of range");
+  });
+
+  it("throws when extracted PRG chain yields only 1 byte", async () => {
+    const api: ApiMock = { writeMemoryBlock: vi.fn() };
+    const image = createDiskImage(new Uint8Array([0xaa]), "TINY");
+    await expect(loadFirstDiskPrgViaDma(api as any, image, "d64")).rejects.toThrow("Extracted PRG is too small");
+  });
+
+  it("clamps nextSector=0 to 254 bytes when reading final PRG sector", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const size = totalSectors1541(35) * 256;
+    const image = new Uint8Array(size);
+    writeDirectoryEntry(image, 1, 0, "CLAMP");
+    const offset = tsOffset(1, 0);
+    image[offset] = 0; // nextTrack=0 (final sector)
+    image[offset + 1] = 0; // nextSector=0 → used=0 → clamped to 254
+    image[offset + 2] = 0x00; // load addr low
+    image[offset + 3] = 0x10; // load addr high → 0x1000
+    image.fill(0xde, offset + 4, offset + 256);
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+    expect(result.loadAddress).toBe(0x1000);
+  });
+
+  it("treats short BASIC-addressed PRG (< 8 bytes) as non-BASIC", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = new Uint8Array([0x01, 0x08, 0xaa, 0xbb, 0xcc, 0xdd, 0xee]); // 7 bytes, load=0x0801
+    const image = createDiskImage(prg, "SHORT");
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+    expect(result.isBasic).toBe(false);
+    expect(result.loadAddress).toBe(0x0801);
+  });
+
+  it("treats BASIC with lineNo=0 as non-BASIC", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    // load=0x0801, nextPtr=0, lineNo=0 → looksLikeTokenisedBasic returns false
+    const prg = new Uint8Array([0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    const image = createDiskImage(prg, "BADLN");
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+    expect(result.isBasic).toBe(false);
+  });
+
+  it("treats BASIC where token bytes run to end of data (no null) as non-BASIC", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    // load=0x0801, nextPtr=0, lineNo=10, two token bytes with no null terminator
+    const prg = new Uint8Array([0x01, 0x08, 0x00, 0x00, 0x0a, 0x00, 0xfe, 0xff]);
+    const image = createDiskImage(prg, "NOTERM");
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+    expect(result.isBasic).toBe(false);
+  });
+
+  it("treats BASIC with nextPtr pointing before load address as non-BASIC", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    // nextPtr=0x0700 < 0x0801 → expectedOffset < 0 → false
+    const prg = new Uint8Array([0x01, 0x08, 0x00, 0x07, 0x0a, 0x00, 0x00, 0x00]);
+    const image = createDiskImage(prg, "LOWPTR");
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+    expect(result.isBasic).toBe(false);
+  });
+
+  it("treats BASIC with nextPtr miscalibrated by more than 2 bytes as non-BASIC", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    // data length=10, nextPtr=0x0809 → expectedOffset=8; after line1 i=6; Math.abs(6-8)=2 still ok
+    // but token+null makes j=6, i=7; Math.abs(7-8)=1 ok; need bigger gap:
+    // nextPtr=0x0809, no tokens, j=4→null at 4→i=5; Math.abs(5-8)=3 > 2 → false
+    const prg = new Uint8Array([
+      0x01,
+      0x08, // load addr 0x0801
+      0x09,
+      0x08, // nextPtr = 0x0809 (offset 8 in data)
+      0x0a,
+      0x00, // lineNo = 10
+      0x00, // null at j=4 → i=5; expectedOffset=8; Math.abs(5-8)=3 > 2 → false
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00, // padding so data.length=10 ≥ expectedOffset=8
+    ]);
+    const image = createDiskImage(prg, "MISC");
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+    expect(result.isBasic).toBe(false);
+  });
+
+  it("treats BASIC where second line header is truncated as non-BASIC", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    // Line 1: nextPtr=0x0809, lineNo=10, token=0xfe, null → j=5, i=6
+    // expectedOffset=8, Math.abs(6-8)=2 ≤ 2 OK.  data.length=9 → i+4=10 > 9 → return false
+    const prg = new Uint8Array([
+      0x01,
+      0x08, // load addr 0x0801
+      0x09,
+      0x08, // nextPtr = 0x0809
+      0x0a,
+      0x00, // lineNo = 10
+      0xfe, // token byte → j=4→5
+      0x00, // null → j=5, i=6; expectedOffset=8, Math.abs(6-8)=2 ok
+      0x00,
+      0x00,
+      0x00, // three more bytes → data.length=9; i+4=10 > 9 → return false
+    ]);
+    const image = createDiskImage(prg, "TRUNC");
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+    expect(result.isBasic).toBe(false);
+  });
+
+  it("throws DMA load failure with unknown error when rejection is not an Error", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockRejectedValue("plain string failure"),
+    };
+    const prg = makeBasicPrg();
+    const image = createDiskImage(prg, "NOERR");
+    await expect(loadFirstDiskPrgViaDma(api as any, image, "d64")).rejects.toThrow("Unknown error");
+  });
 });

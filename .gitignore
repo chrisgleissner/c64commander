@@ -46,6 +46,9 @@ test-results/
 .cov-shards/
 .cov-unit/
 .cov-unit-single/
+.cov-cur/
+.cov-latest/
+.cov-v8-current/
 
 # Local config
 *.local

@@ -215,10 +215,7 @@ describe("configFileReferenceSelection", () => {
       [
         "src-1",
         new Map([
-          [
-            "/Demo.cfg",
-            { name: "Demo.cfg", uri: "content://files/demo", modifiedAt: "2026-03-01", sizeBytes: 55 },
-          ],
+          ["/Demo.cfg", { name: "Demo.cfg", uri: "content://files/demo", modifiedAt: "2026-03-01", sizeBytes: 55 }],
         ]),
       ],
     ]);

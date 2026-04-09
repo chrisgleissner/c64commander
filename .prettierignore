@@ -6,6 +6,7 @@ docs/research/**/rollout-artifacts/**
 docs/research/**/metrics/**
 docs/research/**/screenshots/**
 coverage/**
+.cov-*/**
 dist/**
 ios/**/App/**
 node_modules/**

@@ -85,6 +85,7 @@ vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
     ingestionError: null,
     installedVersion: 84,
   })),
+  resetHvscLibraryData: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscMediaIndex", () => ({
@@ -172,11 +173,15 @@ import {
   getHvscDurationByMd5Seconds,
   getHvscDurationsByMd5Seconds,
   resolveHvscSonglength,
+  resetHvscLibraryData,
+  streamHvscSongsRecursive,
+  ensureHvscMetadataHydration,
   __test__,
 } from "@/lib/hvsc/hvscService";
 import {
   getHvscStatus as getRuntimeStatus,
   getHvscFolderListing as getRuntimeFolderListing,
+  resetHvscLibraryData as runtimeResetHvscLibraryData,
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "@/lib/hvsc/hvscBrowseIndexStore";
@@ -627,6 +632,46 @@ describe("hvscService", () => {
       (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
       const result = await getHvscDurationsByMd5Seconds("abc");
       expect(result).toBeNull();
+    });
+  });
+
+  describe("streamHvscSongsRecursive null snapshot (L431)", () => {
+    it("returns null when loadBrowseSnapshot returns null", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce(null);
+      const result = await streamHvscSongsRecursive("/", { onChunk: vi.fn() });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("resetHvscLibraryData mock bridge branch (L158)", () => {
+    it("delegates to mock bridge when bridge has resetHvscLibraryData (L158 TRUE)", async () => {
+      const mockReset = vi.fn().mockResolvedValue(undefined);
+      (window as any).__hvscMock__ = { resetHvscLibraryData: mockReset };
+      await resetHvscLibraryData();
+      expect(mockReset).toHaveBeenCalled();
+    });
+
+    it("calls runtime when no mock bridge has resetHvscLibraryData (L158 FALSE)", async () => {
+      await resetHvscLibraryData();
+      expect(vi.mocked(runtimeResetHvscLibraryData)).toHaveBeenCalled();
+    });
+  });
+
+  describe("ensureHvscMetadataHydration branches (L171, L178)", () => {
+    it("returns early when snapshot is null (L178 TRUE)", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce(null);
+      await ensureHvscMetadataHydration();
+      expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns memoized promise on concurrent second call (L171 TRUE)", async () => {
+      mediaIndexMocks.loadBrowseSnapshot.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(null), 10)),
+      );
+      const p1 = ensureHvscMetadataHydration();
+      const p2 = ensureHvscMetadataHydration(); // hits L171 TRUE
+      await Promise.all([p1, p2]);
+      expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(1);
     });
   });
 });

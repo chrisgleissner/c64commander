@@ -563,6 +563,50 @@ describe("hvscStatusStore", () => {
       );
       expect(result.extraction.errorMessage).toBe("Fallback message used");
     });
+
+    it("uses null errorMessage when bare error event omits both errorCause and message", () => {
+      const initial = getDefaultHvscStatusSummary();
+      // Covers: errorCause ?? message ?? null → rightmost null branch (L281 slot 2)
+      const result = applyHvscProgressEventToSummary(
+        initial,
+        { stage: "error", ingestionId: "bare-err" },
+        "sid_metadata_hydration",
+      );
+      expect(result.metadata.status).toBe("failure");
+      expect(result.metadata.errorMessage).toBeNull();
+      expect(result.metadata.durationMs).toBeNull();
+      expect(result.metadata.processedSongs).toBeNull();
+      expect(result.metadata.totalSongs).toBeNull();
+      expect(result.metadata.errorCount).toBeNull();
+    });
+
+    it("uses null for optional progress fields when bare sid_metadata_hydration event has no count data", () => {
+      const initial = getDefaultHvscStatusSummary();
+      // Covers: processedSongs ?? null, totalSongs ?? null, percent fallback to null (L243, L244, L232)
+      const result = applyHvscProgressEventToSummary(initial, {
+        ingestionId: "bare-progress",
+        stage: "sid_metadata_hydration",
+        statusToken: "running",
+        message: "progress",
+      });
+      expect(result.metadata.processedSongs).toBeNull();
+      expect(result.metadata.totalSongs).toBeNull();
+      expect(result.metadata.percent).toBeNull();
+      expect(result.metadata.durationMs).toBeNull();
+    });
+
+    it("falls back to null errorMessage when status-error progress event has no errorCause or message", () => {
+      const initial = getDefaultHvscStatusSummary();
+      // Covers: errorCause ?? message ?? null inside stateToken=error branch (L248 slots 1 and 2)
+      const result = applyHvscProgressEventToSummary(initial, {
+        ingestionId: "err-no-msg",
+        stage: "sid_metadata_hydration",
+        statusToken: "error",
+        // No errorCause, no message
+      });
+      expect(result.metadata.status).toBe("failure");
+      expect(result.metadata.errorMessage).toBeNull();
+    });
   });
 
   describe("recordHvscQueryTiming", () => {

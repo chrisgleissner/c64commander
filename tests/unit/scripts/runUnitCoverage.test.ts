@@ -56,7 +56,9 @@ describe("run-unit-coverage", () => {
 
     expect(lightingStudioChunkIndex).toBe(-1);
     expect(queryFilteredPlaylistChunkIndex).toBe(-1);
-    expect(chunks.some((chunk) => chunk.includes("tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx"))).toBe(false);
+    expect(chunks.some((chunk) => chunk.includes("tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx"))).toBe(
+      false,
+    );
   });
 
   it("runs the current heavy jsdom coverage specs in dedicated single-file shards", () => {
@@ -73,8 +75,16 @@ describe("run-unit-coverage", () => {
     const rootDir = process.cwd();
     const plan = createCoveragePlan(rootDir);
 
-    const jsdomArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns[dedicatedJsdomCoverageFiles.length], plan.projectReports["jsdom-1"]);
-    const dedicatedArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns[0], plan.projectReports[unitCoverageRuns[0].reportKey]);
+    const jsdomArgs = getVitestCoverageArgs(
+      rootDir,
+      unitCoverageRuns[dedicatedJsdomCoverageFiles.length],
+      plan.projectReports["jsdom-1"],
+    );
+    const dedicatedArgs = getVitestCoverageArgs(
+      rootDir,
+      unitCoverageRuns[0],
+      plan.projectReports[unitCoverageRuns[0].reportKey],
+    );
     const nodeArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns.at(-1), plan.projectReports.node);
     const jsdomFiles = collectJsdomCoverageFiles(rootDir);
     const sharedJsdomFiles = collectSharedJsdomCoverageFiles(rootDir);

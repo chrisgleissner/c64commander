@@ -7,7 +7,13 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildHvscBaselineUrl, buildHvscUpdateUrl, fetchLatestHvscVersions } from "@/lib/hvsc/hvscReleaseService";
+import {
+  buildHvscBaselineUrl,
+  buildHvscUpdateUrl,
+  fetchLatestHvscVersions,
+  getHvscBaseUrlOverride,
+  setHvscBaseUrlOverride,
+} from "@/lib/hvsc/hvscReleaseService";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
 vi.mock("@capacitor/core", () => ({
@@ -175,5 +181,52 @@ describe("hvscReleaseService", () => {
 
     const result = await fetchLatestHvscVersions("https://example.com/hvsc/");
     expect(result).toHaveProperty("baselineVersion");
+  });
+
+  describe("getHvscBaseUrlOverride", () => {
+    it("returns null when no override URL is stored in localStorage", () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(null);
+      expect(getHvscBaseUrlOverride()).toBeNull();
+    });
+
+    it("returns the normalized stored URL when an override is present", () => {
+      vi.mocked(localStorage.getItem).mockReturnValue("https://custom.com/hvsc");
+      expect(getHvscBaseUrlOverride()).toBe("https://custom.com/hvsc/");
+    });
+
+    it("returns the stored URL unchanged when it already has a trailing slash", () => {
+      vi.mocked(localStorage.getItem).mockReturnValue("https://custom.com/hvsc/");
+      expect(getHvscBaseUrlOverride()).toBe("https://custom.com/hvsc/");
+    });
+  });
+
+  describe("setHvscBaseUrlOverride", () => {
+    it("stores the normalized URL in localStorage", () => {
+      const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
+      vi.stubGlobal("localStorage", mockLS);
+      setHvscBaseUrlOverride("https://example.com/hvsc");
+      expect(mockLS.setItem).toHaveBeenCalledWith("c64u_hvsc_base_url", "https://example.com/hvsc/");
+    });
+
+    it("removes the stored URL when called with an empty string", () => {
+      const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
+      vi.stubGlobal("localStorage", mockLS);
+      setHvscBaseUrlOverride("");
+      expect(mockLS.removeItem).toHaveBeenCalledWith("c64u_hvsc_base_url");
+    });
+
+    it("removes the stored URL when called with null", () => {
+      const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
+      vi.stubGlobal("localStorage", mockLS);
+      setHvscBaseUrlOverride(null);
+      expect(mockLS.removeItem).toHaveBeenCalledWith("c64u_hvsc_base_url");
+    });
+
+    it("removes the stored URL when called with undefined", () => {
+      const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
+      vi.stubGlobal("localStorage", mockLS);
+      setHvscBaseUrlOverride(undefined);
+      expect(mockLS.removeItem).toHaveBeenCalledWith("c64u_hvsc_base_url");
+    });
   });
 });

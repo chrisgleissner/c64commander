@@ -145,5 +145,9 @@ describe("versionLabel", () => {
         }),
       ).toBe("0.6.5-903c8");
     });
+
+    it("uses empty string defaults for all parameters when called with an empty object", () => {
+      expect(resolveBuildVersionLabel({})).toBe("\u2014");
+    });
   });
 });

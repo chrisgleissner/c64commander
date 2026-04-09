@@ -250,9 +250,7 @@ describe("configWorkflow", () => {
       listRemoteTempFiles: vi
         .fn()
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { name: "snap.cfg", path: "/Temp/snap.cfg", modifiedAt: "2026-01-01T00:00:00Z" },
-        ]),
+        .mockResolvedValueOnce([{ name: "snap.cfg", path: "/Temp/snap.cfg", modifiedAt: "2026-01-01T00:00:00Z" }]),
       runSaveRemoteConfig: vi.fn().mockResolvedValue(undefined),
       readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array([1])),
       persistLocalSnapshot,
