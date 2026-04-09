@@ -10,114 +10,114 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
-// Mock health state hook
-const mockHealthState = {
-  state: "Degraded" as const,
-  connectivity: "Online" as const,
-  connectedDeviceLabel: "C64U",
-  problemCount: 3,
-  host: "c64u",
-  contributors: {
-    App: { state: "Idle" as const, problemCount: 0, totalOperations: 0, failedOperations: 0 },
-    REST: { state: "Degraded" as const, problemCount: 3, totalOperations: 10, failedOperations: 3 },
-    FTP: { state: "Idle" as const, problemCount: 0, totalOperations: 0, failedOperations: 0 },
+const mockState = vi.hoisted(() => ({
+  healthState: {
+    state: "Degraded" as const,
+    connectivity: "Online" as const,
+    connectedDeviceLabel: "C64U",
+    problemCount: 3,
+    host: "c64u",
+    contributors: {
+      App: { state: "Idle" as const, problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      REST: { state: "Degraded" as const, problemCount: 3, totalOperations: 10, failedOperations: 3 },
+      FTP: { state: "Idle" as const, problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    },
+    lastRestActivity: null,
+    lastFtpActivity: null,
+    primaryProblem: null,
   },
-  lastRestActivity: null,
-  lastFtpActivity: null,
-  primaryProblem: null,
-};
-
-let currentProfile = "compact";
-const mockConnectionStatus = {
-  state: "REAL_CONNECTED",
-  deviceInfo: { product: "C64 Ultimate", errors: [] as string[] },
-};
-const mockSavedDevices = {
-  devices: [
-    {
-      id: "device-office",
-      nickname: "Office U64",
-      shortLabel: "Office",
-      host: "c64u",
-      httpPort: 80,
-      ftpPort: 21,
-      telnetPort: 23,
-      hasPassword: false,
-      lastKnownProduct: "U64",
-      lastKnownHostname: "office-u64",
-      lastKnownUniqueId: "UID-OFFICE",
-    },
-    {
-      id: "device-backup",
-      nickname: "Backup Lab",
-      shortLabel: "Backup",
-      host: "backup-c64",
-      httpPort: 8080,
-      ftpPort: 2021,
-      telnetPort: 2323,
-      hasPassword: false,
-      lastKnownProduct: "U64E",
-      lastKnownHostname: "backup-lab",
-      lastKnownUniqueId: "UID-BACKUP",
-    },
-  ],
-  selectedDeviceId: "device-office",
-  verifiedByDeviceId: {
-    "device-office": {
-      product: "U64",
-      hostname: "office-u64",
-      unique_id: "UID-OFFICE",
-    },
-    "device-backup": {
-      product: "U64E",
-      hostname: "backup-lab",
-      unique_id: "UID-BACKUP",
-    },
+  currentProfile: "compact",
+  connectionStatus: {
+    state: "REAL_CONNECTED",
+    deviceInfo: { product: "C64 Ultimate", errors: [] as string[] },
   },
-  switchSummaryByDeviceId: {},
-  summaryOrder: [],
-};
-const mockSwitchSavedDevice = vi.fn();
-const mockRequestDiagnosticsOpen = vi.fn();
+  savedDevices: {
+    devices: [
+      {
+        id: "device-office",
+        nickname: "Office U64",
+        shortLabel: "Office",
+        host: "c64u",
+        httpPort: 80,
+        ftpPort: 21,
+        telnetPort: 23,
+        hasPassword: false,
+        lastKnownProduct: "U64",
+        lastKnownHostname: "office-u64",
+        lastKnownUniqueId: "UID-OFFICE",
+      },
+      {
+        id: "device-backup",
+        nickname: "Backup Lab",
+        shortLabel: "Backup",
+        host: "backup-c64",
+        httpPort: 8080,
+        ftpPort: 2021,
+        telnetPort: 2323,
+        hasPassword: false,
+        lastKnownProduct: "U64E",
+        lastKnownHostname: "backup-lab",
+        lastKnownUniqueId: "UID-BACKUP",
+      },
+    ],
+    selectedDeviceId: "device-office",
+    verifiedByDeviceId: {
+      "device-office": {
+        product: "U64",
+        hostname: "office-u64",
+        unique_id: "UID-OFFICE",
+      },
+      "device-backup": {
+        product: "U64E",
+        hostname: "backup-lab",
+        unique_id: "UID-BACKUP",
+      },
+    },
+    switchSummaryByDeviceId: {},
+    summaryOrder: [],
+  },
+  switchSavedDevice: vi.fn(),
+  requestDiagnosticsOpen: vi.fn(),
+}));
 
 vi.mock("@/hooks/useHealthState", () => ({
-  useHealthState: () => mockHealthState,
+  useHealthState: () => mockState.healthState,
 }));
 
 vi.mock("@/hooks/useDisplayProfile", () => ({
-  useDisplayProfile: () => ({ profile: currentProfile }),
+  useDisplayProfile: () => ({ profile: mockState.currentProfile }),
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => ({
-    status: mockConnectionStatus,
+    status: mockState.connectionStatus,
   }),
 }));
 
 vi.mock("@/hooks/useSavedDevices", () => ({
-  useSavedDevices: () => mockSavedDevices,
+  useSavedDevices: () => mockState.savedDevices,
 }));
 
 vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
-  useSavedDeviceSwitching: () => mockSwitchSavedDevice,
+  useSavedDeviceSwitching: () => mockState.switchSavedDevice,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
-  requestDiagnosticsOpen: mockRequestDiagnosticsOpen,
+  requestDiagnosticsOpen: mockState.requestDiagnosticsOpen,
 }));
 
 describe("UnifiedHealthBadge", () => {
   beforeEach(() => {
-    currentProfile = "compact";
-    (mockHealthState as { state: string }).state = "Degraded";
-    (mockHealthState as { connectivity: string }).connectivity = "Online";
-    mockHealthState.connectedDeviceLabel = "C64U";
-    mockHealthState.problemCount = 3;
-    mockConnectionStatus.state = "REAL_CONNECTED";
-    mockConnectionStatus.deviceInfo = { product: "C64 Ultimate", errors: [] };
-    mockSavedDevices.selectedDeviceId = "device-office";
-    mockSwitchSavedDevice.mockReset();
-    mockRequestDiagnosticsOpen.mockReset();
+    mockState.currentProfile = "compact";
+    (mockState.healthState as { state: string }).state = "Degraded";
+    (mockState.healthState as { connectivity: string }).connectivity = "Online";
+    mockState.healthState.connectedDeviceLabel = "C64U";
+    mockState.healthState.problemCount = 3;
+    mockState.connectionStatus.state = "REAL_CONNECTED";
+    mockState.connectionStatus.deviceInfo = { product: "C64 Ultimate", errors: [] };
+    mockState.savedDevices.selectedDeviceId = "device-office";
+    mockState.switchSavedDevice.mockReset();
+    mockState.requestDiagnosticsOpen.mockReset();
   });
 
   afterEach(() => {
@@ -125,10 +125,10 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("renders capped counts exactly once on compact and medium profiles", () => {
-    mockHealthState.problemCount = 1000;
+    mockState.healthState.problemCount = 1000;
 
     for (const profile of ["compact", "medium"] as const) {
-      currentProfile = profile;
+      mockState.currentProfile = profile;
       const { unmount } = render(<UnifiedHealthBadge />);
       const badge = screen.getByTestId("unified-health-badge");
       const textContent = badge.textContent ?? "";
@@ -143,8 +143,8 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("renders the expanded problem suffix without a separate count span", () => {
-    currentProfile = "expanded";
-    mockHealthState.problemCount = 12;
+    mockState.currentProfile = "expanded";
+    mockState.healthState.problemCount = 12;
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
@@ -156,7 +156,7 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("keeps connectivity text neutral while the health signal stays colored", () => {
-    currentProfile = "medium";
+    mockState.currentProfile = "medium";
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
@@ -170,8 +170,8 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("keeps nowrap and overflow containment classes on the badge", () => {
-    currentProfile = "medium";
-    mockHealthState.problemCount = 1808;
+    mockState.currentProfile = "medium";
+    mockState.healthState.problemCount = 1808;
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
@@ -185,8 +185,8 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("caps compact badge width so the app bar can shrink without overflowing", () => {
-    currentProfile = "compact";
-    mockHealthState.connectedDeviceLabel = "Ultimate-64-Elite-Living-Room";
+    mockState.currentProfile = "compact";
+    mockState.healthState.connectedDeviceLabel = "Ultimate-64-Elite-Living-Room";
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
@@ -196,7 +196,7 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("renders as a bordered chrome control while preserving the 44px hit target", () => {
-    currentProfile = "medium";
+    mockState.currentProfile = "medium";
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
@@ -210,11 +210,11 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("keeps the leading device label visible", () => {
-    currentProfile = "medium";
-    (mockHealthState as { state: string }).state = "Healthy";
-    mockHealthState.problemCount = 0;
-    mockHealthState.connectedDeviceLabel = "U64E2";
-    mockConnectionStatus.deviceInfo = { product: "Ultimate 64-II", errors: [] };
+    mockState.currentProfile = "medium";
+    (mockState.healthState as { state: string }).state = "Healthy";
+    mockState.healthState.problemCount = 0;
+    mockState.healthState.connectedDeviceLabel = "U64E2";
+    mockState.connectionStatus.deviceInfo = { product: "Ultimate 64-II", errors: [] };
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
@@ -223,9 +223,9 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("makes the healthy glyph optically larger than the degraded glyph", () => {
-    currentProfile = "medium";
-    (mockHealthState as { state: string }).state = "Healthy";
-    mockHealthState.problemCount = 0;
+    mockState.currentProfile = "medium";
+    (mockState.healthState as { state: string }).state = "Healthy";
+    mockState.healthState.problemCount = 0;
     const { unmount } = render(<UnifiedHealthBadge />);
 
     let glyph = screen.getByTestId("unified-health-badge").querySelectorAll('[data-overlay-critical="badge"]')[1];
@@ -234,8 +234,8 @@ describe("UnifiedHealthBadge", () => {
 
     unmount();
 
-    (mockHealthState as { state: string }).state = "Degraded";
-    mockHealthState.problemCount = 3;
+    (mockState.healthState as { state: string }).state = "Degraded";
+    mockState.healthState.problemCount = 3;
     render(<UnifiedHealthBadge />);
 
     glyph = screen.getByTestId("unified-health-badge").querySelectorAll('[data-overlay-critical="badge"]')[1];
@@ -244,41 +244,41 @@ describe("UnifiedHealthBadge", () => {
   });
 
   it("keeps the badge data contract stable when online device labeling is unavailable", () => {
-    currentProfile = "medium";
-    (mockHealthState as { state: string }).state = "Healthy";
-    mockHealthState.problemCount = 0;
-    mockHealthState.connectedDeviceLabel = null;
-    mockConnectionStatus.deviceInfo = { product: "Ultimate 64-II", errors: [] };
+    mockState.currentProfile = "medium";
+    (mockState.healthState as { state: string }).state = "Healthy";
+    mockState.healthState.problemCount = 0;
+    mockState.healthState.connectedDeviceLabel = null;
+    mockState.connectionStatus.deviceInfo = { product: "Ultimate 64-II", errors: [] };
     render(<UnifiedHealthBadge />);
 
     expect(screen.getByTestId("unified-health-badge")).not.toHaveAttribute("data-connected-device");
   });
 
   it("renders offline and not-yet-connected special copy unchanged", () => {
-    (mockHealthState as { connectivity: string }).connectivity = "Offline";
-    (mockHealthState as { state: string }).state = "Unavailable";
-    currentProfile = "expanded";
+    (mockState.healthState as { connectivity: string }).connectivity = "Offline";
+    (mockState.healthState as { state: string }).state = "Unavailable";
+    mockState.currentProfile = "expanded";
     const { unmount } = render(<UnifiedHealthBadge />);
 
     expect(screen.getByTestId("unified-health-badge").textContent).toContain("Offline ◌ Device not reachable");
 
     unmount();
 
-    (mockHealthState as { connectivity: string }).connectivity = "Not yet connected";
-    (mockHealthState as { state: string }).state = "Idle";
-    currentProfile = "medium";
+    (mockState.healthState as { connectivity: string }).connectivity = "Not yet connected";
+    (mockState.healthState as { state: string }).state = "Idle";
+    mockState.currentProfile = "medium";
     render(<UnifiedHealthBadge />);
 
     expect(screen.getByTestId("unified-health-badge").textContent).toBe("Not connected ○");
   });
 
   it("clicking the badge calls requestDiagnosticsOpen with 'header'", () => {
-    currentProfile = "compact";
+    mockState.currentProfile = "compact";
     render(<UnifiedHealthBadge />);
 
     fireEvent.click(screen.getByTestId("unified-health-badge"));
 
-    expect(mockRequestDiagnosticsOpen).toHaveBeenCalledWith("header");
+    expect(mockState.requestDiagnosticsOpen).toHaveBeenCalledWith("header");
   });
 
   it("opens the switch picker on long press without also opening diagnostics", async () => {
@@ -294,12 +294,12 @@ describe("UnifiedHealthBadge", () => {
     fireEvent.pointerUp(badge);
     fireEvent.click(badge);
 
-    expect(mockRequestDiagnosticsOpen).not.toHaveBeenCalled();
+    expect(mockState.requestDiagnosticsOpen).not.toHaveBeenCalled();
   });
 
   it("switches devices from the picker and closes the dialog", async () => {
     vi.useFakeTimers();
-    mockSwitchSavedDevice.mockResolvedValueOnce(undefined);
+    mockState.switchSavedDevice.mockResolvedValueOnce(undefined);
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
@@ -307,10 +307,9 @@ describe("UnifiedHealthBadge", () => {
     await vi.advanceTimersByTimeAsync(450);
 
     fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+    expect(mockState.switchSavedDevice).toHaveBeenCalledWith("device-backup");
 
-    await waitFor(() => {
-      expect(mockSwitchSavedDevice).toHaveBeenCalledWith("device-backup");
-    });
+    vi.useRealTimers();
     await waitFor(() => {
       expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
     });
