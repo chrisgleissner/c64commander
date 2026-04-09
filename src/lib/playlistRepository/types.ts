@@ -9,6 +9,7 @@
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import type { ConfigResolutionOrigin, ConfigValueOverride } from "@/lib/config/playbackConfig";
 import type { ArchivePlaylistReference } from "@/lib/archive/types";
+import type { DeviceBoundContentOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
 export type SourceKind = "local" | "ultimate" | "hvsc" | "commoserve";
 
@@ -17,6 +18,7 @@ export type TrackRecord = {
   sourceKind: SourceKind;
   sourceLocator: string;
   sourceId?: string | null;
+  origin?: DeviceBoundContentOrigin | null;
   category?: string | null;
   title: string;
   author?: string | null;
@@ -43,7 +45,15 @@ export type PlaylistItemRecord = {
   sortKey: string;
   durationOverrideMs?: number | null;
   status: "ready" | "unavailable";
-  unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
+  unavailableReason?:
+    | "source-revoked"
+    | "file-inaccessible"
+    | "hvsc-unavailable"
+    | "origin-device-unreachable"
+    | "origin-device-removed"
+    | "origin-device-mismatch"
+    | "origin-file-missing"
+    | null;
   addedAt: string;
 };
 

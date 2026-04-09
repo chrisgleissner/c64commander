@@ -31,6 +31,11 @@ const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   endHvscPerfScope: vi.fn(),
 }));
 
+const { mockFetchUltimateOriginBlob, mockIsOriginOnSelectedDevice } = vi.hoisted(() => ({
+  mockFetchUltimateOriginBlob: vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])])),
+  mockIsOriginOnSelectedDevice: vi.fn(() => true),
+}));
+
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
@@ -55,6 +60,12 @@ vi.mock("@/lib/ftp/ftpClient", () => ({
 
 vi.mock("@/lib/ftp/ftpConfig", () => ({
   getStoredFtpPort: vi.fn().mockReturnValue(21),
+}));
+
+vi.mock("@/lib/savedDevices/deviceBoundOrigin", () => ({
+  fetchUltimateOriginBlob: mockFetchUltimateOriginBlob,
+  isOriginOnSelectedDevice: mockIsOriginOnSelectedDevice,
+  buildSelectedDeviceBoundOrigin: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", async () => {
@@ -127,6 +138,9 @@ beforeEach(() => {
   } as any);
   vi.mocked(recordDeviceGuard).mockReset();
   vi.mocked(recordSmokeBenchmarkSnapshot).mockReset();
+  mockFetchUltimateOriginBlob.mockClear();
+  mockIsOriginOnSelectedDevice.mockReset();
+  mockIsOriginOnSelectedDevice.mockReturnValue(true);
   beginHvscPerfScope.mockReset();
   endHvscPerfScope.mockReset();
   vi.mocked(getActiveAction).mockReturnValue({
@@ -574,6 +588,26 @@ describe("playbackRouter", () => {
     const plan = buildPlayPlan({ source: "ultimate", path: "/demo.prg" });
     await executePlayPlan(api as any, plan, { loadMode: "load" });
     expect(api.loadPrg).toHaveBeenCalledWith("/demo.prg");
+  });
+
+  it("uploads ultimate PRG bytes when the item belongs to a different saved device", async () => {
+    mockIsOriginOnSelectedDevice.mockReturnValue(false);
+    const api = createApiMock();
+    const plan = buildPlayPlan({
+      source: "ultimate",
+      path: "/demo.prg",
+      origin: {
+        sourceKind: "ultimate",
+        originDeviceId: "device-a",
+        originDeviceLastKnownUniqueId: "UID-A",
+        originPath: "/demo.prg",
+        importedAt: "2026-04-09T00:00:00.000Z",
+      },
+    });
+    await executePlayPlan(api as any, plan, { loadMode: "run" });
+    expect(mockFetchUltimateOriginBlob).toHaveBeenCalledWith(plan.origin);
+    expect(api.runPrgUpload).toHaveBeenCalledWith(expect.any(Blob), { filename: "/demo.prg" });
+    expect(api.runPrg).not.toHaveBeenCalled();
   });
 
   it("routes PRG upload from local file in run mode", async () => {

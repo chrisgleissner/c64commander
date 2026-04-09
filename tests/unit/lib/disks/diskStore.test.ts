@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
+import { loadDiskLibrary, saveDiskLibrary, SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -43,5 +43,17 @@ describe("diskStore", () => {
     localStorage.setItem(`c64u_disk_library:${mockId}`, JSON.stringify({ disks: "not an array" }));
     const loaded = loadDiskLibrary(mockId);
     expect(loaded.disks).toEqual([]);
+  });
+
+  it("merges legacy per-device libraries into the shared disk library", () => {
+    const diskA = createDiskEntry({ path: "/device-a/demo.d64", location: "local" });
+    const diskB = createDiskEntry({ path: "/device-b/demo.d81", location: "local" });
+    localStorage.setItem("c64u_disk_library:device-a", JSON.stringify({ disks: [diskA] }));
+    localStorage.setItem("c64u_disk_library:device-b", JSON.stringify({ disks: [diskB] }));
+
+    const loaded = loadDiskLibrary(SHARED_DISK_LIBRARY_ID);
+
+    expect(loaded.disks).toHaveLength(2);
+    expect(loaded.disks.map((disk) => disk.path)).toEqual(["/device-a/demo.d64", "/device-b/demo.d81"]);
   });
 });

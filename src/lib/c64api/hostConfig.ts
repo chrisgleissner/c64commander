@@ -8,6 +8,8 @@
 
 import { addLog } from "@/lib/logging";
 
+const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+
 export const DEFAULT_BASE_URL = "http://c64u";
 export const DEFAULT_DEVICE_HOST = "c64u";
 export const DEFAULT_HTTP_PORT = 80;
@@ -145,6 +147,24 @@ export const resolvePlatformApiBaseUrl = (deviceHost: string, baseUrl?: string) 
 
 export const resolveDeviceHostFromStorage = () => {
   if (typeof localStorage === "undefined") return DEFAULT_DEVICE_HOST;
+  const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
+  if (savedDevicesRaw) {
+    try {
+      const parsed = JSON.parse(savedDevicesRaw) as {
+        selectedDeviceId?: string;
+        devices?: Array<{ id?: string; host?: string; httpPort?: number }>;
+      };
+      const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+      const selected = devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0];
+      if (selected?.host) {
+        return buildDeviceHostWithHttpPort(selected.host, selected.httpPort ?? DEFAULT_HTTP_PORT);
+      }
+    } catch (error) {
+      addLog("warn", "Failed to parse saved devices while resolving device host", {
+        error: (error as Error).message,
+      });
+    }
+  }
   const storedDeviceHost = localStorage.getItem("c64u_device_host");
   const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
   if (storedDeviceHost) {

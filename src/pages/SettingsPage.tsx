@@ -22,10 +22,15 @@ import {
   Play,
   Bell,
   Globe,
+  Plus,
+  Trash,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { C64_DEFAULTS, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
@@ -136,6 +141,17 @@ import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layo
 import { buildDefaultArchiveClientConfig, validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
 import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
 import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import {
+  addSavedDevice,
+  buildSavedDevicePrimaryLabel,
+  deriveSavedDeviceShortLabel,
+  getSavedDevicesSnapshot,
+  removeSavedDevice,
+  resolveCanonicalProductFamilyCode,
+  updateSavedDevice,
+  validateSavedDeviceShortLabel,
+} from "@/lib/savedDevices/store";
+import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 
 type Theme = "light" | "dark" | "system";
 
@@ -148,6 +164,8 @@ export default function SettingsPage() {
   const { profile } = useDisplayProfile();
   const navigate = useNavigate();
   const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
+  const savedDevices = useSavedDevices();
+  const switchSavedDevice = useSavedDeviceSwitching();
   const connectionSnapshot = useConnectionState();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
@@ -175,15 +193,22 @@ export default function SettingsPage() {
   };
 
   const [passwordInput, setPasswordInput] = useState(password);
+  const [nicknameInput, setNicknameInput] = useState("");
+  const [shortLabelInput, setShortLabelInput] = useState("");
   const [deviceHostInput, setDeviceHostInput] = useState(() => stripPortFromDeviceHost(deviceHost));
   const [httpPortInput, setHttpPortInput] = useState(() => String(getDeviceHostHttpPort(deviceHost, runtimeBaseUrl)));
   const [ftpPortInput, setFtpPortInput] = useState(() => String(getStoredFtpPort()));
   const [telnetPortInput, setTelnetPortInput] = useState(() => String(getStoredTelnetPort()));
   const [hostnameError, setHostnameError] = useState<string | null>(null);
+  const [shortLabelError, setShortLabelError] = useState<string | null>(null);
   const [connectionFieldError, setConnectionFieldError] = useState<string | null>(null);
   const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
   const runtimeHttpPort = getDeviceHostHttpPort(deviceHost, runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
+  const selectedSavedDevice =
+    savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
+    savedDevices.devices[0] ??
+    null;
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
@@ -268,19 +293,26 @@ export default function SettingsPage() {
   }, [password]);
 
   useEffect(() => {
-    if (isDemoActive) {
-      const storedHost = resolveDeviceHostFromStorage();
-      setDeviceHostInput(stripPortFromDeviceHost(storedHost));
-      setHttpPortInput(String(getDeviceHostHttpPort(storedHost, runtimeBaseUrl)));
-      setFtpPortInput(String(getStoredFtpPort()));
-      setTelnetPortInput(String(getStoredTelnetPort()));
+    if (!selectedSavedDevice) {
       return;
     }
-    setDeviceHostInput(stripPortFromDeviceHost(deviceHost));
-    setHttpPortInput(String(getDeviceHostHttpPort(deviceHost, runtimeBaseUrl)));
-    setFtpPortInput(String(getStoredFtpPort()));
-    setTelnetPortInput(String(getStoredTelnetPort()));
-  }, [deviceHost, isDemoActive, runtimeBaseUrl]);
+    setNicknameInput(selectedSavedDevice.nickname ?? "");
+    setShortLabelInput(selectedSavedDevice.shortLabel ?? "");
+    setDeviceHostInput(selectedSavedDevice.host);
+    setHttpPortInput(String(selectedSavedDevice.httpPort));
+    setFtpPortInput(String(selectedSavedDevice.ftpPort));
+    setTelnetPortInput(String(selectedSavedDevice.telnetPort));
+    let cancelled = false;
+    void (async () => {
+      const nextPassword = selectedSavedDevice.hasPassword ? await getPasswordForDevice(selectedSavedDevice.id) : null;
+      if (!cancelled) {
+        setPasswordInput(nextPassword ?? "");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSavedDevice]);
 
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
@@ -408,8 +440,13 @@ export default function SettingsPage() {
   };
 
   const handleSaveConnection = trace(async function handleSaveConnection() {
+    if (!selectedSavedDevice) return;
     const hostError = validateDeviceHost(deviceHostInput);
     setHostnameError(hostError);
+    const nextShortLabelError = shortLabelInput.trim()
+      ? validateSavedDeviceShortLabel(savedDevices.devices, selectedSavedDevice.id, shortLabelInput)
+      : null;
+    setShortLabelError(nextShortLabelError);
     const portError = !isValidConnectionPort(httpPortInput)
       ? "HTTP port must be 1 to 65535."
       : !isValidConnectionPort(ftpPortInput)
@@ -418,15 +455,29 @@ export default function SettingsPage() {
           ? "Telnet port must be 1 to 65535."
           : null;
     setConnectionFieldError(portError);
-    if (hostError || portError) return;
+    if (hostError || portError || nextShortLabelError) return;
     setIsSaving(true);
     try {
       const nextHost = stripPortFromDeviceHost(deviceHostInput.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
       const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(httpPortInput));
       setStoredFtpPort(Number(ftpPortInput));
       setStoredTelnetPort(Number(telnetPortInput));
-      updateConfig(nextDeviceHost, passwordInput || undefined);
+      updateSavedDevice(selectedSavedDevice.id, {
+        nickname: nicknameInput.trim() || null,
+        shortLabel: shortLabelInput.trim() || null,
+        host: nextHost,
+        httpPort: Number(httpPortInput),
+        ftpPort: Number(ftpPortInput),
+        telnetPort: Number(telnetPortInput),
+      });
+      if (passwordInput.trim()) {
+        await setPasswordForDevice(selectedSavedDevice.id, passwordInput.trim());
+      } else {
+        await clearPasswordForDevice(selectedSavedDevice.id);
+      }
+      updateConfig(nextDeviceHost, passwordInput.trim() || undefined);
       await discoverConnection("settings");
+      await switchSavedDevice(selectedSavedDevice.id);
       toast({ title: "Connection settings saved" });
     } catch (error) {
       reportUserError({
@@ -438,6 +489,40 @@ export default function SettingsPage() {
     } finally {
       setIsSaving(false);
     }
+  });
+
+  const handleAddSavedDevice = trace(async function handleAddSavedDevice() {
+    const nextId =
+      (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
+      `${Date.now().toString(36)}-${Math.round(Math.random() * 1e6).toString(36)}`;
+    addSavedDevice({
+      id: nextId,
+      nickname: `Device ${savedDevices.devices.length + 1}`,
+      shortLabel: null,
+      host: C64_DEFAULTS.DEFAULT_DEVICE_HOST,
+      httpPort: C64_DEFAULTS.DEFAULT_HTTP_PORT,
+      ftpPort: getStoredFtpPort(),
+      telnetPort: getStoredTelnetPort(),
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+    await switchSavedDevice(nextId);
+  });
+
+  const handleDeleteSelectedDevice = trace(async function handleDeleteSelectedDevice() {
+    if (!selectedSavedDevice || savedDevices.devices.length <= 1) return;
+    removeSavedDevice(selectedSavedDevice.id);
+    await clearPasswordForDevice(selectedSavedDevice.id);
+    const nextSelected = getSavedDevicesSnapshot().selectedDeviceId;
+    if (nextSelected) {
+      await switchSavedDevice(nextSelected);
+    }
+  });
+
+  const handleSelectSavedDevice = trace(async function handleSelectSavedDevice(deviceId: string) {
+    await switchSavedDevice(deviceId);
   });
 
   const handleDeveloperTap = () => {
@@ -699,6 +784,116 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-3">
+                <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label className="text-sm font-medium">Saved devices</Label>
+                      <p className="text-xs text-muted-foreground">Select a device here or switch from diagnostics.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={handleAddSavedDevice}>
+                        <Plus className="mr-1 h-3.5 w-3.5" />
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDeleteSelectedDevice}
+                        disabled={savedDevices.devices.length <= 1 || !selectedSavedDevice}
+                      >
+                        <Trash className="mr-1 h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {savedDevices.devices.map((device) => {
+                      const isSelected = device.id === savedDevices.selectedDeviceId;
+                      const productCode =
+                        device.lastKnownProduct ??
+                        resolveCanonicalProductFamilyCode(status.deviceInfo?.product) ??
+                        "C64U";
+                      return (
+                        <button
+                          key={device.id}
+                          type="button"
+                          className={cn(
+                            "flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
+                            isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
+                          )}
+                          onClick={() => {
+                            void handleSelectSavedDevice(device.id);
+                          }}
+                          data-testid={`settings-device-row-${device.id}`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {buildSavedDevicePrimaryLabel(device)}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {productCode} · {device.host}
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            {deriveSavedDeviceShortLabel(device, savedDevices.devices)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="deviceNickname" className="text-sm">
+                      Device name
+                    </Label>
+                    <Input
+                      id="deviceNickname"
+                      value={nicknameInput}
+                      onChange={(e) => setNicknameInput(e.target.value)}
+                      placeholder="Optional nickname"
+                      className="font-sans"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deviceShortLabel" className="text-sm">
+                      Badge label
+                    </Label>
+                    <Input
+                      id="deviceShortLabel"
+                      value={shortLabelInput}
+                      onChange={(e) => {
+                        setShortLabelInput(e.target.value);
+                        if (shortLabelError) {
+                          setShortLabelError(
+                            e.target.value.trim()
+                              ? validateSavedDeviceShortLabel(
+                                  savedDevices.devices,
+                                  selectedSavedDevice?.id ?? "",
+                                  e.target.value,
+                                )
+                              : null,
+                          );
+                        }
+                      }}
+                      placeholder="Up to 8 chars"
+                      className="font-sans"
+                      maxLength={8}
+                    />
+                    {shortLabelError ? (
+                      <p className="text-xs text-destructive" role="alert">
+                        {shortLabelError}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Optional. Leave blank to derive from the device name or host.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="deviceHost" className="text-sm">
                     C64U Hostname / IP

@@ -358,7 +358,7 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
-  it("rehydrates the device-specific playlist after the resolved device id replaces the default key", async () => {
+  it("rehydrates a legacy per-device playlist while the shared playlist key is active", async () => {
     const devicePlaylistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       devicePlaylistStorageKey,
@@ -393,7 +393,8 @@ describe("usePlaybackPersistence", () => {
     );
 
     await waitFor(() => {
-      expect(result.current.playlist).toHaveLength(0);
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].label).toBe("delayed.sid");
     });
 
     rerender({
@@ -1147,7 +1148,7 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
-  it("ignores unrelated legacy playlist keys when restoring the active device playlist", async () => {
+  it("restores the first available legacy playlist when the shared playlist key has no data yet", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-2");
     const unrelatedKey = buildPlaylistStorageKey("stale-device");
 
@@ -1176,7 +1177,8 @@ describe("usePlaybackPersistence", () => {
     );
 
     await waitFor(() => {
-      expect(result.current.playlist).toHaveLength(0);
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].label).toBe("stale.sid");
     });
   });
 

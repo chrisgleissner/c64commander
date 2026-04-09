@@ -72,10 +72,12 @@ const {
   mockSetFeatureFlag,
   mockSetTheme,
   mockSetListPreviewLimit,
+  mockSwitchSavedDevice,
   connectionPayloadRef,
   connectionStateRef,
   developerModeEnabledRef,
   featureFlagValueRef,
+  savedDevicesRef,
 } = vi.hoisted(() => ({
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
@@ -85,7 +87,35 @@ const {
   mockSetFeatureFlag: vi.fn(),
   mockSetTheme: vi.fn(),
   mockSetListPreviewLimit: vi.fn(),
+  mockSwitchSavedDevice: vi.fn(async () => undefined),
   featureFlagValueRef: { current: false as boolean },
+  savedDevicesRef: {
+    current: {
+      selectedDeviceId: "saved-device-1",
+      devices: [
+        {
+          id: "saved-device-1",
+          nickname: "Office U64",
+          shortLabel: "Office",
+          host: "c64u",
+          httpPort: 80,
+          ftpPort: 21,
+          telnetPort: 64,
+          lastKnownProduct: "U64",
+          lastKnownHostname: "office-u64",
+          lastKnownUniqueId: "UID-1",
+          lastSuccessfulConnectionAt: null,
+          lastUsedAt: null,
+          hasPassword: false,
+        },
+      ],
+      summaries: {},
+      summaryLru: [],
+      runtimeStatuses: {},
+      verifiedByDeviceId: {},
+      actualDeviceIdByDeviceId: {},
+    },
+  },
   connectionPayloadRef: {
     current: {
       status: {
@@ -120,6 +150,20 @@ vi.mock("@/hooks/useC64Connection", () => ({
     updateConfig: mockUpdateConfig,
     refetch: mockRefetch,
   }),
+}));
+
+vi.mock("@/hooks/useSavedDevices", () => ({
+  useSavedDevices: () => savedDevicesRef.current,
+}));
+
+vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
+  useSavedDeviceSwitching: () => mockSwitchSavedDevice,
+}));
+
+vi.mock("@/lib/secureStorage", () => ({
+  getPasswordForDevice: vi.fn(async () => null),
+  setPasswordForDevice: vi.fn(async () => undefined),
+  clearPasswordForDevice: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/hooks/useConnectionState", () => ({

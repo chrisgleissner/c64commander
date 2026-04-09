@@ -15,6 +15,7 @@ import {
   hasStoredPasswordFlag,
   setPassword as storePassword,
 } from "@/lib/secureStorage";
+import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
@@ -1791,7 +1792,12 @@ export function getC64API(): C64API {
   return apiProxy;
 }
 
-export function updateC64APIConfig(baseUrl: string, password?: string, deviceHost?: string) {
+export function updateC64APIConfig(
+  baseUrl: string,
+  password?: string,
+  deviceHost?: string,
+  options?: { reason?: string },
+) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
   const resolvedBaseUrl = resolvePlatformApiBaseUrl(resolvedDeviceHost, buildBaseUrlFromDeviceHost(resolvedDeviceHost));
@@ -1802,6 +1808,11 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
   localStorage.removeItem("c64u_base_url");
   localStorage.setItem("c64u_device_host", resolvedDeviceHost);
   localStorage.removeItem("c64u_password");
+  updateSelectedSavedDeviceConnection({
+    deviceHost: resolvedDeviceHost,
+    passwordPresent: Boolean(password),
+    httpPort: getDeviceHostHttpPort(resolvedDeviceHost, resolvedBaseUrl),
+  });
   if (password) {
     storePassword(password).catch((error) => {
       addErrorLog("Failed to persist password to secure storage", { error: (error as Error).message });
@@ -1837,6 +1848,7 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
         baseUrl: resolvedBaseUrl,
         password: password || "",
         deviceHost: resolvedDeviceHost,
+        reason: options?.reason,
       },
     }),
   );

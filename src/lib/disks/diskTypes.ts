@@ -9,6 +9,7 @@
 import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import type { ConfigCandidate, ConfigResolutionOrigin, ConfigValueOverride } from "@/lib/config/playbackConfig";
+import { buildSelectedDeviceBoundOrigin, type DeviceBoundContentOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
 export type DiskLocation = "local" | "ultimate";
 
@@ -17,6 +18,7 @@ export type DiskEntry = {
   name: string;
   path: string;
   location: DiskLocation;
+  origin?: DeviceBoundContentOrigin | null;
   group: string | null;
   sourceId?: string | null;
   localUri?: string | null;
@@ -70,6 +72,7 @@ export const getLeafFolderName = (path: string) => {
 export const createDiskEntry = (params: {
   path: string;
   location: DiskLocation;
+  origin?: DeviceBoundContentOrigin | null;
   group?: string | null;
   sourceId?: string | null;
   localUri?: string | null;
@@ -89,6 +92,7 @@ export const createDiskEntry = (params: {
     name: params.name?.trim() || getDiskName(path),
     path,
     location: params.location,
+    origin: params.origin ?? (params.location === "ultimate" ? buildSelectedDeviceBoundOrigin(path) : null),
     group: params.group ?? null,
     sourceId: params.sourceId ?? null,
     localUri: params.localUri ?? null,

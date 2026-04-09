@@ -9,6 +9,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import {
   AlertDialog,
@@ -39,6 +40,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
@@ -62,6 +65,13 @@ import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
 import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
+import {
+  buildSavedDevicePrimaryLabel,
+  deriveSavedDeviceShortLabel,
+  getSavedDeviceSwitchStatus,
+  type DeviceSwitchStatus,
+  type SavedDevice,
+} from "@/lib/savedDevices/store";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
@@ -352,6 +362,34 @@ const FilterChip = ({ label }: { label: string }) => (
     {label}
   </span>
 );
+
+const DEVICE_SWITCH_STATUS_LABEL: Record<DeviceSwitchStatus, string> = {
+  connected: "Connected",
+  verifying: "Verifying",
+  offline: "Offline",
+  mismatch: "Mismatch",
+  "last-known": "Last known",
+};
+
+const formatUniqueIdFragment = (value?: string | null) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.length <= 6 ? trimmed : trimmed.slice(-6);
+};
+
+const buildDeviceSecondaryLine = (
+  device: SavedDevice,
+  verifiedProduct: string | null,
+  verifiedHostname: string | null,
+  verifiedUniqueId: string | null,
+) => {
+  const parts = [verifiedProduct ?? device.lastKnownProduct ?? "C64U", device.host];
+  const uniqueFragment = formatUniqueIdFragment(verifiedUniqueId ?? device.lastKnownUniqueId);
+  if (uniqueFragment) {
+    parts.push(uniqueFragment);
+  }
+  return parts.join(" · ");
+};
 
 const FilterToggleChip = ({
   label,
@@ -922,6 +960,9 @@ export function DiagnosticsDialog({
   repairRunning = false,
   onRepair,
 }: Props) {
+  const navigate = useNavigate();
+  const savedDevices = useSavedDevices();
+  const switchSavedDevice = useSavedDeviceSwitching();
   const { profile } = useDisplayProfile();
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);
@@ -1104,6 +1145,10 @@ export function DiagnosticsDialog({
   const healthDetailAvailable =
     headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
   const connectionLabel = `${healthState.connectedDeviceLabel ?? "C64U"} · ${connectionDraft.host}:${connectionDraft.httpPort}`;
+  const selectedSavedDevice =
+    savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
+    savedDevices.devices[0] ??
+    null;
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (severity !== "All") labels.push(severity);
@@ -1187,6 +1232,19 @@ export function DiagnosticsDialog({
   const handleShareFiltered = () => {
     void onShareFiltered(filteredEntries.map((entry) => entry.payload));
   };
+
+  const handleManageDevices = useCallback(() => {
+    onOpenChange(false);
+    navigate("/settings");
+  }, [navigate, onOpenChange]);
+
+  const handleSwitchDevice = useCallback(
+    async (deviceId: string) => {
+      await switchSavedDevice(deviceId);
+      onOpenChange(false);
+    },
+    [onOpenChange, switchSavedDevice],
+  );
 
   return (
     <>
@@ -1430,6 +1488,80 @@ export function DiagnosticsDialog({
                     onBack={() => setHeaderExpanded(false)}
                   />
                 </div>
+              ) : null}
+            </section>
+
+            <section
+              className="mt-3 shrink-0 rounded-xl border border-border/70 bg-card p-3"
+              data-testid="diagnostics-devices"
+            >
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Devices</p>
+                  <p className="text-xs text-muted-foreground">Switch saved devices from diagnostics.</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManageDevices}
+                  data-testid="manage-devices-button"
+                >
+                  Manage devices
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {savedDevices.devices.map((device) => {
+                  const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
+                  const status =
+                    device.id === savedDevices.selectedDeviceId ? getSavedDeviceSwitchStatus(device.id) : "last-known";
+                  const isSelected = device.id === savedDevices.selectedDeviceId;
+                  return (
+                    <button
+                      key={device.id}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
+                        isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
+                      )}
+                      onClick={() => {
+                        void handleSwitchDevice(device.id);
+                      }}
+                      data-testid={`diagnostics-device-row-${device.id}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {buildSavedDevicePrimaryLabel(device, verified)}
+                          {isSelected ? (
+                            <span className="ml-2 text-xs text-primary">
+                              {deriveSavedDeviceShortLabel(device, savedDevices.devices)}
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {buildDeviceSecondaryLine(
+                            device,
+                            verified?.product ?? null,
+                            verified?.hostname ?? null,
+                            verified?.uniqueId ?? null,
+                          )}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {DEVICE_SWITCH_STATUS_LABEL[status]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedSavedDevice ? (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Selected:{" "}
+                  {buildSavedDevicePrimaryLabel(
+                    selectedSavedDevice,
+                    savedDevices.verifiedByDeviceId[selectedSavedDevice.id] ?? null,
+                  )}
+                </p>
               ) : null}
             </section>
 
