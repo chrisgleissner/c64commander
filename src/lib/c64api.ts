@@ -31,6 +31,7 @@ import {
   DEFAULT_PROXY_URL,
   WEB_PROXY_PATH,
   buildBaseUrlFromDeviceHost,
+  getDeviceHostHttpPort,
   getDeviceHostFromBaseUrl,
   isLocalProxy,
   normalizeDeviceHost,

@@ -7,12 +7,7 @@
  */
 
 import { SecureStorage } from "@/lib/native/secureStorage";
-import {
-  getSelectedSavedDevice,
-  getSelectedSavedDeviceConnection,
-  getSavedDeviceById,
-  setSavedDevicePasswordFlag,
-} from "@/lib/savedDevices/store";
+import { getSelectedSavedDevice, setSavedDevicePasswordFlag } from "@/lib/savedDevices/store";
 
 const HAS_PASSWORD_KEY = "c64u_has_password";
 
@@ -133,6 +128,10 @@ export const getCachedPassword = () => {
 };
 
 export const getPasswordForDevice = async (deviceId: string): Promise<string | null> => {
+  if (!hasStoredPasswordFlag()) {
+    setSavedDevicePasswordFlag(deviceId, false);
+    return null;
+  }
   const state = await loadPasswordState();
   const current = resolvePasswordForDevice(state, deviceId);
   if (current && !state.passwordsByDeviceId[deviceId]) {
@@ -205,7 +204,7 @@ export const setPassword = async (value: string): Promise<void> => {
 
 export const getPassword = async (): Promise<string | null> => {
   const deviceId = getSelectedDeviceId();
-  if (!deviceId && !hasStoredPasswordFlag()) {
+  if (!hasStoredPasswordFlag()) {
     cachedPasswordState = DEFAULT_PASSWORD_STATE;
     passwordLoaded = true;
     return null;

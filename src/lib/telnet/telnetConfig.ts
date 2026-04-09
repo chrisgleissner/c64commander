@@ -72,4 +72,9 @@ export const setStoredTelnetPort = (port: number) => {
 export const clearStoredTelnetPort = () => {
   if (typeof localStorage === "undefined") return;
   localStorage.removeItem(TELNET_PORT_KEY);
+  try {
+    updateSelectedSavedDevicePorts({ telnetPort: TELNET_DEFAULT_PORT });
+  } catch {
+    // Ignore storage sync failures when resetting to the default Telnet port.
+  }
 };

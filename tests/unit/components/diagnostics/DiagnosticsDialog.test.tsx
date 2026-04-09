@@ -7,7 +7,9 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -27,11 +29,27 @@ const setViewportWidth = (width: number) => {
   });
 };
 
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  });
+
 const renderDialog = (props?: Partial<DiagnosticsDialogProps>) =>
   render(
-    <DisplayProfileProvider>
-      <DiagnosticsDialog {...defaultProps} {...props} />
-    </DisplayProfileProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={createTestQueryClient()}>
+        <DisplayProfileProvider>
+          <DiagnosticsDialog {...defaultProps} {...props} />
+        </DisplayProfileProvider>
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 
 const healthyHealthState: OverallHealthState = {
@@ -264,7 +282,7 @@ describe("DiagnosticsDialog", () => {
     fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
 
     expect(screen.getByTestId("connection-view-surface")).toBeVisible();
-    expect(screen.getByText("c64u")).toBeVisible();
+    expect(within(screen.getByTestId("connection-view-surface")).getAllByText("c64u").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId("connection-view-edit"));
     expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
@@ -330,9 +348,13 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("health-history-popup")).toBeVisible();
 
     rerender(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} open={false} />
-      </DisplayProfileProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <DisplayProfileProvider>
+            <DiagnosticsDialog {...defaultProps} open={false} />
+          </DisplayProfileProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => {

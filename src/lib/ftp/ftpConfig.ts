@@ -70,6 +70,11 @@ export const setStoredFtpPort = (port: number) => {
 
 export const clearStoredFtpPort = () => {
   localStorage.removeItem(FTP_PORT_KEY);
+  try {
+    updateSelectedSavedDevicePorts({ ftpPort: DEFAULT_FTP_PORT });
+  } catch {
+    // Ignore storage sync failures when resetting to the default FTP port.
+  }
 };
 
 export const setRuntimeFtpPortOverride = (port: number | null) => {
