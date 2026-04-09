@@ -24,8 +24,23 @@ EXTRACT_DIR="$SRC_ROOT/7zip"
 
 mkdir -p "$CACHE_DIR" "$SRC_ROOT" "$OUTPUT_DIR"
 
+# Skip everything if all compiled outputs already exist for this source version.
+OUTPUT_STAMP="$OUTPUT_DIR/.upstream-7zip-sha256"
+all_outputs_exist=true
+for ABI in "${ABIS[@]}"; do
+  if [[ ! -f "$OUTPUT_DIR/$ABI/lib7zz.so" ]]; then
+    all_outputs_exist=false
+    break
+  fi
+done
+if [[ "$all_outputs_exist" == "true" && -f "$OUTPUT_STAMP" && "$(cat "$OUTPUT_STAMP")" == "$SOURCE_SHA256" ]]; then
+  echo "All upstream 7-Zip outputs already exist for $SOURCE_SHA256, skipping build."
+  exit 0
+fi
+
 if [[ ! -f "$ARCHIVE_PATH" ]]; then
-  curl -L --fail --output "$ARCHIVE_PATH" "$SOURCE_URL"
+  curl -L --fail --retry 5 --retry-delay 10 --connect-timeout 60 --max-time 300 \
+    --output "$ARCHIVE_PATH" "$SOURCE_URL"
 fi
 
 ACTUAL_SHA256="$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')"
@@ -80,3 +95,5 @@ for ABI in "${ABIS[@]}"; do
   cp "$BUILD_DIR/$OUT_DIR/7zz" "$OUTPUT_DIR/$ABI/lib7zz.so"
   chmod 755 "$OUTPUT_DIR/$ABI/lib7zz.so"
 done
+
+printf '%s' "$SOURCE_SHA256" > "$OUTPUT_STAMP"

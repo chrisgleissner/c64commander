@@ -94,7 +94,7 @@ describe("run-unit-coverage", () => {
     expect(jsdomArgs).toContain("--project");
     expect(jsdomArgs).toContain("unit-jsdom");
     expect(jsdomArgs).toContain(`--coverage.reportsDirectory=${plan.projectReports["jsdom-1"]}`);
-    expect(jsdomArgs).toContain("--coverage.provider=istanbul");
+    expect(jsdomArgs).toContain("--coverage.provider=v8");
     expect(jsdomArgs).toContain("--coverage.reporter=json");
     expect(jsdomArgs).toContain("--maxWorkers=1");
     expect(jsdomArgs).toContain("--minWorkers=1");

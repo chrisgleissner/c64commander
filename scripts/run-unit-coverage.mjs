@@ -121,7 +121,7 @@ export function getVitestCoverageArgs(rootDir, runConfig, reportsDirectory) {
     "--project",
     runConfig.projectName,
     "--coverage",
-    "--coverage.provider=istanbul",
+    "--coverage.provider=v8",
     `--coverage.reportsDirectory=${reportsDirectory}`,
     "--coverage.reporter=json",
     "--coverage.thresholds.statements=0",

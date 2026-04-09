@@ -635,6 +635,13 @@ jobs:
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Cache upstream 7-zip built binaries
+        id: cache-upstream-7zip
+        uses: actions/cache@v4
+        with:
+          path: android/app/build/generated/jniLibs/upstream7zip
+          key: upstream-7zip-${{ runner.os }}-3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16
+
       - name: Verify Android assemble path (dry-run)
         run: |
           set -e
