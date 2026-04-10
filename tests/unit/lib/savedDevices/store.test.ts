@@ -150,7 +150,20 @@ describe("savedDevices store", () => {
         "U64",
         backupDevice.host,
       ),
-    ).toBeNull();
+    ).toBe("Device name must be unique.");
+    expect(
+      store.validateSavedDeviceName(
+        [
+          officeDevice,
+          backupDevice,
+          store.getSavedDeviceById("device-auto-1")!,
+          store.getSavedDeviceById("device-auto-2")!,
+        ],
+        backupDevice.id,
+        "U64-2",
+        backupDevice.host,
+      ),
+    ).toBe("Device name must be unique.");
   });
 
   it("truncates custom device names to 10 characters when persisting updates", async () => {

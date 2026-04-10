@@ -7,16 +7,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
 import {
-  AppDialog,
-  AppDialogBody,
-  AppDialogContent,
-  AppDialogDescription,
-  AppDialogFooter,
-  AppDialogHeader,
-  AppDialogTitle,
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
 } from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
 import { useHealthState } from "@/hooks/useHealthState";
@@ -219,7 +219,10 @@ function PickerHealthStatusBadge({
   const glyphColor = HEALTH_COLOR[healthState];
 
   return (
-    <span className="inline-flex w-fit max-w-full shrink-0 min-w-0 items-center overflow-hidden rounded-full" data-testid={testId}>
+    <span
+      className="inline-flex w-fit max-w-full shrink-0 min-w-0 items-center overflow-hidden rounded-full"
+      data-testid={testId}
+    >
       <span
         className="app-chrome-badge-surface inline-flex min-w-0 max-w-full items-center overflow-hidden rounded-full px-2 py-[0.25rem]"
         aria-hidden="true"
@@ -510,26 +513,15 @@ export function UnifiedHealthBadge({ className }: Props) {
         </span>
       </button>
 
-      <AppDialog open={pickerOpen} onOpenChange={handlePickerOpenChange}>
-        <AppDialogContent className="max-w-sm" data-testid="switch-device-dialog">
-          <AppDialogHeader>
-            <AppDialogTitle>Switch device</AppDialogTitle>
-            <AppDialogDescription>
+      <AppSheet open={pickerOpen} onOpenChange={handlePickerOpenChange}>
+        <AppSheetContent className="overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]" data-testid="switch-device-sheet">
+          <AppSheetHeader>
+            <AppSheetTitle>Switch device</AppSheetTitle>
+            <AppSheetDescription>
               Choose a saved device. Checks refresh automatically every 10s while open.
-            </AppDialogDescription>
-          </AppDialogHeader>
-          <AppDialogBody className="space-y-2">
-              <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={refreshAll}
-                data-testid="switch-device-refresh-all"
-              >
-                Refresh all
-              </Button>
-            </div>
+            </AppSheetDescription>
+          </AppSheetHeader>
+          <AppSheetBody className="space-y-3 px-4 py-4 sm:px-5">
             {savedDevices.devices.map((device) => {
               const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
               const isSelected = device.id === savedDevices.selectedDeviceId;
@@ -578,26 +570,37 @@ export function UnifiedHealthBadge({ className }: Props) {
                       </span>
                       {pickerBadgeOwnLine ? (
                         <span className="flex min-w-0 max-w-full items-start">
-                          <PickerHealthStatusBadge snapshot={healthSnapshot} testId={`switch-device-status-${device.id}`} />
+                          <PickerHealthStatusBadge
+                            snapshot={healthSnapshot}
+                            testId={`switch-device-status-${device.id}`}
+                          />
                         </span>
                       ) : (
-                        <PickerHealthStatusBadge snapshot={healthSnapshot} testId={`switch-device-status-${device.id}`} />
+                        <PickerHealthStatusBadge
+                          snapshot={healthSnapshot}
+                          testId={`switch-device-status-${device.id}`}
+                        />
                       )}
                     </button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-8 shrink-0 self-start px-2 text-xs"
+                      className="h-8 w-8 shrink-0 self-start p-0 text-muted-foreground hover:text-foreground"
                       data-testid={`switch-device-expand-${device.id}`}
                       aria-expanded={isExpanded}
+                      aria-label={isExpanded ? "Collapse device health detail" : "Expand device health detail"}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
                         toggleDeviceDetails(device.id);
                       }}
                     >
-                      {isExpanded ? "Hide" : "Details"}
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      )}
                     </Button>
                   </div>
                   {isExpanded ? (
@@ -608,22 +611,15 @@ export function UnifiedHealthBadge({ className }: Props) {
                         isRunning={healthSnapshot?.running}
                         probeStates={healthSnapshot?.probeStates}
                         title="Device health detail"
-                        backAriaLabel="Collapse device health detail"
-                        onBack={() => toggleDeviceDetails(device.id)}
                       />
                     </div>
                   ) : null}
                 </div>
               );
             })}
-          </AppDialogBody>
-          <AppDialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPickerOpen(false)}>
-              Cancel
-            </Button>
-          </AppDialogFooter>
-        </AppDialogContent>
-      </AppDialog>
+          </AppSheetBody>
+        </AppSheetContent>
+      </AppSheet>
     </>
   );
 }

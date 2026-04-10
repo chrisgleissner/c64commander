@@ -719,6 +719,7 @@ const ConnectionSurface = ({
   open,
   onOpenChange,
   mode,
+  displayName,
   draft,
   setDraft,
   onStartEdit,
@@ -731,6 +732,7 @@ const ConnectionSurface = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "view" | "edit";
+  displayName: string;
   draft: SavedDeviceEditorDraft;
   setDraft: (value: SavedDeviceEditorDraft) => void;
   onStartEdit: () => void;
@@ -756,7 +758,7 @@ const ConnectionSurface = ({
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-[4rem_1fr] gap-y-2">
                 <span className="text-muted-foreground">Name</span>
-                <span className="font-medium text-foreground">{draft.name}</span>
+                <span className="font-medium text-foreground">{displayName}</span>
                 <span className="text-muted-foreground">Type</span>
                 <span className="font-medium text-foreground">{productCode}</span>
                 <span className="text-muted-foreground">Host</span>
@@ -1083,6 +1085,9 @@ export function DiagnosticsDialog({
   const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
   const healthDetailAvailable =
     headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
+  const connectionDisplayName = selectedSavedDevice
+    ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
+    : connectionDraft.name || healthState.connectedDeviceLabel || connectionDraft.host;
   const connectionLabel = buildConnectionLabel(
     selectedSavedDevice
       ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
@@ -1469,7 +1474,6 @@ export function DiagnosticsDialog({
                     result={lastHealthCheckResult}
                     liveProbes={liveHealthCheckProbes}
                     isRunning={healthCheckRunning}
-                    onBack={() => setHeaderExpanded(false)}
                   />
                 </div>
               ) : null}
@@ -1549,6 +1553,7 @@ export function DiagnosticsDialog({
         open={open && connectionOpen}
         onOpenChange={setConnectionOpen}
         mode={connectionMode}
+        displayName={connectionDisplayName}
         draft={connectionDraft}
         setDraft={handleConnectionDraftChange}
         onStartEdit={() => setConnectionMode("edit")}

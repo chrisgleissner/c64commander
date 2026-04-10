@@ -56,4 +56,29 @@ describe("diskStore", () => {
     expect(loaded.disks).toHaveLength(2);
     expect(loaded.disks.map((disk) => disk.path)).toEqual(["/device-a/demo.d64", "/device-b/demo.d81"]);
   });
+
+  it("keeps same-path ultimate disks from different devices distinct when merging legacy libraries", () => {
+    const originA = {
+      sourceKind: "ultimate" as const,
+      originDeviceId: "device-a",
+      originDeviceLastKnownUniqueId: "uid-a",
+      originPath: "/Usb0/demo.d64",
+      importedAt: "2024-01-01T00:00:00Z",
+    };
+    const originB = {
+      ...originA,
+      originDeviceId: "device-b",
+      originDeviceLastKnownUniqueId: "uid-b",
+    };
+    const diskA = createDiskEntry({ path: "/Usb0/demo.d64", location: "ultimate", origin: originA });
+    const diskB = createDiskEntry({ path: "/Usb0/demo.d64", location: "ultimate", origin: originB });
+
+    localStorage.setItem("c64u_disk_library:device-a", JSON.stringify({ disks: [diskA] }));
+    localStorage.setItem("c64u_disk_library:device-b", JSON.stringify({ disks: [diskB] }));
+
+    const loaded = loadDiskLibrary(SHARED_DISK_LIBRARY_ID);
+
+    expect(loaded.disks).toHaveLength(2);
+    expect(new Set(loaded.disks.map((disk) => disk.id)).size).toBe(2);
+  });
 });

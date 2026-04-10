@@ -34,8 +34,8 @@ export const getStoredTelnetPort = () => {
       if (typeof selected?.telnetPort === "number" && isValidTelnetPort(selected.telnetPort)) {
         return selected.telnetPort;
       }
-    } catch {
-      // Ignore parse errors and fall back to legacy storage.
+    } catch (error) {
+      console.warn("Failed to parse saved devices while resolving Telnet port", { error });
     }
   }
   return parseTelnetPort(localStorage.getItem(TELNET_PORT_KEY));
@@ -47,7 +47,8 @@ export const setStoredTelnetPort = (port: number) => {
   localStorage.setItem(TELNET_PORT_KEY, String(port));
   try {
     updateSelectedSavedDevicePorts({ telnetPort: port });
-  } catch {
+  } catch (error) {
+    console.warn("Failed to sync Telnet port to selected saved device", { error });
     const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
     if (!savedDevicesRaw) return;
     try {
@@ -63,8 +64,8 @@ export const setStoredTelnetPort = (port: number) => {
         ),
       };
       localStorage.setItem(SAVED_DEVICES_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore parse errors and keep legacy storage updated.
+    } catch (fallbackError) {
+      console.warn("Failed to update saved-device fallback Telnet port", { error: fallbackError });
     }
   }
 };
@@ -74,7 +75,7 @@ export const clearStoredTelnetPort = () => {
   localStorage.removeItem(TELNET_PORT_KEY);
   try {
     updateSelectedSavedDevicePorts({ telnetPort: TELNET_DEFAULT_PORT });
-  } catch {
-    // Ignore storage sync failures when resetting to the default Telnet port.
+  } catch (error) {
+    console.warn("Failed to reset selected saved-device Telnet port", { error });
   }
 };

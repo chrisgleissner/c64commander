@@ -480,7 +480,6 @@ export default function SettingsPage() {
         await clearPasswordForDevice(selectedSavedDevice.id);
       }
       updateConfig(nextDeviceHost, passwordInput.trim() || undefined);
-      await discoverConnection("settings");
       await switchSavedDevice(selectedSavedDevice.id);
       toast({ title: "Connection settings saved" });
     } catch (error) {

@@ -413,13 +413,6 @@ const updateRuntime = (update: (currentSnapshot: SavedDevicesSnapshot) => SavedD
 const summaryStamp = (summary: DeviceSwitchSummary): string =>
   summary.lastProbeSucceededAt ?? summary.lastProbeFailedAt ?? summary.verifiedAt ?? "";
 
-const isUniqueSavedDeviceName = (devices: SavedDevice[], deviceId: string, candidate: string) => {
-  const normalizedCandidate = candidate.trim().toLowerCase();
-  return !devices.some(
-    (device) => device.id !== deviceId && normalizeSavedDeviceName(device.name).toLowerCase() === normalizedCandidate,
-  );
-};
-
 export const resolveCanonicalProductFamilyCode = (product?: string | null): ProductFamilyCode | null => {
   return inferConnectedDeviceLabel(product ?? null) ?? null;
 };
@@ -442,6 +435,14 @@ export const buildSavedDevicePrimaryLabel = (device: SavedDevice, verified?: Ver
 export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string, name: string, host: string) => {
   const normalizedHost = normalizeHostInput(host);
   const normalizedName = normalizeSavedDeviceName(name);
+  const currentLabels = buildSavedDeviceLabelMap(devices);
+  const reservedVisibleLabel =
+    normalizedName !== "" &&
+    devices.some(
+      (device) =>
+        device.id !== deviceId &&
+        (currentLabels.get(device.id)?.trim().toLowerCase() ?? "") === normalizedName.toLowerCase(),
+    );
   const existingDevice = devices.find((device) => device.id === deviceId) ?? null;
   const candidateDevice: SavedDevice = existingDevice
     ? {
@@ -474,7 +475,7 @@ export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string
   const duplicate = nextDevices.some(
     (device) => device.id !== deviceId && (labels.get(device.id)?.trim().toLowerCase() ?? "") === candidateLabel,
   );
-  if (duplicate || (normalizedName && !isUniqueSavedDeviceName(nextDevices, deviceId, normalizedName))) {
+  if (duplicate || reservedVisibleLabel) {
     return "Device name must be unique.";
   }
   return null;

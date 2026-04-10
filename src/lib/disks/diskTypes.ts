@@ -42,7 +42,14 @@ export const normalizeDiskPath = (value: string) => {
   return withSlash.replace(/\/+/g, "/");
 };
 
-export const buildDiskId = (location: DiskLocation, path: string) => `${location}:${normalizeDiskPath(path)}`;
+export const buildDiskId = (location: DiskLocation, path: string, origin?: DeviceBoundContentOrigin | null) => {
+  const normalizedPath = normalizeDiskPath(path);
+  const originDeviceId = location === "ultimate" ? origin?.originDeviceId?.trim() : "";
+  if (originDeviceId) {
+    return `${location}:${originDeviceId}:${normalizedPath}`;
+  }
+  return `${location}:${normalizedPath}`;
+};
 
 export const getDiskName = (path: string) => {
   const normalized = normalizeDiskPath(path);
@@ -87,12 +94,13 @@ export const createDiskEntry = (params: {
   configCandidates?: ConfigCandidate[] | null;
 }): DiskEntry => {
   const path = normalizeDiskPath(params.path);
+  const origin = params.origin ?? (params.location === "ultimate" ? buildSelectedDeviceBoundOrigin(path) : null);
   return {
-    id: buildDiskId(params.location, path),
+    id: buildDiskId(params.location, path, origin),
     name: params.name?.trim() || getDiskName(path),
     path,
     location: params.location,
-    origin: params.origin ?? (params.location === "ultimate" ? buildSelectedDeviceBoundOrigin(path) : null),
+    origin,
     group: params.group ?? null,
     sourceId: params.sourceId ?? null,
     localUri: params.localUri ?? null,

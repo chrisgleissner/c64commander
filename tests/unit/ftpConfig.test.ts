@@ -18,10 +18,20 @@ import {
   setStoredFtpPort,
 } from "@/lib/ftp/ftpConfig";
 
+const { mockUpdateSelectedSavedDevicePorts } = vi.hoisted(() => ({
+  mockUpdateSelectedSavedDevicePorts: vi.fn(),
+}));
+
+vi.mock("@/lib/savedDevices/store", () => ({
+  updateSelectedSavedDevicePorts: mockUpdateSelectedSavedDevicePorts,
+}));
+
 describe("ftpConfig", () => {
   beforeEach(() => {
     localStorage.clear();
     clearRuntimeFtpPortOverride();
+    mockUpdateSelectedSavedDevicePorts.mockReset();
+    mockUpdateSelectedSavedDevicePorts.mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -50,6 +60,61 @@ describe("ftpConfig", () => {
     expect(getStoredFtpPort()).toBe(2121);
     setStoredFtpPort(-1);
     expect(getStoredFtpPort()).toBe(2121);
+    setStoredFtpPort(70000);
+    expect(getStoredFtpPort()).toBe(2121);
+    setStoredFtpPort(12.5);
+    expect(getStoredFtpPort()).toBe(2121);
+  });
+
+  it("ignores invalid saved-device FTP ports outside the TCP range", () => {
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        selectedDeviceId: "saved-device-1",
+        devices: [{ id: "saved-device-1", ftpPort: 70000 }],
+      }),
+    );
+    localStorage.setItem("c64u_ftp_port", "2121");
+
+    expect(getStoredFtpPort()).toBe(2121);
+  });
+
+  it("warns and falls back when saved-device FTP storage is malformed", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    localStorage.setItem("c64u_saved_devices:v1", "{");
+    localStorage.setItem("c64u_ftp_port", "2121");
+
+    expect(getStoredFtpPort()).toBe(2121);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Failed to parse saved devices while resolving FTP port",
+      expect.objectContaining({ error: expect.any(SyntaxError) }),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("warns and applies the manual fallback when saved-device FTP sync fails", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockUpdateSelectedSavedDevicePorts.mockImplementationOnce(() => {
+      throw new Error("sync failed");
+    });
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        selectedDeviceId: "saved-device-1",
+        devices: [{ id: "saved-device-1", ftpPort: 21 }],
+      }),
+    );
+
+    setStoredFtpPort(2121);
+
+    expect(JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}").devices[0].ftpPort).toBe(2121);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Failed to sync FTP port to selected saved device",
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
+
+    warnSpy.mockRestore();
   });
 
   it("stores and clears FTP bridge URL", () => {

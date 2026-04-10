@@ -6,14 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Button } from "@/components/ui/button";
 import type {
   HealthCheckRunResult,
   HealthCheckProbeType,
   HealthCheckProbeRecord,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 type Props = {
   result: HealthCheckRunResult | null;
@@ -23,8 +22,6 @@ type Props = {
   isRunning?: boolean;
   probeStates?: ReturnType<typeof useHealthCheckState>["probeStates"];
   title?: string;
-  backAriaLabel?: string;
-  onBack: () => void;
 };
 
 const PRESENTATION_ORDER = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"] as const;
@@ -50,8 +47,6 @@ export function HealthCheckDetailView({
   isRunning,
   probeStates,
   title = "Health Check Detail",
-  backAriaLabel = "Back to diagnostics summary",
-  onBack,
 }: Props) {
   const healthCheckState = useHealthCheckState();
   const activeProbeStates = probeStates ?? healthCheckState.probeStates;
@@ -63,19 +58,7 @@ export function HealthCheckDetailView({
 
   return (
     <div className="space-y-3" data-testid="health-check-detail-view">
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onBack}
-          className="h-7 px-1.5 -ml-1.5"
-          data-testid="health-check-detail-back"
-          aria-label={backAriaLabel}
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        </Button>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      </div>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
 
       {!result && !activeLive ? (
         <p className="text-xs text-muted-foreground">Run a health check to load probe detail.</p>

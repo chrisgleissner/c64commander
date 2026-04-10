@@ -185,7 +185,7 @@ const defaultProps: DiagnosticsDialogProps = {
 };
 
 describe("DiagnosticsDialog", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
     localStorage.setItem(
       "c64u_saved_devices:v1",
@@ -212,6 +212,27 @@ describe("DiagnosticsDialog", () => {
         summaryLru: [],
       }),
     );
+    const store = await import("@/lib/savedDevices/store");
+    const snapshot = store.getSavedDevicesSnapshot();
+    const primaryDevice = snapshot.devices[0]!;
+
+    for (const device of snapshot.devices.slice(1)) {
+      store.removeSavedDevice(device.id);
+    }
+
+    store.updateSavedDevice(primaryDevice.id, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "office-u64",
+      lastKnownUniqueId: "UID-OFFICE",
+      hasPassword: false,
+    });
+    store.selectSavedDevice(primaryDevice.id);
+
     vi.clearAllMocks();
     updateC64APIConfig(buildBaseUrlFromDeviceHost("c64u:80"), undefined, "c64u:80");
     setStoredFtpPort(21);
@@ -333,6 +354,55 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
 
     vi.useRealTimers();
+  });
+
+  it("shows the effective auto-generated device name in connection details while keeping the edit field blank", async () => {
+    setViewportWidth(600);
+    const store = await import("@/lib/savedDevices/store");
+    const snapshot = store.getSavedDevicesSnapshot();
+    const primaryDevice = snapshot.devices[0]!;
+
+    for (const device of snapshot.devices.slice(1)) {
+      store.removeSavedDevice(device.id);
+    }
+
+    store.updateSavedDevice(primaryDevice.id, {
+      name: "",
+      host: "u64-primary",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "u64-primary",
+      lastKnownUniqueId: "UID-U64-1",
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-u64-secondary",
+      name: "",
+      host: "u64-secondary",
+      httpPort: 80,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "u64-secondary",
+      lastKnownUniqueId: "UID-U64-2",
+      hasPassword: false,
+    });
+    store.selectSavedDevice("device-u64-secondary");
+
+    renderDialog();
+
+    fireEvent.pointerDown(screen.getByTestId("diagnostics-device-line"));
+    fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
+
+    const connectionView = screen.getByTestId("connection-view-surface");
+    expect(connectionView).toBeVisible();
+    expect(within(connectionView).getByText("U64-2")).toBeVisible();
+    expect(within(connectionView).getAllByText("u64-secondary").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTestId("connection-view-edit"));
+    expect(screen.getByLabelText(/device name/i)).toHaveValue("");
   });
 
   it("persists connection edits and retries the connection", async () => {

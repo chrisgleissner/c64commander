@@ -52,7 +52,8 @@ export function SavedDeviceEditorFields({
           </p>
         ) : (
           <p id={`${idPrefix}-name-help`} className="text-xs text-muted-foreground">
-            Leave blank to use the detected device type, with a suffix added automatically for duplicates. Max 10 characters.
+            Leave blank to use the detected device type, with a suffix added automatically for duplicates. Max 10
+            characters.
           </p>
         )}
       </div>

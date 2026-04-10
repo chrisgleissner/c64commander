@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
@@ -90,10 +90,23 @@ describe("useSavedDeviceHealthChecks", () => {
     vi.useRealTimers();
   });
 
-  it("runs concurrent passive checks for all devices and reruns every 10 seconds while enabled", async () => {
-    const { result } = renderHook(() => useSavedDeviceHealthChecks([...devices], true));
+  const buildSavedDevices = () => [...devices];
 
-    await waitFor(() => expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2));
+  const flushAsyncWork = async () => {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  it("runs concurrent passive checks for all devices and reruns every 10 seconds while enabled", async () => {
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
 
     expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
       1,
@@ -112,19 +125,26 @@ describe("useSavedDeviceHealthChecks", () => {
       vi.advanceTimersByTime(10_000);
     });
 
-    await waitFor(() => expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4));
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
   });
 
   it("manual refresh forces a new all-device cycle before the next interval", async () => {
-    const { result } = renderHook(() => useSavedDeviceHealthChecks([...devices], true));
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
 
-    await waitFor(() => expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2));
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       result.current.refreshAll();
     });
 
-    await waitFor(() => expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4));
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
   });
 
   it("prefers seeded saved-device health state from the diagnostics test bridge", async () => {
@@ -199,7 +219,8 @@ describe("useSavedDeviceHealthChecks", () => {
       }),
     } as typeof window.__c64uDiagnosticsTestBridge;
 
-    const { result } = renderHook(() => useSavedDeviceHealthChecks([...devices], true));
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
 
     expect(result.current.cycle.running).toBe(true);
     expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
@@ -214,7 +235,9 @@ describe("useSavedDeviceHealthChecks", () => {
       );
     });
 
-    await waitFor(() => expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2));
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
   });
 
   it("switches from live polling to seeded saved-device state after mount without breaking updates", async () => {
@@ -222,9 +245,12 @@ describe("useSavedDeviceHealthChecks", () => {
       getSavedDeviceHealthSnapshot: () => null,
     } as typeof window.__c64uDiagnosticsTestBridge;
 
-    const { result } = renderHook(() => useSavedDeviceHealthChecks([...devices], true));
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
 
-    await waitFor(() => expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2));
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
 
     act(() => {
       window.dispatchEvent(

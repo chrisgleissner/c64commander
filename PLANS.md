@@ -410,3 +410,8 @@ Exit criteria:
 - tests and build pass
 - global branch coverage remains `>= 91%`
 - docs match the shipped behavior
+
+## Backlog additions
+
+- Switch device screenshots should use full page-context framing instead of cropping to the popup surface, matching the documented modal/interstitial style used elsewhere.
+- Docs section screenshots should use full Docs page-context framing instead of isolated subsection crops, and the full Switch device plus Docs screenshot sets should be regenerated together after framing changes.

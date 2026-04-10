@@ -15,8 +15,11 @@ const DEFAULT_FTP_PORT = 21;
 
 let runtimeFtpPortOverride: number | null = null;
 
+const isValidFtpPort = (port: number) => Number.isInteger(port) && port >= 1 && port <= 65535;
+
 export const getStoredFtpPort = () => {
   if (runtimeFtpPortOverride !== null) return runtimeFtpPortOverride;
+  if (typeof localStorage === "undefined") return DEFAULT_FTP_PORT;
   if (typeof localStorage !== "undefined") {
     const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
     if (savedDevicesRaw) {
@@ -27,26 +30,28 @@ export const getStoredFtpPort = () => {
         };
         const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
         const selected = devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0];
-        if (typeof selected?.ftpPort === "number" && Number.isFinite(selected.ftpPort) && selected.ftpPort > 0) {
+        if (typeof selected?.ftpPort === "number" && isValidFtpPort(selected.ftpPort)) {
           return selected.ftpPort;
         }
-      } catch {
-        // Ignore parse errors and fall back to legacy storage.
+      } catch (error) {
+        console.warn("Failed to parse saved devices while resolving FTP port", { error });
       }
     }
   }
   const raw = localStorage.getItem(FTP_PORT_KEY);
   const parsed = raw ? Number(raw) : NaN;
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_FTP_PORT;
+  if (!isValidFtpPort(parsed)) return DEFAULT_FTP_PORT;
   return parsed;
 };
 
 export const setStoredFtpPort = (port: number) => {
-  if (!Number.isFinite(port) || port <= 0) return;
+  if (typeof localStorage === "undefined") return;
+  if (!isValidFtpPort(port)) return;
   localStorage.setItem(FTP_PORT_KEY, String(port));
   try {
     updateSelectedSavedDevicePorts({ ftpPort: port });
-  } catch {
+  } catch (error) {
+    console.warn("Failed to sync FTP port to selected saved device", { error });
     const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
     if (!savedDevicesRaw) return;
     try {
@@ -62,18 +67,19 @@ export const setStoredFtpPort = (port: number) => {
         ),
       };
       localStorage.setItem(SAVED_DEVICES_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore parse errors and keep legacy storage updated.
+    } catch (fallbackError) {
+      console.warn("Failed to update saved-device fallback FTP port", { error: fallbackError });
     }
   }
 };
 
 export const clearStoredFtpPort = () => {
+  if (typeof localStorage === "undefined") return;
   localStorage.removeItem(FTP_PORT_KEY);
   try {
     updateSelectedSavedDevicePorts({ ftpPort: DEFAULT_FTP_PORT });
-  } catch {
-    // Ignore storage sync failures when resetting to the default FTP port.
+  } catch (error) {
+    console.warn("Failed to reset selected saved-device FTP port", { error });
   }
 };
 
@@ -82,7 +88,7 @@ export const setRuntimeFtpPortOverride = (port: number | null) => {
     runtimeFtpPortOverride = null;
     return;
   }
-  if (!Number.isFinite(port) || port <= 0) return;
+  if (!isValidFtpPort(port)) return;
   runtimeFtpPortOverride = port;
 };
 

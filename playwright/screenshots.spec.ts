@@ -33,6 +33,7 @@ import {
   DISPLAY_PROFILE_VIEWPORTS,
   type DisplayProfileViewportId,
 } from "./displayProfileViewports";
+import { getScreenshotFraming, type ScreenshotFramingSurface } from "./screenshotFraming";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices, selectCanonicalHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
@@ -927,6 +928,29 @@ const seedLightingStudioState = async (page: Page, state: unknown) => {
   }, state);
 };
 
+const captureFramedScreenshot = async (
+  page: Page,
+  testInfo: TestInfo,
+  relativePath: string,
+  surface: ScreenshotFramingSurface,
+  options?: {
+    fullPage?: boolean;
+    locator?: Locator;
+    borderPx?: number;
+    borderColor?: { r: number; g: number; b: number; alpha?: number };
+    writeWhenTrackedDuplicate?: boolean;
+    skipFuzzyHeadRestore?: boolean;
+  },
+) => {
+  if (getScreenshotFraming(surface) === "surface") {
+    await captureScreenshot(page, testInfo, relativePath, options);
+    return;
+  }
+
+  const { locator: _locator, ...rest } = options ?? {};
+  await captureScreenshot(page, testInfo, relativePath, Object.keys(rest).length > 0 ? rest : undefined);
+};
+
 const captureScreenshot = async (
   page: Page,
   testInfo: TestInfo,
@@ -1139,9 +1163,15 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
     await expect.poll(getVisibleButtonExpandedState).toBe("true");
     await waitForStableRender(page);
     await scrollHeadingIntoView(page, button);
-    await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`, {
-      locator: card,
-    });
+    await captureFramedScreenshot(
+      page,
+      testInfo,
+      `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`,
+      "docs-section",
+      {
+        locator: card,
+      },
+    );
     await page.evaluate((controlId) => {
       const visibleButton = Array.from(
         document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
@@ -2225,32 +2255,31 @@ test.describe("App screenshots", () => {
       await installSavedDeviceScreenshotState(page, server.baseUrl);
 
       const diagnosticsButton = page.getByTestId("unified-health-badge");
-      const openSwitchDeviceDialog = async () => {
+      const openSwitchDeviceSheet = async () => {
         await diagnosticsButton.dispatchEvent("pointerdown");
         await page.waitForTimeout(500);
-        const dialog = page.getByTestId("switch-device-dialog");
-        await expect(dialog).toBeVisible();
+        const sheet = page.getByTestId("switch-device-sheet");
+        await expect(sheet).toBeVisible();
         await diagnosticsButton.dispatchEvent("pointerup");
-        return dialog;
+        return sheet;
       };
 
-      const expandAllDeviceRows = async (dialog: Locator) => {
+      const expandAllDeviceRows = async (sheet: Locator) => {
         for (const deviceId of ["device-u64-primary", "device-u64-secondary", "device-c64u-custom"] as const) {
-          await dialog.getByTestId(`switch-device-expand-${deviceId}`).click();
+          await sheet.getByTestId(`switch-device-expand-${deviceId}`).click();
         }
 
-        await expect(dialog.locator('[data-testid="health-check-detail-view"]')).toHaveCount(3);
+        await expect(sheet.locator('[data-testid="health-check-detail-view"]')).toHaveCount(3);
       };
 
-      const closeSwitchDeviceDialog = async (dialog: Locator) => {
-        await dialog.getByRole("button", { name: "Cancel" }).click();
-        await expect(dialog).toBeHidden();
+      const closeSwitchDeviceSheet = async (sheet: Locator) => {
+        await sheet.getByRole("button", { name: "Close" }).click();
+        await expect(sheet).toBeHidden();
       };
 
       const configureSwitchDeviceViewport = async (profileId: DisplayProfileViewportId) => {
         await page.goto("/");
         await applyDisplayProfileViewport(page, profileId);
-        await page.setViewportSize({ width: DISPLAY_PROFILE_VIEWPORTS[profileId].viewport.width, height: 2200 });
         await waitForStableRender(page);
         await waitForConnected(page);
         await expect(diagnosticsButton).toBeVisible();
@@ -2263,68 +2292,75 @@ test.describe("App screenshots", () => {
         await configureSwitchDeviceViewport(profileId);
         await seedSwitchDeviceHealthProgress(page);
 
-        let switchDeviceDialog = await openSwitchDeviceDialog();
-        await expect(switchDeviceDialog.getByTestId("switch-device-refresh-all")).toBeVisible();
+        let switchDeviceSheet = await openSwitchDeviceSheet();
 
-        await captureScreenshot(page, testInfo, resolvePath("01-picker.png"), {
-          locator: switchDeviceDialog,
+        await captureFramedScreenshot(page, testInfo, resolvePath("01-picker.png"), "switch-device-sheet", {
+          locator: switchDeviceSheet,
         });
 
-        await expandAllDeviceRows(switchDeviceDialog);
-        await captureScreenshot(page, testInfo, resolvePath("02-picker-expanded.png"), {
-          locator: switchDeviceDialog,
+        await expandAllDeviceRows(switchDeviceSheet);
+        await captureFramedScreenshot(page, testInfo, resolvePath("02-picker-expanded.png"), "switch-device-sheet", {
+          locator: switchDeviceSheet,
         });
 
-        await closeSwitchDeviceDialog(switchDeviceDialog);
+        await closeSwitchDeviceSheet(switchDeviceSheet);
 
         await seedSwitchDeviceHealthAllHealthy(page);
-        switchDeviceDialog = await openSwitchDeviceDialog();
-        await expect(switchDeviceDialog.getByTestId("switch-device-refresh-all")).toBeVisible();
-        await expect(switchDeviceDialog.getByTestId("switch-device-status-device-u64-primary")).toContainText(
+        switchDeviceSheet = await openSwitchDeviceSheet();
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-primary")).toContainText("Healthy");
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
           "Healthy",
         );
-        await expect(switchDeviceDialog.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
-          "Healthy",
-        );
-        await expect(switchDeviceDialog.getByTestId("switch-device-status-device-c64u-custom")).toContainText(
-          "Healthy",
-        );
-        await captureScreenshot(page, testInfo, resolvePath("03-picker-all-healthy.png"), {
-          locator: switchDeviceDialog,
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-custom")).toContainText("Healthy");
+        await captureFramedScreenshot(page, testInfo, resolvePath("03-picker-all-healthy.png"), "switch-device-sheet", {
+          locator: switchDeviceSheet,
         });
 
-        await expandAllDeviceRows(switchDeviceDialog);
-        await captureScreenshot(page, testInfo, resolvePath("05-picker-all-healthy-expanded.png"), {
-          locator: switchDeviceDialog,
-        });
+        await expandAllDeviceRows(switchDeviceSheet);
+        await captureFramedScreenshot(
+          page,
+          testInfo,
+          resolvePath("05-picker-all-healthy-expanded.png"),
+          "switch-device-sheet",
+          {
+            locator: switchDeviceSheet,
+          },
+        );
 
-        await closeSwitchDeviceDialog(switchDeviceDialog);
+        await closeSwitchDeviceSheet(switchDeviceSheet);
 
         await seedSwitchDeviceHealthMixedUnhealthy(page);
-        switchDeviceDialog = await openSwitchDeviceDialog();
-        await expect(switchDeviceDialog.getByTestId("switch-device-refresh-all")).toBeVisible();
-        await expect(switchDeviceDialog.getByTestId("switch-device-status-device-u64-primary")).toContainText(
+        switchDeviceSheet = await openSwitchDeviceSheet();
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-primary")).toContainText("Healthy");
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
           "Healthy",
         );
-        await expect(switchDeviceDialog.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
-          "Healthy",
-        );
-        await expect(switchDeviceDialog.getByTestId("switch-device-status-device-c64u-custom")).toContainText(
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-custom")).toContainText(
           "Unhealthy",
         );
-        await captureScreenshot(page, testInfo, resolvePath("04-picker-one-unhealthy.png"), {
-          locator: switchDeviceDialog,
-        });
+        await captureFramedScreenshot(
+          page,
+          testInfo,
+          resolvePath("04-picker-one-unhealthy.png"),
+          "switch-device-sheet",
+          {
+            locator: switchDeviceSheet,
+          },
+        );
 
-        await expandAllDeviceRows(switchDeviceDialog);
-        await captureScreenshot(page, testInfo, resolvePath("06-picker-one-unhealthy-expanded.png"), {
-          locator: switchDeviceDialog,
-        });
+        await expandAllDeviceRows(switchDeviceSheet);
+        await captureFramedScreenshot(
+          page,
+          testInfo,
+          resolvePath("06-picker-one-unhealthy-expanded.png"),
+          "switch-device-sheet",
+          {
+            locator: switchDeviceSheet,
+          },
+        );
 
-        await closeSwitchDeviceDialog(switchDeviceDialog);
+        await closeSwitchDeviceSheet(switchDeviceSheet);
       };
-
-      await captureSwitchDeviceMatrix((fileName) => `diagnostics/switch-device/${fileName}`, "expanded");
 
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await captureSwitchDeviceMatrix(
@@ -2725,7 +2761,7 @@ test.describe("App screenshots", () => {
     const externalResources = page.getByTestId("docs-external-resources");
     await externalResources.scrollIntoViewIfNeeded();
     await waitForStableRender(page);
-    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png", {
+    await captureFramedScreenshot(page, testInfo, "docs/external/01-external-resources.png", "docs-external", {
       locator: externalResources,
     });
 

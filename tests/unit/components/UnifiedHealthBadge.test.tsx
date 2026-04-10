@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
@@ -382,7 +382,7 @@ describe("UnifiedHealthBadge", () => {
     fireEvent.pointerDown(badge);
     await vi.advanceTimersByTimeAsync(450);
 
-    expect(screen.getByTestId("switch-device-dialog")).toBeVisible();
+    expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
 
     fireEvent.pointerUp(badge);
     fireEvent.click(badge);
@@ -401,7 +401,7 @@ describe("UnifiedHealthBadge", () => {
     fireEvent.pointerDown(badge);
     await vi.advanceTimersByTimeAsync(450);
 
-    expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+    expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
 
     mockState.savedDevices.devices = originalDevices;
   });
@@ -420,7 +420,7 @@ describe("UnifiedHealthBadge", () => {
 
     vi.useRealTimers();
     await waitFor(() => {
-      expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+      expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
     });
   });
 
@@ -471,13 +471,13 @@ describe("UnifiedHealthBadge", () => {
 
     vi.useRealTimers();
     await waitFor(() => {
-      expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+      expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
     });
 
     mockState.savedDeviceHealthChecks.byDeviceId["device-backup"] = previousSnapshot;
   });
 
-  it("renders collapsed switcher health summaries and refresh action", async () => {
+  it("renders collapsed switcher health summaries and auto-refreshes on open", async () => {
     vi.useFakeTimers();
     render(<UnifiedHealthBadge />);
 
@@ -488,16 +488,14 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.queryByText("Checking all saved devices")).toBeNull();
     expect(screen.queryByText("Saved-device health")).toBeNull();
     expect(mockState.savedDeviceHealthChecks.refreshAll).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("switch-device-refresh-all")).toBeVisible();
+    expect(screen.queryByTestId("switch-device-refresh-all")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Online");
     expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Healthy");
     expect(screen.getByTestId("switch-device-status-device-backup").textContent).toContain("Checking");
     expect(screen.getByTestId("switch-device-status-device-backup").textContent).not.toContain("Idle");
     expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Last check");
     expect(screen.getByTestId("switch-device-row-device-backup").textContent).toContain("2/6 probes");
-
-    fireEvent.click(screen.getByTestId("switch-device-refresh-all"));
-    expect(mockState.savedDeviceHealthChecks.refreshAll).toHaveBeenCalledTimes(2);
   });
 
   it("uses the app's stronger selected treatment for the active switch-device card", async () => {
@@ -562,10 +560,18 @@ describe("UnifiedHealthBadge", () => {
     fireEvent.pointerDown(badge);
     await vi.advanceTimersByTimeAsync(450);
 
-    fireEvent.click(screen.getByTestId("switch-device-expand-device-office"));
+    const expandButton = screen.getByTestId("switch-device-expand-device-office");
+    expect(expandButton).toHaveAttribute("aria-label", "Expand device health detail");
+
+    fireEvent.click(expandButton);
 
     expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
     expect(screen.getByText("Device health detail")).toBeVisible();
+    expect(screen.queryByTestId("health-check-detail-back")).toBeNull();
+    expect(screen.getByTestId("switch-device-expand-device-office")).toHaveAttribute(
+      "aria-label",
+      "Collapse device health detail",
+    );
     expect(screen.getByTestId("health-check-probe-config").textContent).toContain("Passive");
   });
 
@@ -580,11 +586,11 @@ describe("UnifiedHealthBadge", () => {
     fireEvent.click(screen.getByTestId("switch-device-expand-device-office"));
     expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(screen.getByTestId("switch-device-sheet")).getByRole("button", { name: "Close" }));
 
     vi.useRealTimers();
     await waitFor(() => {
-      expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+      expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
     });
 
     vi.useFakeTimers();
