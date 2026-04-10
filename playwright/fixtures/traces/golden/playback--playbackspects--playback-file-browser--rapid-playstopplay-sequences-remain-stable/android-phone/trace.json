@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-03-29T01:23:09.158Z",
-    "relativeMs": 26,
+    "timestamp": "2026-04-10T22:52:17.921Z",
+    "relativeMs": 14,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -28,8 +28,8 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-03-29T01:23:09.159Z",
-    "relativeMs": 27,
+    "timestamp": "2026-04-10T22:52:17.922Z",
+    "relativeMs": 15,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -45,8 +45,8 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-03-29T01:23:09.402Z",
-    "relativeMs": 270,
+    "timestamp": "2026-04-10T22:52:18.093Z",
+    "relativeMs": 186,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -77,8 +77,8 @@
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-03-29T01:23:09.404Z",
-    "relativeMs": 272,
+    "timestamp": "2026-04-10T22:52:18.094Z",
+    "relativeMs": 187,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -109,8 +109,8 @@
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-03-29T01:23:09.409Z",
-    "relativeMs": 277,
+    "timestamp": "2026-04-10T22:52:18.095Z",
+    "relativeMs": 188,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -126,23 +126,23 @@
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-03-29T01:23:09.409Z",
-    "relativeMs": 277,
+    "timestamp": "2026-04-10T22:52:18.095Z",
+    "relativeMs": 188,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -156,8 +156,8 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-03-29T01:23:09.412Z",
-    "relativeMs": 280,
+    "timestamp": "2026-04-10T22:52:18.097Z",
+    "relativeMs": 190,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -173,23 +173,23 @@
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-03-29T01:23:09.412Z",
-    "relativeMs": 280,
+    "timestamp": "2026-04-10T22:52:18.097Z",
+    "relativeMs": 190,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -203,8 +203,8 @@
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-03-29T01:23:09.413Z",
-    "relativeMs": 281,
+    "timestamp": "2026-04-10T22:52:18.097Z",
+    "relativeMs": 190,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -235,8 +235,8 @@
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-03-29T01:23:09.413Z",
-    "relativeMs": 281,
+    "timestamp": "2026-04-10T22:52:18.098Z",
+    "relativeMs": 191,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -252,23 +252,23 @@
   },
   {
     "id": "EVT-0010",
-    "timestamp": "2026-03-29T01:23:09.414Z",
-    "relativeMs": 282,
+    "timestamp": "2026-04-10T22:52:18.098Z",
+    "relativeMs": 191,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/info",
+      "url": "http://127.0.0.1:39667/v1/info",
       "normalizedUrl": "/v1/info",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/info",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -282,8 +282,8 @@
   },
   {
     "id": "EVT-0011",
-    "timestamp": "2026-03-29T01:23:09.524Z",
-    "relativeMs": 392,
+    "timestamp": "2026-04-10T22:52:18.195Z",
+    "relativeMs": 288,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -292,10 +292,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings",
       "status": 200,
       "headers": {
         "content-length": "47",
@@ -314,7 +314,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 93,
+      "durationMs": 68,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -325,8 +325,8 @@
   },
   {
     "id": "EVT-0012",
-    "timestamp": "2026-03-29T01:23:09.524Z",
-    "relativeMs": 392,
+    "timestamp": "2026-04-10T22:52:18.196Z",
+    "relativeMs": 289,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -342,8 +342,8 @@
   },
   {
     "id": "EVT-0013",
-    "timestamp": "2026-03-29T01:23:09.525Z",
-    "relativeMs": 393,
+    "timestamp": "2026-04-10T22:52:18.196Z",
+    "relativeMs": 289,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -374,8 +374,8 @@
   },
   {
     "id": "EVT-0014",
-    "timestamp": "2026-03-29T01:23:09.525Z",
-    "relativeMs": 393,
+    "timestamp": "2026-04-10T22:52:18.196Z",
+    "relativeMs": 289,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -406,8 +406,8 @@
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-03-29T01:23:09.525Z",
-    "relativeMs": 393,
+    "timestamp": "2026-04-10T22:52:18.197Z",
+    "relativeMs": 290,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -438,8 +438,8 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-03-29T01:23:09.529Z",
-    "relativeMs": 397,
+    "timestamp": "2026-04-10T22:52:18.197Z",
+    "relativeMs": 290,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -470,8 +470,8 @@
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-03-29T01:23:09.529Z",
-    "relativeMs": 397,
+    "timestamp": "2026-04-10T22:52:18.197Z",
+    "relativeMs": 290,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -502,8 +502,8 @@
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-03-29T01:23:09.536Z",
-    "relativeMs": 404,
+    "timestamp": "2026-04-10T22:52:18.197Z",
+    "relativeMs": 290,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -534,8 +534,8 @@
   },
   {
     "id": "EVT-0019",
-    "timestamp": "2026-03-29T01:23:09.536Z",
-    "relativeMs": 404,
+    "timestamp": "2026-04-10T22:52:18.197Z",
+    "relativeMs": 290,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -566,8 +566,8 @@
   },
   {
     "id": "EVT-0020",
-    "timestamp": "2026-03-29T01:23:09.536Z",
-    "relativeMs": 404,
+    "timestamp": "2026-04-10T22:52:18.197Z",
+    "relativeMs": 290,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -598,8 +598,8 @@
   },
   {
     "id": "EVT-0021",
-    "timestamp": "2026-03-29T01:23:09.536Z",
-    "relativeMs": 404,
+    "timestamp": "2026-04-10T22:52:18.198Z",
+    "relativeMs": 291,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -630,8 +630,8 @@
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-03-29T01:23:09.536Z",
-    "relativeMs": 404,
+    "timestamp": "2026-04-10T22:52:18.198Z",
+    "relativeMs": 291,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -662,8 +662,8 @@
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-03-29T01:23:09.537Z",
-    "relativeMs": 405,
+    "timestamp": "2026-04-10T22:52:18.198Z",
+    "relativeMs": 291,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -694,8 +694,8 @@
   },
   {
     "id": "EVT-0024",
-    "timestamp": "2026-03-29T01:23:09.537Z",
-    "relativeMs": 405,
+    "timestamp": "2026-04-10T22:52:18.198Z",
+    "relativeMs": 291,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -726,8 +726,8 @@
   },
   {
     "id": "EVT-0025",
-    "timestamp": "2026-03-29T01:23:09.543Z",
-    "relativeMs": 411,
+    "timestamp": "2026-04-10T22:52:18.198Z",
+    "relativeMs": 291,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -743,23 +743,23 @@
   },
   {
     "id": "EVT-0026",
-    "timestamp": "2026-03-29T01:23:09.543Z",
-    "relativeMs": 411,
+    "timestamp": "2026-04-10T22:52:18.198Z",
+    "relativeMs": 291,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -773,8 +773,8 @@
   },
   {
     "id": "EVT-0027",
-    "timestamp": "2026-03-29T01:23:09.543Z",
-    "relativeMs": 411,
+    "timestamp": "2026-04-10T22:52:18.199Z",
+    "relativeMs": 292,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -790,23 +790,23 @@
   },
   {
     "id": "EVT-0028",
-    "timestamp": "2026-03-29T01:23:09.543Z",
-    "relativeMs": 411,
+    "timestamp": "2026-04-10T22:52:18.199Z",
+    "relativeMs": 292,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -820,8 +820,8 @@
   },
   {
     "id": "EVT-0029",
-    "timestamp": "2026-03-29T01:23:09.557Z",
-    "relativeMs": 425,
+    "timestamp": "2026-04-10T22:52:18.199Z",
+    "relativeMs": 292,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -837,23 +837,23 @@
   },
   {
     "id": "EVT-0030",
-    "timestamp": "2026-03-29T01:23:09.557Z",
-    "relativeMs": 425,
+    "timestamp": "2026-04-10T22:52:18.199Z",
+    "relativeMs": 292,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -867,8 +867,8 @@
   },
   {
     "id": "EVT-0031",
-    "timestamp": "2026-03-29T01:23:09.557Z",
-    "relativeMs": 425,
+    "timestamp": "2026-04-10T22:52:18.199Z",
+    "relativeMs": 292,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -884,23 +884,23 @@
   },
   {
     "id": "EVT-0032",
-    "timestamp": "2026-03-29T01:23:09.558Z",
-    "relativeMs": 426,
+    "timestamp": "2026-04-10T22:52:18.199Z",
+    "relativeMs": 292,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0007",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -914,8 +914,8 @@
   },
   {
     "id": "EVT-0033",
-    "timestamp": "2026-03-29T01:23:09.568Z",
-    "relativeMs": 436,
+    "timestamp": "2026-04-10T22:52:18.200Z",
+    "relativeMs": 293,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -931,23 +931,23 @@
   },
   {
     "id": "EVT-0034",
-    "timestamp": "2026-03-29T01:23:09.571Z",
-    "relativeMs": 439,
+    "timestamp": "2026-04-10T22:52:18.200Z",
+    "relativeMs": 293,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -961,8 +961,8 @@
   },
   {
     "id": "EVT-0035",
-    "timestamp": "2026-03-29T01:23:09.572Z",
-    "relativeMs": 440,
+    "timestamp": "2026-04-10T22:52:18.200Z",
+    "relativeMs": 293,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -978,23 +978,23 @@
   },
   {
     "id": "EVT-0036",
-    "timestamp": "2026-03-29T01:23:09.572Z",
-    "relativeMs": 440,
+    "timestamp": "2026-04-10T22:52:18.200Z",
+    "relativeMs": 293,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1008,8 +1008,8 @@
   },
   {
     "id": "EVT-0037",
-    "timestamp": "2026-03-29T01:23:09.572Z",
-    "relativeMs": 440,
+    "timestamp": "2026-04-10T22:52:18.201Z",
+    "relativeMs": 294,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -1025,23 +1025,23 @@
   },
   {
     "id": "EVT-0038",
-    "timestamp": "2026-03-29T01:23:09.572Z",
-    "relativeMs": 440,
+    "timestamp": "2026-04-10T22:52:18.201Z",
+    "relativeMs": 294,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0010",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1055,8 +1055,8 @@
   },
   {
     "id": "EVT-0039",
-    "timestamp": "2026-03-29T01:23:09.576Z",
-    "relativeMs": 444,
+    "timestamp": "2026-04-10T22:52:18.201Z",
+    "relativeMs": 294,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -1072,23 +1072,23 @@
   },
   {
     "id": "EVT-0040",
-    "timestamp": "2026-03-29T01:23:09.576Z",
-    "relativeMs": 444,
+    "timestamp": "2026-04-10T22:52:18.201Z",
+    "relativeMs": 294,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0011",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1102,8 +1102,8 @@
   },
   {
     "id": "EVT-0041",
-    "timestamp": "2026-03-29T01:23:09.581Z",
-    "relativeMs": 449,
+    "timestamp": "2026-04-10T22:52:18.202Z",
+    "relativeMs": 295,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -1119,23 +1119,23 @@
   },
   {
     "id": "EVT-0042",
-    "timestamp": "2026-03-29T01:23:09.581Z",
-    "relativeMs": 449,
+    "timestamp": "2026-04-10T22:52:18.202Z",
+    "relativeMs": 295,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0012",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1149,8 +1149,8 @@
   },
   {
     "id": "EVT-0043",
-    "timestamp": "2026-03-29T01:23:09.581Z",
-    "relativeMs": 449,
+    "timestamp": "2026-04-10T22:52:18.202Z",
+    "relativeMs": 295,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1166,23 +1166,23 @@
   },
   {
     "id": "EVT-0044",
-    "timestamp": "2026-03-29T01:23:09.581Z",
-    "relativeMs": 449,
+    "timestamp": "2026-04-10T22:52:18.202Z",
+    "relativeMs": 295,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Color%20tint",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Color%20tint",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Color%20tint",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Color%20tint",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1196,8 +1196,8 @@
   },
   {
     "id": "EVT-0045",
-    "timestamp": "2026-03-29T01:23:09.582Z",
-    "relativeMs": 450,
+    "timestamp": "2026-04-10T22:52:18.202Z",
+    "relativeMs": 295,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1213,23 +1213,23 @@
   },
   {
     "id": "EVT-0046",
-    "timestamp": "2026-03-29T01:23:09.582Z",
-    "relativeMs": 450,
+    "timestamp": "2026-04-10T22:52:18.202Z",
+    "relativeMs": 295,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0014",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1243,8 +1243,8 @@
   },
   {
     "id": "EVT-0047",
-    "timestamp": "2026-03-29T01:23:09.584Z",
-    "relativeMs": 452,
+    "timestamp": "2026-04-10T22:52:18.203Z",
+    "relativeMs": 296,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1260,23 +1260,23 @@
   },
   {
     "id": "EVT-0048",
-    "timestamp": "2026-03-29T01:23:09.584Z",
-    "relativeMs": 452,
+    "timestamp": "2026-04-10T22:52:18.203Z",
+    "relativeMs": 296,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1290,8 +1290,8 @@
   },
   {
     "id": "EVT-0049",
-    "timestamp": "2026-03-29T01:23:09.623Z",
-    "relativeMs": 491,
+    "timestamp": "2026-04-10T22:52:18.216Z",
+    "relativeMs": 309,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -1300,10 +1300,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting",
       "status": 200,
       "headers": {
         "content-length": "46",
@@ -1322,7 +1322,7 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 174,
+      "durationMs": 72,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -1333,8 +1333,8 @@
   },
   {
     "id": "EVT-0050",
-    "timestamp": "2026-03-29T01:23:09.624Z",
-    "relativeMs": 492,
+    "timestamp": "2026-04-10T22:52:18.216Z",
+    "relativeMs": 309,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -1350,8 +1350,8 @@
   },
   {
     "id": "EVT-0051",
-    "timestamp": "2026-03-29T01:23:09.624Z",
-    "relativeMs": 492,
+    "timestamp": "2026-04-10T22:52:18.216Z",
+    "relativeMs": 309,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1382,8 +1382,8 @@
   },
   {
     "id": "EVT-0052",
-    "timestamp": "2026-03-29T01:23:09.624Z",
-    "relativeMs": 492,
+    "timestamp": "2026-04-10T22:52:18.216Z",
+    "relativeMs": 309,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1414,8 +1414,8 @@
   },
   {
     "id": "EVT-0053",
-    "timestamp": "2026-03-29T01:23:09.624Z",
-    "relativeMs": 492,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -1446,8 +1446,8 @@
   },
   {
     "id": "EVT-0054",
-    "timestamp": "2026-03-29T01:23:09.624Z",
-    "relativeMs": 492,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -1478,8 +1478,8 @@
   },
   {
     "id": "EVT-0055",
-    "timestamp": "2026-03-29T01:23:09.624Z",
-    "relativeMs": 492,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -1510,8 +1510,8 @@
   },
   {
     "id": "EVT-0056",
-    "timestamp": "2026-03-29T01:23:09.624Z",
-    "relativeMs": 492,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -1542,8 +1542,8 @@
   },
   {
     "id": "EVT-0057",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -1574,8 +1574,8 @@
   },
   {
     "id": "EVT-0058",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -1606,8 +1606,8 @@
   },
   {
     "id": "EVT-0059",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -1638,8 +1638,8 @@
   },
   {
     "id": "EVT-0060",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -1670,8 +1670,8 @@
   },
   {
     "id": "EVT-0061",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.217Z",
+    "relativeMs": 310,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -1702,8 +1702,8 @@
   },
   {
     "id": "EVT-0062",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.218Z",
+    "relativeMs": 311,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0027",
@@ -1734,8 +1734,8 @@
   },
   {
     "id": "EVT-0063",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.218Z",
+    "relativeMs": 311,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1751,23 +1751,23 @@
   },
   {
     "id": "EVT-0064",
-    "timestamp": "2026-03-29T01:23:09.625Z",
-    "relativeMs": 493,
+    "timestamp": "2026-04-10T22:52:18.218Z",
+    "relativeMs": 311,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1781,8 +1781,8 @@
   },
   {
     "id": "EVT-0065",
-    "timestamp": "2026-03-29T01:23:09.626Z",
-    "relativeMs": 494,
+    "timestamp": "2026-04-10T22:52:18.218Z",
+    "relativeMs": 311,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1798,23 +1798,23 @@
   },
   {
     "id": "EVT-0066",
-    "timestamp": "2026-03-29T01:23:09.626Z",
-    "relativeMs": 494,
+    "timestamp": "2026-04-10T22:52:18.218Z",
+    "relativeMs": 311,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1828,8 +1828,8 @@
   },
   {
     "id": "EVT-0067",
-    "timestamp": "2026-03-29T01:23:09.626Z",
-    "relativeMs": 494,
+    "timestamp": "2026-04-10T22:52:18.219Z",
+    "relativeMs": 312,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -1845,23 +1845,23 @@
   },
   {
     "id": "EVT-0068",
-    "timestamp": "2026-03-29T01:23:09.626Z",
-    "relativeMs": 494,
+    "timestamp": "2026-04-10T22:52:18.219Z",
+    "relativeMs": 312,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0018",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1875,8 +1875,8 @@
   },
   {
     "id": "EVT-0069",
-    "timestamp": "2026-03-29T01:23:09.626Z",
-    "relativeMs": 494,
+    "timestamp": "2026-04-10T22:52:18.219Z",
+    "relativeMs": 312,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -1892,23 +1892,23 @@
   },
   {
     "id": "EVT-0070",
-    "timestamp": "2026-03-29T01:23:09.626Z",
-    "relativeMs": 494,
+    "timestamp": "2026-04-10T22:52:18.220Z",
+    "relativeMs": 313,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0019",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1922,8 +1922,8 @@
   },
   {
     "id": "EVT-0071",
-    "timestamp": "2026-03-29T01:23:09.627Z",
-    "relativeMs": 495,
+    "timestamp": "2026-04-10T22:52:18.221Z",
+    "relativeMs": 314,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -1939,23 +1939,23 @@
   },
   {
     "id": "EVT-0072",
-    "timestamp": "2026-03-29T01:23:09.627Z",
-    "relativeMs": 495,
+    "timestamp": "2026-04-10T22:52:18.221Z",
+    "relativeMs": 314,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0020",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -1969,8 +1969,8 @@
   },
   {
     "id": "EVT-0073",
-    "timestamp": "2026-03-29T01:23:09.628Z",
-    "relativeMs": 496,
+    "timestamp": "2026-04-10T22:52:18.221Z",
+    "relativeMs": 314,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -1986,23 +1986,23 @@
   },
   {
     "id": "EVT-0074",
-    "timestamp": "2026-03-29T01:23:09.628Z",
-    "relativeMs": 496,
+    "timestamp": "2026-04-10T22:52:18.221Z",
+    "relativeMs": 314,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2016,8 +2016,8 @@
   },
   {
     "id": "EVT-0075",
-    "timestamp": "2026-03-29T01:23:09.628Z",
-    "relativeMs": 496,
+    "timestamp": "2026-04-10T22:52:18.221Z",
+    "relativeMs": 314,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -2033,23 +2033,23 @@
   },
   {
     "id": "EVT-0076",
-    "timestamp": "2026-03-29T01:23:09.629Z",
-    "relativeMs": 497,
+    "timestamp": "2026-04-10T22:52:18.222Z",
+    "relativeMs": 315,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0022",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2063,8 +2063,8 @@
   },
   {
     "id": "EVT-0077",
-    "timestamp": "2026-03-29T01:23:09.629Z",
-    "relativeMs": 497,
+    "timestamp": "2026-04-10T22:52:18.222Z",
+    "relativeMs": 315,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -2080,23 +2080,23 @@
   },
   {
     "id": "EVT-0078",
-    "timestamp": "2026-03-29T01:23:09.629Z",
-    "relativeMs": 497,
+    "timestamp": "2026-04-10T22:52:18.222Z",
+    "relativeMs": 315,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0023",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2110,8 +2110,8 @@
   },
   {
     "id": "EVT-0079",
-    "timestamp": "2026-03-29T01:23:09.629Z",
-    "relativeMs": 497,
+    "timestamp": "2026-04-10T22:52:18.222Z",
+    "relativeMs": 315,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -2127,23 +2127,23 @@
   },
   {
     "id": "EVT-0080",
-    "timestamp": "2026-03-29T01:23:09.629Z",
-    "relativeMs": 497,
+    "timestamp": "2026-04-10T22:52:18.222Z",
+    "relativeMs": 315,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0024",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2157,8 +2157,8 @@
   },
   {
     "id": "EVT-0081",
-    "timestamp": "2026-03-29T01:23:09.630Z",
-    "relativeMs": 498,
+    "timestamp": "2026-04-10T22:52:18.223Z",
+    "relativeMs": 316,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2174,23 +2174,23 @@
   },
   {
     "id": "EVT-0082",
-    "timestamp": "2026-03-29T01:23:09.630Z",
-    "relativeMs": 498,
+    "timestamp": "2026-04-10T22:52:18.223Z",
+    "relativeMs": 316,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0025",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Color%20tint",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Color%20tint",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Color%20tint",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Color%20tint",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2204,8 +2204,8 @@
   },
   {
     "id": "EVT-0083",
-    "timestamp": "2026-03-29T01:23:09.630Z",
-    "relativeMs": 498,
+    "timestamp": "2026-04-10T22:52:18.223Z",
+    "relativeMs": 316,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -2221,23 +2221,23 @@
   },
   {
     "id": "EVT-0084",
-    "timestamp": "2026-03-29T01:23:09.630Z",
-    "relativeMs": 498,
+    "timestamp": "2026-04-10T22:52:18.223Z",
+    "relativeMs": 316,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0026",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2251,8 +2251,8 @@
   },
   {
     "id": "EVT-0085",
-    "timestamp": "2026-03-29T01:23:09.631Z",
-    "relativeMs": 499,
+    "timestamp": "2026-04-10T22:52:18.223Z",
+    "relativeMs": 316,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0027",
@@ -2268,23 +2268,23 @@
   },
   {
     "id": "EVT-0086",
-    "timestamp": "2026-03-29T01:23:09.631Z",
-    "relativeMs": 499,
+    "timestamp": "2026-04-10T22:52:18.223Z",
+    "relativeMs": 316,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0027",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2298,8 +2298,8 @@
   },
   {
     "id": "EVT-0087",
-    "timestamp": "2026-03-29T01:23:09.643Z",
-    "relativeMs": 511,
+    "timestamp": "2026-04-10T22:52:18.231Z",
+    "relativeMs": 324,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -2308,10 +2308,10 @@
       "normalizedUrl": "/v1/info",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/info",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/info",
+      "url": "http://127.0.0.1:39667/v1/info",
       "status": 200,
       "headers": {
         "content-length": "153",
@@ -2333,7 +2333,7 @@
         "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 197,
+      "durationMs": 78,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -2344,8 +2344,8 @@
   },
   {
     "id": "EVT-0088",
-    "timestamp": "2026-03-29T01:23:09.643Z",
-    "relativeMs": 511,
+    "timestamp": "2026-04-10T22:52:18.231Z",
+    "relativeMs": 324,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -2361,8 +2361,8 @@
   },
   {
     "id": "EVT-0089",
-    "timestamp": "2026-03-29T01:23:09.651Z",
-    "relativeMs": 519,
+    "timestamp": "2026-04-10T22:52:18.235Z",
+    "relativeMs": 328,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -2393,8 +2393,8 @@
   },
   {
     "id": "EVT-0090",
-    "timestamp": "2026-03-29T01:23:09.656Z",
-    "relativeMs": 524,
+    "timestamp": "2026-04-10T22:52:18.238Z",
+    "relativeMs": 331,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -2410,23 +2410,23 @@
   },
   {
     "id": "EVT-0091",
-    "timestamp": "2026-03-29T01:23:09.657Z",
-    "relativeMs": 525,
+    "timestamp": "2026-04-10T22:52:18.238Z",
+    "relativeMs": 331,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0028",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/info",
+      "url": "http://127.0.0.1:39667/v1/info",
       "normalizedUrl": "/v1/info",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/info",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2440,8 +2440,8 @@
   },
   {
     "id": "EVT-0092",
-    "timestamp": "2026-03-29T01:23:09.659Z",
-    "relativeMs": 527,
+    "timestamp": "2026-04-10T22:52:18.258Z",
+    "relativeMs": 351,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -2450,10 +2450,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Mode",
       "status": 200,
       "headers": {
         "content-length": "91",
@@ -2477,7 +2477,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Mode\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 75,
+      "durationMs": 42,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -2488,8 +2488,8 @@
   },
   {
     "id": "EVT-0093",
-    "timestamp": "2026-03-29T01:23:09.660Z",
-    "relativeMs": 528,
+    "timestamp": "2026-04-10T22:52:18.258Z",
+    "relativeMs": 351,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -2505,8 +2505,8 @@
   },
   {
     "id": "EVT-0094",
-    "timestamp": "2026-03-29T01:23:09.675Z",
-    "relativeMs": 543,
+    "timestamp": "2026-04-10T22:52:18.275Z",
+    "relativeMs": 368,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -2515,10 +2515,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Auto%20SID%20Mode",
       "status": 200,
       "headers": {
         "content-length": "100",
@@ -2542,7 +2542,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Auto SID Mode\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 88,
+      "durationMs": 60,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -2553,8 +2553,8 @@
   },
   {
     "id": "EVT-0095",
-    "timestamp": "2026-03-29T01:23:09.675Z",
-    "relativeMs": 543,
+    "timestamp": "2026-04-10T22:52:18.276Z",
+    "relativeMs": 369,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -2570,8 +2570,8 @@
   },
   {
     "id": "EVT-0096",
-    "timestamp": "2026-03-29T01:23:09.693Z",
-    "relativeMs": 561,
+    "timestamp": "2026-04-10T22:52:18.294Z",
+    "relativeMs": 387,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -2580,10 +2580,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern",
       "status": 200,
       "headers": {
         "content-length": "94",
@@ -2607,7 +2607,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Pattern\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 110,
+      "durationMs": 77,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -2618,8 +2618,8 @@
   },
   {
     "id": "EVT-0097",
-    "timestamp": "2026-03-29T01:23:09.694Z",
-    "relativeMs": 562,
+    "timestamp": "2026-04-10T22:52:18.294Z",
+    "relativeMs": 387,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -2635,73 +2635,8 @@
   },
   {
     "id": "EVT-0098",
-    "timestamp": "2026-03-29T01:23:09.706Z",
-    "relativeMs": 574,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0007",
-    "data": {
-      "method": "GET",
-      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
-      "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
-      "status": 200,
-      "headers": {
-        "content-length": "89",
-        "content-type": "application/json"
-      },
-      "body": {
-        "LED Strip Settings": {
-          "items": {
-            "Fixed Color": {
-              "selected": "",
-              "options": []
-            }
-          }
-        },
-        "errors": []
-      },
-      "payloadPreview": {
-        "byteCount": 89,
-        "previewByteCount": 89,
-        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
-        "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
-        "truncated": false
-      },
-      "durationMs": 130,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0099",
-    "timestamp": "2026-03-29T01:23:09.706Z",
-    "relativeMs": 574,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0007",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0100",
-    "timestamp": "2026-03-29T01:23:09.786Z",
-    "relativeMs": 654,
+    "timestamp": "2026-04-10T22:52:18.355Z",
+    "relativeMs": 448,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0029",
@@ -2731,9 +2666,9 @@
     }
   },
   {
-    "id": "EVT-0101",
-    "timestamp": "2026-03-29T01:23:09.786Z",
-    "relativeMs": 654,
+    "id": "EVT-0099",
+    "timestamp": "2026-04-10T22:52:18.355Z",
+    "relativeMs": 448,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0030",
@@ -2763,9 +2698,9 @@
     }
   },
   {
-    "id": "EVT-0102",
-    "timestamp": "2026-03-29T01:23:09.787Z",
-    "relativeMs": 655,
+    "id": "EVT-0100",
+    "timestamp": "2026-04-10T22:52:18.356Z",
+    "relativeMs": 449,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0031",
@@ -2795,9 +2730,9 @@
     }
   },
   {
-    "id": "EVT-0103",
-    "timestamp": "2026-03-29T01:23:09.798Z",
-    "relativeMs": 666,
+    "id": "EVT-0101",
+    "timestamp": "2026-04-10T22:52:18.390Z",
+    "relativeMs": 483,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0029",
@@ -2807,29 +2742,76 @@
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0102",
+    "timestamp": "2026-04-10T22:52:18.390Z",
+    "relativeMs": 483,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0029",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:39667/v1/configs/Audio%20Mixer",
+      "normalizedUrl": "/v1/configs/Audio%20Mixer",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 39667,
+      "path": "/v1/configs/Audio%20Mixer",
+      "query": "",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:39667"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0103",
+    "timestamp": "2026-04-10T22:52:18.391Z",
+    "relativeMs": 484,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0030",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0104",
-    "timestamp": "2026-03-29T01:23:09.798Z",
-    "relativeMs": 666,
+    "timestamp": "2026-04-10T22:52:18.391Z",
+    "relativeMs": 484,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0029",
+    "correlationId": "COR-0030",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/Audio%20Mixer",
-      "normalizedUrl": "/v1/configs/Audio%20Mixer",
+      "url": "http://127.0.0.1:39667/v1/configs/SID%20Sockets%20Configuration",
+      "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/configs/Audio%20Mixer",
+      "port": 39667,
+      "path": "/v1/configs/SID%20Sockets%20Configuration",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2837,46 +2819,46 @@
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0105",
-    "timestamp": "2026-03-29T01:23:09.798Z",
-    "relativeMs": 666,
+    "timestamp": "2026-04-10T22:52:18.391Z",
+    "relativeMs": 484,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0030",
+    "correlationId": "COR-0031",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0106",
-    "timestamp": "2026-03-29T01:23:09.799Z",
-    "relativeMs": 667,
+    "timestamp": "2026-04-10T22:52:18.391Z",
+    "relativeMs": 484,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0030",
+    "correlationId": "COR-0031",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/SID%20Sockets%20Configuration",
-      "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration",
+      "url": "http://127.0.0.1:39667/v1/configs/SID%20Addressing",
+      "normalizedUrl": "/v1/configs/SID%20Addressing",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/configs/SID%20Sockets%20Configuration",
+      "port": 39667,
+      "path": "/v1/configs/SID%20Addressing",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -2884,61 +2866,79 @@
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0107",
-    "timestamp": "2026-03-29T01:23:09.799Z",
-    "relativeMs": 667,
-    "type": "backend-decision",
+    "timestamp": "2026-04-10T22:52:18.424Z",
+    "relativeMs": 517,
+    "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0031",
+    "correlationId": "COR-0007",
     "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode",
+      "method": "GET",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 39667,
+      "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
+      "query": "",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color",
+      "status": 200,
+      "headers": {
+        "content-length": "89",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "Fixed Color": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 89,
+        "previewByteCount": 89,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 101,
+      "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0108",
-    "timestamp": "2026-03-29T01:23:09.799Z",
-    "relativeMs": 667,
-    "type": "rest-request",
+    "timestamp": "2026-04-10T22:52:18.424Z",
+    "relativeMs": 517,
+    "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0031",
+    "correlationId": "COR-0007",
     "data": {
-      "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/configs/SID%20Addressing",
-      "normalizedUrl": "/v1/configs/SID%20Addressing",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/configs/SID%20Addressing",
-      "query": "",
-      "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
-      },
-      "body": null,
-      "payloadPreview": null,
-      "target": "external-mock",
+      "status": "success",
+      "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0109",
-    "timestamp": "2026-03-29T01:23:09.805Z",
-    "relativeMs": 673,
+    "timestamp": "2026-04-10T22:52:18.442Z",
+    "relativeMs": 535,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -2947,10 +2947,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
       "status": 200,
       "headers": {
         "content-length": "93",
@@ -2974,19 +2974,19 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color Red\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 148,
+      "durationMs": 199,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0110",
-    "timestamp": "2026-03-29T01:23:09.805Z",
-    "relativeMs": 673,
+    "timestamp": "2026-04-10T22:52:18.442Z",
+    "relativeMs": 535,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -2996,14 +2996,14 @@
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
-      "trackInstanceId": null,
+      "trackInstanceId": 0,
       "playlistItemId": null
     }
   },
   {
     "id": "EVT-0111",
-    "timestamp": "2026-03-29T01:23:09.856Z",
-    "relativeMs": 724,
+    "timestamp": "2026-04-10T22:52:18.442Z",
+    "relativeMs": 535,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -3012,10 +3012,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
       "status": 200,
       "headers": {
         "content-length": "95",
@@ -3039,7 +3039,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color Green\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 235,
+      "durationMs": 201,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -3050,8 +3050,8 @@
   },
   {
     "id": "EVT-0112",
-    "timestamp": "2026-03-29T01:23:09.856Z",
-    "relativeMs": 724,
+    "timestamp": "2026-04-10T22:52:18.442Z",
+    "relativeMs": 535,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -3067,8 +3067,8 @@
   },
   {
     "id": "EVT-0113",
-    "timestamp": "2026-03-29T01:23:09.857Z",
-    "relativeMs": 725,
+    "timestamp": "2026-04-10T22:52:18.443Z",
+    "relativeMs": 536,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -3077,10 +3077,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
       "status": 200,
       "headers": {
         "content-length": "94",
@@ -3104,7 +3104,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color Blue\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 235,
+      "durationMs": 200,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -3115,8 +3115,8 @@
   },
   {
     "id": "EVT-0114",
-    "timestamp": "2026-03-29T01:23:09.857Z",
-    "relativeMs": 725,
+    "timestamp": "2026-04-10T22:52:18.443Z",
+    "relativeMs": 536,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -3132,8 +3132,8 @@
   },
   {
     "id": "EVT-0115",
-    "timestamp": "2026-03-29T01:23:09.857Z",
-    "relativeMs": 725,
+    "timestamp": "2026-04-10T22:52:18.443Z",
+    "relativeMs": 536,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -3142,10 +3142,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Strip%20Intensity",
       "status": 200,
       "headers": {
         "content-length": "93",
@@ -3169,7 +3169,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"Strip Intensity\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 235,
+      "durationMs": 222,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -3180,8 +3180,8 @@
   },
   {
     "id": "EVT-0116",
-    "timestamp": "2026-03-29T01:23:09.857Z",
-    "relativeMs": 725,
+    "timestamp": "2026-04-10T22:52:18.443Z",
+    "relativeMs": 536,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -3197,8 +3197,8 @@
   },
   {
     "id": "EVT-0117",
-    "timestamp": "2026-03-29T01:23:09.858Z",
-    "relativeMs": 726,
+    "timestamp": "2026-04-10T22:52:18.447Z",
+    "relativeMs": 540,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -3207,10 +3207,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20SID%20Select",
       "status": 200,
       "headers": {
         "content-length": "97",
@@ -3234,7 +3234,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip SID Select\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 229,
+      "durationMs": 227,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -3245,8 +3245,8 @@
   },
   {
     "id": "EVT-0118",
-    "timestamp": "2026-03-29T01:23:09.858Z",
-    "relativeMs": 726,
+    "timestamp": "2026-04-10T22:52:18.447Z",
+    "relativeMs": 540,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -3262,8 +3262,8 @@
   },
   {
     "id": "EVT-0119",
-    "timestamp": "2026-03-29T01:23:09.865Z",
-    "relativeMs": 733,
+    "timestamp": "2026-04-10T22:52:18.452Z",
+    "relativeMs": 545,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -3272,10 +3272,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Color%20tint",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/Color%20tint",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/Color%20tint",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/Color%20tint",
       "status": 200,
       "headers": {
         "content-length": "88",
@@ -3299,7 +3299,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"Color tint\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 255,
+      "durationMs": 242,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -3310,8 +3310,8 @@
   },
   {
     "id": "EVT-0120",
-    "timestamp": "2026-03-29T01:23:09.866Z",
-    "relativeMs": 734,
+    "timestamp": "2026-04-10T22:52:18.452Z",
+    "relativeMs": 545,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -3327,8 +3327,8 @@
   },
   {
     "id": "EVT-0121",
-    "timestamp": "2026-03-29T01:23:09.874Z",
-    "relativeMs": 742,
+    "timestamp": "2026-04-10T22:52:18.475Z",
+    "relativeMs": 568,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -3337,10 +3337,10 @@
       "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
       "status": 200,
       "headers": {
         "content-length": "91",
@@ -3364,7 +3364,7 @@
         "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Type\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 272,
+      "durationMs": 271,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -3375,8 +3375,8 @@
   },
   {
     "id": "EVT-0122",
-    "timestamp": "2026-03-29T01:23:09.875Z",
-    "relativeMs": 743,
+    "timestamp": "2026-04-10T22:52:18.476Z",
+    "relativeMs": 569,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -3392,139 +3392,11 @@
   },
   {
     "id": "EVT-0123",
-    "timestamp": "2026-03-29T01:23:09.905Z",
-    "relativeMs": 773,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0015",
-    "data": {
-      "method": "GET",
-      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
-      "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
-      "status": 200,
-      "headers": {
-        "content-length": "93",
-        "content-type": "application/json"
-      },
-      "body": {
-        "LED Strip Settings": {
-          "items": {
-            "LedStrip Length": {
-              "selected": "",
-              "options": []
-            }
-          }
-        },
-        "errors": []
-      },
-      "payloadPreview": {
-        "byteCount": 93,
-        "previewByteCount": 93,
-        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4c 65 6e 67 74 68 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
-        "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Length\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
-        "truncated": false
-      },
-      "durationMs": 318,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0124",
-    "timestamp": "2026-03-29T01:23:09.905Z",
-    "relativeMs": 773,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0015",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0125",
-    "timestamp": "2026-03-29T01:23:09.934Z",
-    "relativeMs": 802,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0028",
-    "data": {
-      "method": "GET",
-      "normalizedUrl": "/v1/info",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/info",
-      "query": "",
-      "url": "http://127.0.0.1:41959/v1/info",
-      "status": 200,
-      "headers": {
-        "content-length": "153",
-        "content-type": "application/json"
-      },
-      "body": {
-        "product": "C64 Ultimate",
-        "firmware_version": "3.12.0",
-        "fpga_version": "1.0.0",
-        "core_version": "1.0.0",
-        "hostname": "c64u",
-        "unique_id": "TEST-123",
-        "errors": []
-      },
-      "payloadPreview": {
-        "byteCount": 153,
-        "previewByteCount": 153,
-        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 63 6f 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 68 6f 73 74 6e 61 6d 65 22 3a 22 63 36 34 75 22 2c 22 75 6e 69 71 75 65 5f 69 64 22 3a 22 54 45 53 54 2d 31 32 33 22 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
-        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
-        "truncated": false
-      },
-      "durationMs": 268,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0126",
-    "timestamp": "2026-03-29T01:23:09.934Z",
-    "relativeMs": 802,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0028",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0127",
-    "timestamp": "2026-03-29T01:23:10.004Z",
-    "relativeMs": 872,
+    "timestamp": "2026-04-10T22:52:18.522Z",
+    "relativeMs": 615,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0033",
+    "correlationId": "COR-0034",
     "data": {
       "name": "startup.first_meaningful_interaction",
       "component": null,
@@ -3550,8 +3422,8 @@
           "playlistItemId": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       },
       "lifecycleState": "foreground",
@@ -3562,12 +3434,12 @@
     }
   },
   {
-    "id": "EVT-0128",
-    "timestamp": "2026-03-29T01:23:10.006Z",
-    "relativeMs": 874,
+    "id": "EVT-0124",
+    "timestamp": "2026-04-10T22:52:18.522Z",
+    "relativeMs": 615,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0032",
+    "correlationId": "COR-0033",
     "data": {
       "name": "click Play",
       "component": "GlobalInteraction",
@@ -3593,8 +3465,8 @@
           "playlistItemId": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       },
       "lifecycleState": "foreground",
@@ -3605,12 +3477,12 @@
     }
   },
   {
-    "id": "EVT-0129",
-    "timestamp": "2026-03-29T01:23:10.008Z",
-    "relativeMs": 876,
+    "id": "EVT-0125",
+    "timestamp": "2026-04-10T22:52:18.523Z",
+    "relativeMs": 616,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0033",
+    "correlationId": "COR-0034",
     "data": {
       "status": "success",
       "error": null,
@@ -3622,12 +3494,12 @@
     }
   },
   {
-    "id": "EVT-0130",
-    "timestamp": "2026-03-29T01:23:10.011Z",
-    "relativeMs": 879,
+    "id": "EVT-0126",
+    "timestamp": "2026-04-10T22:52:18.523Z",
+    "relativeMs": 616,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0034",
+    "correlationId": "COR-0035",
     "data": {
       "name": "PlayFilesPage.anonymousAction",
       "component": "PlayFilesPage",
@@ -3653,8 +3525,8 @@
           "playlistItemId": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       },
       "lifecycleState": "foreground",
@@ -3665,9 +3537,216 @@
     }
   },
   {
+    "id": "EVT-0127",
+    "timestamp": "2026-04-10T22:52:18.576Z",
+    "relativeMs": 669,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0033",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0128",
+    "timestamp": "2026-04-10T22:52:18.580Z",
+    "relativeMs": 673,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "method": "GET",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 39667,
+      "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "query": "",
+      "url": "http://127.0.0.1:39667/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "status": 200,
+      "headers": {
+        "content-length": "93",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "LedStrip Length": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 93,
+        "previewByteCount": 93,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4c 65 6e 67 74 68 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Length\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 287,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0129",
+    "timestamp": "2026-04-10T22:52:18.580Z",
+    "relativeMs": 673,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0130",
+    "timestamp": "2026-04-10T22:52:18.603Z",
+    "relativeMs": 696,
+    "type": "backend-decision",
+    "origin": "user",
+    "correlationId": "COR-0035",
+    "data": {
+      "selectedTarget": "real-device",
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
     "id": "EVT-0131",
-    "timestamp": "2026-03-29T01:23:10.141Z",
-    "relativeMs": 1009,
+    "timestamp": "2026-04-10T22:52:18.604Z",
+    "relativeMs": 697,
+    "type": "rest-request",
+    "origin": "user",
+    "correlationId": "COR-0035",
+    "data": {
+      "method": "POST",
+      "url": "http://127.0.0.1:42937/v1/ftp/read",
+      "normalizedUrl": "/v1/ftp/read",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 42937,
+      "path": "/v1/ftp/read",
+      "query": "",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "host": "127.0.0.1",
+        "port": 43739,
+        "password": "[redacted]",
+        "path": "/Usb0/Demos/demo.sid",
+        "traceContext": {
+          "correlationId": "COR-0035",
+          "trackInstanceId": 0,
+          "playlistItemId": null
+        }
+      },
+      "payloadPreview": {
+        "byteCount": 173,
+        "previewByteCount": 173,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 34 33 37 33 39 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 33 35 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 30 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":43739,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0035\",\"trackInstanceId\":0,\"playlistItemId\":null}}",
+        "truncated": false
+      },
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0132",
+    "timestamp": "2026-04-10T22:52:18.604Z",
+    "relativeMs": 697,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0028",
+    "data": {
+      "method": "GET",
+      "normalizedUrl": "/v1/info",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 39667,
+      "path": "/v1/info",
+      "query": "",
+      "url": "http://127.0.0.1:39667/v1/info",
+      "status": 200,
+      "headers": {
+        "content-length": "153",
+        "content-type": "application/json"
+      },
+      "body": {
+        "product": "C64 Ultimate",
+        "firmware_version": "3.12.0",
+        "fpga_version": "1.0.0",
+        "core_version": "1.0.0",
+        "hostname": "c64u",
+        "unique_id": "TEST-123",
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 153,
+        "previewByteCount": 153,
+        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 63 6f 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 68 6f 73 74 6e 61 6d 65 22 3a 22 63 36 34 75 22 2c 22 75 6e 69 71 75 65 5f 69 64 22 3a 22 54 45 53 54 2d 31 32 33 22 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 325,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0133",
+    "timestamp": "2026-04-10T22:52:18.604Z",
+    "relativeMs": 697,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0028",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0134",
+    "timestamp": "2026-04-10T22:52:18.606Z",
+    "relativeMs": 699,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -3676,10 +3755,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Mode",
       "status": 200,
       "headers": {
         "content-length": "90",
@@ -3703,19 +3782,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Mode\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 305,
+      "durationMs": 358,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0132",
-    "timestamp": "2026-03-29T01:23:10.141Z",
-    "relativeMs": 1009,
+    "id": "EVT-0135",
+    "timestamp": "2026-04-10T22:52:18.606Z",
+    "relativeMs": 699,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -3726,30 +3805,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0133",
-    "timestamp": "2026-03-29T01:23:10.144Z",
-    "relativeMs": 1012,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0032",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0134",
-    "timestamp": "2026-03-29T01:23:10.173Z",
-    "relativeMs": 1041,
+    "id": "EVT-0136",
+    "timestamp": "2026-04-10T22:52:18.610Z",
+    "relativeMs": 703,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -3758,10 +3820,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Auto%20SID%20Mode",
       "status": 200,
       "headers": {
         "content-length": "99",
@@ -3785,19 +3847,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Auto SID Mode\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 367,
+      "durationMs": 359,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0135",
-    "timestamp": "2026-03-29T01:23:10.173Z",
-    "relativeMs": 1041,
+    "id": "EVT-0137",
+    "timestamp": "2026-04-10T22:52:18.610Z",
+    "relativeMs": 703,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -3808,75 +3870,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0136",
-    "timestamp": "2026-03-29T01:23:10.184Z",
-    "relativeMs": 1052,
-    "type": "backend-decision",
-    "origin": "user",
-    "correlationId": "COR-0034",
-    "data": {
-      "selectedTarget": "real-device",
-      "reason": "reachable",
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0137",
-    "timestamp": "2026-03-29T01:23:10.184Z",
-    "relativeMs": 1052,
-    "type": "rest-request",
-    "origin": "user",
-    "correlationId": "COR-0034",
-    "data": {
-      "method": "POST",
-      "url": "http://127.0.0.1:37999/v1/ftp/read",
-      "normalizedUrl": "/v1/ftp/read",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 37999,
-      "path": "/v1/ftp/read",
-      "query": "",
-      "headers": {
-        "Content-Type": "application/json"
-      },
-      "body": {
-        "host": "127.0.0.1",
-        "port": 39643,
-        "password": "[redacted]",
-        "path": "/Usb0/Demos/demo.sid",
-        "traceContext": {
-          "correlationId": "COR-0034",
-          "trackInstanceId": 0,
-          "playlistItemId": null
-        }
-      },
-      "payloadPreview": {
-        "byteCount": 173,
-        "previewByteCount": 173,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 36 34 33 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 33 34 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 30 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39643,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0034\",\"trackInstanceId\":0,\"playlistItemId\":null}}",
-        "truncated": false
-      },
-      "target": "real-device",
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0138",
-    "timestamp": "2026-03-29T01:23:10.198Z",
-    "relativeMs": 1066,
+    "timestamp": "2026-04-10T22:52:18.620Z",
+    "relativeMs": 713,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -3885,10 +3885,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Pattern",
       "status": 200,
       "headers": {
         "content-length": "93",
@@ -3912,19 +3912,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Pattern\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 516,
+      "durationMs": 363,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0139",
-    "timestamp": "2026-03-29T01:23:10.198Z",
-    "relativeMs": 1066,
+    "timestamp": "2026-04-10T22:52:18.620Z",
+    "relativeMs": 713,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -3935,13 +3935,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0140",
-    "timestamp": "2026-03-29T01:23:10.219Z",
-    "relativeMs": 1087,
+    "timestamp": "2026-04-10T22:52:18.630Z",
+    "relativeMs": 723,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -3950,10 +3950,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color",
       "status": 200,
       "headers": {
         "content-length": "88",
@@ -3977,19 +3977,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Fixed Color\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 518,
+      "durationMs": 387,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0141",
-    "timestamp": "2026-03-29T01:23:10.219Z",
-    "relativeMs": 1087,
+    "timestamp": "2026-04-10T22:52:18.630Z",
+    "relativeMs": 723,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -4000,13 +4000,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0142",
-    "timestamp": "2026-03-29T01:23:10.220Z",
-    "relativeMs": 1088,
+    "timestamp": "2026-04-10T22:52:18.665Z",
+    "relativeMs": 758,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -4015,10 +4015,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
       "status": 200,
       "headers": {
         "content-length": "92",
@@ -4042,19 +4042,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Fixed Color Red\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 518,
+      "durationMs": 430,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0143",
-    "timestamp": "2026-03-29T01:23:10.220Z",
-    "relativeMs": 1088,
+    "timestamp": "2026-04-10T22:52:18.665Z",
+    "relativeMs": 758,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -4065,13 +4065,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0144",
-    "timestamp": "2026-03-29T01:23:10.220Z",
-    "relativeMs": 1088,
+    "timestamp": "2026-04-10T22:52:18.673Z",
+    "relativeMs": 766,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -4080,10 +4080,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
       "status": 200,
       "headers": {
         "content-length": "94",
@@ -4107,19 +4107,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Fixed Color Green\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 517,
+      "durationMs": 451,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0145",
-    "timestamp": "2026-03-29T01:23:10.220Z",
-    "relativeMs": 1088,
+    "timestamp": "2026-04-10T22:52:18.673Z",
+    "relativeMs": 766,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -4130,13 +4130,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0146",
-    "timestamp": "2026-03-29T01:23:10.229Z",
-    "relativeMs": 1097,
+    "timestamp": "2026-04-10T22:52:18.707Z",
+    "relativeMs": 800,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -4145,10 +4145,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
       "status": 200,
       "headers": {
         "content-length": "93",
@@ -4172,19 +4172,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Fixed Color Blue\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 518,
+      "durationMs": 481,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0147",
-    "timestamp": "2026-03-29T01:23:10.229Z",
-    "relativeMs": 1097,
+    "timestamp": "2026-04-10T22:52:18.707Z",
+    "relativeMs": 800,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -4195,13 +4195,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0148",
-    "timestamp": "2026-03-29T01:23:10.236Z",
-    "relativeMs": 1104,
+    "timestamp": "2026-04-10T22:52:18.728Z",
+    "relativeMs": 821,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -4210,10 +4210,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Strip%20Intensity",
       "status": 200,
       "headers": {
         "content-length": "92",
@@ -4237,19 +4237,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Strip Intensity\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 519,
+      "durationMs": 502,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0149",
-    "timestamp": "2026-03-29T01:23:10.236Z",
-    "relativeMs": 1104,
+    "timestamp": "2026-04-10T22:52:18.728Z",
+    "relativeMs": 821,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -4260,13 +4260,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0150",
-    "timestamp": "2026-03-29T01:23:10.237Z",
-    "relativeMs": 1105,
+    "timestamp": "2026-04-10T22:52:18.761Z",
+    "relativeMs": 854,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -4275,10 +4275,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20SID%20Select",
       "status": 200,
       "headers": {
         "content-length": "96",
@@ -4302,19 +4302,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip SID Select\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 521,
+      "durationMs": 537,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0151",
-    "timestamp": "2026-03-29T01:23:10.237Z",
-    "relativeMs": 1105,
+    "timestamp": "2026-04-10T22:52:18.762Z",
+    "relativeMs": 855,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -4325,13 +4325,219 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0152",
-    "timestamp": "2026-03-29T01:23:10.289Z",
-    "relativeMs": 1157,
+    "timestamp": "2026-04-10T22:52:18.793Z",
+    "relativeMs": 886,
+    "type": "rest-response",
+    "origin": "user",
+    "correlationId": "COR-0035",
+    "data": {
+      "method": null,
+      "normalizedUrl": null,
+      "protocol": null,
+      "hostname": null,
+      "port": null,
+      "path": null,
+      "query": null,
+      "url": null,
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "data": "UFNJRAACAHYAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGA=",
+        "sizeBytes": 119
+      },
+      "payloadPreview": {
+        "byteCount": 187,
+        "previewByteCount": 187,
+        "hex": "7b 22 64 61 74 61 22 3a 22 55 46 4e 4a 52 41 41 43 41 48 59 41 41 41 41 41 41 41 41 41 41 51 41 42 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 47 41 3d 22 2c 22 73 69 7a 65 42 79 74 65 73 22 3a 31 31 39 7d",
+        "ascii": "{\"data\":\"UFNJRAACAHYAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGA=\",\"sizeBytes\":119}",
+        "truncated": false
+      },
+      "durationMs": 187,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0153",
+    "timestamp": "2026-04-10T22:52:18.809Z",
+    "relativeMs": 902,
+    "type": "ftp-operation",
+    "origin": "user",
+    "correlationId": "COR-0035",
+    "data": {
+      "operation": "read",
+      "command": "RETR",
+      "hostname": "127.0.0.1",
+      "port": 43739,
+      "path": "/Usb0/Demos/demo.sid",
+      "durationMs": 256,
+      "result": "success",
+      "requestPayload": {
+        "host": "127.0.0.1",
+        "port": 43739,
+        "password": "[redacted]",
+        "path": "/Usb0/Demos/demo.sid",
+        "traceContext": {
+          "correlationId": "COR-0035",
+          "trackInstanceId": 0,
+          "playlistItemId": null
+        }
+      },
+      "requestPayloadPreview": {
+        "byteCount": 173,
+        "previewByteCount": 173,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 34 33 37 33 39 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 33 35 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 30 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":43739,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0035\",\"trackInstanceId\":0,\"playlistItemId\":null}}",
+        "truncated": false
+      },
+      "responsePayload": {
+        "data": "UFNJRAACAHYAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGA=",
+        "sizeBytes": 119
+      },
+      "responsePayloadPreview": {
+        "byteCount": 119,
+        "previewByteCount": 119,
+        "hex": "50 53 49 44 00 02 00 76 00 00 00 00 00 00 00 01 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 60",
+        "ascii": "PSID...v..............................................................................................................`",
+        "truncated": false
+      },
+      "error": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0154",
+    "timestamp": "2026-04-10T22:52:18.859Z",
+    "relativeMs": 952,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0036",
+    "data": {
+      "name": "rest.post /v1/runners:sidplay",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 1,
+          "currentIndex": 0,
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": 8000,
+          "sourceKind": "ultimate",
+          "localAccessMode": null,
+          "trackInstanceId": 0,
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0155",
+    "timestamp": "2026-04-10T22:52:18.862Z",
+    "relativeMs": 955,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0036",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0156",
+    "timestamp": "2026-04-10T22:52:18.862Z",
+    "relativeMs": 955,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0036",
+    "data": {
+      "method": "POST",
+      "url": "http://127.0.0.1:39667/v1/runners:sidplay",
+      "normalizedUrl": "/v1/runners:sidplay",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 39667,
+      "path": "/v1/runners:sidplay",
+      "query": "",
+      "headers": {
+        "X-C64U-Host": "127.0.0.1:39667"
+      },
+      "body": {
+        "type": "form-data",
+        "fields": [
+          {
+            "name": "file",
+            "type": "file",
+            "fileName": "track.sid",
+            "sizeBytes": 119,
+            "mimeType": "application/octet-stream"
+          },
+          {
+            "name": "file",
+            "type": "file",
+            "fileName": "songlengths.ssl",
+            "sizeBytes": 2,
+            "mimeType": "application/octet-stream"
+          }
+        ]
+      },
+      "payloadPreview": {
+        "byteCount": 249,
+        "previewByteCount": 249,
+        "hex": "7b 22 74 79 70 65 22 3a 22 66 6f 72 6d 2d 64 61 74 61 22 2c 22 66 69 65 6c 64 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 66 69 6c 65 22 2c 22 74 79 70 65 22 3a 22 66 69 6c 65 22 2c 22 66 69 6c 65 4e 61 6d 65 22 3a 22 74 72 61 63 6b 2e 73 69 64 22 2c 22 73 69 7a 65 42 79 74 65 73 22 3a 31 31 39 2c 22 6d 69 6d 65 54 79 70 65 22 3a 22 61 70 70 6c 69 63 61 74 69 6f 6e 2f 6f 63 74 65 74 2d 73 74 72 65 61 6d 22 7d 2c 7b 22 6e 61 6d 65 22 3a 22 66 69 6c 65 22 2c 22 74 79 70 65 22 3a 22 66 69 6c 65 22 2c 22 66 69 6c 65 4e 61 6d 65 22 3a 22 73 6f 6e 67 6c 65 6e 67 74 68 73 2e 73 73 6c 22 2c 22 73 69 7a 65 42 79 74 65 73 22 3a 32 2c 22 6d 69 6d 65 54 79 70 65 22 3a 22 61 70 70 6c 69 63 61 74 69 6f 6e 2f 6f 63 74 65 74 2d 73 74 72 65 61 6d 22 7d 5d 7d",
+        "ascii": "{\"type\":\"form-data\",\"fields\":[{\"name\":\"file\",\"type\":\"file\",\"fileName\":\"track.sid\",\"sizeBytes\":119,\"mimeType\":\"application/octet-stream\"},{\"name\":\"file\",\"type\":\"file\",\"fileName\":\"songlengths.ssl\",\"sizeBytes\":2,\"mimeType\":\"application/octet-stream\"}]}",
+        "truncated": false
+      },
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0157",
+    "timestamp": "2026-04-10T22:52:18.867Z",
+    "relativeMs": 960,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -4340,10 +4546,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Color%20tint",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/Color%20tint",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/Color%20tint",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/Color%20tint",
       "status": 200,
       "headers": {
         "content-length": "87",
@@ -4367,19 +4573,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Color tint\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 562,
+      "durationMs": 570,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0153",
-    "timestamp": "2026-03-29T01:23:10.289Z",
-    "relativeMs": 1157,
+    "id": "EVT-0158",
+    "timestamp": "2026-04-10T22:52:18.867Z",
+    "relativeMs": 960,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -4390,78 +4596,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0154",
-    "timestamp": "2026-03-29T01:23:10.303Z",
-    "relativeMs": 1171,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0027",
-    "data": {
-      "method": "GET",
-      "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
-      "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
-      "status": 200,
-      "headers": {
-        "content-length": "92",
-        "content-type": "application/json"
-      },
-      "body": {
-        "Keyboard Lighting": {
-          "items": {
-            "LedStrip Length": {
-              "selected": "",
-              "options": []
-            }
-          }
-        },
-        "errors": []
-      },
-      "payloadPreview": {
-        "byteCount": 92,
-        "previewByteCount": 92,
-        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4c 65 6e 67 74 68 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
-        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Length\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
-        "truncated": false
-      },
-      "durationMs": 598,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0155",
-    "timestamp": "2026-03-29T01:23:10.304Z",
-    "relativeMs": 1172,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0027",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0156",
-    "timestamp": "2026-03-29T01:23:10.329Z",
-    "relativeMs": 1197,
+    "id": "EVT-0159",
+    "timestamp": "2026-04-10T22:52:18.889Z",
+    "relativeMs": 982,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -4470,10 +4611,10 @@
       "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
       "status": 200,
       "headers": {
         "content-length": "90",
@@ -4497,19 +4638,19 @@
         "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Type\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 631,
+      "durationMs": 634,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0157",
-    "timestamp": "2026-03-29T01:23:10.329Z",
-    "relativeMs": 1197,
+    "id": "EVT-0160",
+    "timestamp": "2026-04-10T22:52:18.889Z",
+    "relativeMs": 982,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -4520,13 +4661,78 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0158",
-    "timestamp": "2026-03-29T01:23:10.344Z",
-    "relativeMs": 1212,
+    "id": "EVT-0161",
+    "timestamp": "2026-04-10T22:52:18.891Z",
+    "relativeMs": 984,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0027",
+    "data": {
+      "method": "GET",
+      "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 39667,
+      "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "query": "",
+      "url": "http://127.0.0.1:39667/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "status": 200,
+      "headers": {
+        "content-length": "92",
+        "content-type": "application/json"
+      },
+      "body": {
+        "Keyboard Lighting": {
+          "items": {
+            "LedStrip Length": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 92,
+        "previewByteCount": 92,
+        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4c 65 6e 67 74 68 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Length\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 644,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0162",
+    "timestamp": "2026-04-10T22:52:18.891Z",
+    "relativeMs": 984,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0027",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0163",
+    "timestamp": "2026-04-10T22:52:18.915Z",
+    "relativeMs": 1008,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0029",
@@ -4535,10 +4741,10 @@
       "normalizedUrl": "/v1/configs/Audio%20Mixer",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/Audio%20Mixer",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/Audio%20Mixer",
+      "url": "http://127.0.0.1:39667/v1/configs/Audio%20Mixer",
       "status": 200,
       "headers": {
         "content-length": "1545",
@@ -4718,19 +4924,19 @@
         "ascii": "{\"Audio Mixer\":{\"items\":{\"Vol UltiSid 1\":{\"selected\":\"OFF\",\"options\":[\"OFF\",\"+6 dB\",\"+5 dB\",\"+4 dB\",\"+3 dB\",\"+2 dB\",\"+1 dB\",\" 0 dB\",\"-1 dB\",\"-2 dB\",\"-3 dB\",\"-4 dB\",\"-5 dB\",\"-6 dB\",\"-7 dB\",\"-8 dB\",\"-9 dB\",\"-10 dB\",\"-11 dB\",\"-12 dB\",\"-13 dB\",\"-14 dB\",\"-15 dB",
         "truncated": true
       },
-      "durationMs": 488,
+      "durationMs": 499,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0159",
-    "timestamp": "2026-03-29T01:23:10.344Z",
-    "relativeMs": 1212,
+    "id": "EVT-0164",
+    "timestamp": "2026-04-10T22:52:18.915Z",
+    "relativeMs": 1008,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0029",
@@ -4741,13 +4947,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0160",
-    "timestamp": "2026-03-29T01:23:10.366Z",
-    "relativeMs": 1234,
+    "id": "EVT-0165",
+    "timestamp": "2026-04-10T22:52:18.955Z",
+    "relativeMs": 1048,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0030",
@@ -4756,10 +4962,10 @@
       "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/SID%20Sockets%20Configuration",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/SID%20Sockets%20Configuration",
+      "url": "http://127.0.0.1:39667/v1/configs/SID%20Sockets%20Configuration",
       "status": 200,
       "headers": {
         "content-length": "195",
@@ -4787,19 +4993,19 @@
         "ascii": "{\"SID Sockets Configuration\":{\"items\":{\"SID Socket 1\":{\"selected\":\"Enabled\",\"options\":[\"Enabled\",\"Disabled\"]},\"SID Socket 2\":{\"selected\":\"Enabled\",\"options\":[\"Enabled\",\"Disabled\"]}}},\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 495,
+      "durationMs": 519,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0161",
-    "timestamp": "2026-03-29T01:23:10.366Z",
-    "relativeMs": 1234,
+    "id": "EVT-0166",
+    "timestamp": "2026-04-10T22:52:18.955Z",
+    "relativeMs": 1048,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0030",
@@ -4810,13 +5016,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0162",
-    "timestamp": "2026-03-29T01:23:10.383Z",
-    "relativeMs": 1251,
+    "id": "EVT-0167",
+    "timestamp": "2026-04-10T22:52:18.987Z",
+    "relativeMs": 1080,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0031",
@@ -4825,10 +5031,10 @@
       "normalizedUrl": "/v1/configs/SID%20Addressing",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/configs/SID%20Addressing",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/configs/SID%20Addressing",
+      "url": "http://127.0.0.1:39667/v1/configs/SID%20Addressing",
       "status": 200,
       "headers": {
         "content-length": "336",
@@ -4864,19 +5070,19 @@
         "ascii": "{\"SID Addressing\":{\"items\":{\"SID Socket 1 Address\":{\"selected\":\"$D400\",\"options\":[\"$D400\",\"Unmapped\"]},\"SID Socket 2 Address\":{\"selected\":\"$D440\",\"options\":[\"$D420\",\"Unmapped\"]},\"UltiSID 1 Address\":{\"selected\":\"$D420\",\"options\":[\"$D420\",\"Unmapped\"]},\"UltiS",
         "truncated": true
       },
-      "durationMs": 529,
+      "durationMs": 547,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0163",
-    "timestamp": "2026-03-29T01:23:10.383Z",
-    "relativeMs": 1251,
+    "id": "EVT-0168",
+    "timestamp": "2026-04-10T22:52:18.988Z",
+    "relativeMs": 1081,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0031",
@@ -4887,231 +5093,25 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0164",
-    "timestamp": "2026-03-29T01:23:10.402Z",
-    "relativeMs": 1270,
-    "type": "rest-response",
-    "origin": "user",
-    "correlationId": "COR-0034",
-    "data": {
-      "method": null,
-      "normalizedUrl": null,
-      "protocol": null,
-      "hostname": null,
-      "port": null,
-      "path": null,
-      "query": null,
-      "url": null,
-      "status": 200,
-      "headers": {
-        "content-type": "application/json"
-      },
-      "body": {
-        "data": "UFNJRAACAHYAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGA=",
-        "sizeBytes": 119
-      },
-      "payloadPreview": {
-        "byteCount": 187,
-        "previewByteCount": 187,
-        "hex": "7b 22 64 61 74 61 22 3a 22 55 46 4e 4a 52 41 41 43 41 48 59 41 41 41 41 41 41 41 41 41 41 51 41 42 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 47 41 3d 22 2c 22 73 69 7a 65 42 79 74 65 73 22 3a 31 31 39 7d",
-        "ascii": "{\"data\":\"UFNJRAACAHYAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGA=\",\"sizeBytes\":119}",
-        "truncated": false
-      },
-      "durationMs": 212,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0165",
-    "timestamp": "2026-03-29T01:23:10.411Z",
-    "relativeMs": 1279,
-    "type": "ftp-operation",
-    "origin": "user",
-    "correlationId": "COR-0034",
-    "data": {
-      "operation": "read",
-      "command": "RETR",
-      "hostname": "127.0.0.1",
-      "port": 39643,
-      "path": "/Usb0/Demos/demo.sid",
-      "durationMs": 357,
-      "result": "success",
-      "requestPayload": {
-        "host": "127.0.0.1",
-        "port": 39643,
-        "password": "[redacted]",
-        "path": "/Usb0/Demos/demo.sid",
-        "traceContext": {
-          "correlationId": "COR-0034",
-          "trackInstanceId": 0,
-          "playlistItemId": null
-        }
-      },
-      "requestPayloadPreview": {
-        "byteCount": 173,
-        "previewByteCount": 173,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 36 34 33 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 33 34 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 30 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39643,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0034\",\"trackInstanceId\":0,\"playlistItemId\":null}}",
-        "truncated": false
-      },
-      "responsePayload": {
-        "data": "UFNJRAACAHYAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGA=",
-        "sizeBytes": 119
-      },
-      "responsePayloadPreview": {
-        "byteCount": 119,
-        "previewByteCount": 119,
-        "hex": "50 53 49 44 00 02 00 76 00 00 00 00 00 00 00 01 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 60",
-        "ascii": "PSID...v..............................................................................................................`",
-        "truncated": false
-      },
-      "error": null,
-      "target": "external-mock",
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0166",
-    "timestamp": "2026-03-29T01:23:10.425Z",
-    "relativeMs": 1293,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0035",
-    "data": {
-      "name": "rest.post /v1/runners:sidplay",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 1,
-          "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": 8000,
-          "sourceKind": "ultimate",
-          "localAccessMode": null,
-          "trackInstanceId": 0,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "READY"
-        }
-      },
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0167",
-    "timestamp": "2026-03-29T01:23:10.426Z",
-    "relativeMs": 1294,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0035",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode",
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0168",
-    "timestamp": "2026-03-29T01:23:10.426Z",
-    "relativeMs": 1294,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0035",
-    "data": {
-      "method": "POST",
-      "url": "http://127.0.0.1:41959/v1/runners:sidplay",
-      "normalizedUrl": "/v1/runners:sidplay",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/runners:sidplay",
-      "query": "",
-      "headers": {
-        "X-C64U-Host": "127.0.0.1:41959"
-      },
-      "body": {
-        "type": "form-data",
-        "fields": [
-          {
-            "name": "file",
-            "type": "file",
-            "fileName": "track.sid",
-            "sizeBytes": 119,
-            "mimeType": "application/octet-stream"
-          },
-          {
-            "name": "file",
-            "type": "file",
-            "fileName": "songlengths.ssl",
-            "sizeBytes": 2,
-            "mimeType": "application/octet-stream"
-          }
-        ]
-      },
-      "payloadPreview": {
-        "byteCount": 249,
-        "previewByteCount": 249,
-        "hex": "7b 22 74 79 70 65 22 3a 22 66 6f 72 6d 2d 64 61 74 61 22 2c 22 66 69 65 6c 64 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 66 69 6c 65 22 2c 22 74 79 70 65 22 3a 22 66 69 6c 65 22 2c 22 66 69 6c 65 4e 61 6d 65 22 3a 22 74 72 61 63 6b 2e 73 69 64 22 2c 22 73 69 7a 65 42 79 74 65 73 22 3a 31 31 39 2c 22 6d 69 6d 65 54 79 70 65 22 3a 22 61 70 70 6c 69 63 61 74 69 6f 6e 2f 6f 63 74 65 74 2d 73 74 72 65 61 6d 22 7d 2c 7b 22 6e 61 6d 65 22 3a 22 66 69 6c 65 22 2c 22 74 79 70 65 22 3a 22 66 69 6c 65 22 2c 22 66 69 6c 65 4e 61 6d 65 22 3a 22 73 6f 6e 67 6c 65 6e 67 74 68 73 2e 73 73 6c 22 2c 22 73 69 7a 65 42 79 74 65 73 22 3a 32 2c 22 6d 69 6d 65 54 79 70 65 22 3a 22 61 70 70 6c 69 63 61 74 69 6f 6e 2f 6f 63 74 65 74 2d 73 74 72 65 61 6d 22 7d 5d 7d",
-        "ascii": "{\"type\":\"form-data\",\"fields\":[{\"name\":\"file\",\"type\":\"file\",\"fileName\":\"track.sid\",\"sizeBytes\":119,\"mimeType\":\"application/octet-stream\"},{\"name\":\"file\",\"type\":\"file\",\"fileName\":\"songlengths.ssl\",\"sizeBytes\":2,\"mimeType\":\"application/octet-stream\"}]}",
-        "truncated": false
-      },
-      "target": "external-mock",
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0169",
-    "timestamp": "2026-03-29T01:23:10.860Z",
-    "relativeMs": 1728,
+    "timestamp": "2026-04-10T22:52:19.325Z",
+    "relativeMs": 1418,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0035",
+    "correlationId": "COR-0036",
     "data": {
       "method": "POST",
       "normalizedUrl": "/v1/runners:sidplay",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/runners:sidplay",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/runners:sidplay",
+      "url": "http://127.0.0.1:39667/v1/runners:sidplay",
       "status": 200,
       "headers": {
         "content-length": "13",
@@ -5127,21 +5127,38 @@
         "ascii": "{\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 433,
+      "durationMs": 465,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0170",
-    "timestamp": "2026-03-29T01:23:10.860Z",
-    "relativeMs": 1728,
+    "timestamp": "2026-04-10T22:52:19.325Z",
+    "relativeMs": 1418,
     "type": "action-end",
     "origin": "system",
+    "correlationId": "COR-0036",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 0,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0171",
+    "timestamp": "2026-04-10T22:52:19.329Z",
+    "relativeMs": 1422,
+    "type": "action-end",
+    "origin": "user",
     "correlationId": "COR-0035",
     "data": {
       "status": "success",
@@ -5150,33 +5167,16 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0171",
-    "timestamp": "2026-03-29T01:23:10.868Z",
-    "relativeMs": 1736,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0034",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 0,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0172",
-    "timestamp": "2026-03-29T01:23:11.325Z",
-    "relativeMs": 2193,
+    "timestamp": "2026-04-10T22:52:19.634Z",
+    "relativeMs": 1727,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0036",
+    "correlationId": "COR-0037",
     "data": {
       "name": "click Stop",
       "component": "GlobalInteraction",
@@ -5192,14 +5192,14 @@
         "playback": {
           "queueLength": 1,
           "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
           "isPlaying": true,
-          "elapsedMs": 28,
+          "elapsedMs": 7,
           "durationMs": 8000,
           "sourceKind": "ultimate",
           "localAccessMode": null,
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         },
         "device": {
           "deviceId": null,
@@ -5210,16 +5210,16 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0173",
-    "timestamp": "2026-03-29T01:23:11.325Z",
-    "relativeMs": 2193,
+    "timestamp": "2026-04-10T22:52:19.634Z",
+    "relativeMs": 1727,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0037",
+    "correlationId": "COR-0038",
     "data": {
       "name": "PlayFilesPage.anonymousAction",
       "component": "PlayFilesPage",
@@ -5235,14 +5235,14 @@
         "playback": {
           "queueLength": 1,
           "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
           "isPlaying": true,
-          "elapsedMs": 28,
+          "elapsedMs": 7,
           "durationMs": 8000,
           "sourceKind": "ultimate",
           "localAccessMode": null,
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         },
         "device": {
           "deviceId": null,
@@ -5253,16 +5253,16 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0174",
-    "timestamp": "2026-03-29T01:23:11.325Z",
-    "relativeMs": 2193,
+    "timestamp": "2026-04-10T22:52:19.634Z",
+    "relativeMs": 1727,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0038",
+    "correlationId": "COR-0039",
     "data": {
       "name": "rest.put /v1/machine:reset",
       "component": null,
@@ -5278,14 +5278,14 @@
         "playback": {
           "queueLength": 1,
           "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
           "isPlaying": true,
-          "elapsedMs": 28,
+          "elapsedMs": 7,
           "durationMs": 8000,
           "sourceKind": "ultimate",
           "localAccessMode": null,
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         },
         "device": {
           "deviceId": null,
@@ -5296,16 +5296,16 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0175",
-    "timestamp": "2026-03-29T01:23:11.335Z",
-    "relativeMs": 2203,
+    "timestamp": "2026-04-10T22:52:19.636Z",
+    "relativeMs": 1729,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0038",
+    "correlationId": "COR-0039",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -5313,28 +5313,28 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0176",
-    "timestamp": "2026-03-29T01:23:11.336Z",
-    "relativeMs": 2204,
+    "timestamp": "2026-04-10T22:52:19.636Z",
+    "relativeMs": 1729,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0038",
+    "correlationId": "COR-0039",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:41959/v1/machine:reset",
+      "url": "http://127.0.0.1:39667/v1/machine:reset",
       "normalizedUrl": "/v1/machine:reset",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/machine:reset",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -5343,16 +5343,16 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0177",
-    "timestamp": "2026-03-29T01:23:11.351Z",
-    "relativeMs": 2219,
+    "timestamp": "2026-04-10T22:52:19.650Z",
+    "relativeMs": 1743,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0036",
+    "correlationId": "COR-0037",
     "data": {
       "status": "success",
       "error": null,
@@ -5360,25 +5360,25 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0178",
-    "timestamp": "2026-03-29T01:23:11.376Z",
-    "relativeMs": 2244,
+    "timestamp": "2026-04-10T22:52:19.662Z",
+    "relativeMs": 1755,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0038",
+    "correlationId": "COR-0039",
     "data": {
       "method": "PUT",
       "normalizedUrl": "/v1/machine:reset",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/machine:reset",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/machine:reset",
+      "url": "http://127.0.0.1:39667/v1/machine:reset",
       "status": 200,
       "headers": {
         "content-length": "13",
@@ -5394,21 +5394,38 @@
         "ascii": "{\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 40,
+      "durationMs": 25,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0179",
-    "timestamp": "2026-03-29T01:23:11.376Z",
-    "relativeMs": 2244,
+    "timestamp": "2026-04-10T22:52:19.662Z",
+    "relativeMs": 1755,
     "type": "action-end",
     "origin": "system",
+    "correlationId": "COR-0039",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 1,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0180",
+    "timestamp": "2026-04-10T22:52:19.662Z",
+    "relativeMs": 1755,
+    "type": "action-end",
+    "origin": "user",
     "correlationId": "COR-0038",
     "data": {
       "status": "success",
@@ -5417,183 +5434,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0180",
-    "timestamp": "2026-03-29T01:23:11.376Z",
-    "relativeMs": 2244,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0037",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
     "id": "EVT-0181",
-    "timestamp": "2026-03-29T01:23:11.436Z",
-    "relativeMs": 2304,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0039",
-    "data": {
-      "name": "rest.get /v1/info",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 1,
-          "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": 8000,
-          "sourceKind": "ultimate",
-          "localAccessMode": null,
-          "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "READY"
-        }
-      },
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0182",
-    "timestamp": "2026-03-29T01:23:11.436Z",
-    "relativeMs": 2304,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0039",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode",
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0183",
-    "timestamp": "2026-03-29T01:23:11.436Z",
-    "relativeMs": 2304,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0039",
-    "data": {
-      "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/info",
-      "normalizedUrl": "/v1/info",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/info",
-      "query": "",
-      "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
-      },
-      "body": null,
-      "payloadPreview": null,
-      "target": "external-mock",
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0184",
-    "timestamp": "2026-03-29T01:23:11.472Z",
-    "relativeMs": 2340,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0039",
-    "data": {
-      "method": "GET",
-      "normalizedUrl": "/v1/info",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/info",
-      "query": "",
-      "url": "http://127.0.0.1:41959/v1/info",
-      "status": 200,
-      "headers": {
-        "content-length": "153",
-        "content-type": "application/json"
-      },
-      "body": {
-        "product": "C64 Ultimate",
-        "firmware_version": "3.12.0",
-        "fpga_version": "1.0.0",
-        "core_version": "1.0.0",
-        "hostname": "c64u",
-        "unique_id": "TEST-123",
-        "errors": []
-      },
-      "payloadPreview": {
-        "byteCount": 153,
-        "previewByteCount": 153,
-        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 63 6f 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 68 6f 73 74 6e 61 6d 65 22 3a 22 63 36 34 75 22 2c 22 75 6e 69 71 75 65 5f 69 64 22 3a 22 54 45 53 54 2d 31 32 33 22 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
-        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
-        "truncated": false
-      },
-      "durationMs": 30,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0185",
-    "timestamp": "2026-03-29T01:23:11.472Z",
-    "relativeMs": 2340,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0039",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0186",
-    "timestamp": "2026-03-29T01:23:11.519Z",
-    "relativeMs": 2387,
+    "timestamp": "2026-04-10T22:52:19.825Z",
+    "relativeMs": 1918,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0040",
@@ -5612,14 +5459,14 @@
         "playback": {
           "queueLength": 1,
           "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
           "isPlaying": false,
           "elapsedMs": 0,
           "durationMs": 8000,
           "sourceKind": "ultimate",
           "localAccessMode": null,
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         },
         "device": {
           "deviceId": null,
@@ -5630,13 +5477,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0187",
-    "timestamp": "2026-03-29T01:23:11.519Z",
-    "relativeMs": 2387,
+    "id": "EVT-0182",
+    "timestamp": "2026-04-10T22:52:19.825Z",
+    "relativeMs": 1918,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0041",
@@ -5655,14 +5502,14 @@
         "playback": {
           "queueLength": 1,
           "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
           "isPlaying": false,
           "elapsedMs": 0,
           "durationMs": 8000,
           "sourceKind": "ultimate",
           "localAccessMode": null,
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         },
         "device": {
           "deviceId": null,
@@ -5673,13 +5520,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0188",
-    "timestamp": "2026-03-29T01:23:11.559Z",
-    "relativeMs": 2427,
+    "id": "EVT-0183",
+    "timestamp": "2026-04-10T22:52:19.850Z",
+    "relativeMs": 1943,
     "type": "backend-decision",
     "origin": "user",
     "correlationId": "COR-0041",
@@ -5690,23 +5537,23 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0189",
-    "timestamp": "2026-03-29T01:23:11.560Z",
-    "relativeMs": 2428,
+    "id": "EVT-0184",
+    "timestamp": "2026-04-10T22:52:19.850Z",
+    "relativeMs": 1943,
     "type": "rest-request",
     "origin": "user",
     "correlationId": "COR-0041",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:37999/v1/ftp/read",
+      "url": "http://127.0.0.1:42937/v1/ftp/read",
       "normalizedUrl": "/v1/ftp/read",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 37999,
+      "port": 42937,
       "path": "/v1/ftp/read",
       "query": "",
       "headers": {
@@ -5714,20 +5561,20 @@
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 39643,
+        "port": 43739,
         "password": "[redacted]",
         "path": "/Usb0/Demos/demo.sid",
         "traceContext": {
           "correlationId": "COR-0041",
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         }
       },
       "payloadPreview": {
-        "byteCount": 201,
-        "previewByteCount": 201,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 36 34 33 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 34 31 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 31 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 22 75 6c 74 69 6d 61 74 65 3a 3a 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 7d 7d",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39643,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0041\",\"trackInstanceId\":1,\"playlistItemId\":\"ultimate::/Usb0/Demos/demo.sid\"}}",
+        "byteCount": 209,
+        "previewByteCount": 209,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 34 33 37 33 39 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 34 31 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 31 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 22 75 6c 74 69 6d 61 74 65 3a 54 45 53 54 2d 31 32 33 3a 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":43739,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0041\",\"trackInstanceId\":1,\"playlistItemId\":\"ultimate:TEST-123:/Usb0/Demos/demo.sid\"}}",
         "truncated": false
       },
       "target": "real-device",
@@ -5735,13 +5582,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0190",
-    "timestamp": "2026-03-29T01:23:11.583Z",
-    "relativeMs": 2451,
+    "id": "EVT-0185",
+    "timestamp": "2026-04-10T22:52:19.865Z",
+    "relativeMs": 1958,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0040",
@@ -5752,13 +5599,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0191",
-    "timestamp": "2026-03-29T01:23:11.713Z",
-    "relativeMs": 2581,
+    "id": "EVT-0186",
+    "timestamp": "2026-04-10T22:52:19.953Z",
+    "relativeMs": 2046,
     "type": "rest-response",
     "origin": "user",
     "correlationId": "COR-0041",
@@ -5786,19 +5633,19 @@
         "ascii": "{\"data\":\"UFNJRAACAHYAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGA=\",\"sizeBytes\":119}",
         "truncated": false
       },
-      "durationMs": 152,
+      "durationMs": 102,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0192",
-    "timestamp": "2026-03-29T01:23:11.721Z",
-    "relativeMs": 2589,
+    "id": "EVT-0187",
+    "timestamp": "2026-04-10T22:52:19.957Z",
+    "relativeMs": 2050,
     "type": "ftp-operation",
     "origin": "user",
     "correlationId": "COR-0041",
@@ -5806,26 +5653,26 @@
       "operation": "read",
       "command": "RETR",
       "hostname": "127.0.0.1",
-      "port": 39643,
+      "port": 43739,
       "path": "/Usb0/Demos/demo.sid",
-      "durationMs": 170,
+      "durationMs": 116,
       "result": "success",
       "requestPayload": {
         "host": "127.0.0.1",
-        "port": 39643,
+        "port": 43739,
         "password": "[redacted]",
         "path": "/Usb0/Demos/demo.sid",
         "traceContext": {
           "correlationId": "COR-0041",
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         }
       },
       "requestPayloadPreview": {
-        "byteCount": 201,
-        "previewByteCount": 201,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 36 34 33 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 34 31 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 31 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 22 75 6c 74 69 6d 61 74 65 3a 3a 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 7d 7d",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39643,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0041\",\"trackInstanceId\":1,\"playlistItemId\":\"ultimate::/Usb0/Demos/demo.sid\"}}",
+        "byteCount": 209,
+        "previewByteCount": 209,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 34 33 37 33 39 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 34 31 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 31 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 22 75 6c 74 69 6d 61 74 65 3a 54 45 53 54 2d 31 32 33 3a 2f 55 73 62 30 2f 44 65 6d 6f 73 2f 64 65 6d 6f 2e 73 69 64 22 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":43739,\"password\":\"[redacted]\",\"path\":\"/Usb0/Demos/demo.sid\",\"traceContext\":{\"correlationId\":\"COR-0041\",\"trackInstanceId\":1,\"playlistItemId\":\"ultimate:TEST-123:/Usb0/Demos/demo.sid\"}}",
         "truncated": false
       },
       "responsePayload": {
@@ -5845,13 +5692,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0193",
-    "timestamp": "2026-03-29T01:23:11.751Z",
-    "relativeMs": 2619,
+    "id": "EVT-0188",
+    "timestamp": "2026-04-10T22:52:19.964Z",
+    "relativeMs": 2057,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0042",
@@ -5870,14 +5717,14 @@
         "playback": {
           "queueLength": 1,
           "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
           "isPlaying": false,
           "elapsedMs": 0,
           "durationMs": 8000,
           "sourceKind": "ultimate",
           "localAccessMode": null,
           "trackInstanceId": 1,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         },
         "device": {
           "deviceId": null,
@@ -5888,13 +5735,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0194",
-    "timestamp": "2026-03-29T01:23:11.751Z",
-    "relativeMs": 2619,
+    "id": "EVT-0189",
+    "timestamp": "2026-04-10T22:52:19.965Z",
+    "relativeMs": 2058,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0042",
@@ -5905,27 +5752,27 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0195",
-    "timestamp": "2026-03-29T01:23:11.751Z",
-    "relativeMs": 2619,
+    "id": "EVT-0190",
+    "timestamp": "2026-04-10T22:52:19.965Z",
+    "relativeMs": 2058,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0042",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:41959/v1/runners:sidplay",
+      "url": "http://127.0.0.1:39667/v1/runners:sidplay",
       "normalizedUrl": "/v1/runners:sidplay",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/runners:sidplay",
       "query": "",
       "headers": {
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": {
         "type": "form-data",
@@ -5958,87 +5805,13 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0196",
-    "timestamp": "2026-03-29T01:23:12.219Z",
-    "relativeMs": 3087,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0042",
-    "data": {
-      "method": "POST",
-      "normalizedUrl": "/v1/runners:sidplay",
-      "protocol": "http",
-      "hostname": "127.0.0.1",
-      "port": 41959,
-      "path": "/v1/runners:sidplay",
-      "query": "",
-      "url": "http://127.0.0.1:41959/v1/runners:sidplay",
-      "status": 200,
-      "headers": {
-        "content-length": "13",
-        "content-type": "application/json"
-      },
-      "body": {
-        "errors": []
-      },
-      "payloadPreview": {
-        "byteCount": 13,
-        "previewByteCount": 13,
-        "hex": "7b 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
-        "ascii": "{\"errors\":[]}",
-        "truncated": false
-      },
-      "durationMs": 463,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0197",
-    "timestamp": "2026-03-29T01:23:12.219Z",
-    "relativeMs": 3087,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0042",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0198",
-    "timestamp": "2026-03-29T01:23:12.242Z",
-    "relativeMs": 3110,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0041",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "ultimate",
-      "localAccessMode": null,
-      "trackInstanceId": 1,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
-    }
-  },
-  {
-    "id": "EVT-0199",
-    "timestamp": "2026-03-29T01:23:12.973Z",
-    "relativeMs": 3841,
+    "id": "EVT-0191",
+    "timestamp": "2026-04-10T22:52:20.105Z",
+    "relativeMs": 2198,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0043",
@@ -6057,31 +5830,31 @@
         "playback": {
           "queueLength": 1,
           "currentIndex": 0,
-          "currentItemId": "ultimate::/Usb0/Demos/demo.sid",
-          "isPlaying": true,
-          "elapsedMs": 15,
+          "currentItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid",
+          "isPlaying": false,
+          "elapsedMs": 0,
           "durationMs": 8000,
           "sourceKind": "ultimate",
           "localAccessMode": null,
-          "trackInstanceId": 2,
-          "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+          "trackInstanceId": 1,
+          "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
         },
         "device": {
           "deviceId": null,
-          "connectionState": "READY"
+          "connectionState": "BUSY"
         }
       },
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
-      "trackInstanceId": 2,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "trackInstanceId": 1,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0200",
-    "timestamp": "2026-03-29T01:23:12.973Z",
-    "relativeMs": 3841,
+    "id": "EVT-0192",
+    "timestamp": "2026-04-10T22:52:20.105Z",
+    "relativeMs": 2198,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0043",
@@ -6091,29 +5864,29 @@
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
-      "trackInstanceId": 2,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "trackInstanceId": 1,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0201",
-    "timestamp": "2026-03-29T01:23:12.973Z",
-    "relativeMs": 3841,
+    "id": "EVT-0193",
+    "timestamp": "2026-04-10T22:52:20.105Z",
+    "relativeMs": 2198,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0043",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:41959/v1/info",
+      "url": "http://127.0.0.1:39667/v1/info",
       "normalizedUrl": "/v1/info",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/info",
       "query": "",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41959"
+        "X-C64U-Host": "127.0.0.1:39667"
       },
       "body": null,
       "payloadPreview": null,
@@ -6121,14 +5894,88 @@
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
-      "trackInstanceId": 2,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "trackInstanceId": 1,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0202",
-    "timestamp": "2026-03-29T01:23:13.050Z",
-    "relativeMs": 3918,
+    "id": "EVT-0194",
+    "timestamp": "2026-04-10T22:52:20.376Z",
+    "relativeMs": 2469,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0042",
+    "data": {
+      "method": "POST",
+      "normalizedUrl": "/v1/runners:sidplay",
+      "protocol": "http",
+      "hostname": "127.0.0.1",
+      "port": 39667,
+      "path": "/v1/runners:sidplay",
+      "query": "",
+      "url": "http://127.0.0.1:39667/v1/runners:sidplay",
+      "status": 200,
+      "headers": {
+        "content-length": "13",
+        "content-type": "application/json"
+      },
+      "body": {
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 13,
+        "previewByteCount": 13,
+        "hex": "7b 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 410,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 1,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0195",
+    "timestamp": "2026-04-10T22:52:20.377Z",
+    "relativeMs": 2470,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0042",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 1,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0196",
+    "timestamp": "2026-04-10T22:52:20.386Z",
+    "relativeMs": 2479,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0041",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "ultimate",
+      "localAccessMode": null,
+      "trackInstanceId": 1,
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
+    }
+  },
+  {
+    "id": "EVT-0197",
+    "timestamp": "2026-04-10T22:52:20.441Z",
+    "relativeMs": 2534,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0043",
@@ -6137,10 +5984,10 @@
       "normalizedUrl": "/v1/info",
       "protocol": "http",
       "hostname": "127.0.0.1",
-      "port": 41959,
+      "port": 39667,
       "path": "/v1/info",
       "query": "",
-      "url": "http://127.0.0.1:41959/v1/info",
+      "url": "http://127.0.0.1:39667/v1/info",
       "status": 200,
       "headers": {
         "content-length": "153",
@@ -6162,19 +6009,19 @@
         "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
         "truncated": false
       },
-      "durationMs": 76,
+      "durationMs": 300,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 2,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   },
   {
-    "id": "EVT-0203",
-    "timestamp": "2026-03-29T01:23:13.050Z",
-    "relativeMs": 3918,
+    "id": "EVT-0198",
+    "timestamp": "2026-04-10T22:52:20.441Z",
+    "relativeMs": 2534,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0043",
@@ -6185,7 +6032,7 @@
       "sourceKind": "ultimate",
       "localAccessMode": null,
       "trackInstanceId": 2,
-      "playlistItemId": "ultimate::/Usb0/Demos/demo.sid"
+      "playlistItemId": "ultimate:TEST-123:/Usb0/Demos/demo.sid"
     }
   }
 ]

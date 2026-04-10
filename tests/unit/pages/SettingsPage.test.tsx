@@ -67,6 +67,7 @@ const {
   mockRefetch,
   mockEnableDeveloperMode,
   mockGetSavedDeviceDependencySummary,
+  mockSetFeatureFlag,
   mockPrimeDiagnosticsOverlaySuppression,
   mockRequestDiagnosticsOpen,
   mockSetTheme,
@@ -75,17 +76,24 @@ const {
   connectionPayloadRef,
   connectionStateRef,
   developerModeEnabledRef,
+  featureFlagsRef,
   savedDevicesRef,
 } = vi.hoisted(() => ({
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
   mockEnableDeveloperMode: vi.fn(),
   mockGetSavedDeviceDependencySummary: vi.fn(async () => ({ diskCount: 0, playlistItemCount: 0, totalCount: 0 })),
+  mockSetFeatureFlag: vi.fn(async () => undefined),
   mockPrimeDiagnosticsOverlaySuppression: vi.fn(),
   mockRequestDiagnosticsOpen: vi.fn(),
   mockSetTheme: vi.fn(),
   mockSetListPreviewLimit: vi.fn(),
   mockSwitchSavedDevice: vi.fn(async () => undefined),
+  featureFlagsRef: {
+    current: {
+      hvsc_enabled: true,
+    },
+  },
   savedDevicesRef: {
     current: {
       selectedDeviceId: "saved-device-1",
@@ -192,6 +200,14 @@ vi.mock("@/hooks/useListPreviewLimit", () => ({
   useListPreviewLimit: () => ({
     limit: 50,
     setLimit: mockSetListPreviewLimit,
+  }),
+}));
+
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: (key: "hvsc_enabled") => ({
+    value: featureFlagsRef.current[key],
+    isLoaded: true,
+    setValue: mockSetFeatureFlag,
   }),
 }));
 
@@ -409,6 +425,8 @@ beforeEach(() => {
     lastProbeFailedAtMs: null,
   };
   developerModeEnabledRef.current = false;
+  featureFlagsRef.current.hvsc_enabled = true;
+  mockSetFeatureFlag.mockReset();
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(requestDiagnosticsOpen).mockReset();
@@ -542,13 +560,13 @@ describe("SettingsPage", () => {
     expect(localStorage.getItem("c64u_saved_devices:v1")).toBe(beforeDelete);
   });
 
-  it("uses icon-only saved-device actions and hides the HVSC settings card", () => {
+  it("uses icon-only saved-device actions and shows the HVSC settings card", () => {
     renderSettingsPage();
 
     expect(screen.getByTestId("settings-add-device")).toHaveAccessibleName("Add device");
     expect(screen.getByTestId("settings-delete-device")).toHaveAccessibleName("Delete device");
-    expect(screen.queryByRole("heading", { name: "HVSC" })).toBeNull();
-    expect(screen.queryByText(/enable hvsc downloads/i)).toBeNull();
+    expect(screen.getByRole("heading", { name: "HVSC" })).toBeInTheDocument();
+    expect(screen.getByText(/enable hvsc downloads/i)).toBeInTheDocument();
   });
 
   it("orders core sections and places network timing under Device Safety", () => {

@@ -328,7 +328,12 @@ export async function verifyCurrentConnectionTarget(): Promise<ProbeInfoResult> 
     lastProbeFailedAtMs: Date.now(),
     lastProbeError: result.error,
   });
-  await transitionToOfflineNoDemo("switch");
+  const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
+  if (autoDemoEnabled) {
+    await transitionToDemoActive("switch");
+  } else {
+    await transitionToOfflineNoDemo("switch");
+  }
   return result;
 }
 

@@ -78,6 +78,14 @@ const seedPlaylistStorage = async (
         sourceId?: string | null;
       }>;
     }) => {
+      const configuredHost = localStorage.getItem("c64u_device_host") ?? "c64u";
+      const normalizedHost = configuredHost.trim() || "c64u";
+      const separatorIndex = normalizedHost.lastIndexOf(":");
+      const hasExplicitPort = separatorIndex > -1 && /^\d+$/.test(normalizedHost.slice(separatorIndex + 1));
+      const host = hasExplicitPort ? normalizedHost.slice(0, separatorIndex) : normalizedHost;
+      const httpPort = hasExplicitPort ? Number(normalizedHost.slice(separatorIndex + 1)) : 80;
+      const ftpPort = Number(localStorage.getItem("c64u_ftp_port") ?? "21");
+      const telnetPort = Number(localStorage.getItem("c64u_telnet_port") ?? "64");
       const payload = {
         items: seedItems,
         currentIndex: -1,
@@ -85,6 +93,32 @@ const seedPlaylistStorage = async (
       localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
       localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
       localStorage.setItem("c64u_last_device_id", "TEST-123");
+      localStorage.setItem(
+        "c64u_saved_devices:v1",
+        JSON.stringify({
+          version: 1,
+          selectedDeviceId: "TEST-123",
+          devices: [
+            {
+              id: "TEST-123",
+              name: "",
+              nameSource: "auto",
+              host: host || "c64u",
+              httpPort: Number.isInteger(httpPort) && httpPort > 0 ? httpPort : 80,
+              ftpPort: Number.isInteger(ftpPort) && ftpPort > 0 ? ftpPort : 21,
+              telnetPort: Number.isInteger(telnetPort) && telnetPort > 0 ? telnetPort : 64,
+              lastKnownProduct: null,
+              lastKnownHostname: null,
+              lastKnownUniqueId: null,
+              lastSuccessfulConnectionAt: null,
+              lastUsedAt: null,
+              hasPassword: false,
+            },
+          ],
+          summaries: {},
+          summaryLru: [],
+        }),
+      );
     },
     { seedItems: items },
   );
