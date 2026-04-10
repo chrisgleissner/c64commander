@@ -378,8 +378,8 @@ test.describe("Automatic Demo Mode", () => {
     await expect(dialog).toBeHidden();
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
-    const urlInput = page.locator("#deviceHost");
-    const httpPortInput = page.locator("#httpPort");
+    const urlInput = page.getByTestId("settings-device-host");
+    const httpPortInput = page.getByTestId("settings-device-http");
     await expect(urlInput).toHaveValue("127.0.0.1");
     await expect(httpPortInput).toHaveValue("1");
 
@@ -418,8 +418,8 @@ test.describe("Automatic Demo Mode", () => {
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await dismissDemoModeDialogIfVisible(page);
-    const urlInput = page.locator("#deviceHost");
-    const httpPortInput = page.locator("#httpPort");
+    const urlInput = page.getByTestId("settings-device-host");
+    const httpPortInput = page.getByTestId("settings-device-http");
     const host = new URL(server.baseUrl).host;
     const targetUrl = new URL(server.baseUrl);
     await urlInput.fill(targetUrl.hostname);

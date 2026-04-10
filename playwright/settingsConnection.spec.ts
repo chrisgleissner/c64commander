@@ -60,8 +60,8 @@ test.describe("Settings connection management", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const urlInput = page.locator("#deviceHost");
-    const portInput = page.locator("#httpPort");
+    const urlInput = page.getByTestId("settings-device-host");
+    const portInput = page.getByTestId("settings-device-http");
     await expect(urlInput).toBeVisible();
     await expect(portInput).toBeVisible();
 
@@ -92,7 +92,7 @@ test.describe("Settings connection management", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const urlInput = page.locator("#deviceHost");
+    const urlInput = page.getByTestId("settings-device-host");
     await expect(urlInput).toBeVisible();
 
     await urlInput.fill("not-a-valid-url");

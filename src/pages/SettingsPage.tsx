@@ -35,6 +35,7 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -64,6 +65,7 @@ import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
+import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
@@ -175,6 +177,7 @@ export default function SettingsPage() {
   const connectionSnapshot = useConnectionState();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
+  const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag("hvsc_enabled");
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   const {
     override: displayProfileOverride,
@@ -184,6 +187,18 @@ export default function SettingsPage() {
   const trace = useActionTrace("SettingsPage");
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
+
+  const setHvscEnabledAndPersist = (enabled: boolean) => {
+    void setHvscEnabled(enabled);
+    try {
+      localStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
+      sessionStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
+    } catch (error) {
+      addErrorLog("Feature flag storage failed", {
+        error: (error as Error).message,
+      });
+    }
+  };
 
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceDraft, setDeviceDraft] = useState<SavedDeviceEditorDraft>(() =>
@@ -253,6 +268,8 @@ export default function SettingsPage() {
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
   const [commoserveEnabled, setCommoserveEnabled] = useState(loadCommoserveEnabled);
+  const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
+  const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
   const [archiveClientIdOverride, setArchiveClientIdOverride] = useState(loadArchiveClientIdOverride());
   const [archiveUserAgentOverride, setArchiveUserAgentOverride] = useState(loadArchiveUserAgentOverride());
@@ -279,6 +296,14 @@ export default function SettingsPage() {
       ),
     [archiveClientIdOverride, archiveHostOverride, archiveUserAgentOverride, commoserveEnabled],
   );
+
+  const commitHvscBaseUrl = useCallback(() => {
+    const trimmed = hvscBaseUrlInput.trim();
+    setHvscBaseUrlOverride(trimmed || null);
+    const resolved = getHvscBaseUrl();
+    setHvscBaseUrlInput(trimmed ? resolved : "");
+    setHvscBaseUrlPreview(resolved);
+  }, [hvscBaseUrlInput]);
 
   useEffect(() => {
     setPasswordInput(password);
@@ -1305,6 +1330,74 @@ export default function SettingsPage() {
                 />
                 <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
               </div>
+            </div>
+          </motion.div>
+
+          {/* 6. HVSC */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Cpu className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">HVSC</h2>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div
+                  className="space-y-1 min-w-0 cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setHvscEnabledAndPersist(!isHvscEnabled);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    setHvscEnabledAndPersist(!isHvscEnabled);
+                  }}
+                >
+                  <Label htmlFor="hvsc-flag" className="font-medium">
+                    Enable HVSC downloads
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Shows HVSC download and ingest controls on the Play page.
+                  </p>
+                </div>
+                <Checkbox
+                  id="hvsc-flag"
+                  aria-label="Enable HVSC downloads"
+                  data-testid="hvsc-toggle"
+                  checked={isHvscEnabled}
+                  onCheckedChange={(checked) => {
+                    setHvscEnabledAndPersist(checked === true);
+                  }}
+                />
+              </div>
+
+              {isDeveloperModeEnabled ? (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">HVSC base URL override</Label>
+                  <Input
+                    value={hvscBaseUrlInput}
+                    onChange={(event) => setHvscBaseUrlInput(event.target.value)}
+                    onBlur={commitHvscBaseUrl}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commitHvscBaseUrl();
+                    }}
+                    placeholder={hvscBaseUrlPreview}
+                    data-testid="hvsc-base-url"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
+                  </p>
+                </div>
+              ) : null}
             </div>
           </motion.div>
 

@@ -621,7 +621,7 @@ test.describe("Item Selection Dialog UX", () => {
     await expect
       .poll(async () =>
         page.evaluate(() => {
-          const raw = localStorage.getItem("c64u_disk_library:TEST-123");
+          const raw = localStorage.getItem("c64u_disk_library:shared");
           if (!raw) return 0;
           const parsed = JSON.parse(raw) as { disks?: unknown[] };
           return parsed.disks?.length ?? 0;
@@ -630,7 +630,7 @@ test.describe("Item Selection Dialog UX", () => {
       .toBeGreaterThan(0);
 
     const firstCount = await page.evaluate(() => {
-      const raw = localStorage.getItem("c64u_disk_library:TEST-123");
+      const raw = localStorage.getItem("c64u_disk_library:shared");
       if (!raw) return 0;
       const parsed = JSON.parse(raw) as { disks?: unknown[] };
       return parsed.disks?.length ?? 0;
@@ -642,7 +642,7 @@ test.describe("Item Selection Dialog UX", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
 
     const secondCount = await page.evaluate(() => {
-      const raw = localStorage.getItem("c64u_disk_library:TEST-123");
+      const raw = localStorage.getItem("c64u_disk_library:shared");
       if (!raw) return 0;
       const parsed = JSON.parse(raw) as { disks?: unknown[] };
       return parsed.disks?.length ?? 0;
