@@ -35,8 +35,7 @@ const mockState = vi.hoisted(() => ({
     devices: [
       {
         id: "device-office",
-        nickname: "Office U64",
-        shortLabel: "Office",
+        name: "Office U64",
         host: "c64u",
         httpPort: 80,
         ftpPort: 21,
@@ -48,8 +47,7 @@ const mockState = vi.hoisted(() => ({
       },
       {
         id: "device-backup",
-        nickname: "Backup Lab",
-        shortLabel: "Backup",
+        name: "Backup Lab",
         host: "backup-c64",
         httpPort: 8080,
         ftpPort: 2021,
@@ -295,6 +293,22 @@ describe("UnifiedHealthBadge", () => {
     fireEvent.click(badge);
 
     expect(mockState.requestDiagnosticsOpen).not.toHaveBeenCalled();
+  });
+
+  it("keeps the switcher hidden when only one saved device exists", async () => {
+    vi.useFakeTimers();
+    const originalDevices = mockState.savedDevices.devices;
+    mockState.savedDevices.devices = [originalDevices[0]];
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+
+    mockState.savedDevices.devices = originalDevices;
   });
 
   it("switches devices from the picker and closes the dialog", async () => {

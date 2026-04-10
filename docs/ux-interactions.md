@@ -234,17 +234,17 @@ Interaction split:
 
 ### 4.1 Connection Settings
 
-| CTA         | Label                          | Purpose                                   | Importance   | Test Coverage | Test File                              | Notes                                  |
-| ----------- | ------------------------------ | ----------------------------------------- | ------------ | ------------- | -------------------------------------- | -------------------------------------- |
-| Button list | Saved devices                  | Select the active saved device            | **CRITICAL** | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Updates fields from local metadata     |
-| Button      | Add / Delete                   | Create or remove saved devices            | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Keeps at least one device              |
-| Input       | Device name / Badge label      | Set user-facing name and compact badge    | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Badge label is capped at 8 characters  |
-| Input       | Hostname / HTTP / FTP / Telnet | Edit the selected device connection tuple | **CRITICAL** | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Stored per device                      |
-| Input       | Password                       | Set the selected device password          | **HIGH**     | ⚠️ PARTIAL    | tests/unit/secureStorage.test.ts       | Stored in secure storage per device    |
-| Button      | "Save & Connect"               | Persist selected device and verify target | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Uses `/v1/info` after local projection |
-| Button      | "Refresh connection"           | Verify connectivity                       | **HIGH**     | ✅ FULL       | settingsConnection.spec.ts:194         | Validation                             |
-| Toggle      | "Auto-connect"                 | Connect on app launch                     | **MEDIUM**   | ❌ NONE       | -                                      | Convenience feature                    |
-| Toggle      | "Mock mode"                    | Use mock server                           | **LOW**      | ✅ FULL       | settingsConnection.spec.ts:130         | Development only                       |
+| CTA         | Label                          | Purpose                                                                   | Importance   | Test Coverage | Test File                              | Notes                                                                                            |
+| ----------- | ------------------------------ | ------------------------------------------------------------------------- | ------------ | ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Button list | Saved devices                  | Select the active saved device                                            | **CRITICAL** | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Updates fields from local metadata                                                               |
+| Button      | Add / Delete icons             | Create or remove saved devices                                            | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Icon-only controls with accessible labels; keeps at least one device                             |
+| Input       | Device name                    | Set a custom device name or fall back to product-derived automatic labels | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Blank values resolve to product labels such as `U64-2`; the badge truncates visually when needed |
+| Input       | Hostname / HTTP / FTP / Telnet | Edit the selected device connection tuple                                 | **CRITICAL** | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Stored per device                                                                                |
+| Input       | Password                       | Set the selected device password                                          | **HIGH**     | ⚠️ PARTIAL    | tests/unit/secureStorage.test.ts       | Stored in secure storage per device                                                              |
+| Button      | "Save & Connect"               | Persist selected device and verify target                                 | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Uses `/v1/info` after local projection                                                           |
+| Button      | "Refresh connection"           | Verify connectivity                                                       | **HIGH**     | ✅ FULL       | settingsConnection.spec.ts:194         | Validation                                                                                       |
+| Toggle      | "Auto-connect"                 | Connect on app launch                                                     | **MEDIUM**   | ❌ NONE       | -                                      | Convenience feature                                                                              |
+| Toggle      | "Mock mode"                    | Use mock server                                                           | **LOW**      | ✅ FULL       | settingsConnection.spec.ts:130         | Development only                                                                                 |
 
 ### 4.2 Appearance Settings
 

@@ -38,8 +38,10 @@ import {
   AppSheetTitle,
 } from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
+import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
@@ -63,9 +65,16 @@ import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
 import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
+import {
+  buildSavedDeviceEditorDraft,
+  type SavedDeviceEditorDraft,
+  validateSavedDevicePorts,
+} from "@/lib/savedDevices/deviceEditor";
+import { buildSavedDevicePrimaryLabel, updateSavedDevice, validateSavedDeviceName } from "@/lib/savedDevices/store";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
+import { validateDeviceHost } from "@/lib/validation/connectionValidation";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
 import { ActionExpandedContent } from "./ActionExpandedContent";
 import { ConfigDriftView } from "./ConfigDriftView";
@@ -113,13 +122,6 @@ type EvidenceEntry = {
   severity: DiagnosticsSeverity;
   timestamp: string;
   payload: LogEntry | ActionSummary | TraceEvent;
-};
-
-type ConnectionDraft = {
-  host: string;
-  httpPort: string;
-  ftpPort: string;
-  telnetPort: string;
 };
 
 const EVIDENCE_ORDER: EvidenceType[] = ["Problems", "Actions", "Logs", "Traces"];
@@ -321,19 +323,6 @@ const parseConnectionSnapshot = () => {
   }
 };
 
-const isValidHostname = (value: string) => {
-  const trimmed = value.trim();
-  const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-  const hostname =
-    /^(?=.{1,253}$)(localhost|[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$/;
-  return ipv4.test(trimmed) || hostname.test(trimmed);
-};
-
-const isValidPort = (value: string) => {
-  const numeric = Number(value);
-  return Number.isInteger(numeric) && numeric >= 1 && numeric <= 65535;
-};
-
 const getLastCheckTimestamp = (
   lastHealthCheckResult: HealthCheckRunResult | null | undefined,
   healthState: OverallHealthState,
@@ -346,6 +335,17 @@ const getLastCheckTimestamp = (
   if (healthState.lastFtpActivity) return healthState.lastFtpActivity.timestampMs;
   if (healthState.lastTelnetActivity) return healthState.lastTelnetActivity.timestampMs;
   return null;
+};
+
+const buildConnectionLabel = (deviceLabel: string, productCode: string) => {
+  const normalizedDeviceLabel = deviceLabel.trim();
+  const normalizedProductCode = productCode.trim();
+  if (!normalizedDeviceLabel) return normalizedProductCode || "C64U";
+  if (!normalizedProductCode) return normalizedDeviceLabel;
+  if (normalizedDeviceLabel.localeCompare(normalizedProductCode, undefined, { sensitivity: "accent" }) === 0) {
+    return normalizedDeviceLabel;
+  }
+  return `${normalizedDeviceLabel} · ${normalizedProductCode}`;
 };
 
 const FilterChip = ({ label }: { label: string }) => (
@@ -723,16 +723,22 @@ const ConnectionSurface = ({
   setDraft,
   onStartEdit,
   onSave,
-  error,
+  nameError,
+  hostError,
+  portError,
+  productCode,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "view" | "edit";
-  draft: ConnectionDraft;
-  setDraft: (value: ConnectionDraft) => void;
+  draft: SavedDeviceEditorDraft;
+  setDraft: (value: SavedDeviceEditorDraft) => void;
   onStartEdit: () => void;
   onSave: () => void;
-  error: string | null;
+  nameError: string | null;
+  hostError: string | null;
+  portError: string | null;
+  productCode: string;
 }) => {
   return (
     <AppDialog open={open} onOpenChange={onOpenChange}>
@@ -749,6 +755,10 @@ const ConnectionSurface = ({
           {mode === "view" ? (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-[4rem_1fr] gap-y-2">
+                <span className="text-muted-foreground">Name</span>
+                <span className="font-medium text-foreground">{draft.name}</span>
+                <span className="text-muted-foreground">Type</span>
+                <span className="font-medium text-foreground">{productCode}</span>
                 <span className="text-muted-foreground">Host</span>
                 <span className="font-medium text-foreground">{draft.host}</span>
                 <span className="text-muted-foreground">HTTP</span>
@@ -763,63 +773,14 @@ const ConnectionSurface = ({
               </Button>
             </div>
           ) : (
-            <div className="space-y-3 text-sm">
-              <label className="block space-y-1">
-                <span className="text-muted-foreground">Host</span>
-                <Input
-                  value={draft.host}
-                  onChange={(event) => setDraft({ ...draft, host: event.target.value })}
-                  data-testid="connection-edit-host"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground">HTTP</span>
-                <Input
-                  value={draft.httpPort}
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      httpPort: event.target.value.replace(/[^0-9]/g, ""),
-                    })
-                  }
-                  data-testid="connection-edit-http"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground">FTP</span>
-                <Input
-                  value={draft.ftpPort}
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      ftpPort: event.target.value.replace(/[^0-9]/g, ""),
-                    })
-                  }
-                  data-testid="connection-edit-ftp"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground">Telnet</span>
-                <Input
-                  value={draft.telnetPort}
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      telnetPort: event.target.value.replace(/[^0-9]/g, ""),
-                    })
-                  }
-                  data-testid="connection-edit-telnet"
-                />
-              </label>
-              {error ? (
-                <p className="text-sm text-destructive" data-testid="connection-edit-error">
-                  {error}
-                </p>
-              ) : null}
-            </div>
+            <SavedDeviceEditorFields
+              draft={draft}
+              onChange={setDraft}
+              nameError={nameError}
+              hostError={hostError}
+              portError={portError}
+              idPrefix="connection-edit"
+            />
           )}
         </AppDialogBody>
         {mode === "edit" ? (
@@ -925,6 +886,7 @@ export function DiagnosticsDialog({
 }: Props) {
   const navigate = useNavigate();
   const { profile } = useDisplayProfile();
+  const savedDevices = useSavedDevices();
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<Set<EvidenceType>>(defaultEvidenceTypes ?? DEFAULT_TYPES);
@@ -933,12 +895,12 @@ export function DiagnosticsDialog({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [connectionMode, setConnectionMode] = useState<"view" | "edit">("view");
   const [connectionOpen, setConnectionOpen] = useState(false);
-  const [connectionDraft, setConnectionDraft] = useState<ConnectionDraft>({
-    host: "c64u",
-    httpPort: "80",
-    ftpPort: "21",
-  });
-  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectionDraft, setConnectionDraft] = useState<SavedDeviceEditorDraft>(() =>
+    buildSavedDeviceEditorDraft(null),
+  );
+  const [connectionNameError, setConnectionNameError] = useState<string | null>(null);
+  const [connectionHostError, setConnectionHostError] = useState<string | null>(null);
+  const [connectionPortError, setConnectionPortError] = useState<string | null>(null);
   const [latencyOpen, setLatencyOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configDriftOpen, setConfigDriftOpen] = useState(false);
@@ -947,6 +909,11 @@ export function DiagnosticsDialog({
   const [overflowOpen, setOverflowOpen] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
+  const selectedSavedDevice =
+    savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
+    savedDevices.devices[0] ??
+    null;
+  const selectedProductCode = selectedSavedDevice?.lastKnownProduct ?? "C64U";
 
   const allEntries = useMemo(() => {
     const items: EvidenceEntry[] = [];
@@ -1035,7 +1002,9 @@ export function DiagnosticsDialog({
     setFiltersOpen(false);
     setConnectionOpen(false);
     setConnectionMode("view");
-    setConnectionError(null);
+    setConnectionNameError(null);
+    setConnectionHostError(null);
+    setConnectionPortError(null);
     setLatencyOpen(false);
     setHistoryOpen(false);
     setConfigDriftOpen(false);
@@ -1045,12 +1014,21 @@ export function DiagnosticsDialog({
     setExpandedEvidenceId(null);
 
     const snapshot = parseConnectionSnapshot();
-    setConnectionDraft({
-      host: snapshot.host,
-      httpPort: String(snapshot.httpPort),
-      ftpPort: String(snapshot.ftpPort),
-    });
-  }, [defaultEvidenceTypes, open]);
+    setConnectionDraft(
+      selectedSavedDevice
+        ? buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host)
+        : buildSavedDeviceEditorDraft(
+            {
+              name: healthState.connectedDeviceLabel ?? snapshot.host,
+              host: snapshot.host,
+              httpPort: snapshot.httpPort,
+              ftpPort: snapshot.ftpPort,
+              telnetPort: snapshot.telnetPort,
+            },
+            snapshot.host,
+          ),
+    );
+  }, [defaultEvidenceTypes, healthState.connectedDeviceLabel, open, selectedSavedDevice]);
 
   useEffect(() => {
     if (!open) {
@@ -1105,7 +1083,12 @@ export function DiagnosticsDialog({
   const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
   const healthDetailAvailable =
     headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
-  const connectionLabel = `${healthState.connectedDeviceLabel ?? "C64U"} · ${connectionDraft.host}:${connectionDraft.httpPort}`;
+  const connectionLabel = buildConnectionLabel(
+    selectedSavedDevice
+      ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
+      : (healthState.connectedDeviceLabel ?? "C64U"),
+    selectedProductCode,
+  );
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (severity !== "All") labels.push(severity);
@@ -1122,15 +1105,37 @@ export function DiagnosticsDialog({
 
   const openConnectionView = useCallback(() => {
     setConnectionMode("view");
-    setConnectionError(null);
+    setConnectionNameError(null);
+    setConnectionHostError(null);
+    setConnectionPortError(null);
     setConnectionOpen(true);
   }, []);
 
   const openConnectionEdit = useCallback(() => {
     setConnectionMode("edit");
-    setConnectionError(null);
+    setConnectionNameError(null);
+    setConnectionHostError(null);
+    setConnectionPortError(null);
     setConnectionOpen(true);
   }, []);
+
+  const handleConnectionDraftChange = useCallback(
+    (nextDraft: SavedDeviceEditorDraft) => {
+      setConnectionDraft(nextDraft);
+      if (selectedSavedDevice && connectionNameError) {
+        setConnectionNameError(
+          validateSavedDeviceName(savedDevices.devices, selectedSavedDevice.id, nextDraft.name, nextDraft.host),
+        );
+      }
+      if (connectionHostError) {
+        setConnectionHostError(validateDeviceHost(nextDraft.host));
+      }
+      if (connectionPortError) {
+        setConnectionPortError(validateSavedDevicePorts(nextDraft));
+      }
+    },
+    [connectionHostError, connectionNameError, connectionPortError, savedDevices.devices, selectedSavedDevice],
+  );
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -1159,29 +1164,36 @@ export function DiagnosticsDialog({
 
   const saveConnection = () => {
     const nextHost = connectionDraft.host.trim();
-    if (!isValidHostname(nextHost)) {
-      setConnectionError("Enter a valid host.");
-      return;
-    }
-    if (!isValidPort(connectionDraft.httpPort)) {
-      setConnectionError("HTTP must be 1 to 65535.");
-      return;
-    }
-    if (!isValidPort(connectionDraft.ftpPort)) {
-      setConnectionError("FTP must be 1 to 65535.");
-      return;
-    }
-    if (!isValidPort(connectionDraft.telnetPort)) {
-      setConnectionError("Telnet must be 1 to 65535.");
+    const hostError = validateDeviceHost(nextHost);
+    const nameError = selectedSavedDevice
+      ? validateSavedDeviceName(savedDevices.devices, selectedSavedDevice.id, connectionDraft.name, nextHost)
+      : null;
+    const portError = validateSavedDevicePorts(connectionDraft);
+
+    setConnectionHostError(hostError);
+    setConnectionNameError(nameError);
+    setConnectionPortError(portError);
+    if (hostError || nameError || portError) {
       return;
     }
 
     const password = getC64APIConfigSnapshot().password;
     const deviceHost = buildDeviceHostWithHttpPort(nextHost, Number(connectionDraft.httpPort));
+    if (selectedSavedDevice) {
+      updateSavedDevice(selectedSavedDevice.id, {
+        name: connectionDraft.name,
+        host: nextHost,
+        httpPort: Number(connectionDraft.httpPort),
+        ftpPort: Number(connectionDraft.ftpPort),
+        telnetPort: Number(connectionDraft.telnetPort),
+      });
+    }
     updateC64APIConfig(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost);
     setStoredFtpPort(Number(connectionDraft.ftpPort));
     setStoredTelnetPort(Number(connectionDraft.telnetPort));
-    setConnectionError(null);
+    setConnectionNameError(null);
+    setConnectionHostError(null);
+    setConnectionPortError(null);
     setConnectionOpen(false);
     onRetryConnection();
   };
@@ -1538,10 +1550,13 @@ export function DiagnosticsDialog({
         onOpenChange={setConnectionOpen}
         mode={connectionMode}
         draft={connectionDraft}
-        setDraft={setConnectionDraft}
+        setDraft={handleConnectionDraftChange}
         onStartEdit={() => setConnectionMode("edit")}
         onSave={saveConnection}
-        error={connectionError}
+        nameError={connectionNameError}
+        hostError={connectionHostError}
+        portError={connectionPortError}
+        productCode={selectedProductCode}
       />
 
       <ConfigDriftSurface open={open && configDriftOpen} onOpenChange={setConfigDriftOpen} />

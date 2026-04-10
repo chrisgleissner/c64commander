@@ -187,6 +187,31 @@ const defaultProps: DiagnosticsDialogProps = {
 describe("DiagnosticsDialog", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "device-office",
+        devices: [
+          {
+            id: "device-office",
+            name: "Office U64",
+            host: "c64u",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: "U64",
+            lastKnownHostname: "office-u64",
+            lastKnownUniqueId: "UID-OFFICE",
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+        ],
+        summaries: {},
+        summaryLru: [],
+      }),
+    );
     vi.clearAllMocks();
     updateC64APIConfig(buildBaseUrlFromDeviceHost("c64u:80"), undefined, "c64u:80");
     setStoredFtpPort(21);
@@ -293,6 +318,8 @@ describe("DiagnosticsDialog", () => {
     fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
 
     expect(screen.getByTestId("connection-view-surface")).toBeVisible();
+    expect(screen.getByText("Office U64")).toBeVisible();
+    expect(screen.getByText("U64")).toBeVisible();
     expect(within(screen.getByTestId("connection-view-surface")).getAllByText("c64u").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId("connection-view-edit"));
@@ -316,6 +343,7 @@ describe("DiagnosticsDialog", () => {
 
     fireEvent.contextMenu(screen.getByTestId("diagnostics-device-line"));
 
+    fireEvent.change(screen.getByLabelText(/device name/i), { target: { value: "Lab U64" } });
     fireEvent.change(screen.getByTestId("connection-edit-host"), { target: { value: "ultimate.local" } });
     fireEvent.change(screen.getByTestId("connection-edit-http"), { target: { value: "8081" } });
     fireEvent.change(screen.getByTestId("connection-edit-ftp"), { target: { value: "2121" } });
@@ -329,6 +357,34 @@ describe("DiagnosticsDialog", () => {
     expect(localStorage.getItem("c64u_device_host")).toBe("ultimate.local:8081");
     expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
     expect(localStorage.getItem("c64u_telnet_port")).toBe("2323");
+
+    const persisted = JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}");
+    expect(persisted.devices[0]).toMatchObject({
+      id: "device-office",
+      name: "Lab U64",
+      host: "ultimate.local",
+      httpPort: 8081,
+      ftpPort: 2121,
+      telnetPort: 2323,
+    });
+  });
+
+  it("does not repeat the product code when the saved device name already matches it", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.updateSavedDevice("device-office", {
+      name: "U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "office-u64",
+      lastKnownUniqueId: "UID-OFFICE",
+    });
+
+    renderDialog();
+
+    expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent(/^U64$/);
   });
 
   it("keeps filter configuration separate from filter visibility", () => {

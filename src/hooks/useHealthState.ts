@@ -28,7 +28,7 @@ import {
   type OverallHealthState,
 } from "@/lib/diagnostics/healthModel";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
-import { deriveSavedDeviceShortLabel } from "@/lib/savedDevices/store";
+import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
 
 const contributorHealthFromProbe = (
   outcome: "Success" | "Fail" | "Skipped",
@@ -64,7 +64,7 @@ export function useHealthState(): OverallHealthState {
       savedDevices.devices[0] ??
       null;
     const connectedDeviceLabel = selectedSavedDevice
-      ? deriveSavedDeviceShortLabel(selectedSavedDevice, savedDevices.devices)
+      ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
       : inferConnectedDeviceLabel(deviceInfo?.product);
 
     if (latestHealthCheck) {

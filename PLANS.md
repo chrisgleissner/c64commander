@@ -117,23 +117,23 @@ Implementation targets:
 
 Execution tasks:
 
-- [ ] Extend persisted device configuration/state types to support multi-device storage.
-- [ ] Implement deterministic migration from legacy single-device storage into the new saved-device model.
-- [ ] Add label derivation and uniqueness validation helpers for `shortLabel`.
-- [ ] Project `selectedDeviceId` through the runtime config path.
+- [x] Extend persisted device configuration/state types to support multi-device storage.
+- [x] Implement deterministic migration from legacy single-device storage into the new saved-device model.
+- [x] Add label derivation and uniqueness validation helpers for `shortLabel`.
+- [x] Project `selectedDeviceId` through the runtime config path.
 
 Required tests:
 
-- [ ] migration from existing single-device storage
-- [ ] idempotent migration behavior
-- [ ] uniqueness and length handling for `shortLabel`
-- [ ] persisted selection behavior
+- [x] migration from existing single-device storage
+- [x] idempotent migration behavior
+- [x] uniqueness and length handling for `shortLabel`
+- [x] persisted selection behavior
 
 Validation checkpoints:
 
-- [ ] A single-device user migrates without manual action.
-- [ ] `selectedDeviceId` always resolves to an existing saved device after migration.
-- [ ] Selected device survives restart.
+- [x] A single-device user migrates without manual action.
+- [x] `selectedDeviceId` always resolves to an existing saved device after migration.
+- [x] Selected device survives restart.
 
 Exit criteria:
 
@@ -156,24 +156,24 @@ Implementation targets:
 
 Execution tasks:
 
-- [ ] Extend the badge interaction layer to distinguish tap from long press without breaking current tap behavior.
-- [ ] Add the `Switch device` decision interstitial and name-first row rendering.
-- [ ] Ensure the picker is suppressed when switching is impossible.
-- [ ] Wire dismissal behavior for cancel and post-selection.
+- [x] Extend the badge interaction layer to distinguish tap from long press without breaking current tap behavior.
+- [x] Add the `Switch device` decision interstitial and name-first row rendering.
+- [x] Ensure the picker is suppressed when switching is impossible.
+- [x] Wire dismissal behavior for cancel and post-selection.
 
 Required tests:
 
-- [ ] tap still opens Diagnostics
-- [ ] long press opens the picker when two or more saved devices exist
-- [ ] long press does not regress ordinary tap behavior
-- [ ] healthy picker rows do not render hostname, product code, or unique-id text by default
-- [ ] picker dismisses cleanly after cancel or selection
+- [x] tap still opens Diagnostics
+- [x] long press opens the picker when two or more saved devices exist
+- [x] long press does not regress ordinary tap behavior
+- [x] healthy picker rows do not render hostname, product code, or unique-id text by default
+- [x] picker dismisses cleanly after cancel or selection
 
 Validation checkpoints:
 
-- [ ] Badge tap reliability remains intact.
-- [ ] Long press is available only when it adds value.
-- [ ] Picker rows remain name-first in healthy idle state.
+- [x] Badge tap reliability remains intact.
+- [x] Long press is available only when it adds value.
+- [x] Picker rows remain name-first in healthy idle state.
 
 Exit criteria:
 
@@ -195,23 +195,23 @@ Implementation targets:
 
 Execution tasks:
 
-- [ ] Implement the switch action pipeline behind picker selection.
-- [ ] Update runtime connection settings immediately from saved-device metadata.
-- [ ] Perform lightweight `/v1/info` verification and persist last-known identity on success.
-- [ ] Preserve selection while surfacing offline or mismatch status on failure.
+- [x] Implement the switch action pipeline behind picker selection.
+- [x] Update runtime connection settings immediately from saved-device metadata.
+- [x] Perform lightweight `/v1/info` verification and persist last-known identity on success.
+- [x] Preserve selection while surfacing offline or mismatch status on failure.
 
 Required tests:
 
-- [ ] successful switch updates selected state before probe completion
-- [ ] successful probe updates last-known identity
-- [ ] failed probe preserves selection and records offline state
-- [ ] handshake never fetches full config
+- [x] successful switch updates selected state before probe completion
+- [x] successful probe updates last-known identity
+- [x] failed probe preserves selection and records offline state
+- [x] handshake never fetches full config
 
 Validation checkpoints:
 
-- [ ] Local selection updates immediately.
-- [ ] Success and failure states are persisted deterministically.
-- [ ] No `c64-all-config` request is issued during switch.
+- [x] Local selection updates immediately.
+- [x] Success and failure states are persisted deterministically.
+- [x] No `c64-all-config` request is issued during switch.
 
 Exit criteria:
 
@@ -233,23 +233,23 @@ Implementation targets:
 
 Execution tasks:
 
-- [ ] Remove persistent switching UI from Diagnostics.
-- [ ] Preserve Diagnostics health and activity flows.
-- [ ] Keep management actions discoverable in the intended secondary surfaces.
-- [ ] Verify Settings remains the CRUD source of truth.
+- [x] Remove persistent switching UI from Diagnostics.
+- [x] Preserve Diagnostics health and activity flows.
+- [x] Keep management actions discoverable in the intended secondary surfaces.
+- [x] Verify Settings remains the CRUD source of truth.
 
 Required tests:
 
-- [ ] Diagnostics renders without a Devices section
-- [ ] Diagnostics overflow still exposes the intended secondary actions
-- [ ] Settings remains the source of truth for add, edit, rename, delete, and select
-- [ ] one-device flows remain calm and unchanged except for saved-device migration
+- [x] Diagnostics renders without a Devices section
+- [x] Diagnostics overflow still exposes the intended secondary actions
+- [x] Settings remains the source of truth for add, edit, rename, delete, and select
+- [x] one-device flows remain calm and unchanged except for saved-device migration
 
 Validation checkpoints:
 
-- [ ] Diagnostics no longer carries routine switching UI.
-- [ ] Settings still owns device administration.
-- [ ] One-device UX remains unchanged except for migration-backed state.
+- [x] Diagnostics no longer carries routine switching UI.
+- [x] Settings still owns device administration.
+- [x] One-device UX remains unchanged except for migration-backed state.
 
 Exit criteria:
 
@@ -380,30 +380,30 @@ Goal:
 
 Required validation:
 
-- [ ] `npm run lint`
-- [ ] `npm run test`
-- [ ] `npm run test:coverage`
-- [ ] `npm run build`
-- [ ] the smallest honest UI validation for the badge long-press and picker flows
+- [x] `npm run lint`
+- [x] `npm run test`
+- [x] `npm run test:coverage`
+- [x] `npm run build`
+- [x] the smallest honest UI validation for the badge long-press and picker flows
 
 Required UI validation:
 
-- [ ] tap on the badge still opens Diagnostics
-- [ ] long press opens the picker
-- [ ] picker selection enters `Verifying` and resolves correctly
-- [ ] Diagnostics no longer shows a persistent Devices section
+- [x] tap on the badge still opens Diagnostics
+- [x] long press opens the picker
+- [x] picker selection enters `Verifying` and resolves correctly
+- [x] Diagnostics no longer shows a persistent Devices section
 
 Documentation updates:
 
-- [ ] update any product docs affected by the shipped behavior
-- [ ] update the base spec if it still describes Diagnostics as the primary switching surface
-- [ ] refresh only the smallest screenshot subset needed for the new picker flow and Diagnostics simplification
+- [x] update any product docs affected by the shipped behavior
+- [x] update the base spec if it still describes Diagnostics as the primary switching surface
+- [x] refresh only the smallest screenshot subset needed for the new picker flow and Diagnostics simplification
 
 Validation checkpoints:
 
-- [ ] All required validation commands pass.
-- [ ] Global branch coverage remains `>= 91%`.
-- [ ] Documentation and screenshots match shipped behavior.
+- [x] All required validation commands pass.
+- [x] Global branch coverage remains `>= 91%`.
+- [x] Documentation and screenshots match shipped behavior.
 
 Exit criteria:
 

@@ -450,12 +450,13 @@ export const getBadgeAriaLabel = (
   connectivity: ConnectivityState,
   problemCount: number,
   product?: string | null,
+  connectedDeviceLabel?: string | null,
 ): string => {
   if (connectivity === "Offline") return "Offline, device not reachable";
   if (connectivity === "Not yet connected") return "Not yet connected";
   const connPhrase =
     connectivity === "Online" || connectivity === "Checking"
-      ? `Connected to ${inferConnectedDeviceLabel(product) ?? "C64U"}`
+      ? `Connected to ${connectedDeviceLabel ?? inferConnectedDeviceLabel(product) ?? "C64U"}`
       : "Demo mode";
   switch (health) {
     case "Healthy":

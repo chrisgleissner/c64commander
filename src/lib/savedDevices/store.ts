@@ -12,8 +12,8 @@ export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
 
 export type SavedDevice = {
   id: string;
-  nickname: string | null;
-  shortLabel: string | null;
+  name: string;
+  nameSource?: "auto" | "custom";
   host: string;
   httpPort: number;
   ftpPort: number;
@@ -88,6 +88,15 @@ let snapshot: SavedDevicesSnapshot | null = null;
 
 const compact = (value: string) => value.replace(/[^a-z0-9]+/gi, "");
 
+const normalizeSavedDeviceName = (name: string | null | undefined) => name?.trim() ?? "";
+
+const resolveSavedDeviceNameSource = (name: string, host: string, nameSource?: SavedDevice["nameSource"]) => {
+  if (nameSource === "custom" && name) return "custom" as const;
+  if (nameSource === "auto") return "auto" as const;
+  if (!name) return "auto" as const;
+  return compact(name).toLowerCase() === compact(host).toLowerCase() ? ("auto" as const) : ("custom" as const);
+};
+
 const normalizeHostInput = (input?: string | null) => {
   const raw = input?.trim() ?? "";
   if (!raw) return DEFAULT_DEVICE_HOST;
@@ -153,6 +162,50 @@ const createId = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
   `${Date.now().toString(36)}-${Math.round(Math.random() * 1e9).toString(36)}`;
 
+const isSavedDeviceCustomNamed = (device: SavedDevice) => {
+  const normalizedName = normalizeSavedDeviceName(device.name);
+  if (!normalizedName) return false;
+  return resolveSavedDeviceNameSource(normalizedName, device.host, device.nameSource) === "custom";
+};
+
+const getSavedDeviceProductLabel = (device: SavedDevice, verified?: VerifiedSavedDeviceIdentity | null) =>
+  verified?.product ?? device.lastKnownProduct ?? "C64U";
+
+const buildSavedDeviceLabelMap = (
+  devices: SavedDevice[],
+  verifiedByDeviceId: Record<string, VerifiedSavedDeviceIdentity | null> = {},
+) => {
+  const labels = new Map<string, string>();
+  const used = new Set<string>();
+
+  devices.forEach((device) => {
+    if (isSavedDeviceCustomNamed(device)) {
+      const label = normalizeSavedDeviceName(device.name);
+      labels.set(device.id, label);
+      used.add(label.toLowerCase());
+      return;
+    }
+
+    const baseLabel = getSavedDeviceProductLabel(device, verifiedByDeviceId[device.id] ?? null);
+    let candidate = baseLabel;
+    let suffix = 2;
+    while (used.has(candidate.toLowerCase())) {
+      candidate = `${baseLabel}-${suffix}`;
+      suffix += 1;
+    }
+    labels.set(device.id, candidate);
+    used.add(candidate.toLowerCase());
+  });
+
+  return labels;
+};
+
+const resolveSavedDeviceLabel = (
+  device: SavedDevice,
+  devices: SavedDevice[],
+  verifiedByDeviceId: Record<string, VerifiedSavedDeviceIdentity | null> = {},
+) => buildSavedDeviceLabelMap(devices, verifiedByDeviceId).get(device.id) ?? getSavedDeviceProductLabel(device);
+
 const isPasswordFlagSet = () => {
   if (typeof localStorage === "undefined") return false;
   return localStorage.getItem(LEGACY_HAS_PASSWORD_KEY) === "1";
@@ -176,9 +229,22 @@ const parseEnvelope = (raw: string | null): PersistedSavedDevicesEnvelope | null
       selectedDeviceId,
       devices: devices.map((device) => ({
         id: device.id,
-        nickname: device.nickname ?? null,
-        shortLabel: device.shortLabel ?? null,
         host: normalizeHostInput(device.host),
+        name: (() => {
+          const host = normalizeHostInput(device.host);
+          const normalizedName = normalizeSavedDeviceName(typeof device.name === "string" ? device.name : "");
+          return resolveSavedDeviceNameSource(normalizedName, host, device.nameSource) === "custom"
+            ? normalizedName
+            : "";
+        })(),
+        nameSource: (() => {
+          const host = normalizeHostInput(device.host);
+          return resolveSavedDeviceNameSource(
+            normalizeSavedDeviceName(typeof device.name === "string" ? device.name : ""),
+            host,
+            device.nameSource,
+          );
+        })(),
         httpPort: parsePort(String(device.httpPort ?? ""), DEFAULT_HTTP_PORT),
         ftpPort: parsePort(String(device.ftpPort ?? ""), DEFAULT_FTP_PORT),
         telnetPort: parsePort(String(device.telnetPort ?? ""), DEFAULT_TELNET_PORT),
@@ -224,8 +290,8 @@ const createLegacyDevice = (): SavedDevice => {
   const { host, httpPort } = splitHostAndHttpPort(resolvedHost);
   return {
     id: createId(),
-    nickname: null,
-    shortLabel: null,
+    name: "",
+    nameSource: "auto",
     host,
     httpPort,
     ftpPort: parsePort(
@@ -346,32 +412,10 @@ const updateRuntime = (update: (currentSnapshot: SavedDevicesSnapshot) => SavedD
 const summaryStamp = (summary: DeviceSwitchSummary): string =>
   summary.lastProbeSucceededAt ?? summary.lastProbeFailedAt ?? summary.verifiedAt ?? "";
 
-const compactLabelToken = (value: string) => {
-  const token = value
-    .trim()
-    .split(/\s+/)
-    .find((part) => compact(part).length > 0);
-  if (!token) return null;
-  const normalized = token.replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 8);
-  return normalized || null;
-};
-
-const deriveShortLabelFromHost = (host: string) => {
-  const base = stripHostPort(host).replace(/^\[|\]$/g, "");
-  const ipv4Match = /^(?:\d{1,3}\.){3}(\d{1,3})$/.exec(base);
-  if (ipv4Match) return ipv4Match[1]?.slice(0, 8) ?? null;
-  const ipv6Parts = base.split(":").filter(Boolean);
-  if (ipv6Parts.length > 1) {
-    return ipv6Parts[ipv6Parts.length - 1]?.slice(0, 8) ?? null;
-  }
-  return compactLabelToken(base.split(".")[0] ?? base);
-};
-
-const isUniqueShortLabel = (devices: SavedDevice[], deviceId: string, candidate: string) => {
+const isUniqueSavedDeviceName = (devices: SavedDevice[], deviceId: string, candidate: string) => {
   const normalizedCandidate = candidate.trim().toLowerCase();
   return !devices.some(
-    (device) =>
-      device.id !== deviceId && device.shortLabel && device.shortLabel.trim().toLowerCase() === normalizedCandidate,
+    (device) => device.id !== deviceId && normalizeSavedDeviceName(device.name).toLowerCase() === normalizedCandidate,
   );
 };
 
@@ -380,27 +424,58 @@ export const resolveCanonicalProductFamilyCode = (product?: string | null): Prod
 };
 
 export const buildSavedDevicePrimaryLabel = (device: SavedDevice, verified?: VerifiedSavedDeviceIdentity | null) => {
-  return device.nickname?.trim() || verified?.hostname?.trim() || device.lastKnownHostname?.trim() || device.host;
+  const currentSnapshot = snapshot;
+  if (!currentSnapshot) {
+    return resolveSavedDeviceLabel(device, [device], verified ? { [device.id]: verified } : {});
+  }
+  const devices = currentSnapshot.devices.some((entry) => entry.id === device.id)
+    ? currentSnapshot.devices
+    : [...currentSnapshot.devices, device];
+  const verifiedByDeviceId = {
+    ...currentSnapshot.verifiedByDeviceId,
+    ...(verified ? { [device.id]: verified } : {}),
+  };
+  return resolveSavedDeviceLabel(device, devices, verifiedByDeviceId);
 };
 
-export const deriveSavedDeviceShortLabel = (device: SavedDevice, devices: SavedDevice[]) => {
-  if (device.shortLabel?.trim()) return device.shortLabel.trim().slice(0, 8);
-  const nicknameToken = device.nickname ? compactLabelToken(device.nickname) : null;
-  if (nicknameToken && isUniqueShortLabel(devices, device.id, nicknameToken)) return nicknameToken;
-  const hostnameToken = device.lastKnownHostname
-    ? compactLabelToken(device.lastKnownHostname)
-    : compactLabelToken(device.host);
-  if (hostnameToken && isUniqueShortLabel(devices, device.id, hostnameToken)) return hostnameToken;
-  const hostToken = deriveShortLabelFromHost(device.host);
-  if (hostToken && isUniqueShortLabel(devices, device.id, hostToken)) return hostToken;
-  return device.lastKnownProduct ?? "C64U";
-};
-
-export const validateSavedDeviceShortLabel = (devices: SavedDevice[], deviceId: string, shortLabel: string) => {
-  const trimmed = shortLabel.trim();
-  if (!trimmed) return "Short label is required.";
-  if (trimmed.length > 8) return "Short label must be 8 characters or fewer.";
-  if (!isUniqueShortLabel(devices, deviceId, trimmed)) return "Short label must be unique.";
+export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string, name: string, host: string) => {
+  const normalizedHost = normalizeHostInput(host);
+  const normalizedName = normalizeSavedDeviceName(name);
+  const existingDevice = devices.find((device) => device.id === deviceId) ?? null;
+  const candidateDevice: SavedDevice = existingDevice
+    ? {
+        ...existingDevice,
+        host: normalizedHost,
+        name: normalizedName,
+        nameSource: normalizedName ? "custom" : "auto",
+      }
+    : {
+        id: deviceId,
+        name: normalizedName,
+        nameSource: normalizedName ? "custom" : "auto",
+        host: normalizedHost,
+        httpPort: DEFAULT_HTTP_PORT,
+        ftpPort: DEFAULT_FTP_PORT,
+        telnetPort: DEFAULT_TELNET_PORT,
+        lastKnownProduct: null,
+        lastKnownHostname: null,
+        lastKnownUniqueId: null,
+        lastSuccessfulConnectionAt: null,
+        lastUsedAt: null,
+        hasPassword: false,
+      };
+  const nextDevices = existingDevice
+    ? devices.map((device) => (device.id === deviceId ? candidateDevice : device))
+    : [...devices, candidateDevice];
+  const labels = buildSavedDeviceLabelMap(nextDevices);
+  const candidateLabel = labels.get(deviceId)?.trim().toLowerCase() ?? "";
+  if (!candidateLabel) return "Device name is required.";
+  const duplicate = nextDevices.some(
+    (device) => device.id !== deviceId && (labels.get(device.id)?.trim().toLowerCase() ?? "") === candidateLabel,
+  );
+  if (duplicate || (normalizedName && !isUniqueSavedDeviceName(nextDevices, deviceId, normalizedName))) {
+    return "Device name must be unique.";
+  }
   return null;
 };
 
@@ -473,11 +548,13 @@ export const addSavedDevice = (
   draft: Omit<SavedDevice, "id" | "lastSuccessfulConnectionAt" | "lastUsedAt"> & { id?: string },
 ) => {
   return updateSnapshot((envelope) => {
+    const host = normalizeHostInput(draft.host);
+    const normalizedName = normalizeSavedDeviceName(draft.name);
     const nextDevice: SavedDevice = {
       id: draft.id ?? createId(),
-      nickname: draft.nickname ?? null,
-      shortLabel: draft.shortLabel ?? null,
-      host: normalizeHostInput(draft.host),
+      name: normalizedName,
+      nameSource: normalizedName ? "custom" : "auto",
+      host,
       httpPort: draft.httpPort,
       ftpPort: draft.ftpPort,
       telnetPort: draft.telnetPort,
@@ -500,13 +577,23 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
     ...envelope,
     devices: envelope.devices.map((device) =>
       device.id === deviceId
-        ? {
-            ...device,
-            ...update,
-            host: update.host ? normalizeHostInput(update.host) : device.host,
-            shortLabel: update.shortLabel === undefined ? device.shortLabel : update.shortLabel,
-            nickname: update.nickname === undefined ? device.nickname : update.nickname,
-          }
+        ? (() => {
+            const host = update.host ? normalizeHostInput(update.host) : device.host;
+            const normalizedName =
+              update.name === undefined ? normalizeSavedDeviceName(device.name) : normalizeSavedDeviceName(update.name);
+            return {
+              ...device,
+              ...update,
+              host,
+              name: normalizedName,
+              nameSource:
+                update.name === undefined
+                  ? (device.nameSource ?? (normalizedName ? "custom" : "auto"))
+                  : normalizedName
+                    ? "custom"
+                    : "auto",
+            };
+          })()
         : device,
     ),
   }));
@@ -733,7 +820,7 @@ export const getSelectedSavedDeviceBadgeLabel = () => {
   const current = getSavedDevicesSnapshot();
   const selectedDevice = current.devices.find((device) => device.id === current.selectedDeviceId);
   if (!selectedDevice) return "C64U";
-  return deriveSavedDeviceShortLabel(selectedDevice, current.devices);
+  return buildSavedDevicePrimaryLabel(selectedDevice);
 };
 
 export const getSavedDeviceSwitchStatus = (deviceId: string): DeviceSwitchStatus => {

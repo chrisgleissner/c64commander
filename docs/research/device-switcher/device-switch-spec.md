@@ -1,7 +1,7 @@
 # Device Switcher Specification
 
-Date: 2026-04-09
-Status: Draft for implementation
+Date: 2026-04-10
+Status: Reviewed and revised for v3 implementation
 Classification of eventual implementation: `DOC_PLUS_CODE`, `UI_CHANGE`
 
 ## 1. Purpose
@@ -66,11 +66,13 @@ The implementation MUST preserve all of the following:
 
 ### 6.1 Saved device
 
-A persisted user-configured device record that contains connection details and last-known identity metadata.
+A persisted user-configured device record that contains one user-facing device name, connection details, the most recent verified identity snapshot, and one internal app record id.
 
 ### 6.2 Selected device
 
 The saved device currently chosen by the user. This is the target the app is trying to talk to right now.
+
+The selection is stored by internal app record id, but everywhere in the UI it is presented by device name.
 
 ### 6.3 Verified device
 
@@ -111,18 +113,18 @@ Requirements:
 - MUST remain the persistent top-right connectivity indicator
 - MUST continue opening Diagnostics when tapped
 - MUST open the device picker when long pressed and two or more saved devices exist
-- MUST show a badge-safe device label, not the full primary label
+- MUST show the resolved saved-device display name using badge-safe truncation, not a second stored label
 - MUST keep the existing health glyph and health wording behavior
-- MUST fit the device label within 8 visible characters
+- MUST fit the badge text within 8 visible characters
 
-Badge label resolution order:
+Badge display rules:
 
-1. verified selected device `shortLabel`
-2. selected device `shortLabel`
-3. derived badge-safe label
-4. canonical product-family code fallback
+1. use the resolved saved-device display name
+2. visually truncate only for badge fit
+3. never persist a separate badge-only label
+4. product-derived automatic naming remains part of the same display-name resolution path when the user has not saved a custom name
 
-Examples of valid badge labels:
+Examples of device names that fit the badge without truncation:
 
 - `Studio64`
 - `LabU64`
@@ -139,7 +141,7 @@ Requirements:
 - MUST show a vertical list of saved devices
 - MUST use name-first rows in the healthy idle state
 - MUST NOT include CRUD controls or management actions
-- MUST NOT render hostname, product-family code, or unique-id text by default in healthy idle rows
+- MUST NOT render hostname, product code, or unique-id text by default in healthy idle rows
 - MUST allow tapping a row to begin switching immediately
 
 Picker title:
@@ -167,6 +169,9 @@ Requirements:
 - MUST NOT contain a persistent Devices switcher section
 - MUST remain focused on current device health, current device details, activity, and diagnostics-related secondary actions
 - MAY expose `Connection details` and management navigation through overflow actions
+- `Connection details` MUST show the current device name and canonical product code
+- `Connection details` MUST expose an `Edit` action for device details
+- that `Edit` action MUST open the same device-editing model used by Settings, including `name`, `host`, `httpPort`, `ftpPort`, and `telnetPort`
 
 ### 7.4 Settings
 
@@ -178,6 +183,14 @@ Requirements:
 - MUST support add, edit, rename, and delete
 - MUST allow selecting a saved device
 - MUST NOT become the primary routine switching path
+- MUST be the source of truth for editing device name and connection fields
+- any diagnostics-originated edit flow MUST reuse the same fields, validation, and persistence rules as Settings
+
+Field-set parity rule:
+
+- every surface that edits host or ports MUST also expose the device `name`
+- no host-and-ports editor may omit `name`
+- the shared device-editing field set is exactly: `name`, `host`, `httpPort`, `ftpPort`, `telnetPort`
 
 ## 8. Required User Flows
 
@@ -199,9 +212,10 @@ Requirements:
 
 ### 8.3 Deep editing
 
-1. User opens `SettingsPage`.
-2. User adds, edits, renames, or deletes saved devices.
-3. Edits affect future switching immediately after persistence.
+1. User opens `SettingsPage`, or taps `Edit` from `Connection details`.
+2. App opens the same device editor.
+3. User adds, edits, renames, or deletes saved devices, including the device name.
+4. Edits affect future switching immediately after persistence.
 
 ### 8.4 Offline selection
 
@@ -236,20 +250,19 @@ Requirements:
 ### 9.1 Persisted records
 
 ```ts
-type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
+type ProductCode = "C64U" | "U64" | "U64E" | "U64E2";
 
 type SavedDevice = {
   id: string;
-  nickname: string | null;
-  shortLabel: string | null;
+  name: string;
+  nameSource?: "auto" | "custom";
   host: string;
   httpPort: number;
   ftpPort: number;
   telnetPort: number;
-  lastKnownProduct: ProductFamilyCode | null;
-  lastKnownHostname: string | null;
-  lastKnownUniqueId: string | null;
-  lastSuccessfulConnectionAt: string | null;
+  productCode: ProductCode | null;
+  uniqueId: string | null;
+  lastConnectedAt: string | null;
   lastUsedAt: string | null;
 };
 
@@ -261,9 +274,14 @@ type SavedDeviceState = {
 
 Rules:
 
+- `SavedDevice.id` MUST be an internal stable app record key, not a user-facing label
+- `SavedDevice.name` MUST be the only persisted user-editable device label field
+- `SavedDevice.nameSource` MAY be stored to distinguish product-derived automatic names from user-authored custom names
 - `selectedDeviceId` MUST always refer to an existing saved device after migration completes
+- `SavedDevice.host` MUST be the configured network target that the app connects to, whether that value is a hostname or an IP address
 - port values MUST remain independently editable per device
-- `lastKnown*` fields MUST be updated only from successful verification results
+- `productCode`, `uniqueId`, and `lastConnectedAt` MUST be updated only from successful verification results
+- a blank or whitespace-only submitted `name` MUST switch the device back to product-derived automatic naming during save
 
 ### 9.2 Compact per-device switch summary
 
@@ -277,9 +295,8 @@ type DeviceSwitchSummary = {
   lastConnectivityState: string | null;
   lastProbeSucceededAt: string | null;
   lastProbeFailedAt: string | null;
-  lastVerifiedProduct: ProductFamilyCode | null;
-  lastVerifiedHostname: string | null;
-  lastVerifiedUniqueId: string | null;
+  productCode: ProductCode | null;
+  uniqueId: string | null;
 };
 ```
 
@@ -302,7 +319,7 @@ Minimum required fields:
 type DeviceBoundContentOrigin = {
   sourceKind: "ultimate";
   originDeviceId: string;
-  originDeviceLastKnownUniqueId: string | null;
+  originDeviceUniqueId: string | null;
   originPath: string;
   importedAt: string;
 };
@@ -313,6 +330,7 @@ Rules:
 - this metadata MUST be persisted for every playlist item and disk entry imported from a C64 device-backed source
 - this metadata MUST NOT be surfaced as source text in normal playlist rows or disk rows
 - `originDeviceId` MUST bind to the saved-device record, not to a host string
+- `originDeviceUniqueId`, when present, MUST capture the origin device's verified `unique_id` at import time
 - `originPath` MUST preserve the device-relative path needed for FTP or direct-device retrieval
 - local and HVSC items MUST NOT require origin-device metadata
 
@@ -327,9 +345,27 @@ Minimum additional reasons:
 - `origin-device-mismatch`
 - `origin-file-missing`
 
-## 10. Label and Identity Rules
+## 10. Naming and Identity Rules
 
-### 10.1 Canonical product-family code
+### 10.1 Distinct values with different roles
+
+The implementation MUST keep these concepts separate:
+
+- `name`: the one user-facing device label. Users see and edit this.
+- `id`: the internal app record key stored in `SavedDevice.id`. The app uses this for selection, persistence, and collection references.
+- `host`: the configured network target the app connects to. This may itself be either a hostname or an IP address.
+- `productCode`: the canonical product code derived from successful verification.
+- `unique_id`: the hardware identity returned by `/v1/info`. The app uses this for verification, mismatch detection, and alias resolution.
+
+Rules:
+
+- UI copy, picker rows, settings rows, diagnostics headers, and connection details MUST use `name`, not `id`
+- `host` MUST remain the only persisted network-target field in the saved-device model
+- `id` MUST NEVER be required for ordinary user understanding or routine switching
+- `unique_id` MUST NEVER replace `name` as the routine user-facing label
+- `id` and `unique_id` MUST NOT be conflated in code or documentation
+
+### 10.2 Canonical product code
 
 Valid codes:
 
@@ -340,44 +376,63 @@ Valid codes:
 
 Requirements:
 
-- settings saved-device rows MUST show the canonical product-family code
-- diagnostics detail MUST show the canonical product-family code
-- `Connection details` surfaces MUST show the canonical product-family code
+- settings saved-device rows MUST show the canonical product code
+- diagnostics detail MUST show the canonical product code
+- `Connection details` surfaces MUST show the canonical product code
 - the badge does not need to show both custom label and product code together
-- the picker does not need to show canonical product-family code in healthy idle rows
+- the picker does not need to show canonical product code in healthy idle rows
 
-### 10.2 Primary label
+### 10.3 Device name
 
-Primary label resolution order:
-
-1. `nickname`
-2. verified hostname
-3. configured host
-
-This label is used for picker rows, settings rows, and detailed displays.
-
-### 10.3 Badge label
-
-Badge label source: `shortLabel`
+`name` is the only user-editable device label.
 
 Requirements:
 
-- MUST be at most 8 visible characters
-- MUST be unique across saved devices after trim and case-fold
-- MUST be explicitly user-provided when automatic derivation cannot produce a unique result
+- MUST be editable by the user
+- MUST be used for picker rows, settings rows, diagnostics details, and connection details
+- MAY be user-overridden at any time
+- MUST fall back to an automatic display name when the user has not provided a non-empty custom value
+- add-device flows MUST start on the automatic naming path, not from `host` and not from an auto-numbered placeholder string
+- a blank or whitespace-only `name` input on save MUST be treated as "use the detected product type"
+- MUST NOT be split into `nickname` and `shortLabel`
+- MUST NOT be silently auto-mutated after the user has saved it
 
-Derivation order:
+Automatic display-name resolution order:
 
-1. explicit `shortLabel`
-2. first meaningful token from `nickname` if unique within 8 characters
-3. first meaningful token from hostname if unique within 8 characters
-4. IPv4 last octet or IPv6 last hextet if unique
-5. canonical product-family code fallback
+1. an existing non-empty user-authored name, when one already exists
+2. verified canonical product code
+3. the saved device's last known product code
+4. canonical product code fallback `C64U` when no better device-specific name is available
 
-If derivation is not unique:
+Automatic duplicate handling:
 
-- app MUST require explicit `shortLabel`
-- app MUST NOT silently append numbers or mutate labels heuristically
+- when two or more auto-named devices resolve to the same product code, the app MUST render suffixes `-2`, `-3`, and so on for later duplicates
+- the first auto-named device keeps the unsuffixed base product code
+- the app MUST NOT append suffixes to a user-authored custom name unless required to reject that exact custom name as conflicting
+
+If a proposed name is not unique:
+
+- the app MUST require the user to choose a unique name before saving a second device with that conflicting name
+- the app MUST NOT create a second hidden label to work around that conflict
+- the app MUST NOT silently append counters or other heuristics to user-provided names
+
+### 10.4 Badge display
+
+Badge text source: the resolved saved-device display name
+
+Requirements:
+
+- MUST visually fit within 8 visible characters
+- MUST use the resolved saved-device display name, not a separate stored field
+- MAY truncate visually for fit
+- SHOULD preserve the leading characters of the name when truncating
+- MUST NOT derive, persist, or validate a second badge-only label
+
+Practical consequence:
+
+1. the user edits one name
+2. the badge renders that same name compactly
+3. the picker and details show the full saved name
 
 ## 11. Identity Truth Model
 
@@ -386,21 +441,21 @@ If derivation is not unique:
 Identity certainty order:
 
 1. `unique_id` from `/v1/info`
-2. `hostname` + `product` from `/v1/info`
+2. `productCode` from `/v1/info`
 3. configured host only
 
 ### 11.2 Expected identity
 
 The expected identity for a saved device is derived from:
 
-1. `lastKnownUniqueId`, when present
-2. else `lastKnownHostname` + `lastKnownProduct`, when both are present
+1. `uniqueId`, when present
+2. else `productCode`, when present
 3. else configured host only
 
 ### 11.3 Mismatch rules
 
 - if verified `unique_id` differs from the selected device's expected `unique_id`, the state MUST be `Mismatch`
-- if verified `unique_id` matches another saved device, diagnostics SHOULD surface that saved device as the actual connected device
+- if verified `unique_id` matches another saved device, diagnostics SHOULD surface that saved device's name as the actual connected device
 - if `/v1/info` does not expose `unique_id`, mismatch detection MUST fall back to the strongest remaining certainty source
 - older firmware without full identity fields MUST degrade gracefully instead of blocking switching
 
@@ -427,6 +482,8 @@ Rules:
 
 Function name: `switchToSavedDevice(deviceId)`
 
+`deviceId` here is an internal app record id, not a user-facing name.
+
 Required sequence:
 
 1. validate `deviceId` exists
@@ -439,19 +496,20 @@ Required sequence:
 8. start lightweight verification using `/v1/info`
 9. if verification succeeds:
    - update verified identity
-   - update `SavedDevice.lastKnownProduct`
-   - update `SavedDevice.lastKnownHostname`
-   - update `SavedDevice.lastKnownUniqueId`
-   - update `SavedDevice.lastSuccessfulConnectionAt`
-   - update `DeviceSwitchSummary`
-   - resolve final state as `Connected` or `Mismatch`
-   - refresh only active-route essential data
+
+- update `SavedDevice.productCode`
+- update `SavedDevice.uniqueId`
+- update `SavedDevice.lastConnectedAt`
+- update `DeviceSwitchSummary`
+- resolve final state as `Connected` or `Mismatch`
+- refresh only active-route essential data
+
 10. if verification fails:
 
 - keep `selectedDeviceId`
 - update summary failure timestamps
 - mark device as `Offline`
-- preserve last-known metadata separately from live state
+- preserve the verified identity snapshot separately from live state
 
 Handshake restrictions:
 
@@ -623,7 +681,7 @@ Forbidden by default:
 
 - if the selected device and origin device have matching verified `unique_id`, the item MAY be treated as local to the selected device even if host strings differ
 - if the origin saved-device record now verifies to a different `unique_id`, the item MUST be treated as `origin-device-mismatch`
-- host edits or renames to the origin saved-device record MUST NOT break references, because references bind to saved-device id first
+- host edits or device-name changes to the origin saved-device record MUST NOT break references, because references bind to saved-device id first
 
 ### 16.7 Deleting a saved device that still owns collection items
 
@@ -667,8 +725,9 @@ When switching devices:
 - `SavedDevice` records
 - `selectedDeviceId`
 - selected device host and ports projected into runtime config
-- all `SavedDevice.lastKnown*` fields
-- `SavedDevice.lastSuccessfulConnectionAt`
+- `SavedDevice.productCode`
+- `SavedDevice.uniqueId`
+- `SavedDevice.lastConnectedAt`
 - `SavedDevice.lastUsedAt`
 - origin metadata for device-bound playlist items and disk entries
 
@@ -688,13 +747,13 @@ When switching devices:
 ### 19.1 Offline target
 
 - keep selection on the chosen device
-- badge shows selected badge label with offline state
+- badge shows the selected device name with offline state
 - picker or relevant detail surfaces show `Offline`
 - management surface MUST expose `Edit`
 
 ### 19.2 Mismatch
 
-- badge SHOULD use the actual verified device label if the actual device can be resolved confidently
+- badge SHOULD use the actual verified device name if the actual device can be resolved confidently
 - diagnostics MUST show selected target and verified actual device separately
 - saved records remain intact until user action resolves the mismatch
 
@@ -738,7 +797,9 @@ When switching devices:
 
 ## 20. Migration
 
-The app currently has single-device connection storage. Initial rollout MUST migrate that storage into the new saved-device model.
+The only backward-compatibility requirement for rollout is migration from the current production single-device app to the new saved-device model.
+
+The implementation does not need compatibility for interim device-switcher development formats because the device switcher has not shipped yet.
 
 Legacy inputs to read:
 
@@ -753,17 +814,18 @@ Migration steps:
 2. derive `httpPort`
 3. derive `ftpPort`
 4. derive `telnetPort`
-5. create the first `SavedDevice`
-6. derive `nickname` if possible
-7. derive `shortLabel` if possible
-8. set `selectedDeviceId`
-9. continue projecting the selected saved device through the existing runtime config path
+5. create the first `SavedDevice` with an internal app record id
+6. initialize it on the automatic naming path
+7. set `selectedDeviceId`
+8. continue projecting the selected saved device through the existing runtime config path
 
 Migration requirements:
 
 - migration MUST be idempotent
 - migration MUST preserve existing connection behavior for single-device users
 - migration failure MUST not silently destroy old connection data
+- rollout MUST produce exactly one saved device for existing users until they add another device via the UI
+- the device-switcher UI MUST remain invisible when only one saved device exists
 
 ## 21. Likely Implementation Touchpoints
 
@@ -790,7 +852,7 @@ New modules likely required:
 - saved-device store
 - device-switch summary cache
 - switch orchestration logic
-- badge-label derivation helper
+- badge-name truncation helper
 - device picker surface
 - origin-device content resolver
 - device-bound transfer coordinator
@@ -802,10 +864,12 @@ The implementation is complete only when all of the following are true:
 - badge tap still opens diagnostics
 - badge long press opens the picker when multiple saved devices exist
 - the one-device case shows no redundant switching UI
-- badge device label fits within 8 visible characters
+- badge shows the saved device name and fits within 8 visible characters without a second stored label
 - picker rows are name-first in the healthy idle state
-- hostnames, product-family codes, and identity fragments are not rendered by default in healthy picker rows
-- settings and diagnostics detail surfaces show canonical product-family codes where appropriate
+- hostnames, product codes, and identity fragments are not rendered by default in healthy picker rows
+- settings and diagnostics detail surfaces show canonical product codes where appropriate
+- settings and diagnostics edit flows use the same device name field and validation rules
+- creating a device or saving a blank device name results in a product-derived automatic display name
 - selecting a device updates visible identity immediately from local metadata
 - live status is then verified using `/v1/info`
 - switching never triggers automatic full-config reload

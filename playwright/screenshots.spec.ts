@@ -957,6 +957,128 @@ const getActiveSlot = (page: Page) => page.locator('[data-slot-active="true"]');
 
 const getActiveMain = (page: Page) => getActiveSlot(page).locator("main");
 
+const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string, includeDiskReference = false) => {
+  await page.addInitScript(
+    ({ baseUrlArg: targetBaseUrl, includeDiskReference: withDiskReference }) => {
+      const baseUrl = new URL(targetBaseUrl);
+      const resolvedHost = baseUrl.hostname;
+      const resolvedPort = Number(baseUrl.port || "80");
+
+      localStorage.setItem(
+        "c64u_saved_devices:v1",
+        JSON.stringify({
+          version: 1,
+          selectedDeviceId: "device-u64-primary",
+          devices: [
+            {
+              id: "device-u64-primary",
+              name: "",
+              nameSource: "auto",
+              host: resolvedHost,
+              httpPort: resolvedPort,
+              ftpPort: 21,
+              telnetPort: 23,
+              lastKnownProduct: "U64",
+              lastKnownHostname: "u64-primary",
+              lastKnownUniqueId: "UID-U64-1",
+              lastSuccessfulConnectionAt: "2026-04-10T12:00:00.000Z",
+              lastUsedAt: "2026-04-10T12:00:00.000Z",
+              hasPassword: false,
+            },
+            {
+              id: "device-u64-secondary",
+              name: "",
+              nameSource: "auto",
+              host: resolvedHost,
+              httpPort: resolvedPort,
+              ftpPort: 2021,
+              telnetPort: 2323,
+              lastKnownProduct: "U64",
+              lastKnownHostname: "u64-secondary",
+              lastKnownUniqueId: "UID-U64-2",
+              lastSuccessfulConnectionAt: "2026-04-10T11:55:00.000Z",
+              lastUsedAt: null,
+              hasPassword: false,
+            },
+            {
+              id: "device-c64u-custom",
+              name: "Studio C64",
+              nameSource: "custom",
+              host: resolvedHost,
+              httpPort: resolvedPort,
+              ftpPort: 2121,
+              telnetPort: 2324,
+              lastKnownProduct: "C64U",
+              lastKnownHostname: "studio-c64",
+              lastKnownUniqueId: "UID-C64U-1",
+              lastSuccessfulConnectionAt: "2026-04-10T11:50:00.000Z",
+              lastUsedAt: null,
+              hasPassword: false,
+            },
+          ],
+          summaries: {
+            "device-u64-primary": {
+              deviceId: "device-u64-primary",
+              verifiedAt: "2026-04-10T12:00:00.000Z",
+              lastHealthState: "Healthy",
+              lastConnectivityState: "Online",
+              lastProbeSucceededAt: "2026-04-10T12:00:00.000Z",
+              lastProbeFailedAt: null,
+              lastVerifiedProduct: "U64",
+              lastVerifiedHostname: "u64-primary",
+              lastVerifiedUniqueId: "UID-U64-1",
+            },
+            "device-u64-secondary": {
+              deviceId: "device-u64-secondary",
+              verifiedAt: "2026-04-10T11:55:00.000Z",
+              lastHealthState: "Healthy",
+              lastConnectivityState: "Online",
+              lastProbeSucceededAt: "2026-04-10T11:55:00.000Z",
+              lastProbeFailedAt: null,
+              lastVerifiedProduct: "U64",
+              lastVerifiedHostname: "u64-secondary",
+              lastVerifiedUniqueId: "UID-U64-2",
+            },
+            "device-c64u-custom": {
+              deviceId: "device-c64u-custom",
+              verifiedAt: "2026-04-10T11:50:00.000Z",
+              lastHealthState: "Healthy",
+              lastConnectivityState: "Online",
+              lastProbeSucceededAt: "2026-04-10T11:50:00.000Z",
+              lastProbeFailedAt: null,
+              lastVerifiedProduct: "C64U",
+              lastVerifiedHostname: "studio-c64",
+              lastVerifiedUniqueId: "UID-C64U-1",
+            },
+          },
+          summaryLru: ["device-u64-primary", "device-u64-secondary", "device-c64u-custom"],
+        }),
+      );
+
+      if (withDiskReference) {
+        localStorage.setItem(
+          "c64u_disk_library:screenshot-seed",
+          JSON.stringify({
+            disks: [
+              {
+                id: "disk-seeded-1",
+                name: "Demo Disk",
+                origin: {
+                  sourceKind: "ultimate",
+                  originDeviceId: "device-u64-primary",
+                  originDeviceUniqueId: "UID-U64-1",
+                  originPath: "/disks/demo.d64",
+                },
+              },
+            ],
+          }),
+        );
+      }
+    },
+    { baseUrlArg, includeDiskReference },
+  );
+};
+
 test.describe("App screenshots", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -1675,6 +1797,7 @@ test.describe("App screenshots", () => {
     "capture settings screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl, true);
       await page.goto("/settings");
       await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
@@ -1682,6 +1805,17 @@ test.describe("App screenshots", () => {
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "settings/01-overview.png");
       await capturePageSections(page, testInfo, "settings");
+
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.getByTestId("settings-delete-device").click();
+      const deleteDialog = page.getByRole("alertdialog", { name: "Delete device?" });
+      await expect(deleteDialog).toBeVisible();
+      await captureScreenshot(page, testInfo, "settings/device-switch/01-delete-warning.png", {
+        locator: deleteDialog,
+        skipFuzzyHeadRestore: true,
+      });
+      await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(deleteDialog).toBeHidden();
     },
   );
 
@@ -1689,6 +1823,7 @@ test.describe("App screenshots", () => {
     "capture settings profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/settings");
         await applyDisplayProfileViewport(page, profileId);
@@ -1703,6 +1838,7 @@ test.describe("App screenshots", () => {
     "capture settings header badge screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
       const headerRow = page.getByTestId("app-bar-row");
       const badge = page.getByTestId("unified-health-badge");
       const scenarios = [
@@ -1749,72 +1885,7 @@ test.describe("App screenshots", () => {
     "capture diagnostics screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
-      await page.addInitScript(() => {
-        localStorage.setItem(
-          "c64u_saved_devices:v1",
-          JSON.stringify({
-            version: 1,
-            selectedDeviceId: "device-office",
-            devices: [
-              {
-                id: "device-office",
-                nickname: "Office U64",
-                shortLabel: "Office",
-                host: "c64u",
-                httpPort: 80,
-                ftpPort: 21,
-                telnetPort: 23,
-                lastKnownProduct: "U64",
-                lastKnownHostname: "office-u64",
-                lastKnownUniqueId: "UID-OFFICE",
-                lastSuccessfulConnectionAt: "2026-04-09T12:00:00.000Z",
-                lastUsedAt: "2026-04-09T12:00:00.000Z",
-                hasPassword: false,
-              },
-              {
-                id: "device-backup",
-                nickname: "Backup Lab",
-                shortLabel: "Backup",
-                host: "backup-c64",
-                httpPort: 8080,
-                ftpPort: 2021,
-                telnetPort: 2323,
-                lastKnownProduct: "U64E",
-                lastKnownHostname: "backup-lab",
-                lastKnownUniqueId: "UID-BACKUP",
-                lastSuccessfulConnectionAt: "2026-04-09T11:55:00.000Z",
-                lastUsedAt: null,
-                hasPassword: false,
-              },
-            ],
-            summaries: {
-              "device-office": {
-                deviceId: "device-office",
-                verifiedAt: "2026-04-09T12:00:00.000Z",
-                lastHealthState: "Healthy",
-                lastConnectivityState: "Online",
-                lastProbeSucceededAt: "2026-04-09T12:00:00.000Z",
-                lastProbeFailedAt: null,
-                lastVerifiedProduct: "U64",
-                lastVerifiedHostname: "office-u64",
-                lastVerifiedUniqueId: "UID-OFFICE",
-              },
-              "device-backup": {
-                deviceId: "device-backup",
-                verifiedAt: "2026-04-09T11:55:00.000Z",
-                lastHealthState: "Healthy",
-                lastConnectivityState: "Online",
-                lastProbeSucceededAt: "2026-04-09T11:55:00.000Z",
-                lastProbeFailedAt: null,
-                lastVerifiedProduct: "U64E",
-                lastVerifiedHostname: "backup-lab",
-                lastVerifiedUniqueId: "UID-BACKUP",
-              },
-            },
-            summaryLru: ["device-office", "device-backup"],
-          }),
-        );
-      });
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
 
       const openDiagnostics = async () => {
         await page.goto("/");
@@ -2168,6 +2239,7 @@ test.describe("App screenshots", () => {
     "capture diagnostics profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/");
         await applyDisplayProfileViewport(page, profileId);

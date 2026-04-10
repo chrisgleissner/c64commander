@@ -30,7 +30,6 @@ import {
 } from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
-import { setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
   loadConfigWriteIntervalMs,
   loadAutomaticDemoModeEnabled,
@@ -67,36 +66,33 @@ const {
   mockUpdateConfig,
   mockRefetch,
   mockEnableDeveloperMode,
+  mockGetSavedDeviceDependencySummary,
   mockPrimeDiagnosticsOverlaySuppression,
   mockRequestDiagnosticsOpen,
-  mockSetFeatureFlag,
   mockSetTheme,
   mockSetListPreviewLimit,
   mockSwitchSavedDevice,
   connectionPayloadRef,
   connectionStateRef,
   developerModeEnabledRef,
-  featureFlagValueRef,
   savedDevicesRef,
 } = vi.hoisted(() => ({
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
   mockEnableDeveloperMode: vi.fn(),
+  mockGetSavedDeviceDependencySummary: vi.fn(async () => ({ diskCount: 0, playlistItemCount: 0, totalCount: 0 })),
   mockPrimeDiagnosticsOverlaySuppression: vi.fn(),
   mockRequestDiagnosticsOpen: vi.fn(),
-  mockSetFeatureFlag: vi.fn(),
   mockSetTheme: vi.fn(),
   mockSetListPreviewLimit: vi.fn(),
   mockSwitchSavedDevice: vi.fn(async () => undefined),
-  featureFlagValueRef: { current: false as boolean },
   savedDevicesRef: {
     current: {
       selectedDeviceId: "saved-device-1",
       devices: [
         {
           id: "saved-device-1",
-          nickname: "Office U64",
-          shortLabel: "Office",
+          name: "Office U64",
           host: "c64u",
           httpPort: 80,
           ftpPort: 21,
@@ -166,6 +162,10 @@ vi.mock("@/lib/secureStorage", () => ({
   clearPasswordForDevice: vi.fn(async () => undefined),
 }));
 
+vi.mock("@/lib/savedDevices/deviceDependencies", () => ({
+  getSavedDeviceDependencySummary: mockGetSavedDeviceDependencySummary,
+}));
+
 vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: () => connectionStateRef.current,
 }));
@@ -185,13 +185,6 @@ vi.mock("@/hooks/useDeveloperMode", () => ({
   useDeveloperMode: () => ({
     isDeveloperModeEnabled: developerModeEnabledRef.current,
     enableDeveloperMode: mockEnableDeveloperMode,
-  }),
-}));
-
-vi.mock("@/hooks/useFeatureFlags", () => ({
-  useFeatureFlag: () => ({
-    value: featureFlagValueRef.current,
-    setValue: mockSetFeatureFlag,
   }),
 }));
 
@@ -349,12 +342,6 @@ vi.mock("@/lib/config/appSettings", () => ({
   },
 }));
 
-vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
-  getHvscBaseUrl: vi.fn(() => "https://hvsc.example.com"),
-  getHvscBaseUrlOverride: vi.fn(() => null),
-  setHvscBaseUrlOverride: vi.fn(),
-}));
-
 vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
   OnlineArchiveDialog: ({ open, config }: { open: boolean; config: { id: string; baseUrl: string } }) =>
     open ? (
@@ -369,7 +356,41 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  savedDevicesRef.current = {
+    selectedDeviceId: "saved-device-1",
+    devices: [
+      {
+        id: "saved-device-1",
+        name: "Office U64",
+        host: "c64u",
+        httpPort: 80,
+        ftpPort: 21,
+        telnetPort: 64,
+        lastKnownProduct: "U64",
+        lastKnownHostname: "office-u64",
+        lastKnownUniqueId: "UID-1",
+        lastSuccessfulConnectionAt: null,
+        lastUsedAt: null,
+        hasPassword: false,
+      },
+    ],
+    summaries: {},
+    summaryLru: [],
+    runtimeStatuses: {},
+    verifiedByDeviceId: {},
+    actualDeviceIdByDeviceId: {},
+  };
   localStorage.clear();
+  localStorage.setItem(
+    "c64u_saved_devices:v1",
+    JSON.stringify({
+      version: 1,
+      selectedDeviceId: savedDevicesRef.current.selectedDeviceId,
+      devices: savedDevicesRef.current.devices,
+      summaries: {},
+      summaryLru: [],
+    }),
+  );
   connectionPayloadRef.current = {
     status: {
       state: "OFFLINE_NO_DEMO",
@@ -388,7 +409,6 @@ beforeEach(() => {
     lastProbeFailedAtMs: null,
   };
   developerModeEnabledRef.current = false;
-  featureFlagValueRef.current = false;
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(requestDiagnosticsOpen).mockReset();
@@ -441,6 +461,95 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("removes badge-label authoring and keeps a blank device name on the product-based auto label path", async () => {
+    vi.mocked(discoverConnection).mockResolvedValue(undefined);
+
+    renderSettingsPage();
+
+    expect(screen.queryByLabelText(/badge label/i)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/device name/i), { target: { value: "   " } });
+    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "ultimate.local" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("ultimate.local", undefined);
+    });
+
+    const persisted = JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}");
+    expect(persisted.devices[0]).toMatchObject({
+      id: "saved-device-1",
+      name: "",
+      nameSource: "auto",
+      host: "ultimate.local",
+    });
+  });
+
+  it("warns before deleting a device that is still referenced by playlists or disks", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [
+        ...savedDevicesRef.current.devices,
+        {
+          id: "saved-device-2",
+          name: "Backup U64",
+          host: "backup-u64",
+          httpPort: 80,
+          ftpPort: 21,
+          telnetPort: 64,
+          lastKnownProduct: "U64",
+          lastKnownHostname: "backup-u64",
+          lastKnownUniqueId: "UID-2",
+          lastSuccessfulConnectionAt: null,
+          lastUsedAt: null,
+          hasPassword: false,
+        },
+      ],
+    };
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: savedDevicesRef.current.selectedDeviceId,
+        devices: savedDevicesRef.current.devices,
+        summaries: {},
+        summaryLru: [],
+      }),
+    );
+    mockGetSavedDeviceDependencySummary.mockResolvedValue({
+      diskCount: 2,
+      playlistItemCount: 3,
+      totalCount: 5,
+    });
+    const beforeDelete = localStorage.getItem("c64u_saved_devices:v1");
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+    await waitFor(() => {
+      expect(mockGetSavedDeviceDependencySummary).toHaveBeenCalledWith("saved-device-1");
+    });
+    const deleteDialog = screen.getByRole("alertdialog", { name: /delete device/i });
+    expect(
+      within(deleteDialog).getByText(/those items will stay in your playlists and disk library/i),
+    ).toBeInTheDocument();
+    expect(
+      within(deleteDialog).getByText(/after you delete the device, those items will no longer open/i),
+    ).toBeInTheDocument();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+    expect(localStorage.getItem("c64u_saved_devices:v1")).toBe(beforeDelete);
+  });
+
+  it("uses icon-only saved-device actions and hides the HVSC settings card", () => {
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-add-device")).toHaveAccessibleName("Add device");
+    expect(screen.getByTestId("settings-delete-device")).toHaveAccessibleName("Delete device");
+    expect(screen.queryByRole("heading", { name: "HVSC" })).toBeNull();
+    expect(screen.queryByText(/enable hvsc downloads/i)).toBeNull();
+  });
+
   it("orders core sections and places network timing under Device Safety", () => {
     renderSettingsPage();
 
@@ -491,17 +600,6 @@ describe("SettingsPage", () => {
         }),
       );
     });
-  });
-
-  it("toggles HVSC download feature flag and persists", () => {
-    const localStorageSpy = vi.spyOn(Storage.prototype, "setItem");
-
-    renderSettingsPage();
-
-    fireEvent.click(screen.getByTestId("hvsc-toggle"));
-
-    expect(mockSetFeatureFlag).toHaveBeenCalledWith(true);
-    expect(localStorageSpy).toHaveBeenCalledWith("c64u_feature_flag:hvsc_enabled", "1");
   });
 
   it("persists demo mode and debug logging toggles", () => {
@@ -1033,20 +1131,6 @@ describe("SettingsPage", () => {
     expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(callsBefore);
   });
 
-  it("handles HVSC base URL commit on blur", () => {
-    developerModeEnabledRef.current = true;
-
-    renderSettingsPage();
-
-    const input = screen.getByTestId("hvsc-base-url");
-    fireEvent.change(input, {
-      target: { value: "https://custom.hvsc.example.com" },
-    });
-    fireEvent.blur(input);
-
-    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith("https://custom.hvsc.example.com");
-  });
-
   it("saves the device slider preview interval on blur and enter", () => {
     renderSettingsPage();
 
@@ -1066,18 +1150,6 @@ describe("SettingsPage", () => {
     expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledTimes(2);
   });
 
-  it("handles HVSC base URL commit with empty value", () => {
-    developerModeEnabledRef.current = true;
-
-    renderSettingsPage();
-
-    const input = screen.getByTestId("hvsc-base-url");
-    fireEvent.change(input, { target: { value: "  " } });
-    fireEvent.blur(input);
-
-    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith(null);
-  });
-
   it("responds to c64u-device-safety-updated event", async () => {
     const loadSpy = vi.spyOn(deviceSafetySettings, "loadDeviceSafetyConfig");
 
@@ -1090,23 +1162,6 @@ describe("SettingsPage", () => {
     });
 
     expect(loadSpy.mock.calls.length).toBeGreaterThan(callsBefore);
-  });
-
-  it("handles HVSC feature flag toggle storage error", () => {
-    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new DOMException("Storage quota exceeded", "QuotaExceededError");
-    });
-
-    renderSettingsPage();
-
-    fireEvent.click(screen.getByTestId("hvsc-toggle"));
-
-    expect(mockSetFeatureFlag).toHaveBeenCalledWith(true);
-    expect(addErrorLog).toHaveBeenCalledWith("Feature flag storage failed", {
-      error: "Storage quota exceeded",
-    });
-
-    setItemSpy.mockRestore();
   });
 
   it("handles SAF getPersistedUris error path", async () => {
@@ -1145,23 +1200,6 @@ describe("SettingsPage", () => {
       });
     });
   }, 15000);
-
-  it("HVSC toggle to disabled writes 0 to storage", () => {
-    // Set HVSC feature flag to enabled (true) initially so clicking turns it off
-    featureFlagValueRef.current = true;
-    const localStorageSpy = vi.spyOn(Storage.prototype, "setItem");
-
-    renderSettingsPage();
-
-    // Click HVSC toggle — starts enabled, so clicking disables it (enabled=false)
-    fireEvent.click(screen.getByTestId("hvsc-toggle"));
-
-    // Should have been called with false (disabling)
-    expect(mockSetFeatureFlag).toHaveBeenCalledWith(false);
-    // localStorage should have been written with '0'
-    expect(localStorageSpy).toHaveBeenCalledWith("c64u_feature_flag:hvsc_enabled", "0");
-    localStorageSpy.mockRestore();
-  });
 
   it("handles non-finite input for discovery timing fields (uses fallback)", async () => {
     renderSettingsPage();

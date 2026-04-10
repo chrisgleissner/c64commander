@@ -93,8 +93,7 @@ describe("useSavedDeviceSwitching", () => {
     const c64api = await import("@/lib/c64api");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
     store.updateSavedDevice(initialDeviceId, {
-      nickname: "Office U64",
-      shortLabel: "Office",
+      name: "Office U64",
       host: "c64u",
       httpPort: 80,
       ftpPort: 21,
@@ -103,8 +102,7 @@ describe("useSavedDeviceSwitching", () => {
     });
     store.addSavedDevice({
       id: "device-backup",
-      nickname: "Backup Lab",
-      shortLabel: "Backup",
+      name: "Backup Lab",
       host: "backup-c64",
       httpPort: 8080,
       ftpPort: 2021,
@@ -168,8 +166,7 @@ describe("useSavedDeviceSwitching", () => {
     const store = await import("@/lib/savedDevices/store");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
     store.updateSavedDevice(initialDeviceId, {
-      nickname: "Office U64",
-      shortLabel: "Office",
+      name: "Office U64",
       host: "c64u",
       httpPort: 80,
       ftpPort: 21,
@@ -178,8 +175,7 @@ describe("useSavedDeviceSwitching", () => {
     });
     store.addSavedDevice({
       id: "device-backup",
-      nickname: "Backup Lab",
-      shortLabel: "Backup",
+      name: "Backup Lab",
       host: "backup-c64",
       httpPort: 8080,
       ftpPort: 2021,

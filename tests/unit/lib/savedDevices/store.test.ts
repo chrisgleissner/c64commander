@@ -38,12 +38,14 @@ describe("savedDevices store", () => {
     expect(firstSnapshot.devices).toHaveLength(1);
     expect(firstSnapshot.selectedDeviceId).toBe(firstSnapshot.devices[0]?.id);
     expect(firstSnapshot.devices[0]).toMatchObject({
+      name: "",
       host: "backup-c64",
       httpPort: 8080,
       ftpPort: 2021,
       telnetPort: 2323,
       hasPassword: true,
     });
+    expect(store.buildSavedDevicePrimaryLabel(firstSnapshot.devices[0]!)).toBe("C64U");
 
     const persistedAfterFirstLoad = localStorage.getItem(store.getSavedDevicesStorageKey());
     expect(persistedAfterFirstLoad).not.toBeNull();
@@ -57,6 +59,7 @@ describe("savedDevices store", () => {
       selectedDeviceId: firstSnapshot.selectedDeviceId,
       devices: [
         {
+          name: "",
           host: "backup-c64",
           httpPort: 8080,
           ftpPort: 2021,
@@ -65,15 +68,16 @@ describe("savedDevices store", () => {
         },
       ],
     });
-    expect(localStorage.getItem(reloadedStore.getSavedDevicesStorageKey())).toBe(persistedAfterFirstLoad);
+    expect(JSON.parse(localStorage.getItem(reloadedStore.getSavedDevicesStorageKey()) ?? "{}")).toEqual(
+      JSON.parse(persistedAfterFirstLoad ?? "{}"),
+    );
   });
 
-  it("derives unique short labels and rejects missing, duplicate, or oversized labels", async () => {
+  it("derives product-based auto names and enforces unique final labels", async () => {
     const store = await loadStore();
     const officeDevice = {
       id: "device-office",
-      nickname: "Living Room",
-      shortLabel: null,
+      name: "Living Room",
       host: "office-u64.local",
       httpPort: 80,
       ftpPort: 21,
@@ -87,8 +91,7 @@ describe("savedDevices store", () => {
     };
     const backupDevice = {
       id: "device-backup",
-      nickname: "Living Rack",
-      shortLabel: null,
+      name: "Backup Lab",
       host: "backup-lab.local",
       httpPort: 8080,
       ftpPort: 2021,
@@ -101,29 +104,53 @@ describe("savedDevices store", () => {
       hasPassword: false,
     };
 
-    const devicesWithExistingLabel = [
-      { ...officeDevice, shortLabel: "Living" },
-      { ...backupDevice, shortLabel: null },
-    ];
+    expect(store.buildSavedDevicePrimaryLabel(officeDevice)).toBe("Living Room");
+    expect(
+      store.validateSavedDeviceName([officeDevice, backupDevice], backupDevice.id, "  ", backupDevice.host),
+    ).toBeNull();
+    expect(
+      store.validateSavedDeviceName([officeDevice, backupDevice], backupDevice.id, "living room", backupDevice.host),
+    ).toBe("Device name must be unique.");
 
-    expect(store.deriveSavedDeviceShortLabel(officeDevice, [officeDevice, backupDevice])).toBe("Living");
-    expect(store.deriveSavedDeviceShortLabel(backupDevice, devicesWithExistingLabel)).toBe("backupla");
+    store.addSavedDevice({
+      id: "device-auto-1",
+      name: "   ",
+      host: "blank-host",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 64,
+      lastKnownProduct: "U64",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-auto-2",
+      name: "",
+      host: "blank-host-2",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 64,
+      lastKnownProduct: "U64",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
 
-    const devicesWithDuplicateLabel = [
-      { ...officeDevice, shortLabel: "Office" },
-      { ...backupDevice, shortLabel: null },
-    ];
-
-    expect(store.validateSavedDeviceShortLabel(devicesWithDuplicateLabel, backupDevice.id, "")).toBe(
-      "Short label is required.",
-    );
-    expect(store.validateSavedDeviceShortLabel(devicesWithDuplicateLabel, backupDevice.id, "ABCDEFGHI")).toBe(
-      "Short label must be 8 characters or fewer.",
-    );
-    expect(store.validateSavedDeviceShortLabel(devicesWithDuplicateLabel, backupDevice.id, "office")).toBe(
-      "Short label must be unique.",
-    );
-    expect(store.validateSavedDeviceShortLabel(devicesWithDuplicateLabel, backupDevice.id, "Backup")).toBeNull();
+    expect(store.getSavedDeviceById("device-auto-1")).toMatchObject({
+      name: "",
+      host: "blank-host",
+    });
+    expect(store.buildSavedDevicePrimaryLabel(store.getSavedDeviceById("device-auto-1")!)).toBe("U64");
+    expect(store.buildSavedDevicePrimaryLabel(store.getSavedDeviceById("device-auto-2")!)).toBe("U64-2");
+    expect(
+      store.validateSavedDeviceName(
+        [officeDevice, backupDevice, store.getSavedDeviceById("device-auto-1")!],
+        backupDevice.id,
+        "U64",
+        backupDevice.host,
+      ),
+    ).toBeNull();
   });
 
   it("persists the selected device across reloads and projects its connection settings", async () => {
@@ -132,8 +159,7 @@ describe("savedDevices store", () => {
     const initialDeviceId = initialSnapshot.selectedDeviceId;
 
     store.updateSavedDevice(initialDeviceId, {
-      nickname: "Office U64",
-      shortLabel: "Office",
+      name: "Office U64",
       host: "c64u",
       httpPort: 80,
       ftpPort: 21,
@@ -141,8 +167,7 @@ describe("savedDevices store", () => {
     });
     store.addSavedDevice({
       id: "device-backup",
-      nickname: "Backup Lab",
-      shortLabel: "Backup",
+      name: "Backup Lab",
       host: "backup-c64",
       httpPort: 8080,
       ftpPort: 2021,

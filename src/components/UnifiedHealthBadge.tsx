@@ -99,7 +99,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   const canSwitchDevices = savedDevices.devices.length > 1;
 
   const glyph = HEALTH_GLYPHS[state];
-  const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product);
+  const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
   const glyphColor = HEALTH_COLOR[state];
   const badgeText = getBadgeTextContract(
     state,

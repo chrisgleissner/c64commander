@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
+import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -51,7 +52,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogFooter, DialogHeader, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DialogContent } from "@/components/ui/dialog";
@@ -59,13 +59,11 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { useDeveloperMode } from "@/hooks/useDeveloperMode";
-import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
-import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
@@ -142,15 +140,23 @@ import { buildDefaultArchiveClientConfig, validateArchiveHost, resolveArchiveCli
 import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
 import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import {
+  buildSavedDeviceEditorDraft,
+  type SavedDeviceEditorDraft,
+  validateSavedDevicePorts,
+} from "@/lib/savedDevices/deviceEditor";
+import {
   addSavedDevice,
   buildSavedDevicePrimaryLabel,
-  deriveSavedDeviceShortLabel,
   getSavedDevicesSnapshot,
   removeSavedDevice,
   resolveCanonicalProductFamilyCode,
   updateSavedDevice,
-  validateSavedDeviceShortLabel,
+  validateSavedDeviceName,
 } from "@/lib/savedDevices/store";
+import {
+  getSavedDeviceDependencySummary,
+  type SavedDeviceDependencySummary,
+} from "@/lib/savedDevices/deviceDependencies";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 
 type Theme = "light" | "dark" | "system";
@@ -169,7 +175,6 @@ export default function SettingsPage() {
   const connectionSnapshot = useConnectionState();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
-  const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag("hvsc_enabled");
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   const {
     override: displayProfileOverride,
@@ -180,27 +185,21 @@ export default function SettingsPage() {
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
 
-  const setHvscEnabledAndPersist = (enabled: boolean) => {
-    void setHvscEnabled(enabled);
-    try {
-      localStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
-      sessionStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
-    } catch (error) {
-      addErrorLog("Feature flag storage failed", {
-        error: (error as Error).message,
-      });
-    }
-  };
-
   const [passwordInput, setPasswordInput] = useState(password);
-  const [nicknameInput, setNicknameInput] = useState("");
-  const [shortLabelInput, setShortLabelInput] = useState("");
-  const [deviceHostInput, setDeviceHostInput] = useState(() => stripPortFromDeviceHost(deviceHost));
-  const [httpPortInput, setHttpPortInput] = useState(() => String(getDeviceHostHttpPort(deviceHost, runtimeBaseUrl)));
-  const [ftpPortInput, setFtpPortInput] = useState(() => String(getStoredFtpPort()));
-  const [telnetPortInput, setTelnetPortInput] = useState(() => String(getStoredTelnetPort()));
+  const [deviceDraft, setDeviceDraft] = useState<SavedDeviceEditorDraft>(() =>
+    buildSavedDeviceEditorDraft(
+      {
+        name: stripPortFromDeviceHost(deviceHost),
+        host: stripPortFromDeviceHost(deviceHost),
+        httpPort: getDeviceHostHttpPort(deviceHost, runtimeBaseUrl),
+        ftpPort: getStoredFtpPort(),
+        telnetPort: getStoredTelnetPort(),
+      },
+      stripPortFromDeviceHost(deviceHost),
+    ),
+  );
+  const [deviceNameError, setDeviceNameError] = useState<string | null>(null);
   const [hostnameError, setHostnameError] = useState<string | null>(null);
-  const [shortLabelError, setShortLabelError] = useState<string | null>(null);
   const [connectionFieldError, setConnectionFieldError] = useState<string | null>(null);
   const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
   const runtimeHttpPort = getDeviceHostHttpPort(deviceHost, runtimeBaseUrl);
@@ -212,10 +211,11 @@ export default function SettingsPage() {
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteDependencySummary, setDeleteDependencySummary] = useState<SavedDeviceDependencySummary | null>(null);
+  const [deleteWarningOpen, setDeleteWarningOpen] = useState(false);
+  const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
-  const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
-  const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(loadAutomaticDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
@@ -280,14 +280,6 @@ export default function SettingsPage() {
     [archiveClientIdOverride, archiveHostOverride, archiveUserAgentOverride, commoserveEnabled],
   );
 
-  const commitHvscBaseUrl = useCallback(() => {
-    const trimmed = hvscBaseUrlInput.trim();
-    setHvscBaseUrlOverride(trimmed || null);
-    const resolved = getHvscBaseUrl();
-    setHvscBaseUrlInput(trimmed ? resolved : "");
-    setHvscBaseUrlPreview(resolved);
-  }, [hvscBaseUrlInput]);
-
   useEffect(() => {
     setPasswordInput(password);
   }, [password]);
@@ -296,12 +288,10 @@ export default function SettingsPage() {
     if (!selectedSavedDevice) {
       return;
     }
-    setNicknameInput(selectedSavedDevice.nickname ?? "");
-    setShortLabelInput(selectedSavedDevice.shortLabel ?? "");
-    setDeviceHostInput(selectedSavedDevice.host);
-    setHttpPortInput(String(selectedSavedDevice.httpPort));
-    setFtpPortInput(String(selectedSavedDevice.ftpPort));
-    setTelnetPortInput(String(selectedSavedDevice.telnetPort));
+    setDeviceDraft(buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host));
+    setDeviceNameError(null);
+    setHostnameError(null);
+    setConnectionFieldError(null);
     let cancelled = false;
     void (async () => {
       const nextPassword = selectedSavedDevice.hasPassword ? await getPasswordForDevice(selectedSavedDevice.id) : null;
@@ -313,6 +303,24 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [selectedSavedDevice]);
+
+  const handleDeviceDraftChange = useCallback(
+    (nextDraft: SavedDeviceEditorDraft) => {
+      setDeviceDraft(nextDraft);
+      if (selectedSavedDevice && deviceNameError) {
+        setDeviceNameError(
+          validateSavedDeviceName(savedDevices.devices, selectedSavedDevice.id, nextDraft.name, nextDraft.host),
+        );
+      }
+      if (hostnameError) {
+        setHostnameError(validateDeviceHost(nextDraft.host));
+      }
+      if (connectionFieldError) {
+        setConnectionFieldError(validateSavedDevicePorts(nextDraft));
+      }
+    },
+    [connectionFieldError, deviceNameError, hostnameError, savedDevices.devices, selectedSavedDevice],
+  );
 
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
@@ -441,34 +449,30 @@ export default function SettingsPage() {
 
   const handleSaveConnection = trace(async function handleSaveConnection() {
     if (!selectedSavedDevice) return;
-    const hostError = validateDeviceHost(deviceHostInput);
+    const hostError = validateDeviceHost(deviceDraft.host);
     setHostnameError(hostError);
-    const nextShortLabelError = shortLabelInput.trim()
-      ? validateSavedDeviceShortLabel(savedDevices.devices, selectedSavedDevice.id, shortLabelInput)
-      : null;
-    setShortLabelError(nextShortLabelError);
-    const portError = !isValidConnectionPort(httpPortInput)
-      ? "HTTP port must be 1 to 65535."
-      : !isValidConnectionPort(ftpPortInput)
-        ? "FTP port must be 1 to 65535."
-        : !isValidConnectionPort(telnetPortInput)
-          ? "Telnet port must be 1 to 65535."
-          : null;
+    const nextDeviceNameError = validateSavedDeviceName(
+      savedDevices.devices,
+      selectedSavedDevice.id,
+      deviceDraft.name,
+      deviceDraft.host,
+    );
+    setDeviceNameError(nextDeviceNameError);
+    const portError = validateSavedDevicePorts(deviceDraft);
     setConnectionFieldError(portError);
-    if (hostError || portError || nextShortLabelError) return;
+    if (hostError || portError || nextDeviceNameError) return;
     setIsSaving(true);
     try {
-      const nextHost = stripPortFromDeviceHost(deviceHostInput.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
-      const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(httpPortInput));
-      setStoredFtpPort(Number(ftpPortInput));
-      setStoredTelnetPort(Number(telnetPortInput));
+      const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+      const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
+      setStoredFtpPort(Number(deviceDraft.ftpPort));
+      setStoredTelnetPort(Number(deviceDraft.telnetPort));
       updateSavedDevice(selectedSavedDevice.id, {
-        nickname: nicknameInput.trim() || null,
-        shortLabel: shortLabelInput.trim() || null,
+        name: deviceDraft.name,
         host: nextHost,
-        httpPort: Number(httpPortInput),
-        ftpPort: Number(ftpPortInput),
-        telnetPort: Number(telnetPortInput),
+        httpPort: Number(deviceDraft.httpPort),
+        ftpPort: Number(deviceDraft.ftpPort),
+        telnetPort: Number(deviceDraft.telnetPort),
       });
       if (passwordInput.trim()) {
         await setPasswordForDevice(selectedSavedDevice.id, passwordInput.trim());
@@ -497,8 +501,7 @@ export default function SettingsPage() {
       `${Date.now().toString(36)}-${Math.round(Math.random() * 1e6).toString(36)}`;
     addSavedDevice({
       id: nextId,
-      nickname: `Device ${savedDevices.devices.length + 1}`,
-      shortLabel: null,
+      name: "",
       host: C64_DEFAULTS.DEFAULT_DEVICE_HOST,
       httpPort: C64_DEFAULTS.DEFAULT_HTTP_PORT,
       ftpPort: getStoredFtpPort(),
@@ -511,7 +514,7 @@ export default function SettingsPage() {
     await switchSavedDevice(nextId);
   });
 
-  const handleDeleteSelectedDevice = trace(async function handleDeleteSelectedDevice() {
+  const performDeleteSelectedDevice = trace(async function performDeleteSelectedDevice() {
     if (!selectedSavedDevice || savedDevices.devices.length <= 1) return;
     removeSavedDevice(selectedSavedDevice.id);
     await clearPasswordForDevice(selectedSavedDevice.id);
@@ -519,6 +522,36 @@ export default function SettingsPage() {
     if (nextSelected) {
       await switchSavedDevice(nextSelected);
     }
+  });
+
+  const handleDeleteSelectedDevice = trace(async function handleDeleteSelectedDevice() {
+    if (!selectedSavedDevice || savedDevices.devices.length <= 1 || deleteDependencyBusy) return;
+
+    setDeleteDependencyBusy(true);
+    try {
+      const summary = await getSavedDeviceDependencySummary(selectedSavedDevice.id);
+      if (summary.totalCount <= 0) {
+        await performDeleteSelectedDevice();
+        return;
+      }
+      setDeleteDependencySummary(summary);
+      setDeleteWarningOpen(true);
+    } catch (error) {
+      reportUserError({
+        operation: "DEVICE_DELETE_DEPENDENCIES",
+        title: "Unable to inspect saved device references",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setDeleteDependencyBusy(false);
+    }
+  });
+
+  const confirmDeleteSelectedDevice = trace(async function confirmDeleteSelectedDevice() {
+    setDeleteWarningOpen(false);
+    setDeleteDependencySummary(null);
+    await performDeleteSelectedDevice();
   });
 
   const handleSelectSavedDevice = trace(async function handleSelectSavedDevice(deviceId: string) {
@@ -785,27 +818,38 @@ export default function SettingsPage() {
 
               <div className="space-y-3">
                 <div className="space-y-2 rounded-lg border border-border/70 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
+                  <div className="flex items-center justify-between gap-3 min-w-0">
+                    <div className="min-w-0">
                       <Label className="text-sm font-medium">Saved devices</Label>
                       <p className="text-xs text-muted-foreground">
                         Manage devices here. Long press the header badge to switch quickly.
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={handleAddSavedDevice}>
-                        <Plus className="mr-1 h-3.5 w-3.5" />
-                        Add
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={handleAddSavedDevice}
+                        aria-label="Add device"
+                        title="Add device"
+                        data-testid="settings-add-device"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8"
                         onClick={handleDeleteSelectedDevice}
-                        disabled={savedDevices.devices.length <= 1 || !selectedSavedDevice}
+                        disabled={savedDevices.devices.length <= 1 || !selectedSavedDevice || deleteDependencyBusy}
+                        aria-label="Delete device"
+                        title="Delete device"
+                        data-testid="settings-delete-device"
                       >
-                        <Trash className="mr-1 h-3.5 w-3.5" />
-                        Delete
+                        <Trash className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -837,140 +881,29 @@ export default function SettingsPage() {
                               {productCode} · {device.host}
                             </p>
                           </div>
-                          <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            {deriveSavedDeviceShortLabel(device, savedDevices.devices)}
-                          </span>
+                          {isSelected ? (
+                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              Selected
+                            </span>
+                          ) : null}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="deviceNickname" className="text-sm">
-                      Device name
-                    </Label>
-                    <Input
-                      id="deviceNickname"
-                      value={nicknameInput}
-                      onChange={(e) => setNicknameInput(e.target.value)}
-                      placeholder="Optional nickname"
-                      className="font-sans"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="deviceShortLabel" className="text-sm">
-                      Badge label
-                    </Label>
-                    <Input
-                      id="deviceShortLabel"
-                      value={shortLabelInput}
-                      onChange={(e) => {
-                        setShortLabelInput(e.target.value);
-                        if (shortLabelError) {
-                          setShortLabelError(
-                            e.target.value.trim()
-                              ? validateSavedDeviceShortLabel(
-                                  savedDevices.devices,
-                                  selectedSavedDevice?.id ?? "",
-                                  e.target.value,
-                                )
-                              : null,
-                          );
-                        }
-                      }}
-                      placeholder="Up to 8 chars"
-                      className="font-sans"
-                      maxLength={8}
-                    />
-                    {shortLabelError ? (
-                      <p className="text-xs text-destructive" role="alert">
-                        {shortLabelError}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Optional. Leave blank to derive from the device name or host.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="deviceHost" className="text-sm">
-                    C64U Hostname / IP
-                  </Label>
-                  <Input
-                    id="deviceHost"
-                    value={deviceHostInput}
-                    onChange={(e) => {
-                      setDeviceHostInput(e.target.value);
-                      if (hostnameError) setHostnameError(validateDeviceHost(e.target.value));
-                    }}
-                    onBlur={(e) => setHostnameError(validateDeviceHost(e.target.value))}
-                    placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
-                    className="font-sans"
-                    aria-describedby={hostnameError ? "deviceHost-error" : undefined}
-                    aria-invalid={hostnameError ? true : undefined}
+                  <SavedDeviceEditorFields
+                    draft={deviceDraft}
+                    onChange={handleDeviceDraftChange}
+                    nameError={deviceNameError}
+                    hostError={hostnameError}
+                    portError={connectionFieldError}
+                    idPrefix="settings-device"
+                    hostLabel="C64U Hostname / IP"
+                    hostHint="Hostname or IP from the C64 menu."
+                    onHostBlur={(value) => setHostnameError(validateDeviceHost(value))}
                   />
-                  {hostnameError ? (
-                    <p id="deviceHost-error" className="text-xs text-destructive" role="alert">
-                      {hostnameError}
-                    </p>
-                  ) : null}
-                  <p className="text-xs text-muted-foreground">Hostname or IP from the C64 menu.</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="httpPort" className="text-xs text-muted-foreground">
-                        HTTP Port
-                      </Label>
-                      <Input
-                        id="httpPort"
-                        inputMode="numeric"
-                        value={httpPortInput}
-                        onChange={(e) => {
-                          setHttpPortInput(e.target.value.replace(/[^0-9]/g, ""));
-                          if (connectionFieldError) setConnectionFieldError(null);
-                        }}
-                        className="font-sans"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="ftpPort" className="text-xs text-muted-foreground">
-                        FTP Port
-                      </Label>
-                      <Input
-                        id="ftpPort"
-                        inputMode="numeric"
-                        value={ftpPortInput}
-                        onChange={(e) => {
-                          setFtpPortInput(e.target.value.replace(/[^0-9]/g, ""));
-                          if (connectionFieldError) setConnectionFieldError(null);
-                        }}
-                        className="font-sans"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="telnetPort" className="text-xs text-muted-foreground">
-                        Telnet Port
-                      </Label>
-                      <Input
-                        id="telnetPort"
-                        inputMode="numeric"
-                        value={telnetPortInput}
-                        onChange={(e) => {
-                          setTelnetPortInput(e.target.value.replace(/[^0-9]/g, ""));
-                          if (connectionFieldError) setConnectionFieldError(null);
-                        }}
-                        className="font-sans"
-                      />
-                    </div>
-                  </div>
-                  {connectionFieldError ? (
-                    <p className="text-xs text-destructive" role="alert">
-                      {connectionFieldError}
-                    </p>
-                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
                     {` · HTTP ${runtimeHttpPort} · FTP ${getStoredFtpPort()} · Telnet ${getStoredTelnetPort()}`}
@@ -1045,6 +978,52 @@ export default function SettingsPage() {
               <div
                 className={`break-words rounded-lg p-3 text-sm ${status.isConnected ? "bg-success/10 text-success" : isDemoActive ? "bg-primary/10 text-primary" : status.isConnecting ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}
               >
+                <AlertDialog
+                  open={deleteWarningOpen}
+                  onOpenChange={(open) => {
+                    setDeleteWarningOpen(open);
+                    if (!open) {
+                      setDeleteDependencySummary(null);
+                    }
+                  }}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete device?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Removing{" "}
+                        {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}
+                        will disconnect {deleteDependencySummary?.totalCount ?? 0} saved item
+                        {(deleteDependencySummary?.totalCount ?? 0) === 1 ? "" : "s"} that still point to it.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-1 text-sm text-muted-foreground">
+                      <p>Those items will stay in your playlists and disk library.</p>
+                      <p>
+                        Playlist items: {deleteDependencySummary?.playlistItemCount ?? 0} item
+                        {(deleteDependencySummary?.playlistItemCount ?? 0) === 1 ? "" : "s"}
+                      </p>
+                      <p>
+                        Disk library items: {deleteDependencySummary?.diskCount ?? 0} item
+                        {(deleteDependencySummary?.diskCount ?? 0) === 1 ? "" : "s"}
+                      </p>
+                      <p>
+                        After you delete the device, those items will no longer open until you import them again or
+                        remove them.
+                      </p>
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          void confirmDeleteSelectedDevice();
+                        }}
+                      >
+                        Delete device
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 {status.isConnecting
                   ? "Connecting..."
                   : status.isConnected
@@ -1327,72 +1306,6 @@ export default function SettingsPage() {
                 />
                 <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
               </div>
-            </div>
-          </motion.div>
-
-          {/* 6. HVSC */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4"
-          >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Cpu className="h-5 w-5 text-primary" />
-              </div>
-              <h2 className="font-medium">HVSC</h2>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <div
-                  className="space-y-1 min-w-0 cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setHvscEnabledAndPersist(!isHvscEnabled);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return;
-                    event.preventDefault();
-                    setHvscEnabledAndPersist(!isHvscEnabled);
-                  }}
-                >
-                  <Label htmlFor="hvsc-flag" className="font-medium">
-                    Enable HVSC downloads
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Shows HVSC download and ingest controls on the Play page.
-                  </p>
-                </div>
-                <Checkbox
-                  id="hvsc-flag"
-                  aria-label="Enable HVSC downloads"
-                  data-testid="hvsc-toggle"
-                  checked={isHvscEnabled}
-                  onCheckedChange={(checked) => {
-                    setHvscEnabledAndPersist(checked === true);
-                  }}
-                />
-              </div>
-              {isDeveloperModeEnabled ? (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">HVSC base URL override</Label>
-                  <Input
-                    value={hvscBaseUrlInput}
-                    onChange={(event) => setHvscBaseUrlInput(event.target.value)}
-                    onBlur={commitHvscBaseUrl}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") commitHvscBaseUrl();
-                    }}
-                    placeholder={hvscBaseUrlPreview}
-                    data-testid="hvsc-base-url"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
-                  </p>
-                </div>
-              ) : null}
             </div>
           </motion.div>
 
