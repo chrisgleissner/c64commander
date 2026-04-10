@@ -189,13 +189,29 @@ Built-in guides for setup, workflows, and day-to-day usage.
 
 ### Diagnostics
 
-Accessible via the C64U connectivity badge in the top-right corner. Provides health checks, activity logs, trace inspection, filter editor, and latency analysis across App, REST, FTP, and Telnet contributors.
+Short-press the top-right status badge to open diagnostics.
+
+Provides health checks, activity logs, trace inspection, filter editor, and latency analysis across App, REST, FTP, and Telnet contributors.
 
 <table>
   <tr>
     <td><img src="docs/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/activity/07-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
+  </tr>
+</table>
+
+### Device Switcher
+
+Long-press the top-right status badge to switch between devices.
+
+The switcher shows all configured devices with real-time health status, allowing instant switching and quick identification of connectivity or service issues.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/01-picker.png" alt="Switcher (Connecting)" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/03-picker-all-healthy.png" alt="Switcher (All Healthy)" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/04-picker-one-unhealthy.png" alt="Switcher (One Unhealthy)" width="360"/></td>
   </tr>
 </table>
 

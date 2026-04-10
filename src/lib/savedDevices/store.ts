@@ -7,6 +7,7 @@
  */
 
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
+import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
 
 export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
 
@@ -88,7 +89,7 @@ let snapshot: SavedDevicesSnapshot | null = null;
 
 const compact = (value: string) => value.replace(/[^a-z0-9]+/gi, "");
 
-const normalizeSavedDeviceName = (name: string | null | undefined) => name?.trim() ?? "";
+const normalizeSavedDeviceName = (name: string | null | undefined) => sanitizeSavedDeviceNameInput(name ?? "");
 
 const resolveSavedDeviceNameSource = (name: string, host: string, nameSource?: SavedDevice["nameSource"]) => {
   if (nameSource === "custom" && name) return "custom" as const;

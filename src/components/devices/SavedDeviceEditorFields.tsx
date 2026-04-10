@@ -1,6 +1,11 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { sanitizeSavedDevicePortInput, type SavedDeviceEditorDraft } from "@/lib/savedDevices/deviceEditor";
+import {
+  MAX_SAVED_DEVICE_NAME_LENGTH,
+  sanitizeSavedDeviceNameInput,
+  sanitizeSavedDevicePortInput,
+  type SavedDeviceEditorDraft,
+} from "@/lib/savedDevices/deviceEditor";
 
 type Props = {
   draft: SavedDeviceEditorDraft;
@@ -34,9 +39,10 @@ export function SavedDeviceEditorFields({
         <Input
           id={`${idPrefix}-name`}
           value={draft.name}
-          onChange={(event) => onChange({ ...draft, name: event.target.value })}
+          onChange={(event) => onChange({ ...draft, name: sanitizeSavedDeviceNameInput(event.target.value) })}
           placeholder="Defaults to the detected device type"
           className="font-sans"
+          maxLength={MAX_SAVED_DEVICE_NAME_LENGTH}
           aria-describedby={nameError ? `${idPrefix}-name-error` : `${idPrefix}-name-help`}
           aria-invalid={nameError ? true : undefined}
         />
@@ -46,7 +52,7 @@ export function SavedDeviceEditorFields({
           </p>
         ) : (
           <p id={`${idPrefix}-name-help`} className="text-xs text-muted-foreground">
-            Leave blank to use the detected device type, with a suffix added automatically for duplicates.
+            Leave blank to use the detected device type, with a suffix added automatically for duplicates. Max 10 characters.
           </p>
         )}
       </div>

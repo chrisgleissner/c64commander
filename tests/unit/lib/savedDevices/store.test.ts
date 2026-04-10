@@ -104,7 +104,7 @@ describe("savedDevices store", () => {
       hasPassword: false,
     };
 
-    expect(store.buildSavedDevicePrimaryLabel(officeDevice)).toBe("Living Room");
+    expect(store.buildSavedDevicePrimaryLabel(officeDevice)).toBe("Living Roo");
     expect(
       store.validateSavedDeviceName([officeDevice, backupDevice], backupDevice.id, "  ", backupDevice.host),
     ).toBeNull();
@@ -151,6 +151,25 @@ describe("savedDevices store", () => {
         backupDevice.host,
       ),
     ).toBeNull();
+  });
+
+  it("truncates custom device names to 10 characters when persisting updates", async () => {
+    const store = await loadStore();
+    const initialSnapshot = store.getSavedDevicesSnapshot();
+    const initialDeviceId = initialSnapshot.selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Ultimate FE 64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      name: "Ultimate F",
+    });
+    expect(store.buildSavedDevicePrimaryLabel(store.getSelectedSavedDevice()!)).toBe("Ultimate F");
   });
 
   it("persists the selected device across reloads and projects its connection settings", async () => {

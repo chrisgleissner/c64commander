@@ -27,6 +27,11 @@ Screenshots reviewed:
 
 - `docs/img/app/home/profiles/medium/01-overview.png`
 - `docs/img/app/diagnostics/switch-device/01-picker.png`
+- `docs/img/app/diagnostics/switch-device/02-picker-expanded.png`
+- `docs/img/app/diagnostics/switch-device/03-picker-all-healthy.png`
+- `docs/img/app/diagnostics/switch-device/04-picker-one-unhealthy.png`
+- `docs/img/app/diagnostics/switch-device/05-picker-all-healthy-expanded.png`
+- `docs/img/app/diagnostics/switch-device/06-picker-one-unhealthy-expanded.png`
 - `docs/img/app/diagnostics/01-overview.png`
 - `docs/img/app/settings/sections/02-connection.png`
 

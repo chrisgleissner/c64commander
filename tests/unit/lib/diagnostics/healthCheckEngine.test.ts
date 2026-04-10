@@ -54,6 +54,13 @@ vi.mock("@/lib/diagnostics/healthModel", async (importOriginal) => {
 });
 
 vi.mock("@/lib/c64api", () => ({
+  C64API: vi.fn().mockImplementation(() => ({
+    getInfo: mockGetInfo,
+    readMemory: mockReadMemory,
+    getConfigItem: mockGetConfigItem,
+    setConfigValue: mockSetConfigValue,
+    loadConfig: mockLoadConfig,
+  })),
   getC64API: vi.fn(() => ({
     getInfo: mockGetInfo,
     readMemory: mockReadMemory,
@@ -111,6 +118,7 @@ import {
   isHealthCheckRunning,
   recoverStaleHealthCheckRun,
   runHealthCheck,
+  runHealthCheckForTarget,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -160,6 +168,15 @@ const setupAllProbesSuccess = () => {
 };
 
 beforeEach(() => {
+  mockGetInfo.mockReset();
+  mockReadMemory.mockReset();
+  mockGetConfigItem.mockReset();
+  mockSetConfigValue.mockReset();
+  mockLoadConfig.mockReset();
+  mockListFtpDirectory.mockReset();
+  mockTelnetConnect.mockReset();
+  mockTelnetReadScreen.mockReset();
+  mockTelnetDisconnect.mockReset();
   vi.clearAllMocks();
   clearHealthHistory();
   resetHealthCheckStateSnapshot();
@@ -321,6 +338,31 @@ describe("runHealthCheck — all-success path", () => {
     expect(getHealthCheckStateSnapshot().running).toBe(false);
 
     await expect(runPromise).resolves.toBeNull();
+  });
+});
+
+describe("runHealthCheckForTarget", () => {
+  it("runs a passive per-device check without mutating config and uses target ports and password", async () => {
+    setupAllProbesSuccess();
+
+    const result = await runHealthCheckForTarget(
+      {
+        deviceHost: "backup-u64:8080",
+        ftpPort: 2021,
+        telnetPort: 2323,
+        password: "secret",
+      },
+      { mode: "passive" },
+    );
+
+    expect(result.connectivity).toBe("Online");
+    expect(result.probes.CONFIG.outcome).toBe("Skipped");
+    expect(result.probes.CONFIG.reason).toContain("passive switcher checks");
+    expect(mockSetConfigValue).not.toHaveBeenCalled();
+    expect(mockListFtpDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
+    );
+    expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323, "secret");
   });
 });
 

@@ -6,8 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
 import {
   AppDialog,
   AppDialogBody,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { useHealthState } from "@/hooks/useHealthState";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import {
@@ -47,6 +49,223 @@ const resolvePickerStatusLabel = (status: DeviceSwitchStatus, isSelected: boolea
   if (isSelected) return "Selected";
   return null;
 };
+
+const formatRelativeTime = (prefix: string, timestampMs: number | null) => {
+  if (timestampMs === null || Number.isNaN(timestampMs)) return `${prefix} -`;
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  if (minutes === 0) {
+    return `${prefix} ${seconds}s ago`;
+  }
+  return `${prefix} ${minutes}m ${seconds}s ago`;
+};
+
+const parseIsoTimestamp = (value: string | null) => {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const resolveDeviceHealthLabel = (
+  snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
+) => {
+  if (!snapshot) return "Pending";
+  if (snapshot.running) return "Checking";
+  if (snapshot.error) return "Check failed";
+  if (!snapshot.latestResult) return "Pending";
+  return snapshot.latestResult.overallHealth === "Unavailable" ? "Offline" : snapshot.latestResult.overallHealth;
+};
+
+const resolveCompletedProbeCount = (
+  snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
+) => {
+  if (!snapshot?.liveProbes) return 0;
+  return Object.keys(snapshot.liveProbes).length;
+};
+
+const resolveDeviceHealthSummary = (
+  snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
+  totalProbeCount: number,
+  switchStatusLabel: string | null,
+) => {
+  const switchPrefix = switchStatusLabel && switchStatusLabel !== "Selected" ? `${switchStatusLabel} selection` : null;
+
+  if (!snapshot) {
+    return [switchPrefix, "Waiting to start"].filter(Boolean).join(" · ");
+  }
+
+  if (snapshot.running) {
+    return [
+      switchPrefix,
+      `${resolveCompletedProbeCount(snapshot)}/${totalProbeCount} probes`,
+      formatRelativeTime("Started", parseIsoTimestamp(snapshot.lastStartedAt)),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  if (snapshot.error) {
+    return [
+      switchPrefix,
+      "Latest check failed",
+      formatRelativeTime("Last check", parseIsoTimestamp(snapshot.lastCompletedAt)),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return [switchPrefix, formatRelativeTime("Last check", parseIsoTimestamp(snapshot.lastCompletedAt))]
+    .filter(Boolean)
+    .join(" · ");
+};
+
+const resolveHealthProblemCount = (result: HealthCheckRunResult | null | undefined) => {
+  if (!result) return 0;
+  return Object.values(result.probes).filter((probe) => probe.outcome === "Fail").length;
+};
+
+type PickerBadgeContract = {
+  healthState: HealthState;
+  badgeText: ReturnType<typeof getBadgeTextContract>;
+};
+
+const resolvePickerBadgeContract = (
+  snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
+): PickerBadgeContract => {
+  if (!snapshot) {
+    return {
+      healthState: "Idle",
+      badgeText: {
+        leadingLabel: "Pending",
+        glyph: HEALTH_GLYPHS.Idle,
+        countLabel: null,
+        trailingLabel: null,
+      },
+    };
+  }
+
+  if (snapshot.running && !snapshot.latestResult) {
+    return {
+      healthState: "Idle",
+      badgeText: {
+        leadingLabel: "Checking",
+        glyph: HEALTH_GLYPHS.Idle,
+        countLabel: null,
+        trailingLabel: null,
+      },
+    };
+  }
+
+  if (snapshot.running && snapshot.latestResult) {
+    const healthState = snapshot.latestResult.overallHealth;
+    return {
+      healthState,
+      badgeText: getBadgeTextContract(
+        healthState,
+        "Checking",
+        resolveHealthProblemCount(snapshot.latestResult),
+        "medium",
+        HEALTH_GLYPHS[healthState],
+        null,
+        "Checking",
+      ),
+    };
+  }
+
+  if (snapshot.error) {
+    return {
+      healthState: "Unavailable",
+      badgeText: getBadgeTextContract("Unavailable", "Offline", 0, "medium", HEALTH_GLYPHS.Unavailable),
+    };
+  }
+
+  if (!snapshot.latestResult) {
+    return {
+      healthState: "Idle",
+      badgeText: {
+        leadingLabel: "Pending",
+        glyph: HEALTH_GLYPHS.Idle,
+        countLabel: null,
+        trailingLabel: null,
+      },
+    };
+  }
+
+  const healthState = snapshot.latestResult.overallHealth;
+  const connectivity = snapshot.latestResult.connectivity;
+  return {
+    healthState,
+    badgeText: getBadgeTextContract(
+      healthState,
+      connectivity,
+      resolveHealthProblemCount(snapshot.latestResult),
+      "medium",
+      HEALTH_GLYPHS[healthState],
+      null,
+      connectivity === "Online" || connectivity === "Checking" ? connectivity : undefined,
+    ),
+  };
+};
+
+function PickerHealthStatusBadge({
+  snapshot,
+  testId,
+}: {
+  snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined;
+  testId: string;
+}) {
+  const { badgeText, healthState } = resolvePickerBadgeContract(snapshot);
+  const glyphColor = HEALTH_COLOR[healthState];
+
+  return (
+    <span className="inline-flex w-fit max-w-full shrink-0 min-w-0 items-center overflow-hidden rounded-full" data-testid={testId}>
+      <span
+        className="app-chrome-badge-surface inline-flex min-w-0 max-w-full items-center overflow-hidden rounded-full px-2 py-[0.25rem]"
+        aria-hidden="true"
+      >
+        <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
+          <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground">
+            {badgeText.leadingLabel}
+          </span>
+          <span className="shrink-0 whitespace-pre" aria-hidden="true">
+            {" "}
+          </span>
+          <span
+            className={cn(
+              "inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center align-middle font-sans text-[0.95rem] leading-none transform-gpu",
+              glyphColor,
+              HEALTH_GLYPH_VISUAL_CLASS[healthState],
+              HEALTH_GLYPH_ALIGNMENT_CLASS[healthState],
+            )}
+          >
+            {badgeText.glyph}
+          </span>
+          {badgeText.countLabel ? (
+            <>
+              <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                {" "}
+              </span>
+              <span className={cn("shrink-0 text-[10px] font-semibold leading-none", glyphColor)}>
+                {badgeText.countLabel}
+              </span>
+            </>
+          ) : null}
+          {badgeText.trailingLabel ? (
+            <>
+              <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                {" "}
+              </span>
+              <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground">
+                {badgeText.trailingLabel}
+              </span>
+            </>
+          ) : null}
+        </span>
+      </span>
+    </span>
+  );
+}
 
 // §8.3 — Color classes per health state (shape is primary; color reinforces only)
 const HEALTH_COLOR: Record<HealthState, string> = {
@@ -92,11 +311,17 @@ export function UnifiedHealthBadge({ className }: Props) {
   } = useC64Connection();
   const { profile } = useDisplayProfile();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [expandedDeviceIds, setExpandedDeviceIds] = useState<string[]>([]);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
   const suppressClickRef = useRef(false);
 
   const canSwitchDevices = savedDevices.devices.length > 1;
+  const {
+    byDeviceId: healthByDeviceId,
+    refreshAll,
+    totalProbeCount,
+  } = useSavedDeviceHealthChecks(savedDevices.devices, pickerOpen && canSwitchDevices);
 
   const glyph = HEALTH_GLYPHS[state];
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
@@ -110,6 +335,27 @@ export function UnifiedHealthBadge({ className }: Props) {
     deviceInfo?.product,
     connectedDeviceLabel,
   );
+  const expandedDeviceIdSet = useMemo(() => new Set(expandedDeviceIds), [expandedDeviceIds]);
+  const pickerBadgeOwnLine = profile !== "expanded";
+  const pickerRefreshRequestedRef = useRef(false);
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      setExpandedDeviceIds([]);
+    }
+  }, [pickerOpen]);
+
+  useEffect(() => {
+    if (pickerOpen && canSwitchDevices && !pickerRefreshRequestedRef.current) {
+      pickerRefreshRequestedRef.current = true;
+      void refreshAll();
+      return;
+    }
+
+    if (!pickerOpen) {
+      pickerRefreshRequestedRef.current = false;
+    }
+  }, [canSwitchDevices, pickerOpen, refreshAll]);
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -156,6 +402,12 @@ export function UnifiedHealthBadge({ className }: Props) {
     },
     [clearLongPress],
   );
+
+  const toggleDeviceDetails = useCallback((deviceId: string) => {
+    setExpandedDeviceIds((current) =>
+      current.includes(deviceId) ? current.filter((value) => value !== deviceId) : [...current, deviceId],
+    );
+  }, []);
 
   const handleSwitchDevice = useCallback(
     async (deviceId: string) => {
@@ -262,37 +514,106 @@ export function UnifiedHealthBadge({ className }: Props) {
         <AppDialogContent className="max-w-sm" data-testid="switch-device-dialog">
           <AppDialogHeader>
             <AppDialogTitle>Switch device</AppDialogTitle>
-            <AppDialogDescription>Choose a saved device.</AppDialogDescription>
+            <AppDialogDescription>
+              Choose a saved device. Checks refresh automatically every 10s while open.
+            </AppDialogDescription>
           </AppDialogHeader>
           <AppDialogBody className="space-y-2">
+              <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={refreshAll}
+                data-testid="switch-device-refresh-all"
+              >
+                Refresh all
+              </Button>
+            </div>
             {savedDevices.devices.map((device) => {
               const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
               const isSelected = device.id === savedDevices.selectedDeviceId;
               const status = isSelected ? getSavedDeviceSwitchStatus(device.id) : "last-known";
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
+              const healthSnapshot = healthByDeviceId[device.id];
+              const isExpanded = expandedDeviceIdSet.has(device.id);
 
               return (
-                <button
+                <div
                   key={device.id}
-                  type="button"
                   className={cn(
-                    "flex w-full items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
-                    isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
+                    "rounded-lg border border-border/70 bg-background",
+                    isSelected ? "border-primary/60 bg-primary/10 ring-1 ring-primary/35" : "bg-background",
                   )}
-                  onClick={() => {
-                    void handleSwitchDevice(device.id);
-                  }}
-                  data-testid={`switch-device-row-${device.id}`}
+                  data-selected={isSelected ? "true" : "false"}
                 >
-                  <span className="min-w-0 truncate text-sm font-medium text-foreground">
-                    {buildSavedDevicePrimaryLabel(device, verified)}
-                  </span>
-                  {statusLabel ? (
-                    <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      {statusLabel}
-                    </span>
+                  <div className="flex items-start gap-2 px-2 py-2">
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex min-w-0 flex-1 rounded-md px-1 py-1 text-left transition-colors",
+                        isSelected ? "hover:bg-primary/15" : "hover:bg-muted/40",
+                        pickerBadgeOwnLine ? "flex-col items-stretch gap-2" : "items-start justify-between gap-3",
+                      )}
+                      onClick={() => {
+                        void handleSwitchDevice(device.id);
+                      }}
+                      data-testid={`switch-device-row-${device.id}`}
+                      data-badge-layout={pickerBadgeOwnLine ? "stacked" : "inline"}
+                    >
+                      <span className="min-w-0">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            {buildSavedDevicePrimaryLabel(device, verified)}
+                          </span>
+                          {statusLabel ? (
+                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              {statusLabel}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel)}
+                        </span>
+                      </span>
+                      {pickerBadgeOwnLine ? (
+                        <span className="flex min-w-0 max-w-full items-start">
+                          <PickerHealthStatusBadge snapshot={healthSnapshot} testId={`switch-device-status-${device.id}`} />
+                        </span>
+                      ) : (
+                        <PickerHealthStatusBadge snapshot={healthSnapshot} testId={`switch-device-status-${device.id}`} />
+                      )}
+                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 self-start px-2 text-xs"
+                      data-testid={`switch-device-expand-${device.id}`}
+                      aria-expanded={isExpanded}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleDeviceDetails(device.id);
+                      }}
+                    >
+                      {isExpanded ? "Hide" : "Details"}
+                    </Button>
+                  </div>
+                  {isExpanded ? (
+                    <div className="border-t border-border/70 px-2 pb-2 pt-1">
+                      <HealthCheckDetailView
+                        result={healthSnapshot?.latestResult ?? null}
+                        liveProbes={healthSnapshot?.liveProbes ?? null}
+                        isRunning={healthSnapshot?.running}
+                        probeStates={healthSnapshot?.probeStates}
+                        title="Device health detail"
+                        backAriaLabel="Collapse device health detail"
+                        onBack={() => toggleDeviceDetails(device.id)}
+                      />
+                    </div>
                   ) : null}
-                </button>
+                </div>
               );
             })}
           </AppDialogBody>

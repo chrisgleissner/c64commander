@@ -76,6 +76,96 @@ const mockState = vi.hoisted(() => ({
   },
   switchSavedDevice: vi.fn(),
   requestDiagnosticsOpen: vi.fn(),
+  savedDeviceHealthChecks: {
+    byDeviceId: {
+      "device-office": {
+        running: false,
+        latestResult: {
+          runId: "hcr-0001",
+          startTimestamp: "2026-01-01T12:00:00.000Z",
+          endTimestamp: "2026-01-01T12:00:01.000Z",
+          totalDurationMs: 1000,
+          overallHealth: "Healthy",
+          connectivity: "Online",
+          probes: {
+            REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 1 },
+            FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 2 },
+            TELNET: { probe: "TELNET", outcome: "Success", durationMs: 100, reason: null, startMs: 3 },
+            CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+            RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 5 },
+            JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 6 },
+          },
+          latency: { p50: 100, p90: 100, p99: 100 },
+          deviceInfo: {
+            firmware: "3.11",
+            fpga: "1.42",
+            core: "C64",
+            uptimeSeconds: 256,
+            product: "Ultimate 64 Elite",
+          },
+        },
+        liveProbes: null,
+        probeStates: {
+          REST: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+          FTP: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+          TELNET: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+          CONFIG: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+          RASTER: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+          JIFFY: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+        },
+        lastStartedAt: "2026-01-01T12:00:00.000Z",
+        lastCompletedAt: "2026-01-01T12:00:01.000Z",
+        error: null,
+      },
+      "device-backup": {
+        running: true,
+        latestResult: null,
+        liveProbes: {
+          REST: { probe: "REST", outcome: "Success", durationMs: 80, reason: null, startMs: 1 },
+          FTP: { probe: "FTP", outcome: "Success", durationMs: 50, reason: null, startMs: 2 },
+        },
+        probeStates: {
+          REST: {
+            state: "SUCCESS",
+            outcome: "Success",
+            startedAt: "2026-01-01T12:00:00.000Z",
+            endedAt: "2026-01-01T12:00:00.080Z",
+            durationMs: 80,
+            reason: null,
+          },
+          FTP: {
+            state: "SUCCESS",
+            outcome: "Success",
+            startedAt: "2026-01-01T12:00:00.081Z",
+            endedAt: "2026-01-01T12:00:00.130Z",
+            durationMs: 50,
+            reason: null,
+          },
+          TELNET: {
+            state: "RUNNING",
+            outcome: null,
+            startedAt: "2026-01-01T12:00:00.131Z",
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+          CONFIG: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+          RASTER: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+          JIFFY: { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null },
+        },
+        lastStartedAt: "2026-01-01T12:00:00.000Z",
+        lastCompletedAt: null,
+        error: null,
+      },
+    },
+    cycle: {
+      running: true,
+      lastStartedAt: "2026-01-01T12:00:00.000Z",
+      lastCompletedAt: "2026-01-01T11:59:50.000Z",
+    },
+    refreshAll: vi.fn(),
+    totalProbeCount: 6,
+  },
 }));
 
 vi.mock("@/hooks/useHealthState", () => ({
@@ -100,6 +190,10 @@ vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
   useSavedDeviceSwitching: () => mockState.switchSavedDevice,
 }));
 
+vi.mock("@/hooks/useSavedDeviceHealthChecks", () => ({
+  useSavedDeviceHealthChecks: () => mockState.savedDeviceHealthChecks,
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
   requestDiagnosticsOpen: mockState.requestDiagnosticsOpen,
 }));
@@ -116,6 +210,7 @@ describe("UnifiedHealthBadge", () => {
     mockState.savedDevices.selectedDeviceId = "device-office";
     mockState.switchSavedDevice.mockReset();
     mockState.requestDiagnosticsOpen.mockReset();
+    mockState.savedDeviceHealthChecks.refreshAll.mockReset();
   });
 
   afterEach(() => {
@@ -327,5 +422,176 @@ describe("UnifiedHealthBadge", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
     });
+  });
+
+  it("still lets users switch to an unhealthy saved device", async () => {
+    vi.useFakeTimers();
+    const previousSnapshot = mockState.savedDeviceHealthChecks.byDeviceId["device-backup"];
+    const healthyReference = mockState.savedDeviceHealthChecks.byDeviceId["device-office"].latestResult;
+
+    mockState.savedDeviceHealthChecks.byDeviceId["device-backup"] = {
+      ...previousSnapshot,
+      running: false,
+      latestResult: {
+        ...healthyReference,
+        runId: "hcr-0002",
+        overallHealth: "Unhealthy",
+        probes: {
+          ...healthyReference.probes,
+          FTP: {
+            ...healthyReference.probes.FTP,
+            outcome: "Fail",
+            durationMs: 240,
+            reason: "FTP timeout",
+          },
+          RASTER: {
+            ...healthyReference.probes.RASTER,
+            outcome: "Fail",
+            durationMs: 180,
+            reason: "Raster probe mismatch",
+          },
+        },
+      },
+      liveProbes: null,
+      lastCompletedAt: "2026-01-01T12:00:02.000Z",
+      error: null,
+    };
+    mockState.switchSavedDevice.mockResolvedValueOnce(undefined);
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    expect(screen.getByTestId("switch-device-status-device-backup").textContent).toContain("Unhealthy");
+
+    fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+    expect(mockState.switchSavedDevice).toHaveBeenCalledWith("device-backup");
+
+    vi.useRealTimers();
+    await waitFor(() => {
+      expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+    });
+
+    mockState.savedDeviceHealthChecks.byDeviceId["device-backup"] = previousSnapshot;
+  });
+
+  it("renders collapsed switcher health summaries and refresh action", async () => {
+    vi.useFakeTimers();
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    expect(screen.queryByText("Checking all saved devices")).toBeNull();
+    expect(screen.queryByText("Saved-device health")).toBeNull();
+    expect(mockState.savedDeviceHealthChecks.refreshAll).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("switch-device-refresh-all")).toBeVisible();
+    expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Online");
+    expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Healthy");
+    expect(screen.getByTestId("switch-device-status-device-backup").textContent).toContain("Checking");
+    expect(screen.getByTestId("switch-device-status-device-backup").textContent).not.toContain("Idle");
+    expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Last check");
+    expect(screen.getByTestId("switch-device-row-device-backup").textContent).toContain("2/6 probes");
+
+    fireEvent.click(screen.getByTestId("switch-device-refresh-all"));
+    expect(mockState.savedDeviceHealthChecks.refreshAll).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the app's stronger selected treatment for the active switch-device card", async () => {
+    vi.useFakeTimers();
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    const selectedCard = screen.getByTestId("switch-device-row-device-office").closest("[data-selected]");
+    const otherCard = screen.getByTestId("switch-device-row-device-backup").closest("[data-selected]");
+
+    expect(selectedCard).toHaveAttribute("data-selected", "true");
+    expect(selectedCard?.className).toContain("bg-primary/10");
+    expect(selectedCard?.className).toContain("ring-1");
+    expect(selectedCard?.className).toContain("ring-primary/35");
+    expect(otherCard).toHaveAttribute("data-selected", "false");
+  });
+
+  it("keeps switcher badges on their own line for compact and medium profiles", async () => {
+    vi.useFakeTimers();
+
+    for (const profile of ["compact", "medium"] as const) {
+      mockState.currentProfile = profile;
+      const { unmount } = render(<UnifiedHealthBadge />);
+
+      const badge = screen.getByTestId("unified-health-badge");
+      fireEvent.pointerDown(badge);
+      await vi.advanceTimersByTimeAsync(450);
+
+      const row = screen.getByTestId("switch-device-row-device-office");
+      expect(row).toHaveAttribute("data-badge-layout", "stacked");
+      expect(row.className).toContain("flex-col");
+      expect(row.className).not.toContain("justify-between");
+
+      unmount();
+      vi.clearAllTimers();
+    }
+  });
+
+  it("keeps switcher badges inline on expanded profile", async () => {
+    vi.useFakeTimers();
+    mockState.currentProfile = "expanded";
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    const row = screen.getByTestId("switch-device-row-device-office");
+    expect(row).toHaveAttribute("data-badge-layout", "inline");
+    expect(row.className).toContain("justify-between");
+    expect(row.className).not.toContain("flex-col");
+  });
+
+  it("expands a device row into the shared health detail view", async () => {
+    vi.useFakeTimers();
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    fireEvent.click(screen.getByTestId("switch-device-expand-device-office"));
+
+    expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
+    expect(screen.getByText("Device health detail")).toBeVisible();
+    expect(screen.getByTestId("health-check-probe-config").textContent).toContain("Passive");
+  });
+
+  it("resets expanded device details when the picker closes", async () => {
+    vi.useFakeTimers();
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    fireEvent.click(screen.getByTestId("switch-device-expand-device-office"));
+    expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    vi.useRealTimers();
+    await waitFor(() => {
+      expect(screen.queryByTestId("switch-device-dialog")).toBeNull();
+    });
+
+    vi.useFakeTimers();
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    expect(screen.queryByTestId("health-check-detail-view")).toBeNull();
+    expect(screen.getByTestId("switch-device-expand-device-office")).toHaveAttribute("aria-expanded", "false");
   });
 });

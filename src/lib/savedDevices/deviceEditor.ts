@@ -1,5 +1,7 @@
 import type { SavedDevice } from "@/lib/savedDevices/store";
 
+export const MAX_SAVED_DEVICE_NAME_LENGTH = 10;
+
 export type SavedDeviceEditorDraft = {
   name: string;
   host: string;
@@ -8,13 +10,15 @@ export type SavedDeviceEditorDraft = {
   telnetPort: string;
 };
 
+export const sanitizeSavedDeviceNameInput = (value: string) => value.trim().slice(0, MAX_SAVED_DEVICE_NAME_LENGTH);
+
 export const sanitizeSavedDevicePortInput = (value: string) => value.replace(/[^0-9]/g, "");
 
 export const buildSavedDeviceEditorDraft = (
   device: Pick<SavedDevice, "name" | "host" | "httpPort" | "ftpPort" | "telnetPort"> | null | undefined,
   fallbackHost = "c64u",
 ): SavedDeviceEditorDraft => ({
-  name: device?.name ?? "",
+  name: sanitizeSavedDeviceNameInput(device?.name ?? ""),
   host: device?.host ?? fallbackHost,
   httpPort: String(device?.httpPort ?? 80),
   ftpPort: String(device?.ftpPort ?? 21),
