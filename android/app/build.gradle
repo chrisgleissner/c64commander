@@ -12,12 +12,24 @@ def hvscArchiveSha256 = "9ed41b3a8759af5e1489841cd62682e471824892eabf648d913b0c9
 def hvscArchiveCacheDir = new File(System.getProperty("user.home"), ".cache/c64commander/hvsc")
 def upstream7zipSourceUrl = "https://www.7-zip.org/a/7z2600-src.tar.xz"
 def upstream7zipSourceSha256 = "3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16"
-def upstream7zipGeneratedJniLibsDir = new File(buildDir, "generated/jniLibs/upstream7zip")
-def upstream7zipWorkDir = new File(buildDir, "intermediates/upstream7zip")
+def upstream7zipGeneratedJniLibsBaseDir = new File(buildDir, "generated/jniLibs/upstream7zip")
+def upstream7zipWorkBaseDir = new File(buildDir, "intermediates/upstream7zip")
 def upstream7zipBuildScript = rootProject.file("scripts/build-upstream-7zip.sh")
 def upstream7zipNdkVersion = "27.2.12479018"
 def upstream7zipApiLevel = 24
-def upstream7zipAbis = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
+def upstream7zipAllAbis = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
+def upstream7zipReleaseAbis = ["armeabi-v7a", "arm64-v8a"]
+def upstream7zipVariantAbis = [
+    debug: upstream7zipAllAbis,
+    minifiedDebug: upstream7zipAllAbis,
+    release: upstream7zipReleaseAbis,
+]
+def upstream7zipGeneratedJniLibsDirForVariant = { String variantName ->
+    new File(upstream7zipGeneratedJniLibsBaseDir, variantName)
+}
+def upstream7zipWorkDirForVariant = { String variantName ->
+    new File(upstream7zipWorkBaseDir, variantName)
+}
 
 def loadAndroidLocalProperties = {
     def props = new Properties()
@@ -148,9 +160,6 @@ android {
         versionCode resolveAppVersionCode()
         versionName (envVersionName)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        ndk {
-            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -160,8 +169,14 @@ android {
     }
 
     sourceSets {
-        main {
-            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDir]
+        debug {
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("debug")]
+        }
+        minifiedDebug {
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("minifiedDebug")]
+        }
+        release {
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("release")]
         }
         androidTest {
             assets.srcDirs += ['src/test/fixtures']
@@ -206,6 +221,11 @@ android {
         }
     }
     buildTypes {
+        debug {
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            }
+        }
         minifiedDebug {
             initWith(debug)
             minifyEnabled true
@@ -252,38 +272,48 @@ android {
     }
 }
 
-tasks.register('buildUpstream7zipAndroidBinaries', Exec) {
-    group = 'build'
-    description = 'Builds pinned upstream 7-Zip Android executables for the ABIs bundled with the app.'
+upstream7zipVariantAbis.each { variantName, abis ->
+    def capitalizedVariantName = variantName.substring(0, 1).toUpperCase() + variantName.substring(1)
+    def taskName = "buildUpstream7zip${capitalizedVariantName}AndroidBinaries"
+    def outputDir = upstream7zipGeneratedJniLibsDirForVariant(variantName)
+    def workDir = upstream7zipWorkDirForVariant(variantName)
 
-    inputs.file(upstream7zipBuildScript)
-    outputs.dir(upstream7zipGeneratedJniLibsDir)
-    outputs.cacheIf { true }
+    tasks.register(taskName, Exec) {
+        group = 'build'
+        description = "Builds pinned upstream 7-Zip Android executables for the ${variantName} variant."
 
-    doFirst {
-        if (!upstream7zipBuildScript.exists()) {
-            throw new GradleException("Missing upstream 7-Zip build script: ${upstream7zipBuildScript}")
+        inputs.file(upstream7zipBuildScript)
+        inputs.property('abis', abis.join(','))
+        outputs.dir(outputDir)
+        outputs.cacheIf { true }
+
+        doFirst {
+            if (!upstream7zipBuildScript.exists()) {
+                throw new GradleException("Missing upstream 7-Zip build script: ${upstream7zipBuildScript}")
+            }
+            def ndkDir = resolveAndroidNdkDir()
+            if (!ndkDir.exists()) {
+                throw new GradleException("Android NDK not found for upstream 7-Zip build: ${ndkDir}")
+            }
+            outputDir.mkdirs()
+            commandLine(
+                'bash',
+                upstream7zipBuildScript.absolutePath,
+                ndkDir.absolutePath,
+                workDir.absolutePath,
+                outputDir.absolutePath,
+                upstream7zipSourceUrl,
+                upstream7zipSourceSha256,
+                upstream7zipApiLevel.toString(),
+                *abis,
+            )
         }
-        def ndkDir = resolveAndroidNdkDir()
-        if (!ndkDir.exists()) {
-            throw new GradleException("Android NDK not found for upstream 7-Zip build: ${ndkDir}")
-        }
-        upstream7zipGeneratedJniLibsDir.mkdirs()
-        commandLine(
-            'bash',
-            upstream7zipBuildScript.absolutePath,
-            ndkDir.absolutePath,
-            upstream7zipWorkDir.absolutePath,
-            upstream7zipGeneratedJniLibsDir.absolutePath,
-            upstream7zipSourceUrl,
-            upstream7zipSourceSha256,
-            upstream7zipApiLevel.toString(),
-            *upstream7zipAbis,
-        )
+    }
+
+    tasks.matching { it.name == "pre${capitalizedVariantName}Build" }.configureEach {
+        dependsOn(tasks.named(taskName))
     }
 }
-
-preBuild.dependsOn(tasks.named('buildUpstream7zipAndroidBinaries'))
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')

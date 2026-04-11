@@ -1,3 +1,136 @@
+# Android APK/AAB Size Regression Investigation Plan
+
+Date: 2026-04-11
+Status: In execution
+Primary focus: Android release size regression between tags `0.7.2` and `0.7.3`
+Expected change classification: `DOC_PLUS_CODE`
+
+## Objective
+
+Identify the root cause of the Android APK/AAB size increase introduced in `0.7.3`, remove all unnecessary size growth, and prove any remaining increase is unavoidable without breaking HVSC download, ingest, or real-archive decompression performance.
+
+## Working Rules
+
+- All size claims must be backed by build artifacts, archive listings, or binary inspection output.
+- No decompression-path replacement is allowed unless strict equivalence is proven. Initial work is limited to packaging, linkage, stripping, ABI, and dependency optimization around the existing approach.
+- Every optimization attempt must be followed by rebuild, size measurement, and real-device validation on the Pixel 4.
+- Preserve unrelated existing repository work recorded below.
+
+## Phases
+
+### Phase 0. Baseline setup
+
+Goal:
+
+- establish reproducible investigation scaffolding and preserve evidence
+
+Tasks:
+
+- [ ] Record initial scope, commands, and checkpoints in `WORKLOG.md`.
+- [ ] Create isolated worktrees for tags `0.7.2` and `0.7.3`.
+- [ ] Confirm Android build prerequisites and connected Pixel 4 availability.
+
+Exit criteria:
+
+- repeatable build environments exist for both tags and current branch
+
+### Phase 1. Release artifact measurement
+
+Goal:
+
+- quantify the actual APK/AAB delta before proposing fixes
+
+Tasks:
+
+- [ ] Build release APK and AAB for `0.7.2`.
+- [ ] Build release APK and AAB for `0.7.3`.
+- [ ] Record total sizes and per-artifact deltas.
+
+Exit criteria:
+
+- exact before/after size numbers are captured for both tags
+
+### Phase 2. Byte-level attribution
+
+Goal:
+
+- determine which packaged files account for the regression
+
+Tasks:
+
+- [ ] Diff APK contents by compressed and uncompressed size.
+- [ ] Diff AAB contents by module and file contribution.
+- [ ] Isolate native, asset, and resource contributors.
+
+Exit criteria:
+
+- largest size contributors are ranked with byte counts
+
+### Phase 3. Native library and ABI analysis
+
+Goal:
+
+- verify whether JNI packaging caused the regression
+
+Tasks:
+
+- [ ] Inspect `.so` files for ABI coverage, strip state, and symbol/debug sections.
+- [ ] Compare native library counts and sizes across tags.
+- [ ] Evaluate safe packaging changes such as ABI splits or narrower bundled ABIs where compatible with release requirements.
+
+Exit criteria:
+
+- native contribution is either confirmed as root cause or ruled out with evidence
+
+### Phase 4. Safe optimizations
+
+Goal:
+
+- remove avoidable size while preserving runtime behavior and performance
+
+Tasks:
+
+- [ ] Implement the smallest safe packaging or native-build optimizations supported by evidence.
+- [ ] Rebuild APK/AAB after each change and record deltas.
+- [ ] Verify no release-optimization regressions in Gradle/R8/resource shrinking.
+
+Exit criteria:
+
+- all removable Android-specific growth identified by the investigation has been eliminated
+
+### Phase 5. Device validation
+
+Goal:
+
+- prove no regressions on real hardware
+
+Tasks:
+
+- [ ] Install optimized build on Pixel 4.
+- [ ] Validate HVSC download.
+- [ ] Validate HVSC ingest.
+- [ ] Validate real HVSC 7z decompression and capture timing evidence.
+
+Exit criteria:
+
+- functional and performance parity is demonstrated on-device
+
+### Phase 6. Documentation closure
+
+Goal:
+
+- publish evidence, conclusions, and remaining unavoidable cost
+
+Tasks:
+
+- [ ] Write `docs/research/android/apk-size-regression.md` with byte-level breakdown and causal explanation.
+- [ ] Summarize before/after measurements and validation evidence.
+- [ ] Record any unavoidable residual increase with proof.
+
+Exit criteria:
+
+- investigation findings and implemented fixes are fully documented
+
 # Device Switcher V2 Multi-Phase Plan
 
 Date: 2026-04-09
