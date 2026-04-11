@@ -548,3 +548,12 @@ Exit criteria:
 
 - Switch device screenshots should use full page-context framing instead of cropping to the popup surface, matching the documented modal/interstitial style used elsewhere.
 - Docs section screenshots should use full Docs page-context framing instead of isolated subsection crops, and the full Switch device plus Docs screenshot sets should be regenerated together after framing changes.
+- Strengthen web-platform production coverage beyond the current shallow auth/proxy checks.
+  Scope:
+  - exercise the Docker-backed web route against realistic LAN targets, not just local mock upstreams
+  - add regression coverage for real-device host resolution and connectivity using both hostname `c64u` and direct IP targets such as `192.168.1.167`
+  - validate the supported web control path end to end, including REST proxying, target selection, connection status, and operator-visible failure reporting
+  - keep this work explicitly web-focused; iOS coverage remains structurally constrained by the Linux dev environment and public macOS CI availability
+  Motivation:
+  - recent local operator testing reported that a locally running web build could not connect to the C64U via either hostname `c64u` or IP `192.168.1.167`
+  - this indicates a likely severe regression in the supported self-hosted web path and a mismatch between current coverage and real behavior
