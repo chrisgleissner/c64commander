@@ -284,6 +284,11 @@ upstream7zipVariantAbis.each { variantName, abis ->
 
         inputs.file(upstream7zipBuildScript)
         inputs.property('abis', abis.join(','))
+        inputs.property('sourceUrl', upstream7zipSourceUrl)
+        inputs.property('sourceSha256', upstream7zipSourceSha256)
+        inputs.property('apiLevel', upstream7zipApiLevel.toString())
+        inputs.property('ndkVersion', upstream7zipNdkVersion)
+        inputs.property('ndkDirPath', resolveAndroidNdkDir().absolutePath)
         outputs.dir(outputDir)
         outputs.cacheIf { true }
 
