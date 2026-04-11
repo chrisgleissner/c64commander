@@ -28,19 +28,18 @@ const bytesPerSecond =
 const outFile =
     args.get('--out') || process.env.HVSC_PERF_SUMMARY_FILE || 'ci-artifacts/hvsc-performance/web/web-secondary.json';
 const tmpDir = path.resolve('.tmp', 'hvsc-perf');
-const { baselineArchive, updateArchive } = useRealArchives
+const runProfile = resolveWebPerfRunProfile({ suite, useRealArchives });
+const { baselineArchive, updateArchive } = (useRealArchives && runProfile.supported)
     ? await ensureRealArchivePair({ env: process.env, homeCacheDir })
     : { baselineArchive: null, updateArchive: null };
 
-if (useRealArchives && (!baselineArchive || !updateArchive)) {
+if (useRealArchives && runProfile.supported && (!baselineArchive || !updateArchive)) {
     process.stderr.write(
         'Real archive mode requested, but the HVSC baseline/update archives could not be resolved. ' +
         'Populate ~/.cache/c64commander/hvsc or set HVSC_PERF_BASELINE_ARCHIVE and HVSC_PERF_UPDATE_ARCHIVE.\n',
     );
     process.exit(1);
 }
-
-const runProfile = resolveWebPerfRunProfile({ suite, useRealArchives });
 
 await rm(tmpDir, { recursive: true, force: true });
 await mkdir(tmpDir, { recursive: true });
