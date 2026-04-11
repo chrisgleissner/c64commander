@@ -204,6 +204,22 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
+  it("verifyCurrentConnectionTarget falls back to demo when auto-demo is enabled", async () => {
+    const { getConnectionSnapshot, initializeConnectionManager, verifyCurrentConnectionTarget } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await initializeConnectionManager();
+    const result = await verifyCurrentConnectionTarget();
+
+    expect(result.ok).toBe(false);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
+
   it("connects to real device when legacy base url is reachable", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");

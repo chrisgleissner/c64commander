@@ -31,6 +31,16 @@ vi.mock("@/lib/sourceNavigation/localSourcesStore", () => ({
   requireLocalSourceEntries: vi.fn(() => []),
 }));
 
+const { mockFetchUltimateOriginBlob, mockIsOriginOnSelectedDevice } = vi.hoisted(() => ({
+  mockFetchUltimateOriginBlob: vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])])),
+  mockIsOriginOnSelectedDevice: vi.fn(() => true),
+}));
+
+vi.mock("@/lib/savedDevices/deviceBoundOrigin", () => ({
+  fetchUltimateOriginBlob: mockFetchUltimateOriginBlob,
+  isOriginOnSelectedDevice: mockIsOriginOnSelectedDevice,
+}));
+
 import { FolderPicker } from "@/lib/native/folderPicker";
 import {
   loadLocalSources,
@@ -43,6 +53,7 @@ import { buildDiskMountType, resolveLocalDiskBlob, mountDiskToDrive } from "@/li
 describe("diskMount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsOriginOnSelectedDevice.mockReturnValue(true);
   });
 
   describe("buildDiskMountType", () => {
@@ -224,6 +235,28 @@ describe("diskMount", () => {
         location: "ultimate",
       } as any);
       expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/disk.d64", "d64", "readwrite");
+    });
+
+    it("uploads bytes when an ultimate disk belongs to a different saved device", async () => {
+      mockIsOriginOnSelectedDevice.mockReturnValue(false);
+      await mountDiskToDrive(mockApi as any, "a", {
+        path: "/disk.d64",
+        location: "ultimate",
+        origin: {
+          sourceKind: "ultimate",
+          originDeviceId: "device-a",
+          originDeviceLastKnownUniqueId: "UID-A",
+          originPath: "/disk.d64",
+          importedAt: "2026-04-09T00:00:00.000Z",
+        },
+      } as any);
+      expect(mockFetchUltimateOriginBlob).toHaveBeenCalledWith(
+        expect.objectContaining({ originDeviceId: "device-a", originPath: "/disk.d64" }),
+      );
+      expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
+        filename: "/disk.d64",
+      });
+      expect(mockApi.mountDrive).not.toHaveBeenCalled();
     });
 
     it("throws for unsupported disk type", async () => {

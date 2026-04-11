@@ -662,6 +662,12 @@ describe("getBadgeAriaLabel", () => {
     expect(getBadgeAriaLabel("Healthy", "Online", 0, "Ultimate 64-II")).toBe("Connected to U64E2, system healthy");
   });
 
+  it("Online aria label prefers the resolved saved-device label when provided", () => {
+    expect(getBadgeAriaLabel("Healthy", "Online", 0, "Ultimate 64-II", "C64U-2")).toBe(
+      "Connected to C64U-2, system healthy",
+    );
+  });
+
   it("Online + Degraded N → includes problem count", () => {
     expect(getBadgeAriaLabel("Degraded", "Online", 3)).toBe("Connected to C64U, system degraded, 3 problems");
   });

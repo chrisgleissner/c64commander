@@ -9,6 +9,7 @@
 import type { DiskEntry } from "./diskTypes";
 
 const STORE_PREFIX = "c64u_disk_library:";
+export const SHARED_DISK_LIBRARY_ID = "shared";
 
 export type DiskLibraryState = {
   disks: DiskEntry[];
@@ -16,8 +17,20 @@ export type DiskLibraryState = {
 
 const getKey = (uniqueId: string) => `${STORE_PREFIX}${uniqueId}`;
 
-export const loadDiskLibrary = (uniqueId: string): DiskLibraryState => {
-  const raw = localStorage.getItem(getKey(uniqueId));
+const mergeLibraries = (states: DiskLibraryState[]) => {
+  const seen = new Set<string>();
+  const disks: DiskEntry[] = [];
+  states.forEach((state) => {
+    state.disks.forEach((disk) => {
+      if (seen.has(disk.id)) return;
+      seen.add(disk.id);
+      disks.push(disk);
+    });
+  });
+  return { disks } satisfies DiskLibraryState;
+};
+
+const parseState = (raw: string | null, uniqueId: string): DiskLibraryState => {
   if (!raw) return { disks: [] };
   try {
     const parsed = JSON.parse(raw) as DiskLibraryState;
@@ -28,6 +41,21 @@ export const loadDiskLibrary = (uniqueId: string): DiskLibraryState => {
     console.warn("Failed to load disk library", { uniqueId, error });
     return { disks: [] };
   }
+};
+
+export const loadDiskLibrary = (uniqueId: string): DiskLibraryState => {
+  const raw = localStorage.getItem(getKey(uniqueId));
+  const direct = parseState(raw, uniqueId);
+  if (uniqueId !== SHARED_DISK_LIBRARY_ID || direct.disks.length > 0) {
+    return direct;
+  }
+  const legacyStates: DiskLibraryState[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key || !key.startsWith(STORE_PREFIX) || key === getKey(SHARED_DISK_LIBRARY_ID)) continue;
+    legacyStates.push(parseState(localStorage.getItem(key), key));
+  }
+  return mergeLibraries(legacyStates);
 };
 
 export const saveDiskLibrary = (uniqueId: string, state: DiskLibraryState) => {

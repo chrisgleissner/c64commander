@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 export const jsdomChunkCount = 32;
 
 export const dedicatedJsdomCoverageFiles = [
+  "tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx",
   "tests/unit/hooks/useLightingStudio.test.tsx",
   "tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx",
   "tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx",

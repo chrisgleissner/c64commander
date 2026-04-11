@@ -58,6 +58,36 @@ const routePrefixMap: Array<{
   },
 ];
 
+const savedDeviceSwitchRoutePrefixMap: Array<{
+  routePrefix: string;
+  prefixes: ReadonlyArray<C64QueryPrefix>;
+}> = [
+  {
+    routePrefix: "/config",
+    prefixes: ["c64-info", "c64-categories", "c64-category", "c64-config-item", "c64-config-items"],
+  },
+  {
+    routePrefix: "/disks",
+    prefixes: ["c64-info", "c64-drives", "c64-config-items"],
+  },
+  {
+    routePrefix: "/play",
+    prefixes: ["c64-info", "c64-config-item", "c64-config-items"],
+  },
+  {
+    routePrefix: "/settings",
+    prefixes: ["c64-info", "c64-categories"],
+  },
+  {
+    routePrefix: "/docs",
+    prefixes: ["c64-info"],
+  },
+  {
+    routePrefix: "/",
+    prefixes: ["c64-info", "c64-drives", "c64-config-items"],
+  },
+];
+
 const uniquePrefixes = (prefixes: ReadonlyArray<C64QueryPrefix>) => Array.from(new Set(prefixes));
 
 const invalidateByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
@@ -86,6 +116,20 @@ export const invalidateForRouteChange = (queryClient: QueryClient, pathname: str
 
 export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname: string) => {
   const prefixes = getRouteInvalidationPrefixes(pathname);
+  invalidateByPrefix(queryClient, prefixes);
+  refetchActiveByPrefix(queryClient, prefixes);
+};
+
+export const getSavedDeviceSwitchPrefixes = (pathname: string): ReadonlyArray<C64QueryPrefix> => {
+  const normalizedPath = pathname.trim() || "/";
+  const matchedEntry = savedDeviceSwitchRoutePrefixMap.find(({ routePrefix }) =>
+    routePrefix === "/" ? normalizedPath === "/" : normalizedPath.startsWith(routePrefix),
+  );
+  return matchedEntry?.prefixes ?? ["c64-info"];
+};
+
+export const invalidateForSavedDeviceSwitch = (queryClient: QueryClient, pathname: string) => {
+  const prefixes = getSavedDeviceSwitchPrefixes(pathname);
   invalidateByPrefix(queryClient, prefixes);
   refetchActiveByPrefix(queryClient, prefixes);
 };

@@ -12,11 +12,12 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 ## Features
 
 - **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
-- **Dashboard**: Machine controls, Telnet-backed quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
-- **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
+- **Dashboard**: Machine controls, Quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
 - **Playlists**: Build playlists from local files, C64U storage, the High Voltage SID Collection (HVSC), or CommoServe search results. Autoplay, shuffle, and subsong selection.
 - **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
+- **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
 - **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
+- **Device Switcher**: Switch between devices and run parallel health checks.
 
 ## Quick Start
 
@@ -189,13 +190,29 @@ Built-in guides for setup, workflows, and day-to-day usage.
 
 ### Diagnostics
 
-Accessible via the C64U connectivity badge in the top-right corner. Provides health checks, activity logs, trace inspection, filter editor, and latency analysis across App, REST, FTP, and Telnet contributors.
+Tap the top-right status badge to open diagnostics.
+
+Provides health checks, activity logs, trace inspection, filter editor, and latency analysis across App, REST, FTP, and Telnet contributors.
 
 <table>
   <tr>
     <td><img src="docs/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/activity/07-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
+  </tr>
+</table>
+
+### Switch Device
+
+Long-press the top-right status badge to open the device switcher.
+
+The switcher shows all configured devices with real-time health status, allowing instant switching and quick identification of connectivity or device issues.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/01-picker.png" alt="Switcher (Connecting)" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/03-picker-all-healthy.png" alt="Switcher (All Healthy)" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/04-picker-one-unhealthy.png" alt="Switcher (One Unhealthy)" width="360"/></td>
   </tr>
 </table>
 

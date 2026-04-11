@@ -15,6 +15,7 @@ import {
   setPassword,
 } from "@/lib/secureStorage";
 import { SecureStorage } from "@/lib/native/secureStorage";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
 vi.mock("@/lib/native/secureStorage", () => ({
   SecureStorage: {
@@ -36,11 +37,18 @@ describe("secureStorage", () => {
   it("never writes password to localStorage when setting", async () => {
     await setPassword("super-secret");
 
+    const persisted = JSON.parse(vi.mocked(SecureStorage.setPassword).mock.calls[0]?.[0]?.value ?? "null") as {
+      version: number;
+      legacyDefaultPassword: string | null;
+      passwordsByDeviceId: Record<string, string>;
+    };
+    const selectedDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
+
     expect(localStorage.getItem("c64u_password")).toBeNull();
     expect(localStorage.getItem("c64u_has_password")).toBe("1");
-    expect(SecureStorage.setPassword).toHaveBeenCalledWith({
-      value: "super-secret",
-    });
+    expect(persisted.version).toBe(1);
+    expect(persisted.legacyDefaultPassword).toBeNull();
+    expect(persisted.passwordsByDeviceId[selectedDeviceId]).toBe("super-secret");
   });
 
   it("does not touch secure storage when flag is false", async () => {

@@ -25,6 +25,36 @@ describe("diskTypes helpers", () => {
     expect(buildDiskId("ultimate", "Usb0//Games")).toBe("ultimate:/Usb0/Games");
   });
 
+  it("includes the origin device id in ultimate disk ids", () => {
+    const originA = {
+      sourceKind: "ultimate" as const,
+      originDeviceId: "device-a",
+      originDeviceLastKnownUniqueId: "uid-a",
+      originPath: "/Usb0/Games/Disk 1.d64",
+      importedAt: "2024-01-01T00:00:00Z",
+    };
+    const originB = {
+      ...originA,
+      originDeviceId: "device-b",
+      originDeviceLastKnownUniqueId: "uid-b",
+    };
+
+    expect(buildDiskId("ultimate", "/Usb0/Games/Disk 1.d64", originA)).toBe("ultimate:device-a:/Usb0/Games/Disk 1.d64");
+
+    const entryA = createDiskEntry({
+      path: "/Usb0/Games/Disk 1.d64",
+      location: "ultimate",
+      origin: originA,
+    });
+    const entryB = createDiskEntry({
+      path: "/Usb0/Games/Disk 1.d64",
+      location: "ultimate",
+      origin: originB,
+    });
+
+    expect(entryA.id).not.toBe(entryB.id);
+  });
+
   it("derives disk names and folder paths", () => {
     expect(getDiskName("/Usb0/Games/Disk 1.d64")).toBe("Disk 1.d64");
     expect(getDiskName("/")).toBe("/");

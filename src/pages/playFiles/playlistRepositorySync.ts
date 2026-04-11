@@ -65,8 +65,12 @@ const snapshots = new Map<string, PlaylistRepositorySyncSnapshot>();
 const listeners = new Map<string, Set<() => void>>();
 const inflightCommits = new Map<string, { snapshotKey: string; promise: Promise<PlaylistCommitResult> }>();
 
-const buildTrackId = (source: string, sourceId: string | null | undefined, path: string) =>
-  `${source}:${sourceId ?? ""}:${normalizeSourcePath(path)}`;
+const buildTrackId = (
+  source: string,
+  sourceId: string | null | undefined,
+  path: string,
+  originDeviceId?: string | null,
+) => `${source}:${sourceId ?? originDeviceId ?? ""}:${normalizeSourcePath(path)}`;
 
 const buildSnapshotKey = (playlistId: string, items: PlaylistItem[]) => {
   let hash = 2166136261;
@@ -145,7 +149,7 @@ export const serializePlaylistToRepository = (items: PlaylistItem[], playlistId:
   const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
     playlistItemId: item.id,
     playlistId,
-    trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+    trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path, item.origin?.originDeviceId ?? null),
     configRef: item.configRef ?? null,
     configOrigin: item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null),
     configOverrides: item.configOverrides ?? null,
@@ -157,12 +161,18 @@ export const serializePlaylistToRepository = (items: PlaylistItem[], playlistId:
     addedAt: item.addedAt ?? nowIso,
   }));
   items.forEach((item) => {
-    const trackId = buildTrackId(item.request.source, item.sourceId ?? null, item.path);
+    const trackId = buildTrackId(
+      item.request.source,
+      item.sourceId ?? null,
+      item.path,
+      item.origin?.originDeviceId ?? null,
+    );
     tracksById.set(trackId, {
       trackId,
       sourceKind: item.request.source,
       sourceLocator: normalizeSourcePath(item.path),
       sourceId: item.sourceId ?? null,
+      origin: item.origin ?? null,
       category: item.category,
       title: item.label,
       author: null,

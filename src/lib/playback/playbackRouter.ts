@@ -27,6 +27,11 @@ import {
 } from "./fileTypes";
 import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
+import {
+  fetchUltimateOriginBlob,
+  isOriginOnSelectedDevice,
+  type DeviceBoundContentOrigin,
+} from "@/lib/savedDevices/deviceBoundOrigin";
 import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import { loadDiskAutostartMode, type DiskAutostartMode } from "@/lib/config/appSettings";
 import { loadFirstDiskPrgViaDma, type DiskImageType } from "./diskFirstPrg";
@@ -45,6 +50,7 @@ export type LocalPlayFile =
 export type PlayRequest = {
   source: PlaySource;
   path: string;
+  origin?: DeviceBoundContentOrigin | null;
   file?: LocalPlayFile;
   songNr?: number;
   durationMs?: number;
@@ -54,6 +60,7 @@ export type PlayPlan = {
   category: PlayFileCategory;
   source: PlaySource;
   path: string;
+  origin?: DeviceBoundContentOrigin | null;
   mountType?: string;
   file?: LocalPlayFile;
   songNr?: number;
@@ -77,6 +84,7 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
     category,
     source: request.source,
     path: request.path,
+    origin: request.origin ?? null,
     file: request.file,
     mountType: getMountTypeForExtension(request.path),
     songNr: request.songNr,
@@ -318,12 +326,19 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
   const benchmarkMetadata = options.benchmarkMetadata ?? null;
 
   try {
+    const selectedDeviceCanAccessOrigin = plan.source !== "ultimate" || isOriginOnSelectedDevice(plan.origin);
+    const resolveOriginBlob = async () => {
+      if (plan.source !== "ultimate" || !plan.origin || selectedDeviceCanAccessOrigin) {
+        return null;
+      }
+      return fetchUltimateOriginBlob(plan.origin);
+    };
     switch (plan.category) {
       case "sid": {
         if (beforeLaunch) {
           await beforeLaunch();
         }
-        if (plan.source === "ultimate") {
+        if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
           const hasSonglengthData = typeof plan.durationMs === "number" && plan.durationMs > 0;
           if (!hasSonglengthData) {
             emitDurationPropagationEvent({
@@ -394,7 +409,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             throw fallbackContext;
           }
         }
-        const blob = await toBlob(plan.file);
+        const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
         if (!blob) throw new Error("Missing local SID data.");
         const sslBlob =
           plan.durationMs && plan.durationMs > 0
@@ -412,11 +427,11 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         if (beforeLaunch) {
           await beforeLaunch();
         }
-        if (plan.source === "ultimate") {
+        if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
           await api.playMod(plan.path);
           return;
         }
-        const blob = await toBlob(plan.file);
+        const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
         if (!blob) throw new Error("Missing local MOD data.");
         await api.playModUpload(blob, { filename: plan.path });
         return;
@@ -425,7 +440,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         if (beforeLaunch) {
           await beforeLaunch();
         }
-        if (plan.source === "ultimate") {
+        if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
           if (loadMode === "load") {
             await api.loadPrg(plan.path);
           } else {
@@ -433,7 +448,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           }
           return;
         }
-        const blob = await toBlob(plan.file);
+        const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
         if (!blob) throw new Error("Missing local PRG data.");
         if (loadMode === "load") {
           await api.loadPrgUpload(blob, { filename: plan.path });
@@ -446,11 +461,11 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         if (beforeLaunch) {
           await beforeLaunch();
         }
-        if (plan.source === "ultimate") {
+        if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
           await api.runCartridge(plan.path);
           return;
         }
-        const blob = await toBlob(plan.file);
+        const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
         if (!blob) throw new Error("Missing local CRT data.");
         await api.runCartridgeUpload(blob, { filename: plan.path });
         return;
@@ -472,6 +487,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           const diskEntry = createDiskEntry({
             path: plan.path,
             location: "ultimate",
+            origin: plan.origin ?? null,
           });
           await mountDiskToDrive(api, drive, diskEntry);
         } else if (plan.file) {

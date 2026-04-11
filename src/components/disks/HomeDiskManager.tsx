@@ -63,6 +63,7 @@ import {
 import { assignDiskGroupsByPrefix } from "@/lib/disks/diskGrouping";
 import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
+import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -147,10 +148,9 @@ export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives(visibleQueryOptions);
-  const uniqueId = status.deviceInfo?.unique_id || null;
   const trace = useActionTrace("HomeDiskManager");
 
-  const diskLibrary = useDiskLibrary(uniqueId);
+  const diskLibrary = useDiskLibrary(SHARED_DISK_LIBRARY_ID);
   const disksById = useMemo(
     () => Object.fromEntries(diskLibrary.disks.map((disk) => [disk.id, disk])),
     [diskLibrary.disks],

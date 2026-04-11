@@ -19,6 +19,7 @@ describe("run-unit-coverage", () => {
   it("locks unit coverage to split jsdom shards and node project runs", () => {
     expect(jsdomChunkCount).toBe(32);
     expect(dedicatedJsdomCoverageFiles).toEqual([
+      "tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx",
       "tests/unit/hooks/useLightingStudio.test.tsx",
       "tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx",
       "tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx",

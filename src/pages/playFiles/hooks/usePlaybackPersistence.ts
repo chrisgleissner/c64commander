@@ -8,7 +8,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
-import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey, isSongCategory, parseModifiedAt } from "../playFilesUtils";
+import {
+  PLAYBACK_SESSION_KEY,
+  PLAYLIST_STORAGE_PREFIX,
+  buildPlaylistStorageKey,
+  isSongCategory,
+  parseModifiedAt,
+} from "../playFilesUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
@@ -137,6 +143,7 @@ export function usePlaybackPersistence({
           source: entry.source,
           name: entry.name,
           path: entry.path,
+          origin: entry.origin ?? null,
           configRef: entry.configRef ?? null,
           configOrigin: resolveStoredConfigOrigin(entry.configRef ?? null, entry.configOrigin ?? null),
           configOverrides: entry.configOverrides ?? null,
@@ -208,6 +215,7 @@ export function usePlaybackPersistence({
             source: track.sourceKind,
             path: track.path,
             name: track.title,
+            origin: track.origin ?? null,
             configRef: playlistItem.configRef ?? track.configRef ?? null,
             configOrigin: resolveStoredConfigOrigin(
               playlistItem.configRef ?? track.configRef ?? null,
@@ -266,6 +274,15 @@ export function usePlaybackPersistence({
         const candidateKeys = [playlistStorageKey];
         if (resolvedDeviceId !== "default") {
           candidateKeys.push(defaultKey);
+        }
+        if (typeof localStorage !== "undefined") {
+          for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (!key || !key.startsWith(PLAYLIST_STORAGE_PREFIX)) continue;
+            if (!candidateKeys.includes(key)) {
+              candidateKeys.push(key);
+            }
+          }
         }
 
         const candidates: Array<{ key: string; parsed: StoredPlaylistState }> = [];

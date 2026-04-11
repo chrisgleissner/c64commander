@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { getTraceEvents } from "@/lib/tracing/traceSession";
 import { getConfiguredHost } from "@/lib/connection/hostEdit";
 import { useConnectionState } from "@/hooks/useConnectionState";
@@ -27,6 +28,7 @@ import {
   type OverallHealthState,
 } from "@/lib/diagnostics/healthModel";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
+import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
 
 const contributorHealthFromProbe = (
   outcome: "Success" | "Fail" | "Skipped",
@@ -41,6 +43,7 @@ const contributorHealthFromProbe = (
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
   const healthCheckState = useHealthCheckState();
+  const savedDevices = useSavedDevices();
   const {
     status: { deviceInfo },
   } = useC64Connection();
@@ -56,6 +59,13 @@ export function useHealthState(): OverallHealthState {
     const connectivity = deriveConnectivityState(connectionSnapshot.state);
     const host = getConfiguredHost();
     const latestHealthCheck = healthCheckState.latestResult;
+    const selectedSavedDevice =
+      savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
+      savedDevices.devices[0] ??
+      null;
+    const connectedDeviceLabel = selectedSavedDevice
+      ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
+      : inferConnectedDeviceLabel(deviceInfo?.product);
 
     if (latestHealthCheck) {
       const appFailures = [latestHealthCheck.probes.CONFIG, latestHealthCheck.probes.JIFFY].filter(
@@ -77,7 +87,7 @@ export function useHealthState(): OverallHealthState {
         state: latestHealthCheck.overallHealth,
         connectivity,
         host,
-        connectedDeviceLabel: inferConnectedDeviceLabel(latestHealthCheck.deviceInfo?.product ?? deviceInfo?.product),
+        connectedDeviceLabel,
         problemCount,
         contributors,
         lastRestActivity: deriveLastRestActivity(traceEvents),
@@ -122,7 +132,7 @@ export function useHealthState(): OverallHealthState {
         state: "Idle",
         connectivity,
         host,
-        connectedDeviceLabel: inferConnectedDeviceLabel(deviceInfo?.product),
+        connectedDeviceLabel,
         problemCount: 0,
         contributors: idleContributors,
         lastRestActivity: deriveLastRestActivity(traceEvents),
@@ -150,7 +160,7 @@ export function useHealthState(): OverallHealthState {
       state,
       connectivity,
       host,
-      connectedDeviceLabel: inferConnectedDeviceLabel(deviceInfo?.product),
+      connectedDeviceLabel,
       problemCount: totalProblems,
       contributors,
       lastRestActivity: deriveLastRestActivity(traceEvents),
@@ -158,5 +168,5 @@ export function useHealthState(): OverallHealthState {
       lastTelnetActivity: deriveLastTelnetActivity(traceEvents),
       primaryProblem: derivePrimaryProblem(traceEvents, contributors),
     };
-  }, [connectionSnapshot.state, deviceInfo?.product, healthCheckState.latestResult, traceEvents]);
+  }, [connectionSnapshot.state, deviceInfo?.product, healthCheckState.latestResult, savedDevices, traceEvents]);
 }

@@ -18,6 +18,7 @@ export type AudioMixerItem = {
 };
 
 export const CATEGORY_OPTIONS: PlayFileCategory[] = ["sid", "mod", "prg", "crt", "disk"];
+export const SHARED_PLAYLIST_STORAGE_KEY = "c64u_playlist:v2:shared";
 export const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
 export const LAST_DEVICE_ID_KEY = "c64u_last_device_id";
 export const PLAYLIST_STORAGE_PREFIX = "c64u_playlist:v1:";

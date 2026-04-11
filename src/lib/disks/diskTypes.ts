@@ -9,6 +9,7 @@
 import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import type { ConfigCandidate, ConfigResolutionOrigin, ConfigValueOverride } from "@/lib/config/playbackConfig";
+import { buildSelectedDeviceBoundOrigin, type DeviceBoundContentOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
 export type DiskLocation = "local" | "ultimate";
 
@@ -17,6 +18,7 @@ export type DiskEntry = {
   name: string;
   path: string;
   location: DiskLocation;
+  origin?: DeviceBoundContentOrigin | null;
   group: string | null;
   sourceId?: string | null;
   localUri?: string | null;
@@ -40,7 +42,14 @@ export const normalizeDiskPath = (value: string) => {
   return withSlash.replace(/\/+/g, "/");
 };
 
-export const buildDiskId = (location: DiskLocation, path: string) => `${location}:${normalizeDiskPath(path)}`;
+export const buildDiskId = (location: DiskLocation, path: string, origin?: DeviceBoundContentOrigin | null) => {
+  const normalizedPath = normalizeDiskPath(path);
+  const originDeviceId = location === "ultimate" ? origin?.originDeviceId?.trim() : "";
+  if (originDeviceId) {
+    return `${location}:${originDeviceId}:${normalizedPath}`;
+  }
+  return `${location}:${normalizedPath}`;
+};
 
 export const getDiskName = (path: string) => {
   const normalized = normalizeDiskPath(path);
@@ -70,6 +79,7 @@ export const getLeafFolderName = (path: string) => {
 export const createDiskEntry = (params: {
   path: string;
   location: DiskLocation;
+  origin?: DeviceBoundContentOrigin | null;
   group?: string | null;
   sourceId?: string | null;
   localUri?: string | null;
@@ -84,11 +94,13 @@ export const createDiskEntry = (params: {
   configCandidates?: ConfigCandidate[] | null;
 }): DiskEntry => {
   const path = normalizeDiskPath(params.path);
+  const origin = params.origin ?? (params.location === "ultimate" ? buildSelectedDeviceBoundOrigin(path) : null);
   return {
-    id: buildDiskId(params.location, path),
+    id: buildDiskId(params.location, path, origin),
     name: params.name?.trim() || getDiskName(path),
     path,
     location: params.location,
+    origin,
     group: params.group ?? null,
     sourceId: params.sourceId ?? null,
     localUri: params.localUri ?? null,

@@ -11,6 +11,7 @@ import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import type { C64API } from "@/lib/c64api";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { getFileExtension } from "@/lib/playback/fileTypes";
+import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDevices/deviceBoundOrigin";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import {
   getLocalSourceListingMode,
@@ -177,7 +178,14 @@ export const mountDiskToDrive = async (api: C64API, drive: "a" | "b", disk: Disk
       deviceHost: api.getDeviceHost(),
     });
     if (disk.location === "ultimate") {
-      await api.mountDrive(drive, disk.path, mountType, "readwrite");
+      if (isOriginOnSelectedDevice(disk.origin)) {
+        await api.mountDrive(drive, disk.path, mountType, "readwrite");
+      } else if (disk.origin) {
+        const blob = await fetchUltimateOriginBlob(disk.origin);
+        await api.mountDriveUpload(drive, blob, mountType, "readwrite", { filename: disk.origin.originPath });
+      } else {
+        await api.mountDrive(drive, disk.path, mountType, "readwrite");
+      }
       return;
     }
 

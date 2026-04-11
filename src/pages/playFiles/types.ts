@@ -18,11 +18,13 @@ import type {
   ConfigValueOverride,
 } from "@/lib/config/playbackConfig";
 import type { ArchivePlaylistReference } from "@/lib/archive/types";
+import type { DeviceBoundContentOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
 export type PlayableEntry = {
   source: PlaySource;
   name: string;
   path: string;
+  origin?: DeviceBoundContentOrigin | null;
   file?: LocalPlayFile;
   configRef?: ConfigFileReference | null;
   configOrigin?: ConfigResolutionOrigin | null;
@@ -44,6 +46,7 @@ export type PlaylistItem = {
   category: PlayFileCategory;
   label: string;
   path: string;
+  origin?: DeviceBoundContentOrigin | null;
   configRef?: ConfigFileReference | null;
   configOrigin?: ConfigResolutionOrigin | null;
   configOverrides?: ConfigValueOverride[] | null;
@@ -57,7 +60,15 @@ export type PlaylistItem = {
   modifiedAt?: string | null;
   addedAt?: string | null;
   status?: "ready" | "unavailable";
-  unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
+  unavailableReason?:
+    | "source-revoked"
+    | "file-inaccessible"
+    | "hvsc-unavailable"
+    | "origin-device-unreachable"
+    | "origin-device-removed"
+    | "origin-device-mismatch"
+    | "origin-file-missing"
+    | null;
 };
 
 export type StoredPlaylistState = {
@@ -65,6 +76,7 @@ export type StoredPlaylistState = {
     source: PlaySource;
     path: string;
     name: string;
+    origin?: DeviceBoundContentOrigin | null;
     configRef?: ConfigFileReference | null;
     configOrigin?: ConfigResolutionOrigin | null;
     configOverrides?: ConfigValueOverride[] | null;
@@ -77,7 +89,15 @@ export type StoredPlaylistState = {
     modifiedAt?: string | null;
     addedAt?: string | null;
     status?: "ready" | "unavailable";
-    unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
+    unavailableReason?:
+      | "source-revoked"
+      | "file-inaccessible"
+      | "hvsc-unavailable"
+      | "origin-device-unreachable"
+      | "origin-device-removed"
+      | "origin-device-mismatch"
+      | "origin-file-missing"
+      | null;
   }>;
   currentIndex?: number;
 };

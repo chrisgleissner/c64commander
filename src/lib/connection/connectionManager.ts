@@ -8,6 +8,7 @@
 
 import {
   C64API,
+  type DeviceInfo,
   applyC64APIConfigFromStorage,
   applyC64APIRuntimeConfig,
   buildBaseUrlFromDeviceHost,
@@ -31,7 +32,13 @@ import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteraction
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
-export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background";
+export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch";
+
+export type ProbeInfoResult = {
+  ok: boolean;
+  deviceInfo: DeviceInfo | null;
+  error: string | null;
+};
 
 export type ConnectionSnapshot = Readonly<{
   state: ConnectionState;
@@ -114,6 +121,22 @@ const parseProbePayload = async (response: Response): Promise<unknown> => {
   }
 };
 
+const toDeviceInfo = (payload: unknown): DeviceInfo | null => {
+  if (!payload || typeof payload !== "object") return null;
+  const maybePayload = payload as Partial<DeviceInfo>;
+  return {
+    product: typeof maybePayload.product === "string" ? maybePayload.product : undefined,
+    firmware_version: typeof maybePayload.firmware_version === "string" ? maybePayload.firmware_version : undefined,
+    fpga_version: typeof maybePayload.fpga_version === "string" ? maybePayload.fpga_version : undefined,
+    core_version: typeof maybePayload.core_version === "string" ? maybePayload.core_version : undefined,
+    hostname: typeof maybePayload.hostname === "string" ? maybePayload.hostname : undefined,
+    unique_id: typeof maybePayload.unique_id === "string" ? maybePayload.unique_id : undefined,
+    errors: Array.isArray(maybePayload.errors)
+      ? maybePayload.errors.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  };
+};
+
 const probeWithFetch = async (
   baseUrl: string,
   options: { signal?: AbortSignal; timeoutMs?: number },
@@ -192,6 +215,126 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       return false;
     }
   }
+}
+
+export async function probeInfoOnce(
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<ProbeInfoResult> {
+  const config = await loadPersistedConnectionConfig();
+  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
+  const outerSignal = options.signal;
+  const isTestEnv =
+    typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+
+  const probeWithFetchForInfo = async (): Promise<ProbeInfoResult> => {
+    const payloadResult = await (async () => {
+      const controller = timeoutMs ? new AbortController() : null;
+      const abortFromOuter = () => controller?.abort();
+      if (outerSignal && controller) {
+        if (outerSignal.aborted) {
+          controller.abort();
+        } else {
+          outerSignal.addEventListener("abort", abortFromOuter, { once: true });
+        }
+      }
+      const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+      try {
+        const response = await fetch(`${config.baseUrl}/v1/info`, {
+          ...(controller ? { signal: controller.signal } : outerSignal ? { signal: outerSignal } : {}),
+        });
+        const payload = await parseProbePayload(response);
+        if (!response.ok) {
+          return {
+            ok: false,
+            deviceInfo: toDeviceInfo(payload),
+            error: `HTTP ${response.status}`,
+          } satisfies ProbeInfoResult;
+        }
+        return {
+          ok: isProbePayloadHealthy(payload),
+          deviceInfo: toDeviceInfo(payload),
+          error: isProbePayloadHealthy(payload) ? null : "Probe payload missing required identity",
+        } satisfies ProbeInfoResult;
+      } catch (error) {
+        return {
+          ok: false,
+          deviceInfo: null,
+          error: (error as Error).message,
+        } satisfies ProbeInfoResult;
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (outerSignal && controller) {
+          outerSignal.removeEventListener("abort", abortFromOuter);
+        }
+      }
+    })();
+    return payloadResult;
+  };
+
+  if (isTestEnv) {
+    return probeWithFetchForInfo();
+  }
+
+  try {
+    const api = new C64API(config.baseUrl, config.password, config.deviceHost);
+    const response = await api.getInfo({
+      timeoutMs,
+      signal: outerSignal,
+      __c64uIntent: "system",
+      __c64uAllowDuringDiscovery: true,
+      __c64uBypassCache: true,
+      __c64uBypassCooldown: true,
+      __c64uBypassBackoff: true,
+    });
+    return {
+      ok: isProbePayloadHealthy(response),
+      deviceInfo: response,
+      error: isProbePayloadHealthy(response) ? null : "Probe payload missing required identity",
+    };
+  } catch (error) {
+    const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
+    if (/^HTTP\s+\d+/.test(message)) {
+      return {
+        ok: false,
+        deviceInfo: null,
+        error: message,
+      };
+    }
+    const fallbackResult = await probeWithFetchForInfo();
+    return fallbackResult.ok ? fallbackResult : { ...fallbackResult, error: fallbackResult.error ?? message };
+  }
+}
+
+export async function verifyCurrentConnectionTarget(): Promise<ProbeInfoResult> {
+  clearPinnedDemoMode();
+  const discoveryRun = beginDiscoveryRun("switch");
+  cancelActiveDiscovery();
+  transitionTo("DISCOVERING", "switch");
+  setSnapshot({
+    lastDiscoveryTrigger: "switch",
+    lastProbeAtMs: Date.now(),
+    lastProbeError: null,
+  });
+  const result = await probeInfoOnce({ timeoutMs: Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000 });
+  if (!discoveryRun.isCurrent()) {
+    return result;
+  }
+  if (result.ok) {
+    setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+    await transitionToRealConnected("switch");
+    return result;
+  }
+  setSnapshot({
+    lastProbeFailedAtMs: Date.now(),
+    lastProbeError: result.error,
+  });
+  const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
+  if (autoDemoEnabled) {
+    await transitionToDemoActive("switch");
+  } else {
+    await transitionToOfflineNoDemo("switch");
+  }
+  return result;
 }
 
 let snapshot: ConnectionSnapshot = {

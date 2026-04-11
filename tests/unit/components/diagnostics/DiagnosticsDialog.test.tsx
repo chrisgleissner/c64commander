@@ -7,7 +7,9 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -27,11 +29,27 @@ const setViewportWidth = (width: number) => {
   });
 };
 
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  });
+
 const renderDialog = (props?: Partial<DiagnosticsDialogProps>) =>
   render(
-    <DisplayProfileProvider>
-      <DiagnosticsDialog {...defaultProps} {...props} />
-    </DisplayProfileProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={createTestQueryClient()}>
+        <DisplayProfileProvider>
+          <DiagnosticsDialog {...defaultProps} {...props} />
+        </DisplayProfileProvider>
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 
 const healthyHealthState: OverallHealthState = {
@@ -167,8 +185,54 @@ const defaultProps: DiagnosticsDialogProps = {
 };
 
 describe("DiagnosticsDialog", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "device-office",
+        devices: [
+          {
+            id: "device-office",
+            name: "Office U64",
+            host: "c64u",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: "U64",
+            lastKnownHostname: "office-u64",
+            lastKnownUniqueId: "UID-OFFICE",
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+        ],
+        summaries: {},
+        summaryLru: [],
+      }),
+    );
+    const store = await import("@/lib/savedDevices/store");
+    const snapshot = store.getSavedDevicesSnapshot();
+    const primaryDevice = snapshot.devices[0]!;
+
+    for (const device of snapshot.devices.slice(1)) {
+      store.removeSavedDevice(device.id);
+    }
+
+    store.updateSavedDevice(primaryDevice.id, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "office-u64",
+      lastKnownUniqueId: "UID-OFFICE",
+      hasPassword: false,
+    });
+    store.selectSavedDevice(primaryDevice.id);
+
     vi.clearAllMocks();
     updateC64APIConfig(buildBaseUrlFromDeviceHost("c64u:80"), undefined, "c64u:80");
     setStoredFtpPort(21);
@@ -254,6 +318,17 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/ago/i);
   });
 
+  it("keeps diagnostics focused on evidence and removes the old devices section", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    expect(screen.queryByTestId("diagnostics-devices")).toBeNull();
+    expect(screen.queryByTestId("diagnostics-devices-toggle")).toBeNull();
+    expect(screen.queryByTestId("manage-devices-button")).toBeNull();
+    expect(screen.queryByText("Switch saved devices from diagnostics.")).toBeNull();
+  });
+
   it("opens connection view on tap and connection edit on long press", async () => {
     setViewportWidth(600);
     vi.useFakeTimers();
@@ -264,7 +339,9 @@ describe("DiagnosticsDialog", () => {
     fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
 
     expect(screen.getByTestId("connection-view-surface")).toBeVisible();
-    expect(screen.getByText("c64u")).toBeVisible();
+    expect(screen.getByText("Office U64")).toBeVisible();
+    expect(screen.getByText("U64")).toBeVisible();
+    expect(within(screen.getByTestId("connection-view-surface")).getAllByText("c64u").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId("connection-view-edit"));
     expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
@@ -279,6 +356,55 @@ describe("DiagnosticsDialog", () => {
     vi.useRealTimers();
   });
 
+  it("shows the effective auto-generated device name in connection details while keeping the edit field blank", async () => {
+    setViewportWidth(600);
+    const store = await import("@/lib/savedDevices/store");
+    const snapshot = store.getSavedDevicesSnapshot();
+    const primaryDevice = snapshot.devices[0]!;
+
+    for (const device of snapshot.devices.slice(1)) {
+      store.removeSavedDevice(device.id);
+    }
+
+    store.updateSavedDevice(primaryDevice.id, {
+      name: "",
+      host: "u64-primary",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "u64-primary",
+      lastKnownUniqueId: "UID-U64-1",
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-u64-secondary",
+      name: "",
+      host: "u64-secondary",
+      httpPort: 80,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "u64-secondary",
+      lastKnownUniqueId: "UID-U64-2",
+      hasPassword: false,
+    });
+    store.selectSavedDevice("device-u64-secondary");
+
+    renderDialog();
+
+    fireEvent.pointerDown(screen.getByTestId("diagnostics-device-line"));
+    fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
+
+    const connectionView = screen.getByTestId("connection-view-surface");
+    expect(connectionView).toBeVisible();
+    expect(within(connectionView).getByText("U64-2")).toBeVisible();
+    expect(within(connectionView).getAllByText("u64-secondary").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTestId("connection-view-edit"));
+    expect(screen.getByLabelText(/device name/i)).toHaveValue("");
+  });
+
   it("persists connection edits and retries the connection", async () => {
     setViewportWidth(600);
     const onRetryConnection = vi.fn();
@@ -287,6 +413,7 @@ describe("DiagnosticsDialog", () => {
 
     fireEvent.contextMenu(screen.getByTestId("diagnostics-device-line"));
 
+    fireEvent.change(screen.getByLabelText(/device name/i), { target: { value: "Lab U64" } });
     fireEvent.change(screen.getByTestId("connection-edit-host"), { target: { value: "ultimate.local" } });
     fireEvent.change(screen.getByTestId("connection-edit-http"), { target: { value: "8081" } });
     fireEvent.change(screen.getByTestId("connection-edit-ftp"), { target: { value: "2121" } });
@@ -300,6 +427,34 @@ describe("DiagnosticsDialog", () => {
     expect(localStorage.getItem("c64u_device_host")).toBe("ultimate.local:8081");
     expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
     expect(localStorage.getItem("c64u_telnet_port")).toBe("2323");
+
+    const persisted = JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}");
+    expect(persisted.devices[0]).toMatchObject({
+      id: "device-office",
+      name: "Lab U64",
+      host: "ultimate.local",
+      httpPort: 8081,
+      ftpPort: 2121,
+      telnetPort: 2323,
+    });
+  });
+
+  it("does not repeat the product code when the saved device name already matches it", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.updateSavedDevice("device-office", {
+      name: "U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64",
+      lastKnownHostname: "office-u64",
+      lastKnownUniqueId: "UID-OFFICE",
+    });
+
+    renderDialog();
+
+    expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent(/^U64$/);
   });
 
   it("keeps filter configuration separate from filter visibility", () => {
@@ -330,9 +485,13 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("health-history-popup")).toBeVisible();
 
     rerender(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} open={false} />
-      </DisplayProfileProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <DisplayProfileProvider>
+            <DiagnosticsDialog {...defaultProps} open={false} />
+          </DisplayProfileProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => {

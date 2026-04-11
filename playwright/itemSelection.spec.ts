@@ -17,6 +17,7 @@ import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUi
 import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { clickSourceSelectionButton } from "./sourceSelection";
+import { SHARED_PLAYLIST_STORAGE_KEY } from "../src/pages/playFiles/playFilesUtils";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -31,7 +32,7 @@ const openAddItemsDialog = async (page: Page) => {
   await expect(page.getByRole("dialog")).toBeVisible();
 };
 
-const readPlaylistRepositoryCount = async (page: Page, playlistId = "c64u_playlist:v1:TEST-123") =>
+const readPlaylistRepositoryCount = async (page: Page, playlistId = SHARED_PLAYLIST_STORAGE_KEY) =>
   page.evaluate(
     async ({ activePlaylistId }) => {
       const openDb = () =>
@@ -621,7 +622,7 @@ test.describe("Item Selection Dialog UX", () => {
     await expect
       .poll(async () =>
         page.evaluate(() => {
-          const raw = localStorage.getItem("c64u_disk_library:TEST-123");
+          const raw = localStorage.getItem("c64u_disk_library:shared");
           if (!raw) return 0;
           const parsed = JSON.parse(raw) as { disks?: unknown[] };
           return parsed.disks?.length ?? 0;
@@ -630,7 +631,7 @@ test.describe("Item Selection Dialog UX", () => {
       .toBeGreaterThan(0);
 
     const firstCount = await page.evaluate(() => {
-      const raw = localStorage.getItem("c64u_disk_library:TEST-123");
+      const raw = localStorage.getItem("c64u_disk_library:shared");
       if (!raw) return 0;
       const parsed = JSON.parse(raw) as { disks?: unknown[] };
       return parsed.disks?.length ?? 0;
@@ -642,7 +643,7 @@ test.describe("Item Selection Dialog UX", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
 
     const secondCount = await page.evaluate(() => {
-      const raw = localStorage.getItem("c64u_disk_library:TEST-123");
+      const raw = localStorage.getItem("c64u_disk_library:shared");
       if (!raw) return 0;
       const parsed = JSON.parse(raw) as { disks?: unknown[] };
       return parsed.disks?.length ?? 0;

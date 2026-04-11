@@ -102,6 +102,13 @@ export const ItemSelectionView = ({
               data-testid="source-entry-row"
               data-entry-type={entry.type}
               tabIndex={canNavigateFolder ? 0 : undefined}
+              onClick={
+                canNavigateFolder
+                  ? () => {
+                      onOpen(entry.path);
+                    }
+                  : undefined
+              }
               onKeyDown={
                 canNavigateFolder
                   ? (event: React.KeyboardEvent) => {
@@ -130,7 +137,8 @@ export const ItemSelectionView = ({
                   aria-label={folderLabel}
                   aria-disabled={isLoading ? "true" : undefined}
                   disabled={!canNavigateFolder}
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.stopPropagation();
                     if (!canNavigateFolder) return;
                     onOpen(entry.path);
                   }}

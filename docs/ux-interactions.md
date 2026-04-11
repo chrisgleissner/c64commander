@@ -234,13 +234,17 @@ Interaction split:
 
 ### 4.1 Connection Settings
 
-| CTA    | Label                 | Purpose               | Importance   | Test Coverage | Test File                      | Notes               |
-| ------ | --------------------- | --------------------- | ------------ | ------------- | ------------------------------ | ------------------- |
-| Input  | IP address / hostname | Set C64U address      | **CRITICAL** | ⚠️ PARTIAL    | settingsConnection.spec.ts     | Core configuration  |
-| Input  | Port number           | Set C64U port         | **HIGH**     | ⚠️ PARTIAL    | settingsConnection.spec.ts     | Core configuration  |
-| Button | "Refresh connection"  | Verify connectivity   | **HIGH**     | ✅ FULL       | settingsConnection.spec.ts:194 | Validation          |
-| Toggle | "Auto-connect"        | Connect on app launch | **MEDIUM**   | ❌ NONE       | -                              | Convenience feature |
-| Toggle | "Mock mode"           | Use mock server       | **LOW**      | ✅ FULL       | settingsConnection.spec.ts:130 | Development only    |
+| CTA         | Label                          | Purpose                                                                   | Importance   | Test Coverage | Test File                              | Notes                                                                                            |
+| ----------- | ------------------------------ | ------------------------------------------------------------------------- | ------------ | ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Button list | Saved devices                  | Select the active saved device                                            | **CRITICAL** | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Updates fields from local metadata                                                               |
+| Button      | Add / Delete icons             | Create or remove saved devices                                            | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Icon-only controls with accessible labels; keeps at least one device                             |
+| Input       | Device name                    | Set a custom device name or fall back to product-derived automatic labels | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Blank values resolve to product labels such as `U64-2`; the badge truncates visually when needed |
+| Input       | Hostname / HTTP / FTP / Telnet | Edit the selected device connection tuple                                 | **CRITICAL** | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Stored per device                                                                                |
+| Input       | Password                       | Set the selected device password                                          | **HIGH**     | ⚠️ PARTIAL    | tests/unit/secureStorage.test.ts       | Stored in secure storage per device                                                              |
+| Button      | "Save & Connect"               | Persist selected device and verify target                                 | **HIGH**     | ⚠️ PARTIAL    | tests/unit/pages/SettingsPage.test.tsx | Uses `/v1/info` after local projection                                                           |
+| Button      | "Refresh connection"           | Verify connectivity                                                       | **HIGH**     | ✅ FULL       | settingsConnection.spec.ts:194         | Validation                                                                                       |
+| Toggle      | "Auto-connect"                 | Connect on app launch                                                     | **MEDIUM**   | ❌ NONE       | -                                      | Convenience feature                                                                              |
+| Toggle      | "Mock mode"                    | Use mock server                                                           | **LOW**      | ✅ FULL       | settingsConnection.spec.ts:130         | Development only                                                                                 |
 
 ### 4.2 Appearance Settings
 
@@ -252,18 +256,20 @@ Interaction split:
 
 ### 4.3 Diagnostics
 
-| CTA    | Label                       | Purpose                                       | Importance | Test Coverage | Test File                                                    | Notes                         |
-| ------ | --------------------------- | --------------------------------------------- | ---------- | ------------- | ------------------------------------------------------------ | ----------------------------- |
-| Button | "Diagnostics"               | Open diagnostics sheet                        | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:41                               | Workflow bottom sheet         |
-| Button | "Clear All"                 | Clear all diagnostics data                    | **MEDIUM** | ✅ FULL       | settingsDiagnostics.spec.ts:133                              | Maintenance                   |
-| Button | "Share All"                 | Share all diagnostics as ZIP                  | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Support tool                  |
-| Input  | "Filter entries"            | Filter active diagnostics tab                 | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Scoped filtering              |
-| Button | Contributor filter "TELNET" | Focus diagnostics on Telnet-attributed issues | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx | Available beside App/REST/FTP |
-| Button | "Share"                     | Share active tab ZIP export                   | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                               | Support tool                  |
+| CTA    | Label                       | Purpose                                       | Importance | Test Coverage | Test File                                                                                               | Notes                                                                                              |
+| ------ | --------------------------- | --------------------------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Button | "Diagnostics"               | Open diagnostics sheet                        | **LOW**    | ✅ FULL       | settingsDiagnostics.spec.ts:41                                                                          | Workflow bottom sheet                                                                              |
+| Button | Saved device rows           | Switch the selected saved device              | **HIGH**   | ✅ FULL       | tests/unit/components/UnifiedHealthBadge.test.tsx; tests/unit/hooks/useSavedDeviceHealthChecks.test.tsx | 2-tap switch from main pages, with passive multi-device health polling and expandable probe detail |
+| Button | "Clear All"                 | Clear all diagnostics data                    | **MEDIUM** | ✅ FULL       | settingsDiagnostics.spec.ts:133                                                                         | Maintenance                                                                                        |
+| Button | "Share All"                 | Share all diagnostics as ZIP                  | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                                                                          | Support tool                                                                                       |
+| Input  | "Filter entries"            | Filter active diagnostics tab                 | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                                                                          | Scoped filtering                                                                                   |
+| Button | Contributor filter "TELNET" | Focus diagnostics on Telnet-attributed issues | **MEDIUM** | ⚠️ PARTIAL    | tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx                                            | Available beside App/REST/FTP                                                                      |
+| Button | "Share"                     | Share active tab ZIP export                   | **MEDIUM** | ✅ FULL       | homeDiagnosticsOverlay.spec.ts                                                                          | Support tool                                                                                       |
 
 Diagnostics tools follow the same model:
 
 - Diagnostics root: bottom sheet
+- Saved-device switch list: inline section inside the diagnostics root sheet
 - Filters, latency analysis, config drift, decision state, and history: bottom sheets
 - Clear All confirmation: modal
 

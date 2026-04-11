@@ -56,6 +56,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
 import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
+import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -112,6 +113,7 @@ import {
   DURATION_SLIDER_STEPS,
   PLAYBACK_SESSION_KEY,
   PLAYLIST_STORAGE_PREFIX,
+  SHARED_PLAYLIST_STORAGE_KEY,
   buildPlaylistStorageKey,
   clampDurationSeconds,
   durationSecondsToSlider,
@@ -570,7 +572,7 @@ export default function PlayFilesPage() {
   }, [hvsc]);
 
   const resolvedDeviceId = useResolvedPlaybackDeviceId(deviceInfoId);
-  const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(resolvedDeviceId), [resolvedDeviceId]);
+  const playlistStorageKey = SHARED_PLAYLIST_STORAGE_KEY;
 
   useEffect(() => {
     if (browserOpen) return;
@@ -910,17 +912,20 @@ export default function PlayFilesPage() {
       const request: PlayRequest = {
         source: entry.source,
         path: entry.path,
+        origin: entry.origin ?? (entry.source === "ultimate" ? buildSelectedDeviceBoundOrigin(entry.path) : null),
         file: entry.file,
         songNr: Number.isNaN(songNrValue) ? undefined : songNrValue,
       };
       const resolvedSourceId = entry.sourceId ?? (entry.source === "hvsc" ? "hvsc-library" : null);
-      const idParts = [entry.source, resolvedSourceId ?? ""];
+      const originDeviceId = request.origin?.originDeviceId ?? null;
+      const idParts = [entry.source, resolvedSourceId ?? originDeviceId ?? ""];
       return {
         id: `${idParts.join(":")}:${entry.path}`,
         request,
         category,
         label: entry.name,
         path: entry.path,
+        origin: request.origin,
         configRef: entry.configRef ?? null,
         configOrigin: entry.configOrigin ?? resolveStoredConfigOrigin(entry.configRef ?? null, null),
         configOverrides: entry.configOverrides ?? null,

@@ -1,287 +1,417 @@
-# HVSC Playlist Convergence Plan
+# Device Switcher V2 Multi-Phase Plan
 
-## Classification
+Date: 2026-04-09
+Status: In execution
+Primary UX direction: [ux-recommendations-2026-04-09.md](./docs/research/device-switcher/v2/ux-recommendations-2026-04-09.md)
+Base spec: [device-switch-spec.md](./docs/research/device-switcher/device-switch-spec.md)
+Expected change classification: `DOC_PLUS_CODE`, `UI_CHANGE`
 
-- `CODE_CHANGE`
-- `UI_CHANGE`
-- `DOC_PLUS_CODE`
+## Working Rules
 
-### 2026-04-07 HVSC first-use preparation flow and chooser polish
+- Authoritative source: `docs/research/device-switcher/v2/plan.md`
+- Structure and phase ordering below must remain aligned with the authoritative source.
+- A task is complete only after its validation checkpoint passes.
+- Validation failures block progression to the next task or phase.
 
-- Classification: `CODE_CHANGE`, `UI_CHANGE`, `DOC_PLUS_CODE`
-- Scope of this pass:
-  - replace the manual HVSC download plus ingest flow with an automatic `Add items -> HVSC` preparation journey
-  - add the `Preparing HVSC library` sheet with deterministic progress, retry, cancel, and explicit `Browse HVSC` confirmation
-  - keep only summary plus advanced `Reindex HVSC` and `Reset HVSC` actions on the Play page
-  - align the `CommoServe` chooser row with the other source labels and enlarge the CommoServe mark without shifting the label baseline
-  - refresh the affected Play import screenshots after the chooser polish lands
-- Validation scope before completion:
-  - targeted HVSC hook, state-machine, chooser, and UI regressions
-  - `npm run build`
-  - attempt `npm run test:coverage` as the repository coverage gate and record blockers honestly if the environment fails before assertions do
-  - refresh only the Play import screenshots touched by the chooser surface
+## 1. Objective
 
-## 2026-04-07 HVSC Preparation Status
+Implement badge-based device switching so the badge becomes the single device-context anchor:
 
-- [x] `HVSC-PREP-001` Added a user-facing HVSC preparation state machine and hooked it into the Play page flow.
-- [x] `HVSC-PREP-002` Added the `Preparing HVSC library` sheet and routed `Add items -> HVSC` through automatic preparation with retry and explicit browse confirmation.
-- [x] `HVSC-PREP-003` Replaced the Play page HVSC primary actions with summary plus advanced recovery controls.
-- [x] `HVSC-PREP-004` Added focused regression coverage for the hook, chooser interception, state machine, controls, and preparation sheet.
-- [x] `HVSC-PREP-005` Realigned the `CommoServe` source row in the chooser and increased the CommoServe mark size without reintroducing label drift.
-- [x] `HVSC-PREP-006` Regenerated the affected Play import screenshots under `docs/img/app/play/import/` and `docs/img/app/play/import/profiles/`.
-- [ ] `HVSC-PREP-007` Repository-wide lint and coverage gates still need a clean pass without unrelated formatting drift or environment OOMs.
+- tap opens Diagnostics
+- long press opens a compact `Switch device` picker
 
-### 2026-04-06 device-scale harness execution
+The implementation must preserve fast switching, avoid full-config fetches during the switch handshake, keep memory bounded across multiple devices, and preserve continuity for playlist and disk items imported from another saved device.
 
-- Classification: `CODE_CHANGE`
-- Current task: `HARNESS-ANDROID-SCALE-001`
-- Current dominant bottleneck: not selected yet; honest required-platform baselines remain the gate.
-- External prerequisites verified before implementation:
-  - preferred Pixel 4 attached over adb: `9B081FFAZ001WX`
-  - real C64U host reachable at `http://u64/v1/info`
-  - real web archive inputs present at `~/.cache/c64commander/hvsc/HVSC_84-all-of-them.7z` and `~/.cache/c64commander/hvsc/HVSC_Update_84.7z`
-- Harness changes now landed and validated:
-  - `.maestro/perf-hvsc-baseline.yaml` no longer seeds the measurement run with the single-track `10_Orbyte.sid` path
-  - `perf-hvsc-setup-playlist` remains the large-playlist setup phase
-  - smoke snapshots now record playlist size and feedback visibility metadata for download, ingest, add-to-playlist, filter, and playback-start
-  - playlist filter smoke artifacts now emit `playlist-filter-high`, `playlist-filter-low`, and `playlist-filter-zero` instead of collapsing into one overwritten `playlist-filter` file
-  - Android summary output now includes `feedbackEvidence`, `targetEvidence.UX1`, and `targetEvidence.T6`
-  - playback-start smoke artifacts now carry playlist-size context from the Play page controller
-- Validation completed for the harness change:
-  - targeted regressions passed for Android summary, Maestro contracts, playlist filtering, add-to-playlist smoke metadata, playback smoke metadata, and HVSC snapshot emitters
-  - `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
-  - `npm run build`: passed
-  - `npm run test:coverage`: passed with 496 test files, 5642 tests, and 91.15% branch coverage
-- Remaining work on this execution path:
-  - keep `ci-artifacts/hvsc-performance/web/web-full-nightly.json` as an explicit unsupported blocker artifact until the web S1-S11 suite can run at full scale without fixture-backed browse/playback phases
-  - diagnose the Pixel 4 large-playlist setup failure seen in `20260406T1730Z-hvsc-android-pilot` before retrying the Android baseline; the pilot never reached `Items added`, ended with a zero-byte Perfetto trace, and the device dropped off adb afterward
-  - rerun the first honest Pixel 4 Android baseline with `summary.json`, a non-empty Perfetto trace, extracted metrics, playlist-size evidence, and UX feedback evidence once the setup failure is resolved
-  - update the target matrix only from those measured artifacts
+## 2. V2 Product Direction
 
-### 2026-04-06 follow-up convergence closure
+This v2 plan supersedes the earlier diagnostics-embedded switcher direction.
 
-- Classification: `DOC_ONLY`
-- Scope of this follow-up: verify the live Add Items chooser and import screenshots, then refresh the stale HVSC audit and remaining-work prompt to match the current repository state.
-- Validation scope before implementation:
-  - run targeted chooser regressions in `tests/unit/components/FileOriginIcon.test.tsx` and `tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx`
-  - verify the referenced Play import screenshots exist and match the live UI before considering any regeneration
-  - re-read touched tracker and audit documents and verify every referenced repo path or artifact path exists
-- Constraint: do not reopen prior code or screenshot work unless the live tree disproves the existing implementation or documentation.
+Required UX outcome:
 
-## 2026-04-06 Follow-up Convergence Status
+- no persistent Devices switcher section in Diagnostics
+- long press on the badge opens a decision-only picker
+- picker rows are name-first and minimal by default
+- technical details remain in Health, overflow details, and Settings
+- Settings remains the CRUD surface
 
-- [x] `UI-SOURCE-001` Verified the live Add Items chooser against code, targeted regressions, and the current import screenshots; no code change required.
-- [x] `UI-DOC-002` Verified the README import screenshot references and the five referenced screenshot files; no screenshot regeneration required.
-- [x] `PERF-AUDIT-003` Refreshed `docs/research/hvsc/performance/audit/audit.md` against the current tree, trackers, workflows, and artifact roots.
-- [x] `PERF-PROMPT-004` Replaced `docs/research/hvsc/performance/audit/convergence-prompt.md` with the real remaining work only.
-- [x] `CLOSE-005` Rechecked the touched trackers and audit documents so the current repo state, evidence paths, and remaining-work prompt agree.
+If the base spec and the v2 UX recommendation diverge on the switching interaction, the v2 UX recommendation is authoritative for implementation and the base spec should be updated during documentation closure.
 
-## Mission
+## 3. Execution Rules
 
-Restore deterministic playlist correctness for HVSC imports and large playlists. The import workflow must not declare completion until playlist persistence is complete, repository reads reflect the full dataset, and the UI can immediately render the correct playlist state without waiting for background sync.
+- The v2 UX recommendation is authoritative for switching interaction design.
+- The sequence in this plan is authoritative for implementation order.
+- Preserve badge tap -> Diagnostics behavior.
+- Add long press without degrading ordinary tap latency or reliability.
+- Do not add a new persistent header control beyond the existing badge.
+- Do not add a persistent Devices section back into Diagnostics.
+- Do not fetch `c64-all-config` during switching.
+- Do not silently break `ultimate` playlist or disk items imported from another saved device.
+- Reuse and extend the existing mock and harness layers.
+- Every bug fix discovered during implementation must receive a targeted regression test.
+- Final validation must include `npm run test:coverage` with global branch coverage `>= 91%`.
 
-## P0 Failure Statement
+## 4. Phase Summary
 
-Observed failure:
+| Phase | Goal                                                       | Blocking output                                    |
+| ----- | ---------------------------------------------------------- | -------------------------------------------------- |
+| 0     | Confirm architecture, gesture constraints, and spec deltas | touched files and UX contract identified           |
+| 1     | Land saved-device storage and migration                    | persisted multi-device model in place              |
+| 2     | Land badge long-press and picker shell                     | picker opens without regressing badge tap          |
+| 3     | Land switch orchestration and verification                 | switching works through the picker                 |
+| 4     | Land diagnostics/settings simplification                   | Diagnostics no longer owns switching UI            |
+| 5     | Land device-bound collection continuity                    | cross-device playlist and disk items still work    |
+| 6     | Land multi-device mock and harness support                 | deterministic end-to-end coverage becomes possible |
+| 7     | Land reload, cache, and edge behavior                      | switching stays bounded and predictable            |
+| 8     | Validation, docs, and screenshots                          | repo is validated and docs are aligned             |
 
-1. Import completes, playlist appears empty, then items materialize later.
-2. `View all` appears only after delayed playlist materialization.
+## 5. Detailed Phases
 
-Validated root cause:
+### Phase 0. Discovery and alignment
 
-- `useQueryFilteredPlaylist` currently mirrors the full React playlist into the repository asynchronously on every playlist mutation.
-- Large imports create a backlog of full-playlist rewrites.
-- The hook suppresses repository-backed results until the async mirror finishes, so UI correctness lags behind the import completion signal.
+Goal:
 
-## Non-negotiable Rules
+- confirm the touched runtime surfaces and explicitly map the v2 UX changes against the existing diagnostics-first implementation plan
 
-- Lazy behavior is allowed only for rendering and paging.
-- Lazy behavior is forbidden for persistence, correctness, completion semantics, and UI truth.
-- `Import complete` must occur only after repository write completion and read-back validation.
-- There must be zero real repository writes after the UI transitions to ready for a given snapshot.
+Read first:
 
-## Execution Order
+- `README.md`
+- `.github/copilot-instructions.md`
+- `docs/ux-guidelines.md`
+- [../device-switch-spec.md](./docs/research/device-switcher/device-switch-spec.md)
+- [ux-recommendations-2026-04-09.md](./docs/research/device-switcher/v2/ux-recommendations-2026-04-09.md)
 
-### Phase 1. Ingest to Playlist Consistency
+Deliverables:
 
-- [x] Instrument scan start and end, batch creation, batch append, repository commit start and end, repository validation, and UI readiness transition.
-- [x] Introduce an explicit playlist import state machine with `SCANNING`, `INGESTING`, `COMMITTING`, and `READY`.
-- [x] Replace eventual repository mirroring with an explicit commit barrier for playlist imports.
-- [x] Add repository read-back validation so expected item count must equal committed item count before success.
-- [x] Fail loudly and keep the workflow non-ready if repository validation fails.
+- explicit list of touched components, hooks, stores, and query invalidation utilities
+- explicit note of where the earlier diagnostics-switcher design must be replaced
+- explicit confirmation of how long press will be detected on supported platforms and exercised in tests
 
-### Phase 2. Restore `View all` Availability
+Execution tasks:
 
-- [x] Decouple `View all` visibility from lazy rendered rows.
-- [x] Base `View all` availability on authoritative item counts instead of overflow-only preview state.
-- [x] Apply the fix to both Play page and Disks page shared list surfaces.
+- [x] Read only the minimal implementation files needed to map the current device-switch-related architecture.
+- [x] Identify the concrete UI entry points, state stores, persistence layer, route reload logic, diagnostics surfaces, and collection execution paths affected by this feature.
+- [x] Record the impact map and gesture/testing contract in `WORKLOG.md`.
 
-### Phase 3. Rebuild `View all` Bottom Sheet for Scale
+Validation checkpoints:
 
-- [x] Keep eager correctness metadata only: count, ordering, section anchors.
-- [x] Keep rendering windowed with virtualization.
-- [x] Keep repository fetch incremental with paging for large lists.
-- [x] Add fast jump affordances for large result sets.
-- [x] Ensure first viewport opens immediately without blocking on full list hydration.
+- [x] Touched implementation surfaces are identified without speculative expansion.
+- [x] The replacement points for the earlier Diagnostics switcher are explicit.
+- [x] Long-press feasibility and test approach are explicit for web and native-supported paths.
 
-### Phase 4. Harden Playlist Hydration and Query Model
+Exit criteria:
 
-- [x] Audit and fix `playlistRepository`, `usePlaybackPersistence`, `useQueryFilteredPlaylist`, and `usePlaylistListItems` integration.
-- [x] Remove stale cache and hidden async rebuild dependencies from playlist correctness.
-- [x] Introduce explicit repository invalidation and ready revision tracking after each committed snapshot.
-- [x] Guarantee deterministic read-after-write behavior for repository-backed queries.
+- implementation impact is narrow enough to proceed without speculative UI churn
 
-### Phase 5. Regression and Stress Coverage
+### Phase 1. Saved-device model and migration
 
-- [x] Add a consistency test for 10K+ imported items with immediate repository count assertion.
-- [x] Add a regression test proving the UI does not report completion before repository commit resolves.
-- [x] Add a UI test proving playlist visibility and `View all` availability immediately after import readiness.
-- [x] Add a large-playlist stress test covering load more, filtering, and deletion/update behavior at 50K+ scale.
-- [x] Hold changed-code branch coverage above 91% during `npm run test:coverage`.
+Goal:
 
-### Phase 6. Performance Re-measurement
+- replace implicit single-device assumptions with a persisted saved-device model
 
-- [x] Re-measure S6 add to playlist.
-- [x] Re-measure S7 playlist render.
-- [x] Re-measure S8 to S10 playlist filtering.
-- [x] Update target status for T2 ingest, T3 browse, and T4 filter.
-- [x] Record evidence and blockers in `WORKLOG.md`.
+Implementation targets:
 
-## Current Evidence
+- add `SavedDevice` persistence
+- add `selectedDeviceId`
+- add migration from legacy single-device storage
+- add label derivation and uniqueness validation helpers
 
-- Focused regression validation passed: 95 targeted tests, 0 failed.
-- Earlier closeout validation passed: `npm run test:ci` end-to-end, including screenshots, Playwright E2E, evidence validation, trace validation, and production build.
-- Current follow-up validation passed:
-  - `npm run screenshots`: 21 screenshot tests passed; 148 PNGs scanned, 148 kept
-  - `npm run lint`: passed with 3 non-fatal warnings in generated `c64scope/coverage/*` files
-  - `npm run build`: passed
-  - `npm run test:coverage`: passed with 496 test files, 5639 tests, and 91.17% branch coverage
-- Additional regressions covered during the convergence and follow-up cleanup passes:
-  - delayed device-id playlist hydration now retries against the resolved playlist storage key before persistence resumes
-  - stale Maestro and smoke-mode tests were updated to match current runtime behavior
-  - Playwright layout and Home interaction assertions were refreshed to match current UI behavior and tolerance
-  - Add Items source chooser icons now share a fixed slot width, including CommoServe
-  - diagnostics history analysis now shows an expanded, scrollable health-check timeline for the selected segment
-- Fresh web fixture perf artifact: `ci-artifacts/hvsc-performance/web/web-full-quick.json`
-  - S6 add to playlist: `1613.72 ms` wall clock, `playlist:add-batch` p95 `17.2 ms`, `playlist:repo-sync` p95 `21.1 ms`
-  - S7 render playlist: `6.75 ms` wall clock
-  - S8 filter high match: `545.53 ms` wall clock, `playlist:filter` p95 `17.2 ms`
-  - S9 filter zero match: `544.06 ms` wall clock, `playlist:filter` p95 `16.6 ms`
-  - S10 filter low match: `550.23 ms` wall clock, `playlist:filter` p95 `13.9 ms`
-  - Target evidence from the same run: T2 ingest `228.4 ms` pass, T3 browse `334.64 ms` pass, T4 filter `550.23 ms` pass
+Execution tasks:
 
-## Audit Reconciliation Snapshot
+- [x] Extend persisted device configuration/state types to support multi-device storage.
+- [x] Implement deterministic migration from legacy single-device storage into the new saved-device model.
+- [x] Add label derivation and uniqueness validation helpers for `shortLabel`.
+- [x] Project `selectedDeviceId` through the runtime config path.
 
-### Convergence Ledger Status
+Required tests:
 
-- Closed in the current repository state:
-  - `P0.1` Reconcile tree with audit and trackers
-  - `P0.2` Normalize artifact directory strategy
-  - `P1.1` Close benchmark matrix gap `S1` through `S11`
-  - `P1.2` Make the web perf harness benchmark real download and ingest
-  - `P1.3` Close Android benchmark harness gap
-  - `P1.4` Close instrumentation coverage gap
-  - `P1.5` Close Perfetto pipeline gap
-  - `P1.6` Close microbenchmark gap
-- Still open:
-  - `P2.1` Capture the first honest full baseline
-  - `P2.2` Build the first pass/fail matrix
-  - `P3.1` Execute Cycle 1 against the single dominant bottleneck
-  - `P3.2` Repeat optimization cycles until every target is either passing or formally blocked
-  - `P4.1` Close quick-CI gap
-  - `P4.2` Close nightly-CI gap
-  - `P5.1` Re-audit against `docs/research/hvsc/performance/audit/audit.md`
-  - `P5.2` Produce final convergence record
+- [x] migration from existing single-device storage
+- [x] idempotent migration behavior
+- [x] uniqueness and length handling for `shortLabel`
+- [x] persisted selection behavior
 
-Evidence anchors:
+Validation checkpoints:
 
-- `WORKLOG.md` entries:
-  - `2026-04-05 09:00` (`P0.1`)
-  - `2026-04-05 09:15` (`P0.2`)
-  - `2026-04-05 09:30` (`P1.1`)
-  - `2026-04-05 22:15` (`P1.2`)
-  - `2026-04-05 23:30` (`P1.3`)
-  - `2026-04-06 00:00` (`P1.4`)
-  - `2026-04-06 00:15` (`P1.5`)
-  - `2026-04-06 00:20` (`P1.6`)
+- [x] A single-device user migrates without manual action.
+- [x] `selectedDeviceId` always resolves to an existing saved device after migration.
+- [x] Selected device survives restart.
 
-### Target Status Snapshot
+Exit criteria:
 
-| Target | Current honest status                                                                | Evidence                                                                            |
-| ------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `T1`   | Open: not yet measured on both required platforms                                    | No current Docker web + Pixel 4 evidence recorded in `PLANS.md` / `WORKLOG.md`      |
-| `T2`   | Partial only: web fixture evidence exists; full required-platform closure still open | `ci-artifacts/hvsc-performance/web/web-full-quick.json`                             |
-| `T3`   | Partial only: web fixture evidence exists; Pixel 4 closure still open                | `ci-artifacts/hvsc-performance/web/web-full-quick.json`                             |
-| `T4`   | Partial only: web fixture evidence exists; Pixel 4 closure still open                | `ci-artifacts/hvsc-performance/web/web-full-quick.json`                             |
-| `T5`   | Open: no current required-platform closure recorded                                  | No current target-closing artifact recorded in `PLANS.md` / `WORKLOG.md`            |
-| `T6`   | Open: not yet closed on Pixel 4 and Docker web                                       | Node-side stress evidence exists, but required-platform closure is not yet recorded |
+- a single-device user is transparently migrated to one saved device
+- selected device state survives app restart
 
-### Current Bottleneck Selection
+### Phase 2. Badge long-press and picker shell
 
-- No dominant optimization bottleneck is currently selected.
-- Reason: the honest full baseline required by `P2.1` and `P2.2` is still incomplete, so later convergence cycles remain open by definition.
+Goal:
 
-## Success Criteria
+- add the new switching entry point without regressing the existing badge tap behavior
 
-- [x] Playlist state is correct immediately after import completion.
-- [x] UI correctness no longer depends on delayed background repository work.
-- [x] `View all` is always available for non-empty authoritative lists.
-- [x] Large imports remain correct and measurable at 50K+ items.
-- [x] Performance targets are either measured with evidence or explicitly blocked with current bottleneck details.
+Implementation targets:
 
----
+- preserve tap on `UnifiedHealthBadge` -> Diagnostics
+- add long press on the badge -> `Switch device` picker
+- keep the picker decision-only and name-first
+- keep default rows minimal: device name plus selection or transient status only
+- ensure the one-device case does not surface a redundant switch affordance
 
-## Audit 3: HVSC Playlist Import & Large-Playlist Performance Research
+Execution tasks:
 
-Date: 2026-04-07
-Status: Tasks 1-7 implemented and validated
-Primary document: `docs/research/hvsc/performance/audit3/audit3.md`
-Implementation prompt: `docs/research/hvsc/performance/audit3/prompt.md`
+- [x] Extend the badge interaction layer to distinguish tap from long press without breaking current tap behavior.
+- [x] Add the `Switch device` decision interstitial and name-first row rendering.
+- [x] Ensure the picker is suppressed when switching is impossible.
+- [x] Wire dismissal behavior for cancel and post-selection.
 
-### Problem Restatement
+Required tests:
 
-The bottleneck is not 7z extraction. It is (1) importing 60k+ extracted songs into a playlist and (2) interacting with the resulting 100k-item playlist. Five dominant bottlenecks were identified and ranked with benchmark evidence.
+- [x] tap still opens Diagnostics
+- [x] long press opens the picker when two or more saved devices exist
+- [x] long press does not regress ordinary tap behavior
+- [x] healthy picker rows do not render hostname, product code, or unique-id text by default
+- [x] picker dismisses cleanly after cancel or selection
 
-### Top Bottlenecks (Measured)
+Validation checkpoints:
 
-1. **Browse index activation failure** — 30s BFS fallback on Pixel 4 via Capacitor bridge (measured: 50s at 100k simulated)
-2. **O(n²) array spread** — 86ms desktop / 430–690ms Pixel 4 est. for 60k items (measured)
-3. **IndexedDB commit** — ~3.2s at 60k blocking UI (simulated)
-4. **No list virtualization** — all items rendered as DOM nodes
-5. **Linear filter** — 35ms at 100k per keystroke (measured)
+- [x] Badge tap reliability remains intact.
+- [x] Long press is available only when it adds value.
+- [x] Picker rows remain name-first in healthy idle state.
 
-### Recommended Implementation Order
+Exit criteria:
 
-**Phase 1 (Quick Wins):** HVSC-A01, HVSC-A03, HVSC-A04, LIST-A03
-**Phase 2 (Foundation):** LIST-A01, HVSC-A02, HVSC-A05, LIST-A07
-**Phase 3 (Polish):** HVSC-A06, HVSC-A12, LIST-A10, LIST-A09
+- the badge cleanly supports both intents
 
-### Research Artifacts
+### Phase 3. Switch orchestration and verification
 
-| Artifact                   | Path                                                |
-| -------------------------- | --------------------------------------------------- |
-| Main audit                 | `docs/research/hvsc/performance/audit3/audit3.md`   |
-| Implementation prompt      | `docs/research/hvsc/performance/audit3/prompt.md`   |
-| Benchmark: playlist scale  | `tests/research/audit3/playlist-scale-bench.mjs`    |
-| Benchmark: spread analysis | `tests/research/audit3/spread-quadratic-bench.mjs`  |
-| Benchmark: Songlengths.md5 | `tests/research/audit3/songlengths-parse-bench.mjs` |
+Goal:
 
-### Implementation Matrix
+- reuse or implement `switchToSavedDevice(deviceId)` behind the picker flow
 
-| Task     | Status                                 | Notes                                                                                                                                                                                                                                                                                                                        |
-| -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HVSC-A01 | Implemented                            | Songlengths snapshot seeds the persisted HVSC browse projection, cold-start/config reload syncs that projection, and recursive enumeration no longer depends on native browse-index rebuilds. Proof benchmark: seeded projection from 100k songs mean `547.39 ms`; recursive listing mean `0.0190 ms`.                       |
-| HVSC-A03 | Implemented                            | HVSC playlist import now uses the bulk-state path rather than incremental spread updates, preserving the single-set behavior required by the audit3 pass. Regression coverage remains anchored in the add-to-playlist batching tests.                                                                                        |
-| HVSC-A04 | Implemented                            | HVSC items now skip config discovery entirely while local and ultimate sources still resolve sibling `.cfg` files. Regression coverage added in `tests/unit/pages/playFiles/handlers/addFileSelectionsConfig.test.ts`.                                                                                                       |
-| LIST-A03 | Implemented                            | Playlist filtering now uses a `200 ms` debounced committed query while keeping immediate controlled input text. Regression coverage added in `tests/unit/playFiles/useDebouncedValue.test.tsx`.                                                                                                                              |
-| HVSC-A02 | Implemented                            | Added chunked, resumable background SID metadata hydration with seeded title/author display fields, persisted canonical metadata updates, shared status-store progress, and UI surfacing in the HVSC controls area. Regression coverage added in `tests/unit/hvsc/hvscMetadataHydrator.test.ts` and related HVSC hook tests. |
-| HVSC-A05 | Implemented                            | Playlist repository commits now move into a `BACKGROUND_COMMITTING` phase so the playlist becomes interactive before IndexedDB sync finishes. Filtering stays on the in-memory path until the background commit completes.                                                                                                   |
-| LIST-A01 | Implemented via existing virtuoso path | The repo already used `react-virtuoso` for the view-all playlist surface, so the audit3 resolution preserved that virtualized path instead of introducing a second library. Regression coverage now locks the virtualized rendering path and incremental loading wiring.                                                     |
+Implementation targets:
 
-### Final Validation
+- update selected device locally
+- project host and ports into runtime connection config
+- begin `/v1/info` verification
+- update last-known metadata on success
+- preserve selection and mark offline or mismatch on failure
 
-- `npm run test`: passed (`500` files, `5679` tests)
-- `npm run test:coverage`: passed with `91.00%` branch coverage (`5690` tests)
-- `npm run lint`: passed with 3 pre-existing warnings in generated `c64scope/coverage/*.js` files
-- `npm run build`: passed
-- Focused regressions added for HVSC source adapter shape updates, metadata hydrator chunk/error paths, HVSC controls metadata rendering, and status-store metadata transitions
+Execution tasks:
+
+- [x] Implement the switch action pipeline behind picker selection.
+- [x] Update runtime connection settings immediately from saved-device metadata.
+- [x] Perform lightweight `/v1/info` verification and persist last-known identity on success.
+- [x] Preserve selection while surfacing offline or mismatch status on failure.
+
+Required tests:
+
+- [x] successful switch updates selected state before probe completion
+- [x] successful probe updates last-known identity
+- [x] failed probe preserves selection and records offline state
+- [x] handshake never fetches full config
+
+Validation checkpoints:
+
+- [x] Local selection updates immediately.
+- [x] Success and failure states are persisted deterministically.
+- [x] No `c64-all-config` request is issued during switch.
+
+Exit criteria:
+
+- picker-driven switching works even before broader UI cleanup is finished
+
+### Phase 4. Diagnostics and Settings simplification
+
+Goal:
+
+- remove Diagnostics from the primary switching path and keep it focused on status and inspection
+
+Implementation targets:
+
+- remove the persistent Devices switcher section from Diagnostics
+- preserve Health and activity flows
+- keep device management actions in Settings and Diagnostics overflow
+- keep technical detail surfaces in Health, overflow details, and Settings
+- implement the smallest honest discoverability aid for long press if needed
+
+Execution tasks:
+
+- [x] Remove persistent switching UI from Diagnostics.
+- [x] Preserve Diagnostics health and activity flows.
+- [x] Keep management actions discoverable in the intended secondary surfaces.
+- [x] Verify Settings remains the CRUD source of truth.
+
+Required tests:
+
+- [x] Diagnostics renders without a Devices section
+- [x] Diagnostics overflow still exposes the intended secondary actions
+- [x] Settings remains the source of truth for add, edit, rename, delete, and select
+- [x] one-device flows remain calm and unchanged except for saved-device migration
+
+Validation checkpoints:
+
+- [x] Diagnostics no longer carries routine switching UI.
+- [x] Settings still owns device administration.
+- [x] One-device UX remains unchanged except for migration-backed state.
+
+Exit criteria:
+
+- Diagnostics is no longer overloaded with switching UI
+
+### Phase 5. Device-bound collection continuity
+
+Goal:
+
+- ensure playlist items and disk entries imported from one saved device continue to work after switching to another
+
+Implementation targets:
+
+- persist origin-device metadata for `ultimate` playlist and disk items
+- resolve origin identity against the selected device
+- fetch bytes from the origin device when the selected device differs
+- route those bytes through the selected device's existing upload execution path
+- keep selected-device state unchanged throughout origin-device transfer
+
+Execution tasks:
+
+- [ ] Persist origin-device metadata on `ultimate` playlist imports.
+- [ ] Persist origin-device metadata on `ultimate` disk collection imports.
+- [ ] Resolve same-device versus cross-device execution paths without mutating selection.
+- [ ] Route cross-device fetches through existing upload execution paths.
+- [ ] Surface deterministic unavailable outcomes for origin failures.
+
+Required tests:
+
+- [ ] same-device `ultimate` content still uses the direct path
+- [ ] cross-device playback fetches from origin and uploads to target
+- [ ] cross-device disk mount fetches from origin and mounts via upload on target
+- [ ] origin-device transfer never mutates `selectedDeviceId`
+- [ ] origin-device deletion, mismatch, unreachable host, and missing file produce deterministic unavailable outcomes
+
+Validation checkpoints:
+
+- [ ] Playlist continuity is preserved across device switches.
+- [ ] Disk continuity is preserved across device switches.
+- [ ] Origin failures remain item-scoped and do not degrade global connection state.
+
+Exit criteria:
+
+- device-bound collection items remain usable across picker-based switching
+
+### Phase 6. Multi-device mock and harness support
+
+Goal:
+
+- extend the existing mock infrastructure so end-to-end tests can exercise multiple saved devices and the new long-press entry path deterministically
+
+Implementation targets:
+
+- extend the Node mock server to support multiple independently startable device instances
+- preserve per-instance request introspection
+- extend emulator and native mock wiring as needed
+- ensure test harnesses can simulate picker-based switching and device availability changes
+
+Execution tasks:
+
+- [ ] Extend the Node mock server for concurrent device instances with deterministic port allocation.
+- [ ] Preserve per-device request logs and lifecycle controls.
+- [ ] Extend web/native/android mock shims to expose the multi-device behavior.
+- [ ] Teach the relevant harnesses and UI tests to drive long-press switching and per-device faults.
+
+Required tests:
+
+- [ ] two or more mock devices can run concurrently with distinct ports and identities
+- [ ] device request logs remain attributable per instance
+- [ ] one device can be stopped or restarted during a live session without corrupting the others
+- [ ] long-press flow can be exercised in the relevant UI automation path
+
+Validation checkpoints:
+
+- [ ] Multiple mock devices operate concurrently and independently.
+- [ ] Runtime fault injection remains deterministic.
+- [ ] UI automation can exercise the long-press switch path.
+
+Exit criteria:
+
+- deterministic multi-device UI and behavior coverage becomes possible
+
+### Phase 7. Reload, cache, and edge behavior
+
+Goal:
+
+- ensure switching remains bounded, precise, and resilient under edge conditions
+
+Implementation targets:
+
+- invalidate prior-device active-route working data
+- reload only active-route essential queries after successful verification
+- add bounded `DeviceSwitchSummary` retention
+- implement offline, mismatch, host-edit, and older-firmware handling
+- keep non-selected heavy working sets out of memory by default
+
+Execution tasks:
+
+- [ ] Implement active-route-only invalidation and reload behavior.
+- [ ] Add bounded per-device switch summary retention.
+- [ ] Implement mismatch, fallback identity, host-edit, and firmware-edge handling.
+- [ ] Ensure non-selected heavy data is invalidated and not retained by default.
+
+Required tests:
+
+- [ ] route reload matrix behavior for relevant routes
+- [ ] `c64-all-config` not fetched on switch
+- [ ] mismatch detection by `unique_id`
+- [ ] fallback mismatch behavior without `unique_id`
+- [ ] host edit clears verified certainty
+- [ ] non-selected working data is invalidated on switch
+
+Validation checkpoints:
+
+- [ ] Switching reloads only the active route’s essential working set.
+- [ ] Cache growth remains bounded across saved devices.
+- [ ] Edge-state behavior is deterministic and diagnosable.
+
+Exit criteria:
+
+- switching does not create broad stale caches or ambiguous edge behavior
+
+### Phase 8. Validation and documentation closure
+
+Goal:
+
+- bring the implementation to a truthful, reviewable finish
+
+Required validation:
+
+- [x] `npm run lint`
+- [x] `npm run test`
+- [x] `npm run test:coverage`
+- [x] `npm run build`
+- [x] the smallest honest UI validation for the badge long-press and picker flows
+
+Required UI validation:
+
+- [x] tap on the badge still opens Diagnostics
+- [x] long press opens the picker
+- [x] picker selection enters `Verifying` and resolves correctly
+- [x] Diagnostics no longer shows a persistent Devices section
+
+Documentation updates:
+
+- [x] update any product docs affected by the shipped behavior
+- [x] update the base spec if it still describes Diagnostics as the primary switching surface
+- [x] refresh only the smallest screenshot subset needed for the new picker flow and Diagnostics simplification
+
+Validation checkpoints:
+
+- [x] All required validation commands pass.
+- [x] Global branch coverage remains `>= 91%`.
+- [x] Documentation and screenshots match shipped behavior.
+
+Exit criteria:
+
+- tests and build pass
+- global branch coverage remains `>= 91%`
+- docs match the shipped behavior
+
+## Backlog additions
+
+- Switch device screenshots should use full page-context framing instead of cropping to the popup surface, matching the documented modal/interstitial style used elsewhere.
+- Docs section screenshots should use full Docs page-context framing instead of isolated subsection crops, and the full Switch device plus Docs screenshot sets should be regenerated together after framing changes.

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getC64API, getC64APIConfigSnapshot } from "@/lib/c64api";
+import { C64API, getC64API, getC64APIConfigSnapshot } from "@/lib/c64api";
 import {
   appendHealthCheckTransition,
   getHealthCheckStateSnapshot,
@@ -21,9 +21,9 @@ import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
 import { createTelnetClient } from "@/lib/telnet/telnetClient";
 import { createTelnetSession } from "@/lib/telnet/telnetSession";
-import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { buildBaseUrlFromDeviceHost, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { rollUpHealth, deriveConnectivityState } from "@/lib/diagnostics/healthModel";
-import type { HealthState } from "@/lib/diagnostics/healthModel";
+import type { ConnectivityState, HealthState } from "@/lib/diagnostics/healthModel";
 import {
   pushHealthHistoryEntry,
   type HealthCheckProbeOutcome,
@@ -66,6 +66,7 @@ export type HealthCheckRunResult = {
   endTimestamp: string;
   totalDurationMs: number;
   overallHealth: HealthState;
+  connectivity: ConnectivityState;
   probes: Record<HealthCheckProbeType, HealthCheckProbeRecord>;
   latency: { p50: number; p90: number; p99: number };
   deviceInfo?: {
@@ -75,6 +76,20 @@ export type HealthCheckRunResult = {
     uptimeSeconds: number | null;
     product: string | null;
   };
+};
+
+export type HealthCheckTarget = {
+  deviceHost: string;
+  ftpPort: number;
+  telnetPort: number;
+  password?: string | null;
+};
+
+export type HealthCheckTargetRunMode = "full" | "passive";
+
+export type HealthCheckProgressSnapshot = {
+  liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>>;
+  probeStates: Record<HealthCheckProbeType, HealthCheckProbeExecutionState>;
 };
 
 type ActiveRun = {
@@ -90,6 +105,14 @@ type ProbeExecution = {
   lifecycle: Extract<HealthCheckProbeLifecycle, "SUCCESS" | "FAILED" | "TIMEOUT" | "CANCELLED">;
   uptimeSeconds?: number | null;
   deviceInfo?: HealthCheckRunResult["deviceInfo"];
+};
+
+type ProbeRuntime = {
+  api: Pick<C64API, "getInfo" | "readMemory" | "getConfigItem" | "setConfigValue">;
+  host: string;
+  ftpPort: number;
+  telnetPort: number;
+  password?: string;
 };
 
 let activeRun: ActiveRun | null = null;
@@ -112,6 +135,29 @@ const makeRecord = (
 const generateRunId = (): string => {
   runSequence += 1;
   return `hcr-${runSequence.toString().padStart(4, "0")}`;
+};
+
+const buildProbeRuntime = (target?: HealthCheckTarget): ProbeRuntime => {
+  if (target) {
+    const deviceHost = target.deviceHost;
+    return {
+      api: new C64API(buildBaseUrlFromDeviceHost(deviceHost), target.password ?? undefined, deviceHost),
+      host: stripPortFromDeviceHost(deviceHost),
+      ftpPort: target.ftpPort,
+      telnetPort: target.telnetPort,
+      password: target.password ?? undefined,
+    };
+  }
+
+  const api = getC64API();
+  const snap = getC64APIConfigSnapshot();
+  return {
+    api,
+    host: stripPortFromDeviceHost(snap.deviceHost),
+    ftpPort: getStoredFtpPort(),
+    telnetPort: getStoredTelnetPort(),
+    password: snap.password,
+  };
 };
 
 const parseTimestampMs = (value: string | null) => {
@@ -345,15 +391,15 @@ const getConfigRoundtripBounds = (
 
 const probeRest = async (
   signal: AbortSignal,
+  runtime: ProbeRuntime,
 ): Promise<{
   record: HealthCheckProbeRecord;
   deviceInfo: HealthCheckRunResult["deviceInfo"];
 }> => {
   const startMs = Date.now();
   try {
-    const api = getC64API();
     const { result: info, durationMs } = await timedProbe(() =>
-      api.getInfo({
+      runtime.api.getInfo({
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.REST,
         __c64uIntent: "system",
@@ -395,15 +441,15 @@ const probeRest = async (
 
 const probeJiffy = async (
   signal: AbortSignal,
+  runtime: ProbeRuntime,
 ): Promise<{
   record: HealthCheckProbeRecord;
   uptimeSeconds: number | null;
 }> => {
   const startMs = Date.now();
   try {
-    const api = getC64API();
     const { result: bytes, durationMs } = await timedProbe(() =>
-      api.readMemory("00A2", 3, { signal, timeoutMs: PROBE_TIMEOUT_MS.JIFFY }),
+      runtime.api.readMemory("00A2", 3, { signal, timeoutMs: PROBE_TIMEOUT_MS.JIFFY }),
     );
     if (!bytes || bytes.length !== 3) {
       return {
@@ -435,12 +481,11 @@ const probeJiffy = async (
   }
 };
 
-const probeRaster = async (signal: AbortSignal): Promise<HealthCheckProbeRecord> => {
+const probeRaster = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
-    const api = getC64API();
     const { result: bytes, durationMs } = await timedProbe(() =>
-      api.readMemory("D012", 1, { signal, timeoutMs: PROBE_TIMEOUT_MS.RASTER }),
+      runtime.api.readMemory("D012", 1, { signal, timeoutMs: PROBE_TIMEOUT_MS.RASTER }),
     );
     if (!bytes || bytes.length < 1) {
       return makeRecord("RASTER", "Skipped", null, "Raster register unavailable", startMs);
@@ -456,13 +501,12 @@ const probeRaster = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
   }
 };
 
-const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord> => {
+const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
-  const api = getC64API();
 
   for (const target of CONFIG_ROUNDTRIP_TARGETS) {
     try {
-      const readResp = await api.getConfigItem(target.category, target.item, {
+      const readResp = await runtime.api.getConfigItem(target.category, target.item, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
         __c64uIntent: "system",
@@ -503,12 +547,12 @@ const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
         bounds,
       });
 
-      await api.setConfigValue(target.category, target.item, tempValue, {
+      await runtime.api.setConfigValue(target.category, target.item, tempValue, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
       });
 
-      const readBackResp = await api.getConfigItem(target.category, target.item, {
+      const readBackResp = await runtime.api.getConfigItem(target.category, target.item, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
         __c64uIntent: "system",
@@ -516,12 +560,12 @@ const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
       });
       const readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
 
-      await api.setConfigValue(target.category, target.item, currentValue, {
+      await runtime.api.setConfigValue(target.category, target.item, currentValue, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
       });
 
-      const verifyResp = await api.getConfigItem(target.category, target.item, {
+      const verifyResp = await runtime.api.getConfigItem(target.category, target.item, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
         __c64uIntent: "system",
@@ -575,16 +619,14 @@ const probeConfig = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
   return makeRecord("CONFIG", "Skipped", null, "No suitable config roundtrip target available", startMs);
 };
 
-const probeFtp = async (): Promise<HealthCheckProbeRecord> => {
+const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
-    const snap = getC64APIConfigSnapshot();
-    const host = stripPortFromDeviceHost(snap.deviceHost);
-    const port = getStoredFtpPort();
     const { durationMs } = await timedProbe(() =>
       listFtpDirectory({
-        host,
-        port,
+        host: runtime.host,
+        port: runtime.ftpPort,
+        password: runtime.password,
         path: "/",
         timeoutMs: PROBE_TIMEOUT_MS.FTP,
         __c64uIntent: "system",
@@ -608,17 +650,13 @@ const hasExpectedTelnetScreen = (titleLine: string): boolean => {
   );
 };
 
-const probeTelnet = async (signal: AbortSignal): Promise<HealthCheckProbeRecord> => {
+const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
-  const snap = getC64APIConfigSnapshot();
-  const host = stripPortFromDeviceHost(snap.deviceHost);
-  const port = getStoredTelnetPort();
-  const password = snap.password || undefined;
   const session = createTelnetSession(createTelnetClient({ connectTimeoutMs: PROBE_TIMEOUT_MS.TELNET }));
   const readTimeoutMs = Math.max(150, Math.floor(PROBE_TIMEOUT_MS.TELNET / 8));
 
   try {
-    await session.connect(host, port, password);
+    await session.connect(runtime.host, runtime.telnetPort, runtime.password);
     if (signal.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
@@ -626,8 +664,8 @@ const probeTelnet = async (signal: AbortSignal): Promise<HealthCheckProbeRecord>
     const screen = await session.readScreen(readTimeoutMs);
     const titleLine = screen.titleLine.trim();
     addLog("debug", "Health check TELNET probe banner", {
-      host,
-      port,
+      host: runtime.host,
+      port: runtime.telnetPort,
       titleLine: titleLine.slice(0, 120),
       screenType: screen.screenType,
       readTimeoutMs,
@@ -762,6 +800,39 @@ const setSkippedProbe = (probe: HealthCheckProbeType, reason: string): ProbeExec
   return { record, lifecycle: "CANCELLED" };
 };
 
+const buildLocalProbeStates = () => resetHealthCheckProbeStates();
+
+const cloneProbeStates = (probeStates: Record<HealthCheckProbeType, HealthCheckProbeExecutionState>) => ({
+  REST: { ...probeStates.REST },
+  FTP: { ...probeStates.FTP },
+  TELNET: { ...probeStates.TELNET },
+  CONFIG: { ...probeStates.CONFIG },
+  RASTER: { ...probeStates.RASTER },
+  JIFFY: { ...probeStates.JIFFY },
+});
+
+const computeProbeLatencyPercentiles = (
+  records: Record<HealthCheckProbeType, HealthCheckProbeRecord>,
+): { p50: number; p90: number; p99: number } => {
+  const durations = Object.values(records)
+    .map((record) => record.durationMs)
+    .filter((value): value is number => value !== null && Number.isFinite(value))
+    .sort((left, right) => left - right);
+
+  if (durations.length === 0) {
+    return { p50: 0, p90: 0, p99: 0 };
+  }
+
+  const percentile = (ratio: number) =>
+    durations[Math.min(durations.length - 1, Math.floor((durations.length - 1) * ratio))];
+
+  return {
+    p50: percentile(0.5),
+    p90: percentile(0.9),
+    p99: percentile(0.99),
+  };
+};
+
 const buildRunResult = (args: {
   runId: string;
   startTimestamp: string;
@@ -775,6 +846,8 @@ const buildRunResult = (args: {
   jiffy: ProbeExecution;
   deviceInfo?: HealthCheckRunResult["deviceInfo"];
   uptimeSeconds?: number | null;
+  connectivity?: ConnectivityState;
+  latency?: { p50: number; p90: number; p99: number };
 }): HealthCheckRunResult => {
   const contributors = {
     App: {
@@ -819,9 +892,9 @@ const buildRunResult = (args: {
     },
   };
 
-  const connectivity = deriveConnectivityState(getConnectionSnapshot().state);
+  const connectivity = args.connectivity ?? deriveConnectivityState(getConnectionSnapshot().state);
   const overallHealth = rollUpHealth(contributors, connectivity);
-  const latency = computeLatencyPercentiles();
+  const latency = args.latency ?? computeLatencyPercentiles();
   const probes = {
     REST: args.rest.record,
     FTP: args.ftp.record,
@@ -837,10 +910,249 @@ const buildRunResult = (args: {
     endTimestamp: args.endTimestamp,
     totalDurationMs: args.totalDurationMs,
     overallHealth,
+    connectivity,
     probes,
     latency: { p50: latency.p50, p90: latency.p90, p99: latency.p99 },
     deviceInfo: args.deviceInfo ? { ...args.deviceInfo, uptimeSeconds: args.uptimeSeconds ?? null } : undefined,
   };
+};
+
+export const runHealthCheckForTarget = async (
+  target: HealthCheckTarget,
+  options: {
+    signal?: AbortSignal;
+    mode?: HealthCheckTargetRunMode;
+    onProgress?: (snapshot: HealthCheckProgressSnapshot) => void;
+  } = {},
+): Promise<HealthCheckRunResult> => {
+  const runId = generateRunId();
+  const startTimestamp = new Date().toISOString();
+  const startedAtMs = Date.now();
+  const deadlineMs = startedAtMs + GLOBAL_RUN_TIMEOUT_MS;
+  const runtime = buildProbeRuntime(target);
+  const controller = new AbortController();
+  const probeStates = buildLocalProbeStates();
+  const liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> = {};
+  const mode = options.mode ?? "full";
+  const outerSignal = options.signal;
+  const abortFromOuter = () => controller.abort(outerSignal?.reason);
+
+  if (outerSignal) {
+    if (outerSignal.aborted) {
+      controller.abort(outerSignal.reason);
+    } else {
+      outerSignal.addEventListener("abort", abortFromOuter, { once: true });
+    }
+  }
+
+  const emitProgress = () => {
+    options.onProgress?.({
+      liveProbes: { ...liveProbes },
+      probeStates: cloneProbeStates(probeStates),
+    });
+  };
+
+  const setLocalProbeLifecycle = (
+    probe: HealthCheckProbeType,
+    nextState: HealthCheckProbeLifecycle,
+    updates: Partial<HealthCheckProbeExecutionState>,
+    reason: string | null,
+  ) => {
+    probeStates[probe] = {
+      ...probeStates[probe],
+      ...updates,
+      state: nextState,
+      reason,
+    };
+  };
+
+  const setLocalSkippedProbe = (probe: HealthCheckProbeType, reason: string): ProbeExecution => {
+    const endedAt = new Date().toISOString();
+    const record = makeRecord(probe, "Skipped", null, reason, Date.now());
+    setLocalProbeLifecycle(
+      probe,
+      "CANCELLED",
+      {
+        startedAt: probeStates[probe].startedAt ?? endedAt,
+        endedAt,
+        durationMs: null,
+        outcome: record.outcome,
+      },
+      reason,
+    );
+    liveProbes[probe] = record;
+    emitProgress();
+    return { record, lifecycle: "CANCELLED" };
+  };
+
+  const runLocalProbe = async <T>(
+    probe: HealthCheckProbeType,
+    execute: (signal: AbortSignal) => Promise<T>,
+    normalize: (value: T) => ProbeExecution,
+  ): Promise<ProbeExecution> => {
+    const startedAt = new Date().toISOString();
+    setLocalProbeLifecycle(
+      probe,
+      "RUNNING",
+      {
+        startedAt,
+        endedAt: null,
+        durationMs: null,
+        outcome: null,
+      },
+      null,
+    );
+    emitProgress();
+
+    const remainingBudgetMs = Math.max(1, deadlineMs - Date.now());
+    const timeoutMs = Math.min(PROBE_TIMEOUT_MS[probe], remainingBudgetMs);
+
+    try {
+      const value = await withTimeout(
+        () => execute(controller.signal),
+        timeoutMs,
+        `${probe} timed out after ${timeoutMs}ms`,
+      );
+      const normalized = normalize(value);
+      liveProbes[probe] = normalized.record;
+      setLocalProbeLifecycle(
+        probe,
+        normalized.lifecycle,
+        {
+          outcome: normalized.record.outcome,
+          endedAt: new Date().toISOString(),
+          durationMs: normalized.record.durationMs,
+        },
+        normalized.record.reason,
+      );
+      emitProgress();
+      return normalized;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error ?? `${probe} failed`);
+      const timeout = isTimeoutLike(error);
+      const cancelled = isAbortLike(error) || controller.signal.aborted;
+      const record = makeRecord(probe, timeout ? "Fail" : "Skipped", timeout ? timeoutMs : null, reason, Date.now());
+      const lifecycle: ProbeExecution["lifecycle"] = timeout ? "TIMEOUT" : cancelled ? "CANCELLED" : "FAILED";
+      liveProbes[probe] = record;
+      setLocalProbeLifecycle(
+        probe,
+        lifecycle,
+        {
+          outcome: record.outcome,
+          endedAt: new Date().toISOString(),
+          durationMs: record.durationMs,
+        },
+        reason,
+      );
+      emitProgress();
+      if (cancelled) {
+        throw error;
+      }
+      return { record, lifecycle };
+    }
+  };
+
+  try {
+    const rest = await runLocalProbe(
+      "REST",
+      (signal) => probeRest(signal, runtime),
+      ({ record, deviceInfo }) => ({
+        record,
+        lifecycle: lifecycleFromRecord(record.outcome),
+        deviceInfo,
+      }),
+    );
+    const restFailed = rest.lifecycle === "FAILED" || rest.lifecycle === "TIMEOUT";
+
+    const ftp = restFailed
+      ? setLocalSkippedProbe("FTP", "Skipped: REST probe failed")
+      : await runLocalProbe(
+          "FTP",
+          async () => probeFtp(runtime),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
+
+    const telnet = restFailed
+      ? setLocalSkippedProbe("TELNET", "Skipped: REST probe failed")
+      : await runLocalProbe(
+          "TELNET",
+          (signal) => probeTelnet(signal, runtime),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
+
+    const config = restFailed
+      ? setLocalSkippedProbe("CONFIG", "Skipped: REST probe failed")
+      : mode === "passive"
+        ? setLocalSkippedProbe("CONFIG", "Skipped: passive switcher checks do not modify device config")
+        : await runLocalProbe(
+            "CONFIG",
+            (signal) => probeConfig(signal, runtime),
+            (record) => ({
+              record,
+              lifecycle: lifecycleFromRecord(record.outcome),
+            }),
+          );
+
+    const raster = restFailed
+      ? setLocalSkippedProbe("RASTER", "Skipped: REST probe failed")
+      : await runLocalProbe(
+          "RASTER",
+          (signal) => probeRaster(signal, runtime),
+          (record) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+          }),
+        );
+
+    const jiffy = restFailed
+      ? setLocalSkippedProbe("JIFFY", "Skipped: REST probe failed")
+      : await runLocalProbe(
+          "JIFFY",
+          (signal) => probeJiffy(signal, runtime),
+          ({ record, uptimeSeconds }) => ({
+            record,
+            lifecycle: lifecycleFromRecord(record.outcome),
+            uptimeSeconds,
+          }),
+        );
+
+    const endTimestamp = new Date().toISOString();
+    const result = buildRunResult({
+      runId,
+      startTimestamp,
+      endTimestamp,
+      totalDurationMs: Date.now() - startedAtMs,
+      rest,
+      ftp,
+      telnet,
+      config,
+      raster,
+      jiffy,
+      deviceInfo: rest.deviceInfo,
+      uptimeSeconds: jiffy.uptimeSeconds,
+      connectivity: rest.lifecycle === "SUCCESS" ? "Online" : "Offline",
+      latency: computeProbeLatencyPercentiles({
+        REST: rest.record,
+        FTP: ftp.record,
+        TELNET: telnet.record,
+        CONFIG: config.record,
+        RASTER: raster.record,
+        JIFFY: jiffy.record,
+      }),
+    });
+
+    return result;
+  } finally {
+    if (outerSignal) {
+      outerSignal.removeEventListener("abort", abortFromOuter);
+    }
+  }
 };
 
 const recordHealthHistory = (result: HealthCheckRunResult) => {
@@ -941,11 +1253,12 @@ export const runHealthCheck = async (
 
   try {
     addLog("info", "Health check started", { runId });
+    const runtime = buildProbeRuntime();
 
     const rest = await runProbe(
       run,
       "REST",
-      (signal) => probeRest(signal),
+      (signal) => probeRest(signal, runtime),
       ({ record, deviceInfo }) => ({
         record,
         lifecycle: lifecycleFromRecord(record.outcome),
@@ -961,7 +1274,7 @@ export const runHealthCheck = async (
       : await runProbe(
           run,
           "FTP",
-          async () => probeFtp(),
+          async () => probeFtp(runtime),
           (record) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
@@ -974,7 +1287,7 @@ export const runHealthCheck = async (
       : await runProbe(
           run,
           "TELNET",
-          (signal) => probeTelnet(signal),
+          (signal) => probeTelnet(signal, runtime),
           (record) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
@@ -987,7 +1300,7 @@ export const runHealthCheck = async (
       : await runProbe(
           run,
           "CONFIG",
-          (signal) => probeConfig(signal),
+          (signal) => probeConfig(signal, runtime),
           (record) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
@@ -1000,7 +1313,7 @@ export const runHealthCheck = async (
       : await runProbe(
           run,
           "RASTER",
-          (signal) => probeRaster(signal),
+          (signal) => probeRaster(signal, runtime),
           (record) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
@@ -1013,7 +1326,7 @@ export const runHealthCheck = async (
       : await runProbe(
           run,
           "JIFFY",
-          (signal) => probeJiffy(signal),
+          (signal) => probeJiffy(signal, runtime),
           ({ record, uptimeSeconds }) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),

@@ -6,14 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Button } from "@/components/ui/button";
 import type {
   HealthCheckRunResult,
   HealthCheckProbeType,
   HealthCheckProbeRecord,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 type Props = {
   result: HealthCheckRunResult | null;
@@ -21,7 +20,8 @@ type Props = {
   liveProbes?: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
   /** True while a health check is actively running */
   isRunning?: boolean;
-  onBack: () => void;
+  probeStates?: ReturnType<typeof useHealthCheckState>["probeStates"];
+  title?: string;
 };
 
 const PRESENTATION_ORDER = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"] as const;
@@ -41,8 +41,15 @@ const outcomeColorClass: Record<string, string> = {
 
 const REASON_COMPACT_LIMIT = 32;
 
-export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }: Props) {
+export function HealthCheckDetailView({
+  result,
+  liveProbes,
+  isRunning,
+  probeStates,
+  title = "Health Check Detail",
+}: Props) {
   const healthCheckState = useHealthCheckState();
+  const activeProbeStates = probeStates ?? healthCheckState.probeStates;
   // During a live run, show liveProbes overlaid over any previous result.
   // A probe is "done" if it appears in liveProbes, "running" if it's the first
   // missing probe in presentation order, and "pending" otherwise.
@@ -51,19 +58,7 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
 
   return (
     <div className="space-y-3" data-testid="health-check-detail-view">
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onBack}
-          className="h-7 px-1.5 -ml-1.5"
-          data-testid="health-check-detail-back"
-          aria-label="Back to diagnostics summary"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        </Button>
-        <h3 className="text-sm font-semibold text-foreground">Health Check Detail</h3>
-      </div>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
 
       {!result && !activeLive ? (
         <p className="text-xs text-muted-foreground">Run a health check to load probe detail.</p>
@@ -74,7 +69,7 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
               // Live run: use liveProbes for completed entries; derive status for in-flight / pending
               let probe: HealthCheckProbeRecord | undefined;
               let liveStatus: "done" | "running" | "pending" | null = null;
-              const executionState = healthCheckState.probeStates[probeName];
+              const executionState = activeProbeStates[probeName];
 
               if (activeLive) {
                 probe = liveProbes[probeName] ?? undefined;
@@ -123,6 +118,22 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                     "text-foreground")
                   : (outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground");
 
+              const statusContent =
+                liveStatus === "running" ? (
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    Running
+                  </span>
+                ) : liveStatus === "pending" ? (
+                  <span className="text-muted-foreground">Pending</span>
+                ) : probe ? (
+                  <span className={finalStatusClass}>{finalStatusLabel}</span>
+                ) : executionState?.state === "TIMEOUT" || executionState?.state === "CANCELLED" ? (
+                  <span className={finalStatusClass}>{finalStatusLabel}</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                );
+
               return (
                 <div
                   key={probeName}
@@ -130,22 +141,21 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                   data-testid={`health-check-probe-${probeName.toLowerCase()}`}
                   data-live-status={liveStatus ?? undefined}
                 >
-                  <div className="grid grid-cols-[4rem_5.5rem_minmax(0,1fr)_4rem] items-start gap-2">
+                  <div className="grid grid-cols-[4rem_minmax(0,1fr)_4rem] items-start gap-2 sm:hidden">
                     <span className="font-medium">{probeName}</span>
-                    {liveStatus === "running" ? (
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                        Running
-                      </span>
-                    ) : liveStatus === "pending" ? (
-                      <span className="text-muted-foreground">Pending</span>
-                    ) : probe ? (
-                      <span className={finalStatusClass}>{finalStatusLabel}</span>
-                    ) : executionState?.state === "TIMEOUT" || executionState?.state === "CANCELLED" ? (
-                      <span className={finalStatusClass}>{finalStatusLabel}</span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                    <div className="min-w-0 space-y-0.5">
+                      {statusContent}
+                      {reasonText ? (
+                        <span className="block text-muted-foreground break-words leading-snug" title={reasonText}>
+                          {reasonText}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="text-right font-mono">{durationLabel}</span>
+                  </div>
+                  <div className="hidden grid-cols-[4rem_5.5rem_minmax(0,1fr)_4rem] items-start gap-2 sm:grid">
+                    <span className="font-medium">{probeName}</span>
+                    {statusContent}
                     {isDetailRow ? (
                       <span />
                     ) : (

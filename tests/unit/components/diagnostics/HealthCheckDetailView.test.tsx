@@ -351,12 +351,11 @@ describe("HealthCheckDetailView", () => {
     });
   });
 
-  describe("back button", () => {
-    it("calls onBack when clicked", () => {
-      const onBack = vi.fn();
-      render(<HealthCheckDetailView result={makeResult()} onBack={onBack} />);
-      fireEvent.click(screen.getByTestId("health-check-detail-back"));
-      expect(onBack).toHaveBeenCalledOnce();
+  describe("header", () => {
+    it("renders the title without a redundant back control", () => {
+      render(<HealthCheckDetailView result={makeResult()} />);
+      expect(screen.getByText("Health Check Detail")).toBeVisible();
+      expect(screen.queryByTestId("health-check-detail-back")).toBeNull();
     });
   });
 });

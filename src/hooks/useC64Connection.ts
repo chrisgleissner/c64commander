@@ -149,6 +149,7 @@ export function useC64Connection() {
             baseUrl?: string;
             password?: string;
             deviceHost?: string;
+            reason?: string;
           }
         | undefined;
       if (!detail) return;
@@ -167,7 +168,9 @@ export function useC64Connection() {
       if (passwordChanged) setPassword(next.password);
       if (hostChanged) setDeviceHost(next.deviceHost);
       settingsRef.current = next;
-      invalidateForConnectionSettingsChange(queryClient);
+      if (detail.reason !== "saved-device-switch") {
+        invalidateForConnectionSettingsChange(queryClient);
+      }
       rateLimitedInfoRefetch();
     };
 

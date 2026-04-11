@@ -29,16 +29,37 @@ import type {
   HealthCheckProbeType,
   HealthCheckRunResult,
 } from "@/lib/diagnostics/healthCheckEngine";
+import type { HealthCheckProbeExecutionState } from "@/lib/diagnostics/healthCheckState";
 
 export type SeedableLatencySample = LatencySample & { path: string };
 
 export const DIAGNOSTICS_TEST_ANALYTICS_EVENT = "c64u-diagnostics-test-analytics";
 export const DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT = "c64u-diagnostics-test-overlay-state";
+export const DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT = "c64u-diagnostics-test-saved-device-health";
 
 export type DiagnosticsOverlaySeedState = {
   lastHealthCheckResult: HealthCheckRunResult | null;
   liveHealthCheckProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
   healthCheckRunning: boolean;
+};
+
+export type SavedDeviceHealthSeedSnapshot = {
+  running: boolean;
+  latestResult: HealthCheckRunResult | null;
+  liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
+  probeStates: Record<HealthCheckProbeType, HealthCheckProbeExecutionState>;
+  lastStartedAt: string | null;
+  lastCompletedAt: string | null;
+  error: string | null;
+};
+
+export type SavedDeviceHealthSeedState = {
+  byDeviceId: Record<string, SavedDeviceHealthSeedSnapshot>;
+  cycle: {
+    running: boolean;
+    lastStartedAt: string | null;
+    lastCompletedAt: string | null;
+  };
 };
 
 export type DiagnosticsTestBridge = {
@@ -50,12 +71,15 @@ export type DiagnosticsTestBridge = {
   clearAnalytics: () => void;
   seedOverlayState: (payload: Partial<DiagnosticsOverlaySeedState>) => void;
   clearOverlayState: () => void;
+  seedSavedDeviceHealth: (payload: SavedDeviceHealthSeedState | null) => void;
+  clearSavedDeviceHealth: () => void;
   getAnalyticsSnapshot: () => {
     healthHistory: Readonly<HealthHistoryEntry[]>;
     latencySamples: Readonly<LatencySample[]>;
     recoveryEvents: Readonly<RecoveryEvidenceEvent[]>;
   };
   getOverlayStateSnapshot: () => DiagnosticsOverlaySeedState;
+  getSavedDeviceHealthSnapshot: () => SavedDeviceHealthSeedState | null;
 };
 
 let overlayState: DiagnosticsOverlaySeedState = {
@@ -63,6 +87,8 @@ let overlayState: DiagnosticsOverlaySeedState = {
   liveHealthCheckProbes: null,
   healthCheckRunning: false,
 };
+
+let savedDeviceHealthState: SavedDeviceHealthSeedState | null = null;
 
 const isTestProbeEnabled = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
@@ -140,6 +166,25 @@ const clearOverlayState = () => {
   publishOverlayState();
 };
 
+const publishSavedDeviceHealthState = () => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, {
+      detail: savedDeviceHealthState,
+    }),
+  );
+};
+
+const seedSavedDeviceHealth: DiagnosticsTestBridge["seedSavedDeviceHealth"] = (payload) => {
+  savedDeviceHealthState = payload;
+  publishSavedDeviceHealthState();
+};
+
+const clearSavedDeviceHealth = () => {
+  savedDeviceHealthState = null;
+  publishSavedDeviceHealthState();
+};
+
 declare global {
   interface Window {
     __c64uDiagnosticsTestBridge?: DiagnosticsTestBridge;
@@ -159,11 +204,14 @@ export const registerDiagnosticsTestBridge = () => {
     clearAnalytics,
     seedOverlayState,
     clearOverlayState,
+    seedSavedDeviceHealth,
+    clearSavedDeviceHealth,
     getAnalyticsSnapshot: () => ({
       healthHistory: getHealthHistory(),
       latencySamples: getAllLatencySamples(),
       recoveryEvents: getRecoveryEvidence(),
     }),
     getOverlayStateSnapshot: () => overlayState,
+    getSavedDeviceHealthSnapshot: () => savedDeviceHealthState,
   };
 };

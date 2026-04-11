@@ -33,6 +33,7 @@ import {
   DISPLAY_PROFILE_VIEWPORTS,
   type DisplayProfileViewportId,
 } from "./displayProfileViewports";
+import { getScreenshotFraming, type ScreenshotFramingSurface } from "./screenshotFraming";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices, selectCanonicalHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
@@ -331,6 +332,343 @@ const clearLiveDiagnosticsHealthProgress = async (page: Page) => {
   });
 };
 
+const seedSwitchDeviceHealthSnapshot = async (page: Page, scenario: "progress" | "all-healthy" | "mixed-unhealthy") => {
+  await page.waitForFunction(() => typeof window.__c64uDiagnosticsTestBridge?.seedSavedDeviceHealth === "function");
+  await page.evaluate((selectedScenario) => {
+    const bridge = window.__c64uDiagnosticsTestBridge;
+    const probeOrder = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"] as const;
+    const startedAt = new Date(Date.now() - 7_000).toISOString();
+    const cycleStartedAt = new Date(Date.now() - 9_000).toISOString();
+    const lastCompletedAt = new Date(Date.now() - 19_000).toISOString();
+    const completedStartedAt = new Date(Date.now() - 42_000).toISOString();
+    const completedEndedAt = new Date(Date.now() - 38_000).toISOString();
+
+    const buildPendingProbeStates = () =>
+      Object.fromEntries(
+        probeOrder.map((probe) => [
+          probe,
+          {
+            state: "PENDING",
+            outcome: null,
+            startedAt: null,
+            endedAt: null,
+            durationMs: null,
+            reason: null,
+          },
+        ]),
+      );
+
+    const buildProbeStates = (
+      completed: Partial<
+        Record<
+          (typeof probeOrder)[number],
+          { outcome: "Success" | "Skipped"; durationMs: number | null; reason: string | null }
+        >
+      >,
+      runningProbe: (typeof probeOrder)[number],
+    ) => {
+      return Object.fromEntries(
+        probeOrder.map((probe, index) => {
+          const completedProbe = completed[probe];
+          if (completedProbe) {
+            return [
+              probe,
+              {
+                state: completedProbe.outcome === "Skipped" ? "CANCELLED" : "SUCCESS",
+                outcome: completedProbe.outcome,
+                startedAt,
+                endedAt: startedAt,
+                durationMs: completedProbe.durationMs,
+                reason: completedProbe.reason,
+              },
+            ];
+          }
+          if (probe === runningProbe) {
+            return [
+              probe,
+              {
+                state: "RUNNING",
+                outcome: null,
+                startedAt,
+                endedAt: null,
+                durationMs: null,
+                reason: null,
+              },
+            ];
+          }
+          return [
+            probe,
+            {
+              state: "PENDING",
+              outcome: null,
+              startedAt: null,
+              endedAt: null,
+              durationMs: null,
+              reason: null,
+            },
+          ];
+        }),
+      );
+    };
+
+    const buildLiveProbes = (
+      completed: Partial<
+        Record<
+          (typeof probeOrder)[number],
+          { outcome: "Success" | "Skipped"; durationMs: number | null; reason: string | null }
+        >
+      >,
+    ) => {
+      return Object.fromEntries(
+        Object.entries(completed).map(([probe, record], index) => [
+          probe,
+          {
+            probe,
+            outcome: record.outcome,
+            durationMs: record.durationMs,
+            reason: record.reason,
+            startMs: Date.now() - 1_000 + index * 40,
+          },
+        ]),
+      );
+    };
+
+    const buildCompletedResult = ({
+      runId,
+      overallHealth,
+      product,
+      probes,
+    }: {
+      runId: string;
+      overallHealth: "Healthy" | "Degraded" | "Unhealthy" | "Unavailable";
+      product: string;
+      probes: Record<
+        (typeof probeOrder)[number],
+        { outcome: "Success" | "Skipped" | "Fail"; durationMs: number | null; reason: string | null }
+      >;
+    }) => ({
+      runId,
+      startTimestamp: completedStartedAt,
+      endTimestamp: completedEndedAt,
+      totalDurationMs: 4_000,
+      overallHealth,
+      connectivity: "Online",
+      probes: Object.fromEntries(
+        probeOrder.map((probe, index) => [
+          probe,
+          {
+            probe,
+            outcome: probes[probe].outcome,
+            durationMs: probes[probe].durationMs,
+            reason: probes[probe].reason,
+            startMs: Date.now() - 8_000 + index * 30,
+          },
+        ]),
+      ),
+      latency: { p50: 62, p90: 118, p99: 181 },
+      deviceInfo: {
+        firmware: "3.11",
+        fpga: "1.42",
+        core: "C64",
+        uptimeSeconds: 256,
+        product,
+      },
+    });
+
+    const buildHealthyResult = (runId: string, product: string) =>
+      buildCompletedResult({
+        runId,
+        overallHealth: "Healthy",
+        product,
+        probes: {
+          REST: { outcome: "Success", durationMs: 54, reason: null },
+          FTP: { outcome: "Success", durationMs: 88, reason: null },
+          TELNET: { outcome: "Success", durationMs: 119, reason: null },
+          CONFIG: { outcome: "Skipped", durationMs: null, reason: "Passive" },
+          RASTER: { outcome: "Success", durationMs: 35, reason: null },
+          JIFFY: { outcome: "Success", durationMs: 41, reason: null },
+        },
+      });
+
+    const buildUnhealthyResult = (runId: string, product: string) =>
+      buildCompletedResult({
+        runId,
+        overallHealth: "Unhealthy",
+        product,
+        probes: {
+          REST: { outcome: "Success", durationMs: 61, reason: null },
+          FTP: { outcome: "Fail", durationMs: 240, reason: "FTP timeout" },
+          TELNET: { outcome: "Success", durationMs: 122, reason: null },
+          CONFIG: { outcome: "Skipped", durationMs: null, reason: "Passive" },
+          RASTER: { outcome: "Fail", durationMs: 211, reason: "Raster probe mismatch" },
+          JIFFY: { outcome: "Success", durationMs: 48, reason: null },
+        },
+      });
+
+    if (selectedScenario === "all-healthy") {
+      bridge?.seedSavedDeviceHealth({
+        cycle: {
+          running: false,
+          lastStartedAt: completedStartedAt,
+          lastCompletedAt: completedEndedAt,
+        },
+        byDeviceId: {
+          "device-u64-primary": {
+            running: false,
+            latestResult: buildHealthyResult("hcr-picker-healthy-1", "Ultimate 64 Elite"),
+            liveProbes: null,
+            probeStates: buildPendingProbeStates(),
+            lastStartedAt: completedStartedAt,
+            lastCompletedAt: completedEndedAt,
+            error: null,
+          },
+          "device-u64-secondary": {
+            running: false,
+            latestResult: buildHealthyResult("hcr-picker-healthy-2", "Ultimate 64 Elite"),
+            liveProbes: null,
+            probeStates: buildPendingProbeStates(),
+            lastStartedAt: completedStartedAt,
+            lastCompletedAt: completedEndedAt,
+            error: null,
+          },
+          "device-c64u-custom": {
+            running: false,
+            latestResult: buildHealthyResult("hcr-picker-healthy-3", "Commodore 64 Ultimate"),
+            liveProbes: null,
+            probeStates: buildPendingProbeStates(),
+            lastStartedAt: completedStartedAt,
+            lastCompletedAt: completedEndedAt,
+            error: null,
+          },
+        },
+      });
+      return;
+    }
+
+    if (selectedScenario === "mixed-unhealthy") {
+      bridge?.seedSavedDeviceHealth({
+        cycle: {
+          running: false,
+          lastStartedAt: completedStartedAt,
+          lastCompletedAt: completedEndedAt,
+        },
+        byDeviceId: {
+          "device-u64-primary": {
+            running: false,
+            latestResult: buildHealthyResult("hcr-picker-mixed-1", "Ultimate 64 Elite"),
+            liveProbes: null,
+            probeStates: buildPendingProbeStates(),
+            lastStartedAt: completedStartedAt,
+            lastCompletedAt: completedEndedAt,
+            error: null,
+          },
+          "device-u64-secondary": {
+            running: false,
+            latestResult: buildHealthyResult("hcr-picker-mixed-2", "Ultimate 64 Elite"),
+            liveProbes: null,
+            probeStates: buildPendingProbeStates(),
+            lastStartedAt: completedStartedAt,
+            lastCompletedAt: completedEndedAt,
+            error: null,
+          },
+          "device-c64u-custom": {
+            running: false,
+            latestResult: buildUnhealthyResult("hcr-picker-mixed-3", "Commodore 64 Ultimate"),
+            liveProbes: null,
+            probeStates: buildPendingProbeStates(),
+            lastStartedAt: completedStartedAt,
+            lastCompletedAt: completedEndedAt,
+            error: null,
+          },
+        },
+      });
+      return;
+    }
+
+    bridge?.seedSavedDeviceHealth({
+      cycle: {
+        running: true,
+        lastStartedAt: cycleStartedAt,
+        lastCompletedAt,
+      },
+      byDeviceId: {
+        "device-u64-primary": {
+          running: true,
+          latestResult: null,
+          liveProbes: buildLiveProbes({
+            REST: { outcome: "Success", durationMs: 54, reason: null },
+          }),
+          probeStates: buildProbeStates(
+            {
+              REST: { outcome: "Success", durationMs: 54, reason: null },
+            },
+            "FTP",
+          ),
+          lastStartedAt: startedAt,
+          lastCompletedAt: null,
+          error: null,
+        },
+        "device-u64-secondary": {
+          running: true,
+          latestResult: null,
+          liveProbes: buildLiveProbes({
+            REST: { outcome: "Success", durationMs: 48, reason: null },
+            FTP: { outcome: "Success", durationMs: 83, reason: null },
+            TELNET: { outcome: "Success", durationMs: 121, reason: null },
+          }),
+          probeStates: buildProbeStates(
+            {
+              REST: { outcome: "Success", durationMs: 48, reason: null },
+              FTP: { outcome: "Success", durationMs: 83, reason: null },
+              TELNET: { outcome: "Success", durationMs: 121, reason: null },
+            },
+            "CONFIG",
+          ),
+          lastStartedAt: startedAt,
+          lastCompletedAt: null,
+          error: null,
+        },
+        "device-c64u-custom": {
+          running: true,
+          latestResult: null,
+          liveProbes: buildLiveProbes({
+            REST: { outcome: "Success", durationMs: 50, reason: null },
+            FTP: { outcome: "Success", durationMs: 72, reason: null },
+            TELNET: { outcome: "Success", durationMs: 118, reason: null },
+            CONFIG: { outcome: "Skipped", durationMs: null, reason: "Passive" },
+            RASTER: { outcome: "Success", durationMs: 37, reason: null },
+          }),
+          probeStates: buildProbeStates(
+            {
+              REST: { outcome: "Success", durationMs: 50, reason: null },
+              FTP: { outcome: "Success", durationMs: 72, reason: null },
+              TELNET: { outcome: "Success", durationMs: 118, reason: null },
+              CONFIG: { outcome: "Skipped", durationMs: null, reason: "Passive" },
+              RASTER: { outcome: "Success", durationMs: 37, reason: null },
+            },
+            "JIFFY",
+          ),
+          lastStartedAt: startedAt,
+          lastCompletedAt: null,
+          error: null,
+        },
+      },
+    });
+  }, scenario);
+};
+
+const seedSwitchDeviceHealthProgress = async (page: Page) => {
+  await seedSwitchDeviceHealthSnapshot(page, "progress");
+};
+
+const seedSwitchDeviceHealthAllHealthy = async (page: Page) => {
+  await seedSwitchDeviceHealthSnapshot(page, "all-healthy");
+};
+
+const seedSwitchDeviceHealthMixedUnhealthy = async (page: Page) => {
+  await seedSwitchDeviceHealthSnapshot(page, "mixed-unhealthy");
+};
+
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 };
@@ -590,6 +928,29 @@ const seedLightingStudioState = async (page: Page, state: unknown) => {
   }, state);
 };
 
+const captureFramedScreenshot = async (
+  page: Page,
+  testInfo: TestInfo,
+  relativePath: string,
+  surface: ScreenshotFramingSurface,
+  options?: {
+    fullPage?: boolean;
+    locator?: Locator;
+    borderPx?: number;
+    borderColor?: { r: number; g: number; b: number; alpha?: number };
+    writeWhenTrackedDuplicate?: boolean;
+    skipFuzzyHeadRestore?: boolean;
+  },
+) => {
+  if (getScreenshotFraming(surface) === "surface") {
+    await captureScreenshot(page, testInfo, relativePath, options);
+    return;
+  }
+
+  const { locator: _locator, ...rest } = options ?? {};
+  await captureScreenshot(page, testInfo, relativePath, Object.keys(rest).length > 0 ? rest : undefined);
+};
+
 const captureScreenshot = async (
   page: Page,
   testInfo: TestInfo,
@@ -802,9 +1163,15 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
     await expect.poll(getVisibleButtonExpandedState).toBe("true");
     await waitForStableRender(page);
     await scrollHeadingIntoView(page, button);
-    await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`, {
-      locator: card,
-    });
+    await captureFramedScreenshot(
+      page,
+      testInfo,
+      `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`,
+      "docs-section",
+      {
+        locator: card,
+      },
+    );
     await page.evaluate((controlId) => {
       const visibleButton = Array.from(
         document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
@@ -956,6 +1323,128 @@ const waitForDemoBadge = async (page: Page) => {
 const getActiveSlot = (page: Page) => page.locator('[data-slot-active="true"]');
 
 const getActiveMain = (page: Page) => getActiveSlot(page).locator("main");
+
+const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string, includeDiskReference = false) => {
+  await page.addInitScript(
+    ({ baseUrlArg: targetBaseUrl, includeDiskReference: withDiskReference }) => {
+      const baseUrl = new URL(targetBaseUrl);
+      const resolvedHost = baseUrl.hostname;
+      const resolvedPort = Number(baseUrl.port || "80");
+
+      localStorage.setItem(
+        "c64u_saved_devices:v1",
+        JSON.stringify({
+          version: 1,
+          selectedDeviceId: "device-u64-primary",
+          devices: [
+            {
+              id: "device-u64-primary",
+              name: "",
+              nameSource: "auto",
+              host: resolvedHost,
+              httpPort: resolvedPort,
+              ftpPort: 21,
+              telnetPort: 23,
+              lastKnownProduct: "U64",
+              lastKnownHostname: "u64-primary",
+              lastKnownUniqueId: "UID-U64-1",
+              lastSuccessfulConnectionAt: "2026-04-10T12:00:00.000Z",
+              lastUsedAt: "2026-04-10T12:00:00.000Z",
+              hasPassword: false,
+            },
+            {
+              id: "device-u64-secondary",
+              name: "",
+              nameSource: "auto",
+              host: resolvedHost,
+              httpPort: resolvedPort,
+              ftpPort: 2021,
+              telnetPort: 2323,
+              lastKnownProduct: "U64",
+              lastKnownHostname: "u64-secondary",
+              lastKnownUniqueId: "UID-U64-2",
+              lastSuccessfulConnectionAt: "2026-04-10T11:55:00.000Z",
+              lastUsedAt: null,
+              hasPassword: false,
+            },
+            {
+              id: "device-c64u-custom",
+              name: "C64U FE",
+              nameSource: "custom",
+              host: resolvedHost,
+              httpPort: resolvedPort,
+              ftpPort: 2121,
+              telnetPort: 2324,
+              lastKnownProduct: "C64U",
+              lastKnownHostname: "studio-c64",
+              lastKnownUniqueId: "UID-C64U-1",
+              lastSuccessfulConnectionAt: "2026-04-10T11:50:00.000Z",
+              lastUsedAt: null,
+              hasPassword: false,
+            },
+          ],
+          summaries: {
+            "device-u64-primary": {
+              deviceId: "device-u64-primary",
+              verifiedAt: "2026-04-10T12:00:00.000Z",
+              lastHealthState: "Healthy",
+              lastConnectivityState: "Online",
+              lastProbeSucceededAt: "2026-04-10T12:00:00.000Z",
+              lastProbeFailedAt: null,
+              lastVerifiedProduct: "U64",
+              lastVerifiedHostname: "u64-primary",
+              lastVerifiedUniqueId: "UID-U64-1",
+            },
+            "device-u64-secondary": {
+              deviceId: "device-u64-secondary",
+              verifiedAt: "2026-04-10T11:55:00.000Z",
+              lastHealthState: "Healthy",
+              lastConnectivityState: "Online",
+              lastProbeSucceededAt: "2026-04-10T11:55:00.000Z",
+              lastProbeFailedAt: null,
+              lastVerifiedProduct: "U64",
+              lastVerifiedHostname: "u64-secondary",
+              lastVerifiedUniqueId: "UID-U64-2",
+            },
+            "device-c64u-custom": {
+              deviceId: "device-c64u-custom",
+              verifiedAt: "2026-04-10T11:50:00.000Z",
+              lastHealthState: "Healthy",
+              lastConnectivityState: "Online",
+              lastProbeSucceededAt: "2026-04-10T11:50:00.000Z",
+              lastProbeFailedAt: null,
+              lastVerifiedProduct: "C64U",
+              lastVerifiedHostname: "studio-c64",
+              lastVerifiedUniqueId: "UID-C64U-1",
+            },
+          },
+          summaryLru: ["device-u64-primary", "device-u64-secondary", "device-c64u-custom"],
+        }),
+      );
+
+      if (withDiskReference) {
+        localStorage.setItem(
+          "c64u_disk_library:screenshot-seed",
+          JSON.stringify({
+            disks: [
+              {
+                id: "disk-seeded-1",
+                name: "Demo Disk",
+                origin: {
+                  sourceKind: "ultimate",
+                  originDeviceId: "device-u64-primary",
+                  originDeviceUniqueId: "UID-U64-1",
+                  originPath: "/disks/demo.d64",
+                },
+              },
+            ],
+          }),
+        );
+      }
+    },
+    { baseUrlArg, includeDiskReference },
+  );
+};
 
 test.describe("App screenshots", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -1675,6 +2164,7 @@ test.describe("App screenshots", () => {
     "capture settings screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl, true);
       await page.goto("/settings");
       await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
@@ -1682,6 +2172,17 @@ test.describe("App screenshots", () => {
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "settings/01-overview.png");
       await capturePageSections(page, testInfo, "settings");
+
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.getByTestId("settings-delete-device").click();
+      const deleteDialog = page.getByRole("alertdialog", { name: "Delete device?" });
+      await expect(deleteDialog).toBeVisible();
+      await captureScreenshot(page, testInfo, "settings/device-switch/01-delete-warning.png", {
+        locator: deleteDialog,
+        skipFuzzyHeadRestore: true,
+      });
+      await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(deleteDialog).toBeHidden();
     },
   );
 
@@ -1689,6 +2190,7 @@ test.describe("App screenshots", () => {
     "capture settings profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/settings");
         await applyDisplayProfileViewport(page, profileId);
@@ -1703,6 +2205,7 @@ test.describe("App screenshots", () => {
     "capture settings header badge screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
       const headerRow = page.getByTestId("app-bar-row");
       const badge = page.getByTestId("unified-health-badge");
       const scenarios = [
@@ -1746,9 +2249,134 @@ test.describe("App screenshots", () => {
   );
 
   test(
+    "capture switch-device screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
+
+      const diagnosticsButton = page.getByTestId("unified-health-badge");
+      const openSwitchDeviceSheet = async () => {
+        await diagnosticsButton.dispatchEvent("pointerdown");
+        await page.waitForTimeout(500);
+        const sheet = page.getByTestId("switch-device-sheet");
+        await expect(sheet).toBeVisible();
+        await diagnosticsButton.dispatchEvent("pointerup");
+        return sheet;
+      };
+
+      const expandAllDeviceRows = async (sheet: Locator) => {
+        for (const deviceId of ["device-u64-primary", "device-u64-secondary", "device-c64u-custom"] as const) {
+          await sheet.getByTestId(`switch-device-expand-${deviceId}`).click();
+        }
+
+        await expect(sheet.locator('[data-testid="health-check-detail-view"]')).toHaveCount(3);
+      };
+
+      const closeSwitchDeviceSheet = async (sheet: Locator) => {
+        await sheet.getByRole("button", { name: "Close" }).click();
+        await expect(sheet).toBeHidden();
+      };
+
+      const configureSwitchDeviceViewport = async (profileId: DisplayProfileViewportId) => {
+        await page.goto("/");
+        await applyDisplayProfileViewport(page, profileId);
+        await waitForStableRender(page);
+        await waitForConnected(page);
+        await expect(diagnosticsButton).toBeVisible();
+      };
+
+      const captureSwitchDeviceMatrix = async (
+        resolvePath: (fileName: string) => string,
+        profileId: DisplayProfileViewportId,
+      ) => {
+        await configureSwitchDeviceViewport(profileId);
+        await seedSwitchDeviceHealthProgress(page);
+
+        let switchDeviceSheet = await openSwitchDeviceSheet();
+
+        await captureFramedScreenshot(page, testInfo, resolvePath("01-picker.png"), "switch-device-sheet", {
+          locator: switchDeviceSheet,
+        });
+
+        await expandAllDeviceRows(switchDeviceSheet);
+        await captureFramedScreenshot(page, testInfo, resolvePath("02-picker-expanded.png"), "switch-device-sheet", {
+          locator: switchDeviceSheet,
+        });
+
+        await closeSwitchDeviceSheet(switchDeviceSheet);
+
+        await seedSwitchDeviceHealthAllHealthy(page);
+        switchDeviceSheet = await openSwitchDeviceSheet();
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-primary")).toContainText("Healthy");
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
+          "Healthy",
+        );
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-custom")).toContainText("Healthy");
+        await captureFramedScreenshot(page, testInfo, resolvePath("03-picker-all-healthy.png"), "switch-device-sheet", {
+          locator: switchDeviceSheet,
+        });
+
+        await expandAllDeviceRows(switchDeviceSheet);
+        await captureFramedScreenshot(
+          page,
+          testInfo,
+          resolvePath("05-picker-all-healthy-expanded.png"),
+          "switch-device-sheet",
+          {
+            locator: switchDeviceSheet,
+          },
+        );
+
+        await closeSwitchDeviceSheet(switchDeviceSheet);
+
+        await seedSwitchDeviceHealthMixedUnhealthy(page);
+        switchDeviceSheet = await openSwitchDeviceSheet();
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-primary")).toContainText("Healthy");
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
+          "Healthy",
+        );
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-custom")).toContainText(
+          "Unhealthy",
+        );
+        await captureFramedScreenshot(
+          page,
+          testInfo,
+          resolvePath("04-picker-one-unhealthy.png"),
+          "switch-device-sheet",
+          {
+            locator: switchDeviceSheet,
+          },
+        );
+
+        await expandAllDeviceRows(switchDeviceSheet);
+        await captureFramedScreenshot(
+          page,
+          testInfo,
+          resolvePath("06-picker-one-unhealthy-expanded.png"),
+          "switch-device-sheet",
+          {
+            locator: switchDeviceSheet,
+          },
+        );
+
+        await closeSwitchDeviceSheet(switchDeviceSheet);
+      };
+
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await captureSwitchDeviceMatrix(
+          (fileName) => profileScreenshotPath("diagnostics/switch-device", profileId, fileName),
+          profileId,
+        );
+      }
+    },
+  );
+
+  test(
     "capture diagnostics screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
+
       const openDiagnostics = async () => {
         await page.goto("/");
         await applyDisplayProfileViewport(page, "medium");
@@ -2090,6 +2718,7 @@ test.describe("App screenshots", () => {
     "capture diagnostics profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installSavedDeviceScreenshotState(page, server.baseUrl);
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/");
         await applyDisplayProfileViewport(page, profileId);
@@ -2132,7 +2761,7 @@ test.describe("App screenshots", () => {
     const externalResources = page.getByTestId("docs-external-resources");
     await externalResources.scrollIntoViewIfNeeded();
     await waitForStableRender(page);
-    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png", {
+    await captureFramedScreenshot(page, testInfo, "docs/external/01-external-resources.png", "docs-external", {
       locator: externalResources,
     });
 

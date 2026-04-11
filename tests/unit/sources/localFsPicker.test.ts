@@ -8,7 +8,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const platformState = { value: "web" };
+const { platformState } = vi.hoisted(() => ({
+  platformState: { value: "web" },
+}));
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
