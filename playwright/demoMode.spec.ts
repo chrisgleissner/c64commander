@@ -344,7 +344,7 @@ test.describe("Automatic Demo Mode", () => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     const passwordInput = page.getByLabel(/password|network password/i);
     await passwordInput.fill("new-password");
-    await page.getByRole("button", { name: /Save & Connect|Save connection/i }).click();
+    await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
 
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });

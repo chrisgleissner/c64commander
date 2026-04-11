@@ -187,6 +187,7 @@ export default function SettingsPage() {
   const trace = useActionTrace("SettingsPage");
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
+  const passwordInputRef = useRef(password);
 
   const setHvscEnabledAndPersist = (enabled: boolean) => {
     void setHvscEnabled(enabled);
@@ -306,6 +307,7 @@ export default function SettingsPage() {
   }, [hvscBaseUrlInput]);
 
   useEffect(() => {
+    passwordInputRef.current = password;
     setPasswordInput(password);
   }, [password]);
 
@@ -317,17 +319,31 @@ export default function SettingsPage() {
     setDeviceNameError(null);
     setHostnameError(null);
     setConnectionFieldError(null);
+  }, [
+    selectedSavedDevice?.id,
+    selectedSavedDevice?.name,
+    selectedSavedDevice?.host,
+    selectedSavedDevice?.httpPort,
+    selectedSavedDevice?.ftpPort,
+    selectedSavedDevice?.telnetPort,
+  ]);
+
+  useEffect(() => {
+    if (!selectedSavedDevice) {
+      return;
+    }
     let cancelled = false;
     void (async () => {
       const nextPassword = selectedSavedDevice.hasPassword ? await getPasswordForDevice(selectedSavedDevice.id) : null;
       if (!cancelled) {
+        passwordInputRef.current = nextPassword ?? "";
         setPasswordInput(nextPassword ?? "");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [selectedSavedDevice]);
+  }, [selectedSavedDevice?.id, selectedSavedDevice?.hasPassword]);
 
   const handleDeviceDraftChange = useCallback(
     (nextDraft: SavedDeviceEditorDraft) => {
@@ -488,23 +504,26 @@ export default function SettingsPage() {
     if (hostError || portError || nextDeviceNameError) return;
     setIsSaving(true);
     try {
+      const trimmedPassword = passwordInputRef.current.trim();
+      const hasPassword = trimmedPassword.length > 0;
       const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
       const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
       setStoredFtpPort(Number(deviceDraft.ftpPort));
       setStoredTelnetPort(Number(deviceDraft.telnetPort));
+      if (hasPassword) {
+        await setPasswordForDevice(selectedSavedDevice.id, trimmedPassword);
+      } else {
+        await clearPasswordForDevice(selectedSavedDevice.id);
+      }
       updateSavedDevice(selectedSavedDevice.id, {
         name: deviceDraft.name,
         host: nextHost,
         httpPort: Number(deviceDraft.httpPort),
         ftpPort: Number(deviceDraft.ftpPort),
         telnetPort: Number(deviceDraft.telnetPort),
+        hasPassword,
       });
-      if (passwordInput.trim()) {
-        await setPasswordForDevice(selectedSavedDevice.id, passwordInput.trim());
-      } else {
-        await clearPasswordForDevice(selectedSavedDevice.id);
-      }
-      updateConfig(nextDeviceHost, passwordInput.trim() || undefined);
+      updateConfig(nextDeviceHost, hasPassword ? trimmedPassword : undefined);
       await switchSavedDevice(selectedSavedDevice.id);
       toast({ title: "Connection settings saved" });
     } catch (error) {
@@ -953,7 +972,11 @@ export default function SettingsPage() {
                     id="password"
                     type="password"
                     value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
+                    onChange={(e) => {
+                      const nextPassword = e.target.value;
+                      passwordInputRef.current = nextPassword;
+                      setPasswordInput(nextPassword);
+                    }}
                     placeholder="Optional"
                     className="font-sans"
                   />

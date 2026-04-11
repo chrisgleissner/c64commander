@@ -14,6 +14,7 @@ import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection } from "@/lib/connection/connectionManager";
+import { setPasswordForDevice } from "@/lib/secureStorage";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -477,6 +478,23 @@ describe("SettingsPage", () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u:8081", undefined);
       expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
       expect(localStorage.getItem("c64u_telnet_port")).toBe("2323");
+    });
+  });
+
+  it("persists the saved-device password flag before switching devices", async () => {
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByLabelText(/password|network password/i), { target: { value: "new-password" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(vi.mocked(setPasswordForDevice)).toHaveBeenCalledWith("saved-device-1", "new-password");
+      expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", "new-password");
+      const persisted = JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}");
+      expect(persisted.devices[0]).toMatchObject({
+        id: "saved-device-1",
+        hasPassword: true,
+      });
     });
   });
 
