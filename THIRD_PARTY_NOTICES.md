@@ -347,7 +347,7 @@ Summary: 796 dependencies across NPM (779), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | callsites | 3.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/callsites/-/callsites-3.1.0.tgz](https://registry.npmjs.org/callsites/-/callsites-3.1.0.tgz) |
 | NPM | camelcase | 5.3.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/camelcase/-/camelcase-5.3.1.tgz](https://registry.npmjs.org/camelcase/-/camelcase-5.3.1.tgz) |
 | NPM | camelcase-css | 2.0.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/camelcase-css/-/camelcase-css-2.0.1.tgz](https://registry.npmjs.org/camelcase-css/-/camelcase-css-2.0.1.tgz) |
-| NPM | caniuse-lite | 1.0.30001786 | [CC-BY-4.0](https://spdx.org/licenses/CC-BY-4.0.html) | [https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001786.tgz](https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001786.tgz) |
+| NPM | caniuse-lite | 1.0.30001787 | [CC-BY-4.0](https://spdx.org/licenses/CC-BY-4.0.html) | [https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001787.tgz](https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001787.tgz) |
 | NPM | chai | 5.3.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/chai/-/chai-5.3.3.tgz](https://registry.npmjs.org/chai/-/chai-5.3.3.tgz) |
 | NPM | chalk | 4.1.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/chalk/-/chalk-4.1.2.tgz](https://registry.npmjs.org/chalk/-/chalk-4.1.2.tgz) |
 | NPM | chardet | 2.1.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/chardet/-/chardet-2.1.1.tgz](https://registry.npmjs.org/chardet/-/chardet-2.1.1.tgz) |
