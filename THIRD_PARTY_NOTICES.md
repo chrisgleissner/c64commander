@@ -794,7 +794,7 @@ Summary: 796 dependencies across NPM (779), Gradle (13), CocoaPods (4), SwiftPM 
 | Gradle | androidx.documentfile:documentfile | 1.0.1 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [androidx.documentfile:documentfile:1.0.1](androidx.documentfile:documentfile:1.0.1) |
 | Gradle | androidx.security:security-crypto | 1.1.0-alpha06 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [androidx.security:security-crypto:1.1.0-alpha06](androidx.security:security-crypto:1.1.0-alpha06) |
 | Gradle | com.google.code.findbugs:jsr305 | 3.0.2 | [BSD-3-Clause](https://spdx.org/licenses/BSD-3-Clause.html) | [com.google.code.findbugs:jsr305:3.0.2](com.google.code.findbugs:jsr305:3.0.2) |
-| Gradle | com.google.errorprone:error_prone_annotations | 2.28.0 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [com.google.errorprone:error_prone_annotations:2.28.0](com.google.errorprone:error_prone_annotations:2.28.0) |
+| Gradle | com.google.errorprone:error_prone_annotations | 2.49.0 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [com.google.errorprone:error_prone_annotations:2.49.0](com.google.errorprone:error_prone_annotations:2.49.0) |
 | Gradle | commons-net:commons-net | 3.13.0 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [commons-net:commons-net:3.13.0](commons-net:commons-net:3.13.0) |
 | Gradle | org.apache.commons:commons-compress | 1.26.2 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [org.apache.commons:commons-compress:1.26.2](org.apache.commons:commons-compress:1.26.2) |
 | Gradle | org.tukaani:xz | 1.10 | [Public-Domain / BSD-style](https://tukaani.org/xz/java.html) | [org.tukaani:xz:1.10](org.tukaani:xz:1.10) |
