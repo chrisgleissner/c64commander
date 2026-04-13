@@ -12,6 +12,7 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 ## Features
 
 - **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
+- **Cross-device**: Supports Commodore 64 Ultimate (all editions), Ultimate 64, Ultimate 64 Elite, and Ultimate 64 Elite II.
 - **Dashboard**: Machine controls, Quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
 - **Playlists**: Build playlists from local files, C64U storage, the High Voltage SID Collection (HVSC), or CommoServe search results. Autoplay, shuffle, and subsong selection.
 - **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
