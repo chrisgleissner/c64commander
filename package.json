@@ -126,7 +126,7 @@
     "@types/suncalc": "^1.9.2",
     "7z-wasm": "^1.2.0",
     "baseline-browser-mapping": "^2.9.15",
-    "basic-ftp": "^5.2.0",
+    "basic-ftp": "^5.2.2",
     "caniuse-lite": "^1.0.30001765",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

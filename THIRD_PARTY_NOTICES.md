@@ -327,7 +327,7 @@ Summary: 796 dependencies across NPM (779), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | balanced-match | 4.0.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz](https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz) |
 | NPM | base64-js | 1.5.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz](https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz) |
 | NPM | baseline-browser-mapping | 2.10.16 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.10.16.tgz](https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.10.16.tgz) |
-| NPM | basic-ftp | 5.2.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/basic-ftp/-/basic-ftp-5.2.0.tgz](https://registry.npmjs.org/basic-ftp/-/basic-ftp-5.2.0.tgz) |
+| NPM | basic-ftp | 5.2.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/basic-ftp/-/basic-ftp-5.2.2.tgz](https://registry.npmjs.org/basic-ftp/-/basic-ftp-5.2.2.tgz) |
 | NPM | bath-es5 | 3.0.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/bath-es5/-/bath-es5-3.0.3.tgz](https://registry.npmjs.org/bath-es5/-/bath-es5-3.0.3.tgz) |
 | NPM | bidi-js | 1.0.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/bidi-js/-/bidi-js-1.0.3.tgz](https://registry.npmjs.org/bidi-js/-/bidi-js-1.0.3.tgz) |
 | NPM | big-integer | 1.6.52 | [Unlicense](https://spdx.org/licenses/Unlicense.html) | [https://registry.npmjs.org/big-integer/-/big-integer-1.6.52.tgz](https://registry.npmjs.org/big-integer/-/big-integer-1.6.52.tgz) |
