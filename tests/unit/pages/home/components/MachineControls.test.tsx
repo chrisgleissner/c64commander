@@ -72,7 +72,7 @@ describe("MachineControls", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the canonical eight primary quick actions in order", () => {
+  it("renders the canonical primary quick actions without telnet-only controls by default", () => {
     render(<MachineControls {...defaultProps} />);
 
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
@@ -83,7 +83,6 @@ describe("MachineControls", () => {
       "Menu",
       "Save RAM",
       "Load RAM",
-      "Power Cycle",
       "Power Off",
     ]);
     expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "4");
@@ -106,14 +105,25 @@ describe("MachineControls", () => {
     expect(defaultProps.onToggleMenu).toHaveBeenCalledTimes(1);
   });
 
-  it("disables Power Cycle when no handler is provided", () => {
+  it("omits Power Cycle when no handler is provided", () => {
     render(<MachineControls {...defaultProps} />);
-    expect(screen.getByTestId("home-power-cycle")).toBeDisabled();
+    expect(screen.queryByTestId("home-power-cycle")).toBeNull();
   });
 
   it("renders and calls Power Cycle when a handler is provided", () => {
     const onPowerCycle = vi.fn();
     render(<MachineControls {...defaultProps} onPowerCycle={onPowerCycle} />);
+    const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
+    expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
+      "Reset",
+      "Reboot",
+      "Pause",
+      "Menu",
+      "Save RAM",
+      "Load RAM",
+      "Power Cycle",
+      "Power Off",
+    ]);
     fireEvent.click(screen.getByTestId("home-power-cycle"));
     expect(onPowerCycle).toHaveBeenCalledTimes(1);
   });

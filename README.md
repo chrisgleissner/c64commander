@@ -272,6 +272,7 @@ C64 Commander includes **Device Safety** controls under **Settings > Device Safe
 - **App expired**: SideStore refreshes every 7 days automatically.
 - **Account/App ID limits**: Remove unused sideloaded apps and retry.
 - **Install/signing errors**: Re-download the IPA and verify its checksum.
+- **Telnet-backed controls**: Power Cycle, Clear Flash, and other Telnet-only actions use the native socket bridge on iOS and Android.
 
 ## Advanced Topics
 
@@ -294,11 +295,12 @@ Optional hardening:
 
 - No network password configured: the UI opens directly.
 - Network password configured in **Settings > Device > Network password**: login is required. The server injects the password into proxied C64U requests.
-- The password is persisted in `/config/web-config.json`. Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`, optional `Secure`).
+- The password is persisted in `/config/web-config.json`. Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`; add `Secure` only for HTTPS deployments).
 
 #### Security settings
 
-- `Secure` cookies are enabled when `NODE_ENV=production`. Override with `WEB_COOKIE_SECURE=true|false`.
+- Plain-HTTP LAN deployments keep session cookies HTTP-compatible by default so the documented Docker flow can authenticate successfully.
+- Set `WEB_COOKIE_SECURE=true` only when the app is served over HTTPS or an HTTPS reverse proxy. Set `WEB_COOKIE_SECURE=false` to force HTTP-compatible cookies explicitly.
 - FTP host override is disabled by default. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted setups.
 
 #### Logging

@@ -84,6 +84,14 @@ describe("HealthCheckDetailView", () => {
       expect(screen.getByTestId("health-check-probe-telnet")).toHaveTextContent("Success");
     });
 
+    it("does not show a fallback OK reason for successful probes", () => {
+      render(<HealthCheckDetailView result={makeResult()} onBack={vi.fn()} />);
+
+      const row = screen.getByTestId("health-check-probe-rest");
+      expect(row).toHaveTextContent("Success");
+      expect(row).not.toHaveTextContent("OK");
+    });
+
     it("shows duration in ms when durationMs is non-null", () => {
       const result = makeResult();
       result.probes.REST = makeProbe("REST", "Success", 123);

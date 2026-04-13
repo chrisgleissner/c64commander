@@ -214,4 +214,20 @@ describe("HealthHistoryPopup", () => {
     expect(screen.getAllByTestId(/health-history-event-probe-/).length).toBeGreaterThanOrEqual(6);
     expect(screen.getByTestId("health-history-event-scroll")).toBeInTheDocument();
   });
+
+  it("does not show a fallback OK reason for successful probes", () => {
+    vi.mocked(getHealthHistory).mockReturnValue([makeEntry(20, "Healthy")]);
+
+    render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
+
+    const healthySegment = screen.getAllByTestId(/health-history-segment-/)[0];
+    fireEvent.click(healthySegment!);
+
+    const firstToggle = within(screen.getByTestId(/health-history-event-row-/)).getByRole("button");
+    fireEvent.click(firstToggle);
+
+    const restProbe = screen.getByTestId(/health-history-event-probe-.*-rest/);
+    expect(restProbe).toHaveTextContent("Success");
+    expect(restProbe).not.toHaveTextContent("OK");
+  });
 });

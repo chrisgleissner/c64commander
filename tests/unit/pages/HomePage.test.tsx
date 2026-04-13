@@ -604,9 +604,9 @@ vi.mock("@/lib/deviceControl/deviceControl", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => {},
+  subscribeDiagnosticsOverlay: () => () => { },
   shouldSuppressDiagnosticsSideEffects: () => false,
-  subscribeDiagnosticsSuppression: () => () => {},
+  subscribeDiagnosticsSuppression: () => () => { },
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
@@ -1140,14 +1140,15 @@ describe("HomePage SID status", () => {
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
-    expect(within(machineControls).getAllByRole("button")).toHaveLength(8);
+    expect(within(machineControls).getAllByRole("button")).toHaveLength(7);
     expect(
       within(machineControls)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Reset", "Reboot", "Pause", "Menu", "Save RAM", "Load RAM", "Power Cycle", "Power Off"]);
+    ).toEqual(["Reset", "Reboot", "Pause", "Menu", "Save RAM", "Load RAM", "Power Off"]);
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
     expect(within(machineControls).queryByRole("button", { name: /^resume$/i })).toBeNull();
+    expect(within(machineControls).queryByRole("button", { name: /^power cycle$/i })).toBeNull();
 
     fireEvent.click(within(machineControls).getByRole("button", { name: /^pause$/i }));
 
@@ -1385,7 +1386,7 @@ describe("HomePage SID status", () => {
   });
 
   it("shows a pending RAM dump folder label while folder selection is in flight", async () => {
-    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => {}));
+    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => { }));
 
     renderHomePage();
     fireEvent.click(screen.getByTestId("ram-dump-folder-trigger"));
@@ -1474,7 +1475,7 @@ describe("HomePage SID status", () => {
     expect(machineSection?.contains(ramFolderRow)).toBe(true);
     expect(
       screen.getByTestId("home-machine-controls").compareDocumentPosition(screen.getByTestId("home-machine-footer")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
 
     const cardColumn = screen.getByTestId("home-secondary-cards");

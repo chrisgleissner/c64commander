@@ -91,7 +91,7 @@ export function HealthCheckDetailView({
               const reasonText =
                 liveStatus === "running" || liveStatus === "pending"
                   ? ""
-                  : (executionState?.reason ?? probe?.reason ?? "OK");
+                  : (executionState?.reason ?? probe?.reason ?? "");
               const isDetailRow = reasonText.length > REASON_COMPACT_LIMIT;
               const durationLabel =
                 liveStatus === "running" || liveStatus === "pending"

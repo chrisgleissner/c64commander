@@ -1,3 +1,156 @@
+# Multi-Device Diagnostics Attribution Research Worklog
+
+## [2026-04-13 09:15 +0100] EXEC-INIT: multi-device diagnostics attribution spec work started
+
+Classification:
+
+- `DOC_ONLY`
+
+Scope:
+
+- Build on the completed diagnostics-after-device-switching research.
+- Define how logs, traces, actions, and related diagnostics evidence should capture originating saved-device identity.
+- Define how Diagnostics filters and detail views should expose that attribution using user-facing saved-device names.
+- Produce `multi-device-diagnostics-spec.md`, `plan.md`, and `prompt.md` under `docs/research/device-switching-diagnostics/`.
+
+Next step:
+
+- Refresh the current research doc and inspect the trace, logging, action-summary, diagnostics-dialog, and saved-device store code paths.
+
+## [2026-04-13 09:15 +0100] ARCH-MAP: device attribution needs a saved-device key, not just verified hardware identity
+
+What I inspected:
+
+- `src/lib/tracing/types.ts`
+- `src/lib/tracing/traceContext.ts`
+- `src/components/TraceContextBridge.tsx`
+- `src/lib/tracing/traceSession.ts`
+- `src/lib/logging.ts`
+- `src/lib/diagnostics/actionSummaries.ts`
+- `src/lib/diagnostics/webServerLogs.ts`
+- `src/components/diagnostics/DiagnosticsDialog.tsx`
+- `src/lib/savedDevices/store.ts`
+
+What I found:
+
+- trace context already has a device slot, but persisted trace events do not yet carry device attribution
+- `TraceContextBridge` currently populates the trace `deviceId` from the verified device `unique_id`, which is not the right primary filter key for saved-device UX
+- logs are untagged, action summaries are untagged, and Diagnostics filters only know type, contributor, and severity
+- the saved-device store has no persisted `hasEverHadMultipleDevices`-style flag, so the requested visibility rule is not currently representable
+
+Decision:
+
+- the spec should make saved-device identity the primary diagnostics attribution key and keep verified hardware identity as secondary debug context
+
+Next step:
+
+- write the implementation-ready spec, delta plan, and implementation prompt around that model
+
+## [2026-04-13 09:15 +0100] OUTPUT: implementation-ready multi-device diagnostics docs written
+
+Output written:
+
+- `docs/research/device-switching-diagnostics/multi-device-diagnostics-spec.md`
+- `docs/research/device-switching-diagnostics/plan.md`
+- `docs/research/device-switching-diagnostics/prompt.md`
+
+What the docs lock in:
+
+- diagnostics filtering uses saved-device ids rendered by saved-device display names
+- verified hardware identity stays separate for mismatch and deeper debugging
+- logs, traces, actions, and exports all need device attribution
+- Diagnostics keeps a compact inline device label model rather than adding bulky row chrome
+- device attribution UI stays hidden for true single-device users but remains unlocked after prior multi-device use
+
+# Diagnostics Device Switching Research Worklog
+
+## [2026-04-13 08:41 +0100] EXEC-INIT: diagnostics semantics research started
+
+Classification:
+
+- `DOC_ONLY`
+
+Scope:
+
+- Determine how diagnostics should behave after saved-device switching without refactoring the switching feature itself.
+- Inspect badge semantics, switch-dialog health polling, diagnostics overlay ownership, persistence, reset behavior, and route refresh behavior.
+- Produce a research document under `docs/research/` plus updated plan/worklog artifacts.
+
+Initial decision:
+
+- Treat the task as research-only unless a small correctness fix becomes necessary to validate findings.
+
+Next step:
+
+- Read the real switching, badge, diagnostics, persistence, and test code paths.
+
+## [2026-04-13 08:48 +0100] ARCH-MAP: diagnostics state is split across three different scopes today
+
+What I inspected:
+
+- `src/components/UnifiedHealthBadge.tsx`
+- `src/hooks/useHealthState.ts`
+- `src/hooks/useSavedDeviceHealthChecks.ts`
+- `src/hooks/useSavedDeviceSwitching.ts`
+- `src/lib/savedDevices/store.ts`
+- `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`
+- `src/components/diagnostics/DiagnosticsDialog.tsx`
+- `src/lib/diagnostics/healthCheckState.ts`
+- `src/lib/diagnostics/healthCheckEngine.ts`
+- `src/lib/query/c64QueryInvalidation.ts`
+
+What I found:
+
+- The badge and diagnostics sheet are driven by one global selected-device health snapshot (`healthCheckState.latestResult`) plus trace-derived fallback logic.
+- The switch picker owns a separate per-device passive polling map from `useSavedDeviceHealthChecks`, refreshed every 10 seconds only while the picker is open.
+- Saved-device verification status and last-known health/connectivity summaries persist in `savedDevices/store.ts`, but the full diagnostics stores do not become per-device when switching is introduced.
+
+Decision:
+
+- Treat the current model as mixed rather than clearly global or clearly per-device.
+
+Next step:
+
+- verify persistence, clear/export behavior, and the user-visible test contract.
+
+## [2026-04-13 08:55 +0100] SEMANTICS: current-device surfaces and multi-device switcher semantics are not aligned
+
+What I verified:
+
+- Badge count is derived from the selected-device/global health snapshot in `useHealthState`, not from saved-device summaries or switcher polling.
+- The switch dialog shows passive per-device health, status labels (`verifying`, `offline`, `mismatch`, `selected`), and relative last-check timing.
+- `Clear all` in `GlobalDiagnosticsOverlay` clears logs, traces, latency, health history, recovery evidence, diagnostics activity, and the global health-check state, but does not clear saved-device summaries.
+- Logs persist via `localStorage`; traces persist across SPA navigation via `sessionStorage`; health history and global health-check state are in-memory only.
+- Route refresh after a successful switch is active-route-specific and explicitly excludes `c64-all-config`.
+
+Key ambiguity:
+
+- After a device switch, `healthCheckState.latestResult` is not keyed to device identity, so the badge and diagnostics header can temporarily show the newly selected device label with the previous device's last health result.
+
+Next step:
+
+- compare candidate models and write the final recommendation.
+
+## [2026-04-13 09:02 +0100] DECISION: recommend current-device diagnostics with persisted per-device switcher summaries and no switch reset
+
+Recommendation summary:
+
+- Keep the badge strictly current-device only.
+- Keep non-selected-device failures inside the switch dialog, using the existing persisted summary plus passive live checks.
+- Do not reset diagnostics automatically on device switch.
+- Treat app logs/traces/actions as app-global support evidence unless and until the repo adds real device tagging for those records.
+
+Why:
+
+- It matches the existing V2 switching UX and most current ownership boundaries.
+- It avoids misleading aggregated badge counts.
+- It avoids surprising state loss on switch.
+- It requires a much smaller future implementation surface than full per-device diagnostics partitioning.
+
+Output written:
+
+- `docs/research/device-switching-diagnostics/diagnostics-device-switching.md`
+
 # Android APK/AAB Size Regression Worklog
 
 ## [2026-04-11 00:00 +00:00] EXEC-INIT: Android size investigation started

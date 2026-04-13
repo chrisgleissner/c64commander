@@ -334,7 +334,7 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
                                             </span>
                                           </div>
                                           <div className="mt-1 flex items-center justify-between gap-2 text-muted-foreground">
-                                            <span className="break-words">{result.reason ?? "OK"}</span>
+                                            {result.reason ? <span className="break-words">{result.reason}</span> : <span />}
                                             <span className="shrink-0 font-mono">
                                               {result.durationMs != null ? `${result.durationMs}ms` : "-"}
                                             </span>

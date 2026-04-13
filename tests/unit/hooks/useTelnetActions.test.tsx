@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isTelnetAvailable, useTelnetActions } from "@/hooks/useTelnetActions";
 
 const {
+  getPlatformMock,
   isNativePlatformMock,
   shouldUseMockTelnetTransportMock,
   statusRef,
@@ -19,6 +20,7 @@ const {
   decrementTelnetInFlightSpy,
   runWithActionTraceSpy,
 } = vi.hoisted(() => ({
+  getPlatformMock: vi.fn(() => "android"),
   isNativePlatformMock: vi.fn(() => false),
   shouldUseMockTelnetTransportMock: vi.fn(() => false),
   statusRef: {
@@ -35,6 +37,7 @@ const {
 }));
 
 vi.mock("@/lib/native/platform", () => ({
+  getPlatform: () => getPlatformMock(),
   isNativePlatform: () => isNativePlatformMock(),
 }));
 
@@ -113,6 +116,17 @@ describe("isTelnetAvailable", () => {
     );
   });
 
+  it("returns true for iOS native devices when connected to a supported product", () => {
+    expect(
+      isTelnetAvailable({
+        nativePlatform: true,
+        isConnected: true,
+        isDemo: false,
+        product: "Ultimate 64",
+      }),
+    ).toBe(true);
+  });
+
   it("returns false for unsupported products even on native", () => {
     expect(
       isTelnetAvailable({ nativePlatform: true, isConnected: true, isDemo: false, product: "1541 Ultimate II+" }),
@@ -147,6 +161,7 @@ describe("isTelnetAvailable", () => {
 describe("useTelnetActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getPlatformMock.mockReturnValue("android");
     isNativePlatformMock.mockReturnValue(true);
     shouldUseMockTelnetTransportMock.mockReturnValue(false);
     statusRef.current = {
@@ -170,6 +185,12 @@ describe("useTelnetActions", () => {
     isNativePlatformMock.mockReturnValue(false);
     const { result } = renderHook(() => useTelnetActions());
     expect(result.current.isAvailable).toBe(false);
+  });
+
+  it("returns isAvailable=true on iOS native builds", () => {
+    getPlatformMock.mockReturnValue("ios");
+    const { result } = renderHook(() => useTelnetActions());
+    expect(result.current.isAvailable).toBe(true);
   });
 
   it("returns isAvailable=true for demo mode when the target is mock-backed", () => {

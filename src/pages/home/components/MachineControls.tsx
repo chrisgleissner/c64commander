@@ -187,16 +187,18 @@ export function MachineControls({
             disabled={!status.isConnected || effectiveBusy}
             loading={machineTaskId === "load-ram"}
           />
-          <QuickActionCard
-            icon={RefreshCw}
-            label="Power Cycle"
-            variant="danger"
-            className="border-destructive/40 bg-destructive/[0.04]"
-            dataTestId="home-power-cycle"
-            onClick={() => void onPowerCycle?.()}
-            disabled={!status.isConnected || effectiveBusy || !canRunPowerCycle}
-            loading={powerCycleLoading}
-          />
+          {canRunPowerCycle ? (
+            <QuickActionCard
+              icon={RefreshCw}
+              label="Power Cycle"
+              variant="danger"
+              className="border-destructive/40 bg-destructive/[0.04]"
+              dataTestId="home-power-cycle"
+              onClick={() => void onPowerCycle()}
+              disabled={!status.isConnected || effectiveBusy}
+              loading={powerCycleLoading}
+            />
+          ) : null}
           <QuickActionCard
             icon={PowerOff}
             label="Power Off"

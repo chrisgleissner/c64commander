@@ -61,10 +61,14 @@ const loginAndGetCookie = async (baseUrl: string, password: string) => {
   return cookie!;
 };
 
+const expectCookieSecurity = (cookie: string, secure: boolean) => {
+  expect(cookie.includes("; Secure")).toBe(secure);
+};
+
 afterEach(async () => {
   process.env = { ...originalEnv };
   for (const server of webServers.splice(0)) {
-    await server.close().catch(() => {});
+    await server.close().catch(() => { });
   }
   for (const ftpServer of ftpServers.splice(0)) {
     await ftpServer.close();
@@ -116,6 +120,7 @@ describe("web server platform runtime", () => {
       PORT: "0",
       WEB_DIST_DIR: distDir,
       WEB_CONFIG_DIR: configDir,
+      NODE_ENV: "production",
       C64U_NETWORK_PASSWORD: "secret",
     });
 
@@ -130,6 +135,7 @@ describe("web server platform runtime", () => {
     expect(wrong.status).toBe(401);
 
     const cookie = await loginAndGetCookie(server.baseUrl, "secret");
+    expectCookieSecurity(cookie, false);
     const authed = await fetch(`${server.baseUrl}/`, {
       headers: { Cookie: cookie },
     });
@@ -205,6 +211,7 @@ describe("web server platform runtime", () => {
     const server = await startWebServer({
       HOST: "127.0.0.1",
       PORT: "0",
+      NODE_ENV: "production",
       WEB_DIST_DIR: distDir,
       WEB_CONFIG_DIR: configDir,
     });
@@ -215,10 +222,39 @@ describe("web server platform runtime", () => {
       body: JSON.stringify({ value: "new-secret" }),
     });
     expect(setPassword.status).toBe(200);
-    expect(setPassword.headers.get("set-cookie")).toContain("c64_session=");
+    const cookie = setPassword.headers.get("set-cookie");
+    expect(cookie).toContain("c64_session=");
+    expectCookieSecurity(cookie!, false);
+
+    const authStatus = await fetch(`${server.baseUrl}/auth/status`, {
+      headers: { Cookie: cookie! },
+    });
+    expect(authStatus.status).toBe(200);
+    expect(await authStatus.json()).toEqual({ requiresLogin: true, authenticated: true });
 
     const requiresAuth = await fetch(`${server.baseUrl}/`);
     expect(requiresAuth.status).toBe(401);
+
+    await server.close();
+  });
+
+  it("emits secure session cookies only for explicitly secure deployments", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>secure</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      NODE_ENV: "production",
+      WEB_COOKIE_SECURE: "1",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+    });
+
+    const cookie = await loginAndGetCookie(server.baseUrl, "secret");
+    expectCookieSecurity(cookie, true);
 
     await server.close();
   });
@@ -272,16 +308,27 @@ describe("web server platform runtime", () => {
     }
   });
 
-  it("injects network password header in REST proxy requests", async () => {
+  it("authenticates the production HTTP LAN path and proxies control requests", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
     await writeFile(path.join(distDir, "index.html"), "<html><body>proxy</body></html>", "utf8");
 
-    const seen: Array<string | undefined> = [];
+    const seen: Array<{ method?: string; path?: string; password?: string; body: string }> = [];
     const upstream = http.createServer((req, res) => {
-      seen.push(req.headers["x-password"]?.toString());
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ version: "3.12.0", errors: [] }));
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      req.on("end", () => {
+        seen.push({
+          method: req.method,
+          path: req.url,
+          password: req.headers["x-password"]?.toString(),
+          body: Buffer.concat(chunks).toString("utf8"),
+        });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ errors: [] }));
+      });
     });
     await new Promise<void>((resolve, reject) => {
       upstream.listen(0, "127.0.0.1", () => resolve());
@@ -295,6 +342,7 @@ describe("web server platform runtime", () => {
     const server = await startWebServer({
       HOST: "127.0.0.1",
       PORT: "0",
+      NODE_ENV: "production",
       WEB_DIST_DIR: distDir,
       WEB_CONFIG_DIR: configDir,
       C64U_NETWORK_PASSWORD: "secret",
@@ -302,12 +350,24 @@ describe("web server platform runtime", () => {
     });
 
     const cookie = await loginAndGetCookie(server.baseUrl, "secret");
-    const response = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
-      headers: { Cookie: cookie },
+    expectCookieSecurity(cookie, false);
+
+    const response = await fetch(`${server.baseUrl}/api/rest/v1/machine:menu_button`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: cookie,
+      },
+      body: JSON.stringify({ pressed: true }),
     });
 
     expect(response.status).toBe(200);
-    expect(seen[0]).toBe("secret");
+    expect(seen[0]).toEqual({
+      method: "PUT",
+      path: "/v1/machine:menu_button",
+      password: "secret",
+      body: JSON.stringify({ pressed: true }),
+    });
 
     await server.close();
     await new Promise<void>((resolve, reject) => upstream.close((error) => (error ? reject(error) : resolve())));
