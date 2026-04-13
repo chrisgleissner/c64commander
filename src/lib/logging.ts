@@ -10,6 +10,8 @@ import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { redactExportValue, redactExportText } from "@/lib/diagnostics/exportRedaction";
 import { formatLocalTime } from "@/lib/diagnostics/timeFormat";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
+import { toDiagnosticsDeviceAttribution, type DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
+import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -19,6 +21,7 @@ export type LogEntry = {
   message: string;
   timestamp: string;
   details?: unknown;
+  device?: DiagnosticsDeviceAttribution | null;
 };
 
 const MAX_STACK_LINES = 30;
@@ -59,6 +62,7 @@ export const addLog = (level: LogLevel, message: string, details?: unknown) => {
     message,
     timestamp: new Date().toISOString(),
     details,
+    device: toDiagnosticsDeviceAttribution(getTraceContextSnapshot().device),
   };
   const logs = [entry, ...readLogs()];
   writeLogs(logs);

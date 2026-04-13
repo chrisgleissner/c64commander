@@ -9,7 +9,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FolderPicker } from "@/lib/native/folderPicker";
 
-const platformState = { value: "web", native: false };
+const { pickDirectoryMock, platformState } = vi.hoisted(() => ({
+  platformState: { value: "web", native: false },
+  pickDirectoryMock: vi.fn(),
+}));
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
@@ -18,8 +21,6 @@ vi.mock("@capacitor/core", () => ({
   },
   registerPlugin: vi.fn(() => ({})),
 }));
-
-const pickDirectoryMock = vi.fn();
 
 vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {

@@ -39,14 +39,47 @@ vi.mock("@/lib/tracing/traceBridge", () => ({
 }));
 
 import { TraceContextBridge } from "@/components/TraceContextBridge";
-import { getTraceContextSnapshot, setTracePlaybackContext, setTraceUiContext } from "@/lib/tracing/traceContext";
+import {
+  getTraceContextSnapshot,
+  setTraceDeviceContext,
+  setTracePlaybackContext,
+  setTraceUiContext,
+} from "@/lib/tracing/traceContext";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 
 describe("TraceContextBridge", () => {
   beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "saved-1",
+        devices: [
+          {
+            id: "saved-1",
+            name: "Office U64",
+            host: "office-u64",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: "U64",
+            lastKnownHostname: "office-u64",
+            lastKnownUniqueId: "DEV-OLD",
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+        ],
+        summaries: {},
+        summaryLru: [],
+        hasEverHadMultipleDevices: false,
+      }),
+    );
     // Reset the trace context and playback snapshot between tests.
     setTraceUiContext("/", "");
     setTracePlaybackContext(null);
+    setTraceDeviceContext(null);
     setPlaybackTraceSnapshot(null);
     registerTraceBridge.mockClear();
     mockConnectionStatus = {
@@ -81,10 +114,13 @@ describe("TraceContextBridge", () => {
       expect(snapshot.playback?.sourceKind).toBe("ultimate");
       expect(snapshot.playback?.trackInstanceId).toBe(7);
       expect(snapshot.playback?.playlistItemId).toBe("item-2");
+      expect(snapshot.device?.savedDeviceId).toBe("saved-1");
+      expect(snapshot.device?.savedDeviceNameSnapshot).toBe("U64");
+      expect(snapshot.device?.verifiedUniqueId).toBe("DEV-1");
     });
   });
 
-  it("handles missing device info and connection state", async () => {
+  it("keeps saved-device attribution even when verified device info is unavailable", async () => {
     mockConnectionStatus = { deviceInfo: undefined, state: undefined };
 
     render(
@@ -95,8 +131,9 @@ describe("TraceContextBridge", () => {
 
     await waitFor(() => {
       const snapshot = getTraceContextSnapshot();
-      expect(snapshot.device.deviceId).toBeNull();
-      expect(snapshot.device.connectionState).toBeNull();
+      expect(snapshot.device?.savedDeviceId).toBe("saved-1");
+      expect(snapshot.device?.savedDeviceNameSnapshot).toBe("U64");
+      expect(snapshot.device?.verifiedUniqueId).toBeNull();
     });
   });
 });

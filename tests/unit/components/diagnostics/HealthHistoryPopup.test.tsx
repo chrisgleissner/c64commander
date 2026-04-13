@@ -185,11 +185,10 @@ describe("HealthHistoryPopup", () => {
 
   it("renders expandable health-check rows for the selected time range", () => {
     vi.mocked(getHealthHistory).mockReturnValue([
-      makeEntry(80, "Healthy"),
-      makeEntry(60, "Degraded"),
-      makeEntry(58, "Degraded"),
-      makeEntry(56, "Unhealthy"),
-      makeEntry(20, "Healthy"),
+      makeEntry(60, "Healthy"),
+      makeEntry(30, "Degraded"),
+      makeEntry(20, "Unhealthy"),
+      makeEntry(10, "Healthy"),
     ]);
 
     render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
@@ -216,11 +215,19 @@ describe("HealthHistoryPopup", () => {
   });
 
   it("does not show a fallback OK reason for successful probes", () => {
-    vi.mocked(getHealthHistory).mockReturnValue([makeEntry(20, "Healthy")]);
+    vi.mocked(getHealthHistory).mockReturnValue([
+      makeEntry(60, "Healthy"),
+      makeEntry(30, "Degraded"),
+      makeEntry(20, "Unhealthy"),
+      makeEntry(10, "Healthy"),
+    ]);
 
     render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
 
-    const healthySegment = screen.getAllByTestId(/health-history-segment-/)[0];
+    const healthySegment = screen
+      .getAllByTestId(/health-history-segment-/)
+      .find((node) => node.getAttribute("data-state") === "Healthy");
+    expect(healthySegment).toBeDefined();
     fireEvent.click(healthySegment!);
 
     const firstToggle = within(screen.getByTestId(/health-history-event-row-/)).getByRole("button");

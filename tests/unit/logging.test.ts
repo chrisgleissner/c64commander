@@ -19,6 +19,7 @@ import {
 } from "@/lib/logging";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { installConsoleDiagnosticsBridge, logger } from "@/lib/diagnostics/logger";
+import { setTraceDeviceContext } from "@/lib/tracing/traceContext";
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
@@ -93,6 +94,7 @@ ensureLocalStorage();
 describe("logging", () => {
   beforeEach(() => {
     localStorage.clear();
+    setTraceDeviceContext(null);
   });
 
   it("adds logs and filters errors", () => {
@@ -119,6 +121,51 @@ describe("logging", () => {
 
     clearLogs();
     expect(getLogs()).toHaveLength(0);
+  });
+
+  it("persists saved-device attribution on log write across a switch", () => {
+    setTraceDeviceContext({
+      savedDeviceId: "saved-office",
+      savedDeviceNameSnapshot: "Office U64",
+      savedDeviceHostSnapshot: "office-u64",
+      verifiedUniqueId: "UID-OFFICE",
+      verifiedHostname: "office-u64",
+      verifiedProduct: "U64",
+      connectionState: "READY",
+    });
+    addLog("info", "office log");
+
+    setTraceDeviceContext({
+      savedDeviceId: "saved-backup",
+      savedDeviceNameSnapshot: "Backup Lab",
+      savedDeviceHostSnapshot: "backup-lab",
+      verifiedUniqueId: "UID-BACKUP",
+      verifiedHostname: "backup-lab",
+      verifiedProduct: "U64E",
+      connectionState: "READY",
+    });
+    addLog("info", "backup log");
+
+    expect(getLogs()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "office log",
+          device: expect.objectContaining({
+            savedDeviceId: "saved-office",
+            savedDeviceNameSnapshot: "Office U64",
+            verifiedUniqueId: "UID-OFFICE",
+          }),
+        }),
+        expect.objectContaining({
+          message: "backup log",
+          device: expect.objectContaining({
+            savedDeviceId: "saved-backup",
+            savedDeviceNameSnapshot: "Backup Lab",
+            verifiedUniqueId: "UID-BACKUP",
+          }),
+        }),
+      ]),
+    );
   });
 
   it("records debug logs when enabled", () => {

@@ -14,6 +14,11 @@ import type {
   TraceHeaders,
   TraceOrigin,
 } from "@/lib/tracing/types";
+import {
+  cloneDiagnosticsDeviceAttribution,
+  readDiagnosticsDeviceAttribution,
+  type DiagnosticsDeviceAttribution,
+} from "@/lib/diagnostics/deviceAttribution";
 import { normalizeTraceHeaderValue } from "@/lib/tracing/payloadPreview";
 
 export type ActionSummaryOrigin = "user" | "system" | "unknown";
@@ -85,6 +90,7 @@ export type ActionSummary = {
   actionName: string;
   origin: ActionSummaryOrigin;
   originalOrigin?: TraceOrigin;
+  device?: DiagnosticsDeviceAttribution | null;
   trigger?: ActionTrigger | null;
   startTimestamp: string | null;
   endTimestamp: string | null;
@@ -204,6 +210,23 @@ const resolveActionError = (actionEnd: TraceEvent | undefined, errorEvents: Trac
   if (endError) return endError;
   const errorMessage = readString(errorEvents[0]?.data?.message);
   return errorMessage ?? null;
+};
+
+const resolveSummaryDevice = (
+  actionStart: TraceEvent | undefined,
+  orderedEvents: TraceEvent[],
+): DiagnosticsDeviceAttribution | null => {
+  const startDevice = readDiagnosticsDeviceAttribution(actionStart?.data?.device);
+  if (startDevice) {
+    return cloneDiagnosticsDeviceAttribution(startDevice);
+  }
+  for (const event of orderedEvents) {
+    const attribution = readDiagnosticsDeviceAttribution(event.data?.device);
+    if (attribution) {
+      return cloneDiagnosticsDeviceAttribution(attribution);
+    }
+  }
+  return null;
 };
 
 const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | undefined): ErrorEffect[] => {
@@ -433,6 +456,7 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
     const ftpCount = ftpEffects.length;
     const telnetCount = telnetEffects.length;
     const errorCount = errorEffects.length;
+    const device = resolveSummaryDevice(actionStart, ordered);
 
     const startTimestamp = actionStart?.timestamp ?? ordered[0]?.timestamp ?? null;
     const endTimestamp = actionEnd?.timestamp ?? ordered[ordered.length - 1]?.timestamp ?? null;
@@ -452,6 +476,7 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
       actionName: resolveActionName(actionStart, correlationId),
       origin,
       ...(originalOrigin && originalOrigin !== origin ? { originalOrigin } : {}),
+      ...(device ? { device } : {}),
       ...(trigger ? { trigger } : {}),
       startTimestamp,
       endTimestamp,

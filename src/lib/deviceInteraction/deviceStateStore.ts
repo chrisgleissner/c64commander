@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { setTraceDeviceContext } from "@/lib/tracing/traceContext";
+import { setTraceDeviceConnectionState } from "@/lib/tracing/traceContext";
 import type { ConnectionState } from "@/lib/connection/connectionManager";
 
 export type DeviceState = "UNKNOWN" | "DISCOVERING" | "CONNECTING" | "READY" | "BUSY" | "ERROR";
@@ -77,10 +77,7 @@ const updateSnapshot = (note?: string) => {
     lastSuccessAtMs,
     circuitOpenUntilMs,
   });
-  setTraceDeviceContext({
-    deviceId: null,
-    connectionState: state,
-  });
+  setTraceDeviceConnectionState(state);
   emit();
 };
 

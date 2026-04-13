@@ -13,6 +13,7 @@ import type {
   RestEffect,
   TelnetEffect,
 } from "@/lib/diagnostics/actionSummaries";
+import { formatDiagnosticsVerifiedDeviceLabel } from "@/lib/diagnostics/deviceAttribution";
 import type { PayloadPreview, TraceHeaders } from "@/lib/tracing/types";
 import {
   formatActionEffectTarget,
@@ -22,6 +23,7 @@ import {
 
 type Props = {
   summary: ActionSummary;
+  deviceLabel?: string | null;
 };
 
 const PayloadPreviewBlock = ({ label, preview }: { label: string; preview?: PayloadPreview | null }) => {
@@ -56,17 +58,24 @@ const HeaderBlock = ({ label, headers }: { label: string; headers?: TraceHeaders
   return <JsonBlock label={label} value={headers} />;
 };
 
-export const ActionExpandedContent = ({ summary }: Props) => {
+export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) => {
   const effects = summary.effects ?? [];
   const restEffects = effects.filter((e): e is RestEffect => e.type === "REST");
   const ftpEffects = effects.filter((e): e is FtpEffect => e.type === "FTP");
   const telnetEffects = effects.filter((e): e is TelnetEffect => e.type === "TELNET");
   const errorEffects = effects.filter((e): e is ErrorEffect => e.type === "ERROR");
   const inferredProduct = restEffects.find((effect) => effect.product)?.product ?? null;
+  const verifiedDeviceLabel = formatDiagnosticsVerifiedDeviceLabel(summary.device);
+  const displayDeviceLabel = deviceLabel ?? summary.device?.savedDeviceNameSnapshot ?? null;
 
   return (
     <div className="space-y-3 text-xs">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {displayDeviceLabel ? <span>device: {displayDeviceLabel}</span> : null}
+        {summary.device?.savedDeviceId ? (
+          <span className="break-all">saved device id: {summary.device.savedDeviceId}</span>
+        ) : null}
+        {verifiedDeviceLabel ? <span className="break-all">verified device: {verifiedDeviceLabel}</span> : null}
         <span>origin: {formatActionSummaryOrigin(summary.origin, summary.originalOrigin)}</span>
         <span>outcome: {summary.outcome}</span>
         <span className="break-all">correlation: {summary.correlationId}</span>

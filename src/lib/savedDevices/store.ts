@@ -8,6 +8,7 @@
 
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
+import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
 
 export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
 
@@ -58,6 +59,7 @@ type PersistedSavedDevicesEnvelope = {
   devices: SavedDevice[];
   summaries: Record<string, DeviceSwitchSummary>;
   summaryLru: string[];
+  hasEverHadMultipleDevices: boolean;
 };
 
 export type SavedDevicesSnapshot = {
@@ -65,6 +67,7 @@ export type SavedDevicesSnapshot = {
   devices: SavedDevice[];
   summaries: Record<string, DeviceSwitchSummary>;
   summaryLru: string[];
+  hasEverHadMultipleDevices: boolean;
   runtimeStatuses: Record<string, DeviceSwitchStatus>;
   verifiedByDeviceId: Record<string, VerifiedSavedDeviceIdentity | null>;
   actualDeviceIdByDeviceId: Record<string, string | null>;
@@ -278,6 +281,7 @@ const parseEnvelope = (raw: string | null): PersistedSavedDevicesEnvelope | null
       summaryLru: Array.isArray(parsed.summaryLru)
         ? parsed.summaryLru.filter((entry): entry is string => typeof entry === "string")
         : [],
+      hasEverHadMultipleDevices: Boolean(parsed.hasEverHadMultipleDevices) || devices.length > 1,
     };
   } catch {
     return null;
@@ -320,6 +324,7 @@ const createInitialEnvelope = (): PersistedSavedDevicesEnvelope => {
     devices: [device],
     summaries: {},
     summaryLru: [],
+    hasEverHadMultipleDevices: false,
   };
 };
 
@@ -338,6 +343,7 @@ const normalizeEnvelope = (envelope: PersistedSavedDevicesEnvelope): PersistedSa
     selectedDeviceId,
     devices: envelope.devices,
     summaryLru,
+    hasEverHadMultipleDevices: envelope.hasEverHadMultipleDevices || envelope.devices.length > 1,
   };
 };
 
@@ -349,6 +355,7 @@ const buildSnapshot = (envelope: PersistedSavedDevicesEnvelope): SavedDevicesSna
   devices: envelope.devices,
   summaries: envelope.summaries,
   summaryLru: envelope.summaryLru,
+  hasEverHadMultipleDevices: envelope.hasEverHadMultipleDevices,
   runtimeStatuses: snapshot?.runtimeStatuses ?? {},
   verifiedByDeviceId: snapshot?.verifiedByDeviceId ?? {},
   actualDeviceIdByDeviceId: snapshot?.actualDeviceIdByDeviceId ?? {},
@@ -377,6 +384,7 @@ const loadEnvelope = () => {
       devices: snapshot.devices,
       summaries: snapshot.summaries,
       summaryLru: snapshot.summaryLru,
+      hasEverHadMultipleDevices: snapshot.hasEverHadMultipleDevices,
     } satisfies PersistedSavedDevicesEnvelope;
   }
   const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
@@ -570,6 +578,7 @@ export const addSavedDevice = (
     return {
       ...envelope,
       devices: [...envelope.devices, nextDevice],
+      hasEverHadMultipleDevices: envelope.hasEverHadMultipleDevices || envelope.devices.length + 1 > 1,
     };
   });
 };
@@ -868,6 +877,21 @@ export const setSavedDevicePasswordFlag = (deviceId: string, hasPassword: boolea
     ...envelope,
     devices: envelope.devices.map((device) => (device.id === deviceId ? { ...device, hasPassword } : device)),
   }));
+};
+
+export const buildSavedDeviceDiagnosticsAttribution = (
+  device: SavedDevice | null | undefined,
+  verified?: VerifiedSavedDeviceIdentity | null,
+): DiagnosticsDeviceAttribution | null => {
+  const attribution: DiagnosticsDeviceAttribution = {
+    savedDeviceId: device?.id ?? null,
+    savedDeviceNameSnapshot: device ? buildSavedDevicePrimaryLabel(device, verified ?? null) : null,
+    savedDeviceHostSnapshot: device?.host ?? null,
+    verifiedUniqueId: verified?.uniqueId ?? null,
+    verifiedHostname: verified?.hostname ?? null,
+    verifiedProduct: verified?.product ?? null,
+  };
+  return Object.values(attribution).some((value) => value !== null) ? attribution : null;
 };
 
 export const getSavedDevicesEventName = () => EVENT_NAME;

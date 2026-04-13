@@ -15,7 +15,8 @@ vi.mock("@/lib/native/platform", () => ({
 
 import {
   getTraceContextSnapshot,
-  setTraceDeviceContext,
+  setTraceDeviceAttributionContext,
+  setTraceDeviceConnectionState,
   setTraceFeatureFlags,
   setTracePlatformContext,
   setTracePlaybackContext,
@@ -38,14 +39,24 @@ describe("traceContext", () => {
       isPlaying: true,
       elapsedMs: 1000,
     });
-    setTraceDeviceContext({ deviceId: "dev-1", connectionState: "connected" });
+    setTraceDeviceAttributionContext({
+      savedDeviceId: "saved-1",
+      savedDeviceNameSnapshot: "Office U64",
+      savedDeviceHostSnapshot: "office-u64",
+      verifiedUniqueId: "dev-1",
+      verifiedHostname: "office-u64",
+      verifiedProduct: "U64",
+    });
+    setTraceDeviceConnectionState("READY");
 
     const snapshot = getTraceContextSnapshot();
     expect(snapshot.ui.route).toBe("/settings");
     expect(snapshot.platform).toBe("android");
     expect(snapshot.featureFlags.hvsc_enabled).toBe(true);
     expect(snapshot.playback?.currentItemId).toBe("1");
-    expect(snapshot.device?.deviceId).toBe("dev-1");
+    expect(snapshot.device?.savedDeviceId).toBe("saved-1");
+    expect(snapshot.device?.verifiedUniqueId).toBe("dev-1");
+    expect(snapshot.device?.connectionState).toBe("READY");
     expect(updates.length).toBeGreaterThan(1);
 
     unsubscribe();

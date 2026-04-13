@@ -10,14 +10,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Directory } from "@capacitor/filesystem";
 import { persistConfigSnapshotFile, pickConfigSnapshotFile } from "@/lib/config/configSnapshotStorage";
 
-const mkdirMock = vi.fn();
-const writeFileMock = vi.fn();
-const pickFileMock = vi.fn();
-const readFileMock = vi.fn();
-const getPlatformMock = vi.fn(() => "web");
-const isNativePlatformMock = vi.fn(() => false);
-const ensureRamDumpFolderMock = vi.fn();
-const deriveRamDumpFolderDisplayPathMock = vi.fn(() => "Downloads/C64");
+const {
+  deriveRamDumpFolderDisplayPathMock,
+  ensureRamDumpFolderMock,
+  getPlatformMock,
+  isNativePlatformMock,
+  mkdirMock,
+  pickFileMock,
+  readFileMock,
+  writeFileMock,
+} = vi.hoisted(() => ({
+  mkdirMock: vi.fn(),
+  writeFileMock: vi.fn(),
+  pickFileMock: vi.fn(),
+  readFileMock: vi.fn(),
+  getPlatformMock: vi.fn(() => "web"),
+  isNativePlatformMock: vi.fn(() => false),
+  ensureRamDumpFolderMock: vi.fn(),
+  deriveRamDumpFolderDisplayPathMock: vi.fn(() => "Downloads/C64"),
+}));
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: {

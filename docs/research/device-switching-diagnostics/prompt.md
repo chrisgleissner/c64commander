@@ -19,6 +19,8 @@ Do not turn Diagnostics into a multi-device header or switcher surface.
 
 Add stable saved-device attribution to diagnostics evidence so logs, traces, actions, and exports can be filtered and understood by device using user-facing saved-device names, while keeping the compact Diagnostics UX calm for single-device users.
 
+You are expected to drive this to convergence, not to partial progress.
+
 ## Read First
 
 - `README.md`
@@ -43,6 +45,8 @@ Then read the smallest relevant set from:
 - diagnostics export and native snapshot modules that serialize logs, traces, or actions
 - related unit tests
 
+Before editing code, read [plan.md](./plan.md) as an authoritative checklist and use it as the execution tracker.
+
 ## Current State To Preserve
 
 These behaviors are already correct and must remain intact unless the spec explicitly changes them:
@@ -52,6 +56,15 @@ These behaviors are already correct and must remain intact unless the spec expli
 - switching does not auto-clear diagnostics
 - Diagnostics remains one chronological activity stream rather than separate per-device tabs or stores
 - badge tap still opens Diagnostics and badge long press still opens the switcher
+
+## Execution Contract
+
+- Treat [plan.md](./plan.md) as the authoritative checklist for the implementation pass.
+- Tick boxes in [plan.md](./plan.md) as work is actually completed.
+- Do not pre-emptively tick boxes for intent, partial progress, or assumed coverage.
+- Do not claim completion while any box in Sections 4, 5, or 6 of [plan.md](./plan.md) remains unchecked.
+- If a box cannot be completed without widening scope beyond the spec, stop and report the blocker explicitly.
+- Preserve the distinction between saved-device attribution and verified hardware identity from the first edit onward; do not land an intermediate state where `deviceId` is semantically ambiguous.
 
 ## Required Changes
 
@@ -87,6 +100,17 @@ These behaviors are already correct and must remain intact unless the spec expli
 - do not rewrite legacy unattributed rows to the current selected device
 - if a referenced saved device is deleted, fall back to the stored name snapshot rather than a raw id
 
+## Required Order of Operations
+
+1. Resolve the attribution data model first.
+2. Propagate that model through trace writes and log writes.
+3. Derive action-summary attribution from persisted trace data.
+4. Add Diagnostics filtering and compact attribution display.
+5. Add the single-device versus prior-multi-device visibility gate.
+6. Lock regression tests and run the required validation commands.
+
+Do not start with UI-only filtering or display work before the underlying attribution model is stable.
+
 ## Constraints
 
 ### Keep scope tight
@@ -101,6 +125,13 @@ These behaviors are already correct and must remain intact unless the spec expli
 - the Diagnostics header remains current-device only
 - user-facing labels come from the saved-device naming model, not from raw hardware ids
 
+### Convergence rules
+
+- Finish one checklist item fully before starting a second unrelated branch of work.
+- Prefer root-cause metadata propagation over UI-side inference.
+- Any new field, helper, or selector added for attribution must have one unambiguous semantic owner.
+- If a test reveals mixed-device attribution corruption, fix the model instead of weakening the assertion.
+
 ## Minimum Acceptance Criteria
 
 - logs, traces, actions, and exports preserve saved-device attribution across switches
@@ -109,6 +140,8 @@ These behaviors are already correct and must remain intact unless the spec expli
 - first-time single-device users do not see device attribution UI
 - prior multi-device users still see attribution UI even if only one saved device remains
 - verified hardware identity remains available for deeper debugging without replacing saved-device attribution in the main UX
+
+These are necessary but not sufficient. The task is only complete when the checklist in [plan.md](./plan.md) is fully checked off.
 
 ## Validation
 
@@ -128,6 +161,8 @@ Regression coverage must prove:
 - single-device attribution suppression works
 - prior multi-device unlock works after the saved-device count falls back to one
 - legacy unattributed rows remain safe and are not misattributed
+
+Update [plan.md](./plan.md) as each validation command and regression-proof item is completed.
 
 ## Failure Rule
 

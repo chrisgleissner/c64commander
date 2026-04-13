@@ -235,4 +235,33 @@ describe("savedDevices store", () => {
       hasPassword: true,
     });
   });
+
+  it("keeps the prior-multi-device visibility flag after devices are removed back to one", async () => {
+    const store = await loadStore();
+
+    expect(store.getSavedDevicesSnapshot().hasEverHadMultipleDevices).toBe(false);
+
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+      hasPassword: false,
+    });
+
+    expect(store.getSavedDevicesSnapshot().hasEverHadMultipleDevices).toBe(true);
+
+    store.removeSavedDevice("device-backup");
+    expect(store.getSavedDevicesSnapshot().devices).toHaveLength(1);
+    expect(store.getSavedDevicesSnapshot().hasEverHadMultipleDevices).toBe(true);
+
+    vi.resetModules();
+    const reloadedStore = await loadStore();
+    expect(reloadedStore.getSavedDevicesSnapshot().hasEverHadMultipleDevices).toBe(true);
+  });
 });

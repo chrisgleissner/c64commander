@@ -51,6 +51,7 @@ describe("webServerLogs bridge", () => {
         level: "info",
         message: "ready",
         details: { a: 1 },
+        device: null,
       },
     ]);
 

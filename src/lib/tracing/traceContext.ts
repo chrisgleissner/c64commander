@@ -6,6 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import {
+  cloneDiagnosticsDeviceAttribution,
+  cloneDiagnosticsDeviceContext,
+  createEmptyDiagnosticsDeviceAttribution,
+  type DiagnosticsDeviceAttribution,
+} from "@/lib/diagnostics/deviceAttribution";
 import type { TraceContextSnapshot, TraceDeviceContext, TracePlaybackContext } from "@/lib/tracing/types";
 import { getPlatform } from "@/lib/native/platform";
 
@@ -47,7 +53,46 @@ export const setTracePlaybackContext = (playback: TracePlaybackContext | null) =
 };
 
 export const setTraceDeviceContext = (device: TraceDeviceContext | null) => {
-  snapshot = { ...snapshot, device };
+  snapshot = { ...snapshot, device: cloneDiagnosticsDeviceContext(device) };
+  emit();
+};
+
+export const setTraceDeviceAttributionContext = (device: DiagnosticsDeviceAttribution | null) => {
+  const nextAttribution = cloneDiagnosticsDeviceAttribution(device);
+  if (!nextAttribution) {
+    snapshot = {
+      ...snapshot,
+      device: snapshot.device
+        ? {
+            ...createEmptyDiagnosticsDeviceAttribution(),
+            connectionState: snapshot.device.connectionState,
+          }
+        : null,
+    };
+    emit();
+    return;
+  }
+  snapshot = {
+    ...snapshot,
+    device: {
+      ...nextAttribution,
+      connectionState: snapshot.device?.connectionState ?? null,
+    },
+  };
+  emit();
+};
+
+export const setTraceDeviceConnectionState = (connectionState: string | null) => {
+  const base = snapshot.device
+    ? cloneDiagnosticsDeviceContext(snapshot.device)
+    : { ...createEmptyDiagnosticsDeviceAttribution(), connectionState: null };
+  snapshot = {
+    ...snapshot,
+    device: {
+      ...base,
+      connectionState,
+    },
+  };
   emit();
 };
 
