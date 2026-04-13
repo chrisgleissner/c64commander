@@ -7,6 +7,10 @@
  */
 
 import { addLog, setExternalLogs, type LogEntry, type LogLevel } from "@/lib/logging";
+import {
+  readDiagnosticsDeviceAttribution,
+  type DiagnosticsDeviceAttribution,
+} from "@/lib/diagnostics/deviceAttribution";
 
 type ServerLogEntry = {
   id: string;
@@ -14,6 +18,7 @@ type ServerLogEntry = {
   level: LogLevel;
   message: string;
   details?: unknown;
+  device?: DiagnosticsDeviceAttribution | null;
 };
 
 type ServerLogsPayload = {
@@ -33,6 +38,7 @@ const normalizeLogs = (logs: ServerLogEntry[]): LogEntry[] =>
       message: entry.message,
       timestamp: entry.timestamp,
       details: entry.details,
+      device: readDiagnosticsDeviceAttribution(entry.device),
     }));
 
 export const startWebServerLogBridge = () => {

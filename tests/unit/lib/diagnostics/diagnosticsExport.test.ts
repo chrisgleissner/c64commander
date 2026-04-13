@@ -7,7 +7,6 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 const addErrorLog = vi.fn();
 const share = vi.fn();
 const writeFile = vi.fn();
@@ -212,6 +211,93 @@ describe("diagnosticsExport", () => {
     const zipData = buildDiagnosticsZipData("logs", [{ id: "x" }], "2026-03-12-0913-33Z");
     expect(zipData).toBeInstanceOf(Uint8Array);
     expect(zipData.byteLength).toBeGreaterThan(0);
+  });
+
+  it("preserves raw device attribution metadata in exported diagnostics payloads", async () => {
+    const override = vi.fn(async () => undefined);
+    (window as unknown as { __c64uDiagnosticsShareOverride?: unknown }).__c64uDiagnosticsShareOverride = override;
+
+    const exportPayload = {
+      "error-logs": [],
+      logs: [
+        {
+          id: "log-1",
+          device: {
+            savedDeviceId: "device-office",
+            savedDeviceNameSnapshot: "Office U64",
+            savedDeviceHostSnapshot: "office-u64",
+            verifiedUniqueId: "UID-OFFICE",
+            verifiedHostname: "office-u64",
+            verifiedProduct: "U64",
+          },
+        },
+      ],
+      traces: [
+        {
+          id: "trace-1",
+          data: {
+            device: {
+              savedDeviceId: "device-backup",
+              savedDeviceNameSnapshot: "Backup Lab",
+              savedDeviceHostSnapshot: "backup-lab",
+              verifiedUniqueId: "UID-BACKUP",
+              verifiedHostname: "backup-lab",
+              verifiedProduct: "U64E",
+              connectionState: "READY",
+            },
+          },
+        },
+      ],
+      actions: [
+        {
+          correlationId: "COR-1",
+          device: {
+            savedDeviceId: "device-office",
+            savedDeviceNameSnapshot: "Office U64",
+            savedDeviceHostSnapshot: "office-u64",
+            verifiedUniqueId: "UID-OFFICE",
+            verifiedHostname: "office-u64",
+            verifiedProduct: "U64",
+          },
+        },
+      ],
+    };
+
+    const { shareAllDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
+    await shareAllDiagnosticsZip(exportPayload);
+
+    expect(override).toHaveBeenCalledTimes(1);
+    const payload = override.mock.calls[0]?.[0] as {
+      scope: string;
+      data: typeof exportPayload;
+      zipData: Uint8Array;
+    };
+
+    expect(payload.scope).toBe("all");
+    expect(payload.zipData).toBeInstanceOf(Uint8Array);
+    expect(payload.zipData.byteLength).toBeGreaterThan(0);
+    expect(payload.data.logs[0]?.device).toEqual(
+      expect.objectContaining({
+        savedDeviceId: "device-office",
+        savedDeviceNameSnapshot: "Office U64",
+        verifiedUniqueId: "UID-OFFICE",
+      }),
+    );
+    expect(payload.data.traces[0]?.data.device).toEqual(
+      expect.objectContaining({
+        savedDeviceId: "device-backup",
+        savedDeviceNameSnapshot: "Backup Lab",
+        verifiedUniqueId: "UID-BACKUP",
+        connectionState: "READY",
+      }),
+    );
+    expect(payload.data.actions[0]?.device).toEqual(
+      expect.objectContaining({
+        savedDeviceId: "device-office",
+        savedDeviceNameSnapshot: "Office U64",
+        verifiedUniqueId: "UID-OFFICE",
+      }),
+    );
   });
 
   it("logs and rethrows when native share writeFile fails", async () => {

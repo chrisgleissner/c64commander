@@ -10,8 +10,9 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
 import {
-  setTraceDeviceContext,
+  setTraceDeviceAttributionContext,
   setTraceFeatureFlags,
   setTracePlaybackContext,
   setTracePlatformContext,
@@ -20,12 +21,22 @@ import {
 import { getPlatform } from "@/lib/native/platform";
 import { registerTraceBridge } from "@/lib/tracing/traceBridge";
 import { usePlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
+import {
+  buildSavedDeviceDiagnosticsAttribution,
+  resolveCanonicalProductFamilyCode,
+  type VerifiedSavedDeviceIdentity,
+} from "@/lib/savedDevices/store";
 
 export const TraceContextBridge = () => {
   const location = useLocation();
   const { flags } = useFeatureFlags();
   const { status } = useC64Connection();
+  const savedDevices = useSavedDevices();
   const playback = usePlaybackTraceSnapshot();
+  const selectedSavedDevice =
+    savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
+    savedDevices.devices[0] ??
+    null;
 
   useEffect(() => {
     setTraceUiContext(location.pathname, location.search);
@@ -44,11 +55,15 @@ export const TraceContextBridge = () => {
   }, [playback]);
 
   useEffect(() => {
-    setTraceDeviceContext({
-      deviceId: status.deviceInfo?.unique_id ?? null,
-      connectionState: status.state ?? null,
-    });
-  }, [status.deviceInfo?.unique_id, status.state]);
+    const verifiedIdentity: VerifiedSavedDeviceIdentity | null = status.deviceInfo
+      ? {
+          product: resolveCanonicalProductFamilyCode(status.deviceInfo.product ?? null),
+          hostname: status.deviceInfo.hostname?.trim() || null,
+          uniqueId: status.deviceInfo.unique_id?.trim() || null,
+        }
+      : null;
+    setTraceDeviceAttributionContext(buildSavedDeviceDiagnosticsAttribution(selectedSavedDevice, verifiedIdentity));
+  }, [selectedSavedDevice, status.deviceInfo]);
 
   useEffect(() => {
     registerTraceBridge();

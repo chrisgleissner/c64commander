@@ -10,6 +10,7 @@ import { zipSync, strToU8 } from "fflate";
 import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { redactHeaders, redactPayload, redactErrorMessage } from "@/lib/tracing/redaction";
+import { cloneDiagnosticsDeviceContext } from "@/lib/diagnostics/deviceAttribution";
 import type {
   TraceEvent,
   TraceEventType,
@@ -97,13 +98,15 @@ const appendEvent = <T extends Record<string, unknown>>(
   if (shouldSuppressTraceEvent(type)) return;
   const nowMs = Date.now();
   evictExpired(nowMs);
-  const playback = getTraceContextSnapshot().playback;
+  const traceContext = getTraceContextSnapshot();
+  const playback = traceContext.playback;
   const contextFields: TraceEventContextFields = {
     lifecycleState: getLifecycleState(),
     sourceKind: playback?.sourceKind ?? null,
     localAccessMode: playback?.localAccessMode ?? null,
     trackInstanceId: playback?.trackInstanceId ?? null,
     playlistItemId: playback?.playlistItemId ?? null,
+    device: cloneDiagnosticsDeviceContext(traceContext.device),
   };
   const event: TraceEvent<T> = {
     id: nextTraceEventId(),

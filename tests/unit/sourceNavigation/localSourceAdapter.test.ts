@@ -8,9 +8,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const listChildrenMock = vi.fn();
-let platform = "android";
-let nativePlatform = true;
+const { listChildrenMock, platformState } = vi.hoisted(() => ({
+  listChildrenMock: vi.fn(),
+  platformState: { platform: "android", nativePlatform: true },
+}));
 
 vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
@@ -19,8 +20,8 @@ vi.mock("@/lib/native/folderPicker", () => ({
 }));
 
 vi.mock("@/lib/native/platform", () => ({
-  getPlatform: () => platform,
-  isNativePlatform: () => nativePlatform,
+  getPlatform: () => platformState.platform,
+  isNativePlatform: () => platformState.nativePlatform,
 }));
 
 import { createLocalSourceLocation } from "@/lib/sourceNavigation/localSourceAdapter";
@@ -67,8 +68,8 @@ const buildWebSource = (overrides: Partial<LocalSourceRecord> = {}): LocalSource
 describe("localSourceAdapter", () => {
   beforeEach(() => {
     listChildrenMock.mockReset();
-    platform = "android";
-    nativePlatform = true;
+    platformState.platform = "android";
+    platformState.nativePlatform = true;
   });
 
   it("uses SAF listChildren without touching entries", async () => {
@@ -211,7 +212,7 @@ describe("localSourceAdapter", () => {
   });
 
   it("throws when Android source lacks SAF handle", async () => {
-    platform = "android";
+    platformState.platform = "android";
     const source = buildWebSource({ android: undefined });
 
     const location = createLocalSourceLocation(source);
@@ -220,8 +221,8 @@ describe("localSourceAdapter", () => {
   });
 
   it("lists entries from local file list on non-Android platforms", async () => {
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource();
 
     const location = createLocalSourceLocation(source);
@@ -242,8 +243,8 @@ describe("localSourceAdapter", () => {
   });
 
   it("filters recursive file listings by prefix", async () => {
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource();
 
     const location = createLocalSourceLocation(source);
@@ -268,8 +269,8 @@ describe("localSourceAdapter", () => {
   });
 
   it("marks sources unavailable when reselect is required", () => {
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource({ requiresReselect: true });
 
     const location = createLocalSourceLocation(source);
@@ -278,8 +279,8 @@ describe("localSourceAdapter", () => {
   });
 
   it("resolveRootPath returns non-root path when entries are rooted there", async () => {
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource({
       rootPath: "/music",
       entries: [
@@ -296,8 +297,8 @@ describe("localSourceAdapter", () => {
   });
 
   it("resolveRootPath falls back to root when no entries match rootPath prefix", async () => {
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource({
       rootPath: "/other",
       entries: [
@@ -384,8 +385,8 @@ describe("localSourceAdapter", () => {
   });
 
   it("aborts non-SAF recursive listing when signal is pre-aborted", async () => {
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource();
     const controller = new AbortController();
     controller.abort();
@@ -396,8 +397,8 @@ describe("localSourceAdapter", () => {
   });
 
   it("toLocalPlayFile uses Date.now() when modifiedAt is null", async () => {
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource({
       entries: [
         {
@@ -449,8 +450,8 @@ describe("localSourceAdapter", () => {
 
   it("listFilesRecursive on web source with no abort signal", async () => {
     // Covers options?.signal?.aborted path when signal is not provided
-    platform = "web";
-    nativePlatform = false;
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
     const source = buildWebSource({
       entries: [
         {

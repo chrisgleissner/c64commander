@@ -1,3 +1,163 @@
+# Multi-Device Diagnostics Attribution Research Plan
+
+Date: 2026-04-13
+Status: Completed
+Primary focus: implementation-ready spec, plan, and prompt for device-attributed diagnostics evidence
+Expected change classification: `DOC_ONLY`
+
+## Objective
+
+Turn the completed diagnostics-after-device-switching research into an implementation-ready specification for device-attributed diagnostics evidence, including filtering, display, and persistence rules.
+
+## Working Rules
+
+- Build on `docs/research/device-switching-diagnostics/diagnostics-device-switching.md` rather than re-opening its already-decided current-device header semantics.
+- Ground all new requirements in the real trace, log, action-summary, diagnostics-dialog, and saved-device store code.
+- Keep the outcome implementation-ready and narrowly scoped as a retrofit.
+- Treat this task as `DOC_ONLY`; do not modify executable code while producing the design artifacts.
+
+## Phases
+
+### Phase 0. Refresh and classify
+
+Goal:
+
+- re-read the current research doc, plan, and worklog after the follow-up requirement changed the scope
+
+Tasks:
+
+- [x] Refresh `diagnostics-device-switching.md`, `PLANS.md`, and `WORKLOG.md`.
+- [x] Reconfirm the task remains `DOC_ONLY` for this turn.
+- [x] Identify the required output set: `multi-device-diagnostics-spec.md`, `plan.md`, and `prompt.md`.
+
+Exit criteria:
+
+- the new deliverables and scope are explicit
+
+### Phase 1. Schema and UX archaeology
+
+Goal:
+
+- map the exact code paths that must participate in device attribution
+
+Tasks:
+
+- [x] Inspect trace context, trace event, and action-summary schemas.
+- [x] Inspect Diagnostics evidence-list and filter behavior.
+- [x] Inspect saved-device persistence for a historical multi-device visibility flag.
+- [x] Inspect logging and external-log normalization paths.
+
+Exit criteria:
+
+- the retrofit surface is concrete enough to write a precise spec
+
+### Phase 2. Write implementation-ready documents
+
+Goal:
+
+- produce the final spec, delta plan, and implementation prompt without duplicating unnecessary detail
+
+Tasks:
+
+- [x] Define the attribution identity model and display/filter rules.
+- [x] Define the single-device versus prior-multi-device visibility rule.
+- [x] Write `multi-device-diagnostics-spec.md`.
+- [x] Write `plan.md` referencing the spec.
+- [x] Write `prompt.md` referencing the spec and plan.
+- [x] Update `WORKLOG.md` and mark this plan complete.
+
+Exit criteria:
+
+- the docs are implementation-ready and grounded in the current codebase
+
+# Diagnostics Device Switching Research Plan
+
+Date: 2026-04-13
+Status: Completed
+Primary focus: diagnostics semantics after saved-device switching
+Expected change classification: `DOC_ONLY`
+
+## Objective
+
+Determine what diagnostics should mean now that the app supports switching between saved devices, without broad refactors to the switching feature or the wider diagnostics subsystem.
+
+## Working Rules
+
+- Ground all conclusions in the existing code, tests, and current docs.
+- Treat the badge, switch picker, diagnostics sheet, and persistence layers as separate semantics surfaces unless the implementation proves otherwise.
+- Prefer the smallest viable future implementation surface.
+- Do not propose full per-device diagnostics partitioning unless the current code cannot support a calmer model.
+
+## Phases
+
+### Phase 0. Plan and classification
+
+Goal:
+
+- establish the task scope and validation expectations
+
+Tasks:
+
+- [x] Review repo instructions, current `PLANS.md`, and current `WORKLOG.md`.
+- [x] Classify the task as `DOC_ONLY` unless a blocking correctness fix is required.
+- [x] Record the execution plan and keep it authoritative for the task.
+
+Exit criteria:
+
+- research scope is explicit and the plan reflects the work to be completed
+
+### Phase 1. Runtime architecture mapping
+
+Goal:
+
+- map the real ownership boundaries for switching, health state, and diagnostics data
+
+Tasks:
+
+- [x] Inspect saved-device persistence and switching orchestration.
+- [x] Inspect badge state derivation and switch-picker health polling.
+- [x] Inspect diagnostics overlay/dialog ownership, clear/export behavior, and health-check lifecycle.
+- [x] Inspect route invalidation and current-device refresh behavior after switching.
+
+Exit criteria:
+
+- current diagnostics architecture is mapped with concrete code references
+
+### Phase 2. Contract and edge analysis
+
+Goal:
+
+- identify the exact current semantics and the ambiguities introduced by switching
+
+Tasks:
+
+- [x] Determine badge status and badge problem-count semantics.
+- [x] Determine switch-dialog health semantics and persistence.
+- [x] Determine which diagnostics data persists across switch and app restart.
+- [x] Review unit, Playwright, and docs constraints for the current UX contract.
+- [x] Analyze switch timing, stale data, and mixed-device race conditions.
+
+Exit criteria:
+
+- current behavior is explicit enough to compare options rigorously
+
+### Phase 3. Recommendation and documentation
+
+Goal:
+
+- choose a minimal, consistent diagnostics model and publish an implementation-ready research document
+
+Tasks:
+
+- [x] Compare global, per-device, reset-on-switch, and hybrid models.
+- [x] Select one recommended model and define exact semantics for badge, diagnostics count, switch dialog, reset, and persistence.
+- [x] Write the research document under `docs/research/device-switching-diagnostics/`.
+- [x] Update `WORKLOG.md` and mark this plan complete.
+
+Exit criteria:
+
+- the research document is complete, opinionated, code-grounded, and ready to drive a later implementation prompt
+
 # Android APK/AAB Size Regression Investigation Plan
 
 Date: 2026-04-11
@@ -548,3 +708,12 @@ Exit criteria:
 
 - Switch device screenshots should use full page-context framing instead of cropping to the popup surface, matching the documented modal/interstitial style used elsewhere.
 - Docs section screenshots should use full Docs page-context framing instead of isolated subsection crops, and the full Switch device plus Docs screenshot sets should be regenerated together after framing changes.
+- Strengthen web-platform production coverage beyond the current shallow auth/proxy checks.
+  Scope:
+  - exercise the Docker-backed web route against realistic LAN targets, not just local mock upstreams
+  - add regression coverage for real-device host resolution and connectivity using both hostname `c64u` and direct IP targets such as `192.168.1.167`
+  - validate the supported web control path end to end, including REST proxying, target selection, connection status, and operator-visible failure reporting
+  - keep this work explicitly web-focused; iOS coverage remains structurally constrained by the Linux dev environment and public macOS CI availability
+    Motivation:
+  - recent local operator testing reported that a locally running web build could not connect to the C64U via either hostname `c64u` or IP `192.168.1.167`
+  - this indicates a likely severe regression in the supported self-hosted web path and a mismatch between current coverage and real behavior

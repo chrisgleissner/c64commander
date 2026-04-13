@@ -525,6 +525,14 @@ describe("HomePage RAM actions", () => {
     expect(executeTelnetActionSpy).not.toHaveBeenCalled();
   });
 
+  it("hides telnet-only home controls when telnet is unavailable", () => {
+    telnetState.isAvailable = false;
+    renderHomePage();
+
+    expect(screen.queryByRole("button", { name: /^power cycle$/i })).toBeNull();
+    expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
+  });
+
   it("falls back to REST clear-ram reboot when telnet execution fails", async () => {
     executeTelnetActionSpy.mockRejectedValueOnce(new Error("telnet offline"));
     renderHomePage();

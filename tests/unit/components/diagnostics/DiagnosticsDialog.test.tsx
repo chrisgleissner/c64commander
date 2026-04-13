@@ -52,6 +52,19 @@ const renderDialog = (props?: Partial<DiagnosticsDialogProps>) =>
     </MemoryRouter>,
   );
 
+const buildDeviceAttribution = (
+  savedDeviceId: string,
+  savedDeviceNameSnapshot: string,
+  verifiedProduct: "C64U" | "U64" | "U64E" | "U64E2" = "U64",
+) => ({
+  savedDeviceId,
+  savedDeviceNameSnapshot,
+  savedDeviceHostSnapshot: savedDeviceNameSnapshot.toLowerCase().replace(/\s+/g, "-"),
+  verifiedUniqueId: `UID-${savedDeviceId}`,
+  verifiedHostname: savedDeviceNameSnapshot.toLowerCase().replace(/\s+/g, "-"),
+  verifiedProduct,
+});
+
 const healthyHealthState: OverallHealthState = {
   state: "Healthy",
   connectivity: "Online",
@@ -316,6 +329,176 @@ describe("DiagnosticsDialog", () => {
     expect(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "TELNET" })).toBeVisible();
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("Save Debug Log");
     expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/ago/i);
+  });
+
+  it("hides compact device attribution and device filters for true single-device users", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-attributed",
+          level: "info",
+          message: "Office activity",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+          device: buildDeviceAttribution("device-office", "Office U64"),
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    expect(within(screen.getByTestId("evidence-row-log-log-attributed")).queryByText("Office U64")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    const surface = screen.getByTestId("filters-editor-surface");
+    expect(within(surface).queryByText("Device")).toBeNull();
+    expect(within(surface).queryByText("All devices")).toBeNull();
+  });
+
+  it("keeps device attribution UI unlocked after a prior multi-device setup falls back to one", async () => {
+    setViewportWidth(600);
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+      hasPassword: false,
+    });
+    store.removeSavedDevice("device-backup");
+
+    expect(store.getSavedDevicesSnapshot().hasEverHadMultipleDevices).toBe(true);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-unlocked",
+          level: "info",
+          message: "Office activity",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+          device: buildDeviceAttribution("device-office", "Office U64"),
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    expect(screen.getByTestId("evidence-row-log-log-unlocked")).toHaveTextContent("Office U64");
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    const surface = screen.getByTestId("filters-editor-surface");
+    expect(within(surface).getByText("Device")).toBeVisible();
+    expect(within(surface).getByRole("button", { name: /All devices/ })).toBeVisible();
+    expect(within(surface).getByRole("button", { name: /Office U64/ })).toBeVisible();
+  });
+
+  it("filters by saved-device display name and leaves legacy unattributed rows out of specific device filters", async () => {
+    setViewportWidth(600);
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+      hasPassword: false,
+    });
+
+    expect(store.getSavedDevicesSnapshot().hasEverHadMultipleDevices).toBe(true);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-office",
+          level: "info",
+          message: "Office log",
+          timestamp: new Date(Date.now() - 6_000).toISOString(),
+          device: buildDeviceAttribution("device-office", "Office U64"),
+        },
+        {
+          id: "log-backup",
+          level: "info",
+          message: "Backup log",
+          timestamp: new Date(Date.now() - 5_000).toISOString(),
+          device: buildDeviceAttribution("device-backup", "Backup Lab", "U64E"),
+        },
+        {
+          id: "log-legacy",
+          level: "info",
+          message: "Legacy log",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    fireEvent.click(screen.getByRole("button", { name: /Backup Lab/ }));
+
+    const list = screen.getByTestId("evidence-list");
+    expect(list).toHaveTextContent("Backup log");
+    expect(list).not.toHaveTextContent("Office log");
+    expect(list).not.toHaveTextContent("Legacy log");
+  });
+
+  it("falls back to the stored saved-device name snapshot when the referenced device was deleted", async () => {
+    setViewportWidth(600);
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-retired-temp",
+      name: "Retired Lab",
+      host: "retired-lab",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "retired-lab",
+      lastKnownUniqueId: "UID-RETIRED",
+      hasPassword: false,
+    });
+    store.removeSavedDevice("device-retired-temp");
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-deleted-device",
+          level: "info",
+          message: "Retired device log",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+          device: {
+            savedDeviceId: "device-retired",
+            savedDeviceNameSnapshot: "Retired Lab",
+            savedDeviceHostSnapshot: "retired-lab",
+            verifiedUniqueId: "UID-RETIRED",
+            verifiedHostname: "retired-lab",
+            verifiedProduct: "U64E",
+          },
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    expect(within(screen.getByTestId("evidence-row-log-log-deleted-device")).getByText(/Retired Lab/)).toBeVisible();
   });
 
   it("keeps diagnostics focused on evidence and removes the old devices section", () => {

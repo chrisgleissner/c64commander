@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/tracing/traceContext", () => ({
-  setTraceDeviceContext: vi.fn(),
+  setTraceDeviceConnectionState: vi.fn(),
 }));
 
 import {

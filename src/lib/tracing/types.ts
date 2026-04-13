@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { DiagnosticsDeviceContext } from "@/lib/diagnostics/deviceAttribution";
+
 export type TraceOrigin = "user" | "automatic" | "system";
 
 export type TraceLifecycleState = "foreground" | "background" | "locked" | "unknown";
@@ -45,6 +47,7 @@ export type TraceEventContextFields = {
   localAccessMode: TraceLocalAccessMode | null;
   trackInstanceId: number | null;
   playlistItemId: string | null;
+  device?: DiagnosticsDeviceContext | null;
 };
 
 export type TraceEvent<T = Record<string, unknown>> = {
@@ -103,10 +106,7 @@ export type TracePlaybackContext = {
   playlistItemId?: string | null;
 };
 
-export type TraceDeviceContext = {
-  deviceId: string | null;
-  connectionState: string | null;
-};
+export type TraceDeviceContext = DiagnosticsDeviceContext;
 
 export type TraceContextSnapshot = {
   ui: TraceUiContext;

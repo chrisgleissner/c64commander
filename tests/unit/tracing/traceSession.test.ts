@@ -108,6 +108,74 @@ describe("traceSession", () => {
     expect(events.some((event) => event.type === "action-end")).toBe(true);
   });
 
+  it("persists trace attribution at write time across a saved-device switch", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    getTraceContextSnapshotMock.mockReturnValue({
+      ui: { route: "/", query: "" },
+      platform: "web" as const,
+      featureFlags: {},
+      playback: null,
+      device: {
+        savedDeviceId: "saved-office",
+        savedDeviceNameSnapshot: "Office U64",
+        savedDeviceHostSnapshot: "office-u64",
+        verifiedUniqueId: "UID-OFFICE",
+        verifiedHostname: "office-u64",
+        verifiedProduct: "U64",
+        connectionState: "READY",
+      },
+    });
+    recordActionStart({ ...action, correlationId: "COR-A" });
+
+    getTraceContextSnapshotMock.mockReturnValue({
+      ui: { route: "/", query: "" },
+      platform: "web" as const,
+      featureFlags: {},
+      playback: null,
+      device: {
+        savedDeviceId: "saved-backup",
+        savedDeviceNameSnapshot: "Backup Lab",
+        savedDeviceHostSnapshot: "backup-lab",
+        verifiedUniqueId: "UID-BACKUP",
+        verifiedHostname: "backup-lab",
+        verifiedProduct: "U64E",
+        connectionState: "READY",
+      },
+    });
+    recordActionStart({ ...action, correlationId: "COR-B" });
+
+    const events = getTraceEvents().filter((event) => event.type === "action-start");
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          correlationId: "COR-A",
+          data: expect.objectContaining({
+            device: expect.objectContaining({
+              savedDeviceId: "saved-office",
+              savedDeviceNameSnapshot: "Office U64",
+              verifiedUniqueId: "UID-OFFICE",
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          correlationId: "COR-B",
+          data: expect.objectContaining({
+            device: expect.objectContaining({
+              savedDeviceId: "saved-backup",
+              savedDeviceNameSnapshot: "Backup Lab",
+              verifiedUniqueId: "UID-BACKUP",
+            }),
+          }),
+        }),
+      ]),
+    );
+  });
+
   it("records backend decisions once per correlation", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),

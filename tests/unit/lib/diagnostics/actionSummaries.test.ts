@@ -203,4 +203,44 @@ describe("actionSummaries", () => {
       ]),
     );
   });
+
+  it("derives device attribution from action-start instead of later switched events", () => {
+    const events: TraceEvent[] = [
+      makeEvent("1", "action-start", "switchy", 10, {
+        name: "Refresh",
+        device: {
+          savedDeviceId: "saved-office",
+          savedDeviceNameSnapshot: "Office U64",
+          savedDeviceHostSnapshot: "office-u64",
+          verifiedUniqueId: "UID-OFFICE",
+          verifiedHostname: "office-u64",
+          verifiedProduct: "U64",
+          connectionState: "READY",
+        },
+      }),
+      makeEvent("2", "rest-request", "switchy", 11, {
+        method: "GET",
+        normalizedUrl: "/v1/info",
+        device: {
+          savedDeviceId: "saved-backup",
+          savedDeviceNameSnapshot: "Backup Lab",
+          savedDeviceHostSnapshot: "backup-lab",
+          verifiedUniqueId: "UID-BACKUP",
+          verifiedHostname: "backup-lab",
+          verifiedProduct: "U64E",
+          connectionState: "READY",
+        },
+      }),
+      makeEvent("3", "action-end", "switchy", 12, { status: "success" }),
+    ];
+
+    const [summary] = buildActionSummaries(events);
+    expect(summary.device).toEqual(
+      expect.objectContaining({
+        savedDeviceId: "saved-office",
+        savedDeviceNameSnapshot: "Office U64",
+        verifiedUniqueId: "UID-OFFICE",
+      }),
+    );
+  });
 });

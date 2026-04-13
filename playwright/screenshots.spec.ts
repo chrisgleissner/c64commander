@@ -138,11 +138,11 @@ const installHvscScreenshotMock = async (page: Page) => {
       ingestionSummary:
         state.installedVersion > 0
           ? {
-              totalSongs: state.totalSongs,
-              ingestedSongs: state.totalSongs,
-              failedSongs: 0,
-              songlengthSyntaxErrors: 0,
-            }
+            totalSongs: state.totalSongs,
+            ingestedSongs: state.totalSongs,
+            failedSongs: 0,
+            songlengthSyntaxErrors: 0,
+          }
           : null,
     });
 
@@ -197,7 +197,7 @@ const installHvscScreenshotMock = async (page: Page) => {
     window.__hvscMock__ = {
       addListener: (_event: string, listener: (event: Record<string, unknown>) => void) => {
         listeners.push(listener);
-        return { remove: async () => {} };
+        return { remove: async () => { } };
       },
       getHvscStatus: async () => buildStatus(),
       getHvscCacheStatus: async () => ({
@@ -513,18 +513,18 @@ const seedSwitchDeviceHealthSnapshot = async (page: Page, scenario: "progress" |
           lastCompletedAt: completedEndedAt,
         },
         byDeviceId: {
-          "device-u64-primary": {
+          "device-c64u-primary": {
             running: false,
-            latestResult: buildHealthyResult("hcr-picker-healthy-1", "Ultimate 64 Elite"),
+            latestResult: buildHealthyResult("hcr-picker-healthy-1", "Commodore 64 Ultimate"),
             liveProbes: null,
             probeStates: buildPendingProbeStates(),
             lastStartedAt: completedStartedAt,
             lastCompletedAt: completedEndedAt,
             error: null,
           },
-          "device-u64-secondary": {
+          "device-c64u-secondary": {
             running: false,
-            latestResult: buildHealthyResult("hcr-picker-healthy-2", "Ultimate 64 Elite"),
+            latestResult: buildHealthyResult("hcr-picker-healthy-2", "Commodore 64 Ultimate"),
             liveProbes: null,
             probeStates: buildPendingProbeStates(),
             lastStartedAt: completedStartedAt,
@@ -553,18 +553,18 @@ const seedSwitchDeviceHealthSnapshot = async (page: Page, scenario: "progress" |
           lastCompletedAt: completedEndedAt,
         },
         byDeviceId: {
-          "device-u64-primary": {
+          "device-c64u-primary": {
             running: false,
-            latestResult: buildHealthyResult("hcr-picker-mixed-1", "Ultimate 64 Elite"),
+            latestResult: buildHealthyResult("hcr-picker-mixed-1", "Commodore 64 Ultimate"),
             liveProbes: null,
             probeStates: buildPendingProbeStates(),
             lastStartedAt: completedStartedAt,
             lastCompletedAt: completedEndedAt,
             error: null,
           },
-          "device-u64-secondary": {
+          "device-c64u-secondary": {
             running: false,
-            latestResult: buildHealthyResult("hcr-picker-mixed-2", "Ultimate 64 Elite"),
+            latestResult: buildHealthyResult("hcr-picker-mixed-2", "Commodore 64 Ultimate"),
             liveProbes: null,
             probeStates: buildPendingProbeStates(),
             lastStartedAt: completedStartedAt,
@@ -592,7 +592,7 @@ const seedSwitchDeviceHealthSnapshot = async (page: Page, scenario: "progress" |
         lastCompletedAt,
       },
       byDeviceId: {
-        "device-u64-primary": {
+        "device-c64u-primary": {
           running: true,
           latestResult: null,
           liveProbes: buildLiveProbes({
@@ -608,7 +608,7 @@ const seedSwitchDeviceHealthSnapshot = async (page: Page, scenario: "progress" |
           lastCompletedAt: null,
           error: null,
         },
-        "device-u64-secondary": {
+        "device-c64u-secondary": {
           running: true,
           latestResult: null,
           liveProbes: buildLiveProbes({
@@ -847,7 +847,7 @@ const openImportDialog = async (page: Page) => {
     .getByRole("button", { name: /Add items|Add more items/i })
     .click();
   const dialog = page.getByRole("dialog");
-  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => { });
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -856,7 +856,7 @@ const openImportDialog = async (page: Page) => {
 
 const waitForImportInterstitial = async (dialog: ReturnType<Page["getByRole"]>) => {
   const interstitial = dialog.getByTestId("import-selection-interstitial");
-  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
+  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => { });
   if (await interstitial.isVisible().catch(() => false)) {
     return interstitial;
   }
@@ -971,10 +971,10 @@ const captureScreenshot = async (
   let screenshotBuffer = options?.locator
     ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
     : await page.screenshot({
-        animations: "disabled",
-        caret: "hide",
-        fullPage: options?.fullPage ?? false,
-      });
+      animations: "disabled",
+      caret: "hide",
+      fullPage: options?.fullPage ?? false,
+    });
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -1311,6 +1311,20 @@ const waitForConnected = async (page: Page) => {
       timeout: 10000,
     },
   );
+
+  await page
+    .waitForFunction(
+      () => Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
+      undefined,
+      { timeout: 3000 },
+    )
+    .catch(() => null);
+  await seedBadgeHealthTraceState(page, { health: "Healthy", problemCount: 0 });
+  await expect(page.locator('[data-slot-active="true"]').getByTestId("unified-health-badge")).toHaveAttribute(
+    "data-health-state",
+    "Healthy",
+    { timeout: 5000 },
+  );
 };
 
 const getActiveHealthBadge = (page: Page) =>
@@ -1335,34 +1349,34 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
         "c64u_saved_devices:v1",
         JSON.stringify({
           version: 1,
-          selectedDeviceId: "device-u64-primary",
+          selectedDeviceId: "device-c64u-primary",
           devices: [
             {
-              id: "device-u64-primary",
+              id: "device-c64u-primary",
               name: "",
               nameSource: "auto",
               host: resolvedHost,
               httpPort: resolvedPort,
               ftpPort: 21,
               telnetPort: 23,
-              lastKnownProduct: "U64",
-              lastKnownHostname: "u64-primary",
-              lastKnownUniqueId: "UID-U64-1",
+              lastKnownProduct: "C64U",
+              lastKnownHostname: "c64u-primary",
+              lastKnownUniqueId: "UID-C64U-1",
               lastSuccessfulConnectionAt: "2026-04-10T12:00:00.000Z",
               lastUsedAt: "2026-04-10T12:00:00.000Z",
               hasPassword: false,
             },
             {
-              id: "device-u64-secondary",
+              id: "device-c64u-secondary",
               name: "",
               nameSource: "auto",
               host: resolvedHost,
               httpPort: resolvedPort,
               ftpPort: 2021,
               telnetPort: 2323,
-              lastKnownProduct: "U64",
-              lastKnownHostname: "u64-secondary",
-              lastKnownUniqueId: "UID-U64-2",
+              lastKnownProduct: "C64U",
+              lastKnownHostname: "c64u-secondary",
+              lastKnownUniqueId: "UID-C64U-2",
               lastSuccessfulConnectionAt: "2026-04-10T11:55:00.000Z",
               lastUsedAt: null,
               hasPassword: false,
@@ -1384,27 +1398,27 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
             },
           ],
           summaries: {
-            "device-u64-primary": {
-              deviceId: "device-u64-primary",
+            "device-c64u-primary": {
+              deviceId: "device-c64u-primary",
               verifiedAt: "2026-04-10T12:00:00.000Z",
               lastHealthState: "Healthy",
               lastConnectivityState: "Online",
               lastProbeSucceededAt: "2026-04-10T12:00:00.000Z",
               lastProbeFailedAt: null,
-              lastVerifiedProduct: "U64",
-              lastVerifiedHostname: "u64-primary",
-              lastVerifiedUniqueId: "UID-U64-1",
+              lastVerifiedProduct: "C64U",
+              lastVerifiedHostname: "c64u-primary",
+              lastVerifiedUniqueId: "UID-C64U-1",
             },
-            "device-u64-secondary": {
-              deviceId: "device-u64-secondary",
+            "device-c64u-secondary": {
+              deviceId: "device-c64u-secondary",
               verifiedAt: "2026-04-10T11:55:00.000Z",
               lastHealthState: "Healthy",
               lastConnectivityState: "Online",
               lastProbeSucceededAt: "2026-04-10T11:55:00.000Z",
               lastProbeFailedAt: null,
-              lastVerifiedProduct: "U64",
-              lastVerifiedHostname: "u64-secondary",
-              lastVerifiedUniqueId: "UID-U64-2",
+              lastVerifiedProduct: "C64U",
+              lastVerifiedHostname: "c64u-secondary",
+              lastVerifiedUniqueId: "UID-C64U-2",
             },
             "device-c64u-custom": {
               deviceId: "device-c64u-custom",
@@ -1418,7 +1432,7 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
               lastVerifiedUniqueId: "UID-C64U-1",
             },
           },
-          summaryLru: ["device-u64-primary", "device-u64-secondary", "device-c64u-custom"],
+          summaryLru: ["device-c64u-primary", "device-c64u-secondary", "device-c64u-custom"],
         }),
       );
 
@@ -1432,8 +1446,8 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
                 name: "Demo Disk",
                 origin: {
                   sourceKind: "ultimate",
-                  originDeviceId: "device-u64-primary",
-                  originDeviceUniqueId: "UID-U64-1",
+                  originDeviceId: "device-c64u-primary",
+                  originDeviceUniqueId: "UID-C64U-1",
                   originPath: "/disks/demo.d64",
                 },
               },
@@ -1443,6 +1457,77 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
       }
     },
     { baseUrlArg, includeDiskReference },
+  );
+};
+
+const seedDiagnosticsLogsForDeviceFiltering = async (page: Page) => {
+  await page.evaluate(
+    (seedLogs) => {
+      return new Promise<void>((resolve) => {
+        const handler = () => {
+          window.clearTimeout(timeout);
+          window.removeEventListener("c64u-logs-updated", handler);
+          setTimeout(resolve, 50);
+        };
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("c64u-logs-updated", handler);
+          resolve();
+        }, 250);
+        window.addEventListener("c64u-logs-updated", handler);
+        localStorage.setItem("c64u_app_logs", JSON.stringify(seedLogs));
+        window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+      });
+    },
+    [
+      {
+        id: "log-device-primary",
+        level: "info",
+        message: "Primary C64U log",
+        timestamp: "2024-03-20T12:21:00.000Z",
+        device: {
+          savedDeviceId: "device-c64u-primary",
+          savedDeviceNameSnapshot: "C64U",
+          savedDeviceHostSnapshot: "c64u-primary",
+          verifiedUniqueId: "UID-C64U-1",
+          verifiedHostname: "c64u-primary",
+          verifiedProduct: "C64U",
+        },
+      },
+      {
+        id: "log-device-secondary",
+        level: "warn",
+        message: "Secondary rack drift detected",
+        timestamp: "2024-03-20T12:22:00.000Z",
+        device: {
+          savedDeviceId: "device-c64u-secondary",
+          savedDeviceNameSnapshot: "c64u-secondary",
+          savedDeviceHostSnapshot: "c64u-secondary",
+          verifiedUniqueId: "UID-C64U-2",
+          verifiedHostname: "c64u-secondary",
+          verifiedProduct: "C64U",
+        },
+      },
+      {
+        id: "log-device-custom",
+        level: "error",
+        message: "Custom lab import failed",
+        timestamp: "2024-03-20T12:23:00.000Z",
+        device: {
+          savedDeviceId: "device-c64u-custom",
+          savedDeviceNameSnapshot: "C64U FE",
+          savedDeviceHostSnapshot: "studio-c64",
+          verifiedUniqueId: "UID-C64U-1",
+          verifiedHostname: "studio-c64",
+          verifiedProduct: "C64U",
+        },
+      },
+      {
+        id: "log-device-legacy",
+        level: "info",
+        message: "Legacy unattributed log",
+        timestamp: "2024-03-20T12:24:00.000Z",
+      },
+    ],
   );
 };
 
@@ -1629,95 +1714,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                  {
-                    id: "snap-4",
-                    filename: "c64-custom-20260110-060000.c64snap",
-                    bytesBase64: buildSnap(3, 1736488800),
-                    createdAt: "2026-01-10T06:00:00.000Z",
-                    snapshotType: "custom",
-                    metadata: {
-                      snapshot_type: "custom",
-                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                      created_at: "2026-01-10 06:00:00",
-                    },
+                },
+                {
+                  id: "snap-4",
+                  filename: "c64-custom-20260110-060000.c64snap",
+                  bytesBase64: buildSnap(3, 1736488800),
+                  createdAt: "2026-01-10T06:00:00.000Z",
+                  snapshotType: "custom",
+                  metadata: {
+                    snapshot_type: "custom",
+                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                    created_at: "2026-01-10 06:00:00",
                   },
-                ]
+                },
+              ]
               : [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                ];
+                },
+              ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -2265,7 +2350,7 @@ test.describe("App screenshots", () => {
       };
 
       const expandAllDeviceRows = async (sheet: Locator) => {
-        for (const deviceId of ["device-u64-primary", "device-u64-secondary", "device-c64u-custom"] as const) {
+        for (const deviceId of ["device-c64u-primary", "device-c64u-secondary", "device-c64u-custom"] as const) {
           await sheet.getByTestId(`switch-device-expand-${deviceId}`).click();
         }
 
@@ -2307,8 +2392,11 @@ test.describe("App screenshots", () => {
 
         await seedSwitchDeviceHealthAllHealthy(page);
         switchDeviceSheet = await openSwitchDeviceSheet();
-        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-primary")).toContainText("Healthy");
-        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
+        await expect(switchDeviceSheet).not.toContainText("U64");
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-primary")).toContainText(
+          "Healthy",
+        );
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-secondary")).toContainText(
           "Healthy",
         );
         await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-custom")).toContainText("Healthy");
@@ -2331,8 +2419,11 @@ test.describe("App screenshots", () => {
 
         await seedSwitchDeviceHealthMixedUnhealthy(page);
         switchDeviceSheet = await openSwitchDeviceSheet();
-        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-primary")).toContainText("Healthy");
-        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-u64-secondary")).toContainText(
+        await expect(switchDeviceSheet).not.toContainText("U64");
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-primary")).toContainText(
+          "Healthy",
+        );
+        await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-secondary")).toContainText(
           "Healthy",
         );
         await expect(switchDeviceSheet.getByTestId("switch-device-status-device-c64u-custom")).toContainText(
@@ -2411,7 +2502,8 @@ test.describe("App screenshots", () => {
       };
 
       const applyActivityFilter = applyEvidenceFilter;
-      const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
+      const activityTypesSection = () =>
+        page.getByTestId("filters-editor-surface").locator("section").filter({ hasText: "Activity types" }).first();
       const activityTypeButton = (label: "Problems" | "Actions" | "Logs" | "Traces") =>
         activityTypesSection().getByRole("button", { name: new RegExp(`^(?:✓\\s+)?${label}$`) });
       const isActivityTypeSelected = async (label: "Problems" | "Actions" | "Logs" | "Traces") => {
@@ -2673,6 +2765,24 @@ test.describe("App screenshots", () => {
       await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "filters/02-editor.png");
       await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
+
+      await seedDiagnosticsLogsForDeviceFiltering(page);
+      await applyActivityFilter(async () => {
+        await setActivityTypes(["Logs"]);
+        await page
+          .getByTestId("filters-editor-surface")
+          .getByRole("button", { name: /^C64U FE$/i })
+          .click();
+      });
+      await expect(dialog.getByTestId("filters-collapsed-bar")).toContainText("C64U FE");
+      await expect(dialog.getByText("Custom lab import failed")).toBeVisible();
+      await expect(dialog.getByText("Primary C64U log")).toBeHidden();
+      await expect(dialog.getByText("Secondary rack drift detected")).toBeHidden();
+      await expect(dialog.getByText("Legacy unattributed log")).toBeHidden();
+      await captureDiagnosticsScreenshot(page, testInfo, "filters/03-device-name-filter.png");
+      await applyActivityFilter(async () => {
+        // Reset after capturing the device filter view.
+      });
 
       await dialog.getByTestId("diagnostics-overflow-menu").click();
       await expect(page.getByTestId("diagnostics-share-all")).toBeVisible();

@@ -61,6 +61,14 @@ import {
   resolveTraceSeverity,
   type DiagnosticsSeverity,
 } from "@/lib/diagnostics/diagnosticsSeverity";
+import {
+  formatDiagnosticsVerifiedDeviceLabel,
+  hasDiagnosticsDeviceAttribution,
+  readDiagnosticsDeviceAttribution,
+  resolveDiagnosticsDeviceLabel,
+  shouldShowDiagnosticsDeviceUi,
+  type DiagnosticsDeviceAttribution,
+} from "@/lib/diagnostics/deviceAttribution";
 import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
 import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
@@ -87,6 +95,7 @@ import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
 export type EvidenceType = "Problems" | "Actions" | "Logs" | "Traces";
 type SeverityFilter = "All" | "Errors" | "Warnings" | "Info";
 type ContributorFilter = "All" | ContributorKey;
+type DeviceFilter = string | null;
 
 type Props = {
   open: boolean;
@@ -121,7 +130,14 @@ type EvidenceEntry = {
   contributor: ContributorKey | null;
   severity: DiagnosticsSeverity;
   timestamp: string;
+  device: DiagnosticsDeviceAttribution | null;
+  deviceLabel: string | null;
   payload: LogEntry | ActionSummary | TraceEvent;
+};
+
+type DeviceFilterOption = {
+  id: string;
+  label: string;
 };
 
 const EVIDENCE_ORDER: EvidenceType[] = ["Problems", "Actions", "Logs", "Traces"];
@@ -462,33 +478,55 @@ const formatLogExpandedDetail = (entry: LogEntry) => {
   return sections.length > 1 ? sections.join("\n\n") : null;
 };
 
+const buildDeviceDetailLines = (attribution: DiagnosticsDeviceAttribution | null, deviceLabel: string | null) => {
+  if (!attribution) return [] as string[];
+  const lines = [`Device: ${deviceLabel ?? attribution.savedDeviceNameSnapshot ?? "Unknown device"}`];
+  if (attribution.savedDeviceId) {
+    lines.push(`Saved device id: ${attribution.savedDeviceId}`);
+  }
+  const verifiedDeviceLabel = formatDiagnosticsVerifiedDeviceLabel(attribution);
+  if (verifiedDeviceLabel) {
+    lines.push(`Verified device: ${verifiedDeviceLabel}`);
+  }
+  return lines;
+};
+
 const getEntryExpandedDetail = (entry: EvidenceEntry): ReactNode | null => {
+  const deviceLines = buildDeviceDetailLines(entry.device, entry.deviceLabel);
+
   if (entry.type === "Logs" || (entry.type === "Problems" && "level" in entry.payload)) {
-    return formatLogExpandedDetail(entry.payload as LogEntry);
+    return [...deviceLines, formatLogExpandedDetail(entry.payload as LogEntry)].filter(Boolean).join("\n\n") || null;
   }
 
   if (entry.type === "Actions") {
     const summary = entry.payload as ActionSummary;
-    return <ActionExpandedContent summary={summary} />;
+    return <ActionExpandedContent summary={summary} deviceLabel={entry.deviceLabel} />;
   }
 
   const trace = entry.payload as TraceEvent;
-  return formatJsonBlock({
-    type: trace.type,
-    origin: trace.origin,
-    correlationId: trace.correlationId,
-    data: trace.data,
-  });
+  return [
+    ...deviceLines,
+    formatJsonBlock({
+      type: trace.type,
+      origin: trace.origin,
+      correlationId: trace.correlationId,
+      data: trace.data,
+    }),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 };
 
 const EvidenceRow = ({
   entry,
   expanded,
   onToggle,
+  showDeviceLabel,
 }: {
   entry: EvidenceEntry;
   expanded: boolean;
   onToggle: () => void;
+  showDeviceLabel: boolean;
 }) => {
   const expandedDetail = getEntryExpandedDetail(entry);
   const canExpand = expandedDetail !== null;
@@ -508,6 +546,7 @@ const EvidenceRow = ({
               <span>{entry.type}</span>
               {entry.contributor ? <span>· {entry.contributor}</span> : null}
               <span>· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
+              {showDeviceLabel && entry.deviceLabel ? <span>· {entry.deviceLabel}</span> : null}
             </div>
           </div>
           {canExpand ? (
@@ -570,6 +609,10 @@ const FilterEditorSurface = ({
   onContributorChange,
   severity,
   onSeverityChange,
+  deviceFilter,
+  onDeviceFilterChange,
+  deviceOptions,
+  showDeviceFilter,
   totalCount,
   visibleCount,
 }: {
@@ -581,6 +624,10 @@ const FilterEditorSurface = ({
   onContributorChange: (value: ContributorFilter) => void;
   severity: SeverityFilter;
   onSeverityChange: (value: SeverityFilter) => void;
+  deviceFilter: DeviceFilter;
+  onDeviceFilterChange: (value: DeviceFilter) => void;
+  deviceOptions: DeviceFilterOption[];
+  showDeviceFilter: boolean;
   totalCount: number;
   visibleCount: number;
 }) => {
@@ -613,6 +660,33 @@ const FilterEditorSurface = ({
           </p>
 
           <div className="space-y-3">
+            {showDeviceFilter ? (
+              <section className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Device</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <FilterToggleChip
+                    label="All devices"
+                    checked={deviceFilter === null}
+                    onChange={(checked) => {
+                      if (!checked) return;
+                      onDeviceFilterChange(null);
+                    }}
+                  />
+                  {deviceOptions.map((option) => (
+                    <FilterToggleChip
+                      key={option.id}
+                      label={option.label}
+                      checked={deviceFilter === option.id}
+                      onChange={(checked) => {
+                        if (!checked) return;
+                        onDeviceFilterChange(option.id);
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <section className="space-y-1.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
               <div className="flex flex-wrap gap-1.5">
@@ -673,6 +747,7 @@ const FilterEditorSurface = ({
                     onSeverityChange("Errors");
                     onSelectedTypesChange(new Set(EVIDENCE_ORDER));
                     onContributorChange("All");
+                    onDeviceFilterChange(null);
                   }}
                   data-testid="quick-filter-errors"
                 >
@@ -687,6 +762,7 @@ const FilterEditorSurface = ({
                     onSeverityChange("All");
                     onSelectedTypesChange(new Set<EvidenceType>(["Problems"]));
                     onContributorChange("All");
+                    onDeviceFilterChange(null);
                   }}
                   data-testid="quick-filter-problems"
                 >
@@ -701,6 +777,7 @@ const FilterEditorSurface = ({
                     onSeverityChange("All");
                     onSelectedTypesChange(new Set(DEFAULT_TYPES));
                     onContributorChange("All");
+                    onDeviceFilterChange(null);
                   }}
                   data-testid="quick-filter-reset"
                 >
@@ -894,6 +971,7 @@ export function DiagnosticsDialog({
   const [selectedTypes, setSelectedTypes] = useState<Set<EvidenceType>>(defaultEvidenceTypes ?? DEFAULT_TYPES);
   const [contributor, setContributor] = useState<ContributorFilter>("All");
   const [severity, setSeverity] = useState<SeverityFilter>("All");
+  const [deviceFilter, setDeviceFilter] = useState<DeviceFilter>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [connectionMode, setConnectionMode] = useState<"view" | "edit">("view");
   const [connectionOpen, setConnectionOpen] = useState(false);
@@ -916,11 +994,20 @@ export function DiagnosticsDialog({
     savedDevices.devices[0] ??
     null;
   const selectedProductCode = selectedSavedDevice?.lastKnownProduct ?? "C64U";
+  const showDeviceUi = shouldShowDiagnosticsDeviceUi(savedDevices);
 
   const allEntries = useMemo(() => {
     const items: EvidenceEntry[] = [];
+    const resolveEntryDeviceLabel = (device: DiagnosticsDeviceAttribution | null) => {
+      if (!device) return null;
+      return (
+        resolveDiagnosticsDeviceLabel(device, savedDevices) ??
+        (hasDiagnosticsDeviceAttribution(device) ? "Unknown device" : null)
+      );
+    };
 
     for (const entry of errorLogs) {
+      const device = readDiagnosticsDeviceAttribution(entry.device);
       items.push({
         id: `problem-log-${entry.id}`,
         type: "Problems",
@@ -929,12 +1016,15 @@ export function DiagnosticsDialog({
         contributor: "App",
         severity: resolveLogSeverity(entry.level),
         timestamp: entry.timestamp,
+        device,
+        deviceLabel: resolveEntryDeviceLabel(device),
         payload: entry,
       });
     }
 
     for (const entry of traceEvents) {
       if (!isTraceProblem(entry)) continue;
+      const device = readDiagnosticsDeviceAttribution(entry.data?.device);
       const detail =
         typeof entry.data.error === "string"
           ? entry.data.error
@@ -949,11 +1039,14 @@ export function DiagnosticsDialog({
         contributor: getTraceContributor(entry),
         severity: resolveTraceSeverity(entry),
         timestamp: entry.timestamp,
+        device,
+        deviceLabel: resolveEntryDeviceLabel(device),
         payload: entry,
       });
     }
 
     for (const summary of actionSummaries) {
+      const device = summary.device ?? null;
       items.push({
         id: `action-${summary.correlationId}`,
         type: "Actions",
@@ -962,11 +1055,14 @@ export function DiagnosticsDialog({
         contributor: getActionContributor(summary),
         severity: resolveActionSeverity(summary.outcome),
         timestamp: summary.startTimestamp ?? summary.endTimestamp ?? new Date(0).toISOString(),
+        device,
+        deviceLabel: resolveEntryDeviceLabel(device),
         payload: summary,
       });
     }
 
     for (const entry of logs) {
+      const device = readDiagnosticsDeviceAttribution(entry.device);
       items.push({
         id: `log-${entry.id}`,
         type: "Logs",
@@ -975,11 +1071,14 @@ export function DiagnosticsDialog({
         contributor: "App",
         severity: resolveLogSeverity(entry.level),
         timestamp: entry.timestamp,
+        device,
+        deviceLabel: resolveEntryDeviceLabel(device),
         payload: entry,
       });
     }
 
     for (const entry of traceEvents) {
+      const device = readDiagnosticsDeviceAttribution(entry.data?.device);
       items.push({
         id: `trace-${entry.id}`,
         type: "Traces",
@@ -988,12 +1087,30 @@ export function DiagnosticsDialog({
         contributor: getTraceContributor(entry),
         severity: resolveTraceSeverity(entry),
         timestamp: entry.timestamp,
+        device,
+        deviceLabel: resolveEntryDeviceLabel(device),
         payload: entry,
       });
     }
 
     return items.sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
-  }, [actionSummaries, errorLogs, logs, traceEvents]);
+  }, [actionSummaries, errorLogs, logs, savedDevices, traceEvents]);
+
+  const deviceFilterOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: DeviceFilterOption[] = [];
+    allEntries.forEach((entry) => {
+      const savedDeviceId = entry.device?.savedDeviceId ?? null;
+      if (!savedDeviceId || seen.has(savedDeviceId)) return;
+      seen.add(savedDeviceId);
+      options.push({
+        id: savedDeviceId,
+        label: entry.deviceLabel ?? entry.device?.savedDeviceNameSnapshot ?? "Unknown device",
+      });
+    });
+    return options.sort((left, right) => left.label.localeCompare(right.label));
+  }, [allEntries]);
+  const showDeviceFilter = showDeviceUi && deviceFilterOptions.length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -1001,6 +1118,7 @@ export function DiagnosticsDialog({
     setSelectedTypes(defaultEvidenceTypes ?? new Set(DEFAULT_TYPES));
     setContributor("All");
     setSeverity("All");
+    setDeviceFilter(null);
     setFiltersOpen(false);
     setConnectionOpen(false);
     setConnectionMode("view");
@@ -1031,6 +1149,12 @@ export function DiagnosticsDialog({
           ),
     );
   }, [defaultEvidenceTypes, healthState.connectedDeviceLabel, open, selectedSavedDevice]);
+
+  useEffect(() => {
+    if (deviceFilter !== null && !deviceFilterOptions.some((option) => option.id === deviceFilter)) {
+      setDeviceFilter(null);
+    }
+  }, [deviceFilter, deviceFilterOptions]);
 
   useEffect(() => {
     if (!open) {
@@ -1074,9 +1198,10 @@ export function DiagnosticsDialog({
       allEntries.filter((entry) => {
         if (!selectedTypes.has(entry.type)) return false;
         if (contributor !== "All" && entry.contributor !== contributor) return false;
+        if (deviceFilter !== null && entry.device?.savedDeviceId !== deviceFilter) return false;
         return matchesSeverity(severity, entry.severity);
       }),
-    [allEntries, contributor, selectedTypes, severity],
+    [allEntries, contributor, deviceFilter, selectedTypes, severity],
   );
 
   const visibleCount = filteredEntries.length;
@@ -1102,8 +1227,11 @@ export function DiagnosticsDialog({
       labels.push(...selectedTypeLabels);
     }
     if (contributor !== "All") labels.push(contributor);
+    if (showDeviceFilter && deviceFilter !== null) {
+      labels.push(deviceFilterOptions.find((option) => option.id === deviceFilter)?.label ?? "Unknown device");
+    }
     return labels;
-  }, [contributor, selectedTypes, severity]);
+  }, [contributor, deviceFilter, deviceFilterOptions, selectedTypes, severity, showDeviceFilter]);
 
   const filterBarChips = activeFilterLabels.slice(0, 2);
   const overflowChipCount = Math.max(0, activeFilterLabels.length - 2);
@@ -1524,6 +1652,7 @@ export function DiagnosticsDialog({
                       entry={entry}
                       expanded={expandedEvidenceId === entry.id}
                       onToggle={() => setExpandedEvidenceId((current) => (current === entry.id ? null : entry.id))}
+                      showDeviceLabel={showDeviceUi}
                     />
                   </Fragment>
                 ))}
@@ -1545,6 +1674,10 @@ export function DiagnosticsDialog({
         onContributorChange={setContributor}
         severity={severity}
         onSeverityChange={setSeverity}
+        deviceFilter={deviceFilter}
+        onDeviceFilterChange={setDeviceFilter}
+        deviceOptions={deviceFilterOptions}
+        showDeviceFilter={showDeviceFilter}
         totalCount={totalCount}
         visibleCount={visibleCount}
       />
