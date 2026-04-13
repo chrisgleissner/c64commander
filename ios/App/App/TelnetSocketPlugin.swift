@@ -31,24 +31,32 @@ public final class TelnetSocketPlugin: CAPPlugin, CAPBridgedPlugin {
 
         let port = call.getInt("port") ?? 23
         let timeoutMs = call.getInt("timeoutMs") ?? Int(defaultConnectTimeout * 1000)
+        guard case .success(let validatedPort) = TelnetRequestValidation.resolvePort(port) else {
+            call.reject("port must be between 1 and 65535")
+            return
+        }
+        guard case .success(let validatedTimeoutMs) = TelnetRequestValidation.resolveTimeoutMs(timeoutMs) else {
+            call.reject("timeoutMs must be greater than 0")
+            return
+        }
 
         workQueue.async {
             do {
                 self.closeStreams()
-                try self.openStreams(host: host, port: port, timeout: TimeInterval(timeoutMs) / 1000)
+                try self.openStreams(host: host, port: validatedPort, timeout: TimeInterval(validatedTimeoutMs) / 1000)
                 self.connectedHost = host
-                self.connectedPort = port
+                self.connectedPort = validatedPort
                 IOSDiagnostics.log(.info, "Telnet connected", details: [
                     "origin": self.logOrigin,
                     "host": host,
-                    "port": port,
+                    "port": validatedPort,
                 ])
                 call.resolve()
             } catch {
                 IOSDiagnostics.log(.error, "Telnet connect failed", details: [
                     "origin": self.logOrigin,
                     "host": host,
-                    "port": port,
+                    "port": validatedPort,
                 ], error: error)
                 self.closeStreams()
                 call.reject("Connection failed: \(error.localizedDescription)")
@@ -256,5 +264,21 @@ public final class TelnetSocketPlugin: CAPPlugin, CAPBridgedPlugin {
         outputStream = nil
         connectedHost = nil
         connectedPort = nil
+    }
+}
+
+private enum TelnetRequestValidation {
+    static func resolvePort(_ value: Int) -> Result<Int, NativePluginError> {
+        guard (1...65_535).contains(value) else {
+            return .failure(.invalidArgument("port must be between 1 and 65535"))
+        }
+        return .success(value)
+    }
+
+    static func resolveTimeoutMs(_ value: Int) -> Result<Int, NativePluginError> {
+        guard value > 0 else {
+            return .failure(.invalidArgument("timeoutMs must be greater than 0"))
+        }
+        return .success(value)
     }
 }

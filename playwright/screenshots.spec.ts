@@ -1460,6 +1460,77 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
   );
 };
 
+const seedDiagnosticsLogsForDeviceFiltering = async (page: Page) => {
+  await page.evaluate(
+    (seedLogs) => {
+      return new Promise<void>((resolve) => {
+        const handler = () => {
+          window.clearTimeout(timeout);
+          window.removeEventListener("c64u-logs-updated", handler);
+          setTimeout(resolve, 50);
+        };
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("c64u-logs-updated", handler);
+          resolve();
+        }, 250);
+        window.addEventListener("c64u-logs-updated", handler);
+        localStorage.setItem("c64u_app_logs", JSON.stringify(seedLogs));
+        window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+      });
+    },
+    [
+      {
+        id: "log-device-primary",
+        level: "info",
+        message: "Primary C64U log",
+        timestamp: "2024-03-20T12:21:00.000Z",
+        device: {
+          savedDeviceId: "device-c64u-primary",
+          savedDeviceNameSnapshot: "C64U",
+          savedDeviceHostSnapshot: "c64u-primary",
+          verifiedUniqueId: "UID-C64U-1",
+          verifiedHostname: "c64u-primary",
+          verifiedProduct: "C64U",
+        },
+      },
+      {
+        id: "log-device-secondary",
+        level: "warn",
+        message: "Secondary rack drift detected",
+        timestamp: "2024-03-20T12:22:00.000Z",
+        device: {
+          savedDeviceId: "device-c64u-secondary",
+          savedDeviceNameSnapshot: "c64u-secondary",
+          savedDeviceHostSnapshot: "c64u-secondary",
+          verifiedUniqueId: "UID-C64U-2",
+          verifiedHostname: "c64u-secondary",
+          verifiedProduct: "C64U",
+        },
+      },
+      {
+        id: "log-device-custom",
+        level: "error",
+        message: "Custom lab import failed",
+        timestamp: "2024-03-20T12:23:00.000Z",
+        device: {
+          savedDeviceId: "device-c64u-custom",
+          savedDeviceNameSnapshot: "C64U FE",
+          savedDeviceHostSnapshot: "studio-c64",
+          verifiedUniqueId: "UID-C64U-1",
+          verifiedHostname: "studio-c64",
+          verifiedProduct: "C64U",
+        },
+      },
+      {
+        id: "log-device-legacy",
+        level: "info",
+        message: "Legacy unattributed log",
+        timestamp: "2024-03-20T12:24:00.000Z",
+      },
+    ],
+  );
+};
+
 test.describe("App screenshots", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -2431,7 +2502,8 @@ test.describe("App screenshots", () => {
       };
 
       const applyActivityFilter = applyEvidenceFilter;
-      const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
+      const activityTypesSection = () =>
+        page.getByTestId("filters-editor-surface").locator("section").filter({ hasText: "Activity types" }).first();
       const activityTypeButton = (label: "Problems" | "Actions" | "Logs" | "Traces") =>
         activityTypesSection().getByRole("button", { name: new RegExp(`^(?:✓\\s+)?${label}$`) });
       const isActivityTypeSelected = async (label: "Problems" | "Actions" | "Logs" | "Traces") => {
@@ -2693,6 +2765,24 @@ test.describe("App screenshots", () => {
       await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "filters/02-editor.png");
       await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
+
+      await seedDiagnosticsLogsForDeviceFiltering(page);
+      await applyActivityFilter(async () => {
+        await setActivityTypes(["Logs"]);
+        await page
+          .getByTestId("filters-editor-surface")
+          .getByRole("button", { name: /^C64U FE$/i })
+          .click();
+      });
+      await expect(dialog.getByTestId("filters-collapsed-bar")).toContainText("C64U FE");
+      await expect(dialog.getByText("Custom lab import failed")).toBeVisible();
+      await expect(dialog.getByText("Primary C64U log")).toBeHidden();
+      await expect(dialog.getByText("Secondary rack drift detected")).toBeHidden();
+      await expect(dialog.getByText("Legacy unattributed log")).toBeHidden();
+      await captureDiagnosticsScreenshot(page, testInfo, "filters/03-device-name-filter.png");
+      await applyActivityFilter(async () => {
+        // Reset after capturing the device filter view.
+      });
 
       await dialog.getByTestId("diagnostics-overflow-menu").click();
       await expect(page.getByTestId("diagnostics-share-all")).toBeVisible();

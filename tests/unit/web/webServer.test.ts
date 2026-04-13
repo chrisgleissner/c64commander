@@ -223,11 +223,13 @@ describe("web server platform runtime", () => {
     });
     expect(setPassword.status).toBe(200);
     const cookie = setPassword.headers.get("set-cookie");
-    expect(cookie).toContain("c64_session=");
-    expectCookieSecurity(cookie!, false);
+    expect(cookie).not.toBeNull();
+    const sessionCookie = cookie as string;
+    expect(sessionCookie).toContain("c64_session=");
+    expectCookieSecurity(sessionCookie, false);
 
     const authStatus = await fetch(`${server.baseUrl}/auth/status`, {
-      headers: { Cookie: cookie! },
+      headers: { Cookie: sessionCookie },
     });
     expect(authStatus.status).toBe(200);
     expect(await authStatus.json()).toEqual({ requiresLogin: true, authenticated: true });
