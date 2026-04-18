@@ -7,7 +7,7 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import {
   classifyGestureIntent,
@@ -181,6 +181,64 @@ describe("swipe release helpers", () => {
   it("maps negative dx to next page and positive dx to previous page", () => {
     expect(resolveSwipeDirection(-60)).toBe(1);
     expect(resolveSwipeDirection(60)).toBe(-1);
+  });
+});
+
+describe("useSwipeGesture enabled flag", () => {
+  it("does nothing when gestures are disabled", () => {
+    const onCommit = vi.fn();
+
+    const TestComponent = () => {
+      const ref = React.useRef<HTMLDivElement | null>(null);
+      useSwipeGesture(ref, {
+        enabled: false,
+        onProgress: vi.fn(),
+        onCommit,
+        onCancel: vi.fn(),
+      });
+      return React.createElement("div", { ref, "data-testid": "gesture-surface" });
+    };
+
+    render(React.createElement(TestComponent));
+    const surface = screen.getByTestId("gesture-surface");
+
+    act(() => {
+      surface.dispatchEvent(
+        createPointerEvent("pointerdown", {
+          pointerId: 1,
+          clientX: 100,
+          clientY: 40,
+          isPrimary: true,
+          button: 0,
+        }),
+      );
+      surface.dispatchEvent(
+        createPointerEvent(
+          "pointermove",
+          {
+            pointerId: 1,
+            clientX: 0,
+            clientY: 40,
+            isPrimary: true,
+          },
+          16,
+        ),
+      );
+      surface.dispatchEvent(
+        createPointerEvent(
+          "pointerup",
+          {
+            pointerId: 1,
+            clientX: 0,
+            clientY: 40,
+            isPrimary: true,
+          },
+          32,
+        ),
+      );
+    });
+
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 

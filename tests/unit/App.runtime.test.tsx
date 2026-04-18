@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   })),
   getActiveAction: vi.fn(),
   loadDebugLoggingEnabled: vi.fn(),
+  loadEnableSwipeNavigation: vi.fn(),
   getPlatform: vi.fn(),
   redactTreeUri: vi.fn((uri: string) => `redacted:${uri}`),
   getPersistedUris: vi.fn(),
@@ -170,7 +171,13 @@ vi.mock("@/lib/tracing/traceSession", () => ({
   recordActionStart: mocks.recordActionStart,
   recordTraceError: mocks.recordTraceError,
 }));
-vi.mock("@/lib/config/appSettings", () => ({ loadDebugLoggingEnabled: mocks.loadDebugLoggingEnabled }));
+vi.mock("@/lib/config/appSettings", () => ({
+  APP_SETTINGS_KEYS: {
+    ENABLE_SWIPE_NAVIGATION_KEY: "c64u_enable_swipe_navigation",
+  },
+  loadDebugLoggingEnabled: mocks.loadDebugLoggingEnabled,
+  loadEnableSwipeNavigation: mocks.loadEnableSwipeNavigation,
+}));
 vi.mock("@/lib/native/platform", () => ({ getPlatform: mocks.getPlatform }));
 vi.mock("@/lib/native/safUtils", () => ({ redactTreeUri: mocks.redactTreeUri }));
 vi.mock("@/lib/native/folderPicker", () => ({ FolderPicker: { getPersistedUris: mocks.getPersistedUris } }));
@@ -207,6 +214,7 @@ describe("App runtime wiring", () => {
     mocks.createActionContext.mockClear();
     mocks.getActiveAction.mockReset();
     mocks.loadDebugLoggingEnabled.mockReset();
+    mocks.loadEnableSwipeNavigation.mockReset();
     mocks.getPlatform.mockReset();
     mocks.redactTreeUri.mockClear();
     mocks.getPersistedUris.mockReset();
@@ -228,6 +236,7 @@ describe("App runtime wiring", () => {
     mocks.startWebServerLogBridge.mockReturnValue(mocks.webServerLogCleanup);
     mocks.traceContextBridge.mockImplementation(() => <div data-testid="trace-context-bridge" />);
     mocks.loadDebugLoggingEnabled.mockReturnValue(false);
+    mocks.loadEnableSwipeNavigation.mockReturnValue(false);
     mocks.getPlatform.mockReturnValue("web");
     mocks.getActiveAction.mockReturnValue(null);
     mocks.getPersistedUris.mockResolvedValue({ uris: [] });
@@ -306,6 +315,7 @@ describe("App runtime wiring", () => {
   });
 
   it("wraps from the last page to the first page on a touch swipe left", async () => {
+    mocks.loadEnableSwipeNavigation.mockReturnValue(true);
     window.history.pushState({}, "", "/docs");
     render(<App />);
 

@@ -211,7 +211,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "3" });
+      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toThrow("network failure");
       await vi.runAllTimersAsync();
     });
 
@@ -227,7 +227,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "3" });
+      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toThrow("network failure");
       await vi.runAllTimersAsync();
     });
 
@@ -293,7 +293,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "2" });
+      await expect(result.current.write({ "SID1 Volume": "2" })).rejects.toThrow("oops");
       await vi.runAllTimersAsync();
     });
 
@@ -308,7 +308,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "3" });
+      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toBe("network failure string");
       await vi.runAllTimersAsync();
     });
 

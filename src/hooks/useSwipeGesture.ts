@@ -68,6 +68,7 @@ export const shouldCommitSwipe = (dx: number, containerWidth: number | null | un
 export const resolveSwipeDirection = (dx: number): SwipeDirection => (dx < 0 ? 1 : -1);
 
 export type SwipeGestureCallbacks = {
+  enabled?: boolean;
   onProgress: (dx: number, velocityX: number) => void;
   onCommit: (direction: SwipeDirection, metadata: SwipeGestureMetadata) => void;
   onCancel: (metadata: SwipeGestureMetadata) => void;
@@ -134,6 +135,7 @@ export function useSwipeGesture(
 
   const handlePointerDown = useCallback(
     (event: PointerEvent) => {
+      if (callbacksRef.current.enabled === false) return;
       const pointerType = event.pointerType || "mouse";
       const requiresPrimaryMouseButton = pointerType === "mouse";
       if (stateRef.current.active || !event.isPrimary || (requiresPrimaryMouseButton && event.button !== 0)) return;
@@ -178,6 +180,7 @@ export function useSwipeGesture(
 
   const handlePointerMove = useCallback(
     (event: PointerEvent) => {
+      if (callbacksRef.current.enabled === false) return;
       const state = stateRef.current;
       if (!state.active || event.pointerId !== state.pointerId) return;
       if (state.intent === "locked") return;
@@ -243,6 +246,7 @@ export function useSwipeGesture(
 
   const handlePointerEnd = useCallback(
     (event: PointerEvent) => {
+      if (callbacksRef.current.enabled === false) return;
       const state = stateRef.current;
       if (!state.active || event.pointerId !== state.pointerId) return;
 

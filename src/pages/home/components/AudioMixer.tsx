@@ -231,10 +231,13 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
           };
           const handleVolumeAsyncChange = (val: number) => {
-            interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
+            void interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
           };
           const handleVolumeAsyncCommit = (val: number) => {
-            interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
+            const nextValue = resolveVolumeOption(val);
+            void interactiveWrite({ [entry.volumeItem]: nextValue }).catch(() => {
+              setConfigOverride("Audio Mixer", entry.volumeItem, entry.volume);
+            });
           };
           const handlePanLocalChange = (val: number) => {
             const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
@@ -251,10 +254,13 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
           };
           const handlePanAsyncChange = (val: number) => {
-            interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
+            void interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
           };
           const handlePanAsyncCommit = (val: number) => {
-            interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
+            const nextValue = resolvePanOption(val);
+            void interactiveWrite({ [entry.panItem]: nextValue }).catch(() => {
+              setConfigOverride("Audio Mixer", entry.panItem, entry.pan);
+            });
           };
 
           // Identity / Filter

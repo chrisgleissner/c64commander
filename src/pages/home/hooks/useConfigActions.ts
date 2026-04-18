@@ -6,20 +6,25 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { getC64API } from "@/lib/c64api";
 import { buildConfigKey, readItemValue } from "../utils/HomeConfigUtils";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
+import { useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
 
 export function useConfigActions() {
   const api = getC64API();
   const queryClient = useQueryClient();
   const trace = useActionTrace();
-  const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
-  const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
+  const authoritativeValues = useAuthoritativeConfigValueState();
+  const configOverrides = useMemo(
+    () => authoritativeValues.values as Record<string, string | number>,
+    [authoritativeValues.values],
+  );
+  const configWritePending = useMemo(() => authoritativeValues.pending, [authoritativeValues.pending]);
 
   const updateConfigValue = trace(async function updateConfigValue(
     category: string,
@@ -30,9 +35,8 @@ export function useConfigActions() {
     options: { refreshDrives?: boolean; suppressToast?: boolean } = {},
   ) {
     const key = buildConfigKey(category, itemName);
-    const previousValue = configOverrides[key];
-    setConfigOverrides((previous) => ({ ...previous, [key]: value }));
-    setConfigWritePending((previous) => ({ ...previous, [key]: true }));
+    const previousEntry = authoritativeValues.entriesRef.current[key];
+    authoritativeValues.replaceEntry(key, value);
     try {
       await api.setConfigValue(category, itemName, value);
       if (!options.suppressToast) {
@@ -50,15 +54,7 @@ export function useConfigActions() {
         });
       }
     } catch (error) {
-      setConfigOverrides((previous) => {
-        const next = { ...previous };
-        if (previousValue === undefined) {
-          delete next[key];
-        } else {
-          next[key] = previousValue;
-        }
-        return next;
-      });
+      authoritativeValues.restoreEntry(key, previousEntry);
       reportUserError({
         operation,
         title: "Update failed",
@@ -69,25 +65,18 @@ export function useConfigActions() {
           ? undefined
           : () => void updateConfigValue(category, itemName, value, operation, successTitle, options),
       });
-    } finally {
-      setConfigWritePending((previous) => {
-        const next = { ...previous };
-        delete next[key];
-        return next;
-      });
     }
   });
 
   const resolveConfigValue = (payload: unknown, category: string, itemName: string, fallback: string | number) => {
-    const override = configOverrides[buildConfigKey(category, itemName)];
-    if (override !== undefined) return override;
+    const key = buildConfigKey(category, itemName);
     const value = readItemValue(payload, category, itemName);
-    return value === undefined ? fallback : (value as string | number);
+    return authoritativeValues.resolveValue(key, value as string | number | undefined, fallback);
   };
 
   const setConfigOverride = (category: string, itemName: string, value: string | number) => {
     const key = buildConfigKey(category, itemName);
-    setConfigOverrides((previous) => ({ ...previous, [key]: value }));
+    authoritativeValues.replaceEntry(key, value);
   };
 
   return {

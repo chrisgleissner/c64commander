@@ -17,6 +17,7 @@ const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interv
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
 const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
 const AUTO_ROTATION_ENABLED_KEY = "c64u_auto_rotation_enabled";
+const ENABLE_SWIPE_NAVIGATION_KEY = "c64u_enable_swipe_navigation";
 const ARCHIVE_HOST_OVERRIDE_KEY = "c64u_archive_host_override";
 const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
 const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
@@ -209,6 +210,7 @@ export const saveNotificationDurationMs = (value: number) => {
 export const clampNotificationDurationMs = (value: number) => clampNotificationDurationMsInternal(value);
 
 export const DEFAULT_AUTO_ROTATION_ENABLED = false;
+export const DEFAULT_ENABLE_SWIPE_NAVIGATION = false;
 export const DEFAULT_COMMOSERVE_ENABLED = true;
 
 export const loadAutoRotationEnabled = () => readBoolean(AUTO_ROTATION_ENABLED_KEY, DEFAULT_AUTO_ROTATION_ENABLED);
@@ -217,6 +219,15 @@ export const saveAutoRotationEnabled = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(AUTO_ROTATION_ENABLED_KEY, enabled ? "1" : "0");
   broadcast(AUTO_ROTATION_ENABLED_KEY, enabled);
+};
+
+export const loadEnableSwipeNavigation = () =>
+  readBoolean(ENABLE_SWIPE_NAVIGATION_KEY, DEFAULT_ENABLE_SWIPE_NAVIGATION);
+
+export const saveEnableSwipeNavigation = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(ENABLE_SWIPE_NAVIGATION_KEY, enabled ? "1" : "0");
+  broadcast(ENABLE_SWIPE_NAVIGATION_KEY, enabled);
 };
 
 const loadString = (key: string) => {
@@ -262,6 +273,7 @@ export const APP_SETTINGS_KEYS = {
   NOTIFICATION_VISIBILITY_KEY,
   NOTIFICATION_DURATION_MS_KEY,
   AUTO_ROTATION_ENABLED_KEY,
+  ENABLE_SWIPE_NAVIGATION_KEY,
   ARCHIVE_HOST_OVERRIDE_KEY,
   ARCHIVE_CLIENT_ID_OVERRIDE_KEY,
   ARCHIVE_USER_AGENT_OVERRIDE_KEY,

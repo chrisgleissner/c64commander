@@ -15,6 +15,7 @@ import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { addLog } from "@/lib/logging";
 import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
+import { APP_SETTINGS_KEYS, loadEnableSwipeNavigation } from "@/lib/config/appSettings";
 import {
   buildRunwayPanelIndexes,
   resolveAdjacentIndexes,
@@ -155,10 +156,22 @@ export function SwipeNavigationLayer() {
 function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps) {
   const interstitialActive = useInterstitialActive();
   const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex));
+  const [swipeNavigationEnabled, setSwipeNavigationEnabled] = useState(() => loadEnableSwipeNavigation());
   const runwayRef = useRef(runway);
   runwayRef.current = runway;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleSettingsUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string; value?: unknown }>).detail;
+      if (detail?.key !== APP_SETTINGS_KEYS.ENABLE_SWIPE_NAVIGATION_KEY) return;
+      setSwipeNavigationEnabled(loadEnableSwipeNavigation());
+    };
+
+    window.addEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
+    return () => window.removeEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
+  }, []);
 
   useEffect(() => {
     const current = runwayRef.current;
@@ -220,20 +233,25 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     return () => clearTimeout(timer);
   }, [runway.phase, runway.targetIndex]);
 
-  const onProgress = useCallback((dx: number, velocityX: number) => {
-    const current = runwayRef.current;
-    if (current.phase === "transitioning") return;
+  const onProgress = useCallback(
+    (dx: number, velocityX: number) => {
+      if (!swipeNavigationEnabled) return;
+      const current = runwayRef.current;
+      if (current.phase === "transitioning") return;
 
-    setRunway((previous) => ({
-      ...previous,
-      phase: "dragging",
-      dragOffsetPx: dx,
-      lastVelocityX: velocityX,
-    }));
-  }, []);
+      setRunway((previous) => ({
+        ...previous,
+        phase: "dragging",
+        dragOffsetPx: dx,
+        lastVelocityX: velocityX,
+      }));
+    },
+    [swipeNavigationEnabled],
+  );
 
   const onCommit = useCallback(
     (direction: SwipeDirection, metadata: SwipeGestureMetadata) => {
+      if (!swipeNavigationEnabled) return;
       const current = runwayRef.current;
       if (current.phase === "transitioning") return;
 
@@ -258,33 +276,42 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       });
       navigate(TAB_ROUTES[targetIndex].path);
     },
-    [navigate],
+    [navigate, swipeNavigationEnabled],
   );
 
-  const onCancel = useCallback((metadata: SwipeGestureMetadata) => {
-    const current = runwayRef.current;
-    if (current.phase === "transitioning") return;
+  const onCancel = useCallback(
+    (metadata: SwipeGestureMetadata) => {
+      if (!swipeNavigationEnabled) return;
+      const current = runwayRef.current;
+      if (current.phase === "transitioning") return;
 
-    addLog("debug", "[SwipeNav] transition-start", {
-      reason: "cancel",
-      from: TAB_ROUTES[current.centerIndex].label,
-      to: TAB_ROUTES[current.centerIndex].label,
-      direction: 0,
-      ...metadata,
-    });
+      addLog("debug", "[SwipeNav] transition-start", {
+        reason: "cancel",
+        from: TAB_ROUTES[current.centerIndex].label,
+        to: TAB_ROUTES[current.centerIndex].label,
+        direction: 0,
+        ...metadata,
+      });
 
-    setRunway({
-      phase: "transitioning",
-      centerIndex: current.centerIndex,
-      panelIndexes: current.panelIndexes,
-      dragOffsetPx: current.dragOffsetPx,
-      targetIndex: current.centerIndex,
-      transitionDirection: 0,
-      lastVelocityX: metadata.velocityX,
-    });
-  }, []);
+      setRunway({
+        phase: "transitioning",
+        centerIndex: current.centerIndex,
+        panelIndexes: current.panelIndexes,
+        dragOffsetPx: current.dragOffsetPx,
+        targetIndex: current.centerIndex,
+        transitionDirection: 0,
+        lastVelocityX: metadata.velocityX,
+      });
+    },
+    [swipeNavigationEnabled],
+  );
 
-  useSwipeGesture(containerRef, { onProgress, onCommit, onCancel });
+  useSwipeGesture(containerRef, {
+    enabled: swipeNavigationEnabled,
+    onProgress,
+    onCommit,
+    onCancel,
+  });
 
   const runtimeMotionMode = readRuntimeMotionMode();
   const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
@@ -316,6 +343,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       style={{ height: "calc(100dvh - var(--app-tab-bar-reserved-height))", touchAction: "pan-y pinch-zoom" }}
       inert={interstitialActive ? "" : undefined}
       data-testid="swipe-navigation-container"
+      data-swipe-enabled={swipeNavigationEnabled ? "true" : "false"}
       data-swipe-motion-mode={runtimeMotionMode}
       data-swipe-effects={transitionConfig.reducedEffects ? "reduced" : "standard"}
       data-interstitial-active={interstitialActive ? "true" : "false"}
@@ -344,7 +372,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
           if (renderPlaceholderOnly) {
             return (
               <div
-                key={`${panelPosition}-${pageIndex}`}
+                key={pageIndex}
                 className="relative h-full overflow-hidden"
                 style={{ width: "33.333333%", flexShrink: 0 }}
                 aria-hidden={true}
@@ -359,7 +387,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
           return (
             <div
-              key={`${panelPosition}-${pageIndex}`}
+              key={pageIndex}
               className="relative h-full overflow-hidden"
               style={{ width: "33.333333%", flexShrink: 0 }}
               aria-hidden={!isActive}

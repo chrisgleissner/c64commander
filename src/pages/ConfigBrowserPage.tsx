@@ -37,6 +37,7 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { updateHasChanges } from "@/lib/config/appConfigStore";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
+import { useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
 
 type ConfigListItem = {
   name: string;
@@ -62,6 +63,7 @@ function CategorySection({
   const updateConfigBatch = useC64UpdateConfigBatch();
   const isAudioMixer = categoryName === "Audio Mixer";
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
+  const authoritativeValues = useAuthoritativeConfigValueState();
   const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
   const audioConfiguredRef = useRef<ConfigListItem[]>([]);
   const soloSnapshotRef = useRef<ConfigListItem[]>([]);
@@ -264,6 +266,8 @@ function CategorySection({
   }, [isAudioMixer, applySoloRouting, items, soloState.soloItem]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {
+    const previousEntry = authoritativeValues.entriesRef.current[itemName];
+    authoritativeValues.replaceEntry(itemName, value);
     try {
       await setConfig.mutateAsync({
         category: categoryName,
@@ -271,6 +275,7 @@ function CategorySection({
         value,
       });
       toast({ title: `${itemName} updated` });
+      return true;
     } catch (error) {
       reportUserError({
         operation: "CONFIG_UPDATE",
@@ -282,6 +287,8 @@ function CategorySection({
           item: itemName,
         },
       });
+      authoritativeValues.restoreEntry(itemName, previousEntry);
+      return false;
     }
   };
 
@@ -298,6 +305,7 @@ function CategorySection({
   );
 
   const handleAudioValueChange = async (itemName: string, value: string | number) => {
+    const previousConfiguredItems = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
     const wasSoloActive = Boolean(soloState.soloItem);
     if (wasSoloActive) {
       skipSoloRoutingRef.current = true;
@@ -333,10 +341,15 @@ function CategorySection({
             category: categoryName,
           },
         });
+        syncAudioConfiguredItems(previousConfiguredItems);
       }
       return;
     }
-    await handleValueChange(itemName, value);
+    const success = await handleValueChange(itemName, value);
+    if (!success) {
+      syncAudioConfiguredItems(previousConfiguredItems);
+      return;
+    }
     if (!soloState.soloItem) {
       soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
     }
@@ -447,7 +460,14 @@ function CategorySection({
     await refetch();
   };
 
-  const displayItems = isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items;
+  const displayItems = useMemo(
+    () =>
+      (isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items).map((item) => ({
+        ...item,
+        value: authoritativeValues.resolveValue(item.name, item.value, item.value),
+      })),
+    [audioConfiguredItems, authoritativeValues, isAudioMixer, items],
+  );
   const sectionId = `config-section-${categoryName.toLowerCase().replace(/\s+/g, "-")}`;
 
   return (
@@ -574,7 +594,7 @@ function CategorySection({
                         onValueChange={(v) =>
                           isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
                         }
-                        isLoading={setConfig.isPending}
+                        isLoading={setConfig.isPending || Boolean(authoritativeValues.pending[item.name])}
                         readOnly={isReadOnly}
                         className={rowClassName}
                         rightAccessory={rightAccessory}

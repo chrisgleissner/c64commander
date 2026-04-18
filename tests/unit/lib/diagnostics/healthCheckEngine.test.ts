@@ -137,7 +137,7 @@ const successfulInfo = {
 const jiffyBytes = new Uint8Array([0x00, 0x3c, 0x00]);
 
 const ledResp = { "LED Strip Settings": { "Strip Intensity": { selected: 5 } } };
-const ledReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: 6 } } };
+const ledReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: 21 } } };
 const telnetScreen = {
   width: 60,
   height: 24,
@@ -342,7 +342,7 @@ describe("runHealthCheck — all-success path", () => {
 });
 
 describe("runHealthCheckForTarget", () => {
-  it("runs a passive per-device check without mutating config and uses target ports and password", async () => {
+  it("runs a per-device check with config pulse enabled and uses target ports and password", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -356,9 +356,14 @@ describe("runHealthCheckForTarget", () => {
     );
 
     expect(result.connectivity).toBe("Online");
-    expect(result.probes.CONFIG.outcome).toBe("Skipped");
-    expect(result.probes.CONFIG.reason).toContain("passive switcher checks");
-    expect(mockSetConfigValue).not.toHaveBeenCalled();
+    expect(result.probes.CONFIG.outcome).toBe("Success");
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      1,
+      "LED Strip Settings",
+      "Strip Intensity",
+      21,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
     expect(mockListFtpDirectory).toHaveBeenCalledWith(
       expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
     );
@@ -553,7 +558,7 @@ describe("runHealthCheck — CONFIG probe", () => {
       return Promise.resolve(new Uint8Array([0x42]));
     });
     const keyboardResp = { "Keyboard Lighting": { "Strip Intensity": { selected: 8 } } };
-    const keyboardReadback = { "Keyboard Lighting": { "Strip Intensity": { selected: 9 } } };
+    const keyboardReadback = { "Keyboard Lighting": { "Strip Intensity": { selected: 24 } } };
     mockGetConfigItem.mockImplementation((category: string) => {
       if (category === "LED Strip Settings") return Promise.resolve({});
       if (category === "Keyboard Lighting") return Promise.resolve(keyboardResp);
@@ -574,7 +579,7 @@ describe("runHealthCheck — CONFIG probe", () => {
       1,
       "Keyboard Lighting",
       "Strip Intensity",
-      9,
+      24,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
   });
@@ -598,7 +603,7 @@ describe("runHealthCheck — CONFIG probe", () => {
     const currentReadbackResp = {
       "LED Strip Settings": {
         "Strip Intensity": {
-          current: 14,
+          current: 29,
           min: 0,
           max: 31,
           format: "%d",
@@ -619,7 +624,7 @@ describe("runHealthCheck — CONFIG probe", () => {
       1,
       "LED Strip Settings",
       "Strip Intensity",
-      14,
+      29,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
   });
@@ -661,7 +666,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     });
     // itemData is a number directly (not { selected })
     const directNumResp = { "LED Strip Settings": { "Strip Intensity": 5 } };
-    const directNumReadbackResp = { "LED Strip Settings": { "Strip Intensity": 6 } };
+    const directNumReadbackResp = { "LED Strip Settings": { "Strip Intensity": 21 } };
     mockGetConfigItem
       .mockResolvedValueOnce(directNumResp)
       .mockResolvedValueOnce(directNumReadbackResp)
@@ -681,7 +686,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     });
     // selected is a string
     const strResp = { "LED Strip Settings": { "Strip Intensity": { selected: "5" } } };
-    const strReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: "6" } } };
+    const strReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: "21" } } };
     mockGetConfigItem
       .mockResolvedValueOnce(strResp)
       .mockResolvedValueOnce(strReadbackResp)
@@ -710,7 +715,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     const numericReadback = {
       "LED Strip Settings": {
         "Strip Intensity": {
-          selected: "6",
+          selected: "21",
           options: ["OFF", "DIM", "BRIGHT"],
         },
       },
@@ -729,20 +734,20 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
       1,
       "LED Strip Settings",
       "Strip Intensity",
-      6,
+      21,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
   });
 
-  it("applies delta subtraction when currentValue is at max (31)", async () => {
+  it("applies bounded subtraction when currentValue is at max (31)", async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
       if (addr === "00A2") return Promise.resolve(jiffyBytes);
       return Promise.resolve(new Uint8Array([0x42]));
     });
-    // currentValue = 31 = max → tempValue = 31 - 1 = 30
+    // currentValue = 31 = max → tempValue = 31 - 16 = 15
     const maxResp = { "LED Strip Settings": { "Strip Intensity": { selected: 31 } } };
-    const maxReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: 30 } } };
+    const maxReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: 15 } } };
     mockGetConfigItem
       .mockResolvedValueOnce(maxResp)
       .mockResolvedValueOnce(maxReadbackResp)
@@ -752,6 +757,25 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Success");
+  });
+
+  it("fails CONFIG when reverting the pulse throws", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Revert failed"));
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Fail");
+    expect(result!.probes.CONFIG.reason).toContain("Failed to restore original value");
   });
 });
 
@@ -850,6 +874,26 @@ describe("runHealthCheck — TELNET probe", () => {
 
     expect(result!.probes.TELNET.outcome).toBe("Fail");
     expect(result!.probes.TELNET.reason).toBe("Unexpected blank Telnet screen");
+    expect(mockTelnetReadScreen).toHaveBeenCalledTimes(5);
+  });
+
+  it("accepts a later valid TELNET screen after blank initial reads", async () => {
+    setupAllProbesSuccess();
+    mockTelnetReadScreen
+      .mockResolvedValueOnce({
+        ...telnetScreen,
+        titleLine: "   ",
+      })
+      .mockResolvedValueOnce({
+        ...telnetScreen,
+        titleLine: "",
+      })
+      .mockResolvedValueOnce(telnetScreen);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Success");
+    expect(mockTelnetReadScreen).toHaveBeenCalledTimes(3);
   });
 
   it("fails TELNET when the session connect step throws", async () => {
@@ -880,7 +924,7 @@ describe("runHealthCheck — TELNET probe", () => {
 
     await runHealthCheck();
 
-    expect(mockTelnetReadScreen).toHaveBeenCalledWith(250);
+    expect(mockTelnetReadScreen).toHaveBeenCalledWith(375);
   });
 });
 
@@ -960,7 +1004,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       return Promise.resolve(new Uint8Array([0x42]));
     });
     const itemsResp = { "LED Strip Settings": { items: { "Strip Intensity": { selected: 5, options: [] } } } };
-    const itemsReadback = { "LED Strip Settings": { items: { "Strip Intensity": { selected: 6, options: [] } } } };
+    const itemsReadback = { "LED Strip Settings": { items: { "Strip Intensity": { selected: 21, options: [] } } } };
     mockGetConfigItem
       .mockResolvedValueOnce(itemsResp)
       .mockResolvedValueOnce(itemsReadback)
@@ -989,12 +1033,12 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
         },
       },
     };
-    // After delta, expect index 1 ("+" dB)
+    // Delta exceeds the option range, so the pulse chooses the bound with more room.
     const audioReadback = {
       "LED Strip Settings": {
         items: {
           "Strip Intensity": {
-            selected: "+1 dB",
+            selected: "+2 dB",
             options: ["OFF", "+1 dB", "+2 dB"],
           },
         },
@@ -1034,7 +1078,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       "Audio Mixer": {
         items: {
           "Vol UltiSid 1": {
-            selected: "+5 dB",
+            selected: "+4 dB",
             options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
           },
         },
@@ -1063,7 +1107,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       1,
       "Audio Mixer",
       "Vol UltiSid 1",
-      2,
+      3,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
     expect(mockSetConfigValue).toHaveBeenNthCalledWith(
@@ -1098,7 +1142,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       "Audio Mixer": {
         items: {
           "Vol UltiSid 1": {
-            selected: "+5 dB",
+            selected: "OFF",
             options: ["OFF", "+6 dB", "+5 dB", "+4 dB"],
           },
         },
@@ -1127,7 +1171,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       1,
       "Audio Mixer",
       "Vol UltiSid 1",
-      2,
+      0,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
     expect(mockSetConfigValue).toHaveBeenNthCalledWith(

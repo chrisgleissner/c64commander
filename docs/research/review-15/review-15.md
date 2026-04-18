@@ -1,275 +1,2743 @@
-# Review 15 Production Readiness Audit
-
-Date: 2026-04-11
-
-Classification: `DOC_ONLY`
-
-## Executive Summary
-
-Overall verdict: **No-go overall.**
-
-- **Android:** Closest to production-ready. Current code, coverage, web build, and Android JVM evidence are strong, and no new Android-native release blocker was found in this audit. I am not calling Android fully signed off from this workstation because the current branch is not lint-clean and I did not complete an end-to-end Android-app-to-real-target pass.
-- **iOS:** **Partially ready / structurally present but still risky.** The iOS native layer now includes real HVSC, secure storage, FTP, background execution, and diagnostics plugins, but Telnet-backed controls are still exposed through shared UI/runtime logic without any iOS `TelnetSocket` plugin implementation.
-- **Web:** **No-go for the advertised password-protected LAN deployment path.** Follow-up real-target checks showed that the Docker/web route can reach `c64u` and `192.168.1.167` when the frontend is built in actual web-platform mode, so the current web blocker is not generic LAN connectivity. The blocker is that the default Docker production path serves over plain HTTP per `README.md`, while production mode also enables `Secure` session cookies by default. Browsers will not send those cookies back over HTTP, so authenticated web sessions do not persist.
-
-Top release blockers:
-
-1. Default Docker web auth is broken for password-protected HTTP LAN deployments.
-2. iOS still exposes Telnet-dependent controls without a native Telnet transport.
-
-## Scope and Method
-
-This audit was run against the current repository state. No application code was changed.
-
-Primary guidance reviewed:
-
-- `AGENTS.md`
-- `.github/copilot-instructions.md`
-- `README.md`
-- `docs/ux-guidelines.md`
-- `docs/testing/maestro.md`
-- `package.json`
-- `docs/c64/c64u-openapi.yaml`
-- prior review lineage under `docs/research/review-10/` through `review-14/`
-- HVSC and Android readiness docs under `docs/research/hvsc/` and `docs/research/android/`
-
-Major product surfaces inspected:
-
-- app shell and navigation: `src/App.tsx`, `src/components/TabBar.tsx`, `src/components/UnifiedHealthBadge.tsx`
-- connectivity, diagnostics, and tracing: `src/hooks/useC64Connection.ts`, `src/hooks/useHealthState.ts`, `src/hooks/useTelnetActions.ts`, `src/lib/connection/*`, `src/lib/deviceInteraction/*`, `src/lib/diagnostics/*`, `src/lib/tracing/*`
-- playback and source flows: `src/pages/HomePage.tsx`, `src/pages/PlayFilesPage.tsx`, `src/pages/playFiles/hooks/useHvscLibrary.ts`, `src/lib/hvsc/*`, `src/lib/sources/*`, `src/lib/playlistRepository/*`
-- persistence and native bridges: `src/lib/secureStorage.ts`, `src/lib/native/*`, `src/lib/savedDevices/*`
-- Android: `android/app/build.gradle`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/java/uk/gleissner/c64commander/*`
-- iOS: `ios/App/App/*`, `ios/native-tests/*`
-- web runtime: `web/server/src/*`, `web/Dockerfile`
-- test and release infrastructure: `.github/workflows/*.yaml`, `tests/unit/*`, `tests/android-emulator/*`, `playwright/*`, `.maestro/*`
-
-Commands run:
-
-- `npm run lint`
-  Result: failed. Prettier drift reported in `tests/unit/scripts/androidUpstream7zipPackaging.test.ts`.
-- `npm run test:coverage`
-  Result: passed. Coverage summary:
-  - Statements `94.18%`
-  - Branches `92.24%`
-  - Functions `90.02%`
-  - Lines `94.18%`
-- `npm run build`
-  Result: passed.
-- `VITE_WEB_PLATFORM=1 npm run build`
-  Result: passed. This matches the frontend mode used by `web/Dockerfile`.
-- `npm run build:web-server`
-  Result: passed.
-- `cd android && ./gradlew test`
-  Result: passed.
-- `adb devices -l`
-  Result: attached Pixel 4 detected.
-- `curl http://u64/v1/info`
-  Result: unreachable from this workstation during the audit.
-- `getent hosts c64u`
-  Result: `c64u` resolved to `192.168.1.167`.
-- `curl http://c64u/v1/info`
-  Result: later follow-up probe returned `HTTP 200` with live device metadata.
-- `curl http://192.168.1.167/v1/info`
-  Result: returned `HTTP 200` with the same live device metadata.
-- `curl -H 'X-C64U-Host: c64u' http://127.0.0.1:18065/api/rest/v1/info`
-  Result: returned `HTTP 200` through the production web proxy.
-- `curl -H 'X-C64U-Host: 192.168.1.167' http://127.0.0.1:18065/api/rest/v1/info`
-  Result: returned `HTTP 200` through the production web proxy.
-
-Targeted runtime verification performed:
-
-- Started the built web server manually in production mode with `NODE_ENV=production`.
-- Rebuilt the frontend in actual web-platform mode with `VITE_WEB_PLATFORM=1`, matching the Docker image contract in `web/Dockerfile:24-25`.
-- Set a web password through `/api/secure-storage/password`.
-- Verified that the server returned `Set-Cookie: c64_session=...; Secure`.
-- Verified that a subsequent plain-HTTP request to `/auth/status` remained unauthenticated, which matches browser behavior for `Secure` cookies on HTTP.
-- Verified that the same production server could proxy live C64U REST traffic for both `c64u` and `192.168.1.167`.
-- Ran a headless browser check against the production web build with `c64u` stored as the selected host. The health badge reached `REAL_CONNECTED` / `Online` / `C64U`, which showed that the basic web connectivity path works when exercised with the correct web-platform build.
-- Discarded one earlier browser result from a plain `npm run build` bundle because it did not include `VITE_WEB_PLATFORM=1` and therefore was not representative of the shipped Docker/web product mode.
-
-Runtime environments used:
-
-- local Linux workstation
-- attached Android Pixel 4 over `adb`
-- live C64U reachable from the workstation as `c64u` / `192.168.1.167`; U64 remained unreachable
-- no local macOS/iOS runtime available
-
-Screenshot impact:
-
-- none
-
-## What Is Better Than Expected
-
-- The diagnostics and health model are materially stronger than the older review lineage suggests. `TELNET` is now a first-class contributor in the health model and trace-derived badge state, not an afterthought: see `src/lib/diagnostics/healthModel.ts:20-22` and `src/hooks/useHealthState.ts:70-170`.
-- REST traces now preserve concrete request identity instead of collapsing everything into opaque verbs. `recordRestRequest` and `recordRestResponse` persist protocol, hostname, port, path, and query: `src/lib/tracing/traceSession.ts:381-456`.
-- The web server has a much better trust boundary than a typical ad hoc LAN proxy. It applies CSP and related headers in `web/server/src/securityHeaders.ts:11-25`, sanitizes host overrides in `web/server/src/hostValidation.ts:52-108`, and rate-limits repeated login failures in `web/server/src/authState.ts:48-78`.
-- The core Docker/web connectivity path held up better than the current automated evidence implied. `web/Dockerfile:24-25` builds the frontend with `VITE_WEB_PLATFORM=1`; when I matched that build mode locally, both proxied `/api/rest/v1/info` requests and a headless browser run reached the live `c64u` target successfully. That means the current web no-go verdict is about auth/deployment correctness, not generic inability to reach a LAN C64U.
-- Several old HVSC issues are genuinely gone. The codebase now contains a real iOS HVSC native plugin in `ios/App/App/HvscIngestionPlugin.swift:16-40`, and non-native full-archive HVSC ingestion is explicitly blocked with a clear error contract in `src/lib/hvsc/hvscIngestionRuntime.ts:115-136` plus the 5 MiB guard in `src/lib/hvsc/hvscFilesystem.ts:104-107`.
-- Android size discipline is stronger than the earlier lineage implied. Release ABIs are narrowed to `armeabi-v7a` and `arm64-v8a` in `android/app/build.gradle:20-26` and `android/app/build.gradle:236-244`, and there is a dedicated regression test at `tests/unit/scripts/androidUpstream7zipPackaging.test.ts:9-34`.
-
-## Prior Review Reconciliation
-
-| Prior claim | Current status | Current evidence |
-| --- | --- | --- |
-| Review 11: Android HVSC extraction fails with `offsetBytes must be >= 0` | `Fixed` | Current HVSC archive extraction tests pass under `npm run test:coverage`, and Android JVM tests passed in `./gradlew test`. The Android path also now ships a dedicated HVSC plugin/test surface under `android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt` and `android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt`. |
-| Review 11: iOS has no native HVSC plugin | `Fixed` | `ios/App/App/HvscIngestionPlugin.swift:16-40` implements the plugin, and `ios/App/App/AppDelegate.swift:552-560` registers it. |
-| Review 11: REST diagnostics are too generic to be useful | `Fixed` | `src/lib/tracing/traceSession.ts:381-456` now records URL structure, host, path, query, and latency. |
-| Review 11: health badge starts misleadingly unhealthy before first real success | `Fixed` | `src/hooks/useHealthState.ts:116-143` now gates trace-derived health on first successful REST response, keeping the badge idle instead of falsely unhealthy. |
-| Review 11: web HVSC is silently unusable | `Fixed` | Non-native ingestion now fails with an explicit unsupported-platform message in `src/lib/hvsc/hvscIngestionRuntime.ts:115-136`, and large non-native reads are hard-blocked in `src/lib/hvsc/hvscFilesystem.ts:104-107`. |
-| HVSC follow-up: Android plugin/JDK instability remains open | `Fixed` | `cd android && ./gradlew test` passed in this audit. |
-| APK size regression concerns | `Partially Converged` | ABI narrowing and packaging tests are present, but this audit did not build and inspect a signed release artifact. See `android/app/build.gradle:20-26`, `android/app/build.gradle:223-244`, and `tests/unit/scripts/androidUpstream7zipPackaging.test.ts:9-34`. |
-| Review 10 large-file modularity concerns | `Still Open` | Large hotspot files still exist, including `src/pages/SettingsPage.tsx`, `src/pages/HomePage.tsx`, `src/pages/PlayFilesPage.tsx`, and `src/lib/c64api.ts`. This remains an engineering risk map item, but not a new production blocker by itself. |
-
-## Findings
-
-### F1 · Critical · Web blocker
-
-**Default Docker web auth is incompatible with the documented HTTP LAN deployment path.**
-
-Impacted platforms:
-
-- Web
-
-Why this is still current:
-
-- The README explicitly documents the web product as a plain-HTTP LAN deployment and tells users to open `http://<host-ip>:8064`: `README.md:38-55`.
-- The production Docker image sets `NODE_ENV=production`: `web/Dockerfile:27-33`.
-- In production mode, the server enables secure cookies by default unless overridden: `web/server/src/index.ts:58-63`.
-- The auth layer appends `; Secure` to the session cookie whenever that flag is enabled: `web/server/src/authState.ts:92-115`.
-- Password setup and login both rely on that session cookie for authenticated state: `web/server/src/index.ts:470-535`.
-
-Current runtime evidence:
-
-- In a manual production-mode run of the built server, setting a password returned `Set-Cookie: c64_session=...; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400; Secure`.
-- A follow-up HTTP request to `/auth/status` remained `authenticated: false`.
-- In that same production-mode run, `/api/rest/v1/info` successfully proxied to the real device for both `X-C64U-Host: c64u` and `X-C64U-Host: 192.168.1.167`, and a browser run against the proper web build reached `REAL_CONNECTED`.
-- This is expected browser behavior: `Secure` cookies are not sent over plain HTTP.
-
-Why this matters for production:
-
-- The repository currently advertises the web runtime as a supported self-hosted LAN product mode.
-- In that advertised mode, password-protected sessions do not persist under the default Docker configuration.
-- This is not a hardening nit. It breaks the basic authenticated-user path for the documented deployment contract.
-
-Why CI did not catch it:
-
-- The unit web-server tests start the server without forcing production mode: `tests/unit/web/webServer.test.ts:25-29`, `85-90`, `114-119`, `205-218`.
-- The passing web-server logs from this audit showed `secureCookies:false` during automated tests, while the manual production run showed `secureCookies:true`.
-
-Required convergence:
-
-- Either ship honest HTTPS-first deployment with docs and tests to match, or disable secure cookies by default for the documented plain-HTTP LAN mode.
-- Add automated coverage for the actual Docker production path, not just the development/test cookie branch.
-
-### F2 · High · iOS parity blocker
-
-**iOS exposes Telnet-backed actions through shared native-platform logic, but there is no iOS `TelnetSocket` plugin implementation.**
-
-Impacted platforms:
-
-- iOS
-
-Why this is still current:
-
-- Telnet availability is decided generically for any native platform when the device is connected and product-capable: `src/hooks/useTelnetActions.ts:38-68`, `103-108`.
-- The Home page uses that availability to expose Telnet-dependent controls including power cycle, drive/printer Telnet actions, and clear-flash actions: `src/pages/HomePage.tsx:966-970`, `1375-1394`, `1410-1427`, `1530-1539`, `1661-1669`.
-- The shared plugin registration only provides a web fallback for `TelnetSocket`: `src/lib/native/telnetSocket.ts:39-40`.
-- iOS plugin registration includes folder picker, FTP, secure storage, feature flags, background execution, diagnostics, mock server, and HVSC, but no Telnet plugin: `ios/App/App/AppDelegate.swift:541-560`.
-- Android does have a concrete Telnet plugin and test coverage, which makes the iOS omission unambiguous rather than merely hard to find: `android/app/src/main/java/uk/gleissner/c64commander/MainActivity.kt:64-74`, `android/app/src/main/java/uk/gleissner/c64commander/TelnetSocketPlugin.kt:24-25`, `android/app/src/test/java/uk/gleissner/c64commander/TelnetSocketPluginTest.kt`.
-
-Why this matters for production:
-
-- This is a capability-honesty issue, not just an implementation gap.
-- The current iOS build can present Telnet-backed affordances as available because it is a native platform, but the required native transport layer is absent.
-- That undermines the app’s cross-platform support claim and leaves a class of advanced machine/device actions structurally unavailable on iOS.
-
-Required convergence:
-
-- Either implement and register an iOS `TelnetSocket` plugin with validation coverage, or gate Telnet-backed controls out of iOS and document the limitation explicitly.
-
-### F3 · Medium · Release-gate integrity
-
-**The current branch is not lint-clean, so the repository is not in a clean release-validation state even though build, coverage, and Android JVM tests pass.**
-
-Impacted platforms:
-
-- All
-
-Current evidence:
-
-- `npm run lint` failed in this audit.
-- The reported issue was Prettier drift in `tests/unit/scripts/androidUpstream7zipPackaging.test.ts`.
-
-Why this matters for production:
-
-- This is not a shipped-runtime defect, but it is still a release-readiness defect.
-- A production-readiness sign-off should not rely on “everything important passed except lint.”
-- Because the failure is in an existing repository test file, this is a current-state hygiene problem, not an artifact of the audit.
-
-Required convergence:
-
-- Restore a clean lint baseline before treating the branch as fully release-ready.
-
-## Areas Not Fully Verified
-
-- **Android real-target proof remains incomplete.** A Pixel 4 was attached over `adb`. `u64` stayed unreachable, but follow-up workstation probes did reach `c64u` / `192.168.1.167`. I still did not complete an end-to-end Android app validation pass against that live target.
-- **iOS runtime proof remains limited.** No local macOS/iOS runtime was available. I relied on source inspection plus CI workflow review. The native Swift test target currently covers host/path/FTP normalization utilities, not Telnet, HVSC ingestion, secure storage, or background execution end-to-end.
-- **The retained iOS CI lane is intentionally narrow.** The workflow’s grouped Maestro coverage is currently `ios-ci-smoke`, `ios-secure-storage-persist`, and `ios-config-persistence`: `.github/workflows/ios.yaml:136-139`. That is useful evidence, but not broad enough to prove full parity across FTP, Telnet, HVSC, diagnostics, and long-running lifecycle behavior.
-- **Web regression coverage is still shallower than the production risk warrants.** I added a backlog item in `PLANS.md` to deepen Docker/web production coverage against realistic LAN targets, because current automated coverage still underrepresents the real self-hosted web path even though the follow-up live-target checks succeeded.
-- **I did not rerun the full Playwright or Maestro matrices in this audit.** The required baseline validations, targeted production web verification, and environment constraints were sufficient to prove the current blockers without claiming broader runtime coverage than I actually ran.
-
-## Release Readiness Verdict
-
-Overall:
-
-- **No-go.** The app is not honestly production-ready across its advertised Android, iOS, and self-hosted web surfaces because the supported-platform contract still exceeds the verified current behavior.
-
-Android:
-
-- **Near-ready, but not signed off in this audit.**
-- Evidence is strong: `npm run test:coverage` passed at `92.24%` branch coverage, `npm run build` passed, and `cd android && ./gradlew test` passed.
-- I did not find a new Android-native blocker in current code.
-- I am not calling Android a full go from this workstation because the branch is not lint-clean and I did not complete the final Android-app-to-live-target proof on the attached Pixel 4.
-
-iOS:
-
-- **No-go for an honest “production-ready parity” claim.**
-- The platform is no longer a placeholder. It has substantial real native surface area.
-- It is still not release-ready as a parity platform while Telnet-backed controls remain exposed without an iOS Telnet transport.
-- Even after that is fixed, iOS still needs broader runtime proof than this environment could provide.
-
-Web:
-
-- **No-go.**
-- Follow-up real-target checks showed that the correct Docker/web build can connect to `c64u` / `192.168.1.167`, so the current web verdict is not based on a reproduced generic connectivity failure.
-- The documented Docker/LAN deployment contract is still internally inconsistent with the current auth cookie policy.
-- Web can only be called production-ready after the deployment contract and the actual auth/session behavior match.
-
-What must be fixed before calling the app production-ready overall:
-
-1. Resolve the web auth/session contract for the documented LAN deployment path.
-2. Resolve the iOS Telnet capability gap, either by implementation or by honest gating/removal.
-3. Restore a clean lint baseline.
-
-What can reasonably be deferred after those blockers:
-
-- further large-file modularization
-- broader iOS native/HVSC/background stress coverage
-- deeper Docker/web regression coverage against realistic LAN targets
-- renewed Android real-device HIL proof against the reachable `c64u` target and, separately, a reachable U64 when available
-
-## Recommended Implementation Order
-
-1. **Fix the web auth contract first.**
-   This is the clearest production blocker because it breaks the documented password-protected LAN mode today. Change either the cookie policy or the deployment contract, then add an automated production-mode test that exercises the Docker path.
-2. **Make iOS Telnet support honest.**
-   Implement an iOS `TelnetSocket` plugin if parity is required. If not, gate those controls off on iOS and update platform-support docs accordingly.
-3. **Restore release-gate cleanliness.**
-   Fix the current lint failure so the branch is back in a clean, repeatable validation state.
-4. **Re-run platform proof at the edge where current evidence is weakest.**
-   After the blockers above are fixed, repeat:
-   - production-mode web auth verification
-   - deeper Docker/web regression coverage against real-LAN target forms including `c64u` and direct IPs
-   - Android Pixel 4 to reachable C64U/U64 validation
-   - expanded iOS runtime checks for Telnet/HVSC/FTP/lifecycle behavior
+# Review 15 — Production-Hardening Review of C64 Commander
+
+Authoritative contract: [REVIEW_PROMPT.md](REVIEW_PROMPT.md) and [FEATURE_MODEL.md](FEATURE_MODEL.md).
+Target main branch: `main`. Current branch at time of review: `main`.
+Scope: Android (primary), iOS (secondary), Web (secondary) with physical hardware targets Ultimate 64 (`u64`) and C64 Ultimate (`c64u`).
+
+This review is the actual deliverable. It follows the 8-phase execution model in `REVIEW_PROMPT.md` and normalizes every catalogued feature to the schema in `FEATURE_MODEL.md`. Where evidence is insufficient to make a firm claim, the gap is named explicitly rather than silently skipped.
+
+---
+
+## Section 1 — Repository Coverage Ledger
+
+This ledger accounts for every mandatory source group named in the review contract and records whether the group maps to first-class features or to explicit support-only infrastructure.
+
+| Source Group                                     | Path / Glob                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Inspected | Mapped To Features                                                                                                          | Support Only | Notes                                                                                                                                                                                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Mandatory review docs                            | [README.md](README.md), [AGENTS.md](AGENTS.md), [.github/copilot-instructions.md](.github/copilot-instructions.md), [docs/architecture.md](docs/architecture.md), [docs/features-by-page.md](docs/features-by-page.md), [docs/testing/maestro.md](docs/testing/maestro.md), [docs/testing/physical-device-matrix.md](docs/testing/physical-device-matrix.md), [docs/testing/agentic-tests/agentic-test-review.md](docs/testing/agentic-tests/agentic-test-review.md), [docs/testing/agentic-tests/full-app-coverage/README.md](docs/testing/agentic-tests/full-app-coverage/README.md), [docs/testing/agentic-tests/full-app-coverage/feature-inventory.md](docs/testing/agentic-tests/full-app-coverage/feature-inventory.md), [docs/testing/agentic-tests/full-app-coverage/feature-test-catalog.md](docs/testing/agentic-tests/full-app-coverage/feature-test-catalog.md), [docs/c64/c64u-openapi.yaml](docs/c64/c64u-openapi.yaml), [docs/c64/c64u-rest-api.md](docs/c64/c64u-rest-api.md), [docs/c64/c64u-ftp.md](docs/c64/c64u-ftp.md), [docs/c64/c64u-stream-spec.md](docs/c64/c64u-stream-spec.md), [docs/research/review-15/FEATURE_MODEL.md](docs/research/review-15/FEATURE_MODEL.md) | yes       | all catalog scopes                                                                                                          | no           | Reconciled against current code and the inherited review before any claims were retained.                                                                                                                                                                    |
+| Screenshot corpus                                | [docs/img/app/](docs/img/app/), [playwright/screenshot-catalog.json](playwright/screenshot-catalog.json)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | yes       | home, play, disks, config, settings, docs, diagnostics                                                                      | no           | 171 PNGs under 66 directories; screenshot catalog currently groups six top-level families and was reconciled against route ownership.                                                                                                                        |
+| App shell and routing                            | [src/main.tsx](src/main.tsx), [src/App.tsx](src/App.tsx), [src/lib/navigation/tabRoutes.ts](src/lib/navigation/tabRoutes.ts), [src/components/TabBar.tsx](src/components/TabBar.tsx), [src/components/SwipeNavigationLayer.tsx](src/components/SwipeNavigationLayer.tsx), [src/components/AppBar.tsx](src/components/AppBar.tsx), [src/components/ConnectionController.tsx](src/components/ConnectionController.tsx), [src/components/UnifiedHealthBadge.tsx](src/components/UnifiedHealthBadge.tsx), [src/components/DemoModeInterstitial.tsx](src/components/DemoModeInterstitial.tsx), [src/components/TraceContextBridge.tsx](src/components/TraceContextBridge.tsx), [src/components/TestHeartbeat.tsx](src/components/TestHeartbeat.tsx)                                                                                                                                                                                                                                                                                                                                                                                                                                                   | yes       | `app__*`, `coverage_probe__*`, `not_found__*`                                                                               | no           | Route ownership was verified from code; only `/__coverage__` and `*` are React Router routes and tab content is rendered through [src/components/SwipeNavigationLayer.tsx](src/components/SwipeNavigationLayer.tsx).                                         |
+| Routed pages and page-local surfaces             | `src/pages/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | yes       | `home__*`, `play__*`, `disks__*`, `config__*`, `settings__*`, `docs__*`, `licenses__*`, `coverage_probe__*`, `not_found__*` | no           | 78 files including page-local dialogs, hooks, and components. Page-local dialogs were reconciled to the owning workflow feature rather than left as an unresolved backlog.                                                                                   |
+| Diagnostics components                           | `src/components/diagnostics/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | yes       | `app__global_diagnostics_overlay`, `diagnostics__saved_device_switching`, `diagnostics__share_zip`                          | no           | 21 files. The three diagnostics heatmap paths are URL-addressable via [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx), not modal-only.                                                    |
+| Shared workflow components                       | `src/components/disks/**`, `src/components/itemSelection/**`, `src/components/lighting/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | yes       | `disks__library`, `disks__mount`, `play__source_browsing`, `play__hvsc_lifecycle`, `play__playback_transport`               | no           | Item selection, drive management, and lighting are workflow owners, not primitive-only wrappers.                                                                                                                                                             |
+| UI primitives                                    | `src/components/ui/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | yes       | none                                                                                                                        | yes          | Shadcn/Radix wrappers and generic shell primitives are consumed by higher-level features but are not independently catalogued as user workflows.                                                                                                             |
+| Hooks                                            | `src/hooks/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | yes       | route and global workflow state                                                                                             | no           | 27 files including saved-device switching, diagnostics activity, app config state, display profile, lighting studio, and feature flag state.                                                                                                                 |
+| Domain modules                                   | `src/lib/{c64api,config,connection,diagnostics,disks,drives,ftp,hvsc,lighting,machine,native,playback,playlistRepository,reu,savedDevices,sid,sourceNavigation,sources,startup,telnet,tracing}/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | yes       | all runtime and native-adjacent features                                                                                    | no           | 277 files; utility-only helpers under unrelated `src/lib/**` leaves are treated as support code when they do not own user-visible or system-visible behavior.                                                                                                |
+| Android native runtime                           | `android/app/src/main/java/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | yes       | `android_native__*`                                                                                                         | no           | 19 Kotlin source files covering activity, plugins, HVSC extraction, diagnostics, safe area, and mock runtime behavior.                                                                                                                                       |
+| iOS native runtime and native validation package | `ios/App/App/**`, `ios/native-tests/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | yes       | `ios_native__*`                                                                                                             | no           | 20 app files plus a SwiftPM native validation package with request/path validation tests; the inherited review's “iOS tests absent” claim was stale.                                                                                                         |
+| Web runtime                                      | `web/server/src/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | yes       | `web_runtime__*`                                                                                                            | no           | 6 server files: `authState`, `hostValidation`, `securityHeaders`, `httpIO`, `staticAssets`, `index`.                                                                                                                                                         |
+| Test suites                                      | `tests/unit/**`, `tests/android-emulator/**`, `tests/contract/**`, `playwright/**/*.spec.ts`, `.maestro/**/*.yaml`, `android/app/src/test/java/**`, `ios/native-tests/Tests/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | yes       | all feature scopes; support harnesses separated in notes                                                                    | no           | 508 unit files, 13 Android emulator files, 67 contract files, 47 Playwright specs, 57 Maestro YAML files, 22 Android JVM test files, and 5 Swift native test files. Support harnesses under helpers/lib roots are explicitly treated as test infrastructure. |
+| Prior coverage artifacts                         | `docs/testing/agentic-tests/full-app-coverage/**`, `c64scope/artifacts/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | yes       | hardware evidence and prior feature reconciliation                                                                          | no           | Provides direct physical Android plus `c64u` evidence for 23 app-first features on device serial `2113b87f`; it does not prove Pixel 4 or `u64` coverage.                                                                                                    |
+
+---
+
+## Section 2 — Canonical Route and Global Surface Inventory
+
+Authoritative routing sources are [src/lib/navigation/tabRoutes.ts](src/lib/navigation/tabRoutes.ts), [src/App.tsx](src/App.tsx), and [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx). `tabIndexForPath` maps `/diagnostics` and every `/diagnostics/*` deep link to the Settings slot, while [src/components/SwipeNavigationLayer.tsx](src/components/SwipeNavigationLayer.tsx) renders the actual tab content.
+
+### 2.1 Routes
+
+| ID  | Path or Surface                  | Owning Files                                                                                                       | Feature Count | Notes                                                                                                 |
+| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------- |
+| R01 | `/`                              | [src/pages/HomePage.tsx](src/pages/HomePage.tsx)                                                                   | 3             | Home workflow features are `home__machine_controls`, `home__app_configs`, and `home__ram_operations`. |
+| R02 | `/play`                          | [src/pages/PlayFilesPage.tsx](src/pages/PlayFilesPage.tsx)                                                         | 4             | Play owns source browsing, HVSC lifecycle, playback transport, and lock/background playback.          |
+| R03 | `/disks`                         | [src/pages/DisksPage.tsx](src/pages/DisksPage.tsx)                                                                 | 2             | Disks owns library management and mount/drive mutation flows.                                         |
+| R04 | `/config`                        | [src/pages/ConfigBrowserPage.tsx](src/pages/ConfigBrowserPage.tsx)                                                 | 2             | Config browse and edit remain separate workflow features.                                             |
+| R05 | `/settings`                      | [src/pages/SettingsPage.tsx](src/pages/SettingsPage.tsx)                                                           | 3             | Settings owns connection, safety, and demo/offline behavior.                                          |
+| R06 | `/settings/open-source-licenses` | [src/pages/OpenSourceLicensesPage.tsx](src/pages/OpenSourceLicensesPage.tsx)                                       | 1             | Routed through the Settings slot as a path-matched sub-route.                                         |
+| R07 | `/docs`                          | [src/pages/DocsPage.tsx](src/pages/DocsPage.tsx)                                                                   | 1             | In-app documentation surface.                                                                         |
+| R08 | `/diagnostics`                   | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | Resolves to diagnostics panel key `overview`.                                                         |
+| R09 | `/diagnostics/latency`           | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | Resolves to diagnostics panel key `latency`.                                                          |
+| R10 | `/diagnostics/history`           | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | Resolves to diagnostics panel key `history`.                                                          |
+| R11 | `/diagnostics/config-drift`      | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | Resolves to diagnostics panel key `config-drift`.                                                     |
+| R12 | `/diagnostics/decision-state`    | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | Resolves to diagnostics panel key `decision-state`.                                                   |
+| R13 | `/diagnostics/heatmap/rest`      | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | Contrary to the inherited review, this route is URL-addressable and resolves to `rest-heatmap`.       |
+| R14 | `/diagnostics/heatmap/ftp`       | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | URL-addressable and resolves to `ftp-heatmap`.                                                        |
+| R15 | `/diagnostics/heatmap/config`    | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | 1             | URL-addressable and resolves to `config-heatmap`.                                                     |
+| R16 | `/__coverage__`                  | [src/pages/CoverageProbePage.tsx](src/pages/CoverageProbePage.tsx), [src/App.tsx](src/App.tsx)                     | 1             | Only mounted when `shouldEnableCoverageProbe()` returns true.                                         |
+| R17 | `*`                              | [src/pages/NotFound.tsx](src/pages/NotFound.tsx), [src/App.tsx](src/App.tsx)                                       | 1             | Unknown-path fallback after `tabIndexForPath` rejects the pathname.                                   |
+
+### 2.2 Global Surfaces
+
+| ID  | Path or Surface                 | Owning Files                                                                                                                           | Feature Count | Notes                                                                                      |
+| --- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
+| G01 | Connection controller           | [src/components/ConnectionController.tsx](src/components/ConnectionController.tsx)                                                     | 1             | Always mounted; owns connection-state probes and badge refresh.                            |
+| G02 | Unified health badge            | [src/components/UnifiedHealthBadge.tsx](src/components/UnifiedHealthBadge.tsx), [src/components/AppBar.tsx](src/components/AppBar.tsx) | 1             | Entry point into diagnostics and long-press device switching.                              |
+| G03 | Demo mode interstitial          | [src/components/DemoModeInterstitial.tsx](src/components/DemoModeInterstitial.tsx)                                                     | 1             | Route-agnostic interstitial shown when the app falls back to demo mode.                    |
+| G04 | Diagnostics overlay             | [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx)                     | 1             | Hosts deep-linked diagnostics panels, health check, repair, switching, and export.         |
+| G05 | Trace context bridge            | [src/components/TraceContextBridge.tsx](src/components/TraceContextBridge.tsx)                                                         | 1             | Always mounted observability context propagation.                                          |
+| G06 | Lighting studio dialog          | [src/components/lighting/LightingStudioDialog.tsx](src/components/lighting/LightingStudioDialog.tsx)                                   | 1             | Route-agnostic immersive lighting editor.                                                  |
+| G07 | Test heartbeat                  | [src/components/TestHeartbeat.tsx](src/components/TestHeartbeat.tsx)                                                                   | 1             | Test-only surface behind the probe gate.                                                   |
+| G08 | Tab bar                         | [src/components/TabBar.tsx](src/components/TabBar.tsx)                                                                                 | 1             | Bottom navigation entry surface.                                                           |
+| G09 | Swipe navigation layer          | [src/components/SwipeNavigationLayer.tsx](src/components/SwipeNavigationLayer.tsx)                                                     | 1             | Owns the runway drag state and actual tab-slot rendering.                                  |
+| G10 | App bar                         | [src/components/AppBar.tsx](src/components/AppBar.tsx)                                                                                 | 1             | Shared header shell for routed pages.                                                      |
+| G11 | Global error listener           | [src/App.tsx](src/App.tsx)                                                                                                             | 1             | Window error and unhandled rejection capture with trace recording.                         |
+| G12 | Global button interaction model | [src/App.tsx](src/App.tsx)                                                                                                             | 1             | Global button highlight and interaction instrumentation.                                   |
+| G13 | Route refresher                 | [src/App.tsx](src/App.tsx)                                                                                                             | 1             | Visibility-change reconciler for diagnostics, config, and playback.                        |
+| G14 | Diagnostics runtime bridge      | [src/App.tsx](src/App.tsx)                                                                                                             | 1             | Deferred console/native/web diagnostics bridge startup after first meaningful interaction. |
+
+---
+
+## Section 3 — Canonical Feature Catalog
+
+Every feature below normalizes to [FEATURE_MODEL.md](FEATURE_MODEL.md). `feature_id` follows `<scope>__<feature_slug>`. Each feature contains the full required shape. Where evidence is missing for a field, the value is `[]` or `absent` with an explicit `gaps` entry — never a generic placeholder.
+
+**Catalog status note.** This catalog is converged at workflow grain for the current repository audit. Route-level pages, global surfaces, native bridges, and web-runtime responsibilities each have at least one owning feature. Page-local dialogs, summary cards, and helper components are accounted for under their owning workflow features or classified as support-only in Sections 1 and 10 rather than carried as an open backlog.
+
+### 3.1 App shell scope
+
+```yaml
+feature_id: app__tab_navigation
+name: Primary tab navigation
+description: >
+  Bottom TabBar plus runway-based SwipeNavigationLayer that navigate between
+  Home, Play, Disks, Config, Settings, and Docs. Settings slot internally
+  renders `/settings/open-source-licenses`. `/diagnostics` and its subroutes
+  are routed into the Settings slot by `tabIndexForPath`.
+feature_type: section
+parent_feature_id: null
+entry_points:
+  - kind: ui
+    path_or_selector: "TabBar buttons (bottom nav)"
+    preconditions: []
+  - kind: gesture
+    path_or_selector: "Horizontal swipe across SwipeNavigationLayer"
+    preconditions: ["Pointer/touch events not captured by a modal"]
+  - kind: route
+    path_or_selector: "/, /play, /disks, /config, /settings, /docs"
+    preconditions: []
+implementation_refs:
+  - path: src/lib/navigation/tabRoutes.ts
+    symbol_or_region: TAB_ROUTES, tabIndexForPath, resolveSwipeTarget
+    role: state
+  - path: src/components/TabBar.tsx
+    symbol_or_region: TabBar
+    role: ui
+  - path: src/components/SwipeNavigationLayer.tsx
+    symbol_or_region: SwipeNavigationLayer, SettingsSlot
+    role: ui
+documentation_refs:
+  - docs/features-by-page.md
+  - docs/ux-guidelines.md
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [none], native: [none], external_services: [] }
+platform_scope: { android: primary, ios: secondary, web: supported }
+state_model:
+  stateful: true
+  states: [idle, dragging, transitioning, test_probe_slow]
+  transitions: ["idle -> dragging", "dragging -> transitioning", "transitioning -> idle"]
+  failure_modes: [stuck_transition, wrap_miscompute, reduced_motion_violation]
+test_coverage:
+  unit:
+    status: present
+    evidence: [tests/unit/components/TabBar.test.tsx, tests/unit/components/SwipeNavigationLayer.test.tsx]
+    gaps: ["tabIndexForPath path-prefix matrix is not exhaustively unit-tested"]
+  integration:
+    status: absent
+    evidence: []
+    gaps: ["No ReactDOM-level integration test covers swipe-to-route commit"]
+  playwright:
+    status: present
+    evidence: [playwright/swipe-navigation.spec.ts, playwright/navigationBoundaries.spec.ts]
+    gaps: []
+  maestro:
+    status: present
+    evidence: [.maestro/ios-subflow-open-play-tab-probe.yaml, .maestro/ios-subflow-open-settings-tab-probe.yaml]
+    gaps: ["No Android-specific Maestro flow drives tab swipes end to end"]
+  hil_pixel4:
+    status: not_applicable
+    evidence: []
+    gaps: ["Route navigation does not require hardware HIL proof"]
+  hil_u64:
+    status: not_applicable
+    evidence: []
+    gaps: ["Route navigation does not require hardware HIL proof"]
+  hil_c64u:
+    status: not_applicable
+    evidence: []
+    gaps: ["Route navigation does not require hardware HIL proof"]
+risk_tags: [cross_platform, state_consistency]
+observability: [ui, screenshot, log]
+notes:
+  - "SettingsSlot lazy-imports OpenSourceLicensesPage based on path match; test-probe timing differs from normal motion timing."
+```
+
+```yaml
+feature_id: app__connection_controller
+name: Connection state and health controller
+description: >
+  Owns connection-state transitions, probes configured host at `/v1/info`,
+  populates the UnifiedHealthBadge, and drives reconnect plus saved-device
+  switching in cooperation with the diagnostics overlay.
+feature_type: service
+parent_feature_id: null
+entry_points:
+  - kind: startup
+    path_or_selector: "App mount (ConnectionController always rendered)"
+    preconditions: []
+  - kind: ui
+  - kind: ui
+    path_or_selector: "UnifiedHealthBadge, AppBar connection badge"
+    preconditions: []
+  - kind: api
+    path_or_selector: "saveConfiguredHostAndRetry, runHealthCheck"
+    preconditions: []
+implementation_refs:
+  - path: src/components/ConnectionController.tsx
+    symbol_or_region: ConnectionController
+    role: state
+  - path: src/lib/connection/connectionManager.ts
+    symbol_or_region: connectionManager
+    role: state
+  - path: src/lib/connection/hostEdit.ts
+    symbol_or_region: saveConfiguredHostAndRetry
+    role: transport
+  - path: src/hooks/useConnectionState.ts
+    symbol_or_region: useConnectionState
+    role: state
+documentation_refs:
+  - README.md
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/home/02-connection-status-popover.png
+  - docs/img/app/diagnostics/connection/01-view.png
+  - docs/img/app/diagnostics/connection/02-edit.png
+dependencies:
+  hardware: [u64, c64u, optional]
+  network: [rest]
+  storage: [local_storage]
+  native: [none]
+  external_services: [c64u_rest_info]
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [unknown, probing, connected, stale, error, offline_demo]
+  transitions:
+    - "unknown -> probing"
+    - "probing -> connected"
+    - "probing -> error"
+    - "connected -> stale"
+    - "stale -> probing"
+    - "error -> offline_demo"
+  failure_modes: [dns_unresolved, http_timeout, tls_mismatch, badge_desync]
+test_coverage:
+  unit:
+    status: present
+    evidence:
+      [tests/unit/hooks/useConnectionState.test.ts, tests/unit/lib/diagnostics/connectionStatusDiagnostics.test.ts]
+    gaps: ["No state-machine-style exhaustive transition test"]
+  integration:
+    status: weak
+    evidence: [playwright/connectionSimulation.spec.ts]
+    gaps: ["Stale-state timeout edges under long-running probe jitter not covered"]
+  playwright:
+    status: present
+    evidence:
+      [
+        playwright/settingsConnection.spec.ts,
+        playwright/connectionStatusLayout.spec.ts,
+        playwright/homeDiagnosticsOverlay.spec.ts,
+      ]
+    gaps: []
+  maestro:
+    status: weak
+    evidence: [.maestro/probe-health.yaml]
+    gaps: ["No maestro flow exercising device-switch transition end-to-end on Android"]
+  hil_pixel4:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["Pixel 4 evidence artifact for real u64 reconnect after airplane-mode cycle"]
+  hil_u64:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["u64 reconnect-from-error path artifact not yet linked"]
+  hil_c64u:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["c64u fallback path artifact not yet linked"]
+risk_tags: [reliability, state_consistency, observability, cross_platform]
+observability: [ui, toast, log, trace, rest_response, diagnostics_overlay]
+notes:
+  - "Device preference order per AGENTS.md: probe u64 first, fall back to c64u. Confirm this order is exercised in tests, not only in docs."
+```
+
+```yaml
+feature_id: app__global_diagnostics_overlay
+name: Global diagnostics overlay (panels + actions)
+description: >
+  Path-driven diagnostics overlay: renders overview/latency/history/
+  config-drift/decision-state panels based on URL; hosts saved-device
+  switching, health-check run, repair, share ZIP, and target validation.
+feature_type: overlay
+parent_feature_id: null
+entry_points:
+  - kind: route
+    path_or_selector: "/diagnostics and /diagnostics/{latency,history,config-drift,decision-state}"
+    preconditions: []
+  - kind: ui
+    path_or_selector: "UnifiedHealthBadge → Diagnostics"
+    preconditions: []
+implementation_refs:
+  - path: src/components/diagnostics/GlobalDiagnosticsOverlay.tsx
+    symbol_or_region: GlobalDiagnosticsOverlay, resolveDiagnosticsPanelFromPath
+    role: ui
+  - path: src/components/diagnostics/DiagnosticsDialog.tsx
+    symbol_or_region: DiagnosticsDialog
+    role: ui
+  - path: src/components/diagnostics/LatencyAnalysisPopup.tsx
+    symbol_or_region: LatencyAnalysisPopup
+    role: ui
+  - path: src/components/diagnostics/HealthHistoryPopup.tsx
+    symbol_or_region: HealthHistoryPopup
+    role: ui
+  - path: src/components/diagnostics/ConfigDriftView.tsx
+    symbol_or_region: ConfigDriftView
+    role: ui
+  - path: src/components/diagnostics/DecisionStateView.tsx
+    symbol_or_region: DecisionStateView
+    role: ui
+  - path: src/components/diagnostics/HeatMapPopup.tsx
+    symbol_or_region: HeatMapPopup
+    role: ui
+documentation_refs:
+  - docs/features-by-page.md
+  - docs/testing/agentic-tests/full-app-coverage/feature-test-catalog.md
+screenshot_refs:
+  - docs/img/app/diagnostics/01-overview.png
+  - docs/img/app/diagnostics/analysis/01-latency.png
+  - docs/img/app/diagnostics/analysis/02-history.png
+  - docs/img/app/diagnostics/switch-device/profiles/compact/01-picker.png
+  - docs/img/app/diagnostics/header/02-health-check-detail.png
+  - docs/img/app/diagnostics/tools/01-menu.png
+dependencies:
+  hardware: [u64, c64u, optional]
+  network: [rest]
+  storage: [local_storage]
+  native: [capacitor_bridge]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states:
+    [
+      closed,
+      overview,
+      latency,
+      history,
+      config_drift,
+      decision_state,
+      switching_device,
+      running_health_check,
+      sharing_zip,
+      repairing,
+    ]
+  transitions:
+    - "closed -> overview"
+    - "overview -> latency"
+    - "overview -> history"
+    - "overview -> config_drift"
+    - "overview -> decision_state"
+    - "overview -> switching_device"
+    - "overview -> running_health_check"
+    - "overview -> sharing_zip"
+    - "overview -> repairing"
+  failure_modes:
+    [target_unreachable_on_switch, health_check_timeout, share_zip_permission_denied, repair_noop_claimed_success]
+test_coverage:
+  unit:
+    status: present
+    evidence:
+      [
+        tests/unit/diagnostics/actionSummaryDisplay.test.ts,
+        tests/unit/diagnostics/exportRedaction.test.ts,
+        tests/unit/lib/diagnostics/connectionStatusDiagnostics.test.ts,
+        tests/unit/lib/diagnostics/networkSnapshot.test.ts,
+      ]
+    gaps: ["No unit test covering resolveDiagnosticsPanelFromPath across the 5 panel paths"]
+  integration:
+    status: weak
+    evidence: []
+    gaps: ["No integration test proving panel URL round-trips survive swipe navigation"]
+  playwright:
+    status: present
+    evidence:
+      [
+        playwright/diagnosticsActions.spec.ts,
+        playwright/settingsDiagnostics.spec.ts,
+        playwright/homeDiagnosticsOverlay.spec.ts,
+      ]
+    gaps: ["config-drift and decision-state panel-specific e2e coverage thin"]
+  maestro:
+    status: present
+    evidence: [.maestro/ios-diagnostics-export.yaml]
+    gaps: ["Android maestro coverage for diagnostics share ZIP is missing"]
+  hil_pixel4:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["Share-ZIP write evidence on Pixel 4 SAF target not linked"]
+  hil_u64:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["Repair flow against real u64 not explicitly proven"]
+  hil_c64u:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["Switch-device picker against real c64u not explicitly proven"]
+risk_tags: [reliability, observability, state_consistency, security, cross_platform]
+observability: [ui, screenshot, log, trace, diagnostics_overlay, rest_response, filesystem_state]
+notes:
+  - "Heat-map panels remain overlay content, but they are also deep-linkable at `/diagnostics/heatmap/{rest,ftp,config}` via `resolveDiagnosticsPanelFromPath`."
+```
+
+```yaml
+feature_id: app__error_boundary
+name: App and page error boundaries with global error capture
+description: >
+  AppErrorBoundary, PageErrorBoundary, GlobalErrorListener, and the
+  unhandledrejection handler. Each surface surfaces recovery UI and logs
+  errors through the tracing session.
+feature_type: service
+parent_feature_id: null
+entry_points:
+  - kind: startup
+    path_or_selector: "App mount"
+    preconditions: []
+  - kind: test_only
+    path_or_selector: "Error-injection probes in Playwright"
+    preconditions: ["Coverage probe enabled"]
+implementation_refs:
+  - path: src/App.tsx
+    symbol_or_region: AppErrorBoundary, PageErrorBoundary, GlobalErrorListener
+    role: state
+  - path: src/lib/tracing/traceSession.ts
+    symbol_or_region: recordActionStart, recordTraceError, recordActionEnd
+    role: diagnostics
+  - path: src/lib/logging.ts
+    symbol_or_region: addErrorLog
+    role: diagnostics
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  hardware: [none]
+  network: [none]
+  storage: [local_storage]
+  native: [none]
+  external_services: []
+platform_scope:
+  android: supported
+  ios: supported
+  web: supported
+state_model:
+  stateful: true
+  states: [healthy, app_error, page_error]
+  transitions:
+    - "healthy -> page_error"
+    - "page_error -> healthy"
+    - "healthy -> app_error"
+    - "app_error -> healthy"
+  failure_modes: [error_boundary_not_reset_after_route_change, error_log_not_recorded, global_listener_duplicate_events]
+test_coverage:
+  unit:
+    status: present
+    evidence: [tests/unit/logging/uiErrors.test.ts, tests/unit/tracing/actionTrace.test.ts]
+    gaps: ["No direct test asserting AppErrorBoundary renders fallback and reload button"]
+  integration:
+    status: absent
+    evidence: []
+    gaps: ["ReactDOM-level error-boundary render + reset test absent"]
+  playwright:
+    status: weak
+    evidence: [playwright/ui.spec.ts]
+    gaps: ["No spec that triggers a render error and asserts recovery CTA"]
+  maestro:
+    status: absent
+    evidence: []
+    gaps: ["No flow that validates error-boundary UX on device"]
+  hil_pixel4:
+    status: not_applicable
+    evidence: []
+    gaps: ["Triggering is an app-level concern; HIL not needed"]
+  hil_u64:
+    status: not_applicable
+    evidence: []
+    gaps: []
+  hil_c64u:
+    status: not_applicable
+    evidence: []
+    gaps: []
+risk_tags: [reliability, observability, correctness]
+observability: [ui, log, trace]
+notes: []
+```
+
+### 3.2 Home scope
+
+```yaml
+feature_id: home__machine_controls
+name: Machine controls (reset, power, NMI, freeze)
+description: >
+  Home-page card that issues privileged machine-state actions to the
+  connected device via c64api REST and updates the live system panel.
+feature_type: section
+parent_feature_id: null
+entry_points:
+  - kind: ui
+    path_or_selector: "Home > Machine controls card"
+    preconditions: ["ConnectionController reports connected"]
+implementation_refs:
+  - path: src/pages/home/components/MachineControls.tsx
+    symbol_or_region: MachineControls
+    role: ui
+  - path: src/lib/c64api.ts
+    symbol_or_region: machine endpoint helpers
+    role: transport
+documentation_refs:
+  - docs/features-by-page.md
+  - docs/c64/c64u-openapi.yaml
+screenshot_refs:
+  - docs/img/app/home/02-connection-status-popover.png
+dependencies:
+  hardware: [u64, c64u]
+  network: [rest]
+  storage: [none]
+  native: [none]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [idle, confirming, dispatching, succeeded, failed]
+  transitions:
+    - "idle -> confirming"
+    - "confirming -> dispatching"
+    - "dispatching -> succeeded"
+    - "dispatching -> failed"
+  failure_modes: [unauthorized_state_command, device_offline_mid_command, debounce_violation]
+test_coverage:
+  unit:
+    status: present
+    evidence:
+      [
+        tests/unit/pages/home/uiLogic.test.ts,
+        tests/unit/pages/home/uiLogicBranches.test.ts,
+        tests/unit/c64api.ext2.test.ts,
+      ]
+    gaps: ["No unit test enumerating the confirmation dialog matrix per command"]
+  integration:
+    status: weak
+    evidence: []
+    gaps: ["No integration test that asserts POST payload shape per action"]
+  playwright:
+    status: present
+    evidence: [playwright/homeInteractivity.spec.ts]
+    gaps: ["Failure-path assertions on 5xx responses thin"]
+  maestro:
+    status: absent
+    evidence: []
+    gaps: ["No maestro flow that taps reset/power/NMI on a real device or mock"]
+  hil_pixel4:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["Pixel 4 artifact for reset + re-probe is undocumented"]
+  hil_u64:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["u64 reset artifact with post-reset liveness check missing"]
+  hil_c64u:
+    status: weak
+    evidence: [docs/testing/physical-device-matrix.md]
+    gaps: ["c64u reset artifact missing"]
+risk_tags: [device_interaction, reliability, correctness, security]
+observability: [ui, toast, log, trace, rest_response, device_state]
+notes:
+  - "These actions are destructive to device state; confirm dialogs and safety presets must gate them."
+```
+
+```yaml
+feature_id: home__app_configs
+name: Home app-config dialogs (save/load/manage)
+description: >
+  Save, load, and manage stored app-config snapshots from the Home page,
+  backed by appConfigStore with write throttling.
+feature_type: workflow
+parent_feature_id: home__machine_controls
+entry_points:
+  - kind: ui
+    path_or_selector: "Home > SummaryConfigCard → Save/Load/Manage buttons"
+    preconditions: []
+implementation_refs:
+  - path: src/pages/home/dialogs/SaveConfigDialog.tsx
+    symbol_or_region: SaveConfigDialog
+    role: ui
+  - path: src/pages/home/dialogs/LoadConfigDialog.tsx
+    symbol_or_region: LoadConfigDialog
+    role: ui
+  - path: src/pages/home/dialogs/ManageConfigDialog.tsx
+    symbol_or_region: ManageConfigDialog
+    role: ui
+  - path: src/lib/config/appConfigStore.ts
+    symbol_or_region: appConfigStore
+    role: persistence
+  - path: src/lib/config/configWriteThrottle.ts
+    symbol_or_region: configWriteThrottle
+    role: persistence
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs: []
+dependencies:
+  hardware: [u64, c64u, optional]
+  network: [rest]
+  storage: [local_storage]
+  native: [none]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [idle, saving, saved, loading, loaded, managing, deleting]
+  transitions:
+    - "idle -> saving"
+    - "saving -> saved"
+    - "idle -> loading"
+    - "loading -> loaded"
+    - "idle -> managing"
+    - "managing -> deleting"
+  failure_modes: [quota_exceeded, name_collision, mid_save_device_offline]
+test_coverage:
+  unit:
+    status: present
+    evidence: [tests/unit/config/appConfigStore.test.ts, tests/unit/configWriteThrottle.test.ts]
+    gaps: []
+  integration:
+    status: weak
+    evidence: []
+    gaps: ["Throttle/collision interleaving not covered"]
+  playwright:
+    status: present
+    evidence: [playwright/homeConfigManagement.spec.ts]
+    gaps: []
+  maestro:
+    status: weak
+    evidence: [.maestro/edge-config-persistence.yaml, .maestro/ios-config-persistence.yaml]
+    gaps: ["Android-specific config-persistence flow limited to edge-config-persistence (non-iOS)"]
+  hil_pixel4:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Save→Load round-trip artifact on Pixel 4 missing"],
+    }
+  hil_u64:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Apply-after-load device verification missing"],
+    }
+  hil_c64u:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Apply-after-load device verification missing"],
+    }
+risk_tags: [persistence, correctness, state_consistency]
+observability: [ui, toast, log, trace, storage_state]
+notes: []
+```
+
+```yaml
+feature_id: home__ram_operations
+name: RAM save / restore / REU progress
+description: >
+  Persist RAM dumps and REU contents to the configured RAM dump folder and
+  restore them. REU long-running ops surface a progress dialog with cancel.
+feature_type: workflow
+parent_feature_id: null
+entry_points:
+  - kind: ui
+    path_or_selector: "Home > Save RAM / Restore Snapshot / REU controls"
+    preconditions: ["RAM dump folder configured"]
+implementation_refs:
+  - path: src/pages/home/dialogs/SaveRamDialog.tsx
+    symbol_or_region: SaveRamDialog
+    role: ui
+  - path: src/pages/home/dialogs/RestoreSnapshotDialog.tsx
+    symbol_or_region: RestoreSnapshotDialog
+    role: ui
+  - path: src/pages/home/dialogs/SnapshotManagerDialog.tsx
+    symbol_or_region: SnapshotManagerDialog
+    role: ui
+  - path: src/pages/home/dialogs/ReuProgressDialog.tsx
+    symbol_or_region: ReuProgressDialog
+    role: ui
+  - path: src/lib/config/ramDumpFolderStore.ts
+    symbol_or_region: ramDumpFolderStore
+    role: persistence
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs: []
+dependencies:
+  hardware: [u64, c64u]
+  network: [rest]
+  storage: [saf, native_fs]
+  native: [android_plugin]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: limited
+  web: limited
+state_model:
+  stateful: true
+  states: [idle, folder_missing, saving, restoring, reu_streaming, cancelled, failed]
+  transitions:
+    - "idle -> saving"
+    - "saving -> idle"
+    - "idle -> restoring"
+    - "restoring -> idle"
+    - "idle -> reu_streaming"
+    - "reu_streaming -> cancelled"
+    - "reu_streaming -> failed"
+  failure_modes: [saf_permission_revoked, partial_reu_write, device_disconnect_mid_stream]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/ramDumpFolderStore.test.ts],
+      gaps: ["Chunked REU state machine unit coverage thin"],
+    }
+  integration: { status: weak, evidence: [], gaps: ["No REU progress integration test"] }
+  playwright:
+    { status: present, evidence: [playwright/ramSnapshot.spec.ts, playwright/homeRamDumpFolder.spec.ts], gaps: [] }
+  maestro: { status: present, evidence: [.maestro/edge-ram-restore-chunked.yaml], gaps: ["iOS RAM path not covered"] }
+  hil_pixel4:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Pixel 4 SAF round-trip artifact for RAM save/load missing"],
+    }
+  hil_u64:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["u64 REU large-file artifact not linked"],
+    }
+  hil_c64u:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["c64u REU large-file artifact not linked"],
+    }
+risk_tags: [persistence, performance, reliability, device_interaction]
+observability: [ui, toast, log, trace, filesystem_state, device_state]
+notes: []
+```
+
+### 3.3 Play scope
+
+```yaml
+feature_id: play__source_browsing
+name: Play source browsing
+description: >
+  Top-level Play surface that lets the user choose a source (local FS, HVSC,
+  CommoServe) and browse its catalog before enqueueing items.
+feature_type: section
+parent_feature_id: null
+entry_points:
+  - kind: route
+    path_or_selector: "/play"
+    preconditions: []
+  - kind: ui
+    path_or_selector: "Play > source cards"
+    preconditions: []
+implementation_refs:
+  - path: src/pages/PlayFilesPage.tsx
+    symbol_or_region: PlayFilesPage
+    role: ui
+  - path: src/lib/sources/SongSource.ts
+    symbol_or_region: SongSource
+    role: state
+  - path: src/lib/sources/LocalFsSongSource.ts
+    symbol_or_region: LocalFsSongSource
+    role: state
+  - path: src/lib/sources/HvscSongSource.ts
+    symbol_or_region: HvscSongSource
+    role: state
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/play/import/01-import-interstitial.png
+  - docs/img/app/play/import/02-c64u-file-picker.png
+  - docs/img/app/play/import/03-local-file-picker.png
+dependencies:
+  hardware: [u64, c64u, optional]
+  network: [rest, ftp, internet]
+  storage: [indexeddb, native_fs, saf]
+  native: [capacitor_bridge, android_plugin]
+  external_services: [hvsc_mirror, commoserve]
+platform_scope:
+  android: primary
+  ios: secondary
+  web: limited
+state_model:
+  stateful: true
+  states: [no_source, local_browsing, hvsc_browsing, commoserve_browsing, error]
+  transitions:
+    - "no_source -> local_browsing"
+    - "no_source -> hvsc_browsing"
+    - "no_source -> commoserve_browsing"
+  failure_modes: [source_unreachable, cache_miss, permission_revoked]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/sources/LocalFsSongSource.test.ts, tests/unit/hvsc/hvscSource.test.ts],
+      gaps: [],
+    }
+  integration:
+    { status: weak, evidence: [], gaps: ["No integration test switching between sources within one session"] }
+  playwright:
+    {
+      status: present,
+      evidence: [playwright/commoserve.spec.ts, playwright/hvsc.spec.ts, playwright/itemSelection.spec.ts],
+      gaps: [],
+    }
+  maestro:
+    {
+      status: present,
+      evidence: [.maestro/smoke-file-picker.yaml],
+      gaps: ["No dedicated CommoServe or C64U browse maestro flow"],
+    }
+  hil_pixel4: { status: absent, evidence: [], gaps: ["No Pixel 4 artifact for Play source selection and browse"] }
+  hil_u64: { status: absent, evidence: [], gaps: ["No u64 artifact for source browsing"] }
+  hil_c64u:
+    {
+      status: weak,
+      evidence: [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md],
+      gaps: ["App-first c64u evidence exists, but not as a direct per-feature artifact bundle"],
+    }
+risk_tags: [correctness, persistence, reliability, cross_platform]
+observability: [ui, toast, log, trace, screenshot, filesystem_state]
+notes:
+  - "Source availability is additionally shaped by feature flags and native file-picker availability."
+```
+
+```yaml
+feature_id: play__hvsc_lifecycle
+name: HVSC download, ingest, and ready-state lifecycle
+description: >
+  Manages HVSC installation, cache validation, extraction, metadata hydration,
+  reindexing, cancellation, reset, and transition to browse-ready state from
+  the Play surface.
+feature_type: workflow
+parent_feature_id: play__source_browsing
+entry_points:
+  - kind: ui
+    path_or_selector: "Play > HVSC manager and preparation sheet"
+    preconditions: ["HVSC controls enabled"]
+implementation_refs:
+  - path: src/pages/PlayFilesPage.tsx
+    symbol_or_region: HvscManager and HvscPreparationSheet wiring
+    role: ui
+  - path: src/pages/playFiles/hooks/useHvscLibrary.ts
+    symbol_or_region: useHvscLibrary
+    role: state
+  - path: src/lib/hvsc/index.ts
+    symbol_or_region: HVSC install, ingest, and status helpers
+    role: transport
+  - path: android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt
+    symbol_or_region: HvscIngestionPlugin
+    role: native
+  - path: ios/App/App/HvscIngestionPlugin.swift
+    symbol_or_region: HvscIngestionPlugin
+    role: native
+documentation_refs:
+  - README.md
+  - docs/features-by-page.md
+  - docs/testing/physical-device-matrix.md
+screenshot_refs:
+  - docs/img/app/play/import/06-hvsc-preparing.png
+  - docs/img/app/play/import/07-hvsc-ready.png
+  - docs/img/app/play/import/08-hvsc-browser.png
+dependencies:
+  hardware: [android_device, ios_device, optional]
+  network: [internet]
+  storage: [indexeddb, native_fs]
+  native: [capacitor_bridge, android_plugin, ios_plugin]
+  external_services: [hvsc_mirror]
+platform_scope:
+  android: primary
+  ios: limited
+  web: limited
+state_model:
+  stateful: true
+  states: [disabled, ready_to_download, downloading, extracting, indexing, ready_to_browse, cancelled, failed]
+  transitions:
+    - "disabled -> ready_to_download"
+    - "ready_to_download -> downloading"
+    - "downloading -> extracting"
+    - "extracting -> indexing"
+    - "indexing -> ready_to_browse"
+    - "downloading -> cancelled"
+    - "extracting -> failed"
+    - "indexing -> failed"
+  failure_modes: [download_failure, extraction_failure, partial_index_after_cancel, stale_cache_reuse]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/hvsc/hvscIngestionPipelineStateMachine.test.ts, tests/unit/hvsc/hvscSource.test.ts],
+      gaps: ["Cancel-resume invariants could be tighter"],
+    }
+  integration:
+    {
+      status: present,
+      evidence: [android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt],
+      gaps: ["No iOS-native integration equivalent"],
+    }
+  playwright: { status: present, evidence: [playwright/hvsc.spec.ts], gaps: [] }
+  maestro: { status: present, evidence: [.maestro/edge-hvsc-ingest-lifecycle.yaml], gaps: [] }
+  hil_pixel4: { status: absent, evidence: [], gaps: ["No direct Pixel 4 HVSC lifecycle artifact linked"] }
+  hil_u64: { status: absent, evidence: [], gaps: ["No direct u64 HVSC lifecycle artifact linked"] }
+  hil_c64u:
+    {
+      status: present,
+      evidence: [docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md],
+      gaps: ["Evidence is app-first physical Android plus c64u, not per-feature narrative evidence"],
+    }
+risk_tags: [correctness, performance, reliability, state_consistency, cross_platform]
+observability: [ui, toast, log, trace, screenshot, filesystem_state]
+notes:
+  - "Native ingestion is materially different across Android and iOS; web remains limited and should not be treated as parity."
+```
+
+```yaml
+feature_id: play__playback_transport
+name: Playback transport, queue progression, and control surface
+description: >
+  Starts playback for the selected playlist item, manages stop/pause/resume,
+  queue advancement, and playlist-side control state across local, archive,
+  HVSC, and ultimate-origin tracks.
+feature_type: workflow
+parent_feature_id: play__source_browsing
+entry_points:
+  - kind: ui
+    path_or_selector: "Play > Playback controls card and playlist panel"
+    preconditions: ["Playlist contains at least one playable item"]
+implementation_refs:
+  - path: src/pages/PlayFilesPage.tsx
+    symbol_or_region: playback controls and playlist wiring
+    role: ui
+  - path: src/pages/playFiles/hooks/usePlaybackController.ts
+    symbol_or_region: usePlaybackController
+    role: state
+  - path: src/lib/playback/playbackRouter.ts
+    symbol_or_region: buildPlayPlan and executePlayPlan
+    role: transport
+  - path: src/pages/playFiles/components/PlaybackControlsCard.tsx
+    symbol_or_region: PlaybackControlsCard
+    role: ui
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/play/sections/02-playlist.png
+dependencies:
+  hardware: [u64, c64u]
+  network: [rest, ftp]
+  storage: [local_storage, indexeddb, native_fs]
+  native: [capacitor_bridge]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [idle, loading, playing, paused, stopping, failed]
+  transitions:
+    - "idle -> loading"
+    - "loading -> playing"
+    - "playing -> paused"
+    - "paused -> playing"
+    - "playing -> stopping"
+    - "stopping -> idle"
+    - "loading -> failed"
+  failure_modes: [play_plan_mismatch, queue_desync, auto_advance_race, config_reference_unavailable]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence:
+        [
+          tests/unit/playFiles/usePlaybackController.test.tsx,
+          tests/unit/playFiles/usePlaybackController.autoAdvance.test.tsx,
+        ],
+      gaps: [],
+    }
+  integration: { status: weak, evidence: [], gaps: ["No integrated queue plus router race harness"] }
+  playwright: { status: present, evidence: [playwright/playback.spec.ts], gaps: [] }
+  maestro: { status: present, evidence: [.maestro/smoke-playback.yaml], gaps: [] }
+  hil_pixel4: { status: absent, evidence: [], gaps: ["No Pixel 4 playback transport artifact linked"] }
+  hil_u64: { status: absent, evidence: [], gaps: ["No u64 playback transport artifact linked"] }
+  hil_c64u:
+    {
+      status: present,
+      evidence: [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md],
+      gaps: ["Current evidence is broader than the isolated transport workflow"],
+    }
+risk_tags: [correctness, reliability, state_consistency, device_interaction]
+observability: [ui, toast, log, trace, audio_signal, device_state]
+notes:
+  - "Playback transport depends on per-item config resolution and origin-device routing for imported ultimate content."
+```
+
+```yaml
+feature_id: play__lock_screen_playback
+name: Lock-screen and background playback resume behavior
+description: >
+  Preserves playback continuity when the app is backgrounded or the device is
+  locked, coordinating background execution and resume triggers.
+feature_type: background
+parent_feature_id: play__playback_transport
+entry_points:
+  - kind: background
+    path_or_selector: "Playback active while app backgrounds or window resumes"
+    preconditions: ["Playback already started"]
+implementation_refs:
+  - path: src/pages/PlayFilesPage.tsx
+    symbol_or_region: background execution start/stop wiring
+    role: state
+  - path: src/pages/playFiles/hooks/usePlaybackResumeTriggers.ts
+    symbol_or_region: usePlaybackResumeTriggers
+    role: state
+  - path: src/lib/native/backgroundExecutionManager.ts
+    symbol_or_region: startBackgroundExecution and stopBackgroundExecution
+    role: native
+  - path: android/app/src/main/java/uk/gleissner/c64commander/BackgroundExecutionPlugin.kt
+    symbol_or_region: BackgroundExecutionPlugin
+    role: native
+documentation_refs:
+  - docs/features-by-page.md
+  - docs/testing/physical-device-matrix.md
+screenshot_refs: []
+dependencies:
+  hardware: [android_device, u64, c64u]
+  network: [rest]
+  storage: [none]
+  native: [background_service, android_plugin, capacitor_bridge]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: limited
+  web: unsupported
+state_model:
+  stateful: true
+  states: [foreground_playing, background_playing, locked, resuming, stopped, failed]
+  transitions:
+    - "foreground_playing -> background_playing"
+    - "background_playing -> locked"
+    - "locked -> resuming"
+    - "resuming -> foreground_playing"
+    - "background_playing -> failed"
+  failure_modes: [background_service_killed, resume_signal_missed, duplicate_resume_trigger]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/playFiles/usePlaybackResumeTriggers.test.tsx],
+      gaps: ["No unit test for combined visibilitychange + focus storm"],
+    }
+  integration:
+    {
+      status: present,
+      evidence: [android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionPluginTest.kt],
+      gaps: [],
+    }
+  playwright:
+    { status: not_applicable, evidence: [], gaps: ["Web path is unsupported for this background-native behavior"] }
+  maestro: { status: present, evidence: [.maestro/edge-auto-advance-lock.yaml], gaps: [] }
+  hil_pixel4: { status: absent, evidence: [], gaps: ["No Pixel 4 long-duration lock-screen playback artifact linked"] }
+  hil_u64: { status: absent, evidence: [], gaps: ["No u64 lock-screen playback artifact linked"] }
+  hil_c64u:
+    {
+      status: present,
+      evidence: [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md],
+      gaps: ["Current proof is broader than a focused background-duration run"],
+    }
+risk_tags: [reliability, performance, device_interaction, cross_platform]
+observability: [ui, log, trace, audio_signal, device_state]
+notes:
+  - "This feature is materially Android-first; iOS and web should not inherit Android confidence by analogy."
+```
+
+### 3.4 Disks scope
+
+```yaml
+feature_id: disks__library
+name: Disk library import, grouping, rename, and delete
+description: >
+  Manages the shared disk library shown on the Disks route, including import
+  from local and ultimate sources, grouping, rename, selection, and delete.
+feature_type: workflow
+parent_feature_id: null
+entry_points:
+  - kind: route
+    path_or_selector: "/disks"
+    preconditions: []
+  - kind: ui
+    path_or_selector: "Disks > HomeDiskManager library actions"
+    preconditions: []
+implementation_refs:
+  - path: src/pages/DisksPage.tsx
+    symbol_or_region: DisksPage
+    role: ui
+  - path: src/components/disks/HomeDiskManager.tsx
+    symbol_or_region: HomeDiskManager
+    role: ui
+  - path: src/hooks/useDiskLibrary.ts
+    symbol_or_region: useDiskLibrary
+    role: state
+  - path: src/lib/disks/diskGrouping.ts
+    symbol_or_region: assignDiskGroupsByPrefix
+    role: state
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/disks/collection/01-view-all.png
+dependencies:
+  hardware: [u64, c64u, optional]
+  network: [ftp, rest]
+  storage: [local_storage, native_fs, saf]
+  native: [capacitor_bridge, android_plugin]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [empty, importing, browsing, grouping, renaming, deleting, failed]
+  transitions:
+    - "empty -> importing"
+    - "importing -> browsing"
+    - "browsing -> grouping"
+    - "browsing -> renaming"
+    - "browsing -> deleting"
+    - "importing -> failed"
+  failure_modes: [duplicate_import_hidden, group_assignment_drift, delete_selection_desync]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/hooks/useDiskLibrary.test.ts, tests/unit/disks/diskGrouping.test.ts],
+      gaps: [],
+    }
+  integration: { status: weak, evidence: [], gaps: ["No library persistence plus rename/delete race test"] }
+  playwright: { status: present, evidence: [playwright/diskManagement.spec.ts], gaps: [] }
+  maestro:
+    {
+      status: present,
+      evidence: [.maestro/real-c64u-ftp-browse.yaml],
+      gaps: ["No dedicated local-library grouping maestro flow"],
+    }
+  hil_pixel4: { status: absent, evidence: [], gaps: ["No Pixel 4 disk-library artifact linked"] }
+  hil_u64: { status: absent, evidence: [], gaps: ["No u64 disk-library artifact linked"] }
+  hil_c64u:
+    {
+      status: present,
+      evidence: [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md],
+      gaps: ["Current proof is app-first rather than per-library-operation evidence"],
+    }
+risk_tags: [persistence, performance, state_consistency, cross_platform]
+observability: [ui, toast, log, trace, filesystem_state]
+notes: []
+```
+
+```yaml
+feature_id: disks__mount
+name: Disk mount, eject, rotation, and drive-state mutation
+description: >
+  Mounts a selected disk to a drive, ejects it, resets drive state, and keeps
+  drive metadata synchronized with the device-reported state.
+feature_type: workflow
+parent_feature_id: disks__library
+entry_points:
+  - kind: ui
+    path_or_selector: "Disks > drive actions in HomeDiskManager"
+    preconditions: ["At least one drive visible or one disk selected"]
+implementation_refs:
+  - path: src/components/disks/HomeDiskManager.tsx
+    symbol_or_region: drive action handlers and mountedByDrive state
+    role: ui
+  - path: src/lib/disks/diskMount.ts
+    symbol_or_region: mountDiskToDrive
+    role: transport
+  - path: src/lib/drives/driveDevices.ts
+    symbol_or_region: normalizeDriveDevices
+    role: state
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/disks/sections/01-drives.png
+dependencies:
+  hardware: [u64, c64u]
+  network: [rest, ftp]
+  storage: [native_fs, saf]
+  native: [capacitor_bridge, android_plugin]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [idle, mounting, mounted, ejecting, resetting, failed]
+  transitions:
+    - "idle -> mounting"
+    - "mounting -> mounted"
+    - "mounted -> ejecting"
+    - "mounted -> resetting"
+    - "mounting -> failed"
+  failure_modes: [drive_state_stale_after_mount, reset_race, soft_iec_path_mismatch]
+test_coverage:
+  unit: { status: present, evidence: [tests/unit/diskMount.test.ts], gaps: [] }
+  integration: { status: weak, evidence: [], gaps: ["No mount plus reset convergence integration test"] }
+  playwright: { status: present, evidence: [playwright/diskManagement.spec.ts], gaps: [] }
+  maestro:
+    { status: weak, evidence: [.maestro/real-c64u-ftp-browse.yaml], gaps: ["No dedicated mount/eject maestro path"] }
+  hil_pixel4: { status: absent, evidence: [], gaps: ["No Pixel 4 disk-mount artifact linked"] }
+  hil_u64: { status: absent, evidence: [], gaps: ["No u64 disk-mount artifact linked"] }
+  hil_c64u:
+    {
+      status: present,
+      evidence: [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md],
+      gaps: ["Current proof is broader than an isolated mount/eject sequence"],
+    }
+risk_tags: [device_interaction, reliability, state_consistency, correctness]
+observability: [ui, toast, log, trace, rest_response, ftp_result, device_state]
+notes: []
+```
+
+### 3.5 Config scope
+
+```yaml
+feature_id: config__browse
+name: Config category browsing and filtering
+description: >
+  Loads device config categories, opens a category section on demand, and
+  renders normalized config items with search and section filtering.
+feature_type: section
+parent_feature_id: null
+entry_points:
+  - kind: route
+    path_or_selector: "/config"
+    preconditions: []
+  - kind: ui
+    path_or_selector: "Config > category sections and search"
+    preconditions: ["Device connected"]
+implementation_refs:
+  - path: src/pages/ConfigBrowserPage.tsx
+    symbol_or_region: ConfigBrowserPage and CategorySection
+    role: ui
+  - path: src/lib/config/normalizeConfigItem.ts
+    symbol_or_region: normalizeConfigItem
+    role: state
+  - path: src/hooks/useAppConfigState.ts
+    symbol_or_region: useAppConfigState
+    role: state
+documentation_refs:
+  - docs/features-by-page.md
+  - docs/c64/c64u-openapi.yaml
+screenshot_refs:
+  - docs/img/app/config/01-categories.png
+  - docs/img/app/config/sections/01-audio-mixer.png
+  - docs/img/app/config/sections/02-sid-sockets-configuration.png
+dependencies:
+  hardware: [u64, c64u]
+  network: [rest]
+  storage: [local_storage]
+  native: [none]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [loading, browsing, filtering, error]
+  transitions:
+    - "loading -> browsing"
+    - "browsing -> filtering"
+    - "loading -> error"
+  failure_modes: [schema_version_mismatch, empty_category, dirty_state_on_nav]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/lib/config/normalizeConfigItem.test.ts, tests/unit/lib/config/controlType.test.ts],
+      gaps: [],
+    }
+  integration: { status: weak, evidence: [], gaps: ["Schema-version mismatch path uncovered"] }
+  playwright:
+    {
+      status: present,
+      evidence: [playwright/configVisibility.spec.ts, playwright/configEditingBehavior.spec.ts],
+      gaps: [],
+    }
+  maestro: { status: absent, evidence: [], gaps: ["No maestro flow that navigates every Config section"] }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_u64:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["u64-specific sections (Elite II) end-to-end apply not proven"],
+    }
+  hil_c64u: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+risk_tags: [correctness, state_consistency, cross_platform]
+observability: [ui, log, screenshot, rest_response]
+notes:
+  - "Config schema differs per device family (Ultimate 64, Ultimate 64 Elite, Elite II, C64U); validate section visibility matrix per device."
+```
+
+```yaml
+feature_id: config__edit
+name: Config value editing and save
+description: >
+  Edits a single config item, tracks dirty state, debounces writes, and
+  surfaces a save CTA with confirmation.
+feature_type: workflow
+parent_feature_id: config__browse
+entry_points:
+  - kind: ui
+    path_or_selector: "Config section → control (slider/toggle/select)"
+    preconditions: ["Device connected"]
+implementation_refs:
+  - path: src/pages/ConfigBrowserPage.tsx
+    symbol_or_region: edit handlers
+    role: ui
+  - path: src/lib/config/configWriteThrottle.ts
+    symbol_or_region: configWriteThrottle
+    role: persistence
+  - path: src/lib/ui/sliderDeviceAdapter.ts
+    symbol_or_region: sliderDeviceAdapter
+    role: ui
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs: []
+dependencies:
+  hardware: [u64, c64u]
+  network: [rest]
+  storage: [local_storage]
+  native: [none]
+  external_services: []
+platform_scope:
+  android: primary
+  ios: secondary
+  web: supported
+state_model:
+  stateful: true
+  states: [clean, dirty, saving, saved, error]
+  transitions:
+    - "clean -> dirty"
+    - "dirty -> saving"
+    - "saving -> saved"
+    - "saving -> error"
+    - "saved -> clean"
+  failure_modes: [optimistic_update_desync, throttle_lost_edit, server_rejects_value]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/configWriteThrottle.test.ts, tests/unit/lib/ui/sliderValueFormat.test.ts],
+      gaps: [],
+    }
+  integration: { status: weak, evidence: [], gaps: ["Throttle + server-reject interleaving untested"] }
+  playwright:
+    {
+      status: present,
+      evidence: [playwright/configEditingBehavior.spec.ts, playwright/configVisibility.spec.ts],
+      gaps: [],
+    }
+  maestro:
+    {
+      status: weak,
+      evidence: [.maestro/edge-config-persistence.yaml, .maestro/ios-config-persistence.yaml],
+      gaps: ["No maestro flow that edits every control type"],
+    }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_u64:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Apply→observe-on-device artifact missing"],
+    }
+  hil_c64u:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Apply→observe-on-device artifact missing"],
+    }
+risk_tags: [correctness, state_consistency, persistence, device_interaction]
+observability: [ui, toast, log, rest_response, storage_state]
+notes: []
+```
+
+### 3.6 Settings scope
+
+```yaml
+feature_id: settings__connection
+name: Connection settings (host, reconnect)
+description: >
+  Lets the user view, edit, and validate the configured device host and
+  saves changes through the connection manager.
+feature_type: section
+parent_feature_id: null
+entry_points:
+  - kind: route
+    path_or_selector: "/settings"
+    preconditions: []
+implementation_refs:
+  - path: src/pages/SettingsPage.tsx
+    symbol_or_region: connection section
+    role: ui
+  - path: src/lib/connection/hostEdit.ts
+    symbol_or_region: hostEdit
+    role: state
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/diagnostics/connection/01-view.png
+  - docs/img/app/diagnostics/connection/02-edit.png
+dependencies:
+  hardware: [u64, c64u, optional]
+  network: [rest]
+  storage: [local_storage]
+  native: [none]
+  external_services: []
+platform_scope: { android: primary, ios: secondary, web: supported }
+state_model:
+  stateful: true
+  states: [idle, editing, validating, saved, invalid]
+  transitions:
+    - "idle -> editing"
+    - "editing -> validating"
+    - "validating -> saved"
+    - "validating -> invalid"
+    - "saved -> idle"
+  failure_modes: [invalid_hostname, unreachable_host, tls_downgrade_rejected]
+test_coverage:
+  unit: { status: present, evidence: [tests/unit/lib/network/trustedLanHost.test.ts], gaps: [] }
+  integration: { status: weak, evidence: [], gaps: [] }
+  playwright:
+    { status: present, evidence: [playwright/settingsConnection.spec.ts, playwright/webPlatformAuth.spec.ts], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: ["No maestro flow that edits host + verifies reconnect"] }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_u64: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_c64u: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+risk_tags: [reliability, security, correctness]
+observability: [ui, log, rest_response]
+notes: []
+```
+
+```yaml
+feature_id: settings__safety_presets
+name: Device safety presets (Relaxed / Balanced / Conservative)
+description: >
+  User-visible safety preset that gates destructive operations such as
+  power-off, freeze, and clear flash. README is the authoritative spec.
+feature_type: section
+parent_feature_id: null
+entry_points:
+  - kind: ui
+    path_or_selector: "Settings → Device Safety preset"
+    preconditions: []
+implementation_refs:
+  - path: src/pages/SettingsPage.tsx
+    symbol_or_region: safety preset controls
+    role: ui
+  - path: src/lib/config/appSettings.ts
+    symbol_or_region: safety preset persistence
+    role: persistence
+documentation_refs:
+  - README.md
+  - docs/ux-guidelines.md
+screenshot_refs: []
+dependencies:
+  { hardware: [u64, c64u, optional], network: [rest], storage: [local_storage], native: [none], external_services: [] }
+platform_scope: { android: primary, ios: secondary, web: supported }
+state_model:
+  stateful: true
+  states: [relaxed, balanced, conservative]
+  transitions:
+    - "relaxed -> balanced"
+    - "balanced -> conservative"
+    - "conservative -> balanced"
+    - "balanced -> relaxed"
+  failure_modes: [preset_not_gating_destructive_action, confirm_dialog_bypass]
+test_coverage:
+  unit: { status: weak, evidence: [], gaps: ["No unit test proves preset gates every destructive CTA"] }
+  integration: { status: absent, evidence: [], gaps: ["Destructive-action gating matrix absent"] }
+  playwright:
+    {
+      status: weak,
+      evidence: [playwright/homeInteractivity.spec.ts],
+      gaps: ["Explicit preset x action matrix not tested"],
+    }
+  maestro: { status: absent, evidence: [], gaps: ["No maestro flow that toggles preset and asserts CTA guards"] }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_u64: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_c64u: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+risk_tags: [security, correctness, device_interaction, state_consistency]
+observability: [ui, log, storage_state]
+notes:
+  - "This is a cross-cutting gate, not a point feature; absence of a preset x action test matrix is a release-blocker-grade gap."
+```
+
+```yaml
+feature_id: settings__demo_mode
+name: Demo mode + interstitial
+description: >
+  Toggles demo mode, shows an interstitial on entry, and routes c64api calls
+  to the mock server instead of a live device.
+feature_type: workflow
+parent_feature_id: null
+entry_points:
+  - kind: ui
+    path_or_selector: "Settings → Demo mode toggle"
+    preconditions: []
+  - kind: setting
+    path_or_selector: "FeatureFlag demo-mode default"
+    preconditions: []
+implementation_refs:
+  - path: src/components/DemoModeInterstitial.tsx
+    symbol_or_region: DemoModeInterstitial
+    role: ui
+  - path: src/lib/mock/mockServer.ts
+    symbol_or_region: mockServer
+    role: transport
+  - path: src/lib/native/mockC64u.ts
+    symbol_or_region: mockC64u
+    role: native
+  - path: android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt
+    symbol_or_region: MockC64UPlugin
+    role: native
+  - path: ios/App/App/MockC64UPlugin.swift
+    symbol_or_region: MockC64UPlugin
+    role: native
+documentation_refs:
+  - README.md
+  - docs/features-by-page.md
+screenshot_refs: []
+dependencies:
+  {
+    hardware: [none, optional],
+    network: [rest, ftp],
+    storage: [local_storage],
+    native: [android_plugin, ios_plugin, capacitor_bridge],
+    external_services: [],
+  }
+platform_scope: { android: primary, ios: secondary, web: supported }
+state_model:
+  stateful: true
+  states: [live, demo_entering, demo_active, demo_exiting]
+  transitions:
+    - "live -> demo_entering"
+    - "demo_entering -> demo_active"
+    - "demo_active -> demo_exiting"
+    - "demo_exiting -> live"
+  failure_modes: [demo_bleeds_to_live, mock_server_not_installed, interstitial_skipped_on_deep_link]
+test_coverage:
+  unit: { status: present, evidence: [tests/unit/mockServer.test.ts, tests/unit/mockConfigYaml.test.ts], gaps: [] }
+  integration:
+    {
+      status: present,
+      evidence:
+        [
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UPluginTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UServerTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UServerHandlerTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UStateTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockFtpServerTest.kt,
+        ],
+      gaps: [],
+    }
+  playwright:
+    {
+      status: present,
+      evidence: [playwright/demoMode.spec.ts, playwright/demoConfig.spec.ts, playwright/debugDemo.spec.ts],
+      gaps: [],
+    }
+  maestro:
+    {
+      status: absent,
+      evidence: [],
+      gaps: ["No maestro flow that activates demo and proves FTP+REST both route to mock"],
+    }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: ["Demo is by definition offline"] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [correctness, state_consistency, observability]
+observability: [ui, log, trace, rest_response, ftp_result]
+notes: []
+```
+
+### 3.7 Docs + licenses scopes
+
+```yaml
+feature_id: docs__view
+name: In-app docs viewer
+description: >
+  Renders Markdown-sourced docs sections in-app with section navigation and
+  external-resource links.
+feature_type: route
+parent_feature_id: null
+entry_points: [{ kind: route, path_or_selector: "/docs", preconditions: [] }]
+implementation_refs:
+  - path: src/pages/DocsPage.tsx
+    symbol_or_region: DocsPage
+    role: ui
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/docs/01-overview.png
+  - docs/img/app/docs/sections/01-getting-started.png
+  - docs/img/app/docs/sections/08-diagnostics.png
+  - docs/img/app/docs/external/01-external-resources.png
+dependencies: { hardware: [none], network: [internet], storage: [none], native: [none], external_services: [] }
+platform_scope: { android: primary, ios: secondary, web: supported }
+state_model:
+  {
+    stateful: true,
+    states: [loading, section_open, external],
+    transitions: ["loading -> section_open", "section_open -> external", "external -> section_open"],
+    failure_modes: [section_not_found, external_link_broken],
+  }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: ["No unit test asserting Markdown section rendering"] }
+  integration: { status: absent, evidence: [], gaps: [] }
+  playwright:
+    {
+      status: weak,
+      evidence: [playwright/screenshots.spec.ts],
+      gaps: ["No spec that clicks each external link and validates target"],
+    }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [correctness]
+observability: [ui, screenshot]
+notes: []
+```
+
+```yaml
+feature_id: licenses__open_source_view
+name: Open-source licenses page
+description: >
+  Sub-route of Settings that displays third-party license texts.
+feature_type: route
+parent_feature_id: null
+entry_points: [{ kind: route, path_or_selector: "/settings/open-source-licenses", preconditions: [] }]
+implementation_refs:
+  - path: src/pages/OpenSourceLicensesPage.tsx
+    symbol_or_region: OpenSourceLicensesPage
+    role: ui
+documentation_refs: []
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [none], native: [none], external_services: [] }
+platform_scope: { android: supported, ios: supported, web: supported }
+state_model: { stateful: false, states: [], transitions: [], failure_modes: [missing_license_text] }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: [] }
+  integration: { status: absent, evidence: [], gaps: [] }
+  playwright: { status: weak, evidence: [playwright/navigationBoundaries.spec.ts], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security]
+observability: [ui]
+notes:
+  - "License completeness is a compliance surface; add a CI check that regenerates and diffs the license list."
+```
+
+### 3.8 Diagnostics scope (panel-specific features)
+
+```yaml
+feature_id: diagnostics__saved_device_switching
+name: Saved device switching via diagnostics picker
+description: >
+  Shows all saved devices with live health status and allows the user to
+  switch the active device; on switch, runs target validation and reconnect.
+feature_type: dialog
+parent_feature_id: app__global_diagnostics_overlay
+entry_points:
+  - kind: ui
+    path_or_selector: "Diagnostics overlay → Switch device"
+    preconditions: ["At least one saved device"]
+implementation_refs:
+  - path: src/hooks/useSavedDeviceSwitching.ts
+    symbol_or_region: useSavedDeviceSwitching
+    role: state
+  - path: src/hooks/useSavedDeviceHealthChecks.ts
+    symbol_or_region: useSavedDeviceHealthChecks
+    role: state
+  - path: src/components/diagnostics/DeviceDetailView.tsx
+    symbol_or_region: DeviceDetailView
+    role: ui
+documentation_refs:
+  - docs/features-by-page.md
+screenshot_refs:
+  - docs/img/app/diagnostics/switch-device/profiles/compact/01-picker.png
+  - docs/img/app/diagnostics/switch-device/profiles/compact/04-picker-one-unhealthy.png
+  - docs/img/app/diagnostics/switch-device/profiles/expanded/01-picker.png
+dependencies:
+  { hardware: [u64, c64u], network: [rest], storage: [local_storage], native: [none], external_services: [] }
+platform_scope: { android: primary, ios: secondary, web: supported }
+state_model:
+  stateful: true
+  states: [idle, probing_all, showing_picker, switching, switched, switch_failed]
+  transitions:
+    - "idle -> probing_all"
+    - "probing_all -> showing_picker"
+    - "showing_picker -> switching"
+    - "switching -> switched"
+    - "switching -> switch_failed"
+  failure_modes: [partial_probe_failure, switch_to_unhealthy_accepted_without_warning, health_status_stale]
+test_coverage:
+  unit: { status: weak, evidence: [], gaps: ["No unit test for useSavedDeviceSwitching/HealthChecks"] }
+  integration: { status: weak, evidence: [], gaps: [] }
+  playwright:
+    {
+      status: present,
+      evidence: [playwright/diagnosticsActions.spec.ts, playwright/settingsDiagnostics.spec.ts],
+      gaps: [],
+    }
+  maestro: { status: absent, evidence: [], gaps: ["No maestro flow that switches between u64 and c64u"] }
+  hil_pixel4:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Switch-with-one-unhealthy artifact missing"],
+    }
+  hil_u64: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_c64u: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+risk_tags: [reliability, state_consistency, device_interaction, observability]
+observability: [ui, screenshot, log, rest_response, diagnostics_overlay]
+notes: []
+```
+
+```yaml
+feature_id: diagnostics__share_zip
+name: Diagnostics share ZIP (redacted export)
+description: >
+  Collects logs, traces, snapshots, and health history into a redacted ZIP
+  and hands off via platform share sheet.
+feature_type: workflow
+parent_feature_id: app__global_diagnostics_overlay
+entry_points:
+  - kind: ui
+    path_or_selector: "Diagnostics overlay → Tools → Share diagnostics"
+    preconditions: []
+implementation_refs:
+  - path: src/lib/diagnostics/exportRedaction.ts
+    symbol_or_region: exportRedaction
+    role: diagnostics
+  - path: src/components/diagnostics/ToolsCard.tsx
+    symbol_or_region: ToolsCard
+    role: ui
+documentation_refs: []
+screenshot_refs: [docs/img/app/diagnostics/tools/01-menu.png]
+dependencies:
+  {
+    hardware: [none],
+    network: [none],
+    storage: [saf, native_fs, local_storage],
+    native: [android_plugin, ios_plugin, capacitor_bridge],
+    external_services: [],
+  }
+platform_scope: { android: primary, ios: secondary, web: limited }
+state_model:
+  stateful: true
+  states: [idle, collecting, redacting, packaging, handing_off, failed]
+  transitions:
+    - "idle -> collecting"
+    - "collecting -> redacting"
+    - "redacting -> packaging"
+    - "packaging -> handing_off"
+    - "handing_off -> idle"
+    - "collecting -> failed"
+  failure_modes: [redaction_missed_pii, saf_permission_denied, oversized_zip]
+test_coverage:
+  unit: { status: present, evidence: [tests/unit/diagnostics/exportRedaction.test.ts], gaps: [] }
+  integration: { status: absent, evidence: [], gaps: ["No end-to-end ZIP-content audit under a real share path"] }
+  playwright:
+    { status: weak, evidence: [playwright/diagnosticsActions.spec.ts], gaps: ["Zip content inspection absent"] }
+  maestro:
+    { status: present, evidence: [.maestro/ios-diagnostics-export.yaml], gaps: ["Android share-sheet flow absent"] }
+  hil_pixel4:
+    { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: ["Actual share-sheet artifact missing"] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security, observability, persistence]
+observability: [ui, log, filesystem_state]
+notes:
+  - "This is an observability + compliance surface; a missed redaction is a security bug."
+```
+
+### 3.9 Coverage probe and NotFound scopes
+
+```yaml
+feature_id: coverage_probe__test_heartbeat
+name: Coverage probe and test heartbeat
+description: >
+  Test-only route and heartbeat surface used by Playwright to introspect app
+  readiness and feature-flag state. Gated by `shouldEnableCoverageProbe()`.
+feature_type: hidden_route
+parent_feature_id: null
+entry_points:
+  - kind: test_only
+    path_or_selector: "/__coverage__"
+    preconditions: ["VITE_ENABLE_TEST_PROBES=1 OR window.__c64uTestProbeEnabled"]
+implementation_refs:
+  - path: src/App.tsx
+    symbol_or_region: shouldEnableCoverageProbe, CoverageProbePage mount
+    role: test_support
+  - path: src/pages/CoverageProbePage.tsx
+    symbol_or_region: CoverageProbePage
+    role: test_support
+  - path: src/components/TestHeartbeat.tsx
+    symbol_or_region: TestHeartbeat
+    role: test_support
+documentation_refs: []
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [none], native: [none], external_services: [] }
+platform_scope: { android: supported, ios: supported, web: primary }
+state_model: { stateful: false, states: [], transitions: [], failure_modes: [probe_leaked_to_production_build] }
+test_coverage:
+  unit:
+    {
+      status: weak,
+      evidence: [],
+      gaps: ["No unit test that asserts shouldEnableCoverageProbe returns false by default"],
+    }
+  integration: { status: absent, evidence: [], gaps: [] }
+  playwright: { status: present, evidence: [playwright/coverageProbes.spec.ts], gaps: [] }
+  maestro: { status: not_applicable, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security, observability]
+observability: [ui, log]
+notes:
+  - "This is a prod-hardening concern: ensure CI guards that production bundles cannot enable the probe via env or window var."
+```
+
+```yaml
+feature_id: not_found__route
+name: NotFound route for unknown paths
+description: >
+  Renders NotFound only when the pathname does not resolve to a tab route or
+  known sub-route (via `tabIndexForPath`).
+feature_type: route
+parent_feature_id: null
+entry_points: [{ kind: route, path_or_selector: "*", preconditions: [] }]
+implementation_refs:
+  - path: src/App.tsx
+    symbol_or_region: NotFoundForUnknownPaths
+    role: ui
+  - path: src/pages/NotFound.tsx
+    symbol_or_region: NotFound
+    role: ui
+documentation_refs: []
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [none], native: [none], external_services: [] }
+platform_scope: { android: supported, ios: supported, web: supported }
+state_model:
+  { stateful: false, states: [], transitions: [], failure_modes: [false_positive_for_nested_known_sub_route] }
+test_coverage:
+  unit:
+    { status: weak, evidence: [], gaps: ["No unit test pairing tabIndexForPath with NotFoundForUnknownPaths output"] }
+  integration: { status: absent, evidence: [], gaps: [] }
+  playwright: { status: present, evidence: [playwright/navigationBoundaries.spec.ts], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [correctness]
+observability: [ui, screenshot]
+notes: []
+```
+
+### 3.10 Android native scope
+
+```yaml
+feature_id: android_native__background_execution
+name: Android background execution + foreground service
+description: >
+  Keeps the app process alive while playback is active via a foreground
+  service + sticky notification; bridges start/stop to JS.
+feature_type: native_bridge
+parent_feature_id: play__lock_screen_playback
+entry_points:
+  - kind: api
+    path_or_selector: "BackgroundExecutionPlugin.start/stop"
+    preconditions: []
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/BackgroundExecutionService.kt
+    symbol_or_region: BackgroundExecutionService
+    role: native
+  - path: android/app/src/main/java/uk/gleissner/c64commander/BackgroundExecutionPlugin.kt
+    symbol_or_region: BackgroundExecutionPlugin
+    role: native
+  - path: src/lib/native/backgroundExecution.ts
+    symbol_or_region: backgroundExecution
+    role: transport
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  {
+    hardware: [none],
+    network: [none],
+    storage: [none],
+    native: [android_plugin, background_service],
+    external_services: [],
+  }
+platform_scope: { android: primary, ios: not_applicable, web: not_applicable }
+state_model:
+  stateful: true
+  states: [not_running, starting, running, stopping, killed]
+  transitions:
+    - "not_running -> starting"
+    - "starting -> running"
+    - "running -> stopping"
+    - "stopping -> not_running"
+    - "running -> killed"
+  failure_modes: [notification_channel_missing, foreground_type_rejected_by_os, killed_without_notify]
+test_coverage:
+  unit: { status: present, evidence: [tests/unit/lib/native/backgroundExecutionManager.test.ts], gaps: [] }
+  integration:
+    {
+      status: present,
+      evidence:
+        [
+          android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionServiceTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionPluginTest.kt,
+        ],
+      gaps: [],
+    }
+  playwright: { status: not_applicable, evidence: [], gaps: [] }
+  maestro: { status: present, evidence: [.maestro/smoke-background-execution.yaml], gaps: [] }
+  hil_pixel4:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Service persistence across app swap evidence missing"],
+    }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [reliability, device_interaction]
+observability: [device_state, log, audio_signal]
+notes: []
+```
+
+```yaml
+feature_id: android_native__secure_storage
+name: Android secure storage plugin
+description: >
+  Stores sensitive settings (credentials, signed tokens) via Android keystore-backed storage.
+feature_type: native_bridge
+parent_feature_id: null
+entry_points: [{ kind: api, path_or_selector: "SecureStoragePlugin.get/set/remove", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/SecureStoragePlugin.kt
+    symbol_or_region: SecureStoragePlugin
+    role: native
+  - path: src/lib/native/secureStorage.ts
+    symbol_or_region: secureStorage
+    role: transport
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  { hardware: [none], network: [none], storage: [secure_storage], native: [android_plugin], external_services: [] }
+platform_scope: { android: primary, ios: secondary, web: limited }
+state_model:
+  { stateful: false, states: [], transitions: [], failure_modes: [keystore_rotation_lost_data, migration_failure] }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: ["No web-side test of src/lib/native/secureStorage.web.ts parity"] }
+  integration:
+    {
+      status: present,
+      evidence: [android/app/src/test/java/uk/gleissner/c64commander/SecureStoragePluginTest.kt],
+      gaps: [],
+    }
+  playwright: { status: absent, evidence: [], gaps: [] }
+  maestro:
+    {
+      status: present,
+      evidence: [.maestro/ios-secure-storage-persist.yaml],
+      gaps: ["No Android-specific maestro flow that asserts persistence across app kill"],
+    }
+  hil_pixel4:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["Post-reboot secret-survival artifact missing"],
+    }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security, persistence, correctness]
+observability: [log, storage_state]
+notes: []
+```
+
+```yaml
+feature_id: android_native__folder_picker
+name: Android SAF folder picker
+description: >
+  Exposes Android Storage Access Framework tree-pick + persisted URI
+  management to the JS runtime.
+feature_type: native_bridge
+parent_feature_id: null
+entry_points: [{ kind: api, path_or_selector: "FolderPicker.pick/getPersistedUris/release", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/FolderPickerPlugin.kt
+    symbol_or_region: FolderPickerPlugin
+    role: native
+  - path: src/lib/native/folderPicker.ts
+    symbol_or_region: FolderPicker
+    role: transport
+  - path: src/lib/native/safUtils.ts
+    symbol_or_region: redactTreeUri
+    role: diagnostics
+documentation_refs: []
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [saf], native: [android_plugin], external_services: [] }
+platform_scope: { android: primary, ios: not_applicable, web: unsupported }
+state_model:
+  stateful: true
+  states: [no_permission, permission_granted, permission_revoked]
+  transitions:
+    - "no_permission -> permission_granted"
+    - "permission_granted -> permission_revoked"
+    - "permission_revoked -> permission_granted"
+  failure_modes: [revoked_mid_operation, persisted_uri_limit_exceeded, pick_cancelled]
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/native/folderPicker.test.ts, tests/unit/lib/native/folderPicker.test.ts],
+      gaps: [],
+    }
+  integration:
+    {
+      status: present,
+      evidence: [android/app/src/test/java/uk/gleissner/c64commander/FolderPickerPluginTest.kt],
+      gaps: [],
+    }
+  playwright: { status: not_applicable, evidence: [], gaps: [] }
+  maestro:
+    { status: present, evidence: [.maestro/smoke-file-picker.yaml, .maestro/smoke-file-picker-cancel.yaml], gaps: [] }
+  hil_pixel4:
+    { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: ["Revocation-recovery artifact missing"] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security, reliability, persistence]
+observability: [log, filesystem_state]
+notes: []
+```
+
+```yaml
+feature_id: android_native__telnet_socket
+name: Android Telnet socket plugin
+description: >
+  Raw TCP + Telnet socket bridge used for device consoles and modem flows.
+feature_type: native_bridge
+parent_feature_id: null
+entry_points: [{ kind: api, path_or_selector: "TelnetSocket.connect/write/read/close", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/TelnetSocketPlugin.kt
+    symbol_or_region: TelnetSocketPlugin
+    role: native
+  - path: ios/App/App/TelnetSocketPlugin.swift
+    symbol_or_region: TelnetSocketPlugin
+    role: native
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  {
+    hardware: [u64, c64u, optional],
+    network: [telnet],
+    storage: [none],
+    native: [android_plugin, ios_plugin],
+    external_services: [],
+  }
+platform_scope: { android: primary, ios: secondary, web: unsupported }
+state_model:
+  {
+    stateful: true,
+    states: [closed, connecting, open, closing, error],
+    transitions:
+      ["closed -> connecting", "connecting -> open", "open -> closing", "closing -> closed", "connecting -> error"],
+    failure_modes: [handshake_timeout, half_close_leak, cert_mismatch_on_tls],
+  }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: [] }
+  integration:
+    {
+      status: present,
+      evidence: [android/app/src/test/java/uk/gleissner/c64commander/TelnetSocketPluginTest.kt],
+      gaps: ["No iOS-side integration test"],
+    }
+  playwright: { status: absent, evidence: [], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_u64: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_c64u: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+risk_tags: [reliability, security, device_interaction, cross_platform]
+observability: [telnet_result, log]
+notes: []
+```
+
+```yaml
+feature_id: android_native__ftp_client
+name: Android FTP client plugin
+description: >
+  FTP client bridge for disk browsing and imports against c64u/u64 devices.
+feature_type: native_bridge
+parent_feature_id: null
+entry_points: [{ kind: api, path_or_selector: "FtpClient.connect/list/get/put/close", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt
+    symbol_or_region: FtpClientPlugin
+    role: native
+  - path: ios/App/App/IOSFtp.swift
+    symbol_or_region: IOSFtp
+    role: native
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  {
+    hardware: [u64, c64u],
+    network: [ftp],
+    storage: [none],
+    native: [android_plugin, ios_plugin],
+    external_services: [],
+  }
+platform_scope: { android: primary, ios: secondary, web: limited }
+state_model:
+  {
+    stateful: true,
+    states: [closed, connecting, open, listing, transferring, closing, error],
+    transitions:
+      ["closed -> connecting", "connecting -> open", "open -> listing", "open -> transferring", "open -> closing"],
+    failure_modes: [passive_mode_blocked, credential_rejected, control_channel_timeout],
+  }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: [] }
+  integration:
+    {
+      status: present,
+      evidence:
+        [
+          android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockFtpServerTest.kt,
+        ],
+      gaps: [],
+    }
+  playwright: { status: present, evidence: [playwright/ftpPerformance.spec.ts], gaps: [] }
+  maestro: { status: present, evidence: [.maestro/real-c64u-ftp-browse.yaml, .maestro/ios-ftp-browse.yaml], gaps: [] }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_u64:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["u64 FTP real-disk artifact per run missing"],
+    }
+  hil_c64u: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+risk_tags: [reliability, security, performance, device_interaction, cross_platform]
+observability: [ftp_result, log, filesystem_state]
+notes: []
+```
+
+```yaml
+feature_id: android_native__mock_c64u
+name: Android MockC64U server stack
+description: >
+  Local mock REST + FTP server that emulates a c64u/u64 for demo mode and
+  automated tests. Ships a state machine and timing profile for realistic
+  behavior.
+feature_type: native_bridge
+parent_feature_id: settings__demo_mode
+entry_points: [{ kind: api, path_or_selector: "MockC64UPlugin.start/stop", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/MockC64UServer.kt
+    symbol_or_region: MockC64UServer
+    role: native
+  - path: android/app/src/main/java/uk/gleissner/c64commander/MockC64UState.kt
+    symbol_or_region: MockC64UState
+    role: native
+  - path: android/app/src/main/java/uk/gleissner/c64commander/MockTimingProfile.kt
+    symbol_or_region: MockTimingProfile
+    role: native
+  - path: android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt
+    symbol_or_region: MockC64UPlugin
+    role: native
+  - path: android/app/src/main/java/uk/gleissner/c64commander/MockFtpServer.kt
+    symbol_or_region: MockFtpServer
+    role: native
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  { hardware: [none], network: [rest, ftp], storage: [none], native: [android_plugin], external_services: [] }
+platform_scope: { android: primary, ios: secondary, web: not_applicable }
+state_model:
+  {
+    stateful: true,
+    states: [stopped, starting, running, stopping, crashed],
+    transitions:
+      [
+        "stopped -> starting",
+        "starting -> running",
+        "running -> stopping",
+        "stopping -> stopped",
+        "running -> crashed",
+      ],
+    failure_modes: [port_collision, fixture_load_failure, timing_profile_drift],
+  }
+test_coverage:
+  unit: { status: present, evidence: [tests/unit/mockServer.test.ts, tests/unit/mockConfigYaml.test.ts], gaps: [] }
+  integration:
+    {
+      status: present,
+      evidence:
+        [
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UPluginTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UServerTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UServerHandlerTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockC64UStateTest.kt,
+          android/app/src/test/java/uk/gleissner/c64commander/MockFtpServerTest.kt,
+        ],
+      gaps: [],
+    }
+  playwright: { status: present, evidence: [playwright/demoMode.spec.ts, playwright/demoConfig.spec.ts], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [correctness, observability, reliability]
+observability: [rest_response, ftp_result, log]
+notes: []
+```
+
+```yaml
+feature_id: android_native__diagnostics_bridge
+name: Android diagnostics bridge plugin
+description: >
+  Surfaces native log, snapshot, and diagnostics signals to the JS runtime
+  and accepts push of diagnostics payloads from JS.
+feature_type: native_bridge
+parent_feature_id: app__global_diagnostics_overlay
+entry_points:
+  [{ kind: startup, path_or_selector: "DiagnosticsRuntimeBridge on first-meaningful-interaction", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/DiagnosticsBridgePlugin.kt
+    symbol_or_region: DiagnosticsBridgePlugin
+    role: native
+  - path: src/lib/native/diagnosticsBridge.ts
+    symbol_or_region: diagnosticsBridge
+    role: transport
+  - path: src/lib/diagnostics/nativeDebugSnapshots.ts
+    symbol_or_region: startNativeDebugSnapshotPublisher
+    role: diagnostics
+documentation_refs: []
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [none], native: [android_plugin], external_services: [] }
+platform_scope: { android: primary, ios: limited, web: unsupported }
+state_model:
+  {
+    stateful: true,
+    states: [stopped, starting, running, stopping],
+    transitions: ["stopped -> starting", "starting -> running", "running -> stopping", "stopping -> stopped"],
+    failure_modes: [double_start, event_backpressure, bridge_disconnect_under_load],
+  }
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/native/diagnosticsBridge.test.ts, tests/unit/lib/diagnostics/nativeDebugSnapshots.test.ts],
+      gaps: [],
+    }
+  integration:
+    {
+      status: present,
+      evidence: [android/app/src/test/java/uk/gleissner/c64commander/DiagnosticsBridgePluginTest.kt],
+      gaps: [],
+    }
+  playwright: { status: absent, evidence: [], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [observability, reliability, performance]
+observability: [log, trace, diagnostics_overlay]
+notes: []
+```
+
+```yaml
+feature_id: android_native__feature_flags
+name: Android feature-flag plugin
+description: >
+  Surfaces native-owned feature flags to JS (for OS-gated paths) and accepts
+  overrides from settings.
+feature_type: native_bridge
+parent_feature_id: null
+entry_points: [{ kind: startup, path_or_selector: "FeatureFlagsProvider mount", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/FeatureFlagsPlugin.kt
+    symbol_or_region: FeatureFlagsPlugin
+    role: native
+  - path: src/lib/native/featureFlags.ts
+    symbol_or_region: featureFlags
+    role: transport
+  - path: src/lib/native/featureFlags.web.ts
+    symbol_or_region: featureFlags (web fallback)
+    role: transport
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  { hardware: [none], network: [none], storage: [local_storage], native: [android_plugin], external_services: [] }
+platform_scope: { android: primary, ios: secondary, web: supported }
+state_model: { stateful: false, states: [], transitions: [], failure_modes: [flag_default_drift, override_not_applied] }
+test_coverage:
+  unit:
+    {
+      status: present,
+      evidence: [tests/unit/featureFlags.test.ts, tests/unit/lib/native/featureFlagsWeb.test.ts],
+      gaps: [],
+    }
+  integration:
+    {
+      status: present,
+      evidence: [android/app/src/test/java/uk/gleissner/c64commander/FeatureFlagsPluginTest.kt],
+      gaps: [],
+    }
+  playwright: { status: present, evidence: [playwright/featureFlags.spec.ts], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [correctness, observability]
+observability: [log, storage_state]
+notes: []
+```
+
+```yaml
+feature_id: android_native__safe_area
+name: Android safe-area plugin
+description: >
+  Reports edge-to-edge safe-area insets to the JS runtime for layout.
+feature_type: native_bridge
+parent_feature_id: null
+entry_points: [{ kind: startup, path_or_selector: "SafeAreaPlugin.getInsets", preconditions: [] }]
+implementation_refs:
+  - path: android/app/src/main/java/uk/gleissner/c64commander/SafeAreaPlugin.kt
+    symbol_or_region: SafeAreaPlugin
+    role: native
+documentation_refs: []
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [none], native: [android_plugin], external_services: [] }
+platform_scope: { android: primary, ios: not_applicable, web: not_applicable }
+state_model: { stateful: false, states: [], transitions: [], failure_modes: [inset_not_updated_on_rotation] }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: [] }
+  integration:
+    { status: present, evidence: [android/app/src/test/java/uk/gleissner/c64commander/SafeAreaPluginTest.kt], gaps: [] }
+  playwright: { status: absent, evidence: [], gaps: [] }
+  maestro: { status: absent, evidence: [], gaps: [] }
+  hil_pixel4: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: ["Rotation evidence missing"] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [cross_platform, correctness]
+observability: [ui, log]
+notes: []
+```
+
+### 3.11 iOS native scope
+
+```yaml
+feature_id: ios_native__plugin_registry
+name: iOS NativePlugins registration
+description: >
+  Registers all Capacitor plugins (HVSC, Telnet, IOSFtp, MockC64U) from the
+  AppDelegate boot.
+feature_type: native_bridge
+parent_feature_id: null
+entry_points: [{ kind: startup, path_or_selector: "AppDelegate launch", preconditions: [] }]
+implementation_refs:
+  - path: ios/App/App/NativePlugins.swift
+    symbol_or_region: NativePlugins
+    role: native
+  - path: ios/App/App/AppDelegate.swift
+    symbol_or_region: AppDelegate
+    role: native
+documentation_refs: []
+screenshot_refs: []
+dependencies: { hardware: [none], network: [none], storage: [none], native: [ios_plugin], external_services: [] }
+platform_scope: { android: not_applicable, ios: primary, web: not_applicable }
+state_model:
+  { stateful: false, states: [], transitions: [], failure_modes: [missing_plugin_registration, double_registration] }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: ["No iOS-side unit test target in repo"] }
+  integration: { status: absent, evidence: [], gaps: ["No iOS integration test proves all expected plugins register"] }
+  playwright: { status: not_applicable, evidence: [], gaps: [] }
+  maestro: { status: present, evidence: [.maestro/ios-ci-smoke.yaml, .maestro/ios-smoke-launch.yaml], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64:
+    {
+      status: weak,
+      evidence: [docs/testing/physical-device-matrix.md],
+      gaps: ["iOS HIL gated on macOS CI; no per-plugin artifact"],
+    }
+  hil_c64u: { status: weak, evidence: [docs/testing/physical-device-matrix.md], gaps: [] }
+risk_tags: [reliability, cross_platform]
+observability: [log]
+notes:
+  - "iOS native test parity with Android is missing; this is a production-hardening gap in its own right."
+```
+
+```yaml
+feature_id: ios_native__hvsc_ingestion
+name: iOS HVSC ingestion plugin
+description: >
+  iOS-side HVSC extraction and ingestion bridge paralleling the Android
+  plugin; falls back to JS pipeline when unavailable.
+feature_type: native_bridge
+parent_feature_id: play__hvsc_lifecycle
+entry_points: [{ kind: api, path_or_selector: "HvscIngestionPlugin.ingest/cancel", preconditions: [] }]
+implementation_refs:
+  - path: ios/App/App/HvscIngestionPlugin.swift
+    symbol_or_region: HvscIngestionPlugin
+    role: native
+documentation_refs: []
+screenshot_refs: []
+dependencies:
+  {
+    hardware: [none],
+    network: [internet],
+    storage: [native_fs],
+    native: [ios_plugin],
+    external_services: [hvsc_mirror],
+  }
+platform_scope: { android: not_applicable, ios: primary, web: not_applicable }
+state_model:
+  {
+    stateful: true,
+    states: [idle, downloading, extracting, indexing, ready, cancelled, failed],
+    transitions:
+      [
+        "idle -> downloading",
+        "downloading -> extracting",
+        "extracting -> indexing",
+        "indexing -> ready",
+        "downloading -> cancelled",
+        "extracting -> failed",
+      ],
+    failure_modes: [low_memory_abort, archive_download_failure, extraction_failure],
+  }
+test_coverage:
+  unit: { status: absent, evidence: [], gaps: [] }
+  integration: { status: absent, evidence: [], gaps: ["No Swift-side HVSC integration test"] }
+  playwright: { status: not_applicable, evidence: [], gaps: [] }
+  maestro: { status: present, evidence: [.maestro/ios-hvsc-browse.yaml], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: absent, evidence: [], gaps: ["iOS HVSC → u64 playback evidence absent"] }
+  hil_c64u: { status: absent, evidence: [], gaps: [] }
+risk_tags: [correctness, performance, reliability, cross_platform, device_interaction]
+observability: [ui, log, filesystem_state, audio_signal]
+notes: []
+```
+
+### 3.12 Web runtime scope
+
+```yaml
+feature_id: web_runtime__auth_state
+name: Web server auth state (cookie-based)
+description: >
+  Manages authentication state, sign-in, sign-out, and session cookies for
+  the headless web runtime.
+feature_type: service
+parent_feature_id: null
+entry_points:
+  - kind: api
+    path_or_selector: "POST /auth/signin, POST /auth/signout"
+    preconditions: ["Web server started"]
+implementation_refs:
+  - path: web/server/src/authState.ts
+    symbol_or_region: authState
+    role: state
+  - path: web/server/src/index.ts
+    symbol_or_region: auth routes
+    role: entry
+documentation_refs:
+  - README.md
+screenshot_refs: []
+dependencies:
+  { hardware: [none], network: [rest, internet], storage: [local_storage], native: [none], external_services: [] }
+platform_scope: { android: not_applicable, ios: not_applicable, web: primary }
+state_model:
+  {
+    stateful: true,
+    states: [anonymous, authenticated, expired],
+    transitions:
+      ["anonymous -> authenticated", "authenticated -> expired", "expired -> anonymous", "authenticated -> anonymous"],
+    failure_modes: [cookie_not_secure_in_prod, session_fixation, csrf_missing],
+  }
+test_coverage:
+  unit: { status: weak, evidence: [], gaps: ["Direct unit coverage of authState state machine is minimal"] }
+  integration: { status: weak, evidence: [], gaps: [] }
+  playwright: { status: present, evidence: [playwright/webPlatformAuth.spec.ts], gaps: [] }
+  maestro: { status: not_applicable, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security, reliability, correctness]
+observability: [log, rest_response, storage_state]
+notes:
+  - "README documents WEB_COOKIE_SECURE and WEB_ALLOW_REMOTE_FTP_HOSTS; add a CI audit that these envs are enforced in prod builds."
+```
+
+```yaml
+feature_id: web_runtime__host_validation
+name: Web server host validation
+description: >
+  Validates requested target hosts against the allowlist (trusted LAN,
+  optional remote FTP hosts) before proxying or acting.
+feature_type: service
+parent_feature_id: null
+entry_points: [{ kind: api, path_or_selector: "Every proxied request", preconditions: [] }]
+implementation_refs:
+  - path: web/server/src/hostValidation.ts
+    symbol_or_region: hostValidation
+    role: transport
+  - path: src/lib/network/trustedLanHost.ts
+    symbol_or_region: trustedLanHost
+    role: state
+documentation_refs:
+  - README.md
+screenshot_refs: []
+dependencies:
+  { hardware: [none], network: [internet, rest, ftp], storage: [none], native: [none], external_services: [] }
+platform_scope: { android: not_applicable, ios: not_applicable, web: primary }
+state_model:
+  {
+    stateful: false,
+    states: [],
+    transitions: [],
+    failure_modes: [allowlist_bypass, dns_rebinding, subdomain_confusion],
+  }
+test_coverage:
+  unit: { status: present, evidence: [tests/unit/lib/network/trustedLanHost.test.ts], gaps: [] }
+  integration: { status: weak, evidence: [], gaps: ["No integration test that fuzz-tests remote FTP host allowlist"] }
+  playwright: { status: present, evidence: [playwright/webPlatformAuth.spec.ts], gaps: [] }
+  maestro: { status: not_applicable, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security, correctness]
+observability: [log, rest_response]
+notes: []
+```
+
+```yaml
+feature_id: web_runtime__security_headers
+name: Web server security headers
+description: >
+  Sets CSP, HSTS, X-Frame-Options, referrer-policy, and related headers on
+  every response from the web runtime.
+feature_type: service
+parent_feature_id: null
+entry_points: [{ kind: api, path_or_selector: "Every response", preconditions: [] }]
+implementation_refs:
+  - path: web/server/src/securityHeaders.ts
+    symbol_or_region: securityHeaders
+    role: transport
+documentation_refs:
+  - README.md
+screenshot_refs: []
+dependencies: { hardware: [none], network: [rest], storage: [none], native: [none], external_services: [] }
+platform_scope: { android: not_applicable, ios: not_applicable, web: primary }
+state_model:
+  {
+    stateful: false,
+    states: [],
+    transitions: [],
+    failure_modes: [header_missing, csp_too_permissive, hsts_not_set_in_prod],
+  }
+test_coverage:
+  unit: { status: weak, evidence: [], gaps: ["No test that asserts every required header is present"] }
+  integration: { status: weak, evidence: [], gaps: [] }
+  playwright: { status: weak, evidence: [playwright/webPlatformAuth.spec.ts], gaps: [] }
+  maestro: { status: not_applicable, evidence: [], gaps: [] }
+  hil_pixel4: { status: not_applicable, evidence: [], gaps: [] }
+  hil_u64: { status: not_applicable, evidence: [], gaps: [] }
+  hil_c64u: { status: not_applicable, evidence: [], gaps: [] }
+risk_tags: [security]
+observability: [rest_response]
+notes:
+  - "Recommend adding a `securityHeaders.snapshot.test.ts` that asserts the exact header set for prod + dev profiles."
+```
+
+## Section 4 — Feature-to-Test Matrix
+
+This matrix condenses the catalog to one row per feature and uses the exact review contract columns. Status values remain constrained to `present`, `weak`, `absent`, and `not_applicable`.
+
+| feature_id                             | unit    | integration | playwright     | maestro        | hil_pixel4     | hil_u64        | hil_c64u       | key_evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | key_gaps                                                                                                              |
+| -------------------------------------- | ------- | ----------- | -------------- | -------------- | -------------- | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| app\_\_tab_navigation                  | present | absent      | present        | present        | not_applicable | not_applicable | not_applicable | [tests/unit/components/TabBar.test.tsx](tests/unit/components/TabBar.test.tsx); [tests/unit/components/SwipeNavigationLayer.test.tsx](tests/unit/components/SwipeNavigationLayer.test.tsx); [playwright/swipe-navigation.spec.ts](playwright/swipe-navigation.spec.ts)                                                                                                                                                                                                                                                                                                                                                         | No router-level integration test that commits a drag transition through a full route change.                          |
+| app\_\_connection_controller           | present | weak        | present        | weak           | absent         | absent         | weak           | [tests/unit/components/ConnectionController.test.tsx](tests/unit/components/ConnectionController.test.tsx); [tests/unit/connection/connectionManager.test.ts](tests/unit/connection/connectionManager.test.ts); [playwright/settingsConnection.spec.ts](playwright/settingsConnection.spec.ts); [tests/android-emulator/specs/connection.spec.mjs](tests/android-emulator/specs/connection.spec.mjs)                                                                                                                                                                                                                           | No direct Pixel 4 or `u64` artifact; Maestro only probes health and does not cover long-suspend reconnect.            |
+| app\_\_global_diagnostics_overlay      | present | weak        | present        | weak           | absent         | absent         | weak           | [tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx](tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx); [playwright/diagnosticsActions.spec.ts](playwright/diagnosticsActions.spec.ts); [.maestro/ios-diagnostics-export.yaml](.maestro/ios-diagnostics-export.yaml)                                                                                                                                                                                                                                                                                                                       | No dedicated integration coverage for deep-link round-tripping across every diagnostics route.                        |
+| app\_\_error_boundary                  | present | absent      | weak           | absent         | not_applicable | not_applicable | not_applicable | [tests/unit/PageErrorBoundary.test.tsx](tests/unit/PageErrorBoundary.test.tsx); [tests/unit/App.runtime.test.tsx](tests/unit/App.runtime.test.tsx)                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | No end-to-end recovery assertion after route change or retry from a thrown render error.                              |
+| home\_\_machine_controls               | present | weak        | present        | absent         | absent         | absent         | weak           | [tests/unit/lib/deviceControl/deviceControl.test.ts](tests/unit/lib/deviceControl/deviceControl.test.ts); [tests/unit/pages/home/components/MachineControls.test.tsx](tests/unit/pages/home/components/MachineControls.test.tsx); [playwright/homeInteractivity.spec.ts](playwright/homeInteractivity.spec.ts)                                                                                                                                                                                                                                                                                                                 | No dedicated Maestro flow for destructive machine controls; no Pixel 4 or `u64` artifact.                             |
+| home\_\_app_configs                    | present | weak        | present        | absent         | absent         | absent         | weak           | [tests/unit/config/appConfigStore.test.ts](tests/unit/config/appConfigStore.test.ts); [tests/unit/pages/home/dialogs/ManageConfigDialog.test.tsx](tests/unit/pages/home/dialogs/ManageConfigDialog.test.tsx); [playwright/homeConfigManagement.spec.ts](playwright/homeConfigManagement.spec.ts)                                                                                                                                                                                                                                                                                                                               | HIL evidence is only indirect through the broader `c64u` settings/home surface run.                                   |
+| home\_\_ram_operations                 | present | weak        | present        | present        | absent         | absent         | weak           | [tests/unit/machine/ramOperations.test.ts](tests/unit/machine/ramOperations.test.ts); [tests/unit/lib/reu/reuWorkflow.test.ts](tests/unit/lib/reu/reuWorkflow.test.ts); [playwright/ramSnapshot.spec.ts](playwright/ramSnapshot.spec.ts); [.maestro/edge-ram-restore-chunked.yaml](.maestro/edge-ram-restore-chunked.yaml)                                                                                                                                                                                                                                                                                                     | No Pixel 4 round-trip artifact and no `u64` artifact for save/load/REU flows.                                         |
+| play\_\_source_browsing                | present | weak        | present        | present        | absent         | absent         | weak           | [tests/unit/sourceNavigation/useSourceNavigator.test.ts](tests/unit/sourceNavigation/useSourceNavigator.test.ts); [tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx](tests/unit/components/itemSelection/ItemSelectionDialog.test.tsx); [playwright/itemSelection.spec.ts](playwright/itemSelection.spec.ts); [.maestro/smoke-file-picker.yaml](.maestro/smoke-file-picker.yaml)                                                                                                                                                                                                                               | `u64` proof is absent and Local/C64U/HVSC browse is only hardware-proven against `c64u`.                              |
+| play\_\_hvsc_lifecycle                 | present | present     | present        | present        | absent         | absent         | present        | [tests/unit/hvsc/hvscIngestionPipelineStateMachine.test.ts](tests/unit/hvsc/hvscIngestionPipelineStateMachine.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt); [playwright/hvsc.spec.ts](playwright/hvsc.spec.ts); [.maestro/edge-hvsc-ingest-lifecycle.yaml](.maestro/edge-hvsc-ingest-lifecycle.yaml); [docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md](docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md) | Full-app coverage proves physical Android plus `c64u`, but not Pixel 4 and not `u64`.                                 |
+| play\_\_playback_transport             | present | weak        | present        | present        | absent         | absent         | present        | [tests/unit/playFiles/usePlaybackController.test.tsx](tests/unit/playFiles/usePlaybackController.test.tsx); [tests/unit/playFiles/usePlaybackController.autoAdvance.test.tsx](tests/unit/playFiles/usePlaybackController.autoAdvance.test.tsx); [playwright/playback.spec.ts](playwright/playback.spec.ts); [.maestro/smoke-playback.yaml](.maestro/smoke-playback.yaml); [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)                                                                                                       | No Pixel 4 or `u64` artifact; integration does not fully cover router plus native bridge races.                       |
+| play\_\_lock_screen_playback           | present | present     | not_applicable | present        | absent         | absent         | present        | [tests/unit/playFiles/usePlaybackResumeTriggers.test.tsx](tests/unit/playFiles/usePlaybackResumeTriggers.test.tsx); [android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionPluginTest.kt); [.maestro/edge-auto-advance-lock.yaml](.maestro/edge-auto-advance-lock.yaml); [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)                                                                                                 | No web path by design; no Pixel 4 or `u64` artifact proving long-duration lock-screen behavior.                       |
+| disks\_\_library                       | present | weak        | present        | present        | absent         | absent         | present        | [tests/unit/hooks/useDiskLibrary.test.ts](tests/unit/hooks/useDiskLibrary.test.ts); [tests/unit/disks/diskGrouping.test.ts](tests/unit/disks/diskGrouping.test.ts); [playwright/diskManagement.spec.ts](playwright/diskManagement.spec.ts); [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)                                                                                                                                                                                                                                     | No Pixel 4 or `u64` proof; integration does not cover large-library persistence plus rename/delete races.             |
+| disks\_\_mount                         | present | weak        | present        | weak           | absent         | absent         | present        | [tests/unit/diskMount.test.ts](tests/unit/diskMount.test.ts); [playwright/diskManagement.spec.ts](playwright/diskManagement.spec.ts); [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)                                                                                                                                                                                                                                                                                                                                           | No dedicated Maestro mount/eject flow and no Pixel 4 or `u64` artifact.                                               |
+| config\_\_browse                       | present | weak        | present        | absent         | absent         | absent         | weak           | [tests/unit/pages/ConfigBrowserPage.test.tsx](tests/unit/pages/ConfigBrowserPage.test.tsx); [playwright/configVisibility.spec.ts](playwright/configVisibility.spec.ts); [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)                                                                                                                                                                                                                                                                                                         | No Maestro route coverage and no direct hardware artifact for browse/search on Pixel 4 or `u64`.                      |
+| config\_\_edit                         | present | weak        | present        | weak           | absent         | absent         | present        | [tests/unit/configWriteThrottle.test.ts](tests/unit/configWriteThrottle.test.ts); [tests/unit/audioMixerSolo.test.ts](tests/unit/audioMixerSolo.test.ts); [playwright/configEditingBehavior.spec.ts](playwright/configEditingBehavior.spec.ts); [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)                                                                                                                                                                                                                                 | No Pixel 4 or `u64` artifact; immediate-apply plus navigation-race path still lacks an integration test.              |
+| settings\_\_connection                 | present | weak        | present        | absent         | absent         | absent         | present        | [tests/unit/pages/SettingsPage.test.tsx](tests/unit/pages/SettingsPage.test.tsx); [tests/unit/secureStorage.test.ts](tests/unit/secureStorage.test.ts); [playwright/settingsConnection.spec.ts](playwright/settingsConnection.spec.ts); [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md)                                                                                                                                                                                                                                         | No Maestro coverage and no Pixel 4 or `u64` proof for reconnect and password persistence.                             |
+| settings\_\_safety_presets             | weak    | absent      | weak           | absent         | absent         | absent         | weak           | [tests/unit/config/deviceSafetySettings.test.ts](tests/unit/config/deviceSafetySettings.test.ts); [playwright/settingsDiagnostics.spec.ts](playwright/settingsDiagnostics.spec.ts); [docs/testing/agentic-tests/full-app-coverage/prompts/F021-settings-diagnostics-safety.md](docs/testing/agentic-tests/full-app-coverage/prompts/F021-settings-diagnostics-safety.md)                                                                                                                                                                                                                                                       | Cross-cutting destructive-action matrix remains unowned; this is still the thinnest test area in the catalog.         |
+| settings\_\_demo_mode                  | present | present     | present        | absent         | not_applicable | not_applicable | not_applicable | [tests/unit/components/DemoModeInterstitial.test.tsx](tests/unit/components/DemoModeInterstitial.test.tsx); [tests/unit/appLifecycle.test.ts](tests/unit/appLifecycle.test.ts); [playwright/demoMode.spec.ts](playwright/demoMode.spec.ts)                                                                                                                                                                                                                                                                                                                                                                                     | No device-level Maestro flow, but hardware HIL is not applicable because demo mode is explicitly offline.             |
+| docs\_\_view                           | absent  | absent      | weak           | absent         | not_applicable | not_applicable | not_applicable | [playwright/ui.spec.ts](playwright/ui.spec.ts); [docs/img/app/docs/01-overview.png](docs/img/app/docs/01-overview.png)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | No direct unit or Maestro coverage for docs section content and navigation.                                           |
+| licenses\_\_open_source_view           | absent  | absent      | weak           | absent         | not_applicable | not_applicable | not_applicable | [src/pages/OpenSourceLicensesPage.tsx](src/pages/OpenSourceLicensesPage.tsx); [playwright/ui.spec.ts](playwright/ui.spec.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | No dedicated tests beyond broad shell coverage.                                                                       |
+| diagnostics\_\_saved_device_switching  | present | weak        | present        | absent         | absent         | absent         | weak           | [tests/unit/components/diagnostics/DiagnosticsDialog.savedDeviceSwitch.test.tsx](tests/unit/components/diagnostics/DiagnosticsDialog.savedDeviceSwitch.test.tsx); [playwright/diagnosticsActions.spec.ts](playwright/diagnosticsActions.spec.ts)                                                                                                                                                                                                                                                                                                                                                                               | No Maestro flow and no direct hardware artifact proving stale-health or one-unhealthy switching cases.                |
+| diagnostics\_\_share_zip               | present | absent      | weak           | present        | absent         | not_applicable | not_applicable | [tests/unit/diagnostics/exportRedaction.test.ts](tests/unit/diagnostics/exportRedaction.test.ts); [tests/unit/lib/diagnostics/diagnosticsExport.test.ts](tests/unit/lib/diagnostics/diagnosticsExport.test.ts); [.maestro/ios-diagnostics-export.yaml](.maestro/ios-diagnostics-export.yaml)                                                                                                                                                                                                                                                                                                                                   | No end-to-end ZIP inspection and no hardware dependency beyond native share-sheet path.                               |
+| coverage_probe\_\_test_heartbeat       | present | absent      | present        | not_applicable | not_applicable | not_applicable | not_applicable | [tests/unit/components/TestHeartbeat.test.tsx](tests/unit/components/TestHeartbeat.test.tsx); [playwright/coverageProbes.spec.ts](playwright/coverageProbes.spec.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                           | No build-time guard proving the probe stays out of production bundles.                                                |
+| not_found\_\_route                     | weak    | absent      | present        | absent         | not_applicable | not_applicable | not_applicable | [tests/unit/App.runtime.test.tsx](tests/unit/App.runtime.test.tsx); [playwright/navigationBoundaries.spec.ts](playwright/navigationBoundaries.spec.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | No dedicated unit test isolates the unknown-path branch.                                                              |
+| android_native\_\_background_execution | present | present     | not_applicable | present        | absent         | not_applicable | weak           | [android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionServiceTest.kt](android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionServiceTest.kt); [android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionPluginTest.kt); [.maestro/smoke-background-execution.yaml](.maestro/smoke-background-execution.yaml)                                                                                                                                                                             | No Pixel 4 artifact and no battery-optimizer stress proof.                                                            |
+| android_native\_\_secure_storage       | present | present     | absent         | present        | absent         | not_applicable | weak           | [tests/unit/secureStorage.test.ts](tests/unit/secureStorage.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/SecureStoragePluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/SecureStoragePluginTest.kt); [.maestro/ios-secure-storage-persist.yaml](.maestro/ios-secure-storage-persist.yaml)                                                                                                                                                                                                                                                                                                   | No Android physical-device proof for post-reboot secret survival.                                                     |
+| android_native\_\_folder_picker        | present | present     | not_applicable | present        | absent         | not_applicable | weak           | [tests/unit/native/folderPicker.test.ts](tests/unit/native/folderPicker.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/FolderPickerPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/FolderPickerPluginTest.kt); [.maestro/smoke-file-picker.yaml](.maestro/smoke-file-picker.yaml)                                                                                                                                                                                                                                                                                                           | No Pixel 4 SAF persistence artifact; broader `c64u` evidence only covers app-first Android, not the preferred device. |
+| android_native\_\_telnet_socket        | weak    | present     | absent         | absent         | absent         | absent         | weak           | [tests/unit/telnet/telnetSocketWeb.test.ts](tests/unit/telnet/telnetSocketWeb.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/TelnetSocketPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/TelnetSocketPluginTest.kt)                                                                                                                                                                                                                                                                                                                                                                         | No Maestro or direct hardware stress proof.                                                                           |
+| android_native\_\_ftp_client           | weak    | present     | present        | present        | absent         | absent         | weak           | [android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt); [playwright/webPlatformAuth.spec.ts](playwright/webPlatformAuth.spec.ts); [.maestro/real-c64u-ftp-browse.yaml](.maestro/real-c64u-ftp-browse.yaml)                                                                                                                                                                                                                                                                                                                   | No Pixel 4 or `u64` artifact and no direct JS-to-native bridge integration layer.                                     |
+| android_native\_\_mock_c64u            | present | present     | present        | absent         | not_applicable | not_applicable | not_applicable | [tests/unit/mockC64Server.test.ts](tests/unit/mockC64Server.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/MockC64UServerTest.kt](android/app/src/test/java/uk/gleissner/c64commander/MockC64UServerTest.kt); [playwright/connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts)                                                                                                                                                                                                                                                                                                               | No Maestro flow is needed for this support runtime, but there is no mobile orchestration smoke of the mock server.    |
+| android_native\_\_diagnostics_bridge   | present | present     | absent         | absent         | absent         | not_applicable | weak           | [tests/unit/native/diagnosticsBridge.test.ts](tests/unit/native/diagnosticsBridge.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/DiagnosticsBridgePluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/DiagnosticsBridgePluginTest.kt)                                                                                                                                                                                                                                                                                                                                                           | No end-to-end Playwright or Maestro exercise of the bridge output.                                                    |
+| android_native\_\_feature_flags        | present | present     | present        | absent         | not_applicable | not_applicable | not_applicable | [tests/unit/featureFlags.test.ts](tests/unit/featureFlags.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/FeatureFlagsPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/FeatureFlagsPluginTest.kt); [playwright/featureFlags.spec.ts](playwright/featureFlags.spec.ts)                                                                                                                                                                                                                                                                                                                         | No dedicated mobile flow, but hardware HIL is not required for static flag exposure.                                  |
+| android_native\_\_safe_area            | present | present     | absent         | absent         | absent         | not_applicable | not_applicable | [tests/unit/android/safeAreaPluginRegistration.test.ts](tests/unit/android/safeAreaPluginRegistration.test.ts); [android/app/src/test/java/uk/gleissner/c64commander/SafeAreaPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/SafeAreaPluginTest.kt)                                                                                                                                                                                                                                                                                                                                                         | No device-flow proof for header/footer inset behavior on the preferred handset.                                       |
+| ios_native\_\_plugin_registry          | absent  | absent      | not_applicable | weak           | not_applicable | not_applicable | not_applicable | [ios/App/App/NativePlugins.swift](ios/App/App/NativePlugins.swift); [.maestro/ios-ci-smoke.yaml](.maestro/ios-ci-smoke.yaml)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | The SwiftPM validation package does not cover plugin registration; no iOS unit target mirrors the Android JVM suite.  |
+| ios_native\_\_hvsc_ingestion           | absent  | absent      | not_applicable | weak           | not_applicable | absent         | absent         | [ios/App/App/HvscIngestionPlugin.swift](ios/App/App/HvscIngestionPlugin.swift); [.maestro/ios-hvsc-browse.yaml](.maestro/ios-hvsc-browse.yaml)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | No iOS-native unit or integration proof and no hardware artifact for either `u64` or `c64u`.                          |
+| web_runtime\_\_auth_state              | present | weak        | present        | not_applicable | not_applicable | not_applicable | not_applicable | [tests/unit/web/authState.test.ts](tests/unit/web/authState.test.ts); [playwright/webPlatformAuth.spec.ts](playwright/webPlatformAuth.spec.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | No server-process integration suite that exercises auth state with production headers and cookie settings together.   |
+| web_runtime\_\_host_validation         | present | weak        | present        | not_applicable | not_applicable | not_applicable | not_applicable | [tests/unit/web/hostValidation.test.ts](tests/unit/web/hostValidation.test.ts); [playwright/webPlatformAuth.spec.ts](playwright/webPlatformAuth.spec.ts); [ios/native-tests/Tests/NativeValidationTests/HostValidationTests.swift](ios/native-tests/Tests/NativeValidationTests/HostValidationTests.swift)                                                                                                                                                                                                                                                                                                                     | No end-to-end parity suite covering Android, iOS native validation, and server startup together.                      |
+| web_runtime\_\_security_headers        | present | weak        | weak           | not_applicable | not_applicable | not_applicable | not_applicable | [tests/unit/web/securityHeaders.test.ts](tests/unit/web/securityHeaders.test.ts); [web/server/src/securityHeaders.ts](web/server/src/securityHeaders.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | No snapshot or E2E assertion of the full production header set.                                                       |
+
+Cross-cutting conclusions from the matrix:
+
+1. `tests/android-emulator/**`, `tests/contract/**`, and `ios/native-tests/**` materially improve the integration story compared with the inherited review, but they still do not close the cross-platform runtime gap for every feature.
+2. Direct hardware evidence is strongest for physical Android plus `c64u` through the full-app coverage executor and weakest for the contract's required `hil_pixel4` and `hil_u64` columns.
+3. `settings__safety_presets` remains the least convincing feature in the catalog because no single suite owns the preset-to-destructive-action matrix end to end.
+4. Web runtime unit coverage is stronger than the inherited review credited; the weakest part of the web surface is now integration and deployment-shape validation, not pure logic testing.
+
+## Section 5 — Risk Register
+
+Each risk is tied to a concrete feature and uses the contract severity scale `critical`, `high`, `medium`, `low`.
+
+| risk_id | feature_id                        | category           | severity | platforms         | failure_mode                                                                                                          | missing_evidence                                                                                                     | recommended_test                                                                                                                |
+| ------- | --------------------------------- | ------------------ | -------- | ----------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| R-01    | settings\_\_safety_presets        | correctness        | critical | android, ios, web | A destructive action bypasses the expected preset gate or confirmation path.                                          | No preset × action matrix proves power-off, clear flash, RAM-reset, and related destructive actions under all modes. | Add a parametrized unit-plus-Playwright safety matrix covering every destructive CTA under Relaxed, Balanced, and Conservative. |
+| R-02    | play\_\_hvsc_lifecycle            | reliability        | critical | android, ios      | Cancel or restart during ingest leaves the library in a partial or misleading state.                                  | No iOS-native integration proof and no Pixel 4 or `u64` hardware artifact for the full lifecycle.                    | Add cancel → resume → ready invariants to the HVSC state-store tests and mirror Android native coverage on iOS.                 |
+| R-03    | app\_\_connection_controller      | reliability        | high     | android, ios, web | Resume from background or long suspend leaves stale health state visible.                                             | No integration test fast-forwards staleness thresholds and proves re-probe behavior across suspend/resume.           | Add a connection-manager integration test with suspended clock and resumed probe assertions.                                    |
+| R-04    | diagnostics\_\_share_zip          | security           | high     | android, ios      | ZIP export leaks a newly introduced sensitive token even though string-level redaction still passes.                  | No end-to-end inspection of generated ZIP contents.                                                                  | Add a diagnostics export audit that seeds known sensitive tokens and inspects the produced archive.                             |
+| R-05    | play\_\_playback_transport        | correctness        | high     | android, ios      | Auto-advance silently skips very short tracks or double-advances after a race.                                        | No required-device artifact proves short-track behavior on the preferred handset or on `u64`.                        | Add a curated short-track HIL suite plus an integration race harness around due-at and queue advancement.                       |
+| R-06    | play\_\_lock_screen_playback      | reliability        | high     | android           | Background execution survives unit and Maestro checks but fails under real OEM power-policy pressure.                 | No Pixel 4 artifact covers battery-optimizer or long-duration lock-screen playback.                                  | Add a Pixel 4 HIL run that toggles battery optimization and verifies continuous playback with audio proof.                      |
+| R-07    | disks\_\_mount                    | device_interaction | high     | android, ios, web | Client-mounted state diverges from the actual drive state after concurrent reset, power, or rotation.                 | No integration test interleaves mount/eject with drive reset and validates convergence.                              | Add a MockC64U-backed integration race test for mount, reset, and mounted-state reconciliation.                                 |
+| R-08    | config\_\_edit                    | state_consistency  | high     | android, ios, web | Immediate-apply writes lose the last intended value when the user navigates away mid-throttle window.                 | No navigation-during-throttle integration test.                                                                      | Add a config write integration test that edits, navigates immediately, and asserts the final committed value.                   |
+| R-09    | home\_\_ram_operations            | persistence        | high     | android           | SAF or REU persistence fails mid-flow and leaves the UI or storage in a partially updated state.                      | No revocation or interrupted-write recovery proof on the preferred handset.                                          | Add revocation-path unit tests and a physical-device SAF round-trip run with explicit failure recovery assertions.              |
+| R-10    | ios_native\_\_plugin_registry     | cross_platform     | medium   | ios               | Release builds drift from debug registration and silently omit a native plugin.                                       | No iOS-native unit target validates the registered plugin list.                                                      | Add a Swift test target that asserts the registry contents against the expected plugin set.                                     |
+| R-11    | web_runtime\_\_security_headers   | security           | medium   | web               | Security headers regress in production while logic-level tests still pass.                                            | No snapshot or server-process assertion pins the complete production header set.                                     | Add a web server snapshot/integration test that verifies the exact header matrix for prod and dev.                              |
+| R-12    | app\_\_global_diagnostics_overlay | observability      | medium   | android, ios, web | A newly added diagnostics route or panel drifts from the path-to-panel mapping and silently deep-links wrong content. | No dedicated test enumerates every diagnostics URL, including the three heatmap routes.                              | Add a route-mapping unit test plus a Playwright deep-link smoke covering all diagnostics paths.                                 |
+
+## Section 6 — Proposed Test Backlog
+
+| proposal_id | feature_id                        | priority | test_family          | target_platform   | target_device    | suggested_file_or_suite                                                                                    | scenario                                                                               | assertions                                                                                      | why_missing_now                                                                               |
+| ----------- | --------------------------------- | -------- | -------------------- | ----------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| T-01        | settings\_\_safety_presets        | P0       | unit + playwright    | web               | none             | `tests/unit/config/safetyPresetMatrix.test.ts`, `playwright/safetyPresets.spec.ts`                         | Exercise every destructive action under every safety preset.                           | Gate, confirm, or allow behavior matches the documented preset semantics.                       | Preset semantics are distributed across settings and action flows; no single suite owns them. |
+| T-02        | play\_\_hvsc_lifecycle            | P0       | integration + native | android, ios      | none             | `tests/unit/hvsc/hvscIngestionRecovery.test.ts`, iOS native HVSC plugin suite                              | Cancel ingest, resume, and verify the pipeline reaches a clean ready state.            | No partial index remains after cancel; resume reaches ready-to-browse deterministically.        | Android native coverage exists, but iOS parity and resume invariants are still missing.       |
+| T-03        | diagnostics\_\_share_zip          | P0       | integration          | android, ios, web | none             | `tests/integration/diagnostics/shareZipAudit.test.ts`                                                      | Seed diagnostics with known sensitive tokens and inspect the produced archive.         | Redactions survive the full export pipeline and no seeded token is present verbatim.            | Existing tests validate redaction helpers, not the exported artifact.                         |
+| T-04        | play\_\_playback_transport        | P1       | hil                  | android, ios      | `u64`            | `.maestro/hil-short-track-auto-advance.yaml`                                                               | Play a curated set of very short tracks and let auto-advance run to completion.        | Advance count matches queue size and no track is skipped or doubled.                            | Current hardware evidence is only on `c64u`, not the required `u64` target.                   |
+| T-05        | play\_\_lock_screen_playback      | P1       | hil                  | android           | Pixel 4          | `.maestro/perf-background-battery-opt.yaml`                                                                | Run long-duration playback on the preferred handset with battery optimization toggled. | Playback continues under lock and background, with no silent stop or missed auto-advance.       | No Pixel 4 artifact exists in the current repo evidence set.                                  |
+| T-06        | disks\_\_mount                    | P1       | integration          | web               | mock C64U        | `tests/integration/disks/mountResetRace.test.ts`                                                           | Mount a disk, reset or power-cycle the drive immediately, then re-query state.         | Client state converges to server state and optimistic UI does not remain stale.                 | Current tests cover mount logic and UI happy paths, not the race.                             |
+| T-07        | config\_\_edit                    | P1       | integration          | web               | mock C64U        | `tests/integration/config/editThrottleNavigationRace.test.ts`                                              | Change a throttled config value and navigate away before the write settles.            | Final persisted value matches the user's last visible input.                                    | Immediate-apply behavior is unit-tested but not navigation-race-tested.                       |
+| T-08        | app\_\_connection_controller      | P1       | integration          | web               | none             | `tests/integration/connection/suspendResumeStaleness.test.ts`                                              | Suspend the app past the stale threshold and then resume.                              | Probe restarts, UI state exits stale, and no stale badge remains visible.                       | Current evidence is split across unit logic and E2E happy paths.                              |
+| T-09        | app\_\_global_diagnostics_overlay | P1       | unit + playwright    | web               | none             | `tests/unit/lib/diagnostics/diagnosticsOverlayRouteMap.test.ts`, `playwright/diagnosticsDeepLinks.spec.ts` | Visit every diagnostics URL, including the three heatmap routes.                       | Each path resolves to the expected panel and closes back to Settings correctly.                 | The inherited review missed the heatmap routes entirely, so no dedicated mapping test exists. |
+| T-10        | ios_native\_\_plugin_registry     | P1       | unit                 | ios               | simulator/device | `ios/App/AppTests/NativePluginsRegistrationTests.swift`                                                    | Launch the native registry and introspect registered plugins.                          | The expected plugin set is present exactly once in release-compatible configuration.            | iOS native validation currently covers request/path helpers, not plugin registration.         |
+| T-11        | web_runtime\_\_security_headers   | P1       | unit + integration   | web               | none             | `tests/unit/web/securityHeaders.snapshot.test.ts`, `tests/integration/web/serverHeaders.test.ts`           | Request static and authenticated endpoints under prod and dev configurations.          | Exact CSP/HSTS/frame/referrer/content-type headers match the intended profile.                  | Current web tests assert behavior, not the full deploy-time header matrix.                    |
+| T-12        | home\_\_ram_operations            | P2       | unit + hil           | android           | Pixel 4          | `tests/unit/lib/reu/reuWorkflow.revocation.test.ts`, physical-device RAM flow run                          | Revoke folder or interrupt REU write mid-operation, then recover.                      | UI reports the failure cleanly and prompts for a new folder without corrupting persisted state. | SAF and REU failure paths remain hardware-adjacent and are only partially simulated today.    |
+
+## Section 7 — Completeness Report
+
+| Check                                                                               | Expected                                                                  | Observed                                                                                                                                                   | Pass | Notes                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| mandatory route count accounted for                                                 | All routed paths from app shell and diagnostics overlay are listed        | 17 canonical routes (`/`, `/play`, `/disks`, `/config`, `/settings`, `/settings/open-source-licenses`, `/docs`, 8 diagnostics paths, `/__coverage__`, `*`) | yes  | Heatmap routes were corrected from the inherited false negative.                                                                       |
+| mandatory global surfaces accounted for                                             | Every always-mounted or route-agnostic surface is listed                  | 14 global surfaces                                                                                                                                         | yes  | Includes AppBar, SwipeNavigationLayer, connection controller, diagnostics runtime bridge, and error listeners.                         |
+| screenshot folders accounted for                                                    | Top-level app screenshot families are mapped                              | `home`, `play`, `disks`, `config`, `settings`, `docs`, `diagnostics`                                                                                       | yes  | Grouped by owning feature families and cross-checked against [playwright/screenshot-catalog.json](playwright/screenshot-catalog.json). |
+| screenshot files accounted for or explicitly grouped                                | Every file is either referenced directly or grouped under a stable family | 171 PNG files grouped under 66 directories                                                                                                                 | yes  | High-volume profile variants are grouped where they duplicate the same feature family.                                                 |
+| routed page files accounted for                                                     | All mandatory page files are either feature-owned or support-only         | 78 `src/pages/**` files accounted                                                                                                                          | yes  | Page-local hooks and dialogs were reconciled to owning workflow features.                                                              |
+| global component files accounted for                                                | All mandatory `src/components/**` owners are accounted                    | 106 component files accounted; 21 diagnostics files explicitly mapped                                                                                      | yes  | `src/components/ui/**` is explicitly marked support-only.                                                                              |
+| native Android files accounted for                                                  | All Android runtime and test owners are accounted                         | 19 main files, 22 JVM test files                                                                                                                           | yes  | Android runtime features and plugin tests are mapped separately from app features.                                                     |
+| native iOS files accounted for                                                      | All iOS runtime and native validation files are accounted                 | 20 app files, 5 Swift test files                                                                                                                           | yes  | The inherited “iOS tests absent” claim was removed.                                                                                    |
+| web runtime files accounted for                                                     | All web server files are accounted                                        | 6 `web/server/src/**` files                                                                                                                                | yes  | Each file rolls up under one of the three web runtime features.                                                                        |
+| test files accounted for                                                            | All mandatory test roots are mapped or support-only classified            | 508 unit files, 13 Android emulator files, 67 contract files, 47 Playwright specs, 57 Maestro YAML, 22 Android JVM tests, 5 Swift tests                    | yes  | Helper-only files under test roots are treated as support infrastructure in Section 1 notes.                                           |
+| no feature missing implementation refs                                              | Every feature record has at least one implementation reference            | 38 of 38 features satisfy schema                                                                                                                           | yes  | Preserved from the inherited feature catalog and re-audited during continuation.                                                       |
+| no feature missing coverage statuses                                                | Every feature record carries all seven coverage families                  | 38 of 38 features list all seven families                                                                                                                  | yes  | Section 4 re-states each feature family explicitly.                                                                                    |
+| no hardware-dependent feature falsely marked fully covered by non-hardware evidence | Pixel 4, `u64`, and `c64u` remain separate truth buckets                  | `hil_pixel4` and `hil_u64` remain absent or weak unless direct evidence exists; `hil_c64u` is only marked present where app-first artifacts exist          | yes  | Full-app coverage artifacts are physical Android plus `c64u`, not Pixel 4 and not `u64`.                                               |
+
+## Section 8 — Execution Plan
+
+| Phase | Goal                                          | Required Inputs                                                                                                                                                                                                                                                                                        | Output                                               | Completion Gate                                                                                  |
+| ----- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| P0    | Audit the inherited continuation artifact     | [docs/research/review-15/review-15.md](docs/research/review-15/review-15.md), [docs/research/review-15/FEATURE_MODEL.md](docs/research/review-15/FEATURE_MODEL.md), review prompt contract                                                                                                             | Continuation ledger of keep/rewrite/delete decisions | Every inherited major section has a disposition and all explicit backlog language is identified. |
+| P1    | Build the source ledger                       | Mandatory docs, code roots, test roots, screenshot corpus                                                                                                                                                                                                                                              | Section 1 coverage ledger                            | Every mandatory source group is named and none remain implicit.                                  |
+| P2    | Verify routes and global surfaces from code   | [src/App.tsx](src/App.tsx), [src/lib/navigation/tabRoutes.ts](src/lib/navigation/tabRoutes.ts), [src/components/SwipeNavigationLayer.tsx](src/components/SwipeNavigationLayer.tsx), [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | Section 2 route and surface inventory                | Every route and always-mounted surface is listed with current owning files.                      |
+| P3    | Reconcile the feature catalog to current code | Existing Section 3 catalog, routed pages, global components, native runtime roots                                                                                                                                                                                                                      | Stable feature catalog at workflow grain             | No open feature backlog remains and every route/global surface has an owning feature.            |
+| P4    | Re-map test coverage families                 | Unit, Android emulator, contract, Playwright, Maestro, Android JVM, iOS native tests, HIL artifacts                                                                                                                                                                                                    | Section 4 matrix                                     | Every feature has explicit statuses across all seven families with repository evidence.          |
+| P5    | Synthesize risks and targeted tests           | Verified feature inventory plus coverage gaps                                                                                                                                                                                                                                                          | Sections 5 and 6                                     | Each risk and proposal ties back to a specific feature and evidence gap.                         |
+| P6    | Run convergence checks and continuation audit | Revised sections 1-9 plus inherited review state                                                                                                                                                                                                                                                       | Sections 7 and 10                                    | All mandatory completeness checks pass and stale inherited claims are removed or corrected.      |
+
+## Section 9 — Execution Worklog
+
+| Worklog ID | What Inspected                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | What Learned                                                                                                                                           | What Changed in the Feature or Coverage Model                                                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W-01       | [docs/research/review-15/review-15.md](docs/research/review-15/review-15.md), [docs/research/review-15/FEATURE_MODEL.md](docs/research/review-15/FEATURE_MODEL.md), [README.md](README.md)                                                                                                                                                                                                                                                                                                                                                     | The inherited review was structurally complete but explicitly partial and carried a named feature backlog.                                             | Marked Sections 1, 2, 4, 5, 6, 7, 8, and 9 for rewrite; preserved stable `feature_id` values from Section 3.                                                   |
+| W-02       | [AGENTS.md](AGENTS.md), [.github/copilot-instructions.md](.github/copilot-instructions.md), [docs/architecture.md](docs/architecture.md), [docs/features-by-page.md](docs/features-by-page.md)                                                                                                                                                                                                                                                                                                                                                 | Validation scope for this task is `DOC_ONLY`, but the review still had to be re-grounded in current code and architecture.                             | Confirmed the review must be evidence-backed and not inherit stale route or coverage claims.                                                                   |
+| W-03       | [src/App.tsx](src/App.tsx), [src/lib/navigation/tabRoutes.ts](src/lib/navigation/tabRoutes.ts), [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx)                                                                                                                                                                                                                                                                                                                             | The three diagnostics heatmap routes are URL-addressable and the prior review's contrary claim was false.                                              | Rewrote Section 2 route inventory and corrected the diagnostics deep-link model.                                                                               |
+| W-04       | `src/pages/**`, `src/components/**`, `src/hooks/**`, `src/lib/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Page-local dialogs and helper components can be reconciled to owning workflow features without carrying an unresolved catalog backlog.                 | Removed the inherited Section 3.Z backlog and treated those surfaces as owned subworkflows or support-only infrastructure.                                     |
+| W-05       | `tests/unit/**`, `tests/android-emulator/**`, `tests/contract/**`, `playwright/**/*.spec.ts`, `.maestro/**/*.yaml`, `android/app/src/test/java/**`, `ios/native-tests/**`                                                                                                                                                                                                                                                                                                                                                                      | The test corpus is materially broader than the inherited review credited, especially iOS native validation, Android emulator, and contract suites.     | Rebuilt Section 4 with explicit evidence and closed the stale “iOS tests absent” claim.                                                                        |
+| W-06       | [docs/testing/physical-device-matrix.md](docs/testing/physical-device-matrix.md), [docs/testing/agentic-tests/full-app-coverage/README.md](docs/testing/agentic-tests/full-app-coverage/README.md), [docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md](docs/testing/agentic-tests/full-app-coverage/feature-status-matrix.md), [docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md](docs/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md) | Physical Android plus `c64u` evidence exists, but it does not satisfy the distinct `hil_pixel4` and `hil_u64` buckets.                                 | Tightened HIL truthfulness: `hil_c64u` may be `present` where the manifest proves it; `hil_pixel4` and `hil_u64` stay absent or weak without direct artifacts. |
+| W-07       | [playwright/screenshot-catalog.json](playwright/screenshot-catalog.json), `docs/img/app/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Screenshot coverage is broad enough to support route and feature-family reconciliation, but catalog grouping is coarser than the underlying file tree. | Rebuilt the screenshot completeness checks around grouped top-level families plus explicit file counts.                                                        |
+| W-08       | Existing Sections 5-9 against the prompt contract                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Risk severity scale, backlog format, completeness table, and execution plan shape were all incompatible with the required output contract.             | Replaced Sections 5-9 with contract-compliant tables and phase-based review execution history.                                                                 |
+
+## Section 10 — Continuation Audit
+
+| Section                                 | Inherited State                                 | Disposition | Evidence Rechecked                                                                                                                                                                                                 | Changes Made                                                                                                                                                      |
+| --------------------------------------- | ----------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header and preface                      | provisional                                     | rewrite     | current worktree branch, current review prompt, feature model                                                                                                                                                      | Preserved scope framing but removed the implied first-pass posture and re-grounded the document in the current audit.                                             |
+| Section 1 — Coverage ledger             | stale and incomplete                            | rewrite     | file inventories from `src/**`, `android/**`, `ios/**`, `web/server/**`, test roots, screenshot corpus                                                                                                             | Replaced the split code/test/doc tables with the required single ledger and added missing roots (`tests/android-emulator`, `tests/contract`, `ios/native-tests`). |
+| Section 2 — Route and surface inventory | contradictory                                   | rewrite     | [src/App.tsx](src/App.tsx), [src/lib/navigation/tabRoutes.ts](src/lib/navigation/tabRoutes.ts), [src/components/diagnostics/GlobalDiagnosticsOverlay.tsx](src/components/diagnostics/GlobalDiagnosticsOverlay.tsx) | Added IDs, feature counts, and corrected the false claim that diagnostics heatmap routes were not URL-addressable.                                                |
+| Section 3 intro                         | first-pass / backlog framing                    | rewrite     | current code ownership and current feature catalog                                                                                                                                                                 | Replaced “first-pass catalog” wording with converged workflow-grain wording.                                                                                      |
+| Section 3.Z — Catalog Gap Backlog       | open backlog                                    | delete      | current route/page/component ownership plus current feature catalog                                                                                                                                                | Removed the open backlog and reclassified those items as owned subworkflows or support-only surfaces rather than unresolved future work.                          |
+| Section 4 — Feature-to-Test Matrix      | stale output shape                              | rewrite     | all mandatory test roots plus hardware artifact docs                                                                                                                                                               | Replaced the weakest-link matrix with the required evidence and gap columns.                                                                                      |
+| Section 5 — Risk Register               | partially aligned but wrong severity scale      | rewrite     | risk focus areas in the review prompt plus current coverage gaps                                                                                                                                                   | Converted to `critical/high/medium/low` and removed obsolete or duplicate risks.                                                                                  |
+| Section 6 — Proposed Test Backlog       | wrong output shape                              | rewrite     | existing proposal content and current evidence gaps                                                                                                                                                                | Converted the YAML proposal list to the required flat table.                                                                                                      |
+| Section 7 — Completeness Report         | explicit partial failure                        | rewrite     | current inventories, route counts, screenshot counts, hardware evidence provenance                                                                                                                                 | Closed the inherited partial gates and added contract-specific checks.                                                                                            |
+| Section 8 — Execution Plan              | remediation roadmap, not review execution plan  | rewrite     | prompt phase requirements and actual review steps taken                                                                                                                                                            | Replaced release-remediation waves with the actual phase-based execution plan used for this review.                                                               |
+| Section 9 — Execution Worklog           | falsely claimed completion despite open backlog | rewrite     | actual continuation steps performed in this audit                                                                                                                                                                  | Removed stale “review completed” wording and replaced it with a correction-aware worklog.                                                                         |

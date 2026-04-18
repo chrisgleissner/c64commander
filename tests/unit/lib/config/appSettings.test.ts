@@ -175,6 +175,20 @@ describe("appSettings", () => {
     });
   });
 
+  describe("swipeNavigation", () => {
+    it("defaults to disabled", () => {
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(appSettings.DEFAULT_ENABLE_SWIPE_NAVIGATION);
+    });
+
+    it("saves and loads enablement", () => {
+      appSettings.saveEnableSwipeNavigation(true);
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(true);
+
+      appSettings.saveEnableSwipeNavigation(false);
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(false);
+    });
+  });
+
   // Edge case: localStorage undefined
   describe("environment without localStorage", () => {
     let originalLocalStorage: any;
@@ -198,6 +212,7 @@ describe("appSettings", () => {
       expect(() => appSettings.saveDiscoveryProbeTimeoutMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiskAutostartMode("dma")).not.toThrow();
       expect(() => appSettings.saveVolumeSliderPreviewIntervalMs(250)).not.toThrow();
+      expect(() => appSettings.saveEnableSwipeNavigation(true)).not.toThrow();
       expect(() => appSettings.saveArchiveHostOverride("archive.local")).not.toThrow();
       expect(() => appSettings.saveArchiveClientIdOverride("Custom Client")).not.toThrow();
       expect(() => appSettings.saveArchiveUserAgentOverride("Custom Agent")).not.toThrow();
@@ -210,6 +225,7 @@ describe("appSettings", () => {
       expect(appSettings.loadArchiveHostOverride()).toBe("");
       expect(appSettings.loadArchiveClientIdOverride()).toBe("");
       expect(appSettings.loadArchiveUserAgentOverride()).toBe("");
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(appSettings.DEFAULT_ENABLE_SWIPE_NAVIGATION);
       expect(appSettings.loadCommoserveEnabled()).toBe(appSettings.DEFAULT_COMMOSERVE_ENABLED);
     });
 
