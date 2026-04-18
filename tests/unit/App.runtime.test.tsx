@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   debugSnapshotCleanup: vi.fn(),
   webServerLogCleanup: vi.fn(),
   traceContextBridge: vi.fn(() => <div data-testid="trace-context-bridge" />),
+  shouldThrowDocsPageRef: { current: false },
 }));
 
 vi.mock("@/components/ui/toaster", () => ({ Toaster: () => <div data-testid="toaster" /> }));
@@ -187,13 +188,20 @@ vi.mock("@/pages/HomePage", () => ({ default: () => <div>Home Page</div> }));
 vi.mock("@/pages/ConfigBrowserPage", () => ({ default: () => <div>Config Browser Page</div> }));
 vi.mock("@/pages/SettingsPage", () => ({ default: () => <div>Settings Page</div> }));
 vi.mock("@/pages/OpenSourceLicensesPage", () => ({ default: () => <div>Open Source Licenses</div> }));
-vi.mock("@/pages/DocsPage", () => ({ default: () => <div>Docs Page</div> }));
+vi.mock("@/pages/DocsPage", () => ({
+  default: () => {
+    if (mocks.shouldThrowDocsPageRef.current) {
+      throw new Error("docs render failed");
+    }
+    return <div>Docs Page</div>;
+  },
+}));
 vi.mock("@/pages/NotFound", () => ({ default: () => <div>Not Found</div> }));
 vi.mock("@/pages/PlayFilesPage", () => ({ default: () => <div>Play Files Page</div> }));
 vi.mock("@/pages/DisksPage", () => ({ default: () => <div>Disks Page</div> }));
 vi.mock("@/pages/CoverageProbePage", () => ({ default: () => <div>Coverage Probe Page</div> }));
 
-import App, { shouldEnableCoverageProbe } from "@/App";
+import App, { shouldBundleCoverageProbeModules, shouldEnableCoverageProbe } from "@/App";
 
 describe("App runtime wiring", () => {
   beforeEach(() => {
@@ -223,6 +231,7 @@ describe("App runtime wiring", () => {
     mocks.debugSnapshotCleanup.mockReset();
     mocks.webServerLogCleanup.mockReset();
     mocks.traceContextBridge.mockReset();
+    mocks.shouldThrowDocsPageRef.current = false;
 
     Object.defineProperty(window, "__c64uTestProbeEnabled", {
       configurable: true,
@@ -297,6 +306,22 @@ describe("App runtime wiring", () => {
     }
   });
 
+  it("disables coverage probe modules for production bundles unless the build flag is enabled", () => {
+    const env = import.meta.env as ImportMetaEnv & { PROD: boolean; VITE_ENABLE_TEST_PROBES?: string };
+    const originalProbeFlag = import.meta.env.VITE_ENABLE_TEST_PROBES;
+    const originalProd = import.meta.env.PROD;
+    env.PROD = true;
+    env.VITE_ENABLE_TEST_PROBES = undefined;
+
+    try {
+      expect(shouldBundleCoverageProbeModules()).toBe(false);
+      expect(shouldEnableCoverageProbe()).toBe(false);
+    } finally {
+      env.PROD = originalProd;
+      env.VITE_ENABLE_TEST_PROBES = originalProbeFlag;
+    }
+  });
+
   it("updates the swipe navigation active slot after navigating away from /play", async () => {
     window.history.pushState({}, "", "/play");
     render(<App />);
@@ -312,6 +337,47 @@ describe("App runtime wiring", () => {
     expect(await screen.findByText("Settings Page")).toBeInTheDocument();
     expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "false");
     expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  it("commits swipe navigation through the app router and updates the URL", async () => {
+    mocks.loadEnableSwipeNavigation.mockReturnValue(true);
+    render(<App />);
+
+    expect(await screen.findByText("Home Page")).toBeInTheDocument();
+
+    const container = screen.getByTestId("swipe-navigation-container");
+    const runway = screen.getByTestId("swipe-navigation-runway");
+
+    fireEvent.pointerDown(container, {
+      button: -1,
+      pointerId: 27,
+      isPrimary: true,
+      pointerType: "touch",
+      clientX: 220,
+      clientY: 180,
+    });
+    fireEvent.pointerMove(container, {
+      pointerId: 27,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 184,
+    });
+    fireEvent.pointerUp(container, {
+      pointerId: 27,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 184,
+    });
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/play");
+      expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+    });
+
+    fireEvent.transitionEnd(runway, { target: runway });
+
+    expect(await screen.findByText("Play Files Page")).toBeInTheDocument();
+    expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "true");
   });
 
   it("wraps from the last page to the first page on a touch swipe left", async () => {
@@ -349,6 +415,34 @@ describe("App runtime wiring", () => {
 
     expect(await screen.findByText("Home Page")).toBeInTheDocument();
     expect(screen.getByTestId("swipe-slot-home")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  it("recovers from an active page render failure after navigating away and back", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.shouldThrowDocsPageRef.current = true;
+    window.history.pushState({}, "", "/docs");
+
+    render(<App />);
+
+    expect(await screen.findByText("Something went wrong")).toBeInTheDocument();
+
+    mocks.shouldThrowDocsPageRef.current = false;
+    await act(async () => {
+      window.history.pushState({}, "", "/settings");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(await screen.findByText("Settings Page")).toBeInTheDocument();
+    expect(screen.queryByTestId("page-error-boundary-fallback")).not.toBeInTheDocument();
+
+    await act(async () => {
+      window.history.pushState({}, "", "/docs");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(await screen.findByText("Docs Page")).toBeInTheDocument();
+    expect(screen.queryByTestId("page-error-boundary-fallback")).not.toBeInTheDocument();
+    consoleSpy.mockRestore();
   });
 
   it("invalidates visible-route queries on visibility resume", async () => {

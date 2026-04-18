@@ -123,7 +123,7 @@ telnet:
           - Delete
         default_item: Run
       reu:
-        representative_file: /USB2/test-data/snapshots/__codex_menu_probe.reu
+        representative_file: /USB2/test-data/snapshots/menu_probe.reu
         items:
           - Load into REU
           - Preload on Startup

@@ -87,3 +87,30 @@
 - A temporary 1-byte `.reu` placeholder was uploaded into `/USB2/test-data/snapshots/` only to expose the U64 REU context menu during scraping.
 - Removed the temporary placeholder and the empty `snapshots` directory immediately after the scrape.
 - Restored accidental local C64U mirror writes from the first config scrape attempt so only the intended U64 research artifacts remain.
+
+### Follow-up extractor hardening
+
+- A later review correctly pointed out that `docs/c64/devices/c64u/3.14e/...` was invalid because the live C64U firmware is `1.1.0`, not `3.14e`.
+- The root cause was tool wiring that still assumed a C64U-only mirror root while only substituting the firmware version.
+- Updated the extraction toolchain so it always probes `/v1/info` first and uses that response as the source of truth for both:
+  - firmware version
+  - device family
+- Added explicit device-family inference for known products:
+  - `C64 Ultimate` -> `c64u`
+  - `Ultimate 64` -> `u64`
+  - `Ultimate 64 Elite` -> `u64e`
+  - `Ultimate 64-II` and Elite II variants -> `u64e2`
+- Updated default mirror templates in both scripts and the `build` wrapper so extracts now land under:
+  - `docs/c64/devices/{device_family}/{firmware_version}/c64u-config.yaml`
+  - `docs/c64/devices/{device_family}/{firmware_version}/c64u-config.cfg`
+  - `docs/c64/devices/{device_family}/{firmware_version}/c64u-telnet.yaml`
+- Added regression coverage for both scripts so the placeholder expansion and product-to-family mapping stay locked in.
+
+### Validation
+
+- Ran targeted tool tests:
+  - `python3 -m unittest scripts/test_dump_c64u_config.py scripts/test_dump_c64_telnet_screens.py`
+  - Result: `Ran 16 tests in 0.008s` and `OK`
+- Started the repository coverage gate because the follow-up changed executable files:
+  - `npm run test:coverage`
+  - Final aggregate result was still pending while this work log entry was written.

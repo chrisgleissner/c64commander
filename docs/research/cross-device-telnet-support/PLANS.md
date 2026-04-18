@@ -2,11 +2,11 @@
 
 ## Classification
 
-- `DOC_ONLY`
+- `DOC_PLUS_CODE`
 
 ## Objective
 
-Capture live U64 3.14e Telnet/config evidence and produce a research-backed implementation prompt for cross-device Telnet support across C64U and U64-class devices.
+Capture live U64 3.14e Telnet/config evidence, produce a research-backed implementation prompt for cross-device Telnet support across C64U and U64-class devices, and harden the extraction tooling so device family and firmware version are derived from live `/v1/info` metadata instead of hard-coded output paths.
 
 ## Impact Map
 
@@ -16,14 +16,18 @@ Capture live U64 3.14e Telnet/config evidence and produce a research-backed impl
   - `docs/research/cross-device-telnet-support/prompt.md`
   - `docs/c64/devices/u64e/3.14e/c64u-config.yaml`
   - `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
+- Code and tooling:
+  - `build`
+  - `scripts/dump_c64u_config.py`
+  - `scripts/dump_c64_telnet_screens.py`
+  - `scripts/test_dump_c64u_config.py`
+  - `scripts/test_dump_c64_telnet_screens.py`
 - Read-only analysis targets:
   - `README.md`
   - `.github/copilot-instructions.md`
   - `docs/ux-guidelines.md`
   - `docs/c64/c64u-telnet.yaml`
   - `docs/c64/devices/c64u/1.1.0/c64u-telnet.yaml`
-  - `scripts/dump_c64u_config.py`
-  - `scripts/dump_c64_telnet_screens.py`
   - `src/lib/telnet/telnetTypes.ts`
   - `src/lib/telnet/telnetMenuNavigator.ts`
   - `src/lib/telnet/telnetScreenParser.ts`
@@ -38,6 +42,10 @@ Capture live U64 3.14e Telnet/config evidence and produce a research-backed impl
 - Live device probe confirmed:
   - `http://u64/v1/info` -> `Ultimate 64 Elite`, firmware `3.14e`
   - `http://c64u/v1/info` -> `C64 Ultimate`, firmware `1.1.0`
+- Extraction-tool follow-up:
+  - the initial scrape workflow mistakenly mirrored one config extract under `docs/c64/devices/c64u/3.14e/...`
+  - the extraction toolchain now derives both `firmware_version` and `device_family` from live `/v1/info` metadata
+  - default mirror paths now target `docs/c64/devices/{device_family}/{firmware_version}/...`
 - Added live U64 config snapshot:
   - `docs/c64/devices/u64e/3.14e/c64u-config.yaml`
 - Added live U64 Telnet snapshot:
@@ -63,13 +71,17 @@ Capture live U64 3.14e Telnet/config evidence and produce a research-backed impl
 - [x] Dump live U64 3.14e config snapshot
 - [x] Dump live U64 3.14e Telnet snapshot
 - [x] Probe live U64 Telnet submenus to confirm app-relevant capability differences
+- [x] Harden the extract tools so firmware and device family come from live `/v1/info`
 - [x] Produce folder-local plan and work log
 - [x] Write the implementation prompt in `docs/research/cross-device-telnet-support/prompt.md`
 
 ## Validation
 
-- `DOC_ONLY`: verified by document review plus live device evidence capture
-- No build, lint, test, or screenshot steps were run because this task only added documentation and captured device snapshot files
+- Targeted tool validation:
+  - `python3 -m unittest scripts/test_dump_c64u_config.py scripts/test_dump_c64_telnet_screens.py`
+- Repository coverage run started because the follow-up introduced executable changes:
+  - `npm run test:coverage`
+- No screenshot refresh was needed because no visible UI changed
 
 ## Completion Tracking
 
@@ -77,4 +89,4 @@ Capture live U64 3.14e Telnet/config evidence and produce a research-backed impl
 - [x] U64 3.14e config snapshot exists
 - [x] U64 3.14e Telnet snapshot exists
 - [x] Prompt captures verified U64 differences and current code gaps
-- [x] No executable files were changed
+- [x] Extractor defaults no longer assume `c64u`

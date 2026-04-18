@@ -68,7 +68,7 @@ const expectCookieSecurity = (cookie: string, secure: boolean) => {
 afterEach(async () => {
   process.env = { ...originalEnv };
   for (const server of webServers.splice(0)) {
-    await server.close().catch(() => { });
+    await server.close().catch(() => {});
   }
   for (const ftpServer of ftpServers.splice(0)) {
     await ftpServer.close();
@@ -304,6 +304,63 @@ describe("web server platform runtime", () => {
 
     const cookie = await loginAndGetCookie(server.baseUrl, "secret");
     expectCookieSecurity(cookie, true);
+
+    await server.close();
+  });
+
+  it("reports auth status with production headers and secure cookies across login and logout", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>secure-auth</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      NODE_ENV: "production",
+      WEB_COOKIE_SECURE: "1",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+    });
+
+    const secureHeaders = { "x-forwarded-proto": "https" };
+
+    const unauthStatus = await fetch(`${server.baseUrl}/auth/status`, {
+      headers: secureHeaders,
+    });
+    expect(unauthStatus.status).toBe(200);
+    expect(await unauthStatus.json()).toEqual({ requiresLogin: true, authenticated: false });
+    expect(unauthStatus.headers.get("strict-transport-security")).toBe("max-age=31536000; includeSubDomains");
+
+    const login = await fetch(`${server.baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { ...secureHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "secret" }),
+    });
+    expect(login.status).toBe(200);
+    const sessionCookie = login.headers.get("set-cookie");
+    expect(sessionCookie).toBeTruthy();
+    expectCookieSecurity(sessionCookie as string, true);
+
+    const authStatus = await fetch(`${server.baseUrl}/auth/status`, {
+      headers: { ...secureHeaders, Cookie: sessionCookie as string },
+    });
+    expect(authStatus.status).toBe(200);
+    expect(await authStatus.json()).toEqual({ requiresLogin: true, authenticated: true });
+    expect(authStatus.headers.get("content-security-policy")).toContain("script-src 'self'");
+
+    const logout = await fetch(`${server.baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: { ...secureHeaders, Cookie: sessionCookie as string },
+    });
+    expect(logout.status).toBe(200);
+    expect(logout.headers.get("set-cookie")).toContain("; Secure");
+
+    const clearedStatus = await fetch(`${server.baseUrl}/auth/status`, {
+      headers: secureHeaders,
+    });
+    expect(clearedStatus.status).toBe(200);
+    expect(await clearedStatus.json()).toEqual({ requiresLogin: true, authenticated: false });
 
     await server.close();
   });
