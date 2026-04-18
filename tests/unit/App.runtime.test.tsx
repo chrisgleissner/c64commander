@@ -418,7 +418,7 @@ describe("App runtime wiring", () => {
   });
 
   it("recovers from an active page render failure after navigating away and back", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
     mocks.shouldThrowDocsPageRef.current = true;
     window.history.pushState({}, "", "/docs");
 
