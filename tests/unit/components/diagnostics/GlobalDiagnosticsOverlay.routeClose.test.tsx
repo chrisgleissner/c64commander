@@ -197,12 +197,22 @@ describe("GlobalDiagnosticsOverlay route close", () => {
     consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
   });
 
-  it("closes a deep-linked diagnostics route back to settings", async () => {
-    renderOverlay("/diagnostics/history");
+  it.each([
+    ["/diagnostics", "overview"],
+    ["/diagnostics/", "overview"],
+    ["/diagnostics/latency", "latency"],
+    ["/diagnostics/history", "history"],
+    ["/diagnostics/config-drift", "config-drift"],
+    ["/diagnostics/decision-state", "decision-state"],
+    ["/diagnostics/heatmap/rest", "rest-heatmap"],
+    ["/diagnostics/heatmap/ftp", "ftp-heatmap"],
+    ["/diagnostics/heatmap/config", "config-heatmap"],
+  ])("closes %s back to settings", async (initialPath, expectedPanel) => {
+    renderOverlay(initialPath);
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByTestId("requested-panel")).toHaveTextContent("history");
-    expect(screen.getByTestId("location-path")).toHaveTextContent("/diagnostics/history");
+    expect(screen.getByTestId("requested-panel")).toHaveTextContent(expectedPanel);
+    expect(screen.getByTestId("location-path")).toHaveTextContent(initialPath);
 
     fireEvent.click(screen.getByRole("button", { name: "Close overlay" }));
 

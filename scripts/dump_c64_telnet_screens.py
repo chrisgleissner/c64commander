@@ -30,6 +30,7 @@ HELPER_SPEC.loader.exec_module(HELPER_MODULE)
 _IndentedDumper = HELPER_MODULE._IndentedDumper
 _convert_single_quoted_scalars = HELPER_MODULE._convert_single_quoted_scalars
 _fetch_json = HELPER_MODULE._fetch_json
+infer_device_family = HELPER_MODULE.infer_device_family
 _indent_sequences = HELPER_MODULE._indent_sequences
 _quote_mapping_values_with_spaces = HELPER_MODULE._quote_mapping_values_with_spaces
 
@@ -897,10 +898,22 @@ def capture_selected_directory_action_menus(
     raise RuntimeError(f"Unable to open selected-directory action menu with F1 or F5 for {path}")
 
 
-def resolve_output_paths(output: Path, mirror_output: Optional[str], firmware_version: str) -> list[Path]:
+def resolve_output_paths(
+    output: Path,
+    mirror_output: Optional[str],
+    firmware_version: str,
+    device_family: str = "c64u",
+) -> list[Path]:
     outputs = [output]
     if mirror_output:
-        outputs.append(Path(mirror_output.format(firmware_version=firmware_version)))
+        outputs.append(
+            Path(
+                mirror_output.format(
+                    firmware_version=firmware_version,
+                    device_family=device_family,
+                )
+            )
+        )
     return outputs
 
 
@@ -1010,8 +1023,8 @@ def main() -> int:
     parser.add_argument("--output", default="docs/c64/c64u-telnet.yaml", help="Primary YAML output path")
     parser.add_argument(
         "--mirror-output",
-        default="docs/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml",
-        help="Optional secondary output path template. Use {firmware_version} as a placeholder.",
+        default="docs/c64/devices/{device_family}/{firmware_version}/c64u-telnet.yaml",
+        help="Optional secondary output path template. Use {device_family} and {firmware_version} as placeholders.",
     )
     parser.add_argument(
         "--preferred-test-data-path",
@@ -1141,7 +1154,12 @@ def main() -> int:
     )
 
     yaml_text = dump_yaml(document)
-    outputs = resolve_output_paths(output_path, args.mirror_output, metadata["firmware_version"])
+    outputs = resolve_output_paths(
+        output_path,
+        args.mirror_output,
+        metadata["firmware_version"],
+        infer_device_family(metadata.get("device_type")),
+    )
     for destination in outputs:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(yaml_text, encoding="utf-8")

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
+import { act, render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 import { useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC64Connection";
@@ -182,6 +182,109 @@ describe("HomeDiskManager UI & Interactions", () => {
         }),
       );
     });
+  });
+
+  it("clears a stale mounted override when reset refresh shows no disk", async () => {
+    const disk = createMockDisk({
+      id: "mounted-disk",
+      name: "mounted.d64",
+      path: "/mounted.d64",
+    });
+    const mountedDrive = createMockDrive({
+      image_file: "mounted.d64",
+      image_path: "/",
+    });
+
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+      removeDisk: mockRemoveDisk,
+    });
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: mountedDrive }, { b: createMockDrive() }] },
+    });
+    mockApi.resetDrive.mockImplementationOnce(async () => {
+      (useC64Drives as any).mockReturnValue({
+        data: {
+          drives: [{ a: createMockDrive({ image_file: "", image_path: "" }) }, { b: createMockDrive() }],
+        },
+      });
+    });
+
+    const view = render(<HomeDiskManager />);
+
+    expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("mounted.d64");
+
+    fireEvent.click(screen.getByTestId("drive-reset-a"));
+
+    await waitFor(() => {
+      expect(mockApi.resetDrive).toHaveBeenCalledWith("a");
+    });
+
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("No disk mounted");
+    });
+  });
+
+  it("ignores stale mount completions when a drive reset wins the race", async () => {
+    const disk = createMockDisk({
+      id: "race-disk",
+      name: "race.d64",
+      path: "/race.d64",
+    });
+
+    let releaseMount!: () => void;
+    const mountGate = new Promise<void>((resolve) => {
+      releaseMount = resolve;
+    });
+
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+      removeDisk: mockRemoveDisk,
+    });
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+    });
+    (mountDiskToDrive as any).mockImplementationOnce(() => mountGate);
+    mockApi.resetDrive.mockImplementationOnce(async () => {
+      (useC64Drives as any).mockReturnValue({
+        data: {
+          drives: [{ a: createMockDrive({ image_file: "", image_path: "" }) }, { b: createMockDrive() }],
+        },
+      });
+    });
+
+    const view = render(<HomeDiskManager />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => {
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+    });
+
+    fireEvent.click(screen.getByTestId("drive-reset-a"));
+
+    await waitFor(() => {
+      expect(mockApi.resetDrive).toHaveBeenCalledWith("a");
+    });
+
+    await act(async () => {
+      releaseMount();
+      await Promise.resolve();
+    });
+
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("No disk mounted");
+    });
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Disk mounted" }));
   });
 
   it("displays formated keys and dates in disk details", async () => {

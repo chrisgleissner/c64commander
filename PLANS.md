@@ -2,189 +2,73 @@
 
 ## Classification
 
-- `DOC_PLUS_CODE`
-- `UI_CHANGE`
+- `DOC_ONLY`
 
 ## Objective
 
-Converge the diagnostics and config UI onto deterministic behavior so:
-
-- user intent is the authoritative visible state during interaction
-- sliders never jump back to stale device values
-- health checks run intentionally and reproducibly
-- swipe navigation is disabled by default and safe when enabled
-- page scroll is not reset by avoidable remounts
-
-## Research Findings
-
-### 1. UI state ownership model
-
-- `ConfigBrowserPage` owns category expansion and delegates item writes directly through `useC64SetConfig` / `useC64UpdateConfigBatch`.
-- `ConfigItemRow` buffers text input locally, but slider/select/checkbox state is still driven by props derived from device-backed query data.
-- Home-page config widgets use `useConfigActions`, which keeps an override map plus pending flags in React state.
-- `LightingSummaryCard` and `AudioMixer` add their own local draft state on top of shared config state.
-
-### 2. Slider update flow
-
-- Generic config browser slider flow today:
-  `drag -> local slider thumb state -> async write -> prop value from query cache`
-- Home audio flow today:
-  `drag -> local active slider state -> commit -> shared override -> interactive write lane -> query invalidation`
-- Lighting flow today:
-  `drag -> local draft state -> interactive write lane -> query invalidation`
-
-### 3. Device -> UI update path
-
-- Device-backed config data is fetched with React Query through:
-  - `useC64Category`
-  - `useC64ConfigItems`
-  - `useC64ConfigItem`
-- Route visibility resume triggers `runConfigReconciler`, which invalidates and refetches active route queries.
-- Many visible config queries use `VISIBLE_C64_QUERY_OPTIONS`, which sets `refetchOnMount: "always"`.
-- `useC64Connection` also runs background `c64-info` refresh polling while the screen is active.
-
-### 4. Existing coalescing / merge logic
-
-- There is a partial coalescing system:
-  - `useInteractiveConfigWrite` uses `LatestIntentWriteLane`
-  - `AudioMixer` uses local active-slider state plus `setConfigOverride`
-  - `LightingSummaryCard` uses local draft state
-- The generic config browser lacks per-control pending ownership.
-- `useConfigActions` currently leaves overrides in memory after success, which creates a hidden-state override risk if the device later diverges.
-- No shared timestamp/version-based reconciliation exists for config controls.
-
-### 5. Page lifecycle / remount behavior
-
-- Primary pages are rendered through `SwipeNavigationLayer`.
-- Idle inactive slots are rendered as placeholders only.
-- Transition keys are currently tied to both panel position and page index, which causes the target page to remount when it moves from transition slot to idle center slot.
-- That remount is the most likely root cause of unexpected scroll-to-top / refresh-like behavior at the end of navigation.
-
-### 6. Swipe gesture implementation
-
-- `useSwipeGesture` uses pointer events with:
-  - axis lock threshold: `AXIS_LOCK_THRESHOLD_PX`
-  - symmetric distance threshold: `resolveSwipeCommitThresholdPx`
-  - direction mapping: `dx < 0 -> next`, `dx > 0 -> previous`
-- Sliders and swipe-excluded controls are filtered through `data-swipe-exclude`, `role="slider"`, and scrollability checks.
-- Gestures are currently always active once the swipe container is mounted.
-
-### 7. Telnet probe lifecycle
-
-- `probeTelnet` uses:
-  `createTelnetSession(createTelnetClient(...)) -> connect -> readScreen -> disconnect in finally`
-- Current health-check logic accepts only a single `readScreen` result and fails if the first screen is blank or unexpected.
-
-### 8. Background refresh
-
-- Yes, background refresh exists.
-- Sources:
-  - React Query refetch-on-mount for visible config surfaces
-  - route visibility resume reconciliation
-  - `c64-info` polling while screen is active
-- Current system can reintroduce stale device values while local interaction is still semantically in progress.
-
-## State System Classification
-
-- `TYPE 2: Partial / flawed system`
-
-Reason:
-
-- The app already contains optimistic state, write-lane coalescing, and pending flags in some surfaces.
-- Those mechanisms are inconsistent across pages and controls.
-- The generic config browser still lets device-backed props retake ownership too early.
-- Home-page overrides can outlive the interaction and become hidden state.
+Extend the feature-flag research with a broader codebase survey of non-MVP, somewhat brittle, or deployment-specific add-on capabilities that are reasonable candidates for feature flags, then fold those recommendations into the existing design document.
 
 ## Impact Map
 
-### Code surfaces
+- Documentation:
+  - `PLANS.md`
+  - `docs/research/feature-flags/feature-flags.md`
+- Read-only analysis targets:
+  - `src/lib/config/featureFlags.ts`
+  - `src/hooks/useFeatureFlags.tsx`
+  - `src/lib/config/appSettings.ts`
+  - `src/lib/config/developerModeStore.ts`
+  - `src/hooks/useDeveloperMode.ts`
+  - `src/pages/SettingsPage.tsx`
+  - `src/pages/PlayFilesPage.tsx`
+  - `src/pages/playFiles/hooks/useArchiveClientSettings.ts`
+  - `src/components/TraceContextBridge.tsx`
+  - `src/lib/smoke/smokeMode.ts`
+  - `src/lib/native/featureFlags.ts`
+  - `src/lib/native/featureFlags.web.ts`
+  - `android/app/src/main/java/uk/gleissner/c64commander/FeatureFlagsPlugin.kt`
+  - `ios/App/App/AppDelegate.swift`
 
-- `src/lib/diagnostics/healthCheckEngine.ts`
-- `src/components/SwipeNavigationLayer.tsx`
-- `src/hooks/useSwipeGesture.ts`
-- `src/lib/config/appSettings.ts`
-- `src/pages/home/hooks/useConfigActions.ts`
-- `src/pages/ConfigBrowserPage.tsx`
-- possible small supporting additions for shared authoritative config state
+## Findings
 
-### Test surfaces
-
-- `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`
-- `tests/unit/components/SwipeNavigationLayer.test.tsx`
-- `tests/unit/hooks/useSwipeGesture.test.ts`
-- `tests/unit/lib/config/appSettings.test.ts`
-- `tests/unit/pages/home/useConfigActions.test.tsx`
-- `tests/unit/pages/ConfigBrowserPage.test.tsx`
-
-### Docs / screenshots
-
-- `PLANS.md`
-- `WORKLOG.md`
-- No screenshot refresh planned unless a visible documented surface is intentionally changed.
-- Current intent is to keep the swipe setting non-UI and avoid screenshot churn.
+- The current feature flag registry in `src/lib/config/featureFlags.ts` contains only `hvsc_enabled` and stores only `defaultValue`.
+- Runtime feature flag persistence is already cross-platform through the Capacitor `FeatureFlags` plugin:
+  - Android DataStore in `android/app/src/main/java/uk/gleissner/c64commander/FeatureFlagsPlugin.kt`
+  - iOS `UserDefaults` in `ios/App/App/AppDelegate.swift`
+  - Web `localStorage` / `sessionStorage` in `src/lib/native/featureFlags.web.ts`
+- `FeatureFlagsProvider` is already global in `src/App.tsx`, so the app has a natural integration point for a unified resolver.
+- `commoserveEnabled` is not in the feature flag system. It lives in general app settings in `src/lib/config/appSettings.ts`, is consumed through `useArchiveClientSettings`, and is exported/imported through `src/lib/config/settingsTransfer.ts`.
+- `SettingsPage.tsx` manually writes `hvsc_enabled` to storage after calling the feature flag hook, which duplicates persistence responsibility instead of routing writes through one service.
+- Developer mode is isolated in `src/lib/config/developerModeStore.ts` and `src/hooks/useDeveloperMode.ts`; it currently unlocks only specific settings UI fragments and has no formal relationship to feature flag visibility or mutability.
+- Lighting Studio is not feature-gated today. Its hooks and dialog are mounted directly from app pages/components.
+- Trace capture already records feature flag values via `src/components/TraceContextBridge.tsx`.
+- Smoke/bootstrap support already understands `featureFlags` through `src/lib/smoke/smokeMode.ts`, but it is keyed only from the current `FEATURE_FLAG_DEFINITIONS`.
+- Broader survey results:
+  - strong add-on candidates: diagnostics, built-in docs, device switcher, RAM/REU/app-config snapshot workflows, and stream controls
+  - retained existing candidates: HVSC, CommoServe, Lighting Studio
+  - explicitly not recommended for first-wave flagging: demo mode, the full saved-device persistence model, open-source licenses, coverage probe, and core connection/config/playback/disk flows
 
 ## Task Breakdown
 
-### A. CONFIG probe LED pulse refinement
+- [x] Read repository guidance and classify the task correctly
+- [x] Inspect current feature flag storage, settings storage, and developer mode wiring
+- [x] Survey broader routed pages and optional subsystems for non-MVP flag candidates
+- [x] Decide the target central configuration format and schema
+- [x] Define runtime resolution, visibility, and mutability semantics
+- [x] Define Settings integration and migration strategy
+- [x] Extend `docs/research/feature-flags/feature-flags.md`
+- [x] Add the consolidated feature-flag recommendation table
+- [x] Review the document for consistency and remove placeholders
 
-- [ ] Increase pulse delta to `16`
-- [ ] Use symmetric bounded direction selection
-- [ ] Add `CONFIG_PULSE_DELAY_MS = 80`
-- [ ] Guarantee revert with `try/finally`
-- [ ] Remove passive CONFIG skip logic
-- [ ] Preserve readback and post-revert validation
+## Validation
 
-### B. TELNET probe robustness fix
-
-- [ ] Increase TELNET timeout to `3000`
-- [ ] Retry screen reads until a valid banner appears
-- [ ] Ignore blank initial reads
-- [ ] Preserve `connect -> read -> disconnect` lifecycle
-- [ ] Add retry/time-to-valid-screen debug logging
-
-### C. Swipe navigation disable + fix
-
-- [ ] Add `enableSwipeNavigation = false` app setting
-- [ ] Gate gesture handling at entry
-- [ ] Preserve correct `dx > 0 -> previous`, `dx < 0 -> next`
-- [ ] Keep thresholds symmetric both directions
-- [ ] Preserve slider/scroll exclusion behavior
-
-### D. Scroll/reset investigation and fix
-
-- [ ] Remove avoidable page remount at transition completion
-- [ ] Keep active page identity stable through route transitions
-- [ ] Ensure scroll only resets on actual navigation change, not on runway bookkeeping
-
-### E. Slider state correctness
-
-- [ ] Implement per-control authoritative state for config writes
-- [ ] Track `value`, `pending`, and `lastUserUpdateTimestamp`
-- [ ] Block stale device props from overriding pending user intent
-- [ ] Clear local authority once device state catches up
-
-### F. Config/device state coalescing
-
-- [ ] Formalize the existing partial override system into deterministic control authority
-- [ ] Keep page-entry refresh device-authoritative once no control is pending
-- [ ] Prevent background refetch from overriding pending controls
-- [ ] Remove hidden long-lived overrides after acknowledgement
-
-## Execution Order
-
-1. Replace tracking files with the current task state.
-2. Fix diagnostics determinism first (`A`, `B`).
-3. Stabilize navigation/remount behavior (`C`, `D`).
-4. Repair config authority and slider ownership (`E`, `F`).
-5. Add regression coverage and run required validation.
-6. Update this plan and `WORKLOG.md` to final truth only after validation passes.
+- `DOC_ONLY`: verified by document review only
+- No build, test, or screenshot steps were run because no executable files changed
 
 ## Completion Tracking
 
-- [ ] Research recorded in `PLANS.md`
-- [ ] Classification recorded as `TYPE 2`
-- [ ] Tasks A-F implemented or explicitly concluded
-- [ ] Regression tests added/updated for each bug fix
-- [ ] `npm run test:coverage` executed and branch coverage >= 91%
-- [ ] Relevant targeted tests/builds executed honestly
-- [ ] `WORKLOG.md` finalized with files changed, reasoning, and before/after behavior
+- [x] `PLANS.md` reflects the current task
+- [x] `docs/research/feature-flags/feature-flags.md` exists
+- [x] All required sections are present
+- [x] No TODOs or unresolved placeholders remain
+- [x] No code changes were made

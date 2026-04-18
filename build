@@ -1514,9 +1514,9 @@ if [[ "$RUN_DUMP_C64U_CONFIG" == "true" ]]; then
   (cd "$ROOT_DIR/scripts" && ./dump_c64u_config.py \
     --base-url "http://${CONFIG_HOST}" \
     --output "$ROOT_DIR/docs/c64/c64u-config.yaml" \
-    --mirror-output "$ROOT_DIR/docs/c64/devices/c64u/{firmware_version}/c64u-config.yaml" \
+    --mirror-output "$ROOT_DIR/docs/c64/devices/{device_family}/{firmware_version}/c64u-config.yaml" \
     --cfg-output "$ROOT_DIR/docs/c64/c64u-config.cfg" \
-    --cfg-mirror-output "$ROOT_DIR/docs/c64/devices/c64u/{firmware_version}/c64u-config.cfg")
+    --cfg-mirror-output "$ROOT_DIR/docs/c64/devices/{device_family}/{firmware_version}/c64u-config.cfg")
   exit 0
 fi
 
@@ -1529,7 +1529,7 @@ if [[ "$RUN_DUMP_C64_TELNET_SCREENS" == "true" ]]; then
   (cd "$ROOT_DIR/scripts" && ./dump_c64_telnet_screens.py \
     --base-url "http://${CONFIG_HOST}" \
     --output "$ROOT_DIR/docs/c64/c64u-telnet.yaml" \
-    --mirror-output "$ROOT_DIR/docs/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml")
+    --mirror-output "$ROOT_DIR/docs/c64/devices/{device_family}/{firmware_version}/c64u-telnet.yaml")
   exit 0
 fi
 

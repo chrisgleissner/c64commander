@@ -1026,6 +1026,66 @@ describe("SettingsPage", () => {
     expect(saveSpy).toHaveBeenCalledWith("RELAXED");
   });
 
+  it("feeds persisted safety mode changes into the runtime interaction scheduler", async () => {
+    (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = true;
+
+    try {
+      renderSettingsPage();
+
+      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+      expect(deviceSafetySection).toBeTruthy();
+      const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
+      fireEvent.change(trigger, { target: { value: "CONSERVATIVE" } });
+
+      expect(deviceSafetySettings.loadDeviceSafetyConfig().mode).toBe("CONSERVATIVE");
+
+      const { updateDeviceConnectionState } = await import("@/lib/deviceInteraction/deviceStateStore");
+      const { resetInteractionState, withFtpInteraction } =
+        await import("@/lib/deviceInteraction/deviceInteractionManager");
+
+      updateDeviceConnectionState("REAL_CONNECTED");
+      resetInteractionState("settings-page-test");
+
+      let activeHandlers = 0;
+      let maxActiveHandlers = 0;
+      const handler = vi.fn(async () => {
+        activeHandlers += 1;
+        maxActiveHandlers = Math.max(maxActiveHandlers, activeHandlers);
+        await new Promise<void>((resolve) => {
+          setTimeout(() => {
+            activeHandlers -= 1;
+            resolve();
+          }, 25);
+        });
+      });
+
+      await Promise.all(
+        Array.from({ length: 3 }, (_, index) =>
+          withFtpInteraction(
+            {
+              action: {
+                correlationId: `settings-safety-${index}`,
+                origin: "user",
+                name: `settings-safety-${index}`,
+                componentName: "SettingsPage.test",
+              },
+              operation: "list",
+              path: `/disk-${index}`,
+              intent: "system",
+            },
+            handler,
+          ),
+        ),
+      );
+
+      expect(maxActiveHandlers).toBe(1);
+    } finally {
+      const { updateDeviceConnectionState } = await import("@/lib/deviceInteraction/deviceStateStore");
+      updateDeviceConnectionState("UNKNOWN");
+      delete (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling;
+    }
+  });
+
   it("exports settings and shows a toast", async () => {
     const createObjectURL = vi.fn(() => "blob:settings");
     const revokeObjectURL = vi.fn();

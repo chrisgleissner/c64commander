@@ -108,8 +108,9 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
         output = Path("docs/c64/c64u-telnet.yaml")
         paths = MODULE.resolve_output_paths(
             output,
-            "docs/c64/devices/c64u/{firmware_version}/c64u-telnet.yaml",
+            "docs/c64/devices/{device_family}/{firmware_version}/c64u-telnet.yaml",
             "1.1.0",
+            "c64u",
         )
 
         self.assertEqual(
@@ -117,6 +118,23 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
             [
                 Path("docs/c64/c64u-telnet.yaml"),
                 Path("docs/c64/devices/c64u/1.1.0/c64u-telnet.yaml"),
+            ],
+        )
+
+    def test_resolve_output_paths_uses_device_family_placeholder(self) -> None:
+        output = Path("docs/c64/c64u-telnet.yaml")
+        paths = MODULE.resolve_output_paths(
+            output,
+            "docs/c64/devices/{device_family}/{firmware_version}/c64u-telnet.yaml",
+            "3.14e",
+            "u64e",
+        )
+
+        self.assertEqual(
+            paths,
+            [
+                Path("docs/c64/c64u-telnet.yaml"),
+                Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml"),
             ],
         )
 

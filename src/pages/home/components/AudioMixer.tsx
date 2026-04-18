@@ -235,7 +235,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           };
           const handleVolumeAsyncCommit = (val: number) => {
             const nextValue = resolveVolumeOption(val);
-            void interactiveWrite({ [entry.volumeItem]: nextValue }).catch(() => {
+            void Promise.resolve(interactiveWrite({ [entry.volumeItem]: nextValue })).catch(() => {
               setConfigOverride("Audio Mixer", entry.volumeItem, entry.volume);
             });
           };
@@ -258,7 +258,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           };
           const handlePanAsyncCommit = (val: number) => {
             const nextValue = resolvePanOption(val);
-            void interactiveWrite({ [entry.panItem]: nextValue }).catch(() => {
+            void Promise.resolve(interactiveWrite({ [entry.panItem]: nextValue })).catch(() => {
               setConfigOverride("Audio Mixer", entry.panItem, entry.pan);
             });
           };
