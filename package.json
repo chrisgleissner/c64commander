@@ -146,7 +146,7 @@
     "react-resizable-panels": "^2.1.9",
     "react-router-dom": "^6.30.3",
     "react-virtuoso": "^4.18.1",
-    "recharts": "^2.15.4",
+    "recharts": "^3.8.1",
     "sonner": "^1.7.4",
     "spark-md5": "^3.0.2",
     "suncalc": "^1.9.0",
