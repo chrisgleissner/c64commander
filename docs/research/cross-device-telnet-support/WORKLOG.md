@@ -314,6 +314,16 @@
   - `npm run lint` -> failed because `playwright/uiMocks.ts` is already modified in the worktree and currently fails the repository Prettier check
 - Did not overwrite the unrelated `playwright/uiMocks.ts` user change just to force lint green.
 - Remaining closure work is now limited to live device proof and final reporting unless the unrelated lint failure needs separate direction.
+
+### 10:15 BST
+
+- Added `docs/research/cross-device-telnet-support/HANDOVER_PROMPT.md`.
+- The handover prompt captures:
+  - the implemented cross-device Telnet state
+  - the U64 `u64e-*` mirrored filename rule
+  - the clipped standalone-submenu parser fix that restored live C64U discovery
+  - the remaining live U64 blocker and exact next steps
+  - the validation state that still needs final closure bookkeeping
 - Built a small `vite-node` proof harness around the app-side Telnet session and capability discovery modules to avoid validating only through the Python scraper.
 - Live U64 discovery findings from the app-side probe:
   - the initial `F5` open returns the expected boxed category menu
