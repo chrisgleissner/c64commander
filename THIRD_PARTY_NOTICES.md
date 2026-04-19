@@ -328,7 +328,7 @@ Summary: 794 dependencies across NPM (777), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | at-least-node | 1.0.0 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/at-least-node/-/at-least-node-1.0.0.tgz](https://registry.npmjs.org/at-least-node/-/at-least-node-1.0.0.tgz) |
 | NPM | autoprefixer | 10.4.27 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/autoprefixer/-/autoprefixer-10.4.27.tgz](https://registry.npmjs.org/autoprefixer/-/autoprefixer-10.4.27.tgz) |
 | NPM | axe-core | 4.11.1 | [MPL-2.0](https://spdx.org/licenses/MPL-2.0.html) | [https://registry.npmjs.org/axe-core/-/axe-core-4.11.1.tgz](https://registry.npmjs.org/axe-core/-/axe-core-4.11.1.tgz) |
-| NPM | axios | 1.13.5 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/axios/-/axios-1.13.5.tgz](https://registry.npmjs.org/axios/-/axios-1.13.5.tgz) |
+| NPM | axios | 1.15.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/axios/-/axios-1.15.1.tgz](https://registry.npmjs.org/axios/-/axios-1.15.1.tgz) |
 | NPM | balanced-match | 4.0.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz](https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz) |
 | NPM | base64-js | 1.5.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz](https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz) |
 | NPM | baseline-browser-mapping | 2.10.16 | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | [https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.10.16.tgz](https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.10.16.tgz) |
@@ -638,7 +638,7 @@ Summary: 794 dependencies across NPM (777), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | process-on-spawn | 1.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/process-on-spawn/-/process-on-spawn-1.1.0.tgz](https://registry.npmjs.org/process-on-spawn/-/process-on-spawn-1.1.0.tgz) |
 | NPM | prompts | 2.4.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/prompts/-/prompts-2.4.2.tgz](https://registry.npmjs.org/prompts/-/prompts-2.4.2.tgz) |
 | NPM | prop-types | 15.8.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/prop-types/-/prop-types-15.8.1.tgz](https://registry.npmjs.org/prop-types/-/prop-types-15.8.1.tgz) |
-| NPM | proxy-from-env | 1.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-1.1.0.tgz](https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-1.1.0.tgz) |
+| NPM | proxy-from-env | 2.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-2.1.0.tgz](https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-2.1.0.tgz) |
 | NPM | punycode | 2.3.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz](https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz) |
 | NPM | queue-microtask | 1.2.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz](https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz) |
 | NPM | react | 18.3.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/react/-/react-18.3.1.tgz](https://registry.npmjs.org/react/-/react-18.3.1.tgz) |
