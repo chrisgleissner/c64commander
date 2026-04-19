@@ -432,8 +432,12 @@ function findMenuBounds(cells: ScreenCell[][]): MenuBounds[] {
   for (let row = 0; row < TELNET_SCREEN_HEIGHT; row++) {
     for (let col = 0; col < TELNET_SCREEN_WIDTH; col++) {
       const cell = cells[row][col];
-      if (cell.char !== "l") continue;
-      const bounds = traceMenuBounds(cells, row, col);
+      let bounds: MenuBounds | null = null;
+      if (cell.char === "l") {
+        bounds = traceMenuBounds(cells, row, col);
+      } else if (isClippedTopBorderStart(cells, row, col)) {
+        bounds = traceClippedMenuBounds(cells, row, col);
+      }
       if (!bounds) continue;
       const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`;
       if (seen.has(key)) continue;
@@ -445,19 +449,37 @@ function findMenuBounds(cells: ScreenCell[][]): MenuBounds[] {
   return boundsList;
 }
 
+function isClippedTopBorderStart(cells: ScreenCell[][], row: number, col: number): boolean {
+  if (cells[row][col].char !== "q") return false;
+  if (col > 0) {
+    const previous = cells[row][col - 1].char;
+    if (previous === "l" || previous === "q" || previous === "w") {
+      return false;
+    }
+  }
+  if (row + 2 >= TELNET_SCREEN_HEIGHT) return false;
+  const leftEdgeBelow = cells[row + 1][col].char === "x";
+  const rightCandidate = traceTopRight(cells, row, col);
+  if (!leftEdgeBelow || rightCandidate < 0) return false;
+  return true;
+}
+
+function traceTopRight(cells: ScreenCell[][], startRow: number, startCol: number): number {
+  for (let col = startCol + 1; col < TELNET_SCREEN_WIDTH; col++) {
+    if (cells[startRow][col].char === "k") {
+      return col;
+    }
+    if (cells[startRow][col].char !== "q" && cells[startRow][col].char !== "w") {
+      return -1;
+    }
+  }
+  return -1;
+}
+
 /** Trace the bounds of a bordered menu starting from top-left corner */
 function traceMenuBounds(cells: ScreenCell[][], startRow: number, startCol: number): MenuBounds | null {
   // Find top-right corner (k) on same row
-  let endCol = -1;
-  for (let col = startCol + 1; col < TELNET_SCREEN_WIDTH; col++) {
-    if (cells[startRow][col].char === "k") {
-      endCol = col;
-      break;
-    }
-    if (cells[startRow][col].char !== "q" && cells[startRow][col].char !== "w") {
-      break;
-    }
-  }
+  const endCol = traceTopRight(cells, startRow, startCol);
   if (endCol < 0) return null;
 
   // Find bottom row (m on left, j on right)
@@ -472,6 +494,31 @@ function traceMenuBounds(cells: ScreenCell[][], startRow: number, startCol: numb
     // Nested U64 overlays can overwrite the left edge with parent-menu text.
     // The right edge stays stable more often, so use it as the continuity check.
     if (cells[row][endCol].char !== "x" && cells[row][endCol].char !== "u") {
+      break;
+    }
+  }
+  if (endRow < 0) return null;
+
+  const width = endCol - startCol + 1;
+  const height = endRow - startRow + 1;
+  if (width < 4 || height < 3) return null;
+
+  return { x: startCol, y: startRow, width, height };
+}
+
+function traceClippedMenuBounds(cells: ScreenCell[][], startRow: number, startCol: number): MenuBounds | null {
+  const endCol = traceTopRight(cells, startRow, startCol);
+  if (endCol < 0) return null;
+
+  let endRow = -1;
+  for (let row = startRow + 1; row < TELNET_SCREEN_HEIGHT; row++) {
+    if (cells[row][startCol].char === "m") {
+      if (cells[row][endCol].char === "j") {
+        endRow = row;
+      }
+      break;
+    }
+    if (cells[row][startCol].char !== "x" || (cells[row][endCol].char !== "x" && cells[row][endCol].char !== "u")) {
       break;
     }
   }

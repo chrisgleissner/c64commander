@@ -170,14 +170,14 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
 
         self.assertEqual(
             paths,
-            [Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml")],
+            [Path("docs/c64/devices/u64e/3.14e/u64e-telnet.yaml")],
         )
 
-    def test_resolve_output_paths_keeps_explicit_nondefault_primary_for_u64(self) -> None:
+    def test_resolve_output_paths_normalizes_explicit_nondefault_primary_for_u64e(self) -> None:
         output = Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml")
         paths = MODULE.resolve_output_paths(output, None, "3.14e", "u64e")
 
-        self.assertEqual(paths, [Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml")])
+        self.assertEqual(paths, [Path("docs/c64/devices/u64e/3.14e/u64e-telnet.yaml")])
 
     def test_build_file_type_menu_definitions_uses_file_type_keys(self) -> None:
         definitions = MODULE.build_file_type_menu_definitions(

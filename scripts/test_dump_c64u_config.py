@@ -106,9 +106,16 @@ class DumpC64UConfigTests(unittest.TestCase):
             paths,
             [
                 Path("docs/c64/c64u-config.yaml"),
-                Path("docs/c64/devices/u64e/3.14e/c64u-config.yaml"),
+                Path("docs/c64/devices/u64e/3.14e/u64e-config.yaml"),
             ],
         )
+
+    def test_resolve_output_paths_normalizes_explicit_u64e_device_output_name(self) -> None:
+        output = Path("docs/c64/devices/u64e/3.14e/c64u-config.yaml")
+
+        paths = MODULE.resolve_output_paths(output, None, "3.14e", "u64e")
+
+        self.assertEqual(paths, [Path("docs/c64/devices/u64e/3.14e/u64e-config.yaml")])
 
 
 if __name__ == "__main__":

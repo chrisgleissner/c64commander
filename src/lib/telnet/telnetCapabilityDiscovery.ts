@@ -96,12 +96,24 @@ export const clearTelnetCapabilityCache = () => {
   inFlightDiscovery.clear();
 };
 
-const findTopMenu = (screen: TelnetScreen): ParsedMenu | null =>
-  screen.menus.find((menu) => menu.level === 0) ?? screen.menus[0] ?? null;
+const findTopMenu = (screen: TelnetScreen): ParsedMenu | null => {
+  const actionableMenus = screen.menus.filter((menu) => menu.items.length > 0);
+  return actionableMenus[actionableMenus.length - 1] ?? screen.menus[screen.menus.length - 1] ?? null;
+};
 
 const findSubmenu = (screen: TelnetScreen): ParsedMenu | null => {
   const nested = screen.menus.filter((menu) => menu.level > 0);
   return nested[nested.length - 1] ?? null;
+};
+
+const findStandaloneSubmenu = (screen: TelnetScreen, rootMenu: ParsedMenu): ParsedMenu | null => {
+  if (screen.menus.length !== 1) return null;
+  const candidate = screen.menus[0];
+  if (!candidate || candidate.items.length === 0) return null;
+  const overlapsRootItems = candidate.items.some((candidateItem) =>
+    rootMenu.items.some((rootItem) => matchLabel(candidateItem.label, rootItem.label)),
+  );
+  return overlapsRootItems ? null : candidate;
 };
 
 const extractRow = (screen: TelnetScreen, row: number, left: number, right: number) =>
@@ -182,13 +194,44 @@ const navigateToMenuIndex = async (
   while (currentIndex !== targetIndex) {
     await session.sendKey(targetIndex > currentIndex ? "DOWN" : "UP");
     currentScreen = await session.readScreen(STEP_TIMEOUT_MS);
-    currentMenu = findTopMenu(currentScreen);
-    if (!currentMenu) {
-      throw new TelnetError("Top-level menu disappeared during capability discovery", "DESYNC");
+    const refreshedMenu = findTopMenu(currentScreen);
+    if (!refreshedMenu) {
+      currentIndex += targetIndex > currentIndex ? 1 : -1;
+      continue;
     }
+    currentMenu = refreshedMenu;
     currentIndex = currentMenu.selectedIndex;
   }
   return { screen: currentScreen, menu: currentMenu };
+};
+
+const discoverNodeAfterOpening = async (
+  session: TelnetSessionApi,
+  rootMenu: ParsedMenu,
+): Promise<TelnetDiscoveredNode | null> => {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const followupScreen = await session.readScreen(STEP_TIMEOUT_MS);
+    const submenu = findSubmenu(followupScreen) ?? findStandaloneSubmenu(followupScreen, rootMenu);
+    if (submenu && submenu.items.length > 0) {
+      return {
+        kind: "submenu",
+        items: submenu.items.map((item) => item.label),
+        defaultItem: submenu.items[submenu.selectedIndex]?.label ?? submenu.items[0]?.label ?? null,
+      } satisfies TelnetDiscoveredSubmenu;
+    }
+
+    const overlaySubmenu = extractOverlaySubmenu(followupScreen, rootMenu);
+    if (overlaySubmenu) {
+      return overlaySubmenu;
+    }
+
+    const directEntry = describeDirectEntry(followupScreen);
+    if (directEntry) {
+      return directEntry;
+    }
+  }
+
+  return null;
 };
 
 const resolveCategoryHints = (action: TelnetAction) => [action.menuPath[0], ...(action.categoryHints ?? [])];
@@ -272,16 +315,7 @@ const discoverInitialMenu = async (
       }
       const { menu } = await navigateToMenuIndex(session, initialScreen, topMenu, targetIndex);
       await session.sendKey("RIGHT");
-      const followupScreen = await session.readScreen(STEP_TIMEOUT_MS);
-      const submenu = findSubmenu(followupScreen);
-      if (submenu && submenu.items.length > 0) {
-        return {
-          kind: "submenu",
-          items: submenu.items.map((item) => item.label),
-          defaultItem: submenu.items[submenu.selectedIndex]?.label ?? submenu.items[0]?.label ?? null,
-        } satisfies TelnetDiscoveredSubmenu;
-      }
-      return extractOverlaySubmenu(followupScreen, menu) ?? describeDirectEntry(followupScreen);
+      return await discoverNodeAfterOpening(session, menu);
     });
     if (node) {
       nodes[label] = node;

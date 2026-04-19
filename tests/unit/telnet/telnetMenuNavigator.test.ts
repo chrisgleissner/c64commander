@@ -82,6 +82,80 @@ describe("createMenuNavigator", () => {
       await nav.navigate(["Power & Reset", "Reset C64"], "F1");
     });
 
+    it("uses the deepest actionable menu as the root when F1 exposes a nested C64U action menu", async () => {
+      const topMenu: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [
+          {
+            level: 0,
+            items: [{ label: "USB1 Verbat Ready", selected: true, enabled: true }],
+            selectedIndex: 0,
+            bounds: { x: 0, y: 0, width: 20, height: 5 },
+          },
+          {
+            level: 1,
+            items: [
+              { label: "Power & Reset", selected: true, enabled: true },
+              { label: "Configuration", selected: false, enabled: true },
+            ],
+            selectedIndex: 0,
+            bounds: { x: 20, y: 0, width: 20, height: 5 },
+          },
+        ],
+        form: null,
+        selectedItem: "Power & Reset",
+        titleLine: "",
+        screenType: "action_menu",
+      };
+      const submenuScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [
+          {
+            level: 0,
+            items: [{ label: "Reset C64", selected: true, enabled: true }],
+            selectedIndex: 0,
+            bounds: { x: 40, y: 0, width: 20, height: 5 },
+          },
+        ],
+        form: null,
+        selectedItem: "Reset C64",
+        titleLine: "",
+        screenType: "action_menu",
+      };
+      const afterExecScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [],
+        form: null,
+        selectedItem: null,
+        titleLine: "",
+        screenType: "file_browser",
+      };
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount === 1) return Promise.resolve(topMenu);
+          if (readCount === 2) return Promise.resolve(submenuScreen);
+          return Promise.resolve(afterExecScreen);
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await expect(nav.navigate(["Power & Reset", "Reset C64"], "F1")).resolves.toBeUndefined();
+    });
+
     it("throws ITEM_NOT_FOUND for missing category", async () => {
       const session = await createConnectedSession();
       const nav = createMenuNavigator(session);
@@ -504,6 +578,88 @@ describe("createMenuNavigator", () => {
 
       const nav = createMenuNavigator(fakeSession);
       await expect(nav.navigate(["Software IEC", "Reset C64"], "F5")).rejects.toThrow(TelnetError);
+    });
+
+    it("tolerates transient blank top-level frames and a submenu rendered as the only visible menu", async () => {
+      const topMenu: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [
+          {
+            level: 0,
+            items: [
+              { label: "Assembly 64", selected: true, enabled: true },
+              { label: "C64 Machine", selected: false, enabled: true },
+            ],
+            selectedIndex: 0,
+            bounds: { x: 15, y: 6, width: 30, height: 11 },
+          },
+        ],
+        form: null,
+        selectedItem: "Assembly 64",
+        titleLine: "",
+        screenType: "action_menu",
+      };
+      const blankScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [],
+        form: null,
+        selectedItem: null,
+        titleLine: "",
+        screenType: "action_menu",
+      };
+      const standaloneSubmenu: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [
+          {
+            level: 0,
+            items: [
+              { label: "Reset C64", selected: true, enabled: true },
+              { label: "Reboot C64", selected: false, enabled: true },
+            ],
+            selectedIndex: 0,
+            bounds: { x: 26, y: 7, width: 18, height: 9 },
+          },
+        ],
+        form: null,
+        selectedItem: "Reset C64",
+        titleLine: "",
+        screenType: "action_menu",
+      };
+      const afterExecScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [],
+        form: null,
+        selectedItem: null,
+        titleLine: "",
+        screenType: "file_browser",
+      };
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount === 1) return Promise.resolve(topMenu);
+          if (readCount === 2) return Promise.resolve(blankScreen);
+          if (readCount === 3) return Promise.resolve(standaloneSubmenu);
+          return Promise.resolve(afterExecScreen);
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await expect(nav.navigate(["C64 Machine", "Reset C64"], "F5")).resolves.toBeUndefined();
     });
   });
 

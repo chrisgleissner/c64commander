@@ -20,7 +20,7 @@ Implement cross-device Telnet support so runtime action support is discovered fr
   - `docs/research/cross-device-telnet-support/PLANS.md`
   - `docs/research/cross-device-telnet-support/WORKLOG.md`
   - `README.md`
-  - `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
+  - `docs/c64/devices/u64e/3.14e/u64e-telnet.yaml`
   - Telnet integration docs if discovery/execution semantics need explanation updates
 - Tooling and parser:
   - `scripts/dump_c64_telnet_screens.py`
@@ -69,41 +69,55 @@ Implement cross-device Telnet support so runtime action support is discovered fr
 
 ### Phase 2 - Scraper and parser hardening
 
-- [ ] Harden `scripts/dump_c64_telnet_screens.py` for overlapping nested U64 menus
-- [ ] Fix selected-directory `F5` action-menu capture on U64
-- [ ] Improve handling for direct-entry screens such as `Assembly 64`
-- [ ] Preserve C64U scrape compatibility
-- [ ] Add targeted dump-script and parser regression coverage
-- [ ] Regenerate `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
+- [x] Harden `scripts/dump_c64_telnet_screens.py` for overlapping nested U64 menus
+- [x] Fix selected-directory `F5` action-menu capture on U64
+- [x] Improve handling for direct-entry screens such as `Assembly 64`
+- [x] Preserve C64U scrape compatibility
+- [x] Add targeted dump-script and parser regression coverage
+- [x] Regenerate `docs/c64/devices/u64e/3.14e/u64e-telnet.yaml`
 
 ### Phase 3 - Runtime capability discovery
 
-- [ ] Introduce a discovered Telnet menu graph and per-action capability resolution
-- [ ] Cache discovery by connected device identity and firmware
-- [ ] Handle category renames and menu reordering without device-family hard-coding
-- [ ] Expose `supported`, `unsupported`, and discovery-failed states to callers
+- [x] Introduce a discovered Telnet menu graph and per-action capability resolution
+- [x] Cache discovery by connected device identity and firmware
+- [x] Handle category renames and menu reordering without device-family hard-coding
+- [x] Expose `supported`, `unsupported`, and discovery-failed states to callers
 
 ### Phase 4 - Action execution refactor
 
-- [ ] Execute actions through discovered capabilities instead of static category paths
-- [ ] Upgrade config and REU workflows to use discovered action/menu resolution where needed
-- [ ] Distinguish unsupported-action failures from discovery failures and navigation failures
+- [x] Execute actions through discovered capabilities instead of static category paths
+- [x] Upgrade config and REU workflows to use discovered action/menu resolution where needed
+- [x] Distinguish unsupported-action failures from discovery failures and navigation failures
 
 ### Phase 5 - Home UI convergence
 
-- [ ] Keep app-supported Telnet actions visible even when unsupported on the current device
-- [ ] Render disabled controls with explanatory text/tooltips/inline copy
-- [ ] Make `Power Cycle` visibly disabled on U64 3.14e
+- [x] Keep app-supported Telnet actions visible even when unsupported on the current device
+- [x] Render disabled controls with explanatory text/tooltips/inline copy
+- [x] Make `Power Cycle` visibly disabled on U64 3.14e
 
 ### Phase 6 - Validation and closure
 
-- [ ] Add targeted regression tests for discovery, parser, workflows, and disabled-state UX
+- [x] Add targeted regression tests for discovery, parser, workflows, and disabled-state UX
 - [ ] Run `npm run lint`
-- [ ] Run `npm run test`
-- [ ] Run `npm run test:coverage` and confirm global branch coverage `>= 91%`
-- [ ] Run `npm run build`
+- [x] Run `npm run test`
+- [x] Run `npm run test:coverage` and confirm global branch coverage `>= 91%`
+- [x] Run `npm run build`
 - [ ] Re-verify live U64 and C64U behavior on device
 - [ ] Update only the necessary docs and screenshots
+
+## Current Status
+
+- Core implementation phases 2 through 5 are complete.
+- Targeted parser, scraper, discovery, workflow, hook, and Home UI regressions are in place.
+- Backlog extension added during execution:
+  - mirrored extracted artifacts under `docs/c64/devices/u64e/**` must use `u64e-*` filenames instead of `c64u-*`
+  - the config and Telnet extraction tools must infer that filename prefix automatically from the probed device family
+  - existing mirrored files under the U64E subtree must be renamed retroactively
+- Remaining closure work is:
+  - final live discovery and minimal execution proof on `c64u`
+  - final live discovery and minimal execution proof on `u64` if the device remains reachable
+  - decide whether screenshot refresh is required or whether explicit no-refresh documentation is sufficient
+  - resolve or report the unrelated `npm run lint` failure from the existing modified `playwright/uiMocks.ts` worktree change without overwriting that user edit
 
 ## Success Criteria
 

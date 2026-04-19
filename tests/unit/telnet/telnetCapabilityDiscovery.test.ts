@@ -190,4 +190,113 @@ describe("discoverTelnetCapabilities", () => {
       },
     });
   });
+
+  it("uses the deepest actionable menu as the root on C64U F1 screens", async () => {
+    const actionLabels = ["Power & Reset", "Configuration"];
+    const runner = createRunner([
+      [
+        createScreen({
+          menus: [createMenu(0, 0, ["USB1 Verbat Ready"]), createMenu(1, 0, actionLabels)],
+        }),
+      ],
+      [
+        createScreen({
+          menus: [createMenu(0, 0, ["USB1 Verbat Ready"]), createMenu(1, 0, actionLabels)],
+        }),
+        createScreen({
+          menus: [
+            createMenu(0, 0, ["USB1 Verbat Ready"]),
+            createMenu(1, 0, actionLabels),
+            createMenu(2, 0, ["Reset C64", "Power Cycle"]),
+          ],
+        }),
+      ],
+      [
+        createScreen({
+          menus: [createMenu(0, 0, ["USB1 Verbat Ready"]), createMenu(1, 0, actionLabels)],
+        }),
+        createScreen({
+          menus: [createMenu(0, 0, ["USB1 Verbat Ready"]), createMenu(1, 1, actionLabels)],
+        }),
+        createScreen({
+          menus: [
+            createMenu(0, 0, ["USB1 Verbat Ready"]),
+            createMenu(1, 1, actionLabels),
+            createMenu(2, 0, ["Save to File"]),
+          ],
+        }),
+      ],
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "c64u-nested|F1",
+      deviceInfo: {
+        product: "C64 Ultimate",
+        firmware_version: "1.1.0",
+        hostname: "c64u",
+        unique_id: "c64u-nested",
+      },
+      menuKey: "F1",
+      runner,
+    });
+
+    expect(snapshot.initialMenu.items).toEqual(actionLabels);
+    expect(snapshot.actionSupport.powerCycle).toMatchObject({
+      status: "supported",
+      target: {
+        categoryLabel: "Power & Reset",
+        actionLabel: "Power Cycle",
+      },
+    });
+  });
+
+  it("tolerates transient blank frames and standalone submenu screens while probing U64 menus", async () => {
+    const rootLabels = ["Assembly 64", "C64 Machine", "Configuration"];
+    const runner = createRunner([
+      [createRootScreen(rootLabels)],
+      [createRootScreen(rootLabels), createDirectEntryScreen(rootLabels, 0, "Assembly 64 Query Form")],
+      [
+        createRootScreen(rootLabels),
+        createScreen({ menus: [] }),
+        createScreen({
+          menus: [createMenu(0, 0, ["Reset C64", "Reboot C64", "Reboot (Clr Mem)", "Save REU Memory"])],
+        }),
+      ],
+      [
+        createRootScreen(rootLabels),
+        createScreen({ menus: [] }),
+        createScreen({ menus: [] }),
+        createScreen({
+          menus: [createMenu(0, 0, ["Save to File", "Save to Flash"])],
+        }),
+      ],
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "u64-transient|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-transient",
+      },
+      menuKey: "F5",
+      runner,
+    });
+
+    expect(snapshot.actionSupport.rebootClearMemory).toMatchObject({
+      status: "supported",
+      target: {
+        categoryLabel: "C64 Machine",
+        actionLabel: "Reboot (Clr Mem)",
+      },
+    });
+    expect(snapshot.actionSupport.saveConfigToFile).toMatchObject({
+      status: "supported",
+      target: {
+        categoryLabel: "Configuration",
+        actionLabel: "Save to File",
+      },
+    });
+  });
 });

@@ -18,6 +18,9 @@ const ACTION_TIMEOUT_MS = 10_000;
 /** Per-step read timeout (ms) */
 const STEP_READ_TIMEOUT_MS = 500;
 
+/** Extra reads to tolerate transient blank redraws between keypresses */
+const MAX_TRANSIENT_READS = 3;
+
 /** Maximum ESCAPE presses to recover from desync */
 const MAX_ESCAPE_RECOVERY = 5;
 
@@ -89,12 +92,12 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
       // Step 4: Enter submenu
       state = "ENTERING_SUBMENU";
       await session.sendKey("RIGHT");
-      screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
-      checkTimeout();
+      const submenuResult = await readUntilSubmenuVisible(topMenu, checkTimeout);
+      screen = submenuResult.screen ?? screen;
 
       // Step 5: Scan submenu
       state = "SCANNING_SUBMENU";
-      const subMenu = findSubmenu(screen);
+      const subMenu = submenuResult.submenu;
       if (!subMenu) {
         throw new TelnetError(`Submenu not visible after entering category "${categoryLabel}"`, "MENU_NOT_FOUND", {
           categoryLabel,
@@ -152,12 +155,37 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
 
   /** Find the top-level (level 0) menu on screen */
   function findTopMenu(screen: TelnetScreen): ParsedMenu | null {
-    return screen.menus.find((m) => m.level === 0) ?? null;
+    const actionableMenus = screen.menus.filter((menu) => menu.items.length > 0);
+    return actionableMenus[actionableMenus.length - 1] ?? null;
   }
 
   /** Find a submenu (level 1+) on screen */
   function findSubmenu(screen: TelnetScreen): ParsedMenu | null {
     return screen.menus.find((m) => m.level > 0) ?? null;
+  }
+
+  function findStandaloneSubmenu(screen: TelnetScreen, rootMenu: ParsedMenu): ParsedMenu | null {
+    if (screen.menus.length !== 1) return null;
+    const candidate = screen.menus[0];
+    if (!candidate || candidate.items.length === 0) return null;
+    const overlapsRootItems = candidate.items.some((candidateItem) =>
+      rootMenu.items.some((rootItem) => matchLabel(candidateItem.label, rootItem.label)),
+    );
+    return overlapsRootItems ? null : candidate;
+  }
+
+  async function readUntilSubmenuVisible(rootMenu: ParsedMenu, checkTimeout: () => void) {
+    let lastScreen: TelnetScreen | null = null;
+    for (let attempt = 0; attempt < MAX_TRANSIENT_READS; attempt += 1) {
+      lastScreen = await session.readScreen(STEP_READ_TIMEOUT_MS);
+      checkTimeout();
+      const submenu = findSubmenu(lastScreen) ?? findStandaloneSubmenu(lastScreen, rootMenu);
+      if (submenu) {
+        return { screen: lastScreen, submenu };
+      }
+    }
+
+    return { screen: lastScreen, submenu: null };
   }
 
   /** Navigate within a menu to the item matching the target label */
@@ -188,32 +216,41 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
 
     let screen = currentScreen;
     for (let step = 0; step < distance; step++) {
-      await session.sendKey(direction);
-      screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
-      checkTimeout();
-
-      // Verify cursor moved
-      const refreshedMenu = findMenuAtLevel(screen, menu.level);
-      if (!refreshedMenu) {
-        throw new TelnetError("Menu disappeared during navigation", "DESYNC", { targetLabel, step });
-      }
-
       const expectedIndex = currentIndex + (direction === "DOWN" ? step + 1 : -(step + 1));
-      if (refreshedMenu.selectedIndex !== expectedIndex) {
-        // Retry the key once
-        addLog("warn", `${LOG_TAG}: cursor didn't move as expected, retrying`);
+      let advanced = false;
+
+      for (let attempt = 0; attempt <= MAX_KEY_RETRIES; attempt++) {
         await session.sendKey(direction);
         screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
         checkTimeout();
 
-        const retryMenu = findMenuAtLevel(screen, menu.level);
-        if (!retryMenu || retryMenu.selectedIndex !== expectedIndex) {
-          throw new TelnetError(
-            `Cursor stuck at index ${retryMenu?.selectedIndex ?? "?"}, expected ${expectedIndex}`,
-            "DESYNC",
-            { targetLabel, expected: expectedIndex, actual: retryMenu?.selectedIndex },
-          );
+        const refreshedMenu = findMenuAtLevel(screen, menu.level);
+        if (!refreshedMenu) {
+          advanced = true;
+          break;
         }
+
+        if (refreshedMenu.selectedIndex === expectedIndex) {
+          advanced = true;
+          break;
+        }
+
+        if (attempt < MAX_KEY_RETRIES) {
+          addLog("warn", `${LOG_TAG}: cursor didn't move as expected, retrying`);
+        }
+      }
+
+      if (!advanced) {
+        const finalMenu = findMenuAtLevel(screen, menu.level);
+        throw new TelnetError(
+          `Cursor stuck at index ${finalMenu?.selectedIndex ?? "?"}, expected ${expectedIndex}`,
+          "DESYNC",
+          {
+            targetLabel,
+            expected: expectedIndex,
+            actual: finalMenu?.selectedIndex,
+          },
+        );
       }
     }
 

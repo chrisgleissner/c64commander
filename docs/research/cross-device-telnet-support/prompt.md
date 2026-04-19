@@ -11,8 +11,8 @@ Expected change classification: `DOC_PLUS_CODE`, `UI_CHANGE`
 - `docs/ux-guidelines.md`
 - `docs/c64/c64u-telnet.yaml`
 - `docs/c64/devices/c64u/1.1.0/c64u-telnet.yaml`
-- `docs/c64/devices/u64e/3.14e/c64u-config.yaml`
-- `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
+- `docs/c64/devices/u64e/3.14e/u64e-config.yaml`
+- `docs/c64/devices/u64e/3.14e/u64e-telnet.yaml`
 - `scripts/dump_c64u_config.py`
 - `scripts/dump_c64_telnet_screens.py`
 - `src/lib/telnet/telnetTypes.ts`
@@ -87,7 +87,7 @@ Treat the following as already verified starting assumptions:
   - `Save Debug Log`
   - `Save EDID to file`
   - `Debug Stream`
-- The current `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml` is only partially complete:
+- The current `docs/c64/devices/u64e/3.14e/u64e-telnet.yaml` is only partially complete:
   - file-entry context menus are populated
   - top-level category list is populated
   - initial `F5` submenu details are missing
@@ -126,7 +126,7 @@ The task is complete only when all of the following are true:
 - `Power Cycle` is visibly disabled on U64 3.14e because the live `C64 Machine` menu does not expose it
 - U64 and C64U both work through the same discovery/execution architecture
 - config-file and REU Telnet workflows survive U64 menu naming/layout differences
-- `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml` is regenerated with fully populated initial submenu data and selected-directory action-menu data
+- `docs/c64/devices/u64e/3.14e/u64e-telnet.yaml` is regenerated with fully populated initial submenu data and selected-directory action-menu data
 - the Telnet dump tooling itself can capture those U64 details reproducibly
 
 ## Implementation phases
@@ -163,7 +163,7 @@ Required work:
 - handle direct-entry screens like `Assembly 64` forms without mistaking them for missing menus
 - preserve C64U output compatibility
 - regenerate:
-  - `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
+  - `docs/c64/devices/u64e/3.14e/u64e-telnet.yaml`
 - refresh U64 config snapshot only if scraper changes require it or live evidence changed
 
 Important:
@@ -289,7 +289,7 @@ Required docs to update as relevant:
 - `README.md`
 - in-app docs content if it references Telnet-backed controls
 - `docs/ux-interactions.md` if action visibility/disabled semantics change
-- `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
+- `docs/c64/devices/u64e/3.14e/u64e-telnet.yaml`
 - any Telnet integration/spec docs that describe action assumptions
 
 Screenshot policy:

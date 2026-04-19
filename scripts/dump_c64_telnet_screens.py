@@ -33,6 +33,7 @@ _convert_single_quoted_scalars = HELPER_MODULE._convert_single_quoted_scalars
 _fetch_json = HELPER_MODULE._fetch_json
 infer_device_family = HELPER_MODULE.infer_device_family
 _indent_sequences = HELPER_MODULE._indent_sequences
+normalize_device_output_path = HELPER_MODULE.normalize_device_output_path
 _quote_mapping_values_with_spaces = HELPER_MODULE._quote_mapping_values_with_spaces
 
 SCREEN_WIDTH = 60
@@ -1100,14 +1101,17 @@ def resolve_output_paths(
 ) -> list[Path]:
     output_text = output.as_posix()
     should_write_primary = device_family == "c64u" or not output_text.endswith(DEFAULT_PRIMARY_OUTPUT)
-    outputs = [output] if should_write_primary else []
+    outputs = [normalize_device_output_path(output, device_family)] if should_write_primary else []
     if mirror_output:
         outputs.append(
-            Path(
-                mirror_output.format(
-                    firmware_version=firmware_version,
-                    device_family=device_family,
-                )
+            normalize_device_output_path(
+                Path(
+                    mirror_output.format(
+                        firmware_version=firmware_version,
+                        device_family=device_family,
+                    )
+                ),
+                device_family,
             )
         )
     return outputs

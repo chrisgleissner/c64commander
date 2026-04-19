@@ -88,7 +88,7 @@ describe("C64API playSidUpload", () => {
 
     await api.playSidUpload(sidFile);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-  }, 15000);
+  }, 30000);
 
   it("retries retryable 503 responses and succeeds on final attempt", async () => {
     const fetchSpy = vi

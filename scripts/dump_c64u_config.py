@@ -24,6 +24,8 @@ from urllib.request import Request, urlopen
 import yaml
 from yaml.dumper import SafeDumper as PySafeDumper
 
+KNOWN_DEVICE_FAMILIES = {"c64u", "u64", "u64e", "u64e2"}
+
 
 class _IndentedDumper(PySafeDumper):
     def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
@@ -290,20 +292,49 @@ def infer_device_family(product: Optional[str]) -> str:
     return "unknown"
 
 
+def resolve_device_filename_prefix(device_family: str) -> str:
+    return device_family if device_family in KNOWN_DEVICE_FAMILIES else "c64u"
+
+
+def normalize_device_output_path(output: Path, device_family: str) -> Path:
+    try:
+        devices_index = output.parts.index("devices")
+    except ValueError:
+        return output
+
+    if devices_index + 1 >= len(output.parts):
+        return output
+
+    target_prefix = resolve_device_filename_prefix(device_family)
+    filename = output.name
+    match = re.match(r"^(c64u|u64|u64e|u64e2)(-.+)$", filename)
+    if match is None:
+        return output
+
+    current_prefix, suffix = match.groups()
+    if current_prefix == target_prefix:
+        return output
+
+    return output.with_name(f"{target_prefix}{suffix}")
+
+
 def resolve_output_paths(
     output: Path,
     mirror_output: Optional[str],
     firmware_version: str,
     device_family: str = "c64u",
 ) -> list[Path]:
-    outputs = [output]
+    outputs = [normalize_device_output_path(output, device_family)]
     if mirror_output:
         outputs.append(
-            Path(
-                mirror_output.format(
-                    firmware_version=firmware_version,
-                    device_family=device_family,
-                )
+            normalize_device_output_path(
+                Path(
+                    mirror_output.format(
+                        firmware_version=firmware_version,
+                        device_family=device_family,
+                    )
+                ),
+                device_family,
             )
         )
     return outputs

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   collectJsdomCoverageFiles,
@@ -13,9 +13,12 @@ import {
   getProjectFilesForRun,
   getNycReportArgs,
   getVitestCoverageArgs,
+  coverageRunMaxAttempts,
   jsdomChunkCount,
+  runOrThrow,
   splitFilesIntoChunks,
   unitCoverageRuns,
+  wrapCommandWithDirectoryKeepalive,
 } from "../../../scripts/run-unit-coverage.mjs";
 
 describe("run-unit-coverage", () => {
@@ -153,5 +156,35 @@ describe("run-unit-coverage", () => {
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
+  });
+
+  it("retries a failed coverage shard once before surfacing the exit code", () => {
+    const spawn = vi.fn().mockReturnValueOnce({ status: 1 }).mockReturnValueOnce({ status: 0 });
+    const onRetry = vi.fn();
+
+    expect(() =>
+      runOrThrow(process.execPath, ["coverage-run"], "unit-jsdom chunk 1/32 coverage", process.cwd(), {
+        maxAttempts: coverageRunMaxAttempts,
+        spawn,
+        onRetry,
+      }),
+    ).not.toThrow();
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledWith({ attempt: 1, status: 1 });
+  });
+
+  it("wraps a coverage command with a keepalive loop for the reports temp directory", () => {
+    const wrapped = wrapCommandWithDirectoryKeepalive(
+      process.execPath,
+      ["node_modules/vitest/vitest.mjs", "run"],
+      "/tmp/c64commander/.cov-unit/jsdom-1/.tmp",
+    );
+
+    expect(wrapped.command).toBe("bash");
+    expect(wrapped.args[0]).toBe("-lc");
+    expect(wrapped.args[1]).toContain('keepalive() { while :; do mkdir -p "$keepalive_dir"; sleep 0.2; done; }');
+    expect(wrapped.args[1]).toContain("/tmp/c64commander/.cov-unit/jsdom-1/.tmp");
+    expect(wrapped.args[1]).toContain("node_modules/vitest/vitest.mjs");
   });
 });

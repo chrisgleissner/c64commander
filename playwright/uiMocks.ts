@@ -11,6 +11,10 @@ import * as path from "node:path";
 import type { Page } from "@playwright/test";
 import { ensureValidSidBase64 } from "./sidFixture";
 
+type UiMockSeedOptions = {
+  seedFeatureFlagsByDefault?: boolean;
+};
+
 type HvscFixture = {
   version: number;
   songs: Array<{
@@ -62,9 +66,20 @@ export const uiFixtures = {
   fixtureBase64,
 };
 
-export async function seedUiMocks(page: Page, baseUrl: string) {
+export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSeedOptions = {}) {
+  const { seedFeatureFlagsByDefault = true } = options;
   await page.addInitScript(
-    ({ baseUrl: baseUrlArg, songData, snapshot }: { baseUrl: string; songData: string; snapshot: unknown }) => {
+    ({
+      baseUrl: baseUrlArg,
+      songData,
+      snapshot,
+      seedFeatureFlagsByDefault: seedFeatureFlags,
+    }: {
+      baseUrl: string;
+      songData: string;
+      snapshot: unknown;
+      seedFeatureFlagsByDefault: boolean;
+    }) => {
       try {
         delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
       } catch (error) {
@@ -104,6 +119,12 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         localStorage.setItem("c64u_notification_visibility", "all");
         localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
         sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, "1");
+        if (seedFeatureFlags) {
+          localStorage.setItem("c64u_dev_mode_enabled", "1");
+          localStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");
+          localStorage.setItem("c64u_feature_flag:commoserve_enabled", "1");
+          localStorage.setItem("c64u_feature_flag:lighting_studio_enabled", "1");
+        }
       } catch {
         return;
       }
@@ -120,7 +141,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
       window.__hvscMock__ = {
         addListener: (_event: string, listener: (event: any) => void) => {
           listeners.push(listener);
-          return { remove: async () => {} };
+          return { remove: async () => { } };
         },
         getHvscStatus: async () => ({
           installedBaselineVersion: 83,
@@ -146,7 +167,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
-        cancelHvscInstall: async () => {},
+        cancelHvscInstall: async () => { },
         getHvscFolderListing: async ({ path }: { path: string }) => {
           const normalized = path || "/";
           if (normalized === "/") {
@@ -187,6 +208,11 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         }),
       };
     },
-    { baseUrl: baseUrl, songData: fixtureBase64, snapshot: initialSnapshot },
+    {
+      baseUrl: baseUrl,
+      songData: fixtureBase64,
+      snapshot: initialSnapshot,
+      seedFeatureFlagsByDefault,
+    },
   );
 }
