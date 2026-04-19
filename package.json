@@ -150,7 +150,7 @@
     "sonner": "^1.7.4",
     "spark-md5": "^3.0.2",
     "suncalc": "^1.9.0",
-    "tailwind-merge": "^2.6.0",
+    "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
     "zod": "^3.25.76"
