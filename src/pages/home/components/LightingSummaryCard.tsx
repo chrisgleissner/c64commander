@@ -171,7 +171,9 @@ export function LightingSummaryCard({
     if (parsed === null) return;
     const nextIndex = clampToRange(parsed, 0, fixedColorSliderMax);
     onManualLightingChange?.();
-    interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
+    void interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) }).catch(() => {
+      setFixedColorDraftIndex(null);
+    });
   };
 
   const handleIntensityPreview = (nextValue: number) => {
@@ -179,7 +181,9 @@ export function LightingSummaryCard({
     if (parsed === null) return;
     const clamped = clampToRange(parsed, intensityMin, intensityMax);
     onManualLightingChange?.();
-    interactiveWrite({ "Strip Intensity": Math.round(clamped) });
+    void interactiveWrite({ "Strip Intensity": Math.round(clamped) }).catch(() => {
+      setIntensityDraft(null);
+    });
   };
 
   return (

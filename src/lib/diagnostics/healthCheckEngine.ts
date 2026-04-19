@@ -1015,6 +1015,7 @@ export const runHealthCheckForTarget = async (
   const startTimestamp = new Date().toISOString();
   const startedAtMs = Date.now();
   const deadlineMs = startedAtMs + GLOBAL_RUN_TIMEOUT_MS;
+  const mode = options.mode ?? "full";
   const runtime = buildProbeRuntime(target);
   const controller = new AbortController();
   const probeStates = buildLocalProbeStates();
@@ -1173,14 +1174,16 @@ export const runHealthCheckForTarget = async (
 
     const config = restFailed
       ? setLocalSkippedProbe("CONFIG", "Skipped: REST probe failed")
-      : await runLocalProbe(
-          "CONFIG",
-          (signal) => probeConfig(signal, runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-        );
+      : mode === "passive"
+        ? setLocalSkippedProbe("CONFIG", "Skipped: passive mode disables CONFIG pulse")
+        : await runLocalProbe(
+            "CONFIG",
+            (signal) => probeConfig(signal, runtime),
+            (record) => ({
+              record,
+              lifecycle: lifecycleFromRecord(record.outcome),
+            }),
+          );
 
     const raster = restFailed
       ? setLocalSkippedProbe("RASTER", "Skipped: REST probe failed")

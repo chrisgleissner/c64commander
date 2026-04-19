@@ -163,7 +163,7 @@ describe("Maestro flow contracts", () => {
     const smokeHvscLowRam = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"), "utf8");
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
-      expect(rawSource).toContain("id: hvsc-flag");
+      expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).toContain('visible: "Playlist"');
       expect(rawSource).toContain("times: 4");
       expect(rawSource).toContain("start: 50%, 82%");

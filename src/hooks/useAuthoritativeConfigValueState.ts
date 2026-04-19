@@ -12,8 +12,6 @@ export type AuthoritativeConfigValue = string | number;
 
 export type AuthoritativeConfigValueEntry = {
   value: AuthoritativeConfigValue;
-  pending: boolean;
-  lastUserUpdateTimestamp: number;
 };
 
 export function useAuthoritativeConfigValueState() {
@@ -30,8 +28,6 @@ export function useAuthoritativeConfigValueState() {
       ...previous,
       [key]: {
         value,
-        pending: true,
-        lastUserUpdateTimestamp: Date.now(),
       },
     }));
   }, []);

@@ -745,7 +745,7 @@ function HomePageContent() {
   const handleCpuSpeedPreviewChange = useCallback(
     (nextValue: string) => {
       // Interactive write bypasses the queue for instant hardware feedback.
-      interactiveWriteU64({ "CPU Speed": nextValue });
+      void interactiveWriteU64({ "CPU Speed": nextValue }).catch(() => undefined);
     },
     [interactiveWriteU64],
   );
@@ -755,10 +755,13 @@ function HomePageContent() {
       // Commit via interactive write for the slider value, then trigger the
       // Turbo Control auto-adjustment as a one-shot deliberate write without
       // re-writing CPU Speed through the global queue.
-      interactiveWriteU64({ "CPU Speed": nextValue });
-      void handleTurboControlAutoAdjust(nextValue);
+      void interactiveWriteU64({ "CPU Speed": nextValue })
+        .then(() => handleTurboControlAutoAdjust(nextValue))
+        .catch(() => {
+          setCpuSpeedOptimisticValue(cpuSpeedValue);
+        });
     },
-    [interactiveWriteU64, handleTurboControlAutoAdjust],
+    [cpuSpeedValue, interactiveWriteU64, handleTurboControlAutoAdjust],
   );
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {

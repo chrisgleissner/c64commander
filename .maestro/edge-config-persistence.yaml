@@ -18,14 +18,14 @@ env:
 # Scroll until the HVSC checkbox is in view (bounded).
 - scrollUntilVisible:
     element:
-      id: hvsc-flag
+      id: feature-flag-hvsc_enabled
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
 
 # Expect the flag to be enabled by default on native builds.
 - assertVisible:
-    id: hvsc-flag
+    id: feature-flag-hvsc_enabled
     checked: true
 
 - takeScreenshot: hvsc-enabled
@@ -42,11 +42,11 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      id: hvsc-flag
+      id: feature-flag-hvsc_enabled
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
 - assertVisible:
-    id: hvsc-flag
+    id: feature-flag-hvsc_enabled
     checked: true
 - takeScreenshot: hvsc-persisted

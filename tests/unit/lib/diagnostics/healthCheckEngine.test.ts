@@ -352,7 +352,7 @@ describe("runHealthCheckForTarget", () => {
         telnetPort: 2323,
         password: "secret",
       },
-      { mode: "passive" },
+      { mode: "full" },
     );
 
     expect(result.connectivity).toBe("Online");
@@ -368,6 +368,24 @@ describe("runHealthCheckForTarget", () => {
       expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
     );
     expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323, "secret");
+  });
+
+  it("skips the config pulse in passive mode", async () => {
+    setupAllProbesSuccess();
+
+    const result = await runHealthCheckForTarget(
+      {
+        deviceHost: "backup-u64:8080",
+        ftpPort: 2021,
+        telnetPort: 2323,
+        password: "secret",
+      },
+      { mode: "passive" },
+    );
+
+    expect(result.probes.CONFIG.outcome).toBe("Skipped");
+    expect(result.probes.CONFIG.reason).toContain("passive mode");
+    expect(mockSetConfigValue).not.toHaveBeenCalled();
   });
 });
 
