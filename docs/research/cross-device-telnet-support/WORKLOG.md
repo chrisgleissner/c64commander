@@ -114,3 +114,48 @@
 - Started the repository coverage gate because the follow-up changed executable files:
   - `npm run test:coverage`
   - Final aggregate result was still pending while this work log entry was written.
+
+## 2026-04-19
+
+### 00:55 BST
+
+- Re-read `README.md`, `.github/copilot-instructions.md`, and `docs/ux-guidelines.md` for the implementation task.
+- Reclassified the active work as:
+  - `DOC_PLUS_CODE`
+  - `UI_CHANGE`
+- Confirmed the repository root `PLANS.md` and `WORKLOG.md` are occupied by unrelated in-flight work and must not be touched for this task.
+- Replaced the task-local `docs/research/cross-device-telnet-support/PLANS.md` with the implementation-phase plan for this execution.
+
+### 01:00 BST
+
+- Re-traced the current Telnet execution path through:
+  - `src/lib/telnet/telnetTypes.ts`
+  - `src/lib/telnet/telnetMenuNavigator.ts`
+  - `src/lib/telnet/telnetActionExecutor.ts`
+  - `src/hooks/useTelnetActions.ts`
+  - `src/lib/config/configTelnetWorkflow.ts`
+  - `src/lib/reu/reuTelnetWorkflow.ts`
+  - `src/pages/HomePage.tsx`
+  - `src/pages/home/components/MachineControls.tsx`
+  - `src/pages/home/components/DriveManager.tsx`
+  - `src/pages/home/components/PrinterManager.tsx`
+- Current implementation findings locked in before edits:
+  - action execution still depends on static `menuPath` pairs, especially `Power & Reset`
+  - the hook exposes global availability, not discovered per-action support
+  - `MachineControls` hides `Power Cycle` when no handler exists
+  - drive and printer Telnet controls are still gated as present-or-hidden via global availability
+  - config and REU workflows still assume deterministic context-menu labels without discovery support
+
+### 01:07 BST
+
+- Re-traced the current parser and scraper behavior through:
+  - `src/lib/telnet/telnetScreenParser.ts`
+  - `tests/unit/telnet/telnetScreenParser.test.ts`
+  - `scripts/dump_c64_telnet_screens.py`
+  - `scripts/test_dump_c64_telnet_screens.py`
+- Tooling findings locked in before edits:
+  - runtime parser currently assigns menu nesting purely by discovery order instead of parent/child geometry
+  - runtime parser extracts menu rows from the full inner box width, which is vulnerable to nested overlay contamination
+  - dump-script overlay capture still falls back to splitting parent rows and misses real nested submenu structure on U64
+  - current U64 YAML still shows empty `selected_directory_action_menus.action_menu.items`
+  - current U64 YAML still lacks populated initial submenu trees

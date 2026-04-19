@@ -1,4 +1,6 @@
 import path from "node:path";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +8,7 @@ import {
   collectSharedJsdomCoverageFiles,
   createCoveragePlan,
   dedicatedJsdomCoverageFiles,
+  ensureReportsDirectory,
   getNycMergeArgs,
   getProjectFilesForRun,
   getNycReportArgs,
@@ -136,5 +139,19 @@ describe("run-unit-coverage", () => {
 
     expect(plan.coverageArtifacts.lcov).toBe(path.join(rootDir, "coverage", "lcov.info"));
     expect(plan.coverageArtifacts.json).toBe(path.join(rootDir, "coverage", "coverage-final.json"));
+  });
+
+  it("creates the shard reports directory together with the Vitest temp directory", () => {
+    const tempRoot = mkdtempSync(path.join(os.tmpdir(), "run-unit-coverage-"));
+    const reportsDirectory = path.join(tempRoot, "jsdom-27");
+
+    try {
+      ensureReportsDirectory(reportsDirectory);
+
+      expect(existsSync(reportsDirectory)).toBe(true);
+      expect(existsSync(path.join(reportsDirectory, ".tmp"))).toBe(true);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -6,12 +6,22 @@ import {
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
-  loadCommoserveEnabled,
 } from "@/lib/config/appSettings";
+
+const featureFlagsRef = vi.hoisted(() => ({
+  current: {
+    commoserve_enabled: true,
+  },
+}));
+
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: (key: "commoserve_enabled") => ({
+    value: featureFlagsRef.current[key],
+  }),
+}));
 
 vi.mock("@/lib/config/appSettings", () => ({
   APP_SETTINGS_KEYS: {
-    COMMOSERVE_ENABLED_KEY: "c64u_commoserve_enabled",
     ARCHIVE_HOST_OVERRIDE_KEY: "c64u_archive_host_override",
     ARCHIVE_CLIENT_ID_OVERRIDE_KEY: "c64u_archive_client_id_override",
     ARCHIVE_USER_AGENT_OVERRIDE_KEY: "c64u_archive_user_agent_override",
@@ -19,13 +29,12 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadArchiveClientIdOverride: vi.fn(() => ""),
   loadArchiveHostOverride: vi.fn(() => ""),
   loadArchiveUserAgentOverride: vi.fn(() => ""),
-  loadCommoserveEnabled: vi.fn(() => true),
 }));
 
 describe("useArchiveClientSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(loadCommoserveEnabled).mockReturnValue(true);
+    featureFlagsRef.current.commoserve_enabled = true;
     vi.mocked(loadArchiveHostOverride).mockReturnValue("");
     vi.mocked(loadArchiveClientIdOverride).mockReturnValue("");
     vi.mocked(loadArchiveUserAgentOverride).mockReturnValue("");
@@ -45,7 +54,7 @@ describe("useArchiveClientSettings", () => {
   it("updates the live archive config when matching app settings change", async () => {
     const { result } = renderHook(() => useArchiveClientSettings());
 
-    vi.mocked(loadCommoserveEnabled).mockReturnValue(false);
+    featureFlagsRef.current.commoserve_enabled = false;
     vi.mocked(loadArchiveHostOverride).mockReturnValue("archive.local");
     vi.mocked(loadArchiveClientIdOverride).mockReturnValue("Custom Client");
     vi.mocked(loadArchiveUserAgentOverride).mockReturnValue("Custom Agent");

@@ -21,24 +21,28 @@ import {
   loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
+import { featureFlagManager } from "@/lib/config/featureFlags";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
 
 describe("settingsTransfer", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    await featureFlagManager.load();
+    await featureFlagManager.replaceOverrides({});
   });
 
-  it("exports a versioned, whitelisted payload", () => {
-    const snapshot = exportSettingsSnapshot();
+  it("exports a versioned, whitelisted payload", async () => {
+    const snapshot = await exportSettingsSnapshot();
     expect(snapshot.version).toBe(SETTINGS_EXPORT_VERSION);
     expect(snapshot.appSettings).toHaveProperty("debugLoggingEnabled");
     expect(snapshot.appSettings).toHaveProperty("volumeSliderPreviewIntervalMs");
     expect(snapshot.appSettings).toHaveProperty("archiveHostOverride");
+    expect(snapshot).toHaveProperty("featureFlags");
     expect(snapshot.deviceSafety).toHaveProperty("mode");
     expect(JSON.stringify(snapshot)).not.toMatch(/password/i);
   });
 
-  it("rejects unknown keys on import", () => {
+  it("rejects unknown keys on import", async () => {
     const payload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -55,6 +59,7 @@ describe("settingsTransfer", () => {
         archiveUserAgentOverride: "",
         extra: "nope",
       },
+      featureFlags: {},
       deviceSafety: {
         mode: "BALANCED",
         restMaxConcurrency: 2,
@@ -74,11 +79,11 @@ describe("settingsTransfer", () => {
       },
     };
 
-    const result = importSettingsJson(JSON.stringify(payload));
+    const result = await importSettingsJson(JSON.stringify(payload));
     expect(result.ok).toBe(false);
   });
 
-  it("imports settings and applies values", () => {
+  it("imports settings and applies values", async () => {
     const payload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -93,6 +98,10 @@ describe("settingsTransfer", () => {
         archiveHostOverride: "archive.local:3002",
         archiveClientIdOverride: "Custom",
         archiveUserAgentOverride: "Custom Agent",
+      },
+      featureFlags: {
+        commoserve_enabled: false,
+        hvsc_enabled: true,
       },
       deviceSafety: {
         mode: "TROUBLESHOOTING",
@@ -113,7 +122,7 @@ describe("settingsTransfer", () => {
       },
     };
 
-    const result = importSettingsJson(JSON.stringify(payload));
+    const result = await importSettingsJson(JSON.stringify(payload));
     expect(result.ok).toBe(true);
     expect(loadDebugLoggingEnabled()).toBe(false);
     expect(loadConfigWriteIntervalMs()).toBe(800);
@@ -130,25 +139,30 @@ describe("settingsTransfer", () => {
     const safety = loadDeviceSafetyConfig();
     expect(safety.mode).toBe("TROUBLESHOOTING");
     expect(safety.allowUserOverrideCircuit).toBe(false);
+
+    const snapshot = await exportSettingsSnapshot();
+    expect(snapshot.featureFlags).toEqual({
+      commoserve_enabled: false,
+    });
   });
 
-  it("rejects invalid JSON payloads", () => {
-    const result = importSettingsJson("{bad json");
+  it("rejects invalid JSON payloads", async () => {
+    const result = await importSettingsJson("{bad json");
     expect(result.ok).toBe(false);
   });
 
-  it("rejects unsupported versions", () => {
+  it("rejects unsupported versions", async () => {
     const payload = {
       version: 999,
       appSettings: {},
       deviceSafety: {},
     };
 
-    const result = importSettingsJson(JSON.stringify(payload));
+    const result = await importSettingsJson(JSON.stringify(payload));
     expect(result.ok).toBe(false);
   });
 
-  it("rejects invalid disk autostart mode", () => {
+  it("rejects invalid disk autostart mode", async () => {
     const payload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -164,6 +178,7 @@ describe("settingsTransfer", () => {
         archiveClientIdOverride: "",
         archiveUserAgentOverride: "",
       },
+      featureFlags: {},
       deviceSafety: {
         mode: "BALANCED",
         restMaxConcurrency: 2,
@@ -183,11 +198,11 @@ describe("settingsTransfer", () => {
       },
     };
 
-    const result = importSettingsJson(JSON.stringify(payload));
+    const result = await importSettingsJson(JSON.stringify(payload));
     expect(result.ok).toBe(false);
   });
 
-  it("rejects deviceSafety with non-finite numeric values", () => {
+  it("rejects deviceSafety with non-finite numeric values", async () => {
     const payload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -203,6 +218,7 @@ describe("settingsTransfer", () => {
         archiveClientIdOverride: "",
         archiveUserAgentOverride: "",
       },
+      featureFlags: {},
       deviceSafety: {
         mode: "BALANCED",
         ftpMaxConcurrency: "bad",
@@ -221,7 +237,7 @@ describe("settingsTransfer", () => {
       },
     };
 
-    const result = importSettingsJson(JSON.stringify(payload));
+    const result = await importSettingsJson(JSON.stringify(payload));
     expect(result.ok).toBe(false);
   });
 });

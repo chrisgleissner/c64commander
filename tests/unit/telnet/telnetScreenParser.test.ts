@@ -318,6 +318,93 @@ describe("detectMenus", () => {
     const menus = detectMenus(cells);
     expect(menus).toEqual([]);
   });
+
+  it("classifies adjacent U64 submenu overlays with correct levels", () => {
+    const cells: Array<Array<{ char: string; reverse: boolean; color: number }>> = [];
+    for (let r = 0; r < TELNET_SCREEN_HEIGHT; r++) {
+      cells.push([]);
+      for (let c = 0; c < TELNET_SCREEN_WIDTH; c++) {
+        cells[r].push({ char: " ", reverse: false, color: 7 });
+      }
+    }
+
+    const drawBox = (top: number, left: number, width: number, height: number) => {
+      cells[top][left].char = "l";
+      for (let c = left + 1; c < left + width - 1; c++) {
+        cells[top][c].char = "q";
+      }
+      cells[top][left + width - 1].char = "k";
+      for (let r = top + 1; r < top + height - 1; r++) {
+        cells[r][left].char = "x";
+        cells[r][left + width - 1].char = "x";
+      }
+      cells[top + height - 1][left].char = "m";
+      for (let c = left + 1; c < left + width - 1; c++) {
+        cells[top + height - 1][c].char = "q";
+      }
+      cells[top + height - 1][left + width - 1].char = "j";
+    };
+
+    drawBox(6, 15, 34, 11);
+    drawBox(7, 30, 18, 9);
+
+    const parentItems = [
+      "Assembly 64",
+      "C64 Machine",
+      "Built-in Drive A",
+      "Built-in Drive B",
+      "Software IEC",
+      "Printer",
+      "Configuration",
+      "Streams",
+      "Developer",
+    ];
+    parentItems.forEach((item, index) => {
+      const row = 7 + index;
+      for (let offset = 0; offset < item.length; offset++) {
+        cells[row][16 + offset].char = item[offset];
+      }
+    });
+
+    const childItems = [
+      "Reset C64",
+      "Reboot C64",
+      "Reboot (Clr Mem)",
+      "Power OFF",
+      "Save C64 Memory",
+      "Save REU Memory",
+      "Save MP3 Drv B",
+    ];
+    childItems.forEach((item, index) => {
+      const row = 8 + index;
+      for (let offset = 0; offset < item.length; offset++) {
+        cells[row][31 + offset].char = item[offset];
+      }
+    });
+
+    for (let c = 31; c < 47; c++) {
+      cells[8][c].reverse = true;
+    }
+
+    const menus = detectMenus(cells);
+
+    expect(menus).toHaveLength(2);
+    expect(menus[0].level).toBe(0);
+    expect(menus[0].items.map((item) => item.label)).toEqual([
+      "Assembly 64",
+      "C64 Machine",
+      "Built-in Drive",
+      "Built-in Drive",
+      "Software IEC",
+      "Printer",
+      "Configuration",
+      "Streams",
+      "Developer",
+    ]);
+    expect(menus[1].level).toBe(1);
+    expect(menus[1].items.map((item) => item.label)).toEqual(childItems);
+    expect(menus[1].selectedIndex).toBe(0);
+  });
 });
 
 describe("parseTelnetScreen additional coverage", () => {
@@ -482,7 +569,7 @@ describe("parseTelnetScreen additional coverage", () => {
   it("classifies menu with File Search title as search_form (line 518)", () => {
     // Build a bordered menu box; the row after the top border must contain "File Search"
     // Use short lines (< TELNET_SCREEN_WIDTH) to avoid auto-wrap distorting placement
-    const raw = "lqqqqqqqqqqqqk\r\n" + "x File Search x\r\n" + "mqqqqqqqqqqqqj";
+    const raw = "lqqqqqqqqqqqqqqk\r\n" + "x File Search  x\r\n" + "mqqqqqqqqqqqqqqj";
     const screen = parseTelnetScreen(encode(raw));
     expect(screen.screenType).toBe("search_form");
   });

@@ -83,6 +83,15 @@ vi.mock("@/hooks/useDisplayProfile", () => ({
 }));
 vi.mock("@/hooks/useFeatureFlags", () => ({
   FeatureFlagsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useFeatureFlags: () => ({
+    flags: { hvsc_enabled: true, commoserve_enabled: true, lighting_studio_enabled: false },
+    resolved: {
+      hvsc_enabled: { id: "hvsc_enabled", value: true },
+      commoserve_enabled: { id: "commoserve_enabled", value: true },
+      lighting_studio_enabled: { id: "lighting_studio_enabled", value: false },
+    },
+  }),
+  useFeatureFlag: () => ({ value: false }),
 }));
 vi.mock("@/hooks/useRefreshControl", () => ({
   RefreshControlProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -418,7 +427,7 @@ describe("App runtime wiring", () => {
   });
 
   it("recovers from an active page render failure after navigating away and back", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.shouldThrowDocsPageRef.current = true;
     window.history.pushState({}, "", "/docs");
 

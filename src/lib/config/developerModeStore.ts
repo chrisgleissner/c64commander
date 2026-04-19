@@ -11,18 +11,26 @@ type DevModeEventDetail = { enabled: boolean };
 const DEV_MODE_KEY = "c64u_dev_mode_enabled";
 const DEV_MODE_EVENT = "c64u-dev-mode-change";
 
-export const getDeveloperModeEnabled = () => localStorage.getItem(DEV_MODE_KEY) === "1";
+export const getDeveloperModeEnabled = () => {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(DEV_MODE_KEY) === "1";
+};
 
 export const setDeveloperModeEnabled = (enabled: boolean) => {
-  localStorage.setItem(DEV_MODE_KEY, enabled ? "1" : "0");
-  window.dispatchEvent(
-    new CustomEvent<DevModeEventDetail>(DEV_MODE_EVENT, {
-      detail: { enabled },
-    }),
-  );
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(DEV_MODE_KEY, enabled ? "1" : "0");
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<DevModeEventDetail>(DEV_MODE_EVENT, {
+        detail: { enabled },
+      }),
+    );
+  }
 };
 
 export const subscribeDeveloperMode = (listener: (detail: DevModeEventDetail) => void) => {
+  if (typeof window === "undefined") return () => {};
   const handler = (event: Event) => {
     listener((event as CustomEvent<DevModeEventDetail>).detail);
   };

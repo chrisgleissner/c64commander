@@ -85,6 +85,16 @@ const defaultProps = {
   machineTaskBusy: false,
   machineTaskId: null,
   onResetPrinter: vi.fn().mockResolvedValue(undefined),
+  getTelnetActionSupport: () => ({
+    actionId: "printerFlush",
+    status: "supported" as const,
+    reason: null,
+    target: {
+      categoryLabel: "Printer",
+      actionLabel: "Flush/Eject",
+      source: "initial" as const,
+    },
+  }),
 };
 
 describe("PrinterManager", () => {
@@ -212,6 +222,25 @@ describe("PrinterManager – telnet controls", () => {
     render(<PrinterManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
     expect(screen.getByTestId("home-printer-flush")).toBeInTheDocument();
     expect(screen.getByTestId("home-printer-telnet-reset")).toBeInTheDocument();
+  });
+
+  it("keeps unsupported printer actions visible but disabled with an inline reason", () => {
+    render(
+      <PrinterManager
+        {...defaultProps}
+        telnetAvailable={true}
+        onTelnetAction={vi.fn()}
+        getTelnetActionSupport={() => ({
+          actionId: "printerFlush",
+          status: "unsupported",
+          reason: "Flush/Eject is not available on this firmware.",
+          target: null,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("home-printer-flush")).toBeDisabled();
+    expect(screen.getByText("Flush/Eject: Flush/Eject is not available on this firmware.")).toBeInTheDocument();
   });
 
   it("shows Turn On when printer is disabled", () => {

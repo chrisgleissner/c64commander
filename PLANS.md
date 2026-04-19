@@ -72,3 +72,17 @@ Extend the feature-flag research with a broader codebase survey of non-MVP, some
 - [x] All required sections are present
 - [x] No TODOs or unresolved placeholders remain
 - [x] No code changes were made
+
+## Follow-up TODOs
+
+- Introduce `stable` feature group and reclassify existing flags:
+  - add `stable` group metadata to `src/lib/config/feature-flags.yaml`
+  - reclassify `hvsc_enabled` and `commoserve_enabled` to `stable`
+  - keep `lighting_studio_enabled` in `experimental`
+  - regenerate `src/lib/config/featureFlagsRegistry.generated.ts`
+  - validate compile-time invariants and grouped Settings rendering order (`Stable` before `Experimental`)
+  - run tests and verify no regressions
+- Make feature flags default to enabled in nearly all tests:
+  - create a shared test default where all feature flags are enabled unless a test explicitly covers feature-flag behavior or hidden gated UX
+  - minimize per-file ad hoc `useFeatureFlag` mocks by centralizing the default test harness
+  - keep explicit opt-out coverage for tests that verify feature gating, visibility, or the feature-flag mechanism itself

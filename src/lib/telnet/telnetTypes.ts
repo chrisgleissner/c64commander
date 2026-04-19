@@ -154,6 +154,8 @@ export interface TelnetAction {
   label: string;
   shortLabel?: string;
   menuPath: MenuPath;
+  categoryHints?: string[];
+  actionHints?: string[];
   subsystem: TelnetSubsystem;
   homePlacement?: "primary" | "overflow" | null;
   deviceTargets?: Array<"printer" | "soft-iec" | "drive-a" | "drive-b">;
@@ -165,6 +167,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     id: "powerCycle",
     label: "Power Cycle",
     menuPath: ["Power & Reset", "Power Cycle"],
+    categoryHints: ["C64 Machine"],
     subsystem: "C64",
     homePlacement: "primary",
   },
@@ -173,6 +176,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     label: "Reboot",
     shortLabel: "Reboot (Clr Mem)",
     menuPath: ["Power & Reset", "Reboot (Clr Mem)"],
+    categoryHints: ["C64 Machine"],
     subsystem: "C64",
     homePlacement: "overflow",
   },
@@ -181,6 +185,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     label: "Reboot (Keep RAM)",
     shortLabel: "Reboot C64",
     menuPath: ["Power & Reset", "Reboot C64"],
+    categoryHints: ["C64 Machine"],
     subsystem: "C64",
     homePlacement: null,
   },
@@ -188,6 +193,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     id: "saveC64Memory",
     label: "Save C64 Memory",
     menuPath: ["Power & Reset", "Save C64 Memory"],
+    categoryHints: ["C64 Machine"],
     subsystem: "C64",
   },
   saveReuMemory: {
@@ -195,6 +201,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     label: "Save REU",
     shortLabel: "Save REU Memory",
     menuPath: ["Power & Reset", "Save REU Memory"],
+    categoryHints: ["C64 Machine"],
     subsystem: "C64",
     homePlacement: "overflow",
   },
@@ -330,7 +337,9 @@ export type TelnetErrorCode =
   | "DESYNC"
   | "DISCONNECTED"
   | "NAVIGATION_FAILED"
-  | "ACTION_FAILED";
+  | "ACTION_FAILED"
+  | "UNSUPPORTED_ACTION"
+  | "DISCOVERY_FAILED";
 
 /** Menu fixture for the deterministic mock */
 export interface MenuFixture {

@@ -3,90 +3,112 @@
 ## Classification
 
 - `DOC_PLUS_CODE`
+- `UI_CHANGE`
 
 ## Objective
 
-Capture live U64 3.14e Telnet/config evidence, produce a research-backed implementation prompt for cross-device Telnet support across C64U and U64-class devices, and harden the extraction tooling so device family and firmware version are derived from live `/v1/info` metadata instead of hard-coded output paths.
+Implement cross-device Telnet support so runtime action support is discovered from the live Telnet menu graph per connected device and firmware instead of being hard-coded to the C64U menu layout.
+
+## Planning Scope
+
+- Maintain planning artifacts only under `docs/research/cross-device-telnet-support/`.
+- Do not modify root `PLANS.md` or `WORKLOG.md` because they are currently in use by another task.
 
 ## Impact Map
 
-- Documentation:
+- Documentation and planning:
   - `docs/research/cross-device-telnet-support/PLANS.md`
   - `docs/research/cross-device-telnet-support/WORKLOG.md`
-  - `docs/research/cross-device-telnet-support/prompt.md`
-  - `docs/c64/devices/u64e/3.14e/c64u-config.yaml`
-  - `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
-- Code and tooling:
-  - `build`
-  - `scripts/dump_c64u_config.py`
-  - `scripts/dump_c64_telnet_screens.py`
-  - `scripts/test_dump_c64u_config.py`
-  - `scripts/test_dump_c64_telnet_screens.py`
-- Read-only analysis targets:
   - `README.md`
-  - `.github/copilot-instructions.md`
-  - `docs/ux-guidelines.md`
-  - `docs/c64/c64u-telnet.yaml`
-  - `docs/c64/devices/c64u/1.1.0/c64u-telnet.yaml`
+  - `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
+  - Telnet integration docs if discovery/execution semantics need explanation updates
+- Tooling and parser:
+  - `scripts/dump_c64_telnet_screens.py`
+  - `scripts/test_dump_c64_telnet_screens.py`
+  - `src/lib/telnet/telnetScreenParser.ts`
+  - `tests/unit/telnet/telnetScreenParser.test.ts`
+- Runtime discovery and execution:
   - `src/lib/telnet/telnetTypes.ts`
   - `src/lib/telnet/telnetMenuNavigator.ts`
-  - `src/lib/telnet/telnetScreenParser.ts`
+  - `src/lib/telnet/telnetActionExecutor.ts`
   - `src/hooks/useTelnetActions.ts`
+  - `src/lib/config/configTelnetWorkflow.ts`
+  - `src/lib/reu/reuTelnetWorkflow.ts`
+  - related Telnet unit tests
+- Home UI:
   - `src/pages/HomePage.tsx`
   - `src/pages/home/components/MachineControls.tsx`
   - `src/pages/home/components/DriveManager.tsx`
   - `src/pages/home/components/PrinterManager.tsx`
+  - related Home and hook tests
+- Screenshots:
+  - update only the smallest affected Home screenshot subset if visible documented UI changes make current images inaccurate
 
-## Findings
+## Current Findings
 
-- Live device probe confirmed:
-  - `http://u64/v1/info` -> `Ultimate 64 Elite`, firmware `3.14e`
-  - `http://c64u/v1/info` -> `C64 Ultimate`, firmware `1.1.0`
-- Extraction-tool follow-up:
-  - the initial scrape workflow mistakenly mirrored one config extract under `docs/c64/devices/c64u/3.14e/...`
-  - the extraction toolchain now derives both `firmware_version` and `device_family` from live `/v1/info` metadata
-  - default mirror paths now target `docs/c64/devices/{device_family}/{firmware_version}/...`
-- Added live U64 config snapshot:
-  - `docs/c64/devices/u64e/3.14e/c64u-config.yaml`
-- Added live U64 Telnet snapshot:
-  - `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
-- The current Telnet dump script captured U64 file-entry menus correctly, but did not fully expand U64 `F5` action submenus or the selected-directory `F5` menu.
-- Direct live U64 Telnet probing confirmed:
-  - top-level `F5` items are `Assembly 64`, `C64 Machine`, `Built-in Drive A`, `Built-in Drive B`, `Software IEC`, `Printer`, `Configuration`, `Streams`, `Developer`
-  - `C64 Machine` includes `Reset C64`, `Reboot C64`, `Reboot (Clr Mem)`, `Power OFF`, `Save C64 Memory`, `Save REU Memory`, `Save MP3 Drv B`
-  - `Power Cycle` is absent on U64 3.14e
-  - Drive A/B, Software IEC, Printer, and Configuration submenus match the app's current Telnet action families
-  - `Developer` includes `Clear Debug Log`, `Save Debug Log`, `Save EDID to file`, and `Debug Stream`
-- Current app gaps:
-  - `src/lib/telnet/telnetTypes.ts` hard-codes C64U-centric action paths such as `Power & Reset`
-  - `src/hooks/useTelnetActions.ts` exposes only boolean availability, not per-action support
-  - `MachineControls`, `DriveManager`, and `PrinterManager` hide unsupported Telnet controls instead of rendering visibly disabled controls
-  - `src/lib/telnet/telnetScreenParser.ts` and the dump script both need better handling for overlapping nested menu boxes on U64
+- `src/lib/telnet/telnetTypes.ts` still uses static `menuPath` pairs such as `["Power & Reset", "Power Cycle"]` as the execution source of truth.
+- `src/lib/telnet/telnetActionExecutor.ts` executes only through those static paths.
+- `src/hooks/useTelnetActions.ts` exposes global availability, but not per-action support, discovery state, or unsupported reasons.
+- `MachineControls` hides `Power Cycle` when no handler is passed instead of rendering a visible disabled action.
+- `DriveManager` and `PrinterManager` currently gate Telnet controls with a single availability boolean and hide unsupported actions.
+- `src/lib/config/configTelnetWorkflow.ts` and `src/lib/reu/reuTelnetWorkflow.ts` still rely on fixed browser/menu assumptions around action menus.
+- `scripts/dump_c64_telnet_screens.py` and `src/lib/telnet/telnetScreenParser.ts` both need stronger handling for overlapping nested menu boxes and direct-entry screens on U64.
+- Current U64 YAML evidence is incomplete:
+  - initial `F5` submenu details are missing
+  - selected-directory `F5` action menu details are missing
 
-## Task Breakdown
+## Phases
 
-- [x] Read repository guidance and classify the task correctly
-- [x] Inspect existing Telnet docs, dump scripts, parser, and UI wiring
-- [x] Probe `u64` and `c64u` over REST
-- [x] Dump live U64 3.14e config snapshot
-- [x] Dump live U64 3.14e Telnet snapshot
-- [x] Probe live U64 Telnet submenus to confirm app-relevant capability differences
-- [x] Harden the extract tools so firmware and device family come from live `/v1/info`
-- [x] Produce folder-local plan and work log
-- [x] Write the implementation prompt in `docs/research/cross-device-telnet-support/prompt.md`
+### Phase 1 - Baseline and artifact control
 
-## Validation
+- [x] Read repo guidance and required implementation inputs
+- [x] Confirm classification as `DOC_PLUS_CODE` and `UI_CHANGE`
+- [x] Confirm root planning files are occupied by another task
+- [x] Update task-local planning and work-log artifacts
+- [x] Record current gaps and touched layers before code changes
 
-- Targeted tool validation:
-  - `python3 -m unittest scripts/test_dump_c64u_config.py scripts/test_dump_c64_telnet_screens.py`
-- Repository coverage run started because the follow-up introduced executable changes:
-  - `npm run test:coverage`
-- No screenshot refresh was needed because no visible UI changed
+### Phase 2 - Scraper and parser hardening
 
-## Completion Tracking
+- [ ] Harden `scripts/dump_c64_telnet_screens.py` for overlapping nested U64 menus
+- [ ] Fix selected-directory `F5` action-menu capture on U64
+- [ ] Improve handling for direct-entry screens such as `Assembly 64`
+- [ ] Preserve C64U scrape compatibility
+- [ ] Add targeted dump-script and parser regression coverage
+- [ ] Regenerate `docs/c64/devices/u64e/3.14e/c64u-telnet.yaml`
 
-- [x] Local planning docs exist for this research track
-- [x] U64 3.14e config snapshot exists
-- [x] U64 3.14e Telnet snapshot exists
-- [x] Prompt captures verified U64 differences and current code gaps
-- [x] Extractor defaults no longer assume `c64u`
+### Phase 3 - Runtime capability discovery
+
+- [ ] Introduce a discovered Telnet menu graph and per-action capability resolution
+- [ ] Cache discovery by connected device identity and firmware
+- [ ] Handle category renames and menu reordering without device-family hard-coding
+- [ ] Expose `supported`, `unsupported`, and discovery-failed states to callers
+
+### Phase 4 - Action execution refactor
+
+- [ ] Execute actions through discovered capabilities instead of static category paths
+- [ ] Upgrade config and REU workflows to use discovered action/menu resolution where needed
+- [ ] Distinguish unsupported-action failures from discovery failures and navigation failures
+
+### Phase 5 - Home UI convergence
+
+- [ ] Keep app-supported Telnet actions visible even when unsupported on the current device
+- [ ] Render disabled controls with explanatory text/tooltips/inline copy
+- [ ] Make `Power Cycle` visibly disabled on U64 3.14e
+
+### Phase 6 - Validation and closure
+
+- [ ] Add targeted regression tests for discovery, parser, workflows, and disabled-state UX
+- [ ] Run `npm run lint`
+- [ ] Run `npm run test`
+- [ ] Run `npm run test:coverage` and confirm global branch coverage `>= 91%`
+- [ ] Run `npm run build`
+- [ ] Re-verify live U64 and C64U behavior on device
+- [ ] Update only the necessary docs and screenshots
+
+## Success Criteria
+
+- Runtime support is keyed by connected device identity plus firmware, not a single fixed family assumption.
+- U64 and C64U use the same discovery/execution architecture.
+- Unsupported actions remain visible and disabled with clear explanation.
+- `powerCycle` resolves unsupported on U64 3.14e and supported on C64U 1.1.0.
+- U64 Telnet YAML is fully refreshed from the improved scraper.

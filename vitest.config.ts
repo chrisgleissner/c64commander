@@ -50,6 +50,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    silent: "passed-only",
     testTimeout: 15000,
     setupFiles: ["./tests/setup.ts"],
     projects: [

@@ -4,9 +4,11 @@ import {
   applyRemoteConfigFromTemp,
   saveRemoteConfigFromTemp,
 } from "@/lib/config/configTelnetWorkflow";
+import type { TelnetResolvedActionTarget } from "@/lib/telnet/telnetCapabilityDiscovery";
 import { TelnetError, type TelnetScreen, type TelnetSessionApi } from "@/lib/telnet/telnetTypes";
 
 const executeSpy = vi.fn().mockResolvedValue(undefined);
+const createActionExecutorSpy = vi.fn();
 
 const createScreen = (overrides: Partial<TelnetScreen>): TelnetScreen => ({
   width: 60,
@@ -34,9 +36,12 @@ const createSession = (screens: TelnetScreen[]): TelnetSessionApi => {
 };
 
 vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
-  createActionExecutor: vi.fn(() => ({
-    execute: executeSpy,
-  })),
+  createActionExecutor: (...args: unknown[]) => {
+    createActionExecutorSpy(...args);
+    return {
+      execute: executeSpy,
+    };
+  },
 }));
 
 describe("configTelnetWorkflow", () => {
@@ -67,6 +72,31 @@ describe("configTelnetWorkflow", () => {
     expect(session.sendKey).toHaveBeenCalledWith("HOME");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
     expect(executeSpy).toHaveBeenCalledWith("saveConfigToFile");
+  });
+
+  it("passes the discovered save target to the action executor", async () => {
+    const session = createSession([
+      createScreen({ selectedItem: "Drive A" }),
+      createScreen({ selectedItem: "Temp" }),
+      createScreen({ selectedItem: "capture.cfg" }),
+    ]);
+    const target: TelnetResolvedActionTarget = {
+      categoryLabel: "Configuration",
+      actionLabel: "Save to File",
+      source: "initial",
+    };
+
+    await saveRemoteConfigFromTemp(session, "F5", target);
+
+    expect(createActionExecutorSpy).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({
+        menuKey: "F5",
+        resolvedTargets: {
+          saveConfigToFile: target,
+        },
+      }),
+    );
   });
 
   it("applies a config directly from /Temp", async () => {

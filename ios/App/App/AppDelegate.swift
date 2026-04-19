@@ -302,6 +302,7 @@ public final class FeatureFlagsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getFlag", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFlag", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearFlag", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getAllFlags", returnType: CAPPluginReturnPromise),
     ]
 
@@ -333,6 +334,18 @@ public final class FeatureFlagsPlugin: CAPPlugin, CAPBridgedPlugin {
 
         var store = readStore()
         store[key] = value
+        UserDefaults.standard.set(store, forKey: defaultsKey)
+        call.resolve()
+    }
+
+    @objc public func clearFlag(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else {
+            call.reject("key is required")
+            return
+        }
+
+        var store = readStore()
+        store.removeValue(forKey: key)
         UserDefaults.standard.set(store, forKey: defaultsKey)
         call.resolve()
     }

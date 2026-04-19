@@ -161,6 +161,11 @@ export function getNycReportArgs(mergedDir, coverageDir) {
   ];
 }
 
+export function ensureReportsDirectory(reportsDirectory) {
+  mkdirSync(reportsDirectory, { recursive: true });
+  mkdirSync(path.join(reportsDirectory, ".tmp"), { recursive: true });
+}
+
 function runOrThrow(command, args, label, cwd) {
   const result = spawnSync(command, args, {
     cwd,
@@ -198,7 +203,7 @@ export function runUnitCoverage(rootDir = process.cwd()) {
   for (const runConfig of unitCoverageRuns) {
     const { projectName, reportKey } = runConfig;
     const reportsDirectory = plan.projectReports[reportKey];
-    mkdirSync(reportsDirectory, { recursive: true });
+    ensureReportsDirectory(reportsDirectory);
     runOrThrow(
       process.execPath,
       getVitestCoverageArgs(rootDir, runConfig, reportsDirectory),

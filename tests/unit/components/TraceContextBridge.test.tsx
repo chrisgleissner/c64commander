@@ -11,7 +11,13 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
-  useFeatureFlags: () => ({ flags: { hvsc_enabled: true } }),
+  useFeatureFlags: () => ({
+    resolved: {
+      hvsc_enabled: { id: "hvsc_enabled", value: true },
+      commoserve_enabled: { id: "commoserve_enabled", value: false },
+      lighting_studio_enabled: { id: "lighting_studio_enabled", value: false },
+    },
+  }),
 }));
 
 let mockConnectionStatus: Record<string, unknown> = {

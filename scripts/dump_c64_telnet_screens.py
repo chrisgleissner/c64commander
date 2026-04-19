@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import ftplib
 import importlib.util
+import io
 import re
 import select
 import socket
@@ -38,6 +39,7 @@ SCREEN_WIDTH = 60
 SCREEN_HEIGHT = 24
 TELNET_PORT = 23
 FTP_PORT = 21
+DEFAULT_PRIMARY_OUTPUT = "docs/c64/c64u-telnet.yaml"
 
 ACS_MAP = {
     "j": "┘",
@@ -73,6 +75,10 @@ MENU_OPEN_SETTLE = 0.6
 MODAL_OPEN_SETTLE = 1.0
 ACTION_MENU_SETTLE = 0.6
 QUIET_WINDOW = 0.02
+MENU_PREPARE_SETTLE = 0.8
+MIN_MENU_BOX_WIDTH = 4
+MIN_MENU_BOX_HEIGHT = 3
+SUBMENU_CAPTURE_ATTEMPTS = 3
 
 @dataclass(frozen=True)
 class Cell:
@@ -98,6 +104,28 @@ class Box:
     @property
     def area(self) -> int:
         return self.width * self.height
+
+
+def is_menu_sized_box(box: Box) -> bool:
+    return box.width >= MIN_MENU_BOX_WIDTH and box.height >= MIN_MENU_BOX_HEIGHT
+
+
+def same_box(left: Box, right: Box) -> bool:
+    return (
+        left.left == right.left
+        and left.top == right.top
+        and left.right == right.right
+        and left.bottom == right.bottom
+    )
+
+
+def box_contains(parent: Box, child: Box) -> bool:
+    return (
+        parent.left < child.left
+        and parent.top < child.top
+        and parent.right > child.right
+        and parent.bottom > child.bottom
+    )
 
 
 def log(message: str) -> None:
@@ -349,9 +377,10 @@ def find_boxes(screen: TerminalScreen) -> list[Box]:
                     if any(screen.cells[row][right].char not in BOX_CHARS for row in range(top + 1, bottom)):
                         continue
                     key = (left, top, right, bottom)
-                    if key not in seen:
+                    box = Box(left, top, right, bottom)
+                    if key not in seen and is_menu_sized_box(box):
                         seen.add(key)
-                        boxes.append(Box(left, top, right, bottom))
+                        boxes.append(box)
                     break
     return boxes
 
@@ -413,8 +442,9 @@ def find_right_overlay_boxes(screen: TerminalScreen) -> list[Box]:
             return
         left = min(active_columns)
         right = max(active_columns)
-        if right - left >= 4:
-            overlays.append(Box(left, start_row, right, end_row))
+        box = Box(left, start_row, right, end_row)
+        if is_menu_sized_box(box):
+            overlays.append(box)
         start_row = None
         end_row = -1
         active_columns = []
@@ -441,28 +471,28 @@ def candidate_boxes(screen: TerminalScreen) -> list[Box]:
     exact = find_boxes(screen)
     if exact:
         return exact
-    overlays = find_right_overlay_boxes(screen)
+    overlays = [box for box in find_right_overlay_boxes(screen) if is_menu_sized_box(box)]
     if overlays:
         return overlays
-    return find_box_clusters(screen)
+    return [box for box in find_box_clusters(screen) if is_menu_sized_box(box)]
 
 
 def choose_modal_box(screen: TerminalScreen) -> Box:
-    boxes = [box for box in candidate_boxes(screen) if not (box.width >= 58 and box.height >= 20)]
+    boxes = [box for box in candidate_boxes(screen) if is_menu_sized_box(box) and not (box.width >= 58 and box.height >= 20)]
     if not boxes:
         raise RuntimeError("No modal box found on telnet screen")
     return max(boxes, key=lambda box: (box.area, box.width, box.height))
 
 
 def choose_menu_box(screen: TerminalScreen) -> Box:
-    boxes = [box for box in candidate_boxes(screen) if not (box.width >= 58 and box.height >= 20)]
+    boxes = [box for box in candidate_boxes(screen) if is_menu_sized_box(box) and not (box.width >= 58 and box.height >= 20)]
     if not boxes:
         raise RuntimeError("No menu box found on telnet screen")
     return min(boxes, key=lambda box: (box.area, box.left, box.top))
 
 
 def visible_menu_boxes(screen: TerminalScreen) -> list[Box]:
-    boxes = [box for box in candidate_boxes(screen) if not (box.width >= 58 and box.height >= 20)]
+    boxes = [box for box in candidate_boxes(screen) if is_menu_sized_box(box) and not (box.width >= 58 and box.height >= 20)]
     return sorted(boxes, key=lambda box: (box.left, box.top, box.area))
 
 
@@ -491,6 +521,27 @@ def wait_for_modal_box(session: TelnetSession, retry_delays: tuple[float, ...] =
             last_error = exc
     if last_error is None:
         raise RuntimeError("No modal box found on telnet screen")
+    raise last_error
+
+
+def open_action_menu(
+    session: TelnetSession,
+    action_key: str,
+    *,
+    pre_wait: float = MENU_PREPARE_SETTLE,
+    settle_delays: tuple[float, ...] = (ACTION_MENU_SETTLE, 0.9, 1.2),
+) -> Box:
+    session.wait_for_quiet(initial_timeout=pre_wait, quiet_window=QUIET_WINDOW)
+    last_error: Optional[RuntimeError] = None
+    for settle in settle_delays:
+        session.send_key(action_key, settle=settle)
+        try:
+            return wait_for_menu_box(session, retry_delays=(0.0, 0.08, 0.16, 0.32, 0.64, 1.0))
+        except RuntimeError as exc:
+            last_error = exc
+            session.wait_for_quiet(initial_timeout=0.35, quiet_window=QUIET_WINDOW)
+    if last_error is None:
+        raise RuntimeError(f"Unable to open action menu with {action_key}")
     raise last_error
 
 
@@ -657,6 +708,58 @@ def representative_files(ftp: ftplib.FTP, root_path: str) -> list[dict[str, str]
     return results
 
 
+def ensure_remote_directory(ftp: ftplib.FTP, path: str) -> bool:
+    try:
+        ftp.cwd(path)
+        return False
+    except ftplib.all_errors:
+        ftp.mkd(path)
+        ftp.cwd(path)
+        return True
+
+
+def ensure_reu_probe_fixture(ftp: ftplib.FTP, root_path: str) -> Optional[dict[str, Any]]:
+    reu_directory = f"{root_path}/snapshots"
+    created_directory = ensure_remote_directory(ftp, reu_directory)
+    existing_items = ftp.nlst()
+    if any(item.lower().endswith(".reu") for item in existing_items):
+        return None
+
+    probe_name = "menu_probe.reu"
+    log(f"Creating temporary REU probe fixture at {reu_directory}/{probe_name}")
+    ftp.storbinary(f"STOR {probe_name}", io.BytesIO(b"\x00"))
+    return {
+        "directory": reu_directory,
+        "name": probe_name,
+        "created_directory": created_directory,
+    }
+
+
+def cleanup_reu_probe_fixture(ftp: ftplib.FTP, fixture: Optional[dict[str, Any]]) -> None:
+    if fixture is None:
+        return
+    directory = str(fixture["directory"])
+    name = str(fixture["name"])
+    created_directory = bool(fixture["created_directory"])
+    try:
+        ftp.cwd(directory)
+        ftp.delete(name)
+    except ftplib.all_errors as exc:
+        raise RuntimeError(f"Failed to remove temporary REU probe fixture {directory}/{name}") from exc
+
+    if created_directory:
+        try:
+            remaining = ftp.nlst()
+        except ftplib.all_errors:
+            remaining = []
+        if not remaining:
+            try:
+                ftp.cwd("/")
+                ftp.rmd(directory)
+            except ftplib.all_errors as exc:
+                raise RuntimeError(f"Failed to remove temporary REU probe directory {directory}") from exc
+
+
 def enter_directory(session: TelnetSession, ftp: ftplib.FTP, path: str) -> None:
     current_path = "/"
     for part in split_path(path):
@@ -718,6 +821,53 @@ def extract_deepest_menu(screen: TerminalScreen) -> tuple[Box, dict[str, Any]]:
         raise RuntimeError("No visible menu boxes found on telnet screen")
     box = max(boxes, key=lambda candidate: (candidate.left, candidate.top, candidate.area))
     return box, extract_menu_items(screen, box)
+
+
+def select_browser_entry(session: TelnetSession, ftp: ftplib.FTP, parent: str, name: str) -> None:
+    if parent != "/":
+        enter_directory(session, ftp, parent)
+    entries = ftp_entries(ftp, parent)
+    try:
+        target_index = entries.index(name)
+    except ValueError as exc:
+        raise RuntimeError(f"Unable to locate {name} inside {parent}") from exc
+    for _ in range(target_index):
+        session.send_key("DOWN", settle=FAST_SETTLE)
+    session.wait_for_quiet(initial_timeout=MENU_PREPARE_SETTLE, quiet_window=QUIET_WINDOW)
+
+
+def find_child_menu_box(screen: TerminalScreen, parent_box: Box) -> Optional[Box]:
+    child_boxes = [box for box in visible_menu_boxes(screen) if box_contains(parent_box, box)]
+    if not child_boxes:
+        return None
+    return max(child_boxes, key=lambda box: (box.left, box.top, box.area))
+
+
+def extract_box_lines(screen: TerminalScreen, box: Box) -> list[str]:
+    lines: list[str] = []
+    for row in range(box.top + 1, box.bottom):
+        raw = "".join(cell.char for cell in screen.cells[row][box.left + 1 : box.right]).rstrip()
+        text = raw.strip()
+        if text:
+            lines.append(text)
+    return lines
+
+
+def describe_direct_entry_screen(screen: TerminalScreen) -> Optional[dict[str, Any]]:
+    boxes = visible_menu_boxes(screen)
+    if not boxes:
+        return None
+    box = max(boxes, key=lambda candidate: (candidate.area, candidate.width, candidate.height))
+    lines = extract_box_lines(screen, box)
+    if not lines:
+        return None
+    title = lines[0]
+    if "Query Form" not in title and not any(":" in line for line in lines[1:]):
+        return None
+    return {
+        "kind": "direct_entry",
+        "title": title,
+    }
 
 
 def extract_overlay_menu_items(screen: TerminalScreen, parent_box: Box) -> Optional[dict[str, Any]]:
@@ -796,25 +946,15 @@ def collect_static_dropdown_options(session: TelnetSession, max_steps: int = 32)
     return options
 
 
-def capture_menu_tree(session: TelnetSession, depth: int = 0, max_depth: int = 4) -> dict[str, Any]:
-    if depth > max_depth:
-        raise RuntimeError(f"Exceeded maximum menu depth {max_depth}")
-
-    current_box, current_menu = extract_deepest_menu(session.screen)
-    current_index = current_menu["selected_index"] or 0
-    submenus: dict[str, dict[str, Any]] = {}
-
-    for target_index, item in enumerate(current_menu["items"]):
-        current_index = move_menu_selection(session, current_index, target_index)
-        menu_before = extract_menu_items(session.screen, current_box)
-
-        session.send_key("RIGHT", settle=MENU_OPEN_SETTLE)
-        submenu_menu = extract_overlay_menu_items(session.screen, current_box)
-        if submenu_menu and submenu_menu["items"] != menu_before["items"]:
-            submenus[item] = build_menu_tree_node(submenu_menu)
-            session.send_key("LEFT", settle=FAST_SETTLE)
-
-    return build_menu_tree_node(current_menu, submenus or None)
+def capture_followup_menu_node(session: TelnetSession, parent_box: Box) -> Optional[dict[str, Any]]:
+    session.send_key("RIGHT", settle=MENU_OPEN_SETTLE)
+    child_box = find_child_menu_box(session.screen, parent_box)
+    if child_box is not None:
+        return build_menu_tree_node(extract_menu_items(session.screen, child_box))
+    overlay_menu = extract_overlay_menu_items(session.screen, parent_box)
+    if overlay_menu is not None:
+        return build_menu_tree_node(overlay_menu)
+    return describe_direct_entry_screen(session.screen)
 
 
 def capture_initial_context_menus(
@@ -827,25 +967,56 @@ def capture_initial_context_menus(
 ) -> dict[str, Any]:
     for action_key in (action_keys or ["F1", "F5"]):
         log(f"Capturing initial action menu via {action_key}")
-        with TelnetSession(
-            host,
-            password,
-            connect_timeout,
-            read_timeout,
-            telnet_port=telnet_port,
-            debug_screens=args_debug_screens,
-            debug_prefix=f"initial-context-{action_key.lower()}",
-        ) as session:
-            session.send_key(action_key, settle=ACTION_MENU_SETTLE)
-            try:
-                root_menu = capture_menu_tree(session)
-            except RuntimeError:
-                continue
-            return {
-                "opened_with": action_key,
-                "screen_context": "initial telnet screen with no selected filesystem entry",
-                "action_menu": root_menu,
-            }
+        try:
+            with TelnetSession(
+                host,
+                password,
+                connect_timeout,
+                read_timeout,
+                telnet_port=telnet_port,
+                debug_screens=args_debug_screens,
+                debug_prefix=f"initial-context-{action_key.lower()}",
+            ) as session:
+                root_box = open_action_menu(session, action_key)
+                root_menu = extract_menu_items(session.screen, root_box)
+        except RuntimeError:
+            continue
+
+        submenu_nodes: dict[str, dict[str, Any]] = {}
+        for target_index, item in enumerate(root_menu["items"]):
+            captured_node: Optional[dict[str, Any]] = None
+            last_error: Optional[RuntimeError] = None
+            for attempt in range(1, SUBMENU_CAPTURE_ATTEMPTS + 1):
+                try:
+                    with TelnetSession(
+                        host,
+                        password,
+                        connect_timeout,
+                        read_timeout,
+                        telnet_port=telnet_port,
+                        debug_screens=args_debug_screens,
+                        debug_prefix=f"initial-context-{action_key.lower()}-{target_index}-attempt-{attempt}",
+                    ) as session:
+                        root_box = open_action_menu(session, action_key)
+                        current_menu = extract_menu_items(session.screen, root_box)
+                        current_index = current_menu["selected_index"] or 0
+                        move_menu_selection(session, current_index, target_index)
+                        parent_box = wait_for_menu_box(session)
+                        node = capture_followup_menu_node(session, parent_box)
+                        if node is not None:
+                            captured_node = node
+                            break
+                except RuntimeError as exc:
+                    last_error = exc
+            if captured_node is not None:
+                submenu_nodes[item] = captured_node
+            elif last_error is not None:
+                log(f"Skipping submenu capture for {item!r} via {action_key}: {last_error}")
+        return {
+            "opened_with": action_key,
+            "screen_context": "initial telnet screen with no selected filesystem entry",
+            "action_menu": build_menu_tree_node(root_menu, submenu_nodes or None),
+        }
     raise RuntimeError("Unable to open initial telnet action menu with F1 or F5")
 
 
@@ -863,38 +1034,61 @@ def capture_selected_directory_action_menus(
     name = basename(path)
     for action_key in (action_keys or ["F1", "F5"]):
         log(f"Capturing selected-directory action menu via {action_key} for {path}")
-        with TelnetSession(
-            host,
-            password,
-            connect_timeout,
-            read_timeout,
-            telnet_port=telnet_port,
-            debug_screens=args_debug_screens,
-            debug_prefix=f"selected-directory-action-{action_key.lower()}",
-        ) as session:
-            if parent != "/":
-                enter_directory(session, ftp, parent)
-            entries = ftp_entries(ftp, parent)
-            try:
-                target_index = entries.index(name)
-            except ValueError as exc:
-                raise RuntimeError(f"Unable to locate {name} inside {parent}") from exc
-            for _ in range(target_index):
-                session.send_key("DOWN", settle=FAST_SETTLE)
-            session.send_key(action_key, settle=ACTION_MENU_SETTLE)
-            try:
-                wait_for_menu_box(session, retry_delays=(0.0, 0.1, 0.3, 0.6, 1.0, 1.5))
-                action_menu = capture_menu_tree(session)
-            except RuntimeError:
-                continue
-            return {
-                "path": path,
-                "browser_path": parent if parent.endswith("/") or parent == "/" else f"{parent}/",
-                "selected_entry": name,
-                "opened_with": action_key,
-                "screen_context": "filesystem browser with a directory selected and the action menu opened via function key",
-                "action_menu": action_menu,
-            }
+        try:
+            with TelnetSession(
+                host,
+                password,
+                connect_timeout,
+                read_timeout,
+                telnet_port=telnet_port,
+                debug_screens=args_debug_screens,
+                debug_prefix=f"selected-directory-action-{action_key.lower()}",
+            ) as session:
+                select_browser_entry(session, ftp, parent, name)
+                root_box = open_action_menu(session, action_key)
+                root_menu = extract_menu_items(session.screen, root_box)
+        except RuntimeError:
+            continue
+
+        submenu_nodes: dict[str, dict[str, Any]] = {}
+        for target_index, item in enumerate(root_menu["items"]):
+            captured_node: Optional[dict[str, Any]] = None
+            last_error: Optional[RuntimeError] = None
+            for attempt in range(1, SUBMENU_CAPTURE_ATTEMPTS + 1):
+                try:
+                    with TelnetSession(
+                        host,
+                        password,
+                        connect_timeout,
+                        read_timeout,
+                        telnet_port=telnet_port,
+                        debug_screens=args_debug_screens,
+                        debug_prefix=f"selected-directory-action-{action_key.lower()}-{target_index}-attempt-{attempt}",
+                    ) as session:
+                        select_browser_entry(session, ftp, parent, name)
+                        root_box = open_action_menu(session, action_key)
+                        current_menu = extract_menu_items(session.screen, root_box)
+                        current_index = current_menu["selected_index"] or 0
+                        move_menu_selection(session, current_index, target_index)
+                        parent_box = wait_for_menu_box(session)
+                        node = capture_followup_menu_node(session, parent_box)
+                        if node is not None:
+                            captured_node = node
+                            break
+                except RuntimeError as exc:
+                    last_error = exc
+            if captured_node is not None:
+                submenu_nodes[item] = captured_node
+            elif last_error is not None:
+                log(f"Skipping selected-directory submenu capture for {item!r} via {action_key}: {last_error}")
+        return {
+            "path": path,
+            "browser_path": parent if parent.endswith("/") or parent == "/" else f"{parent}/",
+            "selected_entry": name,
+            "opened_with": action_key,
+            "screen_context": "filesystem browser with a directory selected and the action menu opened via function key",
+            "action_menu": build_menu_tree_node(root_menu, submenu_nodes or None),
+        }
     raise RuntimeError(f"Unable to open selected-directory action menu with F1 or F5 for {path}")
 
 
@@ -904,7 +1098,9 @@ def resolve_output_paths(
     firmware_version: str,
     device_family: str = "c64u",
 ) -> list[Path]:
-    outputs = [output]
+    output_text = output.as_posix()
+    should_write_primary = device_family == "c64u" or not output_text.endswith(DEFAULT_PRIMARY_OUTPUT)
+    outputs = [output] if should_write_primary else []
     if mirror_output:
         outputs.append(
             Path(
@@ -1075,48 +1271,52 @@ def main() -> int:
         log(f"Resolving test-data path from {candidates}")
         resolved_test_data_path = resolve_test_data_path(ftp, candidates)
         log(f"Resolved test-data path to {resolved_test_data_path}")
+        reu_probe_fixture = ensure_reu_probe_fixture(ftp, resolved_test_data_path)
 
-        directory_menu_capture = run_telnet_capture(
-            host=host,
-            password=args.password,
-            connect_timeout=args.connect_timeout,
-            read_timeout=args.read_timeout,
-            telnet_port=args.telnet_port,
-            debug_screens=args.debug_screens,
-            debug_prefix="directory-menu",
-            action=lambda session: open_context_menu(
-                session,
-                ftp,
-                parent_path(resolved_test_data_path),
-                basename(resolved_test_data_path),
-            ),
-        )
-
-        file_menu_payloads: list[dict[str, Any]] = []
-        for file_info in representative_files(ftp, resolved_test_data_path):
-            capture = run_telnet_capture(
+        try:
+            directory_menu_capture = run_telnet_capture(
                 host=host,
                 password=args.password,
                 connect_timeout=args.connect_timeout,
                 read_timeout=args.read_timeout,
                 telnet_port=args.telnet_port,
                 debug_screens=args.debug_screens,
-                debug_prefix=f"file-menu-{file_info['label']}",
-                action=lambda session, file_info=file_info: open_context_menu(
+                debug_prefix="directory-menu",
+                action=lambda session: open_context_menu(
                     session,
                     ftp,
-                    file_info["directory"],
-                    file_info["name"],
+                    parent_path(resolved_test_data_path),
+                    basename(resolved_test_data_path),
                 ),
             )
-            file_menu_payloads.append(
-                {
-                    "label": file_info["label"],
-                    "path": file_info["path"],
-                    "menu_items": capture["menu_items"],
-                    "default_item": capture["default_item"],
-                }
-            )
+
+            file_menu_payloads: list[dict[str, Any]] = []
+            for file_info in representative_files(ftp, resolved_test_data_path):
+                capture = run_telnet_capture(
+                    host=host,
+                    password=args.password,
+                    connect_timeout=args.connect_timeout,
+                    read_timeout=args.read_timeout,
+                    telnet_port=args.telnet_port,
+                    debug_screens=args.debug_screens,
+                    debug_prefix=f"file-menu-{file_info['label']}",
+                    action=lambda session, file_info=file_info: open_context_menu(
+                        session,
+                        ftp,
+                        file_info["directory"],
+                        file_info["name"],
+                    ),
+                )
+                file_menu_payloads.append(
+                    {
+                        "label": file_info["label"],
+                        "path": file_info["path"],
+                        "menu_items": capture["menu_items"],
+                        "default_item": capture["default_item"],
+                    }
+                )
+        finally:
+            cleanup_reu_probe_fixture(ftp, reu_probe_fixture)
 
     menu_definitions = build_file_type_menu_definitions(file_menu_payloads)
 

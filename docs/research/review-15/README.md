@@ -40,4 +40,5 @@ This package is a pre-review handoff for release hardening. It is intended to dr
 - `FEATURE_MODEL.md`: normalized feature schema used by the review
 - `REVIEW_PROMPT.md`: deterministic review contract
 - `review-15.md`: current repository-derived hardening review
+- `HANDOVER_PROMPT.md`: current-state handoff prompt for the remaining external validation work
 - `PRODUCTION_READINESS_CONTINUATION_PROMPT.md`: Android-first implementation follow-up prompt derived from the review backlog

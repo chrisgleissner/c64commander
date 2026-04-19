@@ -12,7 +12,68 @@ import { render, renderHook, act, screen } from "@testing-library/react";
 import type { FeatureFlagSnapshot, FeatureFlagKey } from "@/lib/config/featureFlags";
 
 const mockSnapshot: FeatureFlagSnapshot = {
-  flags: { hvsc_enabled: true },
+  flags: {
+    hvsc_enabled: true,
+    commoserve_enabled: true,
+    lighting_studio_enabled: false,
+  },
+  resolved: {
+    hvsc_enabled: {
+      id: "hvsc_enabled",
+      definition: {
+        id: "hvsc_enabled",
+        enabled: true,
+        visible_to_user: true,
+        user_toggleable: true,
+        developer_only: false,
+        group: "stable",
+        title: "HVSC downloads",
+        description: "Show HVSC download and ingest controls on the Play page.",
+      },
+      value: true,
+      hasOverride: false,
+      overrideValue: null,
+      visible: true,
+      editable: true,
+    },
+    commoserve_enabled: {
+      id: "commoserve_enabled",
+      definition: {
+        id: "commoserve_enabled",
+        enabled: true,
+        visible_to_user: true,
+        user_toggleable: true,
+        developer_only: false,
+        group: "stable",
+        title: "CommoServe",
+        description: "Show the CommoServe source in Add Items and Online Archive flows.",
+      },
+      value: true,
+      hasOverride: false,
+      overrideValue: null,
+      visible: true,
+      editable: true,
+    },
+    lighting_studio_enabled: {
+      id: "lighting_studio_enabled",
+      definition: {
+        id: "lighting_studio_enabled",
+        enabled: false,
+        visible_to_user: false,
+        user_toggleable: false,
+        developer_only: true,
+        group: "experimental",
+        title: "Lighting Studio",
+        description: "Enable Lighting Studio entry points and dialog access.",
+      },
+      value: false,
+      hasOverride: false,
+      overrideValue: null,
+      visible: false,
+      editable: false,
+    },
+  },
+  developerMode: false,
   isLoaded: false,
 };
 
@@ -23,6 +84,8 @@ const mockSubscribe = vi.fn((listener: (s: FeatureFlagSnapshot) => void) => {
 
 const mockLoad = vi.fn(async () => {});
 const mockSetFlag = vi.fn(async (_key: FeatureFlagKey, _value: boolean) => {});
+const mockClearOverride = vi.fn(async (_key: FeatureFlagKey) => {});
+const mockSubscribeToDeveloperMode = vi.fn(() => () => {});
 const mockGetSnapshot = vi.fn(() => mockSnapshot);
 
 vi.mock("@/lib/config/featureFlags", () => ({
@@ -31,6 +94,9 @@ vi.mock("@/lib/config/featureFlags", () => ({
     subscribe: (...args: Parameters<typeof mockSubscribe>) => mockSubscribe(...args),
     load: () => mockLoad(),
     setFlag: (...args: Parameters<typeof mockSetFlag>) => mockSetFlag(...args),
+    clearOverride: (...args: Parameters<typeof mockClearOverride>) => mockClearOverride(...args),
+    subscribeToDeveloperMode: (...args: Parameters<typeof mockSubscribeToDeveloperMode>) =>
+      mockSubscribeToDeveloperMode(...args),
   },
 }));
 
@@ -42,6 +108,7 @@ describe("useFeatureFlags", () => {
       listener(mockSnapshot);
       return () => {};
     });
+    mockSubscribeToDeveloperMode.mockReturnValue(() => {});
   });
 
   describe("FeatureFlagsProvider + useFeatureFlags", () => {
@@ -114,7 +181,10 @@ describe("useFeatureFlags", () => {
 
   describe("useFeatureFlag", () => {
     it("returns value and isLoaded for the requested flag key", async () => {
-      const loadedSnapshot: FeatureFlagSnapshot = { flags: { hvsc_enabled: true }, isLoaded: true };
+      const loadedSnapshot: FeatureFlagSnapshot = {
+        ...mockSnapshot,
+        isLoaded: true,
+      };
       mockGetSnapshot.mockReturnValue(loadedSnapshot);
       mockSubscribe.mockImplementation((listener: (s: FeatureFlagSnapshot) => void) => {
         listener(loadedSnapshot);

@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { appSettingsKeys, buildDefaultArchiveClientConfigSpy, settingsState } = vi.hoisted(() => ({
   appSettingsKeys: {
-    COMMOSERVE_ENABLED_KEY: "c64u_commoserve_enabled",
     ARCHIVE_HOST_OVERRIDE_KEY: "c64u_archive_host_override",
     ARCHIVE_CLIENT_ID_OVERRIDE_KEY: "c64u_archive_client_id_override",
     ARCHIVE_USER_AGENT_OVERRIDE_KEY: "c64u_archive_user_agent_override",
@@ -29,9 +28,14 @@ vi.mock("@/lib/archive/config", () => ({
   buildDefaultArchiveClientConfig: buildDefaultArchiveClientConfigSpy,
 }));
 
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: () => ({
+    value: settingsState.commoserveEnabled,
+  }),
+}));
+
 vi.mock("@/lib/config/appSettings", () => ({
   APP_SETTINGS_KEYS: appSettingsKeys,
-  loadCommoserveEnabled: () => settingsState.commoserveEnabled,
   loadArchiveHostOverride: () => settingsState.archiveHostOverride,
   loadArchiveClientIdOverride: () => settingsState.archiveClientIdOverride,
   loadArchiveUserAgentOverride: () => settingsState.archiveUserAgentOverride,

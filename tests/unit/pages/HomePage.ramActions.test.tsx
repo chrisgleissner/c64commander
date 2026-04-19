@@ -11,6 +11,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import HomePage from "@/pages/HomePage";
 
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: () => ({ value: true }),
+}));
+
 const {
   toastSpy,
   reportUserErrorSpy,
@@ -63,6 +67,28 @@ const {
     isBusy: false,
     activeActionId: null as string | null,
     isAvailable: true,
+    getActionSupport: vi.fn((actionId: string) => ({
+      actionId,
+      status: "supported" as const,
+      reason: null,
+      target: {
+        categoryLabel:
+          actionId === "saveReuMemory"
+            ? "C64 Machine"
+            : actionId === "saveConfigToFile" || actionId === "clearFlashConfig"
+              ? "Configuration"
+              : "Power & Reset",
+        actionLabel:
+          actionId === "saveReuMemory"
+            ? "Save REU Memory"
+            : actionId === "saveConfigToFile"
+              ? "Save to File"
+              : actionId === "clearFlashConfig"
+                ? "Clear Flash Config"
+                : "Power Cycle",
+        source: "initial" as const,
+      },
+    })),
   },
   deviceControlErrorState: {
     isDeviceControlError: (error: unknown) =>
@@ -349,6 +375,10 @@ vi.mock("@/hooks/useTelnetActions", () => ({
     activeActionId: telnetState.activeActionId,
     executeAction: executeTelnetActionSpy,
     isAvailable: telnetState.isAvailable,
+    discoveryState: "ready",
+    discoveryError: null,
+    actionSupport: {},
+    getActionSupport: telnetState.getActionSupport,
   }),
 }));
 
@@ -450,6 +480,23 @@ describe("HomePage RAM actions", () => {
     telnetState.isBusy = false;
     telnetState.activeActionId = null;
     telnetState.isAvailable = true;
+    telnetState.getActionSupport.mockImplementation((actionId: string) => ({
+      actionId,
+      status: "supported",
+      reason: null,
+      target: {
+        categoryLabel: actionId === "saveReuMemory" ? "C64 Machine" : "Power & Reset",
+        actionLabel:
+          actionId === "saveReuMemory"
+            ? "Save REU Memory"
+            : actionId === "saveConfigToFile"
+              ? "Save to File"
+              : actionId === "clearFlashConfig"
+                ? "Clear Flash Config"
+                : "Power Cycle",
+        source: "initial",
+      },
+    }));
   });
 
   it("runs quick reboot through REST without telnet", async () => {
@@ -531,6 +578,36 @@ describe("HomePage RAM actions", () => {
 
     expect(screen.queryByRole("button", { name: /^power cycle$/i })).toBeNull();
     expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
+  });
+
+  it("renders Power Cycle disabled with an explanatory note when discovery marks it unsupported", () => {
+    telnetState.getActionSupport.mockImplementation((actionId: string) => {
+      if (actionId === "powerCycle") {
+        return {
+          actionId,
+          status: "unsupported",
+          reason: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+          target: null,
+        };
+      }
+      return {
+        actionId,
+        status: "supported",
+        reason: null,
+        target: {
+          categoryLabel: "C64 Machine",
+          actionLabel: "Save REU Memory",
+          source: "initial",
+        },
+      };
+    });
+
+    renderHomePage();
+
+    expect(screen.getByRole("button", { name: /^power cycle$/i })).toBeDisabled();
+    expect(screen.getByTestId("home-machine-note-powerCycle")).toHaveTextContent(
+      "Power Cycle: Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+    );
   });
 
   it("falls back to REST clear-ram reboot when telnet execution fails", async () => {

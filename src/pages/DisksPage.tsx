@@ -12,18 +12,20 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 
 export default function DisksPage() {
   const pageShellClassName = usePrimaryPageShellClassName();
   const { resolved, openStudio, openContextLens } = useLightingStudio();
+  const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   return (
     <div className={pageShellClassName}>
       <AppBar title="Disks" />
 
       <PageContainer>
         <PageStack>
-          {resolved.sourceCue?.bucket === "disks" ? (
+          {lightingStudioEnabled && resolved.sourceCue?.bucket === "disks" ? (
             <LightingAutomationCue
               label={resolved.sourceCue.label}
               onOpenStudio={openStudio}

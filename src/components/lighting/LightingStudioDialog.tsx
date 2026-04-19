@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
 import { formatLightingColor, normalizeSurfaceStateForCapability } from "@/lib/lighting/capabilities";
@@ -767,6 +768,7 @@ function LightingContextLensDialog() {
 
 export function LightingStudioDialog() {
   const { profile } = useDisplayProfile();
+  const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const {
     studioOpen,
     closeStudio,
@@ -898,6 +900,10 @@ export function LightingStudioDialog() {
     saveProfile(trimmed, draft);
     setSaveName("");
   };
+
+  if (!lightingStudioEnabled) {
+    return null;
+  }
 
   const activeProfileChip = resolved.activeProfile ? (
     <Badge variant="secondary" className="text-xs" data-testid="lighting-active-profile-chip">

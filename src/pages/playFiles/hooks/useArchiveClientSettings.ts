@@ -9,38 +9,37 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import {
   APP_SETTINGS_KEYS,
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
-  loadCommoserveEnabled,
 } from "@/lib/config/appSettings";
 
 type ArchiveClientSettingsState = {
-  commoserveEnabled: boolean;
   archiveHostOverride: string;
   archiveClientIdOverride: string;
   archiveUserAgentOverride: string;
 };
 
 const ARCHIVE_SETTINGS_KEYS = new Set<string>([
-  APP_SETTINGS_KEYS.COMMOSERVE_ENABLED_KEY,
   APP_SETTINGS_KEYS.ARCHIVE_HOST_OVERRIDE_KEY,
   APP_SETTINGS_KEYS.ARCHIVE_CLIENT_ID_OVERRIDE_KEY,
   APP_SETTINGS_KEYS.ARCHIVE_USER_AGENT_OVERRIDE_KEY,
 ]);
 
 const loadArchiveClientSettingsState = (): ArchiveClientSettingsState => ({
-  commoserveEnabled: loadCommoserveEnabled(),
   archiveHostOverride: loadArchiveHostOverride(),
   archiveClientIdOverride: loadArchiveClientIdOverride(),
   archiveUserAgentOverride: loadArchiveUserAgentOverride(),
 });
 
 export function useArchiveClientSettings(): ArchiveClientSettingsState & {
+  commoserveEnabled: boolean;
   archiveConfig: ArchiveClientConfigInput;
 } {
+  const { value: commoserveEnabled } = useFeatureFlag("commoserve_enabled");
   const [settings, setSettings] = useState(loadArchiveClientSettingsState);
 
   useEffect(() => {
@@ -57,20 +56,21 @@ export function useArchiveClientSettings(): ArchiveClientSettingsState & {
   const archiveConfig = useMemo(
     () =>
       buildDefaultArchiveClientConfig({
-        enabled: settings.commoserveEnabled,
+        enabled: commoserveEnabled,
         hostOverride: settings.archiveHostOverride,
         clientIdOverride: settings.archiveClientIdOverride,
         userAgentOverride: settings.archiveUserAgentOverride,
       }),
     [
+      commoserveEnabled,
       settings.archiveClientIdOverride,
       settings.archiveHostOverride,
       settings.archiveUserAgentOverride,
-      settings.commoserveEnabled,
     ],
   );
 
   return {
+    commoserveEnabled,
     ...settings,
     archiveConfig,
   };

@@ -27,6 +27,12 @@ export class FeatureFlagsWeb implements FeatureFlagsPlugin {
     sessionStorage.setItem(key, value);
   }
 
+  async clearFlag(options: { key: string }): Promise<void> {
+    const key = buildKey(options.key);
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+
   async getAllFlags(options: { keys: string[] }): Promise<{ flags?: Record<string, boolean> }> {
     const flags: Record<string, boolean> = {};
     options.keys.forEach((key) => {

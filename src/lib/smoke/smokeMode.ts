@@ -11,9 +11,9 @@ import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import {
-  FEATURE_FLAG_DEFINITIONS,
   featureFlagManager,
-  type FeatureFlagKey,
+  isKnownFeatureFlagId,
+  type FeatureFlagId,
   type FeatureFlags,
 } from "@/lib/config/featureFlags";
 import {
@@ -24,7 +24,6 @@ import {
 } from "@/lib/c64api";
 import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import { setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
-import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
 
 const SMOKE_CONFIG_STORAGE_KEY = "c64u_smoke_config";
 const SMOKE_MODE_STORAGE_KEY = "c64u_smoke_mode_enabled";
@@ -64,13 +63,11 @@ type SmokeBootstrapWindow = Window & {
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
-const isFeatureFlagKey = (value: string): value is FeatureFlagKey => value in FEATURE_FLAG_DEFINITIONS;
-
 const parseSmokeFeatureFlags = (raw: unknown): SmokeFeatureFlags | undefined => {
   if (!isObject(raw)) return undefined;
   const featureFlags: SmokeFeatureFlags = {};
   Object.entries(raw).forEach(([key, value]) => {
-    if (!isFeatureFlagKey(key) || typeof value !== "boolean") return;
+    if (!isKnownFeatureFlagId(key) || typeof value !== "boolean") return;
     featureFlags[key] = value;
   });
   return Object.keys(featureFlags).length > 0 ? featureFlags : undefined;
@@ -110,32 +107,17 @@ const writeSmokeFile = async (path: string, data: unknown) => {
 
 const persistSmokeFeatureFlags = async (featureFlags: SmokeFeatureFlags | undefined) => {
   if (!featureFlags) return;
-  for (const [key, value] of Object.entries(featureFlags) as Array<[FeatureFlagKey, boolean]>) {
+  await featureFlagManager.load();
+  for (const [key, value] of Object.entries(featureFlags) as Array<[FeatureFlagId, boolean]>) {
     try {
-      await FeatureFlagsPlugin.setFlag({ key, value });
+      await featureFlagManager.applyBootstrapOverride(key, value);
     } catch (error) {
       addLog("warn", "Failed to apply smoke feature flag", {
         key,
         error: (error as Error).message,
       });
     }
-
-    try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(`c64u_feature_flag:${key}`, value ? "1" : "0");
-      }
-      if (typeof sessionStorage !== "undefined") {
-        sessionStorage.setItem(`c64u_feature_flag:${key}`, value ? "1" : "0");
-      }
-    } catch (error) {
-      addLog("warn", "Failed to persist smoke feature flag in storage", {
-        key,
-        error: (error as Error).message,
-      });
-    }
   }
-
-  await featureFlagManager.reload();
 };
 
 const getErrorMessage = (error: unknown) => {

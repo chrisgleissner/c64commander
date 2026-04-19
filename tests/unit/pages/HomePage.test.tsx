@@ -13,6 +13,10 @@ import HomePage from "../../../src/pages/HomePage";
 import { clearRamDumpFolderConfig, saveRamDumpFolderConfig } from "../../../src/lib/config/ramDumpFolderStore";
 import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: () => ({ value: true }),
+}));
+
 const {
   toastSpy,
   reportUserErrorSpy,
@@ -616,6 +620,7 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => c64ApiMockRef.current,
+  resolveDeviceHostFromStorage: () => "u64",
 }));
 
 vi.mock("@/hooks/useInteractiveConfigWrite", () => ({

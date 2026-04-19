@@ -68,6 +68,36 @@ describe("createActionExecutor", () => {
       await executor.execute("powerCycle");
     });
 
+    it("uses the discovered target when one is provided", async () => {
+      const session = await createConnectedSession(
+        new TelnetMock({
+          menuFixture: {
+            categories: [
+              {
+                label: "C64 Machine",
+                actions: [
+                  { label: "Reset C64", enabled: true },
+                  { label: "Reboot C64", enabled: true },
+                  { label: "Reboot (Clr Mem)", enabled: true },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+      const executor = createActionExecutor(session, {
+        resolvedTargets: {
+          rebootClearMemory: {
+            categoryLabel: "C64 Machine",
+            actionLabel: "Reboot (Clr Mem)",
+            source: "initial",
+          },
+        },
+      });
+
+      await executor.execute("rebootClearMemory");
+    });
+
     it("logs and rethrows on navigation failure", async () => {
       const mock = new TelnetMock({ missingItems: ["Power Cycle"] });
       const session = await createConnectedSession(mock);

@@ -88,6 +88,44 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
             ],
         )
 
+    def test_choose_menu_box_rejects_status_bar_fragments(self) -> None:
+        screen = MODULE.make_screen(
+            [
+                "                                                            ",
+                "────────────────────────────────────────────────────────────",
+                "                                                            ",
+                "                                                            ",
+                "/USB2/                                             ─F3=HELP─",
+            ]
+        )
+
+        self.assertEqual(MODULE.visible_menu_boxes(screen), [])
+        with self.assertRaises(RuntimeError):
+            MODULE.choose_menu_box(screen)
+
+    def test_describe_direct_entry_screen_detects_assembly64_form(self) -> None:
+        screen = MODULE.make_screen(
+            [
+                "                                                            ",
+                "          ┌──────────────────────────────────────┐          ",
+                "          │        Assembly 64 Query Form        │          ",
+                "          │                                      │          ",
+                "          │Name:     __________________          │          ",
+                "          │Group:    __________________          │          ",
+                "          │                                      │          ",
+                "          │            <<  Submit  >>            │          ",
+                "          └──────────────────────────────────────┘          ",
+            ]
+        )
+
+        self.assertEqual(
+            MODULE.describe_direct_entry_screen(screen),
+            {
+                "kind": "direct_entry",
+                "title": "Assembly 64 Query Form",
+            },
+        )
+
     def test_normalize_overlay_menu_item_removes_parent_menu_prefix(self) -> None:
         self.assertEqual(MODULE.normalize_overlay_menu_item("Built-in Dri┐Turn Off"), "Turn Off")
         self.assertEqual(MODULE.normalize_overlay_menu_item("Developer┐  Debug Stream"), "Debug Stream")
@@ -132,11 +170,14 @@ class DumpC64TelnetScreensTests(unittest.TestCase):
 
         self.assertEqual(
             paths,
-            [
-                Path("docs/c64/c64u-telnet.yaml"),
-                Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml"),
-            ],
+            [Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml")],
         )
+
+    def test_resolve_output_paths_keeps_explicit_nondefault_primary_for_u64(self) -> None:
+        output = Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml")
+        paths = MODULE.resolve_output_paths(output, None, "3.14e", "u64e")
+
+        self.assertEqual(paths, [Path("docs/c64/devices/u64e/3.14e/c64u-telnet.yaml")])
 
     def test_build_file_type_menu_definitions_uses_file_type_keys(self) -> None:
         definitions = MODULE.build_file_type_menu_definitions(

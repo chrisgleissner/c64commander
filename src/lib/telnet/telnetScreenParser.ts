@@ -40,6 +40,20 @@ const MENU_LABEL_INTERNAL_NOISE = /q{4,}/gi;
 const replaceControlCharacters = (value: string) =>
   Array.from(value, (char) => (char.charCodeAt(0) < 32 ? " " : char)).join("");
 
+type MenuBounds = { x: number; y: number; width: number; height: number };
+
+const containsBounds = (parent: MenuBounds, child: MenuBounds) =>
+  parent.x < child.x &&
+  parent.y < child.y &&
+  parent.x + parent.width > child.x + child.width &&
+  parent.y + parent.height > child.y + child.height;
+
+const isLeftStackParent = (parent: MenuBounds, child: MenuBounds) =>
+  parent.x < child.x && parent.x + parent.width <= child.x && parent.y <= child.y && parent.y + parent.height > child.y;
+
+const overlapsChildOnRow = (child: MenuBounds, row: number, col: number) =>
+  row >= child.y && row < child.y + child.height && col >= child.x && col < child.x + child.width;
+
 /** Parser state for VT100 escape sequence processing */
 interface ParserState {
   cells: ScreenCell[][];
@@ -372,42 +386,67 @@ function skipTelnetCommand(text: string, state: ParserState): void {
 
 /** Detect bordered menu overlays from line-drawing characters */
 export function detectMenus(cells: ScreenCell[][]): ParsedMenu[] {
-  const menus: ParsedMenu[] = [];
-  const visited = new Set<string>();
+  const boundsList = findMenuBounds(cells);
+  const sortedBounds = [...boundsList].sort((left, right) => {
+    const leftLevel = boundsList.filter((candidate) => containsBounds(candidate, left)).length;
+    const rightLevel = boundsList.filter((candidate) => containsBounds(candidate, right)).length;
+    return leftLevel - rightLevel || left.y - right.y || left.x - right.x;
+  });
+
+  const levelByKey = new Map<string, number>();
+
+  const getBoundsKey = (bounds: MenuBounds) => `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`;
+
+  for (const bounds of sortedBounds) {
+    let level = 0;
+
+    for (const candidate of sortedBounds) {
+      if (candidate === bounds) break;
+      if (!containsBounds(candidate, bounds) && !isLeftStackParent(candidate, bounds)) {
+        continue;
+      }
+      level = Math.max(level, (levelByKey.get(getBoundsKey(candidate)) ?? 0) + 1);
+    }
+
+    levelByKey.set(getBoundsKey(bounds), level);
+  }
+
+  return sortedBounds.map((bounds) => {
+    const level = levelByKey.get(getBoundsKey(bounds)) ?? 0;
+    const descendantBounds = boundsList.filter((candidate) => containsBounds(bounds, candidate));
+    const items = extractMenuItems(cells, bounds, descendantBounds);
+    const selectedIndex = items.findIndex((item) => item.selected);
+    return {
+      level,
+      items,
+      selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
+      bounds,
+    };
+  });
+}
+
+function findMenuBounds(cells: ScreenCell[][]): MenuBounds[] {
+  const boundsList: MenuBounds[] = [];
+  const seen = new Set<string>();
 
   for (let row = 0; row < TELNET_SCREEN_HEIGHT; row++) {
     for (let col = 0; col < TELNET_SCREEN_WIDTH; col++) {
-      const key = `${row},${col}`;
-      if (visited.has(key)) continue;
-
       const cell = cells[row][col];
-      if (cell.char === "l") {
-        // Potential top-left corner of a menu box
-        const bounds = traceMenuBounds(cells, row, col);
-        if (bounds) {
-          visited.add(key);
-          const items = extractMenuItems(cells, bounds);
-          const selectedIndex = items.findIndex((item) => item.selected);
-          menus.push({
-            level: menus.length,
-            items,
-            selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
-            bounds,
-          });
-        }
-      }
+      if (cell.char !== "l") continue;
+      const bounds = traceMenuBounds(cells, row, col);
+      if (!bounds) continue;
+      const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      boundsList.push(bounds);
     }
   }
 
-  return menus;
+  return boundsList;
 }
 
 /** Trace the bounds of a bordered menu starting from top-left corner */
-function traceMenuBounds(
-  cells: ScreenCell[][],
-  startRow: number,
-  startCol: number,
-): { x: number; y: number; width: number; height: number } | null {
+function traceMenuBounds(cells: ScreenCell[][], startRow: number, startCol: number): MenuBounds | null {
   // Find top-right corner (k) on same row
   let endCol = -1;
   for (let col = startCol + 1; col < TELNET_SCREEN_WIDTH; col++) {
@@ -430,7 +469,9 @@ function traceMenuBounds(
       }
       break;
     }
-    if (cells[row][startCol].char !== "x" && cells[row][startCol].char !== "t") {
+    // Nested U64 overlays can overwrite the left edge with parent-menu text.
+    // The right edge stays stable more often, so use it as the continuity check.
+    if (cells[row][endCol].char !== "x" && cells[row][endCol].char !== "u") {
       break;
     }
   }
@@ -444,10 +485,7 @@ function traceMenuBounds(
 }
 
 /** Extract menu items from within the bounds of a detected menu */
-function extractMenuItems(
-  cells: ScreenCell[][],
-  bounds: { x: number; y: number; width: number; height: number },
-): MenuItem[] {
+function extractMenuItems(cells: ScreenCell[][], bounds: MenuBounds, childBounds: MenuBounds[] = []): MenuItem[] {
   const items: MenuItem[] = [];
 
   // Menu items are between the top and bottom borders (rows y+1 to y+height-2)
@@ -458,6 +496,7 @@ function extractMenuItems(
 
     for (let col = bounds.x + 1; col < bounds.x + bounds.width - 1; col++) {
       if (col >= TELNET_SCREEN_WIDTH) break;
+      if (childBounds.some((child) => overlapsChildOnRow(child, row, col))) continue;
       const cell = cells[row][col];
       label += cell.char;
       if (cell.reverse) isReverse = true;

@@ -22,6 +22,7 @@ import { formatDiskDosStatus, type DiskDosStatus } from "@/lib/disks/dosStatusFo
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
+import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery";
 
 import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";
 import { readItemOptions, buildConfigKey } from "../utils/HomeConfigUtils";
@@ -79,6 +80,7 @@ interface DriveManagerProps {
   telnetBusy?: boolean;
   telnetActiveActionId?: string | null;
   onTelnetAction?: (actionId: string) => Promise<void>;
+  getTelnetActionSupport?: (actionId: TelnetActionId) => TelnetActionSupport;
 }
 
 export function DriveManager({
@@ -91,12 +93,14 @@ export function DriveManager({
   telnetBusy = false,
   telnetActiveActionId = null,
   onTelnetAction,
+  getTelnetActionSupport,
 }: DriveManagerProps) {
   const { profile } = useDisplayProfile();
   const api = getC64API();
   const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
-  const showTelnetDriveControls = telnetAvailable && typeof onTelnetAction === "function";
+  const showTelnetDriveControls =
+    telnetAvailable && typeof onTelnetAction === "function" && typeof getTelnetActionSupport === "function";
 
   const {
     refetchDrives,
@@ -234,7 +238,15 @@ export function DriveManager({
             : [typeValue];
 
           const isSoftIec = spec.class === "SOFT_IEC_DRIVE";
-          const telnetActions = showTelnetDriveControls ? buildDriveTelnetActions(spec.class, enabled) : [];
+          const telnetActions = showTelnetDriveControls
+            ? buildDriveTelnetActions(spec.class, enabled).map((action) => ({
+                ...action,
+                support: getTelnetActionSupport(action.actionId),
+              }))
+            : [];
+          const disabledTelnetNotes = telnetActions.filter(
+            (action) => action.support.status !== "supported" && action.support.reason,
+          );
           const pendingEnabled = Boolean(configWritePending[buildConfigKey(spec.category, spec.enabledItem)]);
           const pendingBus = Boolean(configWritePending[buildConfigKey(spec.category, spec.busItem)]);
           const pendingType = spec.typeItem
@@ -332,19 +344,31 @@ export function DriveManager({
               testIdSuffix={testIdSuffix}
               footer={
                 telnetActions.length > 0 ? (
-                  <div className="flex items-center gap-2 pt-1">
-                    {telnetActions.map((action) => (
-                      <Button
-                        key={action.actionId}
-                        variant="outline"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        data-testid={action.testId}
-                        disabled={!isConnected || machineTaskBusy || telnetBusy}
-                        onClick={() => void onTelnetAction?.(action.actionId)}
-                      >
-                        {telnetActiveActionId === action.actionId ? action.loadingLabel : action.label}
-                      </Button>
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center gap-2">
+                      {telnetActions.map((action) => (
+                        <Button
+                          key={action.actionId}
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          data-testid={action.testId}
+                          disabled={
+                            !isConnected || machineTaskBusy || telnetBusy || action.support.status !== "supported"
+                          }
+                          title={
+                            action.support.status === "supported" ? undefined : (action.support.reason ?? undefined)
+                          }
+                          onClick={() => void onTelnetAction?.(action.actionId)}
+                        >
+                          {telnetActiveActionId === action.actionId ? action.loadingLabel : action.label}
+                        </Button>
+                      ))}
+                    </div>
+                    {disabledTelnetNotes.map((action) => (
+                      <p key={`${action.actionId}-reason`} className="text-xs text-muted-foreground">
+                        {action.label}: {action.support.reason}
+                      </p>
                     ))}
                   </div>
                 ) : undefined

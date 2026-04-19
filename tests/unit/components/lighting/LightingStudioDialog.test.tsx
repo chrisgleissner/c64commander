@@ -13,6 +13,10 @@ vi.mock("@/hooks/useLightingStudio", () => ({
   useLightingStudio: mocks.useLightingStudio,
 }));
 
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: () => ({ value: true }),
+}));
+
 const buildHookValue = (overrides: Record<string, unknown> = {}) => ({
   studioOpen: true,
   closeStudio: vi.fn(),

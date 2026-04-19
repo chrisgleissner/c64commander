@@ -20,7 +20,6 @@ import { Capacitor } from "@capacitor/core";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
-import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
 
 const smokeDeps = vi.hoisted(() => ({
   collectHvscPerfTimingsMock: vi.fn(() => [{ scope: "browse:query", durationMs: 12.3 }]),
@@ -60,16 +59,12 @@ vi.mock("@/lib/config/featureFlags", async () => {
   return {
     ...actual,
     featureFlagManager: {
+      load: vi.fn(async () => undefined),
       reload: vi.fn(async () => undefined),
+      applyBootstrapOverride: vi.fn(async () => undefined),
     },
   };
 });
-
-vi.mock("@/lib/native/featureFlags", () => ({
-  FeatureFlags: {
-    setFlag: vi.fn(),
-  },
-}));
 
 vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   collectHvscPerfTimings: (...args: unknown[]) => smokeDeps.collectHvscPerfTimingsMock(...args),
@@ -97,8 +92,10 @@ describe("smokeMode", () => {
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = false;
     vi.mocked(addLog).mockClear();
     vi.mocked(saveDebugLoggingEnabled).mockClear();
+    vi.mocked(featureFlagManager.load).mockClear();
     vi.mocked(featureFlagManager.reload).mockClear();
-    vi.mocked(FeatureFlagsPlugin.setFlag).mockClear();
+    vi.mocked(featureFlagManager.applyBootstrapOverride).mockClear();
+    vi.mocked(featureFlagManager.applyBootstrapOverride).mockResolvedValue();
     smokeDeps.collectHvscPerfTimingsMock.mockClear();
     smokeDeps.setHvscBaseUrlOverrideMock.mockClear();
     smokeDeps.buildBaseUrlFromDeviceHostMock.mockClear();
@@ -195,7 +192,7 @@ describe("smokeMode", () => {
     });
   });
 
-  it("applies smoke feature flags to plugin and storage during initialization", async () => {
+  it("applies smoke feature flags through the unified manager during initialization", async () => {
     localStorage.setItem(
       "c64u_smoke_config",
       JSON.stringify({
@@ -209,13 +206,8 @@ describe("smokeMode", () => {
     const config = await initializeSmokeMode();
 
     expect(config?.featureFlags).toEqual({ hvsc_enabled: true });
-    expect(FeatureFlagsPlugin.setFlag).toHaveBeenCalledWith({
-      key: "hvsc_enabled",
-      value: true,
-    });
-    expect(featureFlagManager.reload).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("1");
-    expect(sessionStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("1");
+    expect(featureFlagManager.load).toHaveBeenCalledTimes(1);
+    expect(featureFlagManager.applyBootstrapOverride).toHaveBeenCalledWith("hvsc_enabled", true);
   });
 
   it("ignores unknown or invalid smoke feature flag values", async () => {
@@ -233,11 +225,11 @@ describe("smokeMode", () => {
     const config = await initializeSmokeMode();
 
     expect(config?.featureFlags).toBeUndefined();
-    expect(FeatureFlagsPlugin.setFlag).not.toHaveBeenCalled();
+    expect(featureFlagManager.applyBootstrapOverride).not.toHaveBeenCalled();
   });
 
-  it("logs warning when applying a smoke feature flag fails", async () => {
-    vi.mocked(FeatureFlagsPlugin.setFlag).mockRejectedValueOnce(new Error("plugin write failed"));
+  it("logs a warning when applying a smoke feature flag fails", async () => {
+    vi.mocked(featureFlagManager.applyBootstrapOverride).mockRejectedValueOnce(new Error("bootstrap write failed"));
     localStorage.setItem(
       "c64u_smoke_config",
       JSON.stringify({
@@ -252,37 +244,6 @@ describe("smokeMode", () => {
 
     expect(config?.featureFlags).toEqual({ hvsc_enabled: false });
     expect(addLog).toHaveBeenCalledWith("warn", "Failed to apply smoke feature flag", expect.any(Object));
-    expect(localStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("0");
-    expect(sessionStorage.getItem("c64u_feature_flag:hvsc_enabled")).toBe("0");
-  });
-
-  it("logs warning when persisting smoke feature flags to storage fails", async () => {
-    const originalSetItem = Storage.prototype.setItem;
-    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (key, value) {
-      if (key.startsWith("c64u_feature_flag:")) {
-        throw new Error("storage quota exceeded");
-      }
-      return originalSetItem.call(this, key, value);
-    });
-    localStorage.setItem(
-      "c64u_smoke_config",
-      JSON.stringify({
-        target: "mock",
-        featureFlags: {
-          hvsc_enabled: true,
-        },
-      }),
-    );
-
-    await initializeSmokeMode();
-
-    expect(FeatureFlagsPlugin.setFlag).toHaveBeenCalledWith({
-      key: "hvsc_enabled",
-      value: true,
-    });
-    expect(addLog).toHaveBeenCalledWith("warn", "Failed to persist smoke feature flag in storage", expect.any(Object));
-
-    setItemSpy.mockRestore();
   });
 
   it("records smoke status on native platforms", async () => {

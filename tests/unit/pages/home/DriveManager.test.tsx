@@ -189,6 +189,17 @@ vi.mock("@/lib/sourceNavigation/sourceTerms", () => ({
 
 import { DriveManager } from "@/pages/home/components/DriveManager";
 
+const getTelnetActionSupport = (actionId: string) => ({
+  actionId,
+  status: "supported" as const,
+  reason: null,
+  target: {
+    categoryLabel: "Software IEC",
+    actionLabel: "Reset",
+    source: "initial" as const,
+  },
+});
+
 describe("DriveManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -204,6 +215,7 @@ describe("DriveManager", () => {
     onResetDrives: vi.fn().mockImplementation(async (cb: () => Promise<void>) => {
       await cb();
     }),
+    getTelnetActionSupport,
   };
 
   it("renders Drives section header", () => {
@@ -242,6 +254,31 @@ describe("DriveManager", () => {
       render(<DriveManager {...defaultProps} telnetAvailable={true} onTelnetAction={vi.fn()} />);
       expect(screen.getByTestId("home-softiec-reset")).toBeInTheDocument();
       expect(screen.getByTestId("home-softiec-setdir")).toBeInTheDocument();
+    });
+
+    it("keeps unsupported Soft IEC actions visible but disabled with an inline reason", () => {
+      resolveConfigValueSpy.mockImplementation(
+        (_payload: unknown, category: string, itemName: string, fallback: string | number) => {
+          if (category === "SoftIEC Drive Settings" && itemName === "IEC Drive") return "Enabled";
+          return fallback;
+        },
+      );
+      render(
+        <DriveManager
+          {...defaultProps}
+          telnetAvailable={true}
+          onTelnetAction={vi.fn()}
+          getTelnetActionSupport={() => ({
+            actionId: "iecReset",
+            status: "unsupported",
+            reason: "Reset is not available on Ultimate 64 Elite 3.14e.",
+            target: null,
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId("home-softiec-reset")).toBeDisabled();
+      expect(screen.getByText("Reset: Reset is not available on Ultimate 64 Elite 3.14e.")).toBeInTheDocument();
     });
 
     it("shows Soft IEC Turn On when the device is disabled", () => {

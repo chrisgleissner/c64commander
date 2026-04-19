@@ -98,6 +98,59 @@ class FeatureFlagsPluginTest {
   }
 
   @Test
+  fun clearFlagRejectsWhenKeyIsMissing() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("key")).thenReturn(null)
+
+    plugin.clearFlag(call)
+
+    verify(call).reject("key is required")
+  }
+
+  @Test
+  fun clearFlagRemovesPersistedValue() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+
+    val setCall = mock(PluginCall::class.java)
+    `when`(setCall.getString("key")).thenReturn("clearable_flag")
+    `when`(setCall.getBoolean("value")).thenReturn(true)
+    val setLatch = CountDownLatch(1)
+    doAnswer {
+      setLatch.countDown()
+      null
+    }.`when`(setCall).resolve()
+    plugin.setFlag(setCall)
+    assertTrue(setLatch.await(2, TimeUnit.SECONDS))
+
+    val clearCall = mock(PluginCall::class.java)
+    `when`(clearCall.getString("key")).thenReturn("clearable_flag")
+    val clearLatch = CountDownLatch(1)
+    doAnswer {
+      clearLatch.countDown()
+      null
+    }.`when`(clearCall).resolve()
+    plugin.clearFlag(clearCall)
+    assertTrue(clearLatch.await(2, TimeUnit.SECONDS))
+
+    val getCall = mock(PluginCall::class.java)
+    val keys = JSArray().apply { put("clearable_flag") }
+    `when`(getCall.getArray("keys")).thenReturn(keys)
+    val getLatch = CountDownLatch(1)
+    var resolved: JSObject? = null
+    doAnswer { invocation: org.mockito.invocation.InvocationOnMock ->
+      resolved = invocation.getArgument(0) as JSObject
+      getLatch.countDown()
+      null
+    }.`when`(getCall).resolve(any())
+    plugin.getAllFlags(getCall)
+    assertTrue(getLatch.await(2, TimeUnit.SECONDS))
+
+    val flags = resolved?.getJSObject("flags")
+    assertFalse(flags?.has("clearable_flag") == true)
+  }
+
+  @Test
   fun setFlagPersistsAndGetAllFlagsReturnsValue() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)

@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TelnetSessionApi, TelnetAction } from "@/lib/telnet/telnetTypes";
+import type { TelnetResolvedActionTarget } from "@/lib/telnet/telnetCapabilityDiscovery";
+import type { TelnetSessionApi, TelnetAction, TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { TELNET_ACTIONS, TelnetError } from "@/lib/telnet/telnetTypes";
 import { createMenuNavigator } from "@/lib/telnet/telnetMenuNavigator";
 import type { MenuNavigator } from "@/lib/telnet/telnetMenuNavigator";
@@ -25,6 +26,11 @@ export interface TelnetActionExecutor {
   listActions(): TelnetAction[];
 }
 
+interface CreateActionExecutorOptions {
+  menuKey?: "F5" | "F1";
+  resolvedTargets?: Partial<Record<TelnetActionId, TelnetResolvedActionTarget>>;
+}
+
 /**
  * Creates a high-level action executor that:
  * 1. Looks up action by ID in the TELNET_ACTIONS registry
@@ -35,10 +41,11 @@ export interface TelnetActionExecutor {
  */
 export function createActionExecutor(
   session: TelnetSessionApi,
-  options?: { menuKey?: "F5" | "F1" },
+  options?: CreateActionExecutorOptions,
 ): TelnetActionExecutor {
   const navigator: MenuNavigator = createMenuNavigator(session);
   const menuKey = options?.menuKey ?? "F5";
+  const resolvedTargets = options?.resolvedTargets;
 
   async function execute(actionId: string): Promise<void> {
     const action = TELNET_ACTIONS[actionId];
@@ -50,15 +57,20 @@ export function createActionExecutor(
       );
     }
 
+    const resolvedTarget = resolvedTargets?.[action.id];
+    const menuPath = resolvedTarget
+      ? ([resolvedTarget.categoryLabel, resolvedTarget.actionLabel] as const)
+      : action.menuPath;
     const startTime = Date.now();
     addLog("info", `${LOG_TAG}: executing action "${action.label}" (${actionId})`, {
-      menuPath: action.menuPath,
+      menuPath,
       subsystem: action.subsystem,
       menuKey,
+      resolvedTarget,
     });
 
     try {
-      await navigator.navigate(action.menuPath, menuKey);
+      await navigator.navigate(menuPath, menuKey);
 
       addLog("info", `${LOG_TAG}: action "${action.label}" completed`, {
         actionId,
