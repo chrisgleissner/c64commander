@@ -374,3 +374,80 @@
 - Left the generic top-level outputs under `docs/c64/` unchanged:
   - `docs/c64/c64u-config.yaml`
   - `docs/c64/c64u-telnet.yaml`
+
+### 19:30 BST
+
+- Re-ran `npm run lint` on the current tree.
+- Current result:
+  - passed
+  - existing warnings only:
+    - unused eslint-disable directives in `tests/unit/diagnostics/diagnosticsReconciler.test.ts`
+    - unused eslint-disable directive in `tests/unit/hvsc/hvscPerformance.test.ts`
+- This supersedes the earlier handover note that lint was blocked by `playwright/uiMocks.ts`.
+
+### 19:33 BST
+
+- Re-ran live reachability probes from this environment.
+- Current results:
+  - `curl http://u64/v1/info` -> passed
+  - `u64:23` raw Telnet connect -> passed
+  - `curl http://c64u/v1/info` -> failed to connect
+  - `c64u:23` raw Telnet connect -> timed out
+- Practical impact:
+  - live U64 validation is still possible from this machine
+  - live C64U validation is currently externally blocked by device/network reachability, not by app code
+
+### 19:41 BST
+
+- Re-ran `npm run test:coverage` from scratch.
+- The rerun did not produce a fresh trustworthy merged percentage for the current tree.
+- Concrete failures captured during the rerun:
+  - transient shard-write harness flake persisted:
+    - `ENOENT: no such file or directory, open '/home/chris/dev/c64/c64commander/.cov-unit/jsdom-3/.tmp/coverage-1.json'`
+    - the harness retried that shard once
+  - the overall rerun then failed on unrelated jsdom timeouts and one Vitest worker timeout before a final merged summary was produced
+- Concrete failing tests in the rerun:
+  - `src/components/itemSelection/ItemSelectionDialog.test.tsx`
+  - `src/components/lists/SelectableActionList.test.tsx` (2 tests)
+  - `tests/unit/pages/HomePage.test.tsx`
+  - `tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx`
+  - `tests/unit/components/disks/HomeDiskManager.test.tsx`
+  - plus unhandled error: `[vitest-worker]: Timeout calling "onTaskUpdate"`
+- Practical impact:
+  - the previously recorded `92.01%` branch figure remains the last known successful full coverage result
+  - there is no new final post-rerun coverage percentage to record honestly from this attempt
+
+### 19:49 BST
+
+- Evaluated whether Home screenshot refresh is required for honest closure.
+- Decision:
+  - no screenshot refresh required for this task state
+- Reason:
+  - existing documentation screenshots under `docs/img/app/home/` still depict a connected C64U-supported Home state accurately
+  - no screenshot currently claims to show the U64-specific disabled Telnet controls introduced by this work
+  - therefore the docs are not visually inaccurate solely because the Home semantics now preserve unsupported actions as disabled
+
+### 19:58 BST
+
+- Built and ran a repo-root `vite-node` app-side live probe for `u64` using the same runtime modules the app uses:
+  - `createTelnetSession(...)`
+  - `discoverTelnetCapabilities(...)`
+  - `createActionExecutor(...)`
+- Live U64 probe result:
+  - REST identity resolved as `Ultimate 64 Elite`, firmware `3.14e`
+  - discovery completed far enough to classify actions
+  - action support resolved as:
+    - `powerCycle` -> `unsupported`
+    - `saveReuMemory` -> `unsupported`
+    - `printerFlush` -> `unsupported`
+    - `driveAReset` -> `unsupported`
+  - the run then failed at the first execution step because `printerFlush` had no resolved target
+- Exact app-side evidence:
+  - `powerCycle`: `Power Cycle is not exposed in the C64 Machine menu on Ultimate 64 Elite 3.14e.`
+  - `saveReuMemory`: `Save REU is not exposed in the C64 Machine menu on Ultimate 64 Elite 3.14e.`
+  - `printerFlush`: `Printer Flush/Eject is not exposed in the Printer menu on Ultimate 64 Elite 3.14e.`
+  - `driveAReset`: `Drive A Reset is not exposed in the Built-in Drive A menu on Ultimate 64 Elite 3.14e.`
+- Practical impact:
+  - shared runtime discovery is still not parsing or retaining live U64 submenu-backed actions correctly
+  - this is now the primary remaining code blocker for honest U64 closure
+  - it is not a raw U64 reachability blocker anymore

@@ -21,6 +21,13 @@ import {
   wrapCommandWithDirectoryKeepalive,
 } from "../../../scripts/run-unit-coverage.mjs";
 
+type UnitCoverageRun = (typeof unitCoverageRuns)[number];
+type UnitCoverageRunWithFiles = UnitCoverageRun & { files: string[] };
+
+function hasDedicatedFiles(runConfig: UnitCoverageRun): runConfig is UnitCoverageRunWithFiles {
+  return "files" in runConfig && Array.isArray(runConfig.files);
+}
+
 describe("run-unit-coverage", () => {
   it("locks unit coverage to split jsdom shards and node project runs", () => {
     expect(jsdomChunkCount).toBe(32);
@@ -70,7 +77,7 @@ describe("run-unit-coverage", () => {
 
   it("runs the current heavy jsdom coverage specs in dedicated single-file shards", () => {
     const rootDir = process.cwd();
-    const dedicatedRuns = unitCoverageRuns.filter((runConfig) => Array.isArray(runConfig.files));
+    const dedicatedRuns = unitCoverageRuns.filter(hasDedicatedFiles);
 
     expect(dedicatedRuns).toHaveLength(dedicatedJsdomCoverageFiles.length);
     expect(dedicatedRuns.map((runConfig) => getProjectFilesForRun(rootDir, runConfig))).toEqual(
@@ -81,6 +88,12 @@ describe("run-unit-coverage", () => {
   it("builds per-project vitest coverage arguments", () => {
     const rootDir = process.cwd();
     const plan = createCoveragePlan(rootDir);
+    const dedicatedRuns = unitCoverageRuns.filter(hasDedicatedFiles);
+    const firstDedicatedRun = dedicatedRuns[0];
+
+    if (!firstDedicatedRun) {
+      throw new Error("Expected at least one dedicated jsdom coverage run");
+    }
 
     const jsdomArgs = getVitestCoverageArgs(
       rootDir,
@@ -89,8 +102,8 @@ describe("run-unit-coverage", () => {
     );
     const dedicatedArgs = getVitestCoverageArgs(
       rootDir,
-      unitCoverageRuns[0],
-      plan.projectReports[unitCoverageRuns[0].reportKey],
+      firstDedicatedRun,
+      plan.projectReports[firstDedicatedRun.reportKey],
     );
     const nodeArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns.at(-1), plan.projectReports.node);
     const jsdomFiles = collectJsdomCoverageFiles(rootDir);
@@ -106,7 +119,7 @@ describe("run-unit-coverage", () => {
     expect(jsdomArgs).toContain("--maxWorkers=1");
     expect(jsdomArgs).toContain("--minWorkers=1");
     expect(jsdomArgs).toContain("--no-file-parallelism");
-    expect(dedicatedArgs).toContain(unitCoverageRuns[0].files[0]);
+    expect(dedicatedArgs).toContain(firstDedicatedRun.files[0]);
     expect(jsdomFiles.length).toBeGreaterThan(0);
     expect(sharedJsdomFiles.length).toBe(jsdomFiles.length - dedicatedJsdomCoverageFiles.length);
     expect(firstChunkFiles.length).toBeGreaterThan(0);

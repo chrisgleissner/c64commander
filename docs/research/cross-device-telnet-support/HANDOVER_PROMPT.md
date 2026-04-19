@@ -1,7 +1,7 @@
 # Cross-Device Telnet Support Handover Prompt
 
-Date: 2026-04-19  
-Type: Strict continuation prompt  
+Date: 2026-04-19
+Type: Strict continuation prompt
 Expected change classification: `DOC_PLUS_CODE`, `UI_CHANGE`
 
 ## Read first
@@ -55,8 +55,9 @@ Current mirrored U64E docs now use the correct filenames:
 
 Treat these as the current known facts unless the live device now contradicts them:
 
-- `c64u` REST responds as `C64 Ultimate`, firmware `1.1.0`.
-- `u64` previously responded as `Ultimate 64 Elite`, firmware `3.14e`.
+- Earlier in the task, `c64u` REST responded as `C64 Ultimate`, firmware `1.1.0`.
+- On the latest probe from this machine, `c64u` was unreachable over REST and timed out on raw Telnet.
+- `u64` currently responds as `Ultimate 64 Elite`, firmware `3.14e`.
 - C64U `F1` opens a nested action-menu screen:
   - level 0 visible menu: filesystem/browser entries
   - deeper actionable menu: global action categories such as `Power & Reset`
@@ -68,9 +69,15 @@ Treat these as the current known facts unless the live device now contradicts th
   - `rebootClearMemory` supported
   - `printerFlush` supported
   - `driveAReset` supported
-- U64 reachability is currently unstable:
-  - `curl http://u64/v1/info` repeatedly returned `Recv failure: Connection reset by peer`
-  - repeated live Telnet session attempts to `u64:23` failed with `ECONNRESET`
+- Current reachability split:
+  - `u64` REST currently succeeds and raw Telnet connects
+  - `c64u` REST currently fails to connect and raw Telnet currently times out
+- Latest app-side live U64 discovery proof result:
+  - the repo-root `vite-node` runtime probe works and reaches `discoverTelnetCapabilities(...)`
+  - `powerCycle` resolves `unsupported` as expected
+  - unexpectedly, `saveReuMemory`, `printerFlush`, and `driveAReset` also resolve `unsupported`
+  - first live execution attempt then aborts because `printerFlush` has no resolved target
+  - this points to a remaining runtime parser/discovery gap on live U64 submenu extraction, not a raw connectivity failure
 
 ## Validation status at handover time
 
@@ -84,12 +91,15 @@ Confirmed on the updated tree:
   - `525` test files
   - `6079` tests
 - `npm run build` passed on the current tree
+- `npm run lint` now passes on the current tree with warnings only
 
 Known validation caveats:
 
-- `npm run lint` is blocked by an unrelated existing worktree change in `playwright/uiMocks.ts` that currently fails Prettier.
-- A previous completed `npm run test:coverage` pass succeeded with global branch coverage `92.01%`, but that pass completed before the final standalone-submenu parser fix.
-- A fresh post-fix `npm run test:coverage` rerun was started and was still in progress when this handover prompt was requested. Re-run it from scratch and record the final numbers in the work log before declaring the task complete.
+- The last known successful full coverage result remains the earlier pass with global branch coverage `92.01%`.
+- A fresh rerun of `npm run test:coverage` was attempted on the current tree and did not complete cleanly:
+  - it retried a shard-write `ENOENT` under `.cov-unit/jsdom-3/.tmp/coverage-1.json`
+  - it then failed on unrelated jsdom test timeouts and a Vitest worker timeout before producing a final merged percentage
+- Because of that, there is no fresh final post-rerun coverage number to record honestly from the latest attempt.
 
 ## Remaining work
 
@@ -101,7 +111,7 @@ The implementation is not done until the live-device proof is closed honestly.
 - Re-run `npm run lint` only to confirm the blocker remains limited to the unrelated `playwright/uiMocks.ts` worktree change.
 - Do not rewrite `playwright/uiMocks.ts` unless explicitly instructed by the user.
 
-### 2. Complete U64 live discovery proof
+### 2. Fix or document the remaining U64 live discovery gap
 
 Use app-side runtime discovery, not ad hoc static inspection.
 
@@ -111,6 +121,11 @@ Goal:
 - prove `powerCycle` resolves unsupported on U64 `3.14e`
 - prove supported actions such as `rebootClearMemory`, `printerFlush`, `saveC64Memory`, `saveReuMemory`, `driveAReset`, or `iecReset` resolve correctly if the menu graph exposes them
 
+Current reality:
+
+- `powerCycle` already resolves unsupported on live `u64`
+- the blocker is that submenu-backed actions that should be supported per mirrored U64 YAML are still resolving unsupported in the app-side runtime probe
+
 Notes:
 
 - You can use the temporary `vite-node` probe pattern that was already used during this task:
@@ -118,18 +133,20 @@ Notes:
   - create a minimal Node `TelnetTransport` with `node:net`
   - use `createTelnetSession(...)`
   - call `discoverTelnetCapabilities(...)`
-- Because `u64` REST is currently resetting, it is acceptable to build the live discovery cache key from the already verified device identity facts:
-  - product `Ultimate 64 Elite`
-  - firmware `3.14e`
-  - menu key `F5`
-- If `u64` continues to hard-reset both REST and Telnet after reasonable retries, log that precisely as an external blocker instead of pretending the proof was completed.
+- The repo-root `vite-node` probe path is confirmed to work in this workspace when the script lives under `tmp/`.
+- `u64` no longer appears to be the connectivity blocker; the remaining blocker is runtime discovery/parsing.
 
-### 3. Complete U64 live action execution proof
+### 3. Complete U64 live action execution proof only after discovery resolves supported targets
 
 The original implementation prompt requires:
 
 - at least one supported U64 machine action executes successfully
 - at least one supported U64 drive or printer action executes successfully
+
+Current blocker:
+
+- the latest app-side live probe aborts before execution because `printerFlush` has no resolved target
+- do not claim execution proof until at least one supported target resolves through runtime discovery first
 
 Recommended order:
 
@@ -141,17 +158,16 @@ Be careful here:
 - avoid needlessly disruptive actions if a lower-risk supported machine action exists
 - if the only app-supported machine actions available are destructive or operationally unsafe, stop and record that as a product or environment blocker rather than guessing
 
-### 4. Decide whether screenshot refresh is still required
+### 4. Screenshot closure decision
 
 Current state:
 
 - the Home semantics changed
 - screenshots were not regenerated during this task
 
-You must decide one of these and record it explicitly:
+Current decision already recorded in `WORKLOG.md`:
 
-- update only the minimal affected screenshot set under `docs/img/`, or
-- record that screenshot refresh is intentionally deferred and therefore the task is not yet visually closed
+- screenshot refresh is not required for the current task state because the existing documented Home screenshots still accurately depict a connected C64U-supported surface and do not claim to show the new U64-specific disabled state
 
 ### 5. Final documentation and closure
 
@@ -160,9 +176,9 @@ Before final completion:
 - update `docs/research/cross-device-telnet-support/WORKLOG.md` with:
   - the parser fix for clipped standalone submenu frames
   - the post-fix `npm run test` result
-  - the final `npm run test:coverage` result
-  - the live C64U proof result
-  - the live U64 proof result or exact blocker
+  - the latest `npm run test:coverage` outcome and exact blocker
+  - the live C64U proof result or exact reachability blocker
+  - the live U64 proof result or exact runtime discovery blocker
 - update `PLANS.md` only if the closure state materially changes
 
 ## High-priority technical context
