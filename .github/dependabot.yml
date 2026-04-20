@@ -11,6 +11,7 @@ multi-ecosystem-groups:
       prefix: deps
     labels:
       - dependencies
+    open-pull-requests-limit: 1
 
 updates:
   - package-ecosystem: npm
@@ -18,7 +19,6 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
-    open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
         update-types:
@@ -29,7 +29,6 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
-    open-pull-requests-limit: 0
     ignore:
       - dependency-name: actions/setup-python
         versions:
@@ -44,7 +43,6 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
-    open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
         update-types:
