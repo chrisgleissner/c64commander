@@ -24,9 +24,7 @@ env:
     text: "HVSC downloads"
     checked: false
     optional: true
-- assertVisible:
-  text: "HVSC downloads"
-  checked: true
+- assertVisible: { text: "HVSC downloads", checked: true }
 - tapOn:
     point: "25%,95%"
 - extendedWaitUntil:

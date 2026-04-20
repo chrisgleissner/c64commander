@@ -161,6 +161,10 @@ describe("Maestro flow contracts", () => {
   it("keeps Android HVSC smoke flows anchored through playlist and HVSC section", () => {
     const smokeHvsc = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml"), "utf8");
     const smokeHvscLowRam = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"), "utf8");
+    const smokeHvscParsed = readYaml(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml"));
+    const smokeHvscLowRamParsed = readYaml(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"));
+    const smokeHvscSteps = smokeHvscParsed[1];
+    const smokeHvscLowRamSteps = smokeHvscLowRamParsed[1];
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain('text: "HVSC downloads"');
@@ -170,6 +174,11 @@ describe("Maestro flow contracts", () => {
       expect(rawSource).toContain('text: "Download HVSC"');
       expect(rawSource).toContain("timeout: ${LONG_TIMEOUT}");
     }
+
+    expect(Array.isArray(smokeHvscSteps)).toBe(true);
+    expect(Array.isArray(smokeHvscLowRamSteps)).toBe(true);
+    expect(smokeHvscSteps).toContainEqual({ assertVisible: { text: "HVSC downloads", checked: true } });
+    expect(smokeHvscLowRamSteps).toContainEqual({ assertVisible: { text: "HVSC downloads", checked: true } });
 
     expect(smokeHvsc).toContain('assertVisible: "Ingest HVSC"');
     expect(smokeHvscLowRam).toContain('tapOn: "Download HVSC"');
