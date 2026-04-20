@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -22,6 +22,11 @@ describe("collect-web-perf", () => {
   it("returns success for unsupported real-archive scenario observation runs", () => {
     const tempDir = makeTempDir();
     const outFile = path.join(tempDir, "web-full-nightly.json");
+    const baselineArchive = path.join(tempDir, "HVSC_84-all-of-them.7z");
+    const updateArchive = path.join(tempDir, "HVSC_Update_84.7z");
+
+    writeFileSync(baselineArchive, "fixture");
+    writeFileSync(updateArchive, "fixture");
 
     const result = spawnSync(
       process.execPath,
@@ -31,8 +36,8 @@ describe("collect-web-perf", () => {
         env: {
           ...process.env,
           HVSC_PERF_USE_REAL_ARCHIVES: "1",
-          HVSC_PERF_BASELINE_ARCHIVE: path.join(tempDir, "HVSC_84-all-of-them.7z"),
-          HVSC_PERF_UPDATE_ARCHIVE: path.join(tempDir, "HVSC_Update_84.7z"),
+          HVSC_PERF_BASELINE_ARCHIVE: baselineArchive,
+          HVSC_PERF_UPDATE_ARCHIVE: updateArchive,
         },
       },
     );
