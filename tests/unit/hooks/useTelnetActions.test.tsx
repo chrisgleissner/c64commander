@@ -144,15 +144,15 @@ const buildActionSupport = (
             override?.status === "unsupported" || override?.status === "unknown"
               ? null
               : {
-                  categoryLabel: actionId === "powerCycle" ? "Power & Reset" : "Configuration",
-                  actionLabel:
-                    actionId === "powerCycle"
-                      ? "Power Cycle"
-                      : actionId === "saveConfigToFile"
-                        ? "Save to File"
-                        : "Reset",
-                  source: "initial" as const,
-                },
+                categoryLabel: actionId === "powerCycle" ? "Power & Reset" : "Configuration",
+                actionLabel:
+                  actionId === "powerCycle"
+                    ? "Power Cycle"
+                    : actionId === "saveConfigToFile"
+                      ? "Save to File"
+                      : "Reset",
+                source: "initial" as const,
+              },
         },
       ];
     }),
