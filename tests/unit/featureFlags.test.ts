@@ -27,7 +27,7 @@ describe("featureFlags persistence and logging", () => {
 
   it("exposes the expected initial registry", () => {
     const ids = FEATURE_FLAG_DEFINITIONS.map((definition) => definition.id);
-    expect(ids).toEqual(["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"]);
+    expect(ids).toEqual(["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled", "reu_snapshot_enabled"]);
   });
 
   it("classifies stable and experimental flags via the registry", () => {
@@ -38,6 +38,7 @@ describe("featureFlags persistence and logging", () => {
       hvsc_enabled: "stable",
       commoserve_enabled: "stable",
       lighting_studio_enabled: "experimental",
+      reu_snapshot_enabled: "experimental",
     });
   });
 
@@ -90,9 +91,21 @@ describe("featureFlags persistence and logging", () => {
   });
 
   it("reports gating logic for HVSC controls", () => {
-    expect(isHvscEnabled({ hvsc_enabled: false, commoserve_enabled: true, lighting_studio_enabled: false })).toBe(
-      false,
-    );
-    expect(isHvscEnabled({ hvsc_enabled: true, commoserve_enabled: true, lighting_studio_enabled: false })).toBe(true);
+    expect(
+      isHvscEnabled({
+        hvsc_enabled: false,
+        commoserve_enabled: true,
+        lighting_studio_enabled: false,
+        reu_snapshot_enabled: false,
+      }),
+    ).toBe(false);
+    expect(
+      isHvscEnabled({
+        hvsc_enabled: true,
+        commoserve_enabled: true,
+        lighting_studio_enabled: false,
+        reu_snapshot_enabled: false,
+      }),
+    ).toBe(true);
   });
 });

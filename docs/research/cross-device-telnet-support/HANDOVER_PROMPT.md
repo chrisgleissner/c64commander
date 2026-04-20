@@ -55,9 +55,8 @@ Current mirrored U64E docs now use the correct filenames:
 
 Treat these as the current known facts unless the live device now contradicts them:
 
-- Earlier in the task, `c64u` REST responded as `C64 Ultimate`, firmware `1.1.0`.
-- On the latest probe from this machine, `c64u` was unreachable over REST and timed out on raw Telnet.
-- `u64` currently responds as `Ultimate 64 Elite`, firmware `3.14e`.
+- `u64` responds as `Ultimate 64 Elite`, firmware `3.14e`.
+- `c64u` responds as `C64 Ultimate`, firmware `1.1.0` when reachable.
 - C64U `F1` opens a nested action-menu screen:
   - level 0 visible menu: filesystem/browser entries
   - deeper actionable menu: global action categories such as `Power & Reset`
@@ -69,15 +68,21 @@ Treat these as the current known facts unless the live device now contradicts th
   - `rebootClearMemory` supported
   - `printerFlush` supported
   - `driveAReset` supported
-- Current reachability split:
-  - `u64` REST currently succeeds and raw Telnet connects
-  - `c64u` REST currently fails to connect and raw Telnet currently times out
+- On the final proof pass before execution, both `u64` and `c64u` were reachable over REST and raw Telnet from this machine.
 - Latest app-side live U64 discovery proof result:
   - the repo-root `vite-node` runtime probe works and reaches `discoverTelnetCapabilities(...)`
   - `powerCycle` resolves `unsupported` as expected
-  - unexpectedly, `saveReuMemory`, `printerFlush`, and `driveAReset` also resolve `unsupported`
-  - first live execution attempt then aborts because `printerFlush` has no resolved target
-  - this points to a remaining runtime parser/discovery gap on live U64 submenu extraction, not a raw connectivity failure
+  - `rebootClearMemory`, `saveReuMemory`, `printerFlush`, and `driveAReset` resolve `supported`
+  - this proves the shared discovery architecture is working on live `u64`
+- Latest live U64 execution proof result:
+  - supported drive/printer action: `printerFlush` executed successfully through a discovered target
+  - supported machine action: direct `saveReuMemory` executed successfully through a discovered target
+- Remaining live U64 limitation:
+  - workflow-level `saveRemoteReuFromTemp(...)` still fails because the live U64 Telnet browser produces no observable file-browser redraw frames after `HOME` or `DOWN` through the current `readScreen(...)` path
+  - FTP confirms `/Temp` exists, so this is a browser-observability/workflow issue rather than a missing directory
+- Post-action verification caveat:
+  - the U64 dropped off the network immediately after the direct `saveReuMemory` proof, so the REU file could not be confirmed over FTP afterward
+  - `c64u` remained reachable at the same time, so this was not a general LAN outage from the workstation
 
 ## Validation status at handover time
 
@@ -103,7 +108,7 @@ Known validation caveats:
 
 ## Remaining work
 
-The implementation is not done until the live-device proof is closed honestly.
+The live-device proof is now closed honestly. Remaining work is optional follow-up unless you want to investigate the workflow-specific `/Temp` browser gap or refresh the coverage bookkeeping.
 
 ### 1. Finish validation bookkeeping
 
@@ -111,20 +116,21 @@ The implementation is not done until the live-device proof is closed honestly.
 - Re-run `npm run lint` only to confirm the blocker remains limited to the unrelated `playwright/uiMocks.ts` worktree change.
 - Do not rewrite `playwright/uiMocks.ts` unless explicitly instructed by the user.
 
-### 2. Fix or document the remaining U64 live discovery gap
+### 2. Treat live U64 discovery as closed; focus only on the remaining workflow-specific blocker if needed
 
 Use app-side runtime discovery, not ad hoc static inspection.
 
 Goal:
 
-- prove that the shared discovery architecture works on live `u64`
-- prove `powerCycle` resolves unsupported on U64 `3.14e`
-- prove supported actions such as `rebootClearMemory`, `printerFlush`, `saveC64Memory`, `saveReuMemory`, `driveAReset`, or `iecReset` resolve correctly if the menu graph exposes them
+- keep the current evidence that the shared discovery architecture works on live `u64`
+- keep the current evidence that `powerCycle` resolves unsupported on U64 `3.14e`
+- only continue here if you explicitly want to fix the workflow-specific `/Temp` browser issue
 
 Current reality:
 
 - `powerCycle` already resolves unsupported on live `u64`
-- the blocker is that submenu-backed actions that should be supported per mirrored U64 YAML are still resolving unsupported in the app-side runtime probe
+- `rebootClearMemory`, `saveReuMemory`, `printerFlush`, and `driveAReset` already resolve supported on live `u64`
+- the remaining issue is that `saveRemoteReuFromTemp(...)` cannot navigate to `Temp` because the live U64 Telnet browser emits no observable redraw frames after `HOME`/`DOWN`
 
 Notes:
 
@@ -134,24 +140,26 @@ Notes:
   - use `createTelnetSession(...)`
   - call `discoverTelnetCapabilities(...)`
 - The repo-root `vite-node` probe path is confirmed to work in this workspace when the script lives under `tmp/`.
-- `u64` no longer appears to be the connectivity blocker; the remaining blocker is runtime discovery/parsing.
+- `u64` no longer appears to be the discovery blocker; the remaining blocker is workflow-level file-browser observability.
 
-### 3. Complete U64 live action execution proof only after discovery resolves supported targets
+### 3. U64 live action execution proof is already complete
 
 The original implementation prompt requires:
 
 - at least one supported U64 machine action executes successfully
 - at least one supported U64 drive or printer action executes successfully
 
-Current blocker:
+Current proof:
 
-- the latest app-side live probe aborts before execution because `printerFlush` has no resolved target
-- do not claim execution proof until at least one supported target resolves through runtime discovery first
+- supported drive/printer action: `printerFlush` executed successfully
+- supported machine action: direct `saveReuMemory` executed successfully
+- do not over-claim beyond that: the `/Temp` workflow path and post-save REU artifact verification are still blocked by the live browser/network behavior described above
 
 Recommended order:
 
-1. `printerFlush`
-2. a low-risk machine action if available and truly safe to automate
+1. keep the recorded `printerFlush` proof
+2. keep the recorded direct `saveReuMemory` proof
+3. only continue if you specifically need to debug the live `/Temp` workflow gap
 
 Be careful here:
 
@@ -177,8 +185,9 @@ Before final completion:
   - the parser fix for clipped standalone submenu frames
   - the post-fix `npm run test` result
   - the latest `npm run test:coverage` outcome and exact blocker
-  - the live C64U proof result or exact reachability blocker
-  - the live U64 proof result or exact runtime discovery blocker
+  - the live C64U proof result or current reachability state
+  - the live U64 discovery and execution proof result
+  - the remaining workflow-specific `/Temp` browser blocker and the post-action verification caveat
 - update `PLANS.md` only if the closure state materially changes
 
 ## High-priority technical context
@@ -205,7 +214,7 @@ Both are now addressed in code.
 
 ### Remaining uncertainty
 
-The main unresolved risk is not the static architecture anymore. It is live `u64` reachability and live action-proof completion.
+The main unresolved risk is no longer discovery or action execution. It is the live U64 `/Temp` workflow/browser observability gap and the fact that the device dropped off the network before FTP postcondition verification could be captured.
 
 ## Suggested commands
 
@@ -245,3 +254,6 @@ Do not call this task complete until one of these is true:
 
 - the U64 live discovery and execution proof has been completed honestly, or
 - the exact external blocker preventing that proof is documented clearly enough that the user can act on it without further re-tracing.
+
+Current status: the first condition is now satisfied for discovery plus action-executor proof; the only remaining follow-up is whether to separately debug the live `/Temp` workflow/browser gap.
+\*\*\* Delete File: /home/chris/dev/c64/c64commander/tmp/u64LiveDiscoveryProbe.ts

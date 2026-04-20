@@ -30,6 +30,7 @@ interface SnapshotManagerDialogProps {
   onRestore: (snapshot: RestorableSnapshotEntry) => void;
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
+  showReuFilter?: boolean;
 }
 
 const TYPE_FILTERS: Array<{ value: RestorableSnapshotType | "all"; label: string }> = [
@@ -222,13 +223,16 @@ export function SnapshotManagerDialog({
   onRestore,
   onDelete,
   onUpdateLabel,
+  showReuFilter = true,
 }: SnapshotManagerDialogProps) {
   const { profile } = useDisplayProfile();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<RestorableSnapshotType | "all">("all");
   const compact = profile === "compact";
 
-  const filtered = filterSnapshots(snapshots, query, typeFilter);
+  const visibleFilters = showReuFilter ? TYPE_FILTERS : TYPE_FILTERS.filter((f) => f.value !== "reu");
+  const effectiveTypeFilter = !showReuFilter && typeFilter === "reu" ? "all" : typeFilter;
+  const filtered = filterSnapshots(snapshots, query, effectiveTypeFilter);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -264,13 +268,13 @@ export function SnapshotManagerDialog({
             />
 
             <div className="flex gap-1 flex-wrap" data-testid="snapshot-type-filters">
-              {TYPE_FILTERS.map(({ value, label }) => (
+              {visibleFilters.map(({ value, label }) => (
                 <button
                   key={value}
                   data-testid={`snapshot-filter-type-${value}`}
                   className={[
                     "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
-                    typeFilter === value
+                    effectiveTypeFilter === value
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-transparent text-muted-foreground border-border hover:bg-accent",
                   ].join(" ")}

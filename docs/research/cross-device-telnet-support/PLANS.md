@@ -102,7 +102,7 @@ Implement cross-device Telnet support so runtime action support is discovered fr
 - [x] Run `npm run test`
 - [ ] Re-run `npm run test:coverage` and confirm global branch coverage `>= 91%` on the current tree
 - [x] Run `npm run build`
-- [ ] Re-verify live U64 and C64U behavior on device
+- [x] Re-verify live U64 behavior on device and record the current C64U reachability state
 - [x] Decide whether screenshot refresh is required
 - [ ] Update only the necessary docs and screenshots
 
@@ -115,8 +115,7 @@ Implement cross-device Telnet support so runtime action support is discovered fr
   - the config and Telnet extraction tools must infer that filename prefix automatically from the probed device family
   - existing mirrored files under the U64E subtree must be renamed retroactively
 - Remaining closure work is:
-  - final live discovery and minimal execution proof on `c64u`
-  - root-cause and fix or explicitly document the remaining live U64 runtime discovery gap
+  - decide whether to pursue the live U64 `/Temp` workflow/browser observability gap as a follow-up task
   - obtain a fresh `npm run test:coverage` result once the unrelated jsdom timeout regressions and shard-write flake are resolved
 
 ## Closure Delta
@@ -126,12 +125,18 @@ Implement cross-device Telnet support so runtime action support is discovered fr
   - existing Home documentation screenshots still depict a connected C64U-supported state accurately
   - no documentation screenshot currently claims or demonstrates the U64-specific disabled Telnet state
 - Live-device status changed after the earlier handover:
-  - `u64` is currently reachable over REST and raw Telnet
-  - `c64u` is currently unreachable over REST and times out on raw Telnet from this environment
-- Live U64 app-side discovery still does not close:
+  - immediately before the final proof pass, both `u64` and `c64u` were reachable over REST and raw Telnet
+  - after direct `saveReuMemory` execution on `u64`, only `c64u` remained reachable from this environment
+- Live U64 app-side discovery is now closed:
   - the repo-root `vite-node` probe path works
-  - the app-side probe now proves `powerCycle`, `saveReuMemory`, `printerFlush`, and `driveAReset` all resolve `unsupported` on live `u64`
-  - this contradicts the mirrored U64 Telnet YAML and points to a remaining runtime parser/discovery gap, not a reachability issue
+  - `powerCycle` resolves `unsupported` as expected on `u64` `3.14e`
+  - `rebootClearMemory`, `saveReuMemory`, `printerFlush`, and `driveAReset` resolve `supported` with concrete discovered targets
+- Live U64 action execution is now closed at the action-executor layer:
+  - `printerFlush` executed successfully via a discovered `Printer -> Flush/Eject` target
+  - direct `saveReuMemory` executed successfully via a discovered `C64 Machine -> Save REU Memory` target
+- Remaining live U64 limitation is narrower and workflow-specific:
+  - `saveRemoteReuFromTemp(...)` still cannot find `Temp` because the live U64 Telnet browser emits no observable file-browser redraw frames after `HOME` or `DOWN` through the current `readScreen(...)` path
+  - post-save REU file verification was blocked because the device dropped off the network before FTP confirmation could be captured
 
 ## Success Criteria
 

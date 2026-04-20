@@ -95,6 +95,7 @@ const {
       hvsc_enabled: true,
       commoserve_enabled: true,
       lighting_studio_enabled: false,
+      reu_snapshot_enabled: false,
     },
   },
   savedDevicesRef: {
@@ -252,10 +253,26 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
           default: false,
         },
       },
+      reu_snapshot_enabled: {
+        id: "reu_snapshot_enabled",
+        value: featureFlagsRef.current.reu_snapshot_enabled,
+        visible: developerModeEnabledRef.current,
+        editable: developerModeEnabledRef.current,
+        definition: {
+          id: "reu_snapshot_enabled",
+          title: "REU Snapshots",
+          description: "Enable Save REU and Restore REU Snapshot functionality.",
+          group: "experimental",
+          developer_only: true,
+          default: false,
+        },
+      },
     },
     setFlag: mockSetFeatureFlag,
   }),
-  useFeatureFlag: (key: "hvsc_enabled" | "commoserve_enabled" | "lighting_studio_enabled") => ({
+  useFeatureFlag: (
+    key: "hvsc_enabled" | "commoserve_enabled" | "lighting_studio_enabled" | "reu_snapshot_enabled",
+  ) => ({
     value: featureFlagsRef.current[key],
     isLoaded: true,
     setValue: mockSetFeatureFlag,

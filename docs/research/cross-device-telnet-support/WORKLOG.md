@@ -451,3 +451,68 @@
   - shared runtime discovery is still not parsing or retaining live U64 submenu-backed actions correctly
   - this is now the primary remaining code blocker for honest U64 closure
   - it is not a raw U64 reachability blocker anymore
+
+### 22:08 BST
+
+- Re-ran live reachability probes before the final U64 proof pass.
+- Current pre-proof state from this machine:
+  - `curl http://u64/v1/info` -> passed
+  - `u64:23` raw Telnet connect -> passed
+  - `curl http://c64u/v1/info` -> passed
+  - `c64u:23` raw Telnet connect -> passed
+
+### 22:19 BST
+
+- Rebuilt the repo-root `vite-node` probe with explicit frame logging around live U64 discovery.
+- The earlier `19:58 BST` discovery note was superseded by the new probe result.
+- Live app-side discovery on `u64` now resolves correctly through the shared runtime path:
+  - `powerCycle` -> `unsupported`
+  - `rebootClearMemory` -> `supported`
+  - `saveReuMemory` -> `supported`
+  - `printerFlush` -> `supported`
+  - `driveAReset` -> `supported`
+- Exact app-side evidence:
+  - `powerCycle`: `Power Cycle is not available on Ultimate 64 Elite 3.14e.`
+  - `saveReuMemory`: resolved target `C64 Machine -> Save REU Memory`
+  - `printerFlush`: resolved target `Printer -> Flush/Eject`
+  - `driveAReset`: resolved target `Built-in Drive A -> Reset`
+- Practical impact:
+  - the remaining U64 blocker is no longer capability discovery
+  - the runtime discovery architecture is working on live `u64`
+
+### 22:27 BST
+
+- Completed the required live U64 execution proof through discovered targets:
+  - supported drive/printer action: `printerFlush` -> executor returned `EXECUTION_OK printerFlush`
+  - supported machine action: direct `saveReuMemory` -> executor returned `EXECUTION_OK saveReuMemory`
+- These runs used the same app-side modules as production:
+  - `createTelnetSession(...)`
+  - `discoverTelnetCapabilities(...)`
+  - `createActionExecutor(...)`
+- This satisfies the original live U64 execution requirement at the action-executor layer.
+
+### 22:31 BST
+
+- Attempted to prove the lower-risk machine workflow path `saveRemoteReuFromTemp(...)` after discovery had resolved `saveReuMemory` correctly.
+- That workflow still failed on live `u64` with:
+  - `TelnetError: File browser item not found: Temp`
+- Root-cause evidence gathered during the same probe:
+  - FTP root still exposes `/Temp`, `/Flash`, and `/USB2`
+  - the app-side Telnet session can read the initial title frame
+  - after `HOME` and repeated `DOWN` key presses, the live U64 session produced no observable file-browser redraw frames through `readScreen(...)`
+  - this remained true even after widening the browser read timeout from `700ms` to `3000ms`
+- Practical impact:
+  - the remaining live issue is a workflow-specific Telnet file-browser observability gap, not action discovery
+  - direct action execution succeeds, but the `/Temp` workflow cannot currently navigate by selected file-browser entry on live `u64`
+
+### 22:35 BST
+
+- Tried to verify the post-save REU artifact over FTP after direct `saveReuMemory` execution.
+- Verification was externally blocked because live U64 connectivity degraded immediately afterward:
+  - FTP root probe first timed out, then returned `No route to host`
+  - `curl http://u64/v1/info` later failed to connect
+  - raw `u64:23` Telnet later timed out
+  - `c64u` remained reachable over REST and raw Telnet at the same time
+- Practical impact:
+  - the action-executor proof is complete and honest
+  - file-level REU postcondition verification could not be completed because the U64 dropped off the network before FTP confirmation could be captured

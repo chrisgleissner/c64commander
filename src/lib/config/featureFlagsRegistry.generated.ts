@@ -13,7 +13,7 @@
 
 export const FEATURE_REGISTRY_VERSION = 1 as const;
 
-export type FeatureFlagId = "hvsc_enabled" | "commoserve_enabled" | "lighting_studio_enabled";
+export type FeatureFlagId = "hvsc_enabled" | "commoserve_enabled" | "lighting_studio_enabled" | "reu_snapshot_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -77,6 +77,16 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "experimental",
     title: "Lighting Studio",
     description: "Enable Lighting Studio entry points and dialog access.",
+  },
+  {
+    id: "reu_snapshot_enabled",
+    enabled: false,
+    visible_to_user: false,
+    user_toggleable: false,
+    developer_only: true,
+    group: "experimental",
+    title: "REU Snapshots",
+    description: "Enable Save REU and Restore REU Snapshot functionality.",
   },
 ] as const;
 

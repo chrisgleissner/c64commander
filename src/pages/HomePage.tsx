@@ -210,12 +210,13 @@ function HomePageContent() {
     isActiveProfileModified,
   } = useLightingStudio();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
+  const { value: reuSnapshotEnabled } = useFeatureFlag("reu_snapshot_enabled");
   const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const deviceControlBusy = deviceControlActionId !== null;
   const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
-  const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...reuSnapshots].sort(
+  const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...(reuSnapshotEnabled ? reuSnapshots : [])].sort(
     (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
   );
   const getTelnetSupport = (actionId: TelnetActionId) => telnet.getActionSupport(actionId);
@@ -600,14 +601,18 @@ function HomePageContent() {
       disabled: !isActive || machineTaskBusy || telnet.isBusy,
       loading: telnet.activeActionId === "rebootClearMemory" || deviceControlActionId === "rebootFull",
     },
-    {
-      id: "saveReuMemory",
-      label: TELNET_ACTIONS.saveReuMemory.label,
-      onSelect: () => void handleSaveReu(),
-      disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
-      loading: telnet.activeActionId === "saveReuMemory",
-      reason: saveReuDisabledReason,
-    },
+    ...(reuSnapshotEnabled
+      ? [
+          {
+            id: "saveReuMemory",
+            label: TELNET_ACTIONS.saveReuMemory.label,
+            onSelect: () => void handleSaveReu(),
+            disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
+            loading: telnet.activeActionId === "saveReuMemory",
+            reason: saveReuDisabledReason,
+          },
+        ]
+      : []),
   ];
 
   const ramDumpFolderDisplayPath = ramDumpFolder
@@ -1648,7 +1653,7 @@ function HomePageContent() {
           setSaveRamDialogOpen(false);
           void handleSaveRam(type, customRanges);
         }}
-        onSaveReu={handleSaveReu}
+        onSaveReu={reuSnapshotEnabled ? handleSaveReu : undefined}
         isSaving={machineTaskId === "save-ram" || reuTaskPending}
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}
@@ -1659,6 +1664,7 @@ function HomePageContent() {
         open={snapshotManagerOpen}
         onOpenChange={setSnapshotManagerOpen}
         snapshots={allSnapshots}
+        showReuFilter={reuSnapshotEnabled}
         onRestore={(snapshot) => {
           setRestoreTarget(snapshot);
         }}

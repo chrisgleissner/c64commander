@@ -133,7 +133,6 @@ describe("hvscPerformance", () => {
 
   it("uses String() for non-Error values thrown by performance.mark", () => {
     const markSpy = vi.spyOn(performance, "mark").mockImplementation(() => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw "quota_exceeded_string";
     });
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);

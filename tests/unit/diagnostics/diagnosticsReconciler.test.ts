@@ -201,7 +201,6 @@ describe("diagnosticsReconciler", () => {
 
   it("formats diagnostics failure detail as String when error is a non-null non-Error", async () => {
     recoverStaleHealthCheckRunMock.mockImplementation(() => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw "string_error";
     });
     await expect(runDiagnosticsReconciler("poll")).rejects.toBe("string_error");
@@ -210,7 +209,6 @@ describe("diagnosticsReconciler", () => {
 
   it("uses default message when diagnostics reconciler catches a null throw", async () => {
     recoverStaleHealthCheckRunMock.mockImplementation(() => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw null;
     });
     await expect(runDiagnosticsReconciler("poll")).rejects.toBeNull();
@@ -219,7 +217,6 @@ describe("diagnosticsReconciler", () => {
 
   it("uses default message when config reconciler catches a null throw", async () => {
     invalidateForVisibilityResumeMock.mockImplementation(() => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw null;
     });
     await expect(runConfigReconciler({} as never, "/", "test")).rejects.toBeNull();
@@ -228,7 +225,6 @@ describe("diagnosticsReconciler", () => {
 
   it("uses default message when playback reconciler catches a null throw", async () => {
     vi.spyOn(decisionState, "degradePlaybackConfidence").mockImplementationOnce(() => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw null;
     });
     await expect(runPlaybackReconciler("test")).rejects.toBeNull();

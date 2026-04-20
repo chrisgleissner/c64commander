@@ -84,11 +84,17 @@ vi.mock("@/hooks/useDisplayProfile", () => ({
 vi.mock("@/hooks/useFeatureFlags", () => ({
   FeatureFlagsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useFeatureFlags: () => ({
-    flags: { hvsc_enabled: true, commoserve_enabled: true, lighting_studio_enabled: false },
+    flags: {
+      hvsc_enabled: true,
+      commoserve_enabled: true,
+      lighting_studio_enabled: false,
+      reu_snapshot_enabled: false,
+    },
     resolved: {
       hvsc_enabled: { id: "hvsc_enabled", value: true },
       commoserve_enabled: { id: "commoserve_enabled", value: true },
       lighting_studio_enabled: { id: "lighting_studio_enabled", value: false },
+      reu_snapshot_enabled: { id: "reu_snapshot_enabled", value: false },
     },
   }),
   useFeatureFlag: () => ({ value: false }),

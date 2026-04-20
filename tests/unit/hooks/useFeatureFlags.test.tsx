@@ -16,6 +16,7 @@ const mockSnapshot: FeatureFlagSnapshot = {
     hvsc_enabled: true,
     commoserve_enabled: true,
     lighting_studio_enabled: false,
+    reu_snapshot_enabled: false,
   },
   resolved: {
     hvsc_enabled: {
@@ -65,6 +66,24 @@ const mockSnapshot: FeatureFlagSnapshot = {
         group: "experimental",
         title: "Lighting Studio",
         description: "Enable Lighting Studio entry points and dialog access.",
+      },
+      value: false,
+      hasOverride: false,
+      overrideValue: null,
+      visible: false,
+      editable: false,
+    },
+    reu_snapshot_enabled: {
+      id: "reu_snapshot_enabled",
+      definition: {
+        id: "reu_snapshot_enabled",
+        enabled: false,
+        visible_to_user: false,
+        user_toggleable: false,
+        developer_only: true,
+        group: "experimental",
+        title: "REU Snapshots",
+        description: "Enable Save REU and Restore REU Snapshot functionality.",
       },
       value: false,
       hasOverride: false,

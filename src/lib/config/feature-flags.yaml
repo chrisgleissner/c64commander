@@ -55,3 +55,12 @@ features:
     group: experimental
     title: Lighting Studio
     description: Enable Lighting Studio entry points and dialog access.
+
+  - id: reu_snapshot_enabled
+    enabled: false
+    visible_to_user: false
+    user_toggleable: false
+    developer_only: true
+    group: experimental
+    title: REU Snapshots
+    description: Enable Save REU and Restore REU Snapshot functionality.
