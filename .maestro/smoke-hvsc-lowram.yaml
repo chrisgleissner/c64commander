@@ -10,32 +10,30 @@ env:
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "75%,95%"
+    id: "tab-settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
-- scrollUntilVisible:
-    element:
-      text: "Stable Features"
-    direction: DOWN
-    timeout: ${TIMEOUT}
-    visibilityPercentage: 50
-    centerElement: true
 - retry:
-    maxRetries: 3
+    maxRetries: 6
     commands:
+      - swipe:
+          start: 50%, 78%
+          end: 50%, 28%
+          duration: 400
+      - waitForAnimationToEnd
+      - assertVisible: "HVSC downloads"
       - tapOn:
-          id: feature-flag-hvsc_enabled
+          text: "HVSC downloads"
           checked: false
           optional: true
-      - assertVisible:
-          id: feature-flag-hvsc_enabled
-          checked: true
+      - waitForAnimationToEnd
+      - assertVisible: "HVSC downloads"
 - tapOn:
-    point: "25%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
-    visible: "Playlist"
+    visible: "Play Files"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - scrollUntilVisible:

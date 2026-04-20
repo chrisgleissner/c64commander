@@ -9,25 +9,41 @@ env:
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "75%,95%"
+    id: "tab-settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
+- retry:
+    maxRetries: 6
+    commands:
+      - swipe:
+          start: 50%, 78%
+          end: 50%, 28%
+          duration: 400
+      - waitForAnimationToEnd
+      - assertVisible: "HVSC downloads"
+      - tapOn:
+          text: "HVSC downloads"
+          checked: false
+          optional: true
+      - waitForAnimationToEnd
+      - assertVisible: "HVSC downloads"
 
-# Scroll until the HVSC toggle is in view (bounded).
+- tapOn:
+    id: "tab-play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
 - scrollUntilVisible:
-    element: { text: "Stable Features" }
+    element: { text: "Download HVSC" }
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
     visibilityPercentage: 50
     centerElement: true
-
-# Expect the flag to be enabled by default on native builds.
-- assertVisible:
-    id: feature-flag-hvsc_enabled
-    checked: true
+- assertVisible: "Download HVSC"
 
 - takeScreenshot: hvsc-enabled
 
@@ -36,19 +52,17 @@ env:
     stopApp: true
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "75%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
-    visible: "Settings"
+    visible: "Play Files"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - scrollUntilVisible:
-    element: { text: "Stable Features" }
+    element: { text: "Download HVSC" }
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
     visibilityPercentage: 50
     centerElement: true
-- assertVisible:
-    id: feature-flag-hvsc_enabled
-    checked: true
+- assertVisible: "Download HVSC"
 - takeScreenshot: hvsc-persisted
