@@ -15,6 +15,7 @@ AUTOMATION_READY_TIMEOUT_SECS=${AUTOMATION_READY_TIMEOUT_SECS:-20}
 POWER_STAYON_ENABLED=0
 DEFAULT_LONG_TIMEOUT_MS=${DEFAULT_LONG_TIMEOUT_MS:-20000}
 HVSC_PERF_LONG_TIMEOUT_MS=${HVSC_PERF_LONG_TIMEOUT_MS:-600000}
+HVSC_PERF_SETUP_LONG_TIMEOUT_MS=${HVSC_PERF_SETUP_LONG_TIMEOUT_MS:-1800000}
 DEFAULT_TIMEOUT_MS=${DEFAULT_TIMEOUT_MS:-15000}
 DEFAULT_SHORT_TIMEOUT_MS=${DEFAULT_SHORT_TIMEOUT_MS:-5000}
 
@@ -152,6 +153,10 @@ ensure_device_ready_for_automation() {
 
 select_long_timeout_ms() {
   local tag_source="$1"
+  if [[ "$tag_source" == *"hvsc-perf-setup"* ]]; then
+    printf '%s' "$HVSC_PERF_SETUP_LONG_TIMEOUT_MS"
+    return
+  fi
   if [[ "$tag_source" == *"hvsc-perf"* ]]; then
     printf '%s' "$HVSC_PERF_LONG_TIMEOUT_MS"
     return

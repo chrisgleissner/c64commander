@@ -91,8 +91,14 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
 
       // Step 4: Enter submenu
       state = "ENTERING_SUBMENU";
-      await session.sendKey("RIGHT");
-      const submenuResult = await readUntilSubmenuVisible(topMenu, checkTimeout);
+      const existingSubmenu =
+        screen.menus.find((menu) => menu.level > topMenu.level) ?? findStandaloneSubmenu(screen, topMenu);
+      const submenuResult = existingSubmenu
+        ? { screen, submenu: existingSubmenu }
+        : await (async () => {
+            await session.sendKey("RIGHT");
+            return readUntilSubmenuVisible(topMenu, checkTimeout);
+          })();
       screen = submenuResult.screen ?? screen;
 
       // Step 5: Scan submenu
@@ -188,6 +194,26 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
     return { screen: lastScreen, submenu: null };
   }
 
+  async function readMenuAtLevelWithTransientRetries(
+    level: number,
+    referenceMenu: ParsedMenu,
+    initialScreen: TelnetScreen,
+    checkTimeout: () => void,
+  ): Promise<{ screen: TelnetScreen; menu: ParsedMenu | null; standaloneSubmenu: ParsedMenu | null }> {
+    let screen = initialScreen;
+    let menu = findMenuAtLevel(screen, level);
+    let standaloneSubmenu = level === 0 ? findStandaloneSubmenu(screen, referenceMenu) : null;
+
+    for (let attempt = 0; !menu && !standaloneSubmenu && attempt < MAX_TRANSIENT_READS; attempt += 1) {
+      screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
+      checkTimeout();
+      menu = findMenuAtLevel(screen, level);
+      standaloneSubmenu = level === 0 ? findStandaloneSubmenu(screen, referenceMenu) : null;
+    }
+
+    return { screen, menu, standaloneSubmenu };
+  }
+
   /** Navigate within a menu to the item matching the target label */
   async function navigateToItem(
     menu: ParsedMenu,
@@ -215,6 +241,7 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
     const distance = Math.abs(targetIndex - currentIndex);
 
     let screen = currentScreen;
+    let advancedViaStandaloneSubmenu = false;
     for (let step = 0; step < distance; step++) {
       const expectedIndex = currentIndex + (direction === "DOWN" ? step + 1 : -(step + 1));
       let advanced = false;
@@ -224,10 +251,25 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
         screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
         checkTimeout();
 
-        const refreshedMenu = findMenuAtLevel(screen, menu.level);
-        if (!refreshedMenu) {
+        const refreshedState = await readMenuAtLevelWithTransientRetries(menu.level, menu, screen, checkTimeout);
+        screen = refreshedState.screen;
+        const refreshedMenu = refreshedState.menu;
+        if (refreshedState.standaloneSubmenu) {
+          advancedViaStandaloneSubmenu = true;
           advanced = true;
           break;
+        }
+
+        if (!refreshedMenu) {
+          if (attempt < MAX_KEY_RETRIES) {
+            addLog("warn", `${LOG_TAG}: menu disappeared after navigation key, retrying`, {
+              direction,
+              expectedIndex,
+              level: menu.level,
+              targetLabel,
+            });
+          }
+          continue;
         }
 
         if (refreshedMenu.selectedIndex === expectedIndex) {
@@ -252,6 +294,10 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
           },
         );
       }
+    }
+
+    if (advancedViaStandaloneSubmenu) {
+      return screen;
     }
 
     // Verify the final selected item matches

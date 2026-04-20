@@ -23,6 +23,14 @@ const { toastSpy, reportUserErrorSpy, c64ApiMockRef, queryClientMockRef, updateC
     ),
   }));
 
+const { addLogSpy, buildErrorLogDetailsSpy } = vi.hoisted(() => ({
+  addLogSpy: vi.fn(),
+  buildErrorLogDetailsSpy: vi.fn((error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: error.message,
+  })),
+}));
+
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
 }));
@@ -42,6 +50,11 @@ vi.mock("@/hooks/use-toast", () => ({
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: reportUserErrorSpy,
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: addLogSpy,
+  buildErrorLogDetails: buildErrorLogDetailsSpy,
 }));
 
 vi.mock("framer-motion", () => ({
@@ -327,6 +340,25 @@ describe("AudioMixer", () => {
       expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Vol SID Socket 1": expect.any(String) });
       expect(updateConfigValueSpy).not.toHaveBeenCalled();
     });
+
+    it("logs and restores volume override when async commit fails", async () => {
+      interactiveWriteSpy.mockRejectedValueOnce(new Error("volume failed"));
+      render(<AudioMixer {...defaultProps} />);
+
+      fireEvent.click(screen.getByTestId("volume-async-commit"));
+
+      await vi.waitFor(() => {
+        expect(addLogSpy).toHaveBeenCalledWith(
+          "warn",
+          "Audio Mixer volume preview commit failed",
+          expect.objectContaining({
+            itemName: "Vol SID Socket 1",
+            sidKey: "socket1",
+            error: "volume failed",
+          }),
+        );
+      });
+    });
   });
 
   describe("pan slider handlers", () => {
@@ -352,6 +384,25 @@ describe("AudioMixer", () => {
       fireEvent.click(screen.getByTestId("pan-async-commit"));
       expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Pan SID Socket 1": expect.any(String) });
       expect(updateConfigValueSpy).not.toHaveBeenCalled();
+    });
+
+    it("logs and restores pan override when async commit fails", async () => {
+      interactiveWriteSpy.mockRejectedValueOnce(new Error("pan failed"));
+      render(<AudioMixer {...defaultProps} />);
+
+      fireEvent.click(screen.getByTestId("pan-async-commit"));
+
+      await vi.waitFor(() => {
+        expect(addLogSpy).toHaveBeenCalledWith(
+          "warn",
+          "Audio Mixer pan preview commit failed",
+          expect.objectContaining({
+            itemName: "Pan SID Socket 1",
+            sidKey: "socket1",
+            error: "pan failed",
+          }),
+        );
+      });
     });
   });
 

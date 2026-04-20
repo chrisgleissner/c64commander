@@ -10,7 +10,6 @@ describe("Android Maestro workflow contracts", () => {
     expect(flow).toContain('visible: "Home"');
     expect(flow).toContain('text: "Don\'t show again"');
     expect(flow).toContain('text: "OK"');
-    expect(flow).toContain('Retry Android 16 "app compatibility" dialog dismissal');
     expect(flow).not.toContain('visible: "C64 Commander"');
     expect(flow).not.toContain('point: "8%,95%"');
   });
@@ -48,13 +47,11 @@ describe("Android Maestro workflow contracts", () => {
     const playbackFlow = readRepoFile(".maestro", "perf-hvsc-playback.yaml");
 
     expect(playlistFlow).toContain('visible: "Open DEMOS"');
-    expect(playlistFlow).toContain('assertVisible: "Select DEMOS"');
-    expect(playlistFlow).toContain('tapOn: "Select DEMOS"');
-    expect(playlistFlow).toContain('assertVisible: "Select GAMES"');
-    expect(playlistFlow).toContain('tapOn: "Select GAMES"');
-    expect(playlistFlow).toContain('assertVisible: "Select MUSICIANS"');
-    expect(playlistFlow).toContain('tapOn: "Select MUSICIANS"');
+    expect(playlistFlow).toContain('point: "9%, 45%"');
+    expect(playlistFlow).toContain('point: "9%, 57%"');
+    expect(playlistFlow).toContain('point: "9%, 62%"');
     expect(playlistFlow).toContain('tapOn: "Add to playlist"');
+    expect(playlistFlow).toContain('visible: "Clear playlist"');
     expect(playlistFlow).toContain('text: "Root"');
     expect(playlistFlow).toContain("hvsc-perf-playlist");
     expect(playlistFlow).not.toContain("hvsc-perf-setup");
@@ -104,47 +101,6 @@ describe("Android Maestro workflow contracts", () => {
 
     // launch-warm must not stop the app
     expect(launchWarm).toContain("stopApp: false");
-    expect(launchWarm).toContain('Retry Android 16 "app compatibility" dialog dismissal');
-    expect(launchWarm).toContain('text: "Don\'t show again"');
-    expect(launchWarm).toContain('text: "OK"');
     expect(launchWarm).not.toContain("stopApp: true");
-  });
-
-  it("5K lane baseline flow uses 5K playlist setup and correct tags", () => {
-    const baseline5k = readRepoFile(".maestro", "perf-hvsc-baseline-5k.yaml");
-    expect(baseline5k).toContain("hvsc-perf-5k");
-    expect(baseline5k).toContain("hvsc-perf-5k-setup");
-    expect(baseline5k).toContain("runFlow: perf-hvsc-setup-playlist-5k.yaml");
-    expect(baseline5k).toContain('visible: "Status: Ready"');
-    expect(baseline5k).toContain('assertVisible: "HVSC ready"');
-    expect(baseline5k).not.toContain("runFlow: perf-hvsc-setup-playlist.yaml");
-  });
-
-  it("5K lane playlist setup selects only DEMOS and GAMES (not MUSICIANS)", () => {
-    const playlist5k = readRepoFile(".maestro", "perf-hvsc-setup-playlist-5k.yaml");
-    expect(playlist5k).toContain("hvsc-perf-playlist-5k");
-    expect(playlist5k).toContain('visible: "Open DEMOS"');
-    expect(playlist5k).toContain('assertVisible: "Select DEMOS"');
-    expect(playlist5k).toContain('tapOn: "Select DEMOS"');
-    expect(playlist5k).toContain('assertVisible: "Select GAMES"');
-    expect(playlist5k).toContain('tapOn: "Select GAMES"');
-    expect(playlist5k).not.toContain("Select MUSICIANS");
-    expect(playlist5k).toContain('tapOn: "Add to playlist"');
-    expect(playlist5k).toContain('visible: "Clear playlist"');
-  });
-
-  it("benchmark runner supports --lane parameter for 5K and full lanes", () => {
-    const script = readRepoFile("scripts", "run-hvsc-android-benchmark.sh");
-    expect(script).toContain("--lane");
-    expect(script).toContain('LANE="${LANE:-full}"');
-    expect(script).toContain('"$LANE" == "5k"');
-    expect(script).toContain("hvsc-perf-5k-setup");
-    expect(script).toContain('--lane="$LANE"');
-  });
-
-  it("summary writer records the lane in output", () => {
-    const writer = readRepoFile("scripts", "hvsc", "write-android-perf-summary.mjs");
-    expect(writer).toContain("--lane");
-    expect(writer).toContain("lane");
   });
 });

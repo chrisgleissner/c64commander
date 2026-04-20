@@ -10,11 +10,21 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LightingSummaryCard } from "@/pages/home/components/LightingSummaryCard";
 
-const { updateConfigValueSpy, resolveConfigValueSpy } = vi.hoisted(() => ({
+const { addLogSpy, buildErrorLogDetailsSpy, updateConfigValueSpy, resolveConfigValueSpy } = vi.hoisted(() => ({
+  addLogSpy: vi.fn(),
+  buildErrorLogDetailsSpy: vi.fn((error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: error.message,
+  })),
   updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
   resolveConfigValueSpy: vi.fn(
     (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
   ),
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: addLogSpy,
+  buildErrorLogDetails: buildErrorLogDetailsSpy,
 }));
 
 vi.mock("@/pages/home/hooks/ConfigActionsContext", () => ({
@@ -181,6 +191,16 @@ describe("LightingSummaryCard", () => {
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag"));
 
     await waitFor(() => expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("15"));
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "warn",
+      "Lighting summary intensity preview failed",
+      expect.objectContaining({
+        category: "LED Strip",
+        itemName: "Strip Intensity",
+        value: 5,
+        error: "intensity failed",
+      }),
+    );
   });
 
   it("ignores empty async slider payloads", () => {
@@ -230,6 +250,16 @@ describe("LightingSummaryCard", () => {
     fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
 
     await waitFor(() => expect(screen.getByTestId("led-strip-color-slider")).toHaveAttribute("data-value", "[0]"));
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "warn",
+      "Lighting summary fixed color preview failed",
+      expect.objectContaining({
+        category: "LED Strip",
+        itemName: "Fixed Color",
+        value: "Purple",
+        error: "color failed",
+      }),
+    );
   });
 
   it("shows intensity value from resolved config", () => {

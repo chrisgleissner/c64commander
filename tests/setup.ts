@@ -10,12 +10,15 @@ import "@testing-library/jest-dom";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, vi } from "vitest";
+import {
+  FEATURE_FLAG_IDS as REGISTERED_FEATURE_FLAG_IDS,
+  type FeatureFlagId,
+} from "@/lib/config/featureFlagsRegistry.generated";
 
 const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
-const FEATURE_FLAG_IDS = ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"] as const;
 const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";
 
-type TestFeatureFlagId = (typeof FEATURE_FLAG_IDS)[number];
+type TestFeatureFlagId = FeatureFlagId;
 type TestFeatureFlagState = {
   developerMode?: boolean;
   overrides?: Partial<Record<TestFeatureFlagId, boolean>>;
@@ -139,11 +142,33 @@ const getAvailableStorages = () => {
   return storages;
 };
 
+const getStoredFeatureFlagIds = (storage: unknown): string[] => {
+  if (!storage || typeof storage !== "object" || typeof (storage as Storage).key !== "function") return [];
+
+  const featureFlagIds: string[] = [];
+  for (let index = 0; index < (storage as Storage).length; index += 1) {
+    const key = (storage as Storage).key(index);
+    if (!key?.startsWith(FEATURE_FLAG_STORAGE_PREFIX)) continue;
+    featureFlagIds.push(key.slice(FEATURE_FLAG_STORAGE_PREFIX.length));
+  }
+
+  return featureFlagIds;
+};
+
+const getFeatureFlagIdsToClear = (): string[] =>
+  Array.from(
+    new Set([
+      ...REGISTERED_FEATURE_FLAG_IDS,
+      ...getAvailableStorages().flatMap((storage) => getStoredFeatureFlagIds(storage)),
+    ]),
+  );
+
 const clearFeatureFlagTestState = () => {
+  const featureFlagIds = getFeatureFlagIdsToClear();
   for (const storage of getAvailableStorages()) {
     if (!canWriteStorage(storage)) continue;
     storage.removeItem(DEVELOPER_MODE_KEY);
-    FEATURE_FLAG_IDS.forEach((id) => {
+    featureFlagIds.forEach((id) => {
       storage.removeItem(`${FEATURE_FLAG_STORAGE_PREFIX}${id}`);
     });
   }
@@ -166,7 +191,7 @@ const applyFeatureFlagTestState = (state: TestFeatureFlagState = {}) => {
     );
   }
 
-  for (const id of FEATURE_FLAG_IDS) {
+  for (const id of REGISTERED_FEATURE_FLAG_IDS) {
     const enabled = overrides[id] ?? true;
     const storedValue = enabled ? "1" : "0";
 

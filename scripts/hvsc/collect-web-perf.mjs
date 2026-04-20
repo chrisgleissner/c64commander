@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +7,6 @@ import { spawnSync } from 'node:child_process';
 import { summarizeScenarioIterations, summarizeSecondaryIterations } from './webPerfSummary.mjs';
 import { loadPerfIterationArtifact } from './webPerfArtifacts.mjs';
 import { resolveWebPerfRunProfile } from './webPerfEvidence.mjs';
-import { ensureRealArchivePair } from './realArchiveCache.mjs';
 
 const args = new Map(
     process.argv.slice(2).map((arg) => {
@@ -16,7 +15,16 @@ const args = new Map(
     }),
 );
 
+const resolveCachedArchive = (candidates) => candidates.find((candidate) => candidate && existsSync(candidate)) ?? null;
+
 const homeCacheDir = path.join(os.homedir(), '.cache', 'c64commander', 'hvsc');
+const explicitUpdateCache = process.env.HVSC_UPDATE_84_CACHE;
+const explicitUpdateArchive =
+    explicitUpdateCache && explicitUpdateCache.endsWith('.7z')
+        ? explicitUpdateCache
+        : explicitUpdateCache
+            ? path.join(explicitUpdateCache, 'HVSC_Update_84.7z')
+            : null;
 
 const useRealArchives =
     args.get('--use-real-archives') === '1' || process.env.HVSC_PERF_USE_REAL_ARCHIVES === '1';
@@ -28,18 +36,30 @@ const bytesPerSecond =
 const outFile =
     args.get('--out') || process.env.HVSC_PERF_SUMMARY_FILE || 'ci-artifacts/hvsc-performance/web/web-secondary.json';
 const tmpDir = path.resolve('.tmp', 'hvsc-perf');
-const runProfile = resolveWebPerfRunProfile({ suite, useRealArchives });
-const { baselineArchive, updateArchive } = (useRealArchives && runProfile.supported)
-    ? await ensureRealArchivePair({ env: process.env, homeCacheDir })
-    : { baselineArchive: null, updateArchive: null };
+const baselineArchive = useRealArchives
+    ? resolveCachedArchive([
+        process.env.HVSC_PERF_BASELINE_ARCHIVE,
+        process.env.HVSC_ARCHIVE_PATH,
+        path.join(homeCacheDir, 'HVSC_84-all-of-them.7z'),
+    ])
+    : null;
+const updateArchive = useRealArchives
+    ? resolveCachedArchive([
+        process.env.HVSC_PERF_UPDATE_ARCHIVE,
+        explicitUpdateArchive,
+        path.join(homeCacheDir, 'HVSC_Update_84.7z'),
+    ])
+    : null;
 
-if (useRealArchives && runProfile.supported && (!baselineArchive || !updateArchive)) {
+if (useRealArchives && (!baselineArchive || !updateArchive)) {
     process.stderr.write(
-        'Real archive mode requested, but the HVSC baseline/update archives could not be resolved. ' +
+        'Real archive mode requested, but the cached HVSC baseline/update archives were not both found. ' +
         'Populate ~/.cache/c64commander/hvsc or set HVSC_PERF_BASELINE_ARCHIVE and HVSC_PERF_UPDATE_ARCHIVE.\n',
     );
     process.exit(1);
 }
+
+const runProfile = resolveWebPerfRunProfile({ suite, useRealArchives });
 
 await rm(tmpDir, { recursive: true, force: true });
 await mkdir(tmpDir, { recursive: true });
@@ -61,14 +81,14 @@ if (!runProfile.supported) {
             updateArchive,
         },
         status: 'unsupported',
-        runnerExitCode: 0,
+        runnerExitCode: 1,
         ...summarizeScenarioIterations([], { evidenceClass: runProfile.evidenceClass }),
         iterations: [],
     };
 
     writeFileSync(outFile, JSON.stringify(summary, null, 2), 'utf8');
     process.stdout.write(`${path.resolve(outFile)}\n`);
-    process.exit(0);
+    process.exit(1);
 }
 
 const iterations = [];

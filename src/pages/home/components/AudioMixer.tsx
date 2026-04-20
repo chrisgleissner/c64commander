@@ -17,6 +17,7 @@ import { SidCard } from "../SidCard";
 import { silenceSidTargets } from "@/lib/sid/sidSilence";
 import { buildSidEnablement } from "@/lib/config/sidVolumeControl";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import {
   resolveOptionIndex,
   resolveVolumeCenterIndex,
@@ -235,7 +236,16 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           };
           const handleVolumeAsyncCommit = (val: number) => {
             const nextValue = resolveVolumeOption(val);
-            void Promise.resolve(interactiveWrite({ [entry.volumeItem]: nextValue })).catch(() => {
+            void Promise.resolve(interactiveWrite({ [entry.volumeItem]: nextValue })).catch((error) => {
+              addLog(
+                "warn",
+                "Audio Mixer volume preview commit failed",
+                buildErrorLogDetails(error as Error, {
+                  itemName: entry.volumeItem,
+                  sidKey: entry.key,
+                  value: nextValue,
+                }),
+              );
               setConfigOverride("Audio Mixer", entry.volumeItem, entry.volume);
             });
           };
@@ -258,7 +268,16 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           };
           const handlePanAsyncCommit = (val: number) => {
             const nextValue = resolvePanOption(val);
-            void Promise.resolve(interactiveWrite({ [entry.panItem]: nextValue })).catch(() => {
+            void Promise.resolve(interactiveWrite({ [entry.panItem]: nextValue })).catch((error) => {
+              addLog(
+                "warn",
+                "Audio Mixer pan preview commit failed",
+                buildErrorLogDetails(error as Error, {
+                  itemName: entry.panItem,
+                  sidKey: entry.key,
+                  value: nextValue,
+                }),
+              );
               setConfigOverride("Audio Mixer", entry.panItem, entry.pan);
             });
           };

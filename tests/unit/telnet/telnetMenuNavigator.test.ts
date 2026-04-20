@@ -551,6 +551,39 @@ describe("createMenuNavigator", () => {
       await expect(nav.navigate(["Software IEC", "Reset C64"], "F5")).rejects.toThrow(TelnetError);
     });
 
+    it("re-reads transient blank frames during DOWN navigation before deciding the cursor is stuck", async () => {
+      const menuAt0 = makeMenuScreen(topItems, 0);
+      const emptyScreen = makeEmptyScreen();
+      const menuAt1 = makeMenuScreen(
+        [
+          { label: "Power & Reset", selected: false },
+          { label: "Software IEC", selected: true },
+        ],
+        1,
+        subItems,
+      );
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount === 1) return Promise.resolve(menuAt0);
+          if (readCount === 2) return Promise.resolve(emptyScreen);
+          if (readCount === 3) return Promise.resolve(menuAt1);
+          if (readCount === 4) return Promise.resolve(menuAt1);
+          return Promise.resolve(makeEmptyScreen());
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await expect(nav.navigate(["Software IEC", "Reset C64"], "F5")).resolves.toBeUndefined();
+    });
+
     it("throws DESYNC when final selected item label does not match target after navigation", async () => {
       // Navigate to "Software IEC" — after moving down, selectedItem is a different label
       const menuAt0 = makeMenuScreen(topItems, 0);
