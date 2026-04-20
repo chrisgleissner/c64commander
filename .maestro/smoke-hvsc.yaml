@@ -20,6 +20,8 @@ env:
       text: "HVSC downloads"
     direction: DOWN
     timeout: ${TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
 - retry:
     maxRetries: 3
     commands:

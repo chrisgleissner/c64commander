@@ -118,6 +118,30 @@ const collectRetryCommandErrors = (value: JsonValue, filePath: string, errors: s
   }
 };
 
+const findScrollUntilVisibleStep = (steps: JsonValue, text: string): JsonValue | undefined => {
+  if (!Array.isArray(steps)) {
+    return undefined;
+  }
+
+  return steps.find((step) => {
+    if (!step || typeof step !== "object" || Array.isArray(step)) {
+      return false;
+    }
+
+    const scrollUntilVisible = (step as Record<string, JsonValue>).scrollUntilVisible;
+    if (!scrollUntilVisible || typeof scrollUntilVisible !== "object" || Array.isArray(scrollUntilVisible)) {
+      return false;
+    }
+
+    const element = (scrollUntilVisible as Record<string, JsonValue>).element;
+    if (!element || typeof element !== "object" || Array.isArray(element)) {
+      return false;
+    }
+
+    return (element as Record<string, JsonValue>).text === text;
+  });
+};
+
 describe("Maestro flow contracts", () => {
   it("parses every Maestro YAML file and hardens scrollUntilVisible and retry usage", () => {
     const files = listYamlFiles(maestroRoot);
@@ -167,9 +191,13 @@ describe("Maestro flow contracts", () => {
     ) as JsonValue[];
     const smokeHvscSteps = smokeHvscParsed[1];
     const smokeHvscLowRamSteps = smokeHvscLowRamParsed[1];
+    const smokeHvscScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, "HVSC downloads");
+    const smokeHvscLowRamScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, "HVSC downloads");
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain('text: "HVSC downloads"');
+      expect(rawSource).toContain("visibilityPercentage: 50");
+      expect(rawSource).toContain("centerElement: true");
       expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).toContain("checked: true");
       expect(rawSource).toContain('visible: "Playlist"');
@@ -180,6 +208,24 @@ describe("Maestro flow contracts", () => {
 
     expect(Array.isArray(smokeHvscSteps)).toBe(true);
     expect(Array.isArray(smokeHvscLowRamSteps)).toBe(true);
+    expect(smokeHvscScrollStep).toEqual({
+      scrollUntilVisible: {
+        element: { text: "HVSC downloads" },
+        direction: "DOWN",
+        timeout: "${TIMEOUT}",
+        visibilityPercentage: 50,
+        centerElement: true,
+      },
+    });
+    expect(smokeHvscLowRamScrollStep).toEqual({
+      scrollUntilVisible: {
+        element: { text: "HVSC downloads" },
+        direction: "DOWN",
+        timeout: "${TIMEOUT}",
+        visibilityPercentage: 50,
+        centerElement: true,
+      },
+    });
     expect(smokeHvscSteps).toContainEqual({
       retry: {
         maxRetries: 3,
