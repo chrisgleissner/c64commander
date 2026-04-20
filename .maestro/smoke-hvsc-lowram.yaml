@@ -43,6 +43,8 @@ env:
       text: "Download HVSC"
     direction: DOWN
     timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
 - assertVisible: "Download HVSC"
 - tapOn: "Download HVSC"
 - extendedWaitUntil:

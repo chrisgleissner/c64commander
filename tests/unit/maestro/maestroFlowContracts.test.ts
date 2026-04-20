@@ -191,8 +191,10 @@ describe("Maestro flow contracts", () => {
     ) as JsonValue[];
     const smokeHvscSteps = smokeHvscParsed[1];
     const smokeHvscLowRamSteps = smokeHvscLowRamParsed[1];
-    const smokeHvscScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, "HVSC downloads");
-    const smokeHvscLowRamScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, "HVSC downloads");
+    const smokeHvscSettingsScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, "HVSC downloads");
+    const smokeHvscPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, "Download HVSC");
+    const smokeHvscLowRamSettingsScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, "HVSC downloads");
+    const smokeHvscLowRamPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, "Download HVSC");
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain('text: "HVSC downloads"');
@@ -208,7 +210,7 @@ describe("Maestro flow contracts", () => {
 
     expect(Array.isArray(smokeHvscSteps)).toBe(true);
     expect(Array.isArray(smokeHvscLowRamSteps)).toBe(true);
-    expect(smokeHvscScrollStep).toEqual({
+    expect(smokeHvscSettingsScrollStep).toEqual({
       scrollUntilVisible: {
         element: { text: "HVSC downloads" },
         direction: "DOWN",
@@ -217,11 +219,29 @@ describe("Maestro flow contracts", () => {
         centerElement: true,
       },
     });
-    expect(smokeHvscLowRamScrollStep).toEqual({
+    expect(smokeHvscPlaylistScrollStep).toEqual({
+      scrollUntilVisible: {
+        element: { text: "Download HVSC" },
+        direction: "DOWN",
+        timeout: "${LONG_TIMEOUT}",
+        visibilityPercentage: 50,
+        centerElement: true,
+      },
+    });
+    expect(smokeHvscLowRamSettingsScrollStep).toEqual({
       scrollUntilVisible: {
         element: { text: "HVSC downloads" },
         direction: "DOWN",
         timeout: "${TIMEOUT}",
+        visibilityPercentage: 50,
+        centerElement: true,
+      },
+    });
+    expect(smokeHvscLowRamPlaylistScrollStep).toEqual({
+      scrollUntilVisible: {
+        element: { text: "Download HVSC" },
+        direction: "DOWN",
+        timeout: "${LONG_TIMEOUT}",
         visibilityPercentage: 50,
         centerElement: true,
       },
