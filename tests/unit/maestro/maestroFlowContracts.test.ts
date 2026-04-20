@@ -164,6 +164,7 @@ describe("Maestro flow contracts", () => {
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain('text: "HVSC downloads"');
+      expect(rawSource).toContain("checked: true");
       expect(rawSource).toContain('visible: "Playlist"');
       expect(rawSource).toContain("scrollUntilVisible:");
       expect(rawSource).toContain('text: "Download HVSC"');
