@@ -32,16 +32,13 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      id: hvsc-download
+      text: "Download HVSC"
     direction: DOWN
     timeout: ${LONG_TIMEOUT}
-- assertVisible:
-    id: hvsc-download
+- assertVisible: "Download HVSC"
 - takeScreenshot: hvsc-controls
-- assertVisible:
-    id: hvsc-download
-- assertVisible:
-    id: hvsc-ingest
+- assertVisible: "Download HVSC"
+- assertVisible: "Ingest HVSC"
 - takeScreenshot: hvsc-actions
 - runFlow:
     when:

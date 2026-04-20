@@ -32,13 +32,11 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      id: hvsc-download
+      text: "Download HVSC"
     direction: DOWN
     timeout: ${LONG_TIMEOUT}
-- assertVisible:
-    id: hvsc-download
-- tapOn:
-    id: hvsc-download
+- assertVisible: "Download HVSC"
+- tapOn: "Download HVSC"
 - extendedWaitUntil:
     visible: "Status: Ready"
     timeout: ${HVSC_INGEST_TIMEOUT}
