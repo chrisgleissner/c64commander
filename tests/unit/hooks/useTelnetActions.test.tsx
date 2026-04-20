@@ -144,15 +144,15 @@ const buildActionSupport = (
             override?.status === "unsupported" || override?.status === "unknown"
               ? null
               : {
-                categoryLabel: actionId === "powerCycle" ? "Power & Reset" : "Configuration",
-                actionLabel:
-                  actionId === "powerCycle"
-                    ? "Power Cycle"
-                    : actionId === "saveConfigToFile"
-                      ? "Save to File"
-                      : "Reset",
-                source: "initial" as const,
-              },
+                  categoryLabel: actionId === "powerCycle" ? "Power & Reset" : "Configuration",
+                  actionLabel:
+                    actionId === "powerCycle"
+                      ? "Power Cycle"
+                      : actionId === "saveConfigToFile"
+                        ? "Save to File"
+                        : "Reset",
+                  source: "initial" as const,
+                },
         },
       ];
     }),
@@ -283,8 +283,9 @@ describe("useTelnetActions", () => {
   });
 
   it("uses the discovery runner session to connect and disconnect around capability probing", async () => {
-    discoverTelnetCapabilitiesSpy.mockImplementationOnce(async ({ runner }: { runner: { withSession: Function } }) =>
-      await runner.withSession(async () => buildSnapshot()),
+    discoverTelnetCapabilitiesSpy.mockImplementationOnce(
+      async ({ runner }: { runner: { withSession: <T>(callback: () => Promise<T>) => Promise<T> } }) =>
+        await runner.withSession(async () => buildSnapshot()),
     );
 
     const { result } = renderHook(() => useTelnetActions());
@@ -334,9 +335,9 @@ describe("useTelnetActions", () => {
       status: "unknown",
       reason: "Telnet action discovery failed: capability lookup exploded",
     });
-    expect(addLog).toHaveBeenCalledWith("error", 'useTelnetActions: capability discovery failed', {
-      cacheKey: 'u64-1|u64|Ultimate 64 Elite|3.14e|F5',
-      error: 'capability lookup exploded',
+    expect(addLog).toHaveBeenCalledWith("error", "useTelnetActions: capability discovery failed", {
+      cacheKey: "u64-1|u64|Ultimate 64 Elite|3.14e|F5",
+      error: "capability lookup exploded",
     });
   });
 
@@ -468,8 +469,8 @@ describe("useTelnetActions", () => {
         error: expect.objectContaining({ message: "boom" }),
       }),
     );
-    expect(addLog).toHaveBeenCalledWith('error', 'useTelnetActions: action "powerCycle" failed', {
-      error: 'boom',
+    expect(addLog).toHaveBeenCalledWith("error", 'useTelnetActions: action "powerCycle" failed', {
+      error: "boom",
     });
     expect(decrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
     expect(result.current.isBusy).toBe(false);

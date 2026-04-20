@@ -17,11 +17,11 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      id: feature-flag-hvsc_enabled
+      text: "HVSC downloads"
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn:
-    id: feature-flag-hvsc_enabled
+    text: "HVSC downloads"
     checked: false
     optional: true
 - tapOn:

@@ -322,12 +322,7 @@ describe("discoverTelnetCapabilities", () => {
       [createRootScreen(rootLabels)],
       [
         createRootScreen(rootLabels),
-        createOverlaySubmenuScreen(rootLabels, 0, [
-          "│┌ Reset C64",
-          "│┌ Reboot C64",
-          "│┌ Reboot",
-          "│┌ Reboot",
-        ]),
+        createOverlaySubmenuScreen(rootLabels, 0, ["│┌ Reset C64", "│┌ Reboot C64", "│┌ Reboot", "│┌ Reboot"]),
       ],
       [
         createRootScreen(rootLabels),
