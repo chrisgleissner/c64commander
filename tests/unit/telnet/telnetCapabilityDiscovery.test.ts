@@ -38,10 +38,15 @@ const stampText = (screen: TelnetScreen, row: number, col: number, text: string)
   });
 };
 
-const createMenu = (level: number, selectedIndex: number, labels: string[]): ParsedMenu => ({
+const createMenu = (
+  level: number,
+  selectedIndex: number,
+  labels: string[],
+  bounds: ParsedMenu["bounds"] = { x: 0, y: 0, width: 20, height: labels.length + 2 },
+): ParsedMenu => ({
   level,
   selectedIndex,
-  bounds: { x: 0, y: 0, width: 20, height: labels.length + 2 },
+  bounds,
   items: labels.map((label, index) => ({
     label,
     selected: index === selectedIndex,
@@ -72,6 +77,17 @@ const createDirectEntryScreen = (rootLabels: string[], rootIndex: number, title:
     ],
   });
   stampText(screen, 2, 22, title);
+  return screen;
+};
+
+const createOverlaySubmenuScreen = (rootLabels: string[], rootIndex: number, rows: string[]) => {
+  const bounds = { x: 0, y: 0, width: 48, height: Math.max(rows.length + 2, rootLabels.length + 2) };
+  const screen = createScreen({
+    menus: [createMenu(0, rootIndex, rootLabels, bounds)],
+  });
+  rows.forEach((row, index) => {
+    stampText(screen, index + 1, 1, row);
+  });
   return screen;
 };
 
@@ -298,5 +314,163 @@ describe("discoverTelnetCapabilities", () => {
         actionLabel: "Save to File",
       },
     });
+  });
+
+  it("extracts overlay submenu items from noisy rows and deduplicates repeated labels", async () => {
+    const rootLabels = ["C64 Machine", "Configuration"];
+    const runner = createRunner([
+      [createRootScreen(rootLabels)],
+      [
+        createRootScreen(rootLabels),
+        createOverlaySubmenuScreen(rootLabels, 0, [
+          "│┌ Reset C64",
+          "│┌ Reboot C64",
+          "│┌ Reboot",
+          "│┌ Reboot",
+        ]),
+      ],
+      [
+        createRootScreen(rootLabels),
+        createRootScreen(rootLabels, 1),
+        createSubmenuScreen(rootLabels, 1, ["Save to File"]),
+      ],
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "u64-overlay|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-overlay",
+      },
+      menuKey: "F5",
+      runner,
+    });
+
+    expect(snapshot.initialMenu.nodes["C64 Machine"]).toEqual({
+      kind: "submenu",
+      items: ["Reset C64", "Reboot C64"],
+      defaultItem: "Reset C64",
+    });
+    expect(snapshot.actionSupport.rebootKeepMemory).toMatchObject({
+      status: "supported",
+      target: {
+        categoryLabel: "C64 Machine",
+        actionLabel: "Reboot C64",
+      },
+    });
+  });
+
+  it("marks actions unsupported when a category opens a direct-entry screen", async () => {
+    const rootLabels = ["Configuration"];
+    const runner = createRunner([
+      [createRootScreen(rootLabels)],
+      [createRootScreen(rootLabels), createDirectEntryScreen(rootLabels, 0, "Configuration File Search")],
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "u64-file-search|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-file-search",
+      },
+      menuKey: "F5",
+      runner,
+    });
+
+    expect(snapshot.initialMenu.nodes.Configuration).toEqual({
+      kind: "direct_entry",
+      title: "Configuration File Search",
+    });
+    expect(snapshot.actionSupport.saveConfigToFile).toMatchObject({
+      status: "unsupported",
+      reason: "Save Config to File is not exposed in the Configuration menu on Ultimate 64 Elite 3.14e.",
+      target: null,
+    });
+  });
+
+  it("marks actions unsupported when a submenu does not expose the requested item", async () => {
+    const rootLabels = ["Configuration"];
+    const runner = createRunner([
+      [createRootScreen(rootLabels)],
+      [createRootScreen(rootLabels), createSubmenuScreen(rootLabels, 0, ["Backup to USB"])],
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "u64-missing-action|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-missing-action",
+      },
+      menuKey: "F5",
+      runner,
+    });
+
+    expect(snapshot.actionSupport.saveConfigToFile).toMatchObject({
+      status: "unsupported",
+      reason: "Save Config to File is not available on Ultimate 64 Elite 3.14e.",
+      target: null,
+    });
+  });
+
+  it("fails discovery when the action menu never becomes visible", async () => {
+    const runner = createRunner([[createScreen({ menus: [] }), createScreen({ menus: [] })]]);
+
+    await expect(
+      discoverTelnetCapabilities({
+        cacheKey: "u64-no-menu|F5",
+        deviceInfo: {
+          product: "Ultimate 64 Elite",
+          firmware_version: "3.14e",
+          hostname: "u64",
+          unique_id: "u64-no-menu",
+        },
+        menuKey: "F5",
+        runner,
+      }),
+    ).rejects.toMatchObject({
+      code: "MENU_NOT_FOUND",
+      message: "Action menu not visible after F5",
+    });
+  });
+
+  it("reuses an in-flight discovery promise for the same cache key", async () => {
+    const rootLabels = ["Configuration"];
+    const runner = createRunner([
+      [createRootScreen(rootLabels)],
+      [createRootScreen(rootLabels), createSubmenuScreen(rootLabels, 0, ["Save to File"])],
+    ]);
+
+    const first = discoverTelnetCapabilities({
+      cacheKey: "u64-pending|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-pending",
+      },
+      menuKey: "F5",
+      runner,
+    });
+    const second = discoverTelnetCapabilities({
+      cacheKey: "u64-pending|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-pending",
+      },
+      menuKey: "F5",
+      runner,
+    });
+
+    const [firstSnapshot, secondSnapshot] = await Promise.all([first, second]);
+
+    expect(secondSnapshot).toBe(firstSnapshot);
   });
 });

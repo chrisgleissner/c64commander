@@ -215,6 +215,18 @@ describe("isTelnetAvailable", () => {
       }),
     ).toBe(true);
   });
+
+  it("returns false for demo mode without a mock telnet target", () => {
+    expect(
+      isTelnetAvailable({
+        nativePlatform: true,
+        isConnected: true,
+        isDemo: true,
+        product: "Ultimate 64",
+        mockTarget: false,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("useTelnetActions", () => {
@@ -267,6 +279,76 @@ describe("useTelnetActions", () => {
         status: "unsupported",
         reason: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
       });
+    });
+  });
+
+  it("uses the discovery runner session to connect and disconnect around capability probing", async () => {
+    discoverTelnetCapabilitiesSpy.mockImplementationOnce(async ({ runner }: { runner: { withSession: Function } }) =>
+      await runner.withSession(async () => buildSnapshot()),
+    );
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(mockConnect).toHaveBeenCalledWith("u64", 23, undefined);
+    expect(mockDisconnect).toHaveBeenCalled();
+  });
+
+  it("returns disconnected fallback support without starting discovery", () => {
+    statusRef.current = {
+      ...statusRef.current,
+      isConnected: false,
+    };
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    expect(result.current.discoveryState).toBe("idle");
+    expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+      status: "unsupported",
+      reason: "Connect to a C64 Ultimate device to inspect Telnet actions.",
+    });
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns unavailable fallback support when telnet cannot run on the platform", () => {
+    isNativePlatformMock.mockReturnValue(false);
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    expect(result.current.isAvailable).toBe(false);
+    expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+      status: "unsupported",
+      reason: "Telnet actions are unavailable on this platform or device.",
+    });
+  });
+
+  it("surfaces capability discovery failures through state and fallback support", async () => {
+    const { addLog } = await import("@/lib/logging");
+    discoverTelnetCapabilitiesSpy.mockRejectedValueOnce(new Error("capability lookup exploded"));
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("error"));
+    expect(result.current.discoveryError).toBe("capability lookup exploded");
+    expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+      status: "unknown",
+      reason: "Telnet action discovery failed: capability lookup exploded",
+    });
+    expect(addLog).toHaveBeenCalledWith("error", 'useTelnetActions: capability discovery failed', {
+      cacheKey: 'u64-1|u64|Ultimate 64 Elite|3.14e|F5',
+      error: 'capability lookup exploded',
+    });
+  });
+
+  it("returns a default unknown support object for unrecognized action ids", async () => {
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(result.current.getActionSupport("ghostAction")).toEqual({
+      actionId: "ghostAction",
+      status: "unknown",
+      reason: "Unknown Telnet action.",
+      target: null,
     });
   });
 
@@ -329,5 +411,68 @@ describe("useTelnetActions", () => {
       message: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
     });
     expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it("throws for unknown telnet action ids", async () => {
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    await expect(result.current.executeAction("ghostAction")).rejects.toThrow("Unknown Telnet action: ghostAction");
+  });
+
+  it("throws when telnet is unavailable for the current device", async () => {
+    statusRef.current = {
+      ...statusRef.current,
+      isConnected: false,
+    };
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    await expect(result.current.executeAction("powerCycle")).rejects.toThrow(
+      "Telnet is unavailable for the current device",
+    );
+  });
+
+  it("maps unknown discovery support to a discovery failure error", async () => {
+    discoverTelnetCapabilitiesSpy.mockResolvedValue(
+      buildSnapshot({
+        powerCycle: {
+          status: "unknown",
+          reason: "Discovery still in progress.",
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useTelnetActions());
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+
+    await expect(result.current.executeAction("powerCycle")).rejects.toMatchObject({
+      code: "DISCOVERY_FAILED",
+      message: "Discovery still in progress.",
+    });
+  });
+
+  it("records execution failures and resets busy state", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockExecute.mockRejectedValueOnce(new Error("boom"));
+
+    const { result } = renderHook(() => useTelnetActions());
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+
+    await expect(result.current.executeAction("powerCycle")).rejects.toThrow("boom");
+    expect(recordTelnetOperationSpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        actionId: "powerCycle",
+        result: "failure",
+        error: expect.objectContaining({ message: "boom" }),
+      }),
+    );
+    expect(addLog).toHaveBeenCalledWith('error', 'useTelnetActions: action "powerCycle" failed', {
+      error: 'boom',
+    });
+    expect(decrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.isBusy).toBe(false);
+    expect(result.current.activeActionId).toBeNull();
   });
 });

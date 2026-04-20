@@ -173,6 +173,54 @@ describe("featureFlags", () => {
       await manager.load();
       await expect(manager.setFlag("ghost_flag" as FeatureFlagId, true)).rejects.toThrow(/Unknown feature flag/);
     });
+
+    it("applyBootstrapOverride stores non-default values and clears default values", async () => {
+      await manager.applyBootstrapOverride("hvsc_enabled", false);
+      expect(repo.snapshotOverrides()).toEqual({ hvsc_enabled: false });
+      expect(manager.getSnapshot().resolved.hvsc_enabled).toMatchObject({
+        hasOverride: true,
+        overrideValue: false,
+        value: false,
+      });
+
+      await manager.applyBootstrapOverride("hvsc_enabled", true);
+      expect(repo.snapshotOverrides()).toEqual({});
+      expect(manager.getSnapshot().resolved.hvsc_enabled).toMatchObject({
+        hasOverride: false,
+        overrideValue: null,
+        value: true,
+      });
+    });
+
+    it("replaceOverrides clears defaults and keeps only non-default explicit overrides", async () => {
+      await repo.setOverride("hvsc_enabled", false);
+      await repo.setOverride("commoserve_enabled", false);
+      await manager.load();
+
+      await manager.replaceOverrides({
+        hvsc_enabled: true,
+        lighting_studio_enabled: true,
+      });
+
+      expect(repo.snapshotOverrides()).toEqual({ lighting_studio_enabled: true });
+      expect(manager.getExplicitOverrides()).toEqual({ lighting_studio_enabled: true });
+    });
+
+    it("replaceOverrides logs and rethrows repository failures", async () => {
+      const { addErrorLog } = await import("@/lib/logging");
+      const failing = {
+        getAllOverrides: vi.fn(async () => ({})),
+        setOverride: vi.fn(async () => {
+          throw new Error("replace failed");
+        }),
+      };
+      const manager = new FeatureFlagManager(failing, () => true);
+
+      await expect(manager.replaceOverrides({ hvsc_enabled: false })).rejects.toThrow("replace failed");
+      expect(addErrorLog).toHaveBeenCalledWith("Feature flag replace failed", {
+        error: "replace failed",
+      });
+    });
   });
 
   describe("FeatureFlagManager load semantics", () => {

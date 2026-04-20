@@ -11,10 +11,15 @@ import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } f
 import * as appSettings from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 
-const featureFlagManagerMocks = vi.hoisted(() => ({
-  load: vi.fn(async () => undefined),
-  getExplicitOverrides: vi.fn(() => ({ commoserve_enabled: true })),
-  replaceOverrides: vi.fn(async () => undefined),
+const { featureFlagManagerMocks, isKnownFeatureFlagIdMock } = vi.hoisted(() => ({
+  featureFlagManagerMocks: {
+    load: vi.fn(async () => undefined),
+    getExplicitOverrides: vi.fn(() => ({ commoserve_enabled: true })),
+    replaceOverrides: vi.fn(async () => undefined),
+  },
+  isKnownFeatureFlagIdMock: vi.fn((value: string) =>
+    ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"].includes(value),
+  ),
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
@@ -52,8 +57,7 @@ vi.mock("@/lib/config/appSettings", () => ({
 vi.mock("@/lib/config/featureFlags", () => ({
   FEATURE_FLAG_IDS: ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"],
   featureFlagManager: featureFlagManagerMocks,
-  isKnownFeatureFlagId: (value: string) =>
-    ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"].includes(value),
+  isKnownFeatureFlagId: isKnownFeatureFlagIdMock,
 }));
 
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
@@ -81,6 +85,9 @@ describe("settingsTransfer", () => {
     featureFlagManagerMocks.load.mockResolvedValue(undefined);
     featureFlagManagerMocks.getExplicitOverrides.mockReturnValue({ commoserve_enabled: true });
     featureFlagManagerMocks.replaceOverrides.mockResolvedValue(undefined);
+    isKnownFeatureFlagIdMock.mockImplementation((value: string) =>
+      ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"].includes(value),
+    );
   });
 
   describe("exportSettingsSnapshot", () => {
@@ -338,6 +345,47 @@ describe("settingsTransfer", () => {
       await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({
         ok: false,
         error: "featureFlags.hvsc_enabled must be boolean.",
+      });
+    });
+
+    it("rejects non-object featureFlags payloads", async () => {
+      const payload = {
+        ...validPayload,
+        featureFlags: [],
+      };
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({
+        ok: false,
+        error: "featureFlags must be an object.",
+      });
+    });
+
+    it("ignores unknown feature flag keys while preserving known overrides", async () => {
+      const payload = {
+        ...validPayload,
+        featureFlags: {
+          hvsc_enabled: false,
+          unknown_flag: true,
+        },
+      };
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({ ok: true });
+      expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({ hvsc_enabled: false });
+    });
+
+    it("returns sanitizer exceptions when feature flag validation throws", async () => {
+      isKnownFeatureFlagIdMock.mockImplementationOnce(() => {
+        throw new Error("flag lookup failed");
+      });
+
+      const payload = {
+        ...validPayload,
+        featureFlags: {
+          hvsc_enabled: true,
+        },
+      };
+
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({
+        ok: false,
+        error: "flag lookup failed",
       });
     });
   });
