@@ -17,10 +17,12 @@ env:
 
 # Scroll until the HVSC toggle is in view (bounded).
 - scrollUntilVisible:
-    element: { id: feature-flag-hvsc_enabled }
+    element: { text: "Stable Features" }
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
 
 # Expect the flag to be enabled by default on native builds.
 - assertVisible:
@@ -40,10 +42,12 @@ env:
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - scrollUntilVisible:
-    element: { id: feature-flag-hvsc_enabled }
+    element: { text: "Stable Features" }
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
 - assertVisible:
     id: feature-flag-hvsc_enabled
     checked: true
