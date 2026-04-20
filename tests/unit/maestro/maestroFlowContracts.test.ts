@@ -180,13 +180,23 @@ describe("Maestro flow contracts", () => {
 
     expect(Array.isArray(smokeHvscSteps)).toBe(true);
     expect(Array.isArray(smokeHvscLowRamSteps)).toBe(true);
-    expect(smokeHvscSteps).toContainEqual({ assertVisible: { id: "feature-flag-hvsc_enabled", checked: true } });
-    expect(smokeHvscLowRamSteps).toContainEqual({ assertVisible: { id: "feature-flag-hvsc_enabled", checked: true } });
     expect(smokeHvscSteps).toContainEqual({
-      tapOn: { id: "feature-flag-hvsc_enabled", checked: false, optional: true },
+      retry: {
+        maxRetries: 3,
+        commands: [
+          { tapOn: { id: "feature-flag-hvsc_enabled", checked: false, optional: true } },
+          { assertVisible: { id: "feature-flag-hvsc_enabled", checked: true } },
+        ],
+      },
     });
     expect(smokeHvscLowRamSteps).toContainEqual({
-      tapOn: { id: "feature-flag-hvsc_enabled", checked: false, optional: true },
+      retry: {
+        maxRetries: 3,
+        commands: [
+          { tapOn: { id: "feature-flag-hvsc_enabled", checked: false, optional: true } },
+          { assertVisible: { id: "feature-flag-hvsc_enabled", checked: true } },
+        ],
+      },
     });
 
     expect(smokeHvsc).toContain('assertVisible: "Ingest HVSC"');
