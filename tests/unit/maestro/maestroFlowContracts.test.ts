@@ -161,13 +161,16 @@ describe("Maestro flow contracts", () => {
   it("keeps Android HVSC smoke flows anchored through playlist and HVSC section", () => {
     const smokeHvsc = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml"), "utf8");
     const smokeHvscLowRam = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"), "utf8");
-    const smokeHvscParsed = readYaml(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml"));
-    const smokeHvscLowRamParsed = readYaml(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"));
+    const smokeHvscParsed = readYaml(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml")) as JsonValue[];
+    const smokeHvscLowRamParsed = readYaml(
+      path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"),
+    ) as JsonValue[];
     const smokeHvscSteps = smokeHvscParsed[1];
     const smokeHvscLowRamSteps = smokeHvscLowRamParsed[1];
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain('text: "HVSC downloads"');
+      expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).toContain("checked: true");
       expect(rawSource).toContain('visible: "Playlist"');
       expect(rawSource).toContain("scrollUntilVisible:");
@@ -177,8 +180,14 @@ describe("Maestro flow contracts", () => {
 
     expect(Array.isArray(smokeHvscSteps)).toBe(true);
     expect(Array.isArray(smokeHvscLowRamSteps)).toBe(true);
-    expect(smokeHvscSteps).toContainEqual({ assertVisible: { text: "HVSC downloads", checked: true } });
-    expect(smokeHvscLowRamSteps).toContainEqual({ assertVisible: { text: "HVSC downloads", checked: true } });
+    expect(smokeHvscSteps).toContainEqual({ assertVisible: { id: "feature-flag-hvsc_enabled", checked: true } });
+    expect(smokeHvscLowRamSteps).toContainEqual({ assertVisible: { id: "feature-flag-hvsc_enabled", checked: true } });
+    expect(smokeHvscSteps).toContainEqual({
+      tapOn: { id: "feature-flag-hvsc_enabled", checked: false, optional: true },
+    });
+    expect(smokeHvscLowRamSteps).toContainEqual({
+      tapOn: { id: "feature-flag-hvsc_enabled", checked: false, optional: true },
+    });
 
     expect(smokeHvsc).toContain('assertVisible: "Ingest HVSC"');
     expect(smokeHvscLowRam).toContain('tapOn: "Download HVSC"');

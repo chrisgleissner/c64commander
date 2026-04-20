@@ -21,11 +21,11 @@ env:
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn:
-    text: "HVSC downloads"
+    id: feature-flag-hvsc_enabled
     checked: false
     optional: true
 - assertVisible:
-    text: "HVSC downloads"
+    id: feature-flag-hvsc_enabled
     checked: true
 - tapOn:
     point: "25%,95%"
