@@ -118,7 +118,10 @@ const collectRetryCommandErrors = (value: JsonValue, filePath: string, errors: s
   }
 };
 
-const findScrollUntilVisibleStep = (steps: JsonValue, text: string): JsonValue | undefined => {
+const findScrollUntilVisibleStep = (
+  steps: JsonValue,
+  selector: { id?: string; text?: string },
+): JsonValue | undefined => {
   if (!Array.isArray(steps)) {
     return undefined;
   }
@@ -138,7 +141,8 @@ const findScrollUntilVisibleStep = (steps: JsonValue, text: string): JsonValue |
       return false;
     }
 
-    return (element as Record<string, JsonValue>).text === text;
+    const elementSelector = element as Record<string, JsonValue>;
+    return Object.entries(selector).every(([key, value]) => elementSelector[key] === value);
   });
 };
 
@@ -185,19 +189,36 @@ describe("Maestro flow contracts", () => {
   it("keeps Android HVSC smoke flows anchored through playlist and HVSC section", () => {
     const smokeHvsc = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml"), "utf8");
     const smokeHvscLowRam = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"), "utf8");
+    const edgeConfigPersistence = readFileSync(
+      path.resolve(process.cwd(), ".maestro/edge-config-persistence.yaml"),
+      "utf8",
+    );
     const smokeHvscParsed = readYaml(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml")) as JsonValue[];
     const smokeHvscLowRamParsed = readYaml(
       path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"),
     ) as JsonValue[];
+    const edgeConfigPersistenceParsed = readYaml(
+      path.resolve(process.cwd(), ".maestro/edge-config-persistence.yaml"),
+    ) as JsonValue[];
     const smokeHvscSteps = smokeHvscParsed[1];
     const smokeHvscLowRamSteps = smokeHvscLowRamParsed[1];
-    const smokeHvscSettingsScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, "HVSC downloads");
-    const smokeHvscPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, "Download HVSC");
-    const smokeHvscLowRamSettingsScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, "HVSC downloads");
-    const smokeHvscLowRamPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, "Download HVSC");
+    const edgeConfigPersistenceSteps = edgeConfigPersistenceParsed[1];
+    const smokeHvscSettingsScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, {
+      id: "feature-flag-hvsc_enabled",
+    });
+    const smokeHvscPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, { text: "Download HVSC" });
+    const smokeHvscLowRamSettingsScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, {
+      id: "feature-flag-hvsc_enabled",
+    });
+    const smokeHvscLowRamPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, {
+      text: "Download HVSC",
+    });
+    const edgeConfigPersistenceSettingsScrollStep = findScrollUntilVisibleStep(edgeConfigPersistenceSteps, {
+      id: "feature-flag-hvsc_enabled",
+    });
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
-      expect(rawSource).toContain('text: "HVSC downloads"');
+      expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).toContain("visibilityPercentage: 50");
       expect(rawSource).toContain("centerElement: true");
       expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
@@ -210,9 +231,10 @@ describe("Maestro flow contracts", () => {
 
     expect(Array.isArray(smokeHvscSteps)).toBe(true);
     expect(Array.isArray(smokeHvscLowRamSteps)).toBe(true);
+    expect(Array.isArray(edgeConfigPersistenceSteps)).toBe(true);
     expect(smokeHvscSettingsScrollStep).toEqual({
       scrollUntilVisible: {
-        element: { text: "HVSC downloads" },
+        element: { id: "feature-flag-hvsc_enabled" },
         direction: "DOWN",
         timeout: "${TIMEOUT}",
         visibilityPercentage: 50,
@@ -230,11 +252,20 @@ describe("Maestro flow contracts", () => {
     });
     expect(smokeHvscLowRamSettingsScrollStep).toEqual({
       scrollUntilVisible: {
-        element: { text: "HVSC downloads" },
+        element: { id: "feature-flag-hvsc_enabled" },
         direction: "DOWN",
         timeout: "${TIMEOUT}",
         visibilityPercentage: 50,
         centerElement: true,
+      },
+    });
+    expect(edgeConfigPersistence).toContain("id: feature-flag-hvsc_enabled");
+    expect(edgeConfigPersistenceSettingsScrollStep).toEqual({
+      scrollUntilVisible: {
+        element: { id: "feature-flag-hvsc_enabled" },
+        direction: "DOWN",
+        speed: 80,
+        timeout: "${LONG_TIMEOUT}",
       },
     });
     expect(smokeHvscLowRamPlaylistScrollStep).toEqual({

@@ -17,7 +17,7 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      text: "HVSC downloads"
+      id: feature-flag-hvsc_enabled
     direction: DOWN
     timeout: ${TIMEOUT}
     visibilityPercentage: 50
