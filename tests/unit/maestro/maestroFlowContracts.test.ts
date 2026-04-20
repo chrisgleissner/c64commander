@@ -165,11 +165,9 @@ describe("Maestro flow contracts", () => {
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain('text: "HVSC downloads"');
       expect(rawSource).toContain('visible: "Playlist"');
-      expect(rawSource).toContain("times: 4");
-      expect(rawSource).toContain("start: 50%, 82%");
-      expect(rawSource).toContain("end: 50%, 24%");
+      expect(rawSource).toContain("scrollUntilVisible:");
       expect(rawSource).toContain("id: hvsc-download");
-      expect(rawSource).toContain("timeout: ${SHORT_TIMEOUT}");
+      expect(rawSource).toContain("timeout: ${LONG_TIMEOUT}");
     }
 
     expect(smokeHvsc).toContain("id: hvsc-ingest");

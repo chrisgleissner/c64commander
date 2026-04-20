@@ -30,15 +30,11 @@ env:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
-- repeat:
-    times: 4
-    commands:
-      - swipe:
-          start: 50%, 82%
-          end: 50%, 24%
-          duration: 900
-          waitToSettleTimeoutMs: 500
-      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: hvsc-download
+    direction: DOWN
+    timeout: ${LONG_TIMEOUT}
 - assertVisible:
     id: hvsc-download
 - tapOn:
