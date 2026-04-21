@@ -621,6 +621,42 @@ describe("addFileSelections archive source handler", () => {
     expect(deps.setPlaylist).not.toHaveBeenCalled();
   });
 
+  it("defers no supported files feedback until the page overlay closes", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    vi.useFakeTimers();
+    const events: string[] = [];
+    mockReportUserError.mockImplementation(() => {
+      events.push("error");
+    });
+    const localSource = createLocalSource(async () => [
+      {
+        type: "file",
+        name: "notes.txt",
+        path: "/notes.txt",
+      },
+    ]);
+    const deps = {
+      ...createMockDeps(),
+      browserOpen: false,
+      setShowAddItemsOverlay: vi.fn((value: boolean) => {
+        events.push(`overlay:${String(value)}`);
+      }),
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(localSource, [{ type: "file", name: "notes.txt", path: "/notes.txt" }]);
+
+    await vi.advanceTimersByTimeAsync(799);
+    expect(mockReportUserError).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await promise;
+
+    expect(result).toBe(false);
+    expect(events).toEqual(["overlay:true", "overlay:false", "error"]);
+    vi.useRealTimers();
+  });
+
   it("adds directory selections without recursion when recurseFolders is disabled", async () => {
     vi.useFakeTimers();
     const localSource: SourceLocation = {
@@ -786,6 +822,40 @@ describe("addFileSelections archive source handler", () => {
         }),
       }),
     );
+  });
+
+  it("defers add items failed feedback until the page overlay closes", async () => {
+    const { reportUserError: mockReportUserError } = await import("@/lib/uiErrors");
+    vi.useFakeTimers();
+    const events: string[] = [];
+    mockReportUserError.mockImplementation(() => {
+      events.push("error");
+    });
+    const failingSource = createLocalSource(async () => {
+      throw new LocalSourceListingError("listing unavailable", "saf-listing-unavailable", {
+        treeUri: "content://tree",
+      });
+    });
+    const deps = {
+      ...createMockDeps(),
+      browserOpen: false,
+      setShowAddItemsOverlay: vi.fn((value: boolean) => {
+        events.push(`overlay:${String(value)}`);
+      }),
+    };
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const promise = handler(failingSource, [{ type: "dir", name: "folder", path: "/folder" }]);
+
+    await vi.advanceTimersByTimeAsync(799);
+    expect(mockReportUserError).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await promise;
+
+    expect(result).toBe(false);
+    expect(events).toEqual(["overlay:true", "overlay:false", "error"]);
+    vi.useRealTimers();
   });
 
   it("recursively collects files from nested local directories via collectRecursive", async () => {
