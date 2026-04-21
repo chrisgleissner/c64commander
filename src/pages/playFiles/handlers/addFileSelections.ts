@@ -983,6 +983,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         setShowAddItemsOverlay(false);
         addItemsOverlayStartedAtRef.current = null;
         addItemsOverlayActiveRef.current = false;
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
       deferredFeedback.splice(0).forEach((callback) => callback());
     }

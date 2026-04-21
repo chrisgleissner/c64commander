@@ -650,6 +650,7 @@ describe("addFileSelections archive source handler", () => {
     expect(mockReportUserError).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
+    await vi.runAllTimersAsync();
     const result = await promise;
 
     expect(result).toBe(false);
@@ -851,6 +852,7 @@ describe("addFileSelections archive source handler", () => {
     expect(mockReportUserError).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
+    await vi.runAllTimersAsync();
     const result = await promise;
 
     expect(result).toBe(false);
