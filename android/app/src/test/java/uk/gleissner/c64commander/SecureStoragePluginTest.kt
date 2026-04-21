@@ -58,6 +58,9 @@ class SecureStoragePluginTest {
   fun setGetAndClearPassword() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)
+    plugin.prefsProvider = {
+      context.getSharedPreferences("secure-storage-plugin-test", Context.MODE_PRIVATE)
+    }
 
     val setCall = mock(PluginCall::class.java)
     org.mockito.Mockito.`when`(setCall.getString("value")).thenReturn("secret")
