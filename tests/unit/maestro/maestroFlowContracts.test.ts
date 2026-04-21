@@ -146,14 +146,6 @@ const findScrollUntilVisibleStep = (
   });
 };
 
-const findRetryStepContaining = (steps: JsonValue, snippet: string): JsonValue | undefined => {
-  if (!Array.isArray(steps)) {
-    return undefined;
-  }
-
-  return steps.find((step) => JSON.stringify(step).includes(snippet));
-};
-
 describe("Maestro flow contracts", () => {
   it("parses every Maestro YAML file and hardens scrollUntilVisible and retry usage", () => {
     const files = listYamlFiles(maestroRoot);
@@ -211,20 +203,15 @@ describe("Maestro flow contracts", () => {
     const smokeHvscSteps = smokeHvscParsed[1];
     const smokeHvscLowRamSteps = smokeHvscLowRamParsed[1];
     const edgeConfigPersistenceSteps = edgeConfigPersistenceParsed[1];
-    const smokeHvscPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, { text: "Download HVSC" });
-    const smokeHvscLowRamPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, {
-      text: "Download HVSC",
-    });
-    const smokeHvscSettingsRetryStep = findRetryStepContaining(smokeHvscSteps, 'HVSC downloads');
-    const smokeHvscLowRamSettingsRetryStep = findRetryStepContaining(smokeHvscLowRamSteps, 'HVSC downloads');
-    const edgeConfigPersistenceSettingsRetryStep = findRetryStepContaining(edgeConfigPersistenceSteps, 'HVSC downloads');
-
+    const smokeHvscPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscSteps, { id: "hvsc-download" });
+    const smokeHvscLowRamPlaylistScrollStep = findScrollUntilVisibleStep(smokeHvscLowRamSteps, { id: "hvsc-download" });
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
-      expect(rawSource).toContain('start: 50%, 78%');
-      expect(rawSource).toContain('end: 50%, 28%');
-      expect(rawSource).toContain('duration: 400');
-      expect(rawSource).toContain('HVSC downloads');
+      expect(rawSource).toContain("start: 50%, 78%");
+      expect(rawSource).toContain("end: 50%, 28%");
+      expect(rawSource).toContain("duration: 400");
+      expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).not.toContain('text: "Stable Features"');
+      expect(rawSource).not.toContain("retry:");
     }
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam, edgeConfigPersistence]) {
@@ -238,11 +225,10 @@ describe("Maestro flow contracts", () => {
     }
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
-      expect(rawSource).toContain('assertVisible: "HVSC downloads"');
-      expect(rawSource).toContain('text: "HVSC downloads"');
+      expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).toContain("checked: false");
       expect(rawSource).toContain('visible: "Play Files"');
-      expect(rawSource).toContain('text: "Download HVSC"');
+      expect(rawSource).toContain("id: hvsc-download");
       expect(rawSource).toContain("timeout: ${LONG_TIMEOUT}");
     }
 
@@ -251,72 +237,43 @@ describe("Maestro flow contracts", () => {
     expect(Array.isArray(edgeConfigPersistenceSteps)).toBe(true);
     expect(smokeHvscPlaylistScrollStep).toEqual({
       scrollUntilVisible: {
-        element: { text: "Download HVSC" },
+        element: { id: "hvsc-download" },
         direction: "DOWN",
         timeout: "${LONG_TIMEOUT}",
         visibilityPercentage: 50,
         centerElement: true,
       },
     });
-    expect(edgeConfigPersistence).toContain('start: 50%, 78%');
-    expect(edgeConfigPersistence).toContain('end: 50%, 28%');
-    expect(edgeConfigPersistence).toContain('HVSC downloads');
+    expect(edgeConfigPersistence).toContain("start: 50%, 78%");
+    expect(edgeConfigPersistence).toContain("end: 50%, 28%");
+    expect(edgeConfigPersistence).toContain("id: feature-flag-hvsc_enabled");
+    expect(edgeConfigPersistence).not.toContain("retry:");
     expect(smokeHvscLowRamPlaylistScrollStep).toEqual({
       scrollUntilVisible: {
-        element: { text: "Download HVSC" },
+        element: { id: "hvsc-download" },
         direction: "DOWN",
         timeout: "${LONG_TIMEOUT}",
         visibilityPercentage: 50,
         centerElement: true,
       },
     });
-    expect(smokeHvscSettingsRetryStep).toEqual({
-      retry: {
-        maxRetries: 6,
-        commands: [
-          { swipe: { start: '50%, 78%', end: '50%, 28%', duration: 400 } },
-          'waitForAnimationToEnd',
-          { assertVisible: 'HVSC downloads' },
-          { tapOn: { text: 'HVSC downloads', checked: false, optional: true } },
-          'waitForAnimationToEnd',
-          { assertVisible: 'HVSC downloads' },
-        ],
-      },
-    });
-    expect(smokeHvscLowRamSettingsRetryStep).toEqual({
-      retry: {
-        maxRetries: 6,
-        commands: [
-          { swipe: { start: '50%, 78%', end: '50%, 28%', duration: 400 } },
-          'waitForAnimationToEnd',
-          { assertVisible: 'HVSC downloads' },
-          { tapOn: { text: 'HVSC downloads', checked: false, optional: true } },
-          'waitForAnimationToEnd',
-          { assertVisible: 'HVSC downloads' },
-        ],
-      },
-    });
-    expect(edgeConfigPersistenceSettingsRetryStep).toEqual({
-      retry: {
-        maxRetries: 6,
-        commands: [
-          { swipe: { start: '50%, 78%', end: '50%, 28%', duration: 400 } },
-          'waitForAnimationToEnd',
-          { assertVisible: 'HVSC downloads' },
-          { tapOn: { text: 'HVSC downloads', checked: false, optional: true } },
-          'waitForAnimationToEnd',
-          { assertVisible: 'HVSC downloads' },
-        ],
-      },
-    });
+    expect((smokeHvsc.match(/checked: false/g) ?? []).length).toBe(3);
+    expect((smokeHvscLowRam.match(/checked: false/g) ?? []).length).toBe(3);
+    expect((edgeConfigPersistence.match(/checked: false/g) ?? []).length).toBe(3);
+    expect((smokeHvsc.match(/id: feature-flag-hvsc_enabled/g) ?? []).length).toBe(3);
+    expect((smokeHvscLowRam.match(/id: feature-flag-hvsc_enabled/g) ?? []).length).toBe(3);
+    expect((edgeConfigPersistence.match(/id: feature-flag-hvsc_enabled/g) ?? []).length).toBe(3);
 
-    expect(smokeHvsc).toContain('assertVisible: "Ingest HVSC"');
-    expect(smokeHvscLowRam).toContain('tapOn: "Download HVSC"');
-    expect(edgeConfigPersistence).toContain('assertVisible: "Download HVSC"');
+    expect(smokeHvsc).toContain("id: hvsc-ingest");
+    expect(smokeHvscLowRam).toContain("id: hvsc-download");
+    expect(edgeConfigPersistence).toContain("id: hvsc-download");
   });
 
   it("keeps Android common navigation on tab ids instead of gesture-edge coordinates", () => {
-    const commonNavigation = readFileSync(path.resolve(process.cwd(), ".maestro/subflows/common-navigation.yaml"), "utf8");
+    const commonNavigation = readFileSync(
+      path.resolve(process.cwd(), ".maestro/subflows/common-navigation.yaml"),
+      "utf8",
+    );
 
     expect(commonNavigation).toContain('id: "tab-play"');
     expect(commonNavigation).toContain('id: "tab-settings"');

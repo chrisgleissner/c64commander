@@ -15,21 +15,33 @@ env:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
-- retry:
-    maxRetries: 6
-    commands:
-      - swipe:
-          start: 50%, 78%
-          end: 50%, 28%
-          duration: 400
-      - waitForAnimationToEnd
-      - assertVisible: "HVSC downloads"
-      - tapOn:
-          text: "HVSC downloads"
-          checked: false
-          optional: true
-      - waitForAnimationToEnd
-      - assertVisible: "HVSC downloads"
+- swipe:
+    start: 50%, 78%
+    end: 50%, 28%
+    duration: 400
+- waitForAnimationToEnd
+- tapOn:
+    id: feature-flag-hvsc_enabled
+    checked: false
+    optional: true
+- swipe:
+    start: 50%, 78%
+    end: 50%, 28%
+    duration: 400
+- waitForAnimationToEnd
+- tapOn:
+    id: feature-flag-hvsc_enabled
+    checked: false
+    optional: true
+- swipe:
+    start: 50%, 78%
+    end: 50%, 28%
+    duration: 400
+- waitForAnimationToEnd
+- tapOn:
+    id: feature-flag-hvsc_enabled
+    checked: false
+    optional: true
 - tapOn:
     id: "tab-play"
 - extendedWaitUntil:
@@ -38,13 +50,15 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      text: "Download HVSC"
+      id: hvsc-download
     direction: DOWN
     timeout: ${LONG_TIMEOUT}
     visibilityPercentage: 50
     centerElement: true
-- assertVisible: "Download HVSC"
-- tapOn: "Download HVSC"
+- assertVisible:
+    id: hvsc-download
+- tapOn:
+    id: hvsc-download
 - extendedWaitUntil:
     visible: "Status: Ready"
     timeout: ${HVSC_INGEST_TIMEOUT}
