@@ -25,6 +25,7 @@ import {
 import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { clickSourceSelectionButton } from "./sourceSelection";
+import { expectOpenToast } from "./toasts";
 
 const PERSISTENT_ATTR = "data-c64-persistent-active";
 
@@ -599,7 +600,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "saf-scan-overlay");
 
     await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
-    await expect(page.getByRole("status").getByText("No supported files", { exact: true })).toBeVisible();
+    await expectOpenToast(page, "No supported files");
     await snap(page, testInfo, "saf-no-supported-files");
   });
 
@@ -645,7 +646,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "saf-error-overlay");
 
     await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
-    await expect(page.getByRole("status").getByText("Add items failed", { exact: true })).toBeVisible();
+    await expectOpenToast(page, "Add items failed");
 
     await expect
       .poll(async () => {

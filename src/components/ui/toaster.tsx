@@ -88,6 +88,8 @@ function ToastItem({ id, title, description, action, dismiss, ...props }: ToastI
 
   return (
     <Toast
+      data-testid="app-toast"
+      data-toast-id={id}
       {...props}
       onSwipeStart={handleSwipeStart}
       onSwipeEnd={handleSwipeEnd}
@@ -95,8 +97,8 @@ function ToastItem({ id, title, description, action, dismiss, ...props }: ToastI
       onClick={handleClick}
     >
       <div className="grid gap-1">
-        {title && <ToastTitle>{title}</ToastTitle>}
-        {description && <ToastDescription>{description}</ToastDescription>}
+        {title && <ToastTitle data-testid="app-toast-title">{title}</ToastTitle>}
+        {description && <ToastDescription data-testid="app-toast-description">{description}</ToastDescription>}
       </div>
       {action}
     </Toast>
