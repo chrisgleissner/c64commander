@@ -24,7 +24,9 @@ const renderDialog = (isSaving = false) => {
   return { ...view, onSave, onOpenChange };
 };
 
-const renderDialogWithTelnet = (opts: { telnetAvailable?: boolean; telnetBusy?: boolean } = {}) => {
+const renderDialogWithTelnet = (
+  opts: { telnetAvailable?: boolean; telnetBusy?: boolean; telnetSaveReuDisabledReason?: string | null } = {},
+) => {
   const onSave = vi.fn();
   const onSaveReu = vi.fn().mockResolvedValue(undefined);
   const onOpenChange = vi.fn();
@@ -37,6 +39,7 @@ const renderDialogWithTelnet = (opts: { telnetAvailable?: boolean; telnetBusy?: 
       onSaveReu={onSaveReu}
       telnetAvailable={opts.telnetAvailable ?? true}
       telnetBusy={opts.telnetBusy ?? false}
+      telnetSaveReuDisabledReason={opts.telnetSaveReuDisabledReason ?? null}
     />,
   );
   return { ...view, onSave, onSaveReu, onOpenChange };
@@ -243,5 +246,14 @@ describe("SaveRamDialog – Save REU", () => {
   it("disables Save REU when telnetBusy", () => {
     renderDialogWithTelnet({ telnetBusy: true });
     expect(screen.getByTestId("save-ram-type-reu")).toBeDisabled();
+  });
+
+  it("keeps Save REU visible but disabled with an explanatory note when unsupported", () => {
+    renderDialogWithTelnet({
+      telnetSaveReuDisabledReason: "Save REU is not available on Ultimate 64 Elite 3.14e.",
+    });
+
+    expect(screen.getByTestId("save-ram-type-reu")).toBeDisabled();
+    expect(screen.getByText("Save REU is not available on Ultimate 64 Elite 3.14e.")).toBeInTheDocument();
   });
 });

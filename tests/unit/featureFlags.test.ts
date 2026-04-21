@@ -20,74 +20,92 @@ vi.mock("@/lib/logging", () => ({
   addErrorLog: (...args: unknown[]) => addErrorLog(...args),
 }));
 
-const buildDefaults = () =>
-  Object.fromEntries(Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key, def]) => [key, def.defaultValue])) as Record<
-    keyof typeof FEATURE_FLAG_DEFINITIONS,
-    boolean
-  >;
-
-describe("featureFlags", () => {
+describe("featureFlags persistence and logging", () => {
   beforeEach(() => {
     addErrorLog.mockReset();
   });
-  it("uses default values when no flags are stored", async () => {
-    const repository = new InMemoryFeatureFlagRepository();
-    const manager = new FeatureFlagManager(repository, buildDefaults());
 
-    await manager.load();
-    const snapshot = manager.getSnapshot();
-    expect(snapshot.isLoaded).toBe(true);
-    expect(snapshot.flags.hvsc_enabled).toBe(true);
+  it("exposes the expected initial registry", () => {
+    const ids = FEATURE_FLAG_DEFINITIONS.map((definition) => definition.id);
+    expect(ids).toEqual(["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled", "reu_snapshot_enabled"]);
   });
 
-  it("persists flag updates in repository", async () => {
+  it("classifies stable and experimental flags via the registry", () => {
+    const groupsById = Object.fromEntries(
+      FEATURE_FLAG_DEFINITIONS.map((definition) => [definition.id, definition.group]),
+    );
+    expect(groupsById).toEqual({
+      hvsc_enabled: "stable",
+      commoserve_enabled: "stable",
+      lighting_studio_enabled: "experimental",
+      reu_snapshot_enabled: "experimental",
+    });
+  });
+
+  it("persists a non-default override and it survives a reload through a fresh manager", async () => {
     const repository = new InMemoryFeatureFlagRepository();
-    const manager = new FeatureFlagManager(repository, buildDefaults());
-
+    const manager = new FeatureFlagManager(repository, () => true);
     await manager.load();
-    await manager.setFlag("hvsc_enabled", true);
+    await manager.setFlag("hvsc_enabled", false);
 
-    const freshManager = new FeatureFlagManager(repository, buildDefaults());
+    const freshManager = new FeatureFlagManager(repository, () => true);
     await freshManager.load();
-    expect(freshManager.getSnapshot().flags.hvsc_enabled).toBe(true);
+
+    const resolution = freshManager.getSnapshot().resolved.hvsc_enabled;
+    expect(resolution.hasOverride).toBe(true);
+    expect(resolution.value).toBe(false);
   });
 
-  it("falls back to defaults when repository load fails", async () => {
+  it("logs and recovers when the repository load fails", async () => {
     const repository = {
-      getFlag: vi.fn(),
-      getAllFlags: vi.fn().mockRejectedValue(new Error("boom")),
-      setFlag: vi.fn(),
+      getAllOverrides: vi.fn().mockRejectedValue(new Error("boom")),
+      setOverride: vi.fn(),
     };
-    const manager = new FeatureFlagManager(repository, buildDefaults());
-
+    const manager = new FeatureFlagManager(repository, () => false);
     await manager.load();
-
     expect(manager.getSnapshot().isLoaded).toBe(true);
     expect(manager.getSnapshot().flags.hvsc_enabled).toBe(true);
     expect(addErrorLog).toHaveBeenCalledWith("Feature flag load failed", expect.any(Object));
   });
 
-  it("surfaces repository failures when setting flags", async () => {
+  it("surfaces and logs repository failures when writing an override", async () => {
     const repository = {
-      getFlag: vi.fn(),
-      getAllFlags: vi.fn().mockResolvedValue({}),
-      setFlag: vi.fn().mockRejectedValue(new Error("fail")),
+      getAllOverrides: vi.fn().mockResolvedValue({}),
+      setOverride: vi.fn().mockRejectedValue(new Error("fail")),
     };
-    const manager = new FeatureFlagManager(repository, buildDefaults());
-
+    const manager = new FeatureFlagManager(repository, () => true);
     await manager.load();
     await expect(manager.setFlag("hvsc_enabled", false)).rejects.toThrow("fail");
     expect(addErrorLog).toHaveBeenCalledWith("Feature flag update failed", expect.any(Object));
   });
 
-  it("returns null when in-memory repository has no value", async () => {
-    const repository = new InMemoryFeatureFlagRepository();
-
-    await expect(repository.getFlag("hvsc_enabled")).resolves.toBeNull();
+  it("surfaces and logs repository failures when clearing an override", async () => {
+    const repository = {
+      getAllOverrides: vi.fn().mockResolvedValue({ hvsc_enabled: false }),
+      setOverride: vi.fn().mockRejectedValue(new Error("clear failed")),
+    };
+    const manager = new FeatureFlagManager(repository, () => true);
+    await manager.load();
+    await expect(manager.clearOverride("hvsc_enabled")).rejects.toThrow("clear failed");
+    expect(addErrorLog).toHaveBeenCalledWith("Feature flag clear failed", expect.any(Object));
   });
 
   it("reports gating logic for HVSC controls", () => {
-    expect(isHvscEnabled({ hvsc_enabled: false })).toBe(false);
-    expect(isHvscEnabled({ hvsc_enabled: true })).toBe(true);
+    expect(
+      isHvscEnabled({
+        hvsc_enabled: false,
+        commoserve_enabled: true,
+        lighting_studio_enabled: false,
+        reu_snapshot_enabled: false,
+      }),
+    ).toBe(false);
+    expect(
+      isHvscEnabled({
+        hvsc_enabled: true,
+        commoserve_enabled: true,
+        lighting_studio_enabled: false,
+        reu_snapshot_enabled: false,
+      }),
+    ).toBe(true);
   });
 });

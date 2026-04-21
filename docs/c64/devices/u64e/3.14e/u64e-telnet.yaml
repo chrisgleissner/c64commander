@@ -1,0 +1,299 @@
+telnet:
+  general:
+    base_url: http://u64
+    host: u64
+    device_type: "Ultimate 64 Elite"
+    firmware_version: 3.14e
+    rest_api_version: "0.1"
+    requested_test_data_paths:
+      - /USB2/test-data
+      - /USB1/test-data
+      - /USB0/test-data
+    resolved_test_data_path: /USB2/test-data
+  initial_action_menus:
+    screen_context: "initial telnet screen with no selected filesystem entry"
+    opened_with: F5
+    action_menu:
+      items:
+        - Assembly 64
+        - C64 Machine
+        - Built-in Drive A
+        - Built-in Drive B
+        - Software IEC
+        - Printer
+        - Configuration
+        - Streams
+        - Developer
+      default_item: "Assembly 64"
+      submenus:
+        C64 Machine:
+          items:
+            - Reset C64
+            - Reboot C64
+            - Reboot (Clr Mem)
+            - Power OFF
+            - Save C64 Memory
+            - Save REU Memory
+            - Save MP3 Drv B
+          default_item: "Reset C64"
+        Built-in Drive A:
+          items:
+            - Turn Off
+            - Reset
+            - Switch to 1571
+            - Switch to 1581
+            - Insert Blank
+          default_item: "Turn Off"
+        Built-in Drive B:
+          items:
+            - Turn On
+            - Switch to 1541
+            - Switch to 1571
+            - Switch to 1581
+          default_item: "Turn On"
+        Software IEC:
+          items:
+            - Turn On
+            - Reset
+            - Set dir. here
+          default_item: "Turn On"
+        Printer:
+          items:
+            - Flush/Eject
+            - Reset
+            - Turn On
+          default_item: Flush/Eject
+        Configuration:
+          items:
+            - Save to Flash
+            - Save to File
+            - Reset from Flash
+            - Reset to Defaults
+            - Clear Flash Config
+          default_item: "Save to Flash"
+        Streams:
+          items:
+            - VIC Stream
+            - Audio Stream
+          default_item: "VIC Stream"
+        Developer:
+          items:
+            - Clear Debug Log
+            - Save Debug Log
+            - Save EDID to file
+            - Debug Stream
+          default_item: "Clear Debug Log"
+  selected_directory_action_menus:
+    screen_context: "filesystem browser with a directory selected and the action menu opened via function key"
+    path: /USB2/test-data
+    browser_path: /USB2/
+    selected_entry: test-data
+    opened_with: F5
+    action_menu:
+      items:
+        - Assembly 64
+        - Create
+        - C64 Machine
+        - Built-in Drive A
+        - Built-in Drive B
+        - Software IEC
+        - UltiCopy
+        - Tape
+        - Printer
+        - Configuration
+        - Streams
+        - Developer
+      default_item: "Assembly 64"
+      submenus:
+        Create:
+          items:
+            - D64 Image
+            - G64 Image
+            - D71 Image
+            - G71 Image
+            - D81 Image
+            - D81 (81 Tr.)
+            - DNP Image
+            - Directory
+          default_item: "D64 Image"
+        C64 Machine:
+          items:
+            - Reset C64
+            - Reboot C64
+            - Reboot (Clr Mem)
+            - Power OFF
+            - Save C64 Memory
+            - Save REU Memory
+            - Save MP3 Drv B
+          default_item: "Reset C64"
+        Built-in Drive A:
+          items:
+            - Turn Off
+            - Reset
+            - Switch to 1571
+            - Switch to 1581
+            - Insert Blank
+          default_item: "Turn Off"
+        Built-in Drive B:
+          items:
+            - Turn On
+            - Switch to 1541
+            - Switch to 1571
+            - Switch to 1581
+          default_item: "Turn On"
+        Software IEC:
+          items:
+            - Turn On
+            - Reset
+            - Set dir. here
+          default_item: "Turn On"
+        UltiCopy:
+          items:
+            - Drive 8
+            - Drive 9
+            - Drive 10
+            - Drive 11
+          default_item: "Drive 8"
+        Tape:
+          items:
+            - Sample tape to TAP
+            - Capture save to TAP
+          default_item: "Sample tape to TAP"
+        Printer:
+          items:
+            - Flush/Eject
+            - Reset
+            - Turn On
+          default_item: Flush/Eject
+        Configuration:
+          items:
+            - Save to Flash
+            - Save to File
+            - Reset from Flash
+            - Reset to Defaults
+            - Clear Flash Config
+          default_item: "Save to Flash"
+        Streams:
+          items:
+            - VIC Stream
+            - Audio Stream
+          default_item: "VIC Stream"
+        Developer:
+          items:
+            - Clear Debug Log
+            - Save Debug Log
+            - Save EDID to file
+            - Debug Stream
+          default_item: "Clear Debug Log"
+  filesystem_context_menus:
+    screen_context: "filesystem browser with a selected entry and its ENTER-opened context menu"
+    selected_directory:
+      path: /USB2/test-data
+      browser_path: /USB2/
+      selected_entry: test-data
+      menu_items:
+        - Enter
+        - Rename
+        - Delete
+      default_item: Enter
+    menu_definitions:
+      archive_7z:
+        representative_file: /USB2/test-data/SID/HVSC_77-all-of-them.7z
+        items:
+          - Rename
+          - Delete
+        default_item: Rename
+      crt:
+        representative_file: /USB2/test-data/crt/266_Cabal_1989_Ocean.crt
+        items:
+          - Run Cart
+          - Copy to Flash
+          - View
+          - Hex View
+          - Rename
+          - Delete
+        default_item: "Run Cart"
+      d64:
+        representative_file: "/USB2/test-data/d64/Boulder Dash 2.d64"
+        items:
+          - Mount Disk
+          - Run Disk
+          - Mount Disk Read Only
+          - Mount Disk Unlinked
+          - Mount Disk on B
+          - Mount Disk R/O on B
+          - Mount Disk Unl. on B
+          - View
+          - Hex View
+          - Rename
+          - Delete
+        default_item: "Mount Disk"
+      d71:
+        representative_file: /USB2/test-data/d71/10_Years_HVSC.d71
+        items:
+          - Mount Disk
+          - Run Disk
+          - Mount Disk Read Only
+          - Mount Disk Unlinked
+          - Mount Disk on B
+          - Mount Disk R/O on B
+          - Mount Disk Unl. on B
+          - Load into MP3 Drv B
+          - Rename
+          - Delete
+        default_item: "Mount Disk"
+      d81:
+        representative_file: /USB2/test-data/d81/10_Years_HVSC.d81
+        items:
+          - Mount Disk
+          - Run Disk
+          - Mount Disk Read Only
+          - Mount Disk Unlinked
+          - Mount Disk on B
+          - Mount Disk R/O on B
+          - Mount Disk Unl. on B
+          - Rename
+          - Delete
+        default_item: "Mount Disk"
+      mod:
+        representative_file: /USB2/test-data/mod/jukebox_packtune.mod
+        items:
+          - Play MOD
+          - Load into REU
+          - Preload on Startup
+          - View
+          - Hex View
+          - Rename
+          - Delete
+        default_item: "Play MOD"
+      prg:
+        representative_file: /USB2/test-data/prg/1k-mini-bdash-note.prg
+        items:
+          - Run
+          - Load
+          - DMA
+          - View
+          - Hex View
+          - Rename
+          - Delete
+        default_item: Run
+      reu:
+        representative_file: /USB2/test-data/snapshots/menu_probe.reu
+        items:
+          - Load into REU
+          - Preload on Startup
+          - View
+          - Hex View
+          - Rename
+          - Delete
+        default_item: "Load into REU"
+      sid:
+        representative_file: /USB2/test-data/SID/10_Orbyte.sid
+        items:
+          - Play Main Tune
+          - Show Info
+          - View
+          - Hex View
+          - Rename
+          - Delete
+        default_item: "Play Main Tune"

@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
 import {
   buildConfigKey,
@@ -170,16 +171,40 @@ export function LightingSummaryCard({
     const parsed = parseSliderValue(nextValue);
     if (parsed === null) return;
     const nextIndex = clampToRange(parsed, 0, fixedColorSliderMax);
+    const nextColor = resolveFixedColorOption(nextIndex);
     onManualLightingChange?.();
-    interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
+    void interactiveWrite({ "Fixed Color": nextColor }).catch((error) => {
+      addLog(
+        "warn",
+        "Lighting summary fixed color preview failed",
+        buildErrorLogDetails(error as Error, {
+          category,
+          itemName: "Fixed Color",
+          value: nextColor,
+        }),
+      );
+      setFixedColorDraftIndex(null);
+    });
   };
 
   const handleIntensityPreview = (nextValue: number) => {
     const parsed = parseSliderValue(nextValue);
     if (parsed === null) return;
     const clamped = clampToRange(parsed, intensityMin, intensityMax);
+    const nextIntensity = Math.round(clamped);
     onManualLightingChange?.();
-    interactiveWrite({ "Strip Intensity": Math.round(clamped) });
+    void interactiveWrite({ "Strip Intensity": nextIntensity }).catch((error) => {
+      addLog(
+        "warn",
+        "Lighting summary intensity preview failed",
+        buildErrorLogDetails(error as Error, {
+          category,
+          itemName: "Strip Intensity",
+          value: nextIntensity,
+        }),
+      );
+      setIntensityDraft(null);
+    });
   };
 
   return (

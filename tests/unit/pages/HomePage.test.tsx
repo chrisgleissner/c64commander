@@ -13,6 +13,10 @@ import HomePage from "../../../src/pages/HomePage";
 import { clearRamDumpFolderConfig, saveRamDumpFolderConfig } from "../../../src/lib/config/ramDumpFolderStore";
 import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: () => ({ value: true }),
+}));
+
 const {
   toastSpy,
   reportUserErrorSpy,
@@ -34,6 +38,7 @@ const {
   machineControlPayloadRef,
   appConfigStatePayloadRef,
   deviceControlPayloadRef,
+  interactiveWriteMockRef,
 } = vi.hoisted(() => ({
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
@@ -178,6 +183,9 @@ const {
         .fn()
         .mockReturnValue("PUT /v1/machine:pause -> PUT /v1/machine:writemem -> PUT /v1/machine:reboot"),
     },
+  },
+  interactiveWriteMockRef: {
+    current: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -616,10 +624,11 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => c64ApiMockRef.current,
+  resolveDeviceHostFromStorage: () => "u64",
 }));
 
 vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
-  useInteractiveConfigWrite: () => ({ write: vi.fn(), isPending: false }),
+  useInteractiveConfigWrite: () => ({ write: interactiveWriteMockRef.current, isPending: false }),
 }));
 
 beforeEach(() => {
@@ -647,6 +656,7 @@ beforeEach(() => {
     startStream: vi.fn().mockResolvedValue({}),
     stopStream: vi.fn().mockResolvedValue({}),
   };
+  interactiveWriteMockRef.current = vi.fn().mockResolvedValue(undefined);
   statusPayloadRef.current = {
     isConnected: true,
     isConnecting: false,
@@ -1438,6 +1448,31 @@ describe("HomePage SID status", () => {
     // CPU speed commit goes via interactive write; only Turbo Control auto-adjust uses setConfigValue.
     // Turbo is already "Manual", so no redundant write should happen.
     await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("3"));
+    expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
+      "U64 Specific Settings",
+      "Turbo Control",
+      expect.anything(),
+    );
+  });
+
+  it("rolls back the CPU speed preview when the interactive commit fails", async () => {
+    interactiveWriteMockRef.current = vi.fn().mockRejectedValue(new Error("CPU write failed"));
+    u64SettingsPayloadRef.current = buildU64SettingsPayload({
+      cpuSpeed: "1",
+      turboControl: "Manual",
+      turboControlOptions: ["Manual", "Off"],
+    });
+
+    renderHomePage();
+
+    const slider = screen.getByTestId("home-cpu-speed-slider");
+    const thumb = slider.querySelector('[role="slider"]');
+    expect(thumb).toBeTruthy();
+
+    fireEvent.keyDown(thumb!, { key: "ArrowRight" });
+
+    await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value")).toHaveTextContent("1"));
+    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({ "CPU Speed": "2" });
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",

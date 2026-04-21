@@ -4,13 +4,14 @@ multi-ecosystem-groups:
   weekly-rollup:
     schedule:
       interval: weekly
-      day: monday
+      day: friday
       time: "06:00"
       timezone: UTC
     commit-message:
       prefix: deps
     labels:
       - dependencies
+    open-pull-requests-limit: 1
 
 updates:
   - package-ecosystem: npm
@@ -18,14 +19,6 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-    open-pull-requests-limit: 1
     ignore:
       - dependency-name: "*"
         update-types:
@@ -36,14 +29,6 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-    open-pull-requests-limit: 1
     ignore:
       - dependency-name: actions/setup-python
         versions:
@@ -58,14 +43,6 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-    open-pull-requests-limit: 1
     ignore:
       - dependency-name: "*"
         update-types:

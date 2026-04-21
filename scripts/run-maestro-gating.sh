@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_ID="uk.gleissner.c64commander"
+APP_MAIN_ACTIVITY="$APP_ID/.MainActivity"
 DEFAULT_APK="$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
 RAW_OUTPUT_DIR="$ROOT_DIR/test-results/maestro"
 EVIDENCE_DIR="$ROOT_DIR/test-results/evidence/maestro"
@@ -30,6 +31,8 @@ BOOT_TIMEOUT_SECS=${BOOT_TIMEOUT_SECS:-180}
 BOOT_POLL_SECS=${BOOT_POLL_SECS:-3}
 INSTALL_TIMEOUT_SECS=${INSTALL_TIMEOUT_SECS:-90}
 MAESTRO_TIMEOUT_SECS=${MAESTRO_TIMEOUT_SECS:-300}
+AUTOMATION_READY_TIMEOUT_SECS=${AUTOMATION_READY_TIMEOUT_SECS:-20}
+POWER_STAYON_ENABLED=0
 
 usage() {
   cat <<EOF
@@ -51,6 +54,84 @@ EOF
 
 log() {
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" >&2
+}
+
+cleanup_maestro_processes() {
+  local port="7001"
+  local deadline
+  local pids
+  pids=$(ps -eo pid=,cmd= | awk '/\.maestro\// {print $1}')
+  if [[ -n "$pids" ]]; then
+    log "Stopping stale Maestro process(es): $pids"
+    for pid in $pids; do
+      kill "$pid" >/dev/null 2>&1 || true
+    done
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    pids=$(ss -ltnp 2>/dev/null | awk -v port=":${port}" '$4 ~ port {print $NF}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u)
+    if [[ -n "$pids" ]]; then
+      log "Stopping process(es) holding port ${port}: $pids"
+      for pid in $pids; do
+        kill "$pid" >/dev/null 2>&1 || true
+      done
+    fi
+  fi
+  deadline=$((SECONDS + 5))
+  if command -v ss >/dev/null 2>&1; then
+    while [[ $SECONDS -lt $deadline ]]; do
+      if ! ss -ltnp 2>/dev/null | grep -q ":${port} "; then
+        break
+      fi
+      sleep 1
+    done
+  else
+    sleep 1
+  fi
+}
+
+cleanup_device_state() {
+  if [[ "$POWER_STAYON_ENABLED" == "1" && -n "$DEVICE_ID" ]]; then
+    adb -s "$DEVICE_ID" shell "svc power stayon false" >/dev/null 2>&1 || true
+  fi
+}
+
+get_current_focus_window() {
+  local focus
+  focus=$(adb -s "$1" shell "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'" 2>/dev/null | tr -d '\r' || true)
+  printf '%s' "$focus"
+}
+
+is_keyguard_showing() {
+  local status
+  status=$(adb -s "$1" shell "dumpsys window policy | grep -E 'isStatusBarKeyguard|mShowingLockscreen|mDreamingLockscreen'" 2>/dev/null | tr -d '\r' || true)
+  [[ "${status,,}" == *"=true"* ]]
+}
+
+unlock_device() {
+  local serial="$1"
+  adb -s "$serial" shell "svc power stayon usb" >/dev/null 2>&1 || true
+  POWER_STAYON_ENABLED=1
+  adb -s "$serial" shell input keyevent 224 >/dev/null 2>&1 || true
+  adb -s "$serial" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+  adb -s "$serial" shell input keyevent 82 >/dev/null 2>&1 || true
+  adb -s "$serial" shell input keyevent 4 >/dev/null 2>&1 || true
+}
+
+ensure_device_ready_for_automation() {
+  local serial="$1"
+  local deadline=$(( $(date +%s) + AUTOMATION_READY_TIMEOUT_SECS ))
+  local focus=""
+  while [[ $(date +%s) -lt $deadline ]]; do
+    unlock_device "$serial"
+    adb -s "$serial" shell am start -W -n "$APP_MAIN_ACTIVITY" >/dev/null 2>&1 || true
+    sleep 1
+    focus=$(get_current_focus_window "$serial")
+    if ! is_keyguard_showing "$serial" && [[ "$focus" == *"$APP_ID"* ]]; then
+      return 0
+    fi
+  done
+  echo "Device preflight failed: app not focused or keyguard still active (focus=${focus:-unknown})" >&2
+  return 1
 }
 
 require_cmd() {
@@ -322,6 +403,9 @@ require_cmd adb
 require_cmd maestro
 require_cmd node
 
+cleanup_maestro_processes
+trap cleanup_device_state EXIT
+
 sdk_dir=$(resolve_sdk_dir)
 configure_sdk_env "$sdk_dir"
 configure_java_env
@@ -429,6 +513,8 @@ adb -s "$DEVICE_ID" shell settings put global transition_animation_scale 0 || tr
 adb -s "$DEVICE_ID" shell settings put global animator_duration_scale 0 || true
 
 prepare_diagnostics "$DEVICE_ID"
+adb -s "$DEVICE_ID" forward --remove-all >/dev/null 2>&1 || true
+ensure_device_ready_for_automation "$DEVICE_ID"
 
 if ! resolve_apk_path; then
   log "Unable to locate APK at $APK_PATH"

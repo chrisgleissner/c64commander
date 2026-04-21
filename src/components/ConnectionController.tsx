@@ -28,7 +28,7 @@ const allowBackgroundRediscovery = () => {
 
 export function ConnectionController() {
   const queryClient = useQueryClient();
-  const { state } = useConnectionState();
+  const { state, lastProbeAtMs } = useConnectionState();
   const backgroundTimerRef = useRef<number | null>(null);
   const backgroundScheduleTokenRef = useRef(0);
   const backgroundFailureCountRef = useRef(0);
@@ -50,6 +50,23 @@ export function ConnectionController() {
     invalidateForConnectionStateTransition(queryClient, previousStateRef.current, state);
     previousStateRef.current = state;
   }, [queryClient, state]);
+
+  useEffect(() => {
+    const handler = () => {
+      if (document.hidden) return;
+      const snapshot = getConnectionSnapshot();
+      if (snapshot.state === "DISCOVERING" || state === "DISCOVERING") return;
+      const effectiveLastProbeAtMs = Math.max(lastProbeAtMs ?? 0, snapshot.lastProbeAtMs ?? 0) || null;
+      const minResumeProbeIntervalMs = Math.max(1500, loadBackgroundRediscoveryIntervalMs());
+      if (effectiveLastProbeAtMs !== null && Date.now() - effectiveLastProbeAtMs < minResumeProbeIntervalMs) {
+        return;
+      }
+      void discoverConnection("resume");
+    };
+
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [lastProbeAtMs, state]);
 
   useEffect(() => {
     const scheduleToken = backgroundScheduleTokenRef.current + 1;

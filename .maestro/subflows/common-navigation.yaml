@@ -35,37 +35,31 @@ tags:
       - tapOn:
           id: "tab-play"
           optional: true
-      - tapOn:
-          text: "Play"
-          optional: true
-      - tapOn:
-          point: "25%,95%"
-          optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Playlist"
+          visible: "Play Files"
           timeout: ${TIMEOUT}
 - extendedWaitUntil:
-    visible: "Playlist"
+    visible: "Play Files"
     timeout: ${TIMEOUT}
-- assertVisible: "Playlist"
+- assertVisible: "Play Files"
 - takeScreenshot: play-tab
 - tapOn:
-    text: "Settings"
+    id: "tab-settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Settings"
 - takeScreenshot: settings-tab
 - tapOn:
-    text: "Config"
+    id: "tab-config"
 - extendedWaitUntil:
     visible: "Config"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Config"
 - takeScreenshot: config-tab
 - tapOn:
-    text: "Home"
+    id: "tab-home"
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${SHORT_TIMEOUT}

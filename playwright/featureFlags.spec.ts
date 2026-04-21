@@ -31,7 +31,7 @@ test.describe("Feature flags", () => {
       localStorage.removeItem("c64u_feature_flag:hvsc_enabled");
       localStorage.removeItem("c64u_dev_mode_enabled");
     });
-    await seedUiMocks(page, server.baseUrl);
+    await seedUiMocks(page, server.baseUrl, { seedFeatureFlagsByDefault: false });
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -50,7 +50,7 @@ test.describe("Feature flags", () => {
 
   test("hvsc toggle is visible by default", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
-    const toggle = page.getByLabel("Enable HVSC downloads");
+    const toggle = page.getByTestId("feature-flag-hvsc_enabled");
     await expect(toggle).toBeVisible();
     await expect(toggle).toBeChecked();
     await snap(page, testInfo, "toggle-visible");
@@ -58,7 +58,7 @@ test.describe("Feature flags", () => {
 
   test("hvsc toggle controls play page visibility", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
-    const toggle = page.getByLabel("Enable HVSC downloads");
+    const toggle = page.getByTestId("feature-flag-hvsc_enabled");
     await expect(toggle).toBeChecked();
     await page.goto("/play");
     await expect(page.getByRole("button", { name: "Download HVSC" })).toBeVisible();

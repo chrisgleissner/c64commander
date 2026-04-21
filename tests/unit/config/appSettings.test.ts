@@ -15,6 +15,7 @@ import {
   DEFAULT_DISK_AUTOSTART_MODE,
   DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS,
   DEFAULT_STARTUP_DISCOVERY_WINDOW_MS,
+  DEFAULT_ENABLE_SWIPE_NAVIGATION,
   APP_SETTINGS_KEYS,
   loadAutomaticDemoModeEnabled,
   loadBackgroundRediscoveryIntervalMs,
@@ -22,6 +23,7 @@ import {
   loadConfigWriteIntervalMs,
   loadDebugLoggingEnabled,
   loadDiskAutostartMode,
+  loadEnableSwipeNavigation,
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
@@ -30,6 +32,7 @@ import {
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
+  saveEnableSwipeNavigation,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
@@ -64,6 +67,7 @@ describe("appSettings", () => {
     expect(loadDiscoveryProbeTimeoutMs()).toBe(DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS);
     expect(loadDiskAutostartMode()).toBe(DEFAULT_DISK_AUTOSTART_MODE);
     expect(loadVolumeSliderPreviewIntervalMs()).toBe(DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS);
+    expect(loadEnableSwipeNavigation()).toBe(DEFAULT_ENABLE_SWIPE_NAVIGATION);
   });
 
   it("saves values and emits setting events", () => {
@@ -77,6 +81,7 @@ describe("appSettings", () => {
     saveDiscoveryProbeTimeoutMs(2780);
     saveDiskAutostartMode("dma");
     saveVolumeSliderPreviewIntervalMs(321);
+    saveEnableSwipeNavigation(true);
 
     dispose();
 
@@ -88,6 +93,7 @@ describe("appSettings", () => {
     expect(localStorage.getItem(APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY)).toBe("2800");
     expect(localStorage.getItem(APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY)).toBe("dma");
     expect(localStorage.getItem(APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY)).toBe("321");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.ENABLE_SWIPE_NAVIGATION_KEY)).toBe("1");
 
     expect(events).toEqual(
       expect.arrayContaining([
@@ -102,6 +108,7 @@ describe("appSettings", () => {
         { key: APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY, value: 2800 },
         { key: APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY, value: "dma" },
         { key: APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, value: 321 },
+        { key: APP_SETTINGS_KEYS.ENABLE_SWIPE_NAVIGATION_KEY, value: true },
       ]),
     );
   });

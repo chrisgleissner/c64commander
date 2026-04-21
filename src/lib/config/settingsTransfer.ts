@@ -10,8 +10,6 @@ import {
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
-  loadCommoserveEnabled,
-  DEFAULT_COMMOSERVE_ENABLED,
   clampBackgroundRediscoveryIntervalMs,
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -29,7 +27,6 @@ import {
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
-  saveCommoserveEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
@@ -39,6 +36,12 @@ import {
   saveVolumeSliderPreviewIntervalMs,
   type DiskAutostartMode,
 } from "@/lib/config/appSettings";
+import {
+  FEATURE_FLAG_IDS,
+  featureFlagManager,
+  isKnownFeatureFlagId,
+  type FeatureFlagId,
+} from "@/lib/config/featureFlags";
 import {
   loadDeviceSafetyConfig,
   saveAllowUserOverrideCircuit,
@@ -58,24 +61,30 @@ import {
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
 
-export const SETTINGS_EXPORT_VERSION = 1 as const;
+export const SETTINGS_EXPORT_VERSION = 2 as const;
+
+type SettingsAppSettingsPayload = {
+  debugLoggingEnabled: boolean;
+  configWriteIntervalMs: number;
+  automaticDemoModeEnabled: boolean;
+  startupDiscoveryWindowMs: number;
+  backgroundRediscoveryIntervalMs: number;
+  discoveryProbeTimeoutMs: number;
+  diskAutostartMode: DiskAutostartMode;
+  volumeSliderPreviewIntervalMs: number;
+  archiveHostOverride: string;
+  archiveClientIdOverride: string;
+  archiveUserAgentOverride: string;
+};
+
+type LegacySettingsAppSettingsPayload = SettingsAppSettingsPayload & {
+  commoserveEnabled?: boolean;
+};
 
 export type SettingsExportPayload = {
   version: typeof SETTINGS_EXPORT_VERSION;
-  appSettings: {
-    debugLoggingEnabled: boolean;
-    configWriteIntervalMs: number;
-    automaticDemoModeEnabled: boolean;
-    startupDiscoveryWindowMs: number;
-    backgroundRediscoveryIntervalMs: number;
-    discoveryProbeTimeoutMs: number;
-    diskAutostartMode: DiskAutostartMode;
-    volumeSliderPreviewIntervalMs: number;
-    archiveHostOverride: string;
-    archiveClientIdOverride: string;
-    archiveUserAgentOverride: string;
-    commoserveEnabled: boolean;
-  };
+  appSettings: SettingsAppSettingsPayload;
+  featureFlags: Partial<Record<FeatureFlagId, boolean>>;
   deviceSafety: {
     mode: DeviceSafetyMode;
     ftpMaxConcurrency: number;
@@ -94,8 +103,11 @@ export type SettingsExportPayload = {
   };
 };
 
-// Keys added after the initial v1 release — may be absent in older exported payloads.
-const OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled"] as const;
+type LegacySettingsExportPayload = {
+  version: 1;
+  appSettings: LegacySettingsAppSettingsPayload;
+  deviceSafety: SettingsExportPayload["deviceSafety"];
+};
 
 // Keys that must be present in all settings payloads.
 const REQUIRED_APP_SETTINGS_KEYS = [
@@ -111,6 +123,8 @@ const REQUIRED_APP_SETTINGS_KEYS = [
   "archiveClientIdOverride",
   "archiveUserAgentOverride",
 ] as const;
+
+const LEGACY_OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled"] as const;
 
 const DEVICE_SAFETY_KEYS = [
   "mode",
@@ -146,7 +160,8 @@ const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => valu
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
   value === "RELAXED" || value === "BALANCED" || value === "CONSERVATIVE" || value === "TROUBLESHOOTING";
 
-export const exportSettingsSnapshot = (): SettingsExportPayload => {
+export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> => {
+  await featureFlagManager.load();
   const safety = loadDeviceSafetyConfig();
   return {
     version: SETTINGS_EXPORT_VERSION,
@@ -162,8 +177,8 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
       archiveHostOverride: loadArchiveHostOverride(),
       archiveClientIdOverride: loadArchiveClientIdOverride(),
       archiveUserAgentOverride: loadArchiveUserAgentOverride(),
-      commoserveEnabled: loadCommoserveEnabled(),
     },
+    featureFlags: featureFlagManager.getExplicitOverrides(),
     deviceSafety: {
       mode: safety.mode,
       ftpMaxConcurrency: safety.ftpMaxConcurrency,
@@ -183,12 +198,12 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
   };
 };
 
-export const exportSettingsJson = () => JSON.stringify(exportSettingsSnapshot(), null, 2);
+export const exportSettingsJson = async () => JSON.stringify(await exportSettingsSnapshot(), null, 2);
 
-const validateAppSettings = (value: unknown) => {
+const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = []) => {
   if (!value || typeof value !== "object") return "appSettings must be an object.";
   const record = value as Record<string, unknown>;
-  if (!hasRequiredKeysAllowOptional(record, REQUIRED_APP_SETTINGS_KEYS, OPTIONAL_APP_SETTINGS_KEYS))
+  if (!hasRequiredKeysAllowOptional(record, REQUIRED_APP_SETTINGS_KEYS, optionalKeys))
     return "appSettings contains unknown or missing keys.";
   if (typeof record.debugLoggingEnabled !== "boolean") return "debugLoggingEnabled must be boolean.";
   if (!Number.isFinite(record.configWriteIntervalMs)) return "configWriteIntervalMs must be a number.";
@@ -207,6 +222,24 @@ const validateAppSettings = (value: unknown) => {
   return null;
 };
 
+const sanitizeFeatureFlags = (value: unknown): Partial<Record<FeatureFlagId, boolean>> | { error: string } => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { error: "featureFlags must be an object." };
+  }
+  const record = value as Record<string, unknown>;
+  const next: Partial<Record<FeatureFlagId, boolean>> = {};
+  for (const [key, rawValue] of Object.entries(record)) {
+    if (!isKnownFeatureFlagId(key)) {
+      continue;
+    }
+    if (typeof rawValue !== "boolean") {
+      return { error: `featureFlags.${key} must be boolean.` };
+    }
+    next[key] = rawValue;
+  }
+  return next;
+};
+
 const validateDeviceSafety = (value: unknown) => {
   if (!value || typeof value !== "object") return "deviceSafety must be an object.";
   const record = value as Record<string, unknown>;
@@ -223,7 +256,7 @@ const validateDeviceSafety = (value: unknown) => {
   return null;
 };
 
-export const importSettingsJson = (raw: string): { ok: true } | { ok: false; error: string } => {
+export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { ok: false; error: string }> => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -232,19 +265,37 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   }
   if (!parsed || typeof parsed !== "object") return { ok: false, error: "Payload must be a JSON object." };
   const payload = parsed as Record<string, unknown>;
-  if (!("version" in payload) || payload.version !== SETTINGS_EXPORT_VERSION) {
+  if (!("version" in payload) || (payload.version !== 1 && payload.version !== SETTINGS_EXPORT_VERSION)) {
     return { ok: false, error: "Unsupported settings export version." };
   }
   const appSettings = payload.appSettings as Record<string, unknown> | undefined;
   const deviceSafety = payload.deviceSafety as Record<string, unknown> | undefined;
+  const version = payload.version as 1 | typeof SETTINGS_EXPORT_VERSION;
 
-  const appError = validateAppSettings(appSettings);
+  const appError = validateAppSettings(appSettings, version === 1 ? LEGACY_OPTIONAL_APP_SETTINGS_KEYS : []);
   if (appError) return { ok: false, error: appError };
   const safetyError = validateDeviceSafety(deviceSafety);
   if (safetyError) return { ok: false, error: safetyError };
 
-  const safeApp = appSettings as SettingsExportPayload["appSettings"];
+  let importedFeatureFlags: Partial<Record<FeatureFlagId, boolean>> = {};
+  if (version === SETTINGS_EXPORT_VERSION) {
+    try {
+      const sanitized = sanitizeFeatureFlags(payload.featureFlags);
+      if ("error" in sanitized) {
+        return { ok: false, error: sanitized.error };
+      }
+      importedFeatureFlags = sanitized;
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  }
+
+  const safeApp = appSettings as LegacySettingsAppSettingsPayload;
   const safeSafety = deviceSafety as SettingsExportPayload["deviceSafety"];
+
+  if (version === 1 && typeof safeApp.commoserveEnabled === "boolean") {
+    importedFeatureFlags.commoserve_enabled = safeApp.commoserveEnabled;
+  }
 
   saveDebugLoggingEnabled(Boolean(safeApp.debugLoggingEnabled));
   saveConfigWriteIntervalMs(clampConfigWriteIntervalMs(safeApp.configWriteIntervalMs));
@@ -257,9 +308,6 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   saveArchiveHostOverride(safeApp.archiveHostOverride);
   saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);
   saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
-  saveCommoserveEnabled(
-    "commoserveEnabled" in safeApp ? Boolean(safeApp.commoserveEnabled) : DEFAULT_COMMOSERVE_ENABLED,
-  );
 
   saveDeviceSafetyMode(safeSafety.mode);
   saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);
@@ -275,6 +323,8 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   saveCircuitBreakerCooldownMs(safeSafety.circuitBreakerCooldownMs);
   saveDiscoveryProbeIntervalMs(safeSafety.discoveryProbeIntervalMs);
   saveAllowUserOverrideCircuit(Boolean(safeSafety.allowUserOverrideCircuit));
+  await featureFlagManager.load();
+  await featureFlagManager.replaceOverrides(importedFeatureFlags);
 
   return { ok: true };
 };

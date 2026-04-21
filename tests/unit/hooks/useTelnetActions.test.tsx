@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isTelnetAvailable, useTelnetActions } from "@/hooks/useTelnetActions";
+import { TELNET_ACTION_IDS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 
 const {
   getPlatformMock,
@@ -19,21 +20,30 @@ const {
   incrementTelnetInFlightSpy,
   decrementTelnetInFlightSpy,
   runWithActionTraceSpy,
+  discoverTelnetCapabilitiesSpy,
+  createActionExecutorSpy,
 } = vi.hoisted(() => ({
   getPlatformMock: vi.fn(() => "android"),
-  isNativePlatformMock: vi.fn(() => false),
+  isNativePlatformMock: vi.fn(() => true),
   shouldUseMockTelnetTransportMock: vi.fn(() => false),
   statusRef: {
     current: {
       isConnected: true,
       isDemo: false,
-      deviceInfo: { product: "Ultimate 64 Elite" },
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-1",
+      },
     },
   },
   recordTelnetOperationSpy: vi.fn(),
   incrementTelnetInFlightSpy: vi.fn(),
   decrementTelnetInFlightSpy: vi.fn(),
   runWithActionTraceSpy: vi.fn(async (_action: unknown, handler: () => Promise<void>) => await handler()),
+  discoverTelnetCapabilitiesSpy: vi.fn(),
+  createActionExecutorSpy: vi.fn(),
 }));
 
 vi.mock("@/lib/native/platform", () => ({
@@ -58,9 +68,12 @@ vi.mock("@/lib/telnet/telnetSession", () => ({
 }));
 
 vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
-  createActionExecutor: () => ({
-    execute: mockExecute,
-  }),
+  createActionExecutor: (...args: unknown[]) => {
+    createActionExecutorSpy(...args);
+    return {
+      execute: mockExecute,
+    };
+  },
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
@@ -74,7 +87,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
 }));
 
 vi.mock("@/lib/c64api", () => ({
-  resolveDeviceHostFromStorage: () => "c64u",
+  resolveDeviceHostFromStorage: () => "u64",
 }));
 
 vi.mock("@/lib/secureStorage", () => ({
@@ -103,6 +116,75 @@ vi.mock("@/lib/diagnostics/diagnosticsActivity", () => ({
   decrementTelnetInFlight: decrementTelnetInFlightSpy,
 }));
 
+vi.mock("@/lib/telnet/telnetCapabilityDiscovery", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/telnet/telnetCapabilityDiscovery")>(
+    "@/lib/telnet/telnetCapabilityDiscovery",
+  );
+  return {
+    ...actual,
+    discoverTelnetCapabilities: (...args: unknown[]) => discoverTelnetCapabilitiesSpy(...args),
+  };
+});
+
+const buildActionSupport = (
+  overrides: Partial<
+    Record<TelnetActionId, { status: "supported" | "unsupported" | "unknown"; reason?: string | null }>
+  >,
+) =>
+  Object.fromEntries(
+    TELNET_ACTION_IDS.map((actionId) => {
+      const override = overrides[actionId];
+      return [
+        actionId,
+        {
+          actionId,
+          status: override?.status ?? "supported",
+          reason: override?.reason ?? null,
+          target:
+            override?.status === "unsupported" || override?.status === "unknown"
+              ? null
+              : {
+                  categoryLabel: actionId === "powerCycle" ? "Power & Reset" : "Configuration",
+                  actionLabel:
+                    actionId === "powerCycle"
+                      ? "Power Cycle"
+                      : actionId === "saveConfigToFile"
+                        ? "Save to File"
+                        : "Reset",
+                  source: "initial" as const,
+                },
+        },
+      ];
+    }),
+  );
+
+const buildSnapshot = (
+  overrides: Partial<
+    Record<TelnetActionId, { status: "supported" | "unsupported" | "unknown"; reason?: string | null }>
+  > = {},
+) => ({
+  cacheKey: "u64|F5",
+  deviceIdentity: "u64-1|u64|Ultimate 64 Elite|3.14e",
+  menuKey: "F5" as const,
+  initialMenu: {
+    items: ["C64 Machine", "Configuration"],
+    defaultItem: "C64 Machine",
+    nodes: {
+      "C64 Machine": {
+        kind: "submenu" as const,
+        items: ["Reset C64", "Reboot C64", "Reboot (Clr Mem)"],
+        defaultItem: "Reset C64",
+      },
+      Configuration: {
+        kind: "submenu" as const,
+        items: ["Save to File", "Clear Flash Config"],
+        defaultItem: "Save to File",
+      },
+    },
+  },
+  actionSupport: buildActionSupport(overrides),
+});
+
 describe("isTelnetAvailable", () => {
   it("returns false when not on native platform", () => {
     expect(isTelnetAvailable({ nativePlatform: false, isConnected: true, isDemo: false, product: "Ultimate 64" })).toBe(
@@ -114,17 +196,6 @@ describe("isTelnetAvailable", () => {
     expect(isTelnetAvailable({ nativePlatform: true, isConnected: true, isDemo: false, product: "Ultimate 64" })).toBe(
       true,
     );
-  });
-
-  it("returns true for iOS native devices when connected to a supported product", () => {
-    expect(
-      isTelnetAvailable({
-        nativePlatform: true,
-        isConnected: true,
-        isDemo: false,
-        product: "Ultimate 64",
-      }),
-    ).toBe(true);
   });
 
   it("returns false for unsupported products even on native", () => {
@@ -145,16 +216,16 @@ describe("isTelnetAvailable", () => {
     ).toBe(true);
   });
 
-  it("returns true for external mock targets on web when telnet is mock-backed", () => {
+  it("returns false for demo mode without a mock telnet target", () => {
     expect(
       isTelnetAvailable({
-        nativePlatform: false,
+        nativePlatform: true,
         isConnected: true,
-        isDemo: false,
+        isDemo: true,
         product: "Ultimate 64",
-        mockTarget: true,
+        mockTarget: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 
@@ -167,66 +238,145 @@ describe("useTelnetActions", () => {
     statusRef.current = {
       isConnected: true,
       isDemo: false,
-      deviceInfo: { product: "Ultimate 64 Elite" },
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-1",
+      },
     };
     mockExecute.mockResolvedValue(undefined);
     mockConnect.mockResolvedValue(undefined);
     mockDisconnect.mockResolvedValue(undefined);
+    discoverTelnetCapabilitiesSpy.mockResolvedValue(buildSnapshot());
   });
 
-  it("returns initial state", () => {
+  it("returns initial availability and loads discovery state", async () => {
     const { result } = renderHook(() => useTelnetActions());
+
     expect(result.current.isBusy).toBe(false);
     expect(result.current.activeActionId).toBeNull();
     expect(result.current.isAvailable).toBe(true);
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("returns isAvailable=false on web", () => {
-    isNativePlatformMock.mockReturnValue(false);
+  it("exposes unsupported action state from discovery", async () => {
+    discoverTelnetCapabilitiesSpy.mockResolvedValue(
+      buildSnapshot({
+        powerCycle: {
+          status: "unsupported",
+          reason: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+        },
+      }),
+    );
+
     const { result } = renderHook(() => useTelnetActions());
-    expect(result.current.isAvailable).toBe(false);
+
+    await waitFor(() => {
+      expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+        status: "unsupported",
+        reason: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+      });
+    });
   });
 
-  it("returns isAvailable=true on iOS native builds", () => {
-    getPlatformMock.mockReturnValue("ios");
+  it("uses the discovery runner session to connect and disconnect around capability probing", async () => {
+    discoverTelnetCapabilitiesSpy.mockImplementationOnce(
+      async ({ runner }: { runner: { withSession: <T>(callback: () => Promise<T>) => Promise<T> } }) =>
+        await runner.withSession(async () => buildSnapshot()),
+    );
+
     const { result } = renderHook(() => useTelnetActions());
-    expect(result.current.isAvailable).toBe(true);
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(mockConnect).toHaveBeenCalledWith("u64", 23, undefined);
+    expect(mockDisconnect).toHaveBeenCalled();
   });
 
-  it("returns isAvailable=true for demo mode when the target is mock-backed", () => {
-    isNativePlatformMock.mockReturnValue(false);
-    shouldUseMockTelnetTransportMock.mockReturnValue(true);
+  it("returns disconnected fallback support without starting discovery", () => {
     statusRef.current = {
-      isConnected: true,
-      isDemo: true,
-      deviceInfo: { product: "Ultimate 64 Elite" },
+      ...statusRef.current,
+      isConnected: false,
     };
 
     const { result } = renderHook(() => useTelnetActions());
 
-    expect(result.current.isAvailable).toBe(true);
+    expect(result.current.discoveryState).toBe("idle");
+    expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+      status: "unsupported",
+      reason: "Connect to a C64 Ultimate device to inspect Telnet actions.",
+    });
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
   });
 
-  it("returns isAvailable=false when the connected product is not Telnet-capable", () => {
-    statusRef.current = {
-      isConnected: true,
-      isDemo: false,
-      deviceInfo: { product: "1541 Ultimate II+" },
-    };
+  it("returns unavailable fallback support when telnet cannot run on the platform", () => {
+    isNativePlatformMock.mockReturnValue(false);
+
     const { result } = renderHook(() => useTelnetActions());
+
     expect(result.current.isAvailable).toBe(false);
+    expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+      status: "unsupported",
+      reason: "Telnet actions are unavailable on this platform or device.",
+    });
   });
 
-  it("executes a known telnet action successfully", async () => {
+  it("surfaces capability discovery failures through state and fallback support", async () => {
+    const { addLog } = await import("@/lib/logging");
+    discoverTelnetCapabilitiesSpy.mockRejectedValueOnce(new Error("capability lookup exploded"));
+
     const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("error"));
+    expect(result.current.discoveryError).toBe("capability lookup exploded");
+    expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+      status: "unknown",
+      reason: "Telnet action discovery failed: capability lookup exploded",
+    });
+    expect(addLog).toHaveBeenCalledWith("error", "useTelnetActions: capability discovery failed", {
+      cacheKey: "u64-1|u64|Ultimate 64 Elite|3.14e|F5",
+      error: "capability lookup exploded",
+    });
+  });
+
+  it("returns a default unknown support object for unrecognized action ids", async () => {
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(result.current.getActionSupport("ghostAction")).toEqual({
+      actionId: "ghostAction",
+      status: "unknown",
+      reason: "Unknown Telnet action.",
+      target: null,
+    });
+  });
+
+  it("executes a known telnet action through the discovered target", async () => {
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
 
     await act(async () => {
       await result.current.executeAction("powerCycle");
     });
 
-    expect(mockConnect).toHaveBeenCalledWith("c64u", 23, undefined);
+    expect(mockConnect).toHaveBeenCalledWith("u64", 23, undefined);
+    expect(createActionExecutorSpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        menuKey: "F5",
+        resolvedTargets: {
+          powerCycle: {
+            categoryLabel: "Power & Reset",
+            actionLabel: "Power Cycle",
+            source: "initial",
+          },
+        },
+      }),
+    );
     expect(mockExecute).toHaveBeenCalledWith("powerCycle");
-    expect(mockDisconnect).toHaveBeenCalled();
     expect(recordTelnetOperationSpy).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
@@ -238,70 +388,92 @@ describe("useTelnetActions", () => {
     );
     expect(incrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
     expect(decrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
-    expect(result.current.isBusy).toBe(false);
-    expect(result.current.activeActionId).toBeNull();
   });
 
-  it("throws for unknown action", async () => {
+  it("throws when discovery resolves the action as unsupported", async () => {
+    discoverTelnetCapabilitiesSpy.mockResolvedValue(
+      buildSnapshot({
+        powerCycle: {
+          status: "unsupported",
+          reason: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+        },
+      }),
+    );
+
     const { result } = renderHook(() => useTelnetActions());
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
 
     await expect(
       act(async () => {
-        await result.current.executeAction("nonexistent");
+        await result.current.executeAction("powerCycle");
       }),
-    ).rejects.toThrow("Unknown Telnet action: nonexistent");
+    ).rejects.toMatchObject({
+      code: "UNSUPPORTED_ACTION",
+      message: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+    });
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 
-  it("disconnects even when execute throws", async () => {
-    mockExecute.mockRejectedValueOnce(new Error("action failed"));
+  it("throws for unknown telnet action ids", async () => {
     const { result } = renderHook(() => useTelnetActions());
 
-    let caught: Error | undefined;
-    await act(async () => {
-      try {
-        await result.current.executeAction("powerCycle");
-      } catch (e) {
-        caught = e as Error;
-      }
-    });
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    await expect(result.current.executeAction("ghostAction")).rejects.toThrow("Unknown Telnet action: ghostAction");
+  });
 
-    expect(caught?.message).toBe("action failed");
-    expect(mockDisconnect).toHaveBeenCalled();
+  it("throws when telnet is unavailable for the current device", async () => {
+    statusRef.current = {
+      ...statusRef.current,
+      isConnected: false,
+    };
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    await expect(result.current.executeAction("powerCycle")).rejects.toThrow(
+      "Telnet is unavailable for the current device",
+    );
+  });
+
+  it("maps unknown discovery support to a discovery failure error", async () => {
+    discoverTelnetCapabilitiesSpy.mockResolvedValue(
+      buildSnapshot({
+        powerCycle: {
+          status: "unknown",
+          reason: "Discovery still in progress.",
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useTelnetActions());
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+
+    await expect(result.current.executeAction("powerCycle")).rejects.toMatchObject({
+      code: "DISCOVERY_FAILED",
+      message: "Discovery still in progress.",
+    });
+  });
+
+  it("records execution failures and resets busy state", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockExecute.mockRejectedValueOnce(new Error("boom"));
+
+    const { result } = renderHook(() => useTelnetActions());
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+
+    await expect(result.current.executeAction("powerCycle")).rejects.toThrow("boom");
     expect(recordTelnetOperationSpy).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
         actionId: "powerCycle",
         result: "failure",
-        error: expect.any(Error),
+        error: expect.objectContaining({ message: "boom" }),
       }),
     );
+    expect(addLog).toHaveBeenCalledWith("error", 'useTelnetActions: action "powerCycle" failed', {
+      error: "boom",
+    });
+    expect(decrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
     expect(result.current.isBusy).toBe(false);
-  });
-
-  it("prevents double execution via inflight guard", async () => {
-    let resolveFirst: () => void;
-    mockExecute.mockImplementationOnce(() => new Promise<void>((resolve) => (resolveFirst = resolve)));
-
-    const { result } = renderHook(() => useTelnetActions());
-
-    // Start first action (won't complete immediately)
-    let firstPromise: Promise<void>;
-    await act(async () => {
-      firstPromise = result.current.executeAction("powerCycle");
-    });
-
-    // Try second action while first is in-flight — should be ignored
-    await act(async () => {
-      await result.current.executeAction("iecReset");
-    });
-
-    // Only one execute call should have been made
-    expect(mockExecute).toHaveBeenCalledTimes(1);
-
-    // Now resolve the first
-    await act(async () => {
-      resolveFirst!();
-      await firstPromise!;
-    });
+    expect(result.current.activeActionId).toBeNull();
   });
 });

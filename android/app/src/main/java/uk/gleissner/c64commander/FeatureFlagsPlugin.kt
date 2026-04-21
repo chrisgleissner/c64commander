@@ -91,6 +91,31 @@ class FeatureFlagsPlugin : Plugin() {
   }
 
   @PluginMethod
+  fun clearFlag(call: PluginCall) {
+    val key = call.getString("key")
+    if (key.isNullOrBlank()) {
+      call.reject("key is required")
+      return
+    }
+
+    scope.launch {
+      try {
+        context.featureFlagsDataStore.edit { prefs ->
+          prefs.remove(booleanPreferencesKey(key))
+        }
+        withContext(Dispatchers.Main) {
+          call.resolve()
+        }
+      } catch (error: Exception) {
+        Log.e(logTag, "Failed to clear feature flag", error)
+        withContext(Dispatchers.Main) {
+          call.reject(error.message, error)
+        }
+      }
+    }
+  }
+
+  @PluginMethod
   fun getAllFlags(call: PluginCall) {
     val keysArray: JSArray? = call.getArray("keys")
     val keys = mutableListOf<String>()

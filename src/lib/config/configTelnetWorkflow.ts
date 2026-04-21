@@ -8,6 +8,7 @@
 
 import { createActionExecutor } from "@/lib/telnet/telnetActionExecutor";
 import { matchLabel } from "@/lib/telnet/telnetMenuNavigator";
+import type { TelnetResolvedActionTarget } from "@/lib/telnet/telnetCapabilityDiscovery";
 import type { ParsedMenu, TelnetMenuKey, TelnetScreen, TelnetSessionApi } from "@/lib/telnet/telnetTypes";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 
@@ -119,9 +120,16 @@ const basename = (path: string) => {
   return parts[parts.length - 1] ?? "";
 };
 
-export const saveRemoteConfigFromTemp = async (session: TelnetSessionApi, menuKey: TelnetMenuKey) => {
+export const saveRemoteConfigFromTemp = async (
+  session: TelnetSessionApi,
+  menuKey: TelnetMenuKey,
+  resolvedTarget?: TelnetResolvedActionTarget,
+) => {
   await openDirectoryPath(session, "/Temp");
-  const executor = createActionExecutor(session, { menuKey });
+  const executor = createActionExecutor(session, {
+    menuKey,
+    resolvedTargets: resolvedTarget ? { saveConfigToFile: resolvedTarget } : undefined,
+  });
   await executor.execute("saveConfigToFile");
 };
 

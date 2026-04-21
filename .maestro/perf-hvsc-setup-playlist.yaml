@@ -59,18 +59,21 @@ env:
 - extendedWaitUntil:
     visible: "Open DEMOS"
     timeout: ${LONG_TIMEOUT}
-# Select the playable top-level corpora using stable checkbox labels.
-- assertVisible: "Select DEMOS"
-- tapOn: "Select DEMOS"
-- assertVisible: "Select GAMES"
-- tapOn: "Select GAMES"
-- assertVisible: "Select MUSICIANS"
-- tapOn: "Select MUSICIANS"
+# The folder row's aria-label overrides the inner checkbox in AccessibilityNodeInfo,
+# so Maestro cannot select checkboxes by text or id. Tap the checkbox area by
+# coordinate (left ~9% of screen, row center Y %).
+# Row bounds from Maestro hierarchy on Pixel 4 (1080x2280):
+#   DEMOS      [66,981][1012,1089]   → checkbox ≈ (9%, 45.4%)
+#   GAMES      [66,1237][1012,1347]  → checkbox ≈ (9%, 56.7%)
+#   MUSICIANS  [66,1366][1012,1476]  → checkbox ≈ (9%, 62.3%)
+- tapOn:
+    point: "9%, 45%"
+- tapOn:
+    point: "9%, 57%"
+- tapOn:
+    point: "9%, 62%"
 - waitForAnimationToEnd
 - tapOn: "Add to playlist"
-# The fast path completes in sub-second, so the "Items added" toast
-# vanishes before Maestro can catch it. Assert the persistent UI instead:
-# "Clear playlist" only appears when the playlist has tracks.
 - extendedWaitUntil:
     visible: "Clear playlist"
     timeout: ${LONG_TIMEOUT}

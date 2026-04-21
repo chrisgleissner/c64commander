@@ -15,7 +15,6 @@ MAESTRO_TAGS="${MAESTRO_TAGS:-hvsc-perf}"
 DEVICE_ID="${DEVICE_ID:-}"
 LOOPS="${LOOPS:-3}"
 WARMUP="${WARMUP:-1}"
-LANE="${LANE:-full}"
 
 usage() {
   cat <<EOF
@@ -33,7 +32,6 @@ Options:
   --maestro-tags <tags>           Maestro tag filter list (default: $MAESTRO_TAGS)
   --loops <n>                     Number of measured loops (default: $LOOPS)
   --warmup <n>                    Number of warm-up loops to discard (default: $WARMUP)
-  --lane <5k|full>                Benchmark lane: 5k (~4540 items) or full (~60K) (default: $LANE)
   -h, --help                      Show this help
 EOF
 }
@@ -163,10 +161,6 @@ while [[ $# -gt 0 ]]; do
       WARMUP="$2"
       shift 2
       ;;
-    --lane)
-      LANE="$2"
-      shift 2
-      ;;
     -h|--help)
       usage
       exit 0
@@ -270,21 +264,11 @@ log "Starting multi-loop HVSC benchmark: $WARMUP warmup + $LOOPS measured loops"
 # Detect whether the tag set includes a setup phase.
 # When using hvsc-perf tags, we need to run the setup flow (hvsc-perf-setup)
 # first to download+ingest HVSC, then remaining flows in a separate pass.
-# The --lane parameter controls which setup flow variant runs:
-#   full  → hvsc-perf-setup  (baseline + full ~60K playlist)
-#   5k    → hvsc-perf-5k-setup (baseline-5k + DEMOS+GAMES ~4540 playlist)
 SETUP_TAGS=""
 REMAINING_TAGS=""
 if [[ "$MAESTRO_TAGS" == *"hvsc-perf"* ]]; then
-  if [[ "$LANE" == "5k" ]]; then
-    SETUP_TAGS="hvsc-perf-5k-setup"
-    REMAINING_TAGS="hvsc-perf,-hvsc-perf-setup"
-    log "Using 5K lane (DEMOS+GAMES ~4540 items)"
-  else
-    SETUP_TAGS="hvsc-perf-setup"
-    REMAINING_TAGS="hvsc-perf,-hvsc-perf-setup"
-    log "Using full lane (~60K items)"
-  fi
+  SETUP_TAGS="hvsc-perf-setup"
+  REMAINING_TAGS="hvsc-perf,-hvsc-perf-setup"
 fi
 
 for loop_index in $(seq 1 "$TOTAL_LOOPS"); do
@@ -408,8 +392,7 @@ node "$ROOT_DIR/scripts/hvsc/write-android-perf-summary.mjs" \
   --smoke-files="$SMOKE_FILES_ARG" \
   --telemetry-dir="$TELEMETRY_DIR" \
   --loops="$LOOPS" \
-  --warmup="$WARMUP" \
-  --lane="$LANE"
+  --warmup="$WARMUP"
 
 log "HVSC Android benchmark artifacts written to $RUN_DIR"
 log "Summary: $SUMMARY_PATH"

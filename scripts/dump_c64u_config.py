@@ -24,6 +24,8 @@ from urllib.request import Request, urlopen
 import yaml
 from yaml.dumper import SafeDumper as PySafeDumper
 
+KNOWN_DEVICE_FAMILIES = {"c64u", "u64", "u64e", "u64e2"}
+
 
 class _IndentedDumper(PySafeDumper):
     def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
@@ -275,10 +277,66 @@ def _scrape_category(
     return {"items": menu_items, "errors": errors} if errors else {"items": menu_items}
 
 
-def resolve_output_paths(output: Path, mirror_output: Optional[str], firmware_version: str) -> list[Path]:
-    outputs = [output]
+def infer_device_family(product: Optional[str]) -> str:
+    normalized = (product or "").strip().lower().replace(" ", "")
+    if not normalized:
+        return "unknown"
+    if "ultimate64eliteii" in normalized or "ultimate64-ii" in normalized or "u64e2" in normalized:
+        return "u64e2"
+    if "ultimate64elite" in normalized or normalized == "u64e" or "u64e" in normalized:
+        return "u64e"
+    if "ultimate64" in normalized or normalized == "u64":
+        return "u64"
+    if "c64ultimate" in normalized or normalized == "c64u":
+        return "c64u"
+    return "unknown"
+
+
+def resolve_device_filename_prefix(device_family: str) -> str:
+    return device_family if device_family in KNOWN_DEVICE_FAMILIES else "c64u"
+
+
+def normalize_device_output_path(output: Path, device_family: str) -> Path:
+    try:
+        devices_index = output.parts.index("devices")
+    except ValueError:
+        return output
+
+    if devices_index + 1 >= len(output.parts):
+        return output
+
+    target_prefix = resolve_device_filename_prefix(device_family)
+    filename = output.name
+    match = re.match(r"^(c64u|u64|u64e|u64e2)(-.+)$", filename)
+    if match is None:
+        return output
+
+    current_prefix, suffix = match.groups()
+    if current_prefix == target_prefix:
+        return output
+
+    return output.with_name(f"{target_prefix}{suffix}")
+
+
+def resolve_output_paths(
+    output: Path,
+    mirror_output: Optional[str],
+    firmware_version: str,
+    device_family: str = "c64u",
+) -> list[Path]:
+    outputs = [normalize_device_output_path(output, device_family)]
     if mirror_output:
-        outputs.append(Path(mirror_output.format(firmware_version=firmware_version)))
+        outputs.append(
+            normalize_device_output_path(
+                Path(
+                    mirror_output.format(
+                        firmware_version=firmware_version,
+                        device_family=device_family,
+                    )
+                ),
+                device_family,
+            )
+        )
     return outputs
 
 
@@ -325,8 +383,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--mirror-output",
-        default="docs/c64/devices/c64u/{firmware_version}/c64u-config.yaml",
-        help="Optional secondary YAML output path template. Use {firmware_version} as a placeholder.",
+        default="docs/c64/devices/{device_family}/{firmware_version}/c64u-config.yaml",
+        help="Optional secondary YAML output path template. Use {device_family} and {firmware_version} as placeholders.",
     )
     parser.add_argument(
         "--cfg-output",
@@ -335,8 +393,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--cfg-mirror-output",
-        default="docs/c64/devices/c64u/{firmware_version}/c64u-config.cfg",
-        help="Optional secondary cfg output path template. Use {firmware_version} as a placeholder.",
+        default="docs/c64/devices/{device_family}/{firmware_version}/c64u-config.cfg",
+        help="Optional secondary cfg output path template. Use {device_family} and {firmware_version} as placeholders.",
     )
     parser.add_argument(
         "--timeout",
@@ -436,8 +494,9 @@ def main() -> int:
     )
 
     firmware_version = str(info_payload.get("firmware_version") or "unknown")
-    yaml_outputs = resolve_output_paths(output_path, args.mirror_output, firmware_version)
-    cfg_outputs = resolve_output_paths(cfg_output_path, args.cfg_mirror_output, firmware_version)
+    device_family = infer_device_family(info_payload.get("product"))
+    yaml_outputs = resolve_output_paths(output_path, args.mirror_output, firmware_version, device_family)
+    cfg_outputs = resolve_output_paths(cfg_output_path, args.cfg_mirror_output, firmware_version, device_family)
 
     write_text_outputs(yaml_text, yaml_outputs)
     write_text_outputs(build_cfg_text(snapshot), cfg_outputs)

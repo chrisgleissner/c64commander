@@ -24,6 +24,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import type { TelnetActionId } from "@/lib/telnet/telnetTypes";
+import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery";
 
 const buildPrinterTelnetActions = (enabled: boolean) => {
   return enabled
@@ -43,6 +45,7 @@ interface PrinterManagerProps {
   telnetBusy?: boolean;
   telnetActiveActionId?: string | null;
   onTelnetAction?: (actionId: string) => Promise<void>;
+  getTelnetActionSupport?: (actionId: TelnetActionId) => TelnetActionSupport;
 }
 
 export function PrinterManager({
@@ -54,6 +57,7 @@ export function PrinterManager({
   telnetBusy = false,
   telnetActiveActionId = null,
   onTelnetAction,
+  getTelnetActionSupport,
 }: PrinterManagerProps) {
   const { profile } = useDisplayProfile();
   const trace = useActionTrace("PrinterManager");
@@ -69,9 +73,16 @@ export function PrinterManager({
     ),
   );
   const printerEnabled = printerEnabledValue.trim().toLowerCase() === "enabled";
-  const showTelnetControls = telnetAvailable && printerEnabled && typeof onTelnetAction === "function";
   const printerTelnetActions =
-    telnetAvailable && typeof onTelnetAction === "function" ? buildPrinterTelnetActions(printerEnabled) : [];
+    telnetAvailable && typeof onTelnetAction === "function" && typeof getTelnetActionSupport === "function"
+      ? buildPrinterTelnetActions(printerEnabled).map((action) => ({
+          ...action,
+          support: getTelnetActionSupport(action.actionId),
+        }))
+      : [];
+  const disabledPrinterTelnetNotes = printerTelnetActions.filter(
+    (action) => action.support.status !== "supported" && action.support.reason,
+  );
 
   const printerBusValue = Number(
     resolveConfigValue(
@@ -238,19 +249,27 @@ export function PrinterManager({
               ))}
           </div>
           {printerTelnetActions.length > 0 && (
-            <div className="flex items-center gap-2 pt-1">
-              {printerTelnetActions.map((action) => (
-                <Button
-                  key={action.actionId}
-                  variant="outline"
-                  size="sm"
-                  className="h-6 px-2 text-xs"
-                  data-testid={action.testId}
-                  disabled={!isConnected || machineTaskBusy || telnetBusy}
-                  onClick={() => void onTelnetAction?.(action.actionId)}
-                >
-                  {telnetActiveActionId === action.actionId ? action.loadingLabel : action.label}
-                </Button>
+            <div className="space-y-1 pt-1">
+              <div className="flex items-center gap-2">
+                {printerTelnetActions.map((action) => (
+                  <Button
+                    key={action.actionId}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    data-testid={action.testId}
+                    disabled={!isConnected || machineTaskBusy || telnetBusy || action.support.status !== "supported"}
+                    title={action.support.status === "supported" ? undefined : (action.support.reason ?? undefined)}
+                    onClick={() => void onTelnetAction?.(action.actionId)}
+                  >
+                    {telnetActiveActionId === action.actionId ? action.loadingLabel : action.label}
+                  </Button>
+                ))}
+              </div>
+              {disabledPrinterTelnetNotes.map((action) => (
+                <p key={`${action.actionId}-reason`} className="text-xs text-muted-foreground">
+                  {action.label}: {action.support.reason}
+                </p>
               ))}
             </div>
           )}

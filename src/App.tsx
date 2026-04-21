@@ -25,7 +25,6 @@ import { redactTreeUri } from "@/lib/native/safUtils";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
-import { TestHeartbeat } from "@/components/TestHeartbeat";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
@@ -45,7 +44,16 @@ import { LightingStudioProvider } from "@/hooks/useLightingStudio";
 import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
-const CoverageProbePage = lazy(() => import("./pages/CoverageProbePage"));
+
+export const shouldBundleCoverageProbeModules = () =>
+  import.meta.env.VITE_ENABLE_TEST_PROBES === "1" || !import.meta.env.PROD;
+
+const coverageProbeModulesAvailable = shouldBundleCoverageProbeModules();
+
+const CoverageProbePage = coverageProbeModulesAvailable ? lazy(() => import("./pages/CoverageProbePage")) : null;
+const TestHeartbeat = coverageProbeModulesAvailable
+  ? lazy(async () => ({ default: (await import("@/components/TestHeartbeat")).TestHeartbeat }))
+  : null;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,6 +91,7 @@ const GlobalNavigationBlocker = () => {
 
 export const shouldEnableCoverageProbe = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (!shouldBundleCoverageProbeModules()) return false;
   if (typeof window !== "undefined") {
     return Boolean((window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
   }
@@ -122,11 +131,17 @@ const AppRoutes = () => {
           <ConnectionController />
           <DemoModeInterstitial />
           <LightingStudioDialog />
-          {coverageProbeEnabled && <TestHeartbeat />}
+          {coverageProbeEnabled && TestHeartbeat ? (
+            <Suspense fallback={null}>
+              <TestHeartbeat />
+            </Suspense>
+          ) : null}
           <Suspense fallback={<RouteLoadingFallback />}>
             <SwipeNavigationLayer />
             <Routes>
-              {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
+              {coverageProbeEnabled && CoverageProbePage ? (
+                <Route path="/__coverage__" element={<CoverageProbePage />} />
+              ) : null}
               <Route path="*" element={<NotFoundForUnknownPaths />} />
             </Routes>
           </Suspense>

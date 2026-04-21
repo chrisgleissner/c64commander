@@ -273,7 +273,7 @@ C64 Commander includes **Device Safety** controls under **Settings > Device Safe
 - **App expired**: SideStore refreshes every 7 days automatically.
 - **Account/App ID limits**: Remove unused sideloaded apps and retry.
 - **Install/signing errors**: Re-download the IPA and verify its checksum.
-- **Telnet-backed controls**: Power Cycle, Clear Flash, and other Telnet-only actions use the native socket bridge on iOS and Android.
+- **Telnet-backed controls**: Power Cycle, Clear Flash, and other Telnet-only actions use the native socket bridge on iOS and Android. Support is discovered from the connected device's live Telnet menu graph, so device-specific gaps stay visible as disabled controls with inline explanation instead of disappearing.
 
 ## Advanced Topics
 

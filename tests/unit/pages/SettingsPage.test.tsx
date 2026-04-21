@@ -93,6 +93,9 @@ const {
   featureFlagsRef: {
     current: {
       hvsc_enabled: true,
+      commoserve_enabled: true,
+      lighting_studio_enabled: false,
+      reu_snapshot_enabled: false,
     },
   },
   savedDevicesRef: {
@@ -205,7 +208,71 @@ vi.mock("@/hooks/useListPreviewLimit", () => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
-  useFeatureFlag: (key: "hvsc_enabled") => ({
+  useFeatureFlags: () => ({
+    flags: featureFlagsRef.current,
+    resolved: {
+      hvsc_enabled: {
+        id: "hvsc_enabled",
+        value: featureFlagsRef.current.hvsc_enabled,
+        visible: true,
+        editable: true,
+        definition: {
+          id: "hvsc_enabled",
+          title: "Enable HVSC downloads",
+          description: "Shows HVSC download and ingest controls on the Play page.",
+          group: "stable",
+          developer_only: false,
+          default: false,
+        },
+      },
+      commoserve_enabled: {
+        id: "commoserve_enabled",
+        value: featureFlagsRef.current.commoserve_enabled,
+        visible: true,
+        editable: true,
+        definition: {
+          id: "commoserve_enabled",
+          title: "CommoServe",
+          description: "Enable the online archive source.",
+          group: "stable",
+          developer_only: false,
+          default: false,
+        },
+      },
+      lighting_studio_enabled: {
+        id: "lighting_studio_enabled",
+        value: featureFlagsRef.current.lighting_studio_enabled,
+        visible: developerModeEnabledRef.current,
+        editable: developerModeEnabledRef.current,
+        definition: {
+          id: "lighting_studio_enabled",
+          title: "Lighting Studio",
+          description: "Show lighting automation controls and diagnostics.",
+          group: "experimental",
+          developer_only: true,
+          default: false,
+        },
+      },
+      reu_snapshot_enabled: {
+        id: "reu_snapshot_enabled",
+        value: featureFlagsRef.current.reu_snapshot_enabled,
+        visible: developerModeEnabledRef.current,
+        editable: developerModeEnabledRef.current,
+        definition: {
+          id: "reu_snapshot_enabled",
+          title: "REU Snapshots",
+          description: "Enable Save REU and Restore REU Snapshot functionality.",
+          group: "experimental",
+          developer_only: true,
+          default: false,
+        },
+      },
+    },
+    setFlag: mockSetFeatureFlag,
+  }),
+  useFeatureFlag: (
+    key: "hvsc_enabled" | "commoserve_enabled" | "lighting_studio_enabled" | "reu_snapshot_enabled",
+  ) => ({
     value: featureFlagsRef.current[key],
     isLoaded: true,
     setValue: mockSetFeatureFlag,
@@ -311,8 +378,8 @@ vi.mock("@/hooks/useActionTrace", () => ({
 vi.mock("@/lib/tracing/traceExport", () => ({}));
 
 vi.mock("@/lib/config/settingsTransfer", () => ({
-  exportSettingsJson: vi.fn(() => '{"version":1}'),
-  importSettingsJson: vi.fn(() => ({ ok: true })),
+  exportSettingsJson: vi.fn(async () => '{"version":2}'),
+  importSettingsJson: vi.fn(async () => ({ ok: true })),
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
@@ -336,8 +403,6 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveArchiveHostOverride: vi.fn(),
   saveArchiveClientIdOverride: vi.fn(),
   saveArchiveUserAgentOverride: vi.fn(),
-  loadCommoserveEnabled: vi.fn(() => true),
-  saveCommoserveEnabled: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveStartupDiscoveryWindowMs: vi.fn(),
@@ -584,7 +649,24 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-add-device")).toHaveAccessibleName("Add device");
     expect(screen.getByTestId("settings-delete-device")).toHaveAccessibleName("Delete device");
     expect(screen.getByRole("heading", { name: "HVSC" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Stable Features" })).toBeInTheDocument();
     expect(screen.getByText(/enable hvsc downloads/i)).toBeInTheDocument();
+  });
+
+  it("renders stable feature rows before experimental ones", () => {
+    developerModeEnabledRef.current = true;
+
+    renderSettingsPage();
+
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((node) => node.textContent ?? "");
+    expect(headings.indexOf("Stable Features")).toBeGreaterThanOrEqual(0);
+    expect(headings.indexOf("Experimental Features")).toBeGreaterThan(headings.indexOf("Stable Features"));
+
+    const stableSection = screen.getByTestId("settings-feature-group-stable");
+    const experimentalSection = screen.getByTestId("settings-feature-group-experimental");
+    expect(within(stableSection).getByTestId("feature-flag-hvsc_enabled")).toBeInTheDocument();
+    expect(within(stableSection).getByTestId("feature-flag-commoserve_enabled")).toBeInTheDocument();
+    expect(within(experimentalSection).getByTestId("feature-flag-lighting_studio_enabled")).toBeInTheDocument();
   });
 
   it("orders core sections and places network timing under Device Safety", () => {
@@ -920,7 +1002,7 @@ describe("SettingsPage", () => {
     expect(saveDiscoveryProbeTimeoutMs).toHaveBeenCalledWith(0);
   });
 
-  it("reports settings export failures", () => {
+  it("reports settings export failures", async () => {
     const createObjectURL = vi.fn(() => {
       throw new Error("export blocked");
     });
@@ -933,12 +1015,14 @@ describe("SettingsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /export settings/i }));
 
-    expect(reportUserError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: "SETTINGS_EXPORT",
-        description: "export blocked",
-      }),
-    );
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "SETTINGS_EXPORT",
+          description: "export blocked",
+        }),
+      );
+    });
   });
 
   it("reports file read failures during settings import", async () => {
@@ -1026,6 +1110,66 @@ describe("SettingsPage", () => {
     expect(saveSpy).toHaveBeenCalledWith("RELAXED");
   });
 
+  it("feeds persisted safety mode changes into the runtime interaction scheduler", async () => {
+    (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = true;
+
+    try {
+      renderSettingsPage();
+
+      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+      expect(deviceSafetySection).toBeTruthy();
+      const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
+      fireEvent.change(trigger, { target: { value: "CONSERVATIVE" } });
+
+      expect(deviceSafetySettings.loadDeviceSafetyConfig().mode).toBe("CONSERVATIVE");
+
+      const { updateDeviceConnectionState } = await import("@/lib/deviceInteraction/deviceStateStore");
+      const { resetInteractionState, withFtpInteraction } =
+        await import("@/lib/deviceInteraction/deviceInteractionManager");
+
+      updateDeviceConnectionState("REAL_CONNECTED");
+      resetInteractionState("settings-page-test");
+
+      let activeHandlers = 0;
+      let maxActiveHandlers = 0;
+      const handler = vi.fn(async () => {
+        activeHandlers += 1;
+        maxActiveHandlers = Math.max(maxActiveHandlers, activeHandlers);
+        await new Promise<void>((resolve) => {
+          setTimeout(() => {
+            activeHandlers -= 1;
+            resolve();
+          }, 25);
+        });
+      });
+
+      await Promise.all(
+        Array.from({ length: 3 }, (_, index) =>
+          withFtpInteraction(
+            {
+              action: {
+                correlationId: `settings-safety-${index}`,
+                origin: "user",
+                name: `settings-safety-${index}`,
+                componentName: "SettingsPage.test",
+              },
+              operation: "list",
+              path: `/disk-${index}`,
+              intent: "system",
+            },
+            handler,
+          ),
+        ),
+      );
+
+      expect(maxActiveHandlers).toBe(1);
+    } finally {
+      const { updateDeviceConnectionState } = await import("@/lib/deviceInteraction/deviceStateStore");
+      updateDeviceConnectionState("UNKNOWN");
+      delete (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling;
+    }
+  });
+
   it("exports settings and shows a toast", async () => {
     const createObjectURL = vi.fn(() => "blob:settings");
     const revokeObjectURL = vi.fn();
@@ -1050,14 +1194,16 @@ describe("SettingsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /export settings/i }));
 
-    expect(exportSettingsJson).toHaveBeenCalled();
-    expect(createObjectURL).toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith({ title: "Settings export ready" });
+    await waitFor(() => {
+      expect(exportSettingsJson).toHaveBeenCalled();
+      expect(createObjectURL).toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith({ title: "Settings export ready" });
+    });
     createElementSpy.mockRestore();
   });
 
   it("imports settings and refreshes local state", async () => {
-    vi.mocked(importSettingsJson).mockReturnValue({ ok: true });
+    vi.mocked(importSettingsJson).mockResolvedValue({ ok: true });
     const file = new File(['{"version":1}'], "settings.json", {
       type: "application/json",
     });
@@ -1077,7 +1223,7 @@ describe("SettingsPage", () => {
   });
 
   it("reports import validation errors", async () => {
-    vi.mocked(importSettingsJson).mockReturnValue({
+    vi.mocked(importSettingsJson).mockResolvedValue({
       ok: false,
       error: "Invalid payload",
     });

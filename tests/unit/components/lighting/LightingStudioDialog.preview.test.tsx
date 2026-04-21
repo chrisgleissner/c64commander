@@ -14,6 +14,10 @@ vi.mock("@/hooks/useLightingStudio", () => ({
   useLightingStudio: () => mockUseLightingStudio(),
 }));
 
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlag: () => ({ value: true }),
+}));
+
 const buildCapability = () => ({
   supported: true,
   colorEncoding: "named" as const,

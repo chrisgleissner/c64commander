@@ -45,4 +45,23 @@ describe("FeatureFlagsWeb", () => {
     });
     expect(result.flags).toEqual({ flag_a: true, flag_b: false });
   });
+
+  it("clearFlag removes the stored override from localStorage and sessionStorage", async () => {
+    await plugin.setFlag({ key: "clearable", value: true });
+    expect(localStorage.getItem("c64u_feature_flag:clearable")).toBe("1");
+    expect(sessionStorage.getItem("c64u_feature_flag:clearable")).toBe("1");
+
+    await plugin.clearFlag({ key: "clearable" });
+
+    expect(localStorage.getItem("c64u_feature_flag:clearable")).toBeNull();
+    expect(sessionStorage.getItem("c64u_feature_flag:clearable")).toBeNull();
+    const result = await plugin.getFlag({ key: "clearable" });
+    expect(result).toEqual({});
+  });
+
+  it("clearFlag is idempotent when no override exists", async () => {
+    await expect(plugin.clearFlag({ key: "never_set" })).resolves.toBeUndefined();
+    const result = await plugin.getFlag({ key: "never_set" });
+    expect(result).toEqual({});
+  });
 });

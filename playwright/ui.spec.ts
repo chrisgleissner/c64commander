@@ -186,7 +186,7 @@ test.describe("UI coverage", () => {
 
   const enableHvscDownloads = async (page: Page) => {
     await enableDeveloperMode(page);
-    const toggle = page.getByLabel("Enable HVSC downloads");
+    const toggle = page.getByTestId("feature-flag-hvsc_enabled");
     await expect(toggle).toBeVisible();
     if (!(await toggle.isChecked())) {
       await toggle.click();

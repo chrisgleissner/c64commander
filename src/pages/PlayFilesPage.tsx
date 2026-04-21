@@ -105,6 +105,7 @@ import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { syncPlaybackDecisionFromTrace } from "@/lib/diagnostics/decisionState";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
@@ -254,6 +255,7 @@ export default function PlayFilesPage() {
   const featureFlags = useFeatureFlags();
   const hvscControlsEnabled = shouldShowHvscControls(featureFlags);
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
+  const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -1378,7 +1380,7 @@ export default function PlayFilesPage() {
       <AppBar title="Play Files" />
       <PageContainer>
         <PageStack>
-          {lightingResolved.sourceCue ? (
+          {lightingStudioEnabled && lightingResolved.sourceCue ? (
             <LightingAutomationCue
               label={lightingResolved.sourceCue.label}
               onOpenStudio={openStudio}

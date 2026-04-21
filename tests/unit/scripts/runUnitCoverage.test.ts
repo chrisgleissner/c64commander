@@ -1,19 +1,32 @@
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   collectJsdomCoverageFiles,
   collectSharedJsdomCoverageFiles,
   createCoveragePlan,
   dedicatedJsdomCoverageFiles,
+  ensureReportsDirectory,
   getNycMergeArgs,
   getProjectFilesForRun,
   getNycReportArgs,
   getVitestCoverageArgs,
+  coverageRunMaxAttempts,
   jsdomChunkCount,
+  runOrThrow,
   splitFilesIntoChunks,
   unitCoverageRuns,
+  wrapCommandWithDirectoryKeepalive,
 } from "../../../scripts/run-unit-coverage.mjs";
+
+type UnitCoverageRun = (typeof unitCoverageRuns)[number];
+type UnitCoverageRunWithFiles = UnitCoverageRun & { files: string[] };
+
+function hasDedicatedFiles(runConfig: UnitCoverageRun): runConfig is UnitCoverageRunWithFiles {
+  return "files" in runConfig && Array.isArray(runConfig.files);
+}
 
 describe("run-unit-coverage", () => {
   it("locks unit coverage to split jsdom shards and node project runs", () => {
@@ -64,7 +77,7 @@ describe("run-unit-coverage", () => {
 
   it("runs the current heavy jsdom coverage specs in dedicated single-file shards", () => {
     const rootDir = process.cwd();
-    const dedicatedRuns = unitCoverageRuns.filter((runConfig) => Array.isArray(runConfig.files));
+    const dedicatedRuns = unitCoverageRuns.filter(hasDedicatedFiles);
 
     expect(dedicatedRuns).toHaveLength(dedicatedJsdomCoverageFiles.length);
     expect(dedicatedRuns.map((runConfig) => getProjectFilesForRun(rootDir, runConfig))).toEqual(
@@ -75,6 +88,12 @@ describe("run-unit-coverage", () => {
   it("builds per-project vitest coverage arguments", () => {
     const rootDir = process.cwd();
     const plan = createCoveragePlan(rootDir);
+    const dedicatedRuns = unitCoverageRuns.filter(hasDedicatedFiles);
+    const firstDedicatedRun = dedicatedRuns[0];
+
+    if (!firstDedicatedRun) {
+      throw new Error("Expected at least one dedicated jsdom coverage run");
+    }
 
     const jsdomArgs = getVitestCoverageArgs(
       rootDir,
@@ -83,8 +102,8 @@ describe("run-unit-coverage", () => {
     );
     const dedicatedArgs = getVitestCoverageArgs(
       rootDir,
-      unitCoverageRuns[0],
-      plan.projectReports[unitCoverageRuns[0].reportKey],
+      firstDedicatedRun,
+      plan.projectReports[firstDedicatedRun.reportKey],
     );
     const nodeArgs = getVitestCoverageArgs(rootDir, unitCoverageRuns.at(-1), plan.projectReports.node);
     const jsdomFiles = collectJsdomCoverageFiles(rootDir);
@@ -100,7 +119,7 @@ describe("run-unit-coverage", () => {
     expect(jsdomArgs).toContain("--maxWorkers=1");
     expect(jsdomArgs).toContain("--minWorkers=1");
     expect(jsdomArgs).toContain("--no-file-parallelism");
-    expect(dedicatedArgs).toContain(unitCoverageRuns[0].files[0]);
+    expect(dedicatedArgs).toContain(firstDedicatedRun.files[0]);
     expect(jsdomFiles.length).toBeGreaterThan(0);
     expect(sharedJsdomFiles.length).toBe(jsdomFiles.length - dedicatedJsdomCoverageFiles.length);
     expect(firstChunkFiles.length).toBeGreaterThan(0);
@@ -136,5 +155,49 @@ describe("run-unit-coverage", () => {
 
     expect(plan.coverageArtifacts.lcov).toBe(path.join(rootDir, "coverage", "lcov.info"));
     expect(plan.coverageArtifacts.json).toBe(path.join(rootDir, "coverage", "coverage-final.json"));
+  });
+
+  it("creates the shard reports directory together with the Vitest temp directory", () => {
+    const tempRoot = mkdtempSync(path.join(os.tmpdir(), "run-unit-coverage-"));
+    const reportsDirectory = path.join(tempRoot, "jsdom-27");
+
+    try {
+      ensureReportsDirectory(reportsDirectory);
+
+      expect(existsSync(reportsDirectory)).toBe(true);
+      expect(existsSync(path.join(reportsDirectory, ".tmp"))).toBe(true);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("retries a failed coverage shard once before surfacing the exit code", () => {
+    const spawn = vi.fn().mockReturnValueOnce({ status: 1 }).mockReturnValueOnce({ status: 0 });
+    const onRetry = vi.fn();
+
+    expect(() =>
+      runOrThrow(process.execPath, ["coverage-run"], "unit-jsdom chunk 1/32 coverage", process.cwd(), {
+        maxAttempts: coverageRunMaxAttempts,
+        spawn,
+        onRetry,
+      }),
+    ).not.toThrow();
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledWith({ attempt: 1, status: 1 });
+  });
+
+  it("wraps a coverage command with a keepalive loop for the reports temp directory", () => {
+    const wrapped = wrapCommandWithDirectoryKeepalive(
+      process.execPath,
+      ["node_modules/vitest/vitest.mjs", "run"],
+      "/tmp/c64commander/.cov-unit/jsdom-1/.tmp",
+    );
+
+    expect(wrapped.command).toBe("bash");
+    expect(wrapped.args[0]).toBe("-lc");
+    expect(wrapped.args[1]).toContain('keepalive() { while :; do mkdir -p "$keepalive_dir"; sleep 0.2; done; }');
+    expect(wrapped.args[1]).toContain("/tmp/c64commander/.cov-unit/jsdom-1/.tmp");
+    expect(wrapped.args[1]).toContain("node_modules/vitest/vitest.mjs");
   });
 });

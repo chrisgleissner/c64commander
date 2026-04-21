@@ -6,6 +6,9 @@ import { ConnectionController } from "@/components/ConnectionController";
 
 const connectionState = {
   value: "UNKNOWN" as "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO",
+  lastProbeAtMs: null as number | null,
+  lastProbeSucceededAtMs: null as number | null,
+  lastProbeFailedAtMs: null as number | null,
 };
 
 const discoverConnectionMock = vi.fn();
@@ -18,9 +21,9 @@ vi.mock("@/hooks/useConnectionState", () => ({
     state: connectionState.value,
     lastDiscoveryTrigger: null,
     lastTransitionAtMs: 0,
-    lastProbeAtMs: null,
-    lastProbeSucceededAtMs: null,
-    lastProbeFailedAtMs: null,
+    lastProbeAtMs: connectionState.lastProbeAtMs,
+    lastProbeSucceededAtMs: connectionState.lastProbeSucceededAtMs,
+    lastProbeFailedAtMs: connectionState.lastProbeFailedAtMs,
     lastProbeError: null,
     demoInterstitialVisible: false,
   }),
@@ -33,9 +36,9 @@ vi.mock("@/lib/connection/connectionManager", () => ({
     state: connectionState.value,
     lastDiscoveryTrigger: null,
     lastTransitionAtMs: 0,
-    lastProbeAtMs: null,
-    lastProbeSucceededAtMs: null,
-    lastProbeFailedAtMs: null,
+    lastProbeAtMs: connectionState.lastProbeAtMs,
+    lastProbeSucceededAtMs: connectionState.lastProbeSucceededAtMs,
+    lastProbeFailedAtMs: connectionState.lastProbeFailedAtMs,
     lastProbeError: null,
     demoInterstitialVisible: false,
   }),
@@ -58,6 +61,9 @@ vi.mock("@/lib/secureStorage", () => ({
 describe("ConnectionController", () => {
   beforeEach(() => {
     connectionState.value = "UNKNOWN";
+    connectionState.lastProbeAtMs = null;
+    connectionState.lastProbeSucceededAtMs = null;
+    connectionState.lastProbeFailedAtMs = null;
     discoverConnectionMock.mockReset();
     discoverConnectionMock.mockResolvedValue(undefined);
     initializeConnectionManagerMock.mockReset();
@@ -249,6 +255,36 @@ describe("ConnectionController", () => {
       vi.unstubAllEnvs();
       windowWithProbeGate.__c64uAllowBackgroundRediscovery = previousAllow;
       vi.useRealTimers();
+    }
+  });
+
+  it("reprobes on visibility resume after the last probe has gone stale", async () => {
+    const originalHidden = Object.getOwnPropertyDescriptor(document, "hidden");
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get: () => false,
+    });
+
+    try {
+      connectionState.value = "REAL_CONNECTED";
+      connectionState.lastProbeAtMs = Date.now() - 120_000;
+      connectionState.lastProbeSucceededAtMs = connectionState.lastProbeAtMs;
+
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      expect(discoverConnectionMock).toHaveBeenCalledWith("resume");
+    } finally {
+      if (originalHidden) {
+        Object.defineProperty(document, "hidden", originalHidden);
+      }
     }
   });
 

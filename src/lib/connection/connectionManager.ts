@@ -32,7 +32,7 @@ import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteraction
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
-export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch";
+export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
 
 export type ProbeInfoResult = {
   ok: boolean;

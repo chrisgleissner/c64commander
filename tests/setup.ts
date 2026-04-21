@@ -9,7 +9,24 @@
 import "@testing-library/jest-dom";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
+import {
+  FEATURE_FLAG_IDS as REGISTERED_FEATURE_FLAG_IDS,
+  type FeatureFlagId,
+} from "@/lib/config/featureFlagsRegistry.generated";
+
+const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
+const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";
+
+type TestFeatureFlagId = FeatureFlagId;
+type TestFeatureFlagState = {
+  developerMode?: boolean;
+  overrides?: Partial<Record<TestFeatureFlagId, boolean>>;
+};
+
+declare global {
+  var __setFeatureFlagTestState: ((state?: TestFeatureFlagState) => void) | undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Shared setup (runs in both Node and jsdom environments)
@@ -105,11 +122,105 @@ const ensureLocalStorage = () => {
   }
 };
 
+const canWriteStorage = (storage: unknown): storage is Pick<Storage, "setItem" | "removeItem"> =>
+  typeof storage === "object" &&
+  storage !== null &&
+  typeof (storage as Storage).setItem === "function" &&
+  typeof (storage as Storage).removeItem === "function";
+
+const getAvailableStorages = () => {
+  const storages: Array<unknown> = [];
+
+  if (typeof localStorage !== "undefined") {
+    storages.push(localStorage);
+  }
+
+  if (typeof sessionStorage !== "undefined") {
+    storages.push(sessionStorage);
+  }
+
+  return storages;
+};
+
+const getStoredFeatureFlagIds = (storage: unknown): string[] => {
+  if (!storage || typeof storage !== "object" || typeof (storage as Storage).key !== "function") return [];
+
+  const featureFlagIds: string[] = [];
+  for (let index = 0; index < (storage as Storage).length; index += 1) {
+    const key = (storage as Storage).key(index);
+    if (!key?.startsWith(FEATURE_FLAG_STORAGE_PREFIX)) continue;
+    featureFlagIds.push(key.slice(FEATURE_FLAG_STORAGE_PREFIX.length));
+  }
+
+  return featureFlagIds;
+};
+
+const getFeatureFlagIdsToClear = (): string[] =>
+  Array.from(
+    new Set([
+      ...REGISTERED_FEATURE_FLAG_IDS,
+      ...getAvailableStorages().flatMap((storage) => getStoredFeatureFlagIds(storage)),
+    ]),
+  );
+
+const clearFeatureFlagTestState = () => {
+  const featureFlagIds = getFeatureFlagIdsToClear();
+  for (const storage of getAvailableStorages()) {
+    if (!canWriteStorage(storage)) continue;
+    storage.removeItem(DEVELOPER_MODE_KEY);
+    featureFlagIds.forEach((id) => {
+      storage.removeItem(`${FEATURE_FLAG_STORAGE_PREFIX}${id}`);
+    });
+  }
+};
+
+const applyFeatureFlagTestState = (state: TestFeatureFlagState = {}) => {
+  const { developerMode = true, overrides = {} } = state;
+
+  clearFeatureFlagTestState();
+
+  if (typeof localStorage !== "undefined" && canWriteStorage(localStorage)) {
+    localStorage.setItem(DEVELOPER_MODE_KEY, developerMode ? "1" : "0");
+  }
+
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(
+      new CustomEvent<{ enabled: boolean }>("c64u-dev-mode-change", {
+        detail: { enabled: developerMode },
+      }),
+    );
+  }
+
+  for (const id of REGISTERED_FEATURE_FLAG_IDS) {
+    const enabled = overrides[id] ?? true;
+    const storedValue = enabled ? "1" : "0";
+
+    if (typeof localStorage !== "undefined" && canWriteStorage(localStorage)) {
+      localStorage.setItem(`${FEATURE_FLAG_STORAGE_PREFIX}${id}`, storedValue);
+    }
+
+    if (typeof sessionStorage !== "undefined" && canWriteStorage(sessionStorage)) {
+      sessionStorage.setItem(`${FEATURE_FLAG_STORAGE_PREFIX}${id}`, storedValue);
+    }
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Shared initialisation (environment-agnostic)
 // ---------------------------------------------------------------------------
 
 ensureLocalStorage();
+applyFeatureFlagTestState();
+
+globalThis.__setFeatureFlagTestState = applyFeatureFlagTestState;
+
+beforeEach(() => {
+  applyFeatureFlagTestState();
+});
+
+afterEach(() => {
+  clearFeatureFlagTestState();
+});
 
 const packageVersion = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8")).version as string;
 

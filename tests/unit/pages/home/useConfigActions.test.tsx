@@ -72,7 +72,7 @@ describe("useConfigActions", () => {
     expect(predicate({ queryKey: ["c64-config-items", "Video"] })).toBe(false);
     expect(fetchQueryMock).toHaveBeenCalledTimes(1);
     expect(getDrivesMock).toHaveBeenCalledTimes(1);
-    expect(result.current.configWritePending).toEqual({});
+    expect(result.current.configWritePending).toEqual({ "Audio:Volume": true });
   });
 
   it("suppresses success toast when requested", async () => {
@@ -108,7 +108,7 @@ describe("useConfigActions", () => {
       }),
     );
     expect(result.current.resolveConfigValue({}, "Audio", "Volume", 0)).toBe(3);
-    expect(result.current.configWritePending).toEqual({});
+    expect(result.current.configWritePending).toEqual({ "Audio:Volume": true });
   });
 
   it("setConfigOverride sets the override synchronously without a REST call", () => {
@@ -149,6 +149,15 @@ describe("useConfigActions", () => {
     // Clean up: resolve the pending REST call
     resolveApi();
     await updatePromise;
+
+    // Once the device payload catches up, local authority clears and device state
+    // becomes authoritative again without a hidden override lingering.
+    expect(result.current.resolveConfigValue({}, "Audio Mixer", "Volume", 75)).toBe(75);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.configOverrides).toEqual({});
+    expect(result.current.configWritePending).toEqual({});
   });
 
   it("removes temporary override after failed first write and falls back to payload value", async () => {
@@ -162,5 +171,23 @@ describe("useConfigActions", () => {
 
     expect(result.current.configOverrides).toEqual({});
     expect(result.current.resolveConfigValue({}, "Video", "Mode", "fallback")).toBe("from-payload");
+  });
+
+  it("keeps user intent authoritative until the device payload matches, then clears the pending state", async () => {
+    const { result } = renderHook(() => useConfigActions());
+
+    await act(async () => {
+      await result.current.updateConfigValue("Audio Mixer", "Volume", "6 dB", "HOME_CONFIG_UPDATE", "Updated");
+    });
+
+    expect(result.current.resolveConfigValue({}, "Audio Mixer", "Volume", "0 dB")).toBe("6 dB");
+    expect(result.current.configWritePending).toEqual({ "Audio Mixer:Volume": true });
+
+    expect(result.current.resolveConfigValue({}, "Audio Mixer", "Volume", "6 dB")).toBe("6 dB");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.configWritePending).toEqual({});
+    expect(result.current.configOverrides).toEqual({});
   });
 });

@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import {
@@ -27,12 +27,42 @@ type SwipeLogEntry = {
 
 const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
 const APP_LOGS_KEY = "c64u_app_logs";
+const SWIPE_NAVIGATION_KEY = "c64u_enable_swipe_navigation";
 
-const swipe = async (page: Page, fromX: number, fromY: number, toX: number, toY: number, steps = 20) => {
-  await page.mouse.move(fromX, fromY);
-  await page.mouse.down();
-  await page.mouse.move(toX, toY, { steps });
-  await page.mouse.up();
+const swipe = async (target: Locator, fromX: number, fromY: number, toX: number, toY: number, steps = 20) => {
+  const pointerId = 1;
+  await target.dispatchEvent("pointerdown", {
+    pointerId,
+    pointerType: "touch",
+    isPrimary: true,
+    button: 0,
+    buttons: 1,
+    clientX: fromX,
+    clientY: fromY,
+  });
+
+  for (let step = 1; step <= steps; step += 1) {
+    const progress = step / steps;
+    await target.dispatchEvent("pointermove", {
+      pointerId,
+      pointerType: "touch",
+      isPrimary: true,
+      button: 0,
+      buttons: 1,
+      clientX: fromX + (toX - fromX) * progress,
+      clientY: fromY + (toY - fromY) * progress,
+    });
+  }
+
+  await target.dispatchEvent("pointerup", {
+    pointerId,
+    pointerType: "touch",
+    isPrimary: true,
+    button: 0,
+    buttons: 0,
+    clientX: toX,
+    clientY: toY,
+  });
 };
 
 const getSwipeLane = async (page: Page) => {
@@ -41,7 +71,7 @@ const getSwipeLane = async (page: Page) => {
 
   return {
     centerX: box.x + box.width / 2,
-    y: box.y + 24,
+    y: box.y + Math.max(96, Math.min(140, box.height * 0.18)),
     swipeLen: Math.min(260, box.width * 0.66),
   };
 };
@@ -93,11 +123,12 @@ test.describe("Swipe navigation", () => {
     await startStrictUiMonitoring(page, testInfo);
     allowVisualOverflow(testInfo, "Swipe navigation keeps adjacent pages partially visible during drag.");
     await page.addInitScript(
-      ({ debugKey, logsKey }) => {
+      ({ debugKey, logsKey, swipeKey }) => {
         localStorage.setItem(debugKey, "1");
         localStorage.setItem(logsKey, "[]");
+        localStorage.setItem(swipeKey, "1");
       },
-      { debugKey: DEBUG_LOGGING_KEY, logsKey: APP_LOGS_KEY },
+      { debugKey: DEBUG_LOGGING_KEY, logsKey: APP_LOGS_KEY, swipeKey: SWIPE_NAVIGATION_KEY },
     );
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
@@ -117,9 +148,10 @@ test.describe("Swipe navigation", () => {
     await page.goto("/");
     await attachStepScreenshot(page, testInfo, "home-initial");
 
+    const swipeContainer = page.getByTestId("swipe-navigation-container");
     const { centerX, y, swipeLen } = await getSwipeLane(page);
 
-    await swipe(page, centerX, y, centerX - swipeLen, y);
+    await swipe(swipeContainer, centerX, y, centerX - swipeLen, y);
 
     await waitForRouteIndex(page, 1);
     await attachStepScreenshot(page, testInfo, "play-after-swipe");
@@ -146,9 +178,10 @@ test.describe("Swipe navigation", () => {
     await page.goto("/play");
     await waitForRouteIndex(page, 1);
 
+    const swipeContainer = page.getByTestId("swipe-navigation-container");
     const { centerX, y, swipeLen } = await getSwipeLane(page);
 
-    await swipe(page, centerX, y, centerX + swipeLen, y);
+    await swipe(swipeContainer, centerX, y, centerX + swipeLen, y);
 
     await waitForRouteIndex(page, 0);
     await attachStepScreenshot(page, testInfo, "home-after-swipe");
@@ -160,9 +193,10 @@ test.describe("Swipe navigation", () => {
     await page.goto("/docs");
     await waitForRouteIndex(page, 5);
 
+    const swipeContainer = page.getByTestId("swipe-navigation-container");
     const { centerX, y, swipeLen } = await getSwipeLane(page);
 
-    await swipe(page, centerX, y, centerX - swipeLen, y);
+    await swipe(swipeContainer, centerX, y, centerX - swipeLen, y);
 
     await waitForRouteIndex(page, 0);
     await attachStepScreenshot(page, testInfo, "home-after-wrap");
@@ -184,9 +218,10 @@ test.describe("Swipe navigation", () => {
     await page.goto("/");
     await waitForRouteIndex(page, 0);
 
+    const swipeContainer = page.getByTestId("swipe-navigation-container");
     const { centerX, y, swipeLen } = await getSwipeLane(page);
 
-    await swipe(page, centerX, y, centerX + swipeLen, y);
+    await swipe(swipeContainer, centerX, y, centerX + swipeLen, y);
 
     await waitForRouteIndex(page, 5);
     await attachStepScreenshot(page, testInfo, "docs-after-wrap");
@@ -217,10 +252,7 @@ test.describe("Swipe navigation", () => {
     if (!box) throw new Error("CPU speed slider thumb bounding box is unavailable.");
 
     const y = box.y + box.height / 2;
-    await page.mouse.move(box.x + 6, y);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width - 6, y, { steps: 12 });
-    await page.mouse.up();
+    await swipe(thumb, box.x + 6, y, box.x + box.width - 6, y, 12);
 
     await page.waitForTimeout(250);
     await attachStepScreenshot(page, testInfo, "home-after-slider-drag");
@@ -253,15 +285,16 @@ test.describe("Swipe navigation", () => {
     await page.goto("/");
     await waitForCommittedRouteIndex(page, 0);
 
+    const swipeContainer = page.getByTestId("swipe-navigation-container");
     const { centerX, y, swipeLen } = await getSwipeLane(page);
 
-    await swipe(page, centerX, y, centerX - swipeLen, y);
+    await swipe(swipeContainer, centerX, y, centerX - swipeLen, y);
     await waitForCommittedRouteIndex(page, 1);
 
-    await swipe(page, centerX, y, centerX - swipeLen, y);
+    await swipe(swipeContainer, centerX, y, centerX - swipeLen, y);
     await waitForCommittedRouteIndex(page, 2);
 
-    await swipe(page, centerX, y, centerX - swipeLen, y);
+    await swipe(swipeContainer, centerX, y, centerX - swipeLen, y);
     await waitForCommittedRouteIndex(page, 3);
 
     await attachStepScreenshot(page, testInfo, "config-after-rapid-swipes");

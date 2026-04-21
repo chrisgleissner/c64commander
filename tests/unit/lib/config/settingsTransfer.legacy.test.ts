@@ -9,22 +9,26 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
+import { featureFlagManager } from "@/lib/config/featureFlags";
 import { exportSettingsSnapshot, importSettingsJson } from "@/lib/config/settingsTransfer";
 
 describe("settingsTransfer", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    await featureFlagManager.load();
+    await featureFlagManager.replaceOverrides({});
   });
 
-  it("exports device safety without the removed REST concurrency override", () => {
-    const snapshot = exportSettingsSnapshot();
+  it("exports device safety without the removed REST concurrency override", async () => {
+    const snapshot = await exportSettingsSnapshot();
 
     expect(snapshot.deviceSafety).not.toHaveProperty("restMaxConcurrency");
+    expect(snapshot.featureFlags).toEqual({});
     expect(snapshot.appSettings.volumeSliderPreviewIntervalMs).toBe(200);
   });
 
-  it("imports legacy settings payloads that still contain restMaxConcurrency", () => {
-    const result = importSettingsJson(
+  it("imports legacy settings payloads that still contain restMaxConcurrency", async () => {
+    const result = await importSettingsJson(
       JSON.stringify({
         version: 1,
         appSettings: {
@@ -67,5 +71,8 @@ describe("settingsTransfer", () => {
       allowUserOverrideCircuit: false,
     });
     expect(loadVolumeSliderPreviewIntervalMs()).toBe(320);
+
+    const snapshot = await exportSettingsSnapshot();
+    expect(snapshot.featureFlags).toEqual({});
   });
 });

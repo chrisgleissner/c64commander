@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as appSettings from "@/lib/config/appSettings";
 
 describe("appSettings", () => {
@@ -163,15 +163,19 @@ describe("appSettings", () => {
       expect(appSettings.loadArchiveClientIdOverride()).toBe("Custom Client");
       expect(appSettings.loadArchiveUserAgentOverride()).toBe("Custom Agent");
     });
+  });
 
-    it("saves and loads commoserve enablement", () => {
-      expect(appSettings.loadCommoserveEnabled()).toBe(appSettings.DEFAULT_COMMOSERVE_ENABLED);
+  describe("swipeNavigation", () => {
+    it("defaults to disabled", () => {
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(appSettings.DEFAULT_ENABLE_SWIPE_NAVIGATION);
+    });
 
-      appSettings.saveCommoserveEnabled(false);
-      expect(appSettings.loadCommoserveEnabled()).toBe(false);
+    it("saves and loads enablement", () => {
+      appSettings.saveEnableSwipeNavigation(true);
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(true);
 
-      appSettings.saveCommoserveEnabled(true);
-      expect(appSettings.loadCommoserveEnabled()).toBe(true);
+      appSettings.saveEnableSwipeNavigation(false);
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(false);
     });
   });
 
@@ -198,10 +202,10 @@ describe("appSettings", () => {
       expect(() => appSettings.saveDiscoveryProbeTimeoutMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiskAutostartMode("dma")).not.toThrow();
       expect(() => appSettings.saveVolumeSliderPreviewIntervalMs(250)).not.toThrow();
+      expect(() => appSettings.saveEnableSwipeNavigation(true)).not.toThrow();
       expect(() => appSettings.saveArchiveHostOverride("archive.local")).not.toThrow();
       expect(() => appSettings.saveArchiveClientIdOverride("Custom Client")).not.toThrow();
       expect(() => appSettings.saveArchiveUserAgentOverride("Custom Agent")).not.toThrow();
-      expect(() => appSettings.saveCommoserveEnabled(false)).not.toThrow();
       // Covers BRDA:137 — loadDiskAutostartMode early-returns DEFAULT when localStorage absent
       expect(appSettings.loadDiskAutostartMode()).toBe(appSettings.DEFAULT_DISK_AUTOSTART_MODE);
       expect(appSettings.loadVolumeSliderPreviewIntervalMs()).toBe(
@@ -210,7 +214,7 @@ describe("appSettings", () => {
       expect(appSettings.loadArchiveHostOverride()).toBe("");
       expect(appSettings.loadArchiveClientIdOverride()).toBe("");
       expect(appSettings.loadArchiveUserAgentOverride()).toBe("");
-      expect(appSettings.loadCommoserveEnabled()).toBe(appSettings.DEFAULT_COMMOSERVE_ENABLED);
+      expect(appSettings.loadEnableSwipeNavigation()).toBe(appSettings.DEFAULT_ENABLE_SWIPE_NAVIGATION);
     });
 
     it("handles numeric reads without storage", () => {

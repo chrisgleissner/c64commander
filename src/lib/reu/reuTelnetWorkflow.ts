@@ -8,6 +8,7 @@
 
 import { createActionExecutor } from "@/lib/telnet/telnetActionExecutor";
 import { matchLabel } from "@/lib/telnet/telnetMenuNavigator";
+import type { TelnetResolvedActionTarget } from "@/lib/telnet/telnetCapabilityDiscovery";
 import type { ParsedMenu, TelnetMenuKey, TelnetScreen, TelnetSessionApi } from "@/lib/telnet/telnetTypes";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 import type { ReuRestoreMode } from "./reuSnapshotTypes";
@@ -101,12 +102,19 @@ const navigateToFileBrowserEntry = async (session: TelnetSessionApi, label: stri
   throw new TelnetError(`File browser item not found: ${label}`, "ITEM_NOT_FOUND", { label });
 };
 
-export const saveRemoteReuFromTemp = async (session: TelnetSessionApi, menuKey: TelnetMenuKey) => {
+export const saveRemoteReuFromTemp = async (
+  session: TelnetSessionApi,
+  menuKey: TelnetMenuKey,
+  resolvedTarget?: TelnetResolvedActionTarget,
+) => {
   await navigateToFileBrowserEntry(session, "Temp");
   await session.sendKey("ENTER");
   await readScreen(session);
 
-  const executor = createActionExecutor(session, { menuKey });
+  const executor = createActionExecutor(session, {
+    menuKey,
+    resolvedTargets: resolvedTarget ? { saveReuMemory: resolvedTarget } : undefined,
+  });
   await executor.execute("saveReuMemory");
 };
 

@@ -35,7 +35,7 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
-import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -102,8 +102,6 @@ import {
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
   saveAutoRotationEnabled,
-  loadCommoserveEnabled,
-  saveCommoserveEnabled,
   type DiskAutostartMode,
   type NotificationVisibility,
 } from "@/lib/config/appSettings";
@@ -160,6 +158,7 @@ import {
   type SavedDeviceDependencySummary,
 } from "@/lib/savedDevices/deviceDependencies";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
+import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlags";
 
 type Theme = "light" | "dark" | "system";
 
@@ -177,7 +176,7 @@ export default function SettingsPage() {
   const connectionSnapshot = useConnectionState();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
-  const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag("hvsc_enabled");
+  const { flags, resolved, setFlag } = useFeatureFlags();
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   const {
     override: displayProfileOverride,
@@ -188,18 +187,6 @@ export default function SettingsPage() {
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
   const passwordInputRef = useRef(password);
-
-  const setHvscEnabledAndPersist = (enabled: boolean) => {
-    void setHvscEnabled(enabled);
-    try {
-      localStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
-      sessionStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
-    } catch (error) {
-      addErrorLog("Feature flag storage failed", {
-        error: (error as Error).message,
-      });
-    }
-  };
 
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceDraft, setDeviceDraft] = useState<SavedDeviceEditorDraft>(() =>
@@ -268,7 +255,6 @@ export default function SettingsPage() {
     useState<NotificationVisibility>(loadNotificationVisibility);
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
-  const [commoserveEnabled, setCommoserveEnabled] = useState(loadCommoserveEnabled);
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
@@ -285,6 +271,20 @@ export default function SettingsPage() {
   const devTapTimestamps = useRef<number[]>([]);
   const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
   const isAndroid = getPlatform() === "android";
+  const featureGroups = useMemo(
+    () =>
+      Object.entries(FEATURE_FLAG_GROUPS)
+        .map(([groupKey, metadata]) => ({
+          key: groupKey,
+          metadata,
+          features: FEATURE_FLAG_DEFINITIONS.filter((definition) => definition.group === groupKey)
+            .map((definition) => resolved[definition.id])
+            .filter((feature) => feature.visible),
+        }))
+        .filter((group) => group.features.length > 0),
+    [resolved],
+  );
+  const commoserveEnabled = flags.commoserve_enabled;
   const resolvedArchiveConfig = useMemo(
     () =>
       resolveArchiveClientConfig(
@@ -394,9 +394,6 @@ export default function SettingsPage() {
       }
       if (detail.key === "c64u_volume_slider_preview_interval_ms") {
         setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
-      }
-      if (detail.key === "c64u_commoserve_enabled") {
-        setCommoserveEnabled(loadCommoserveEnabled());
       }
       if (detail.key === "c64u_archive_host_override") {
         const next = loadArchiveHostOverride();
@@ -697,31 +694,33 @@ export default function SettingsPage() {
   };
 
   const handleExportSettings = trace(function handleExportSettings() {
-    try {
-      const payload = exportSettingsJson();
-      const blob = new Blob([payload], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "c64commander-settings.json";
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast({ title: "Settings export ready" });
-    } catch (error) {
-      reportUserError({
-        operation: "SETTINGS_EXPORT",
-        title: "Settings export failed",
-        description: (error as Error).message,
-        error,
-      });
-    }
+    void (async () => {
+      try {
+        const payload = await exportSettingsJson();
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "c64commander-settings.json";
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+        toast({ title: "Settings export ready" });
+      } catch (error) {
+        reportUserError({
+          operation: "SETTINGS_EXPORT",
+          title: "Settings export failed",
+          description: (error as Error).message,
+          error,
+        });
+      }
+    })();
   });
 
   const handleImportSettings = trace(async function handleImportSettings(file?: File | null) {
     if (!file) return;
     try {
       const content = await file.text();
-      const result = importSettingsJson(content);
+      const result = await importSettingsJson(content);
       if (!result.ok) {
         reportUserError({
           operation: "SETTINGS_IMPORT",
@@ -738,7 +737,6 @@ export default function SettingsPage() {
       setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
-      setCommoserveEnabled(loadCommoserveEnabled());
       const importedArchiveHostOverride = loadArchiveHostOverride();
       setArchiveHostOverride(importedArchiveHostOverride);
       setArchiveHostError(validateArchiveHost(importedArchiveHostOverride));
@@ -1356,6 +1354,55 @@ export default function SettingsPage() {
             </div>
           </motion.div>
 
+          {featureGroups.map((group, index) => (
+            <motion.div
+              key={group.key}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.24 + index * 0.02 }}
+              className="bg-card border border-border rounded-xl p-4 space-y-4"
+              data-testid={`settings-feature-group-${group.key}`}
+            >
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Cpu className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">{group.metadata.label}</h2>
+              </div>
+
+              <p className="text-xs text-muted-foreground">{group.metadata.description}</p>
+
+              <div className="space-y-3">
+                {group.features.map((feature) => (
+                  <div key={feature.id} className="flex items-start justify-between gap-3 min-w-0">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label htmlFor={`feature-flag-${feature.id}`} className="font-medium">
+                          {feature.definition.title}
+                        </Label>
+                        {isDeveloperModeEnabled && feature.definition.developer_only ? (
+                          <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            Developer only
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{feature.definition.description}</p>
+                    </div>
+                    <Checkbox
+                      id={`feature-flag-${feature.id}`}
+                      checked={feature.value}
+                      disabled={!feature.editable}
+                      onCheckedChange={(checked) => {
+                        void setFlag(feature.id, checked === true);
+                      }}
+                      data-testid={`feature-flag-${feature.id}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+
           {/* 6. HVSC */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1371,37 +1418,10 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <div
-                  className="space-y-1 min-w-0 cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setHvscEnabledAndPersist(!isHvscEnabled);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return;
-                    event.preventDefault();
-                    setHvscEnabledAndPersist(!isHvscEnabled);
-                  }}
-                >
-                  <Label htmlFor="hvsc-flag" className="font-medium">
-                    Enable HVSC downloads
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Shows HVSC download and ingest controls on the Play page.
-                  </p>
-                </div>
-                <Checkbox
-                  id="hvsc-flag"
-                  aria-label="Enable HVSC downloads"
-                  data-testid="hvsc-toggle"
-                  checked={isHvscEnabled}
-                  onCheckedChange={(checked) => {
-                    setHvscEnabledAndPersist(checked === true);
-                  }}
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                HVSC visibility now follows the unified Experimental Features registry. Mirror configuration remains a
+                separate operational setting.
+              </p>
 
               {isDeveloperModeEnabled ? (
                 <div className="space-y-2">
@@ -1440,27 +1460,10 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-3">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Enabled source</p>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="commoserve-enabled"
-                    data-testid="commoserve-enabled"
-                    checked={commoserveEnabled}
-                    onCheckedChange={(checked) => {
-                      const enabled = checked === true;
-                      setCommoserveEnabled(enabled);
-                      saveCommoserveEnabled(enabled);
-                    }}
-                  />
-                  <Label htmlFor="commoserve-enabled" className="text-sm">
-                    CommoServe
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Enable the online archive source. It appears in the Add Items interstitial when enabled.
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                CommoServe availability now follows the unified Experimental Features registry. Host and header
+                overrides remain independent operational settings.
+              </p>
 
               <div className="space-y-2">
                 <Label htmlFor="archive-host-override" className="text-sm font-medium">

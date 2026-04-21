@@ -9,24 +9,59 @@ env:
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "75%,95%"
+    id: "tab-settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
+- swipe:
+    start: 50%, 78%
+    end: 50%, 28%
+    duration: 400
+- waitForAnimationToEnd
+- tapOn:
+    id: feature-flag-hvsc_enabled
+    checked: false
+    optional: true
+- swipe:
+    start: 50%, 78%
+    end: 50%, 28%
+    duration: 400
+- waitForAnimationToEnd
+- tapOn:
+    id: feature-flag-hvsc_enabled
+    checked: false
+    optional: true
+- swipe:
+    start: 50%, 78%
+    end: 50%, 28%
+    duration: 400
+- waitForAnimationToEnd
+- tapOn:
+    id: feature-flag-hvsc_enabled
+    checked: false
+    optional: true
 
-# Scroll until the HVSC checkbox is in view (bounded).
+- tapOn:
+    id: "tab-play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
+- swipe:
+    start: 50%, 86%
+    end: 50%, 38%
+    duration: 400
+- waitForAnimationToEnd
 - scrollUntilVisible:
-    element:
-      id: hvsc-flag
+    element: { id: hvsc-download }
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
-
-# Expect the flag to be enabled by default on native builds.
+    visibilityPercentage: 50
+    centerElement: true
 - assertVisible:
-    id: hvsc-flag
-    checked: true
+    id: hvsc-download
 
 - takeScreenshot: hvsc-enabled
 
@@ -35,18 +70,23 @@ env:
     stopApp: true
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "75%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
-    visible: "Settings"
+    visible: "Play Files"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
+- swipe:
+    start: 50%, 86%
+    end: 50%, 38%
+    duration: 400
+- waitForAnimationToEnd
 - scrollUntilVisible:
-    element:
-      id: hvsc-flag
+    element: { id: hvsc-download }
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
 - assertVisible:
-    id: hvsc-flag
-    checked: true
+    id: hvsc-download
 - takeScreenshot: hvsc-persisted

@@ -17,6 +17,7 @@ import { SidCard } from "../SidCard";
 import { silenceSidTargets } from "@/lib/sid/sidSilence";
 import { buildSidEnablement } from "@/lib/config/sidVolumeControl";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import {
   resolveOptionIndex,
   resolveVolumeCenterIndex,
@@ -231,10 +232,22 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
           };
           const handleVolumeAsyncChange = (val: number) => {
-            interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
+            void interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
           };
           const handleVolumeAsyncCommit = (val: number) => {
-            interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
+            const nextValue = resolveVolumeOption(val);
+            void Promise.resolve(interactiveWrite({ [entry.volumeItem]: nextValue })).catch((error) => {
+              addLog(
+                "warn",
+                "Audio Mixer volume preview commit failed",
+                buildErrorLogDetails(error as Error, {
+                  itemName: entry.volumeItem,
+                  sidKey: entry.key,
+                  value: nextValue,
+                }),
+              );
+              setConfigOverride("Audio Mixer", entry.volumeItem, entry.volume);
+            });
           };
           const handlePanLocalChange = (val: number) => {
             const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
@@ -251,10 +264,22 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
           };
           const handlePanAsyncChange = (val: number) => {
-            interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
+            void interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
           };
           const handlePanAsyncCommit = (val: number) => {
-            interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
+            const nextValue = resolvePanOption(val);
+            void Promise.resolve(interactiveWrite({ [entry.panItem]: nextValue })).catch((error) => {
+              addLog(
+                "warn",
+                "Audio Mixer pan preview commit failed",
+                buildErrorLogDetails(error as Error, {
+                  itemName: entry.panItem,
+                  sidKey: entry.key,
+                  value: nextValue,
+                }),
+              );
+              setConfigOverride("Audio Mixer", entry.panItem, entry.pan);
+            });
           };
 
           // Identity / Filter

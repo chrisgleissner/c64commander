@@ -34,16 +34,16 @@ import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
-  { category: "LED Strip Settings", item: "Strip Intensity", delta: 1, min: 0, max: 31 },
-  { category: "Keyboard Lighting", item: "Strip Intensity", delta: 1, min: 0, max: 31 },
-  { category: "Audio Mixer", item: "Vol UltiSid 1", delta: 1, min: -64, max: 0 },
-  { category: "Audio Mixer", item: "Vol Drive 1", delta: 1, min: -64, max: 0 },
+  { category: "LED Strip Settings", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
+  { category: "Keyboard Lighting", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
+  { category: "Audio Mixer", item: "Vol UltiSid 1", delta: 16, min: -64, max: 0 },
+  { category: "Audio Mixer", item: "Vol Drive 1", delta: 16, min: -64, max: 0 },
 ] as const;
 
 const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
   REST: 3000,
   FTP: 1000,
-  TELNET: 2000,
+  TELNET: 3000,
   CONFIG: 4000,
   RASTER: 1500,
   JIFFY: 1500,
@@ -52,6 +52,9 @@ const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
 const GLOBAL_RUN_TIMEOUT_MS = 12_000;
 const STALE_RUN_GRACE_MS = 1500;
 const PRESENTATION_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"];
+const CONFIG_PULSE_DELAY_MS = 80;
+const TELNET_READ_RETRY_ATTEMPTS = 5;
+const TELNET_READ_RETRY_DELAY_MS = 80;
 
 export type HealthCheckProbeType = "REST" | "JIFFY" | "RASTER" | "CONFIG" | "FTP" | "TELNET";
 
@@ -303,6 +306,28 @@ const withTimeout = async <T>(run: () => Promise<T>, timeoutMs: number, timeoutM
   }
 };
 
+const waitMs = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      timer = null;
+      signal?.removeEventListener("abort", handleAbort);
+      resolve();
+    }, ms);
+    const handleAbort = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      signal?.removeEventListener("abort", handleAbort);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", handleAbort, { once: true });
+  });
+
 const extractConfigItemData = (resp: Record<string, unknown>, category: string, item: string): unknown | null => {
   const categoryData = resp[category];
   if (!categoryData || typeof categoryData !== "object") return null;
@@ -387,6 +412,16 @@ const getConfigRoundtripBounds = (
   }
 
   return fallback;
+};
+
+const selectConfigPulseValue = (currentValue: number, delta: number, bounds: { min: number; max: number }) => {
+  if (currentValue + delta <= bounds.max) return currentValue + delta;
+  if (currentValue - delta >= bounds.min) return currentValue - delta;
+
+  const upwardRoom = bounds.max - currentValue;
+  const downwardRoom = currentValue - bounds.min;
+  if (upwardRoom >= downwardRoom) return bounds.max;
+  return bounds.min;
 };
 
 const probeRest = async (
@@ -533,11 +568,16 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       }
 
       const bounds = getConfigRoundtripBounds(itemData, target);
-
-      const tempValue =
-        currentValue < bounds.max
-          ? Math.min(currentValue + target.delta, bounds.max)
-          : Math.max(currentValue - target.delta, bounds.min);
+      const tempValue = selectConfigPulseValue(currentValue, target.delta, bounds);
+      if (tempValue === currentValue) {
+        addLog("debug", "Health check CONFIG probe: no pulse headroom for target", {
+          category: target.category,
+          item: target.item,
+          currentValue,
+          bounds,
+        });
+        continue;
+      }
 
       addLog("debug", "Health check CONFIG probe: selected roundtrip target", {
         category: target.category,
@@ -547,23 +587,42 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         bounds,
       });
 
-      await runtime.api.setConfigValue(target.category, target.item, tempValue, {
-        signal,
-        timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
-      });
+      let readBackValue: number | null = null;
+      let revertErrorMessage: string | null = null;
+      let tempValueApplied = false;
+      try {
+        await runtime.api.setConfigValue(target.category, target.item, tempValue, {
+          signal,
+          timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
+        });
+        tempValueApplied = true;
+        await waitMs(CONFIG_PULSE_DELAY_MS, signal);
 
-      const readBackResp = await runtime.api.getConfigItem(target.category, target.item, {
-        signal,
-        timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
-        __c64uIntent: "system",
-        __c64uBypassCache: true,
-      });
-      const readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
-
-      await runtime.api.setConfigValue(target.category, target.item, currentValue, {
-        signal,
-        timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
-      });
+        const readBackResp = await runtime.api.getConfigItem(target.category, target.item, {
+          signal,
+          timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
+          __c64uIntent: "system",
+          __c64uBypassCache: true,
+        });
+        readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
+      } finally {
+        if (tempValueApplied) {
+          try {
+            await runtime.api.setConfigValue(target.category, target.item, currentValue, {
+              signal,
+              timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
+            });
+          } catch (error) {
+            revertErrorMessage = error instanceof Error ? error.message : String(error ?? "Unknown revert failure");
+            addLog("warn", "Health check CONFIG probe revert failed", {
+              category: target.category,
+              item: target.item,
+              currentValue,
+              error: revertErrorMessage,
+            });
+          }
+        }
+      }
 
       const verifyResp = await runtime.api.getConfigItem(target.category, target.item, {
         signal,
@@ -582,6 +641,15 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         verifyValue,
       });
 
+      if (revertErrorMessage) {
+        return makeRecord(
+          "CONFIG",
+          "Fail",
+          Date.now() - startMs,
+          `Failed to restore original value: ${revertErrorMessage}`.slice(0, 80),
+          startMs,
+        );
+      }
       if (readBackValue !== tempValue) {
         return makeRecord(
           "CONFIG",
@@ -661,22 +729,40 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       throw new DOMException("Aborted", "AbortError");
     }
 
-    const screen = await session.readScreen(readTimeoutMs);
-    const titleLine = screen.titleLine.trim();
-    addLog("debug", "Health check TELNET probe banner", {
-      host: runtime.host,
-      port: runtime.telnetPort,
-      titleLine: titleLine.slice(0, 120),
-      screenType: screen.screenType,
-      readTimeoutMs,
-    });
-    if (!hasExpectedTelnetScreen(titleLine)) {
-      const reason =
+    let lastReason = "Unexpected blank Telnet screen";
+    for (let attempt = 1; attempt <= TELNET_READ_RETRY_ATTEMPTS; attempt += 1) {
+      const screen = await session.readScreen(readTimeoutMs);
+      const titleLine = screen.titleLine.trim();
+      const elapsedMs = Date.now() - startMs;
+      addLog("debug", "Health check TELNET probe banner", {
+        host: runtime.host,
+        port: runtime.telnetPort,
+        attempt,
+        elapsedMs,
+        titleLine: titleLine.slice(0, 120),
+        screenType: screen.screenType,
+        readTimeoutMs,
+      });
+
+      if (hasExpectedTelnetScreen(titleLine)) {
+        addLog("debug", "Health check TELNET probe accepted screen", {
+          host: runtime.host,
+          port: runtime.telnetPort,
+          attempt,
+          elapsedMs,
+        });
+        return makeRecord("TELNET", "Success", elapsedMs, null, startMs);
+      }
+
+      lastReason =
         titleLine.length > 0 ? `Unexpected Telnet screen: ${titleLine.slice(0, 80)}` : "Unexpected blank Telnet screen";
-      return makeRecord("TELNET", "Fail", Date.now() - startMs, reason, startMs);
+
+      if (attempt < TELNET_READ_RETRY_ATTEMPTS) {
+        await waitMs(TELNET_READ_RETRY_DELAY_MS, signal);
+      }
     }
 
-    return makeRecord("TELNET", "Success", Date.now() - startMs, null, startMs);
+    return makeRecord("TELNET", "Fail", Date.now() - startMs, lastReason, startMs);
   } catch (error) {
     if (isAbortLike(error) || isTimeoutLike(error)) {
       throw error;
@@ -929,11 +1015,11 @@ export const runHealthCheckForTarget = async (
   const startTimestamp = new Date().toISOString();
   const startedAtMs = Date.now();
   const deadlineMs = startedAtMs + GLOBAL_RUN_TIMEOUT_MS;
+  const mode = options.mode ?? "full";
   const runtime = buildProbeRuntime(target);
   const controller = new AbortController();
   const probeStates = buildLocalProbeStates();
   const liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> = {};
-  const mode = options.mode ?? "full";
   const outerSignal = options.signal;
   const abortFromOuter = () => controller.abort(outerSignal?.reason);
 
@@ -1089,7 +1175,7 @@ export const runHealthCheckForTarget = async (
     const config = restFailed
       ? setLocalSkippedProbe("CONFIG", "Skipped: REST probe failed")
       : mode === "passive"
-        ? setLocalSkippedProbe("CONFIG", "Skipped: passive switcher checks do not modify device config")
+        ? setLocalSkippedProbe("CONFIG", "Skipped: passive mode disables CONFIG pulse")
         : await runLocalProbe(
             "CONFIG",
             (signal) => probeConfig(signal, runtime),

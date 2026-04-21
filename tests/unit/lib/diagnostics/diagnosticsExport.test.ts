@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { inflateSync } from "fflate";
 const addErrorLog = vi.fn();
 const share = vi.fn();
 const writeFile = vi.fn();
@@ -38,6 +39,99 @@ vi.mock("@capacitor/core", () => ({
     isNativePlatform,
   },
 }));
+
+const ZIP_LOCAL_FILE_HEADER = 0x04034b50;
+const ZIP_CENTRAL_DIRECTORY_HEADER = 0x02014b50;
+const ZIP_END_OF_CENTRAL_DIRECTORY = 0x06054b50;
+
+const parseZipEntries = (zipData: Uint8Array) => {
+  const bytes = new Uint8Array(zipData);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let endOffset = -1;
+
+  for (let index = bytes.length - 22; index >= 0; index -= 1) {
+    if (view.getUint32(index, true) === ZIP_END_OF_CENTRAL_DIRECTORY) {
+      endOffset = index;
+      break;
+    }
+  }
+
+  if (endOffset < 0) {
+    throw new Error("ZIP end-of-central-directory record not found.");
+  }
+
+  const entryCount = view.getUint16(endOffset + 10, true);
+  let centralDirectoryOffset = view.getUint32(endOffset + 16, true);
+  const decoder = new TextDecoder();
+  const entries: Record<string, Uint8Array> = {};
+
+  for (let entryIndex = 0; entryIndex < entryCount; entryIndex += 1) {
+    if (view.getUint32(centralDirectoryOffset, true) !== ZIP_CENTRAL_DIRECTORY_HEADER) {
+      throw new Error("ZIP central-directory header not found.");
+    }
+
+    const compressionMethod = view.getUint16(centralDirectoryOffset + 10, true);
+    const compressedSize = view.getUint32(centralDirectoryOffset + 20, true);
+    const fileNameLength = view.getUint16(centralDirectoryOffset + 28, true);
+    const extraLength = view.getUint16(centralDirectoryOffset + 30, true);
+    const commentLength = view.getUint16(centralDirectoryOffset + 32, true);
+    const localHeaderOffset = view.getUint32(centralDirectoryOffset + 42, true);
+    const fileNameStart = centralDirectoryOffset + 46;
+    const fileName = decoder.decode(bytes.slice(fileNameStart, fileNameStart + fileNameLength));
+
+    if (view.getUint32(localHeaderOffset, true) !== ZIP_LOCAL_FILE_HEADER) {
+      throw new Error(`ZIP local header not found for ${fileName}.`);
+    }
+
+    const localFileNameLength = view.getUint16(localHeaderOffset + 26, true);
+    const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+    const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraLength;
+    const compressedData = bytes.slice(dataStart, dataStart + compressedSize);
+
+    entries[fileName] =
+      compressionMethod === 0
+        ? compressedData
+        : compressionMethod === 8
+          ? inflateSync(compressedData)
+          : (() => {
+              throw new Error(`Unsupported ZIP compression method ${compressionMethod} for ${fileName}.`);
+            })();
+
+    centralDirectoryOffset += 46 + fileNameLength + extraLength + commentLength;
+  }
+
+  return entries;
+};
+
+const normalizeZipEntries = (entries: Record<string, Uint8Array>) => {
+  const normalized: Record<string, Uint8Array> = {};
+  const fragmentedEntries = new Map<string, Array<[number, Uint8Array]>>();
+
+  for (const [path, value] of Object.entries(entries)) {
+    if (!path.includes("/")) {
+      normalized[path] = value;
+      continue;
+    }
+
+    const fragmentMatch = path.match(/^(.*\.json)\/(\d+)\/$/);
+    if (!fragmentMatch) continue;
+
+    const [, fileName, indexText] = fragmentMatch;
+    const index = Number(indexText);
+    const bucket = fragmentedEntries.get(fileName) ?? [];
+    bucket.push([index, value]);
+    fragmentedEntries.set(fileName, bucket);
+  }
+
+  for (const [fileName, fragments] of fragmentedEntries) {
+    const flattened = fragments
+      .sort((left, right) => left[0] - right[0])
+      .flatMap(([, fragment]) => Array.from(fragment));
+    normalized[fileName] = Uint8Array.from(flattened);
+  }
+
+  return normalized;
+};
 
 describe("diagnosticsExport", () => {
   beforeEach(() => {
@@ -145,6 +239,37 @@ describe("diagnosticsExport", () => {
     );
     expect(zipData).toBeInstanceOf(Uint8Array);
     expect(zipData.byteLength).toBeGreaterThan(0);
+  });
+
+  it("writes each diagnostics payload into its own JSON archive entry", async () => {
+    const { buildDiagnosticsZipData } = await import("@/lib/diagnostics/diagnosticsExport");
+    const timestamp = "2026-03-12-0913-33Z";
+    const zipData = buildDiagnosticsZipData(
+      "all",
+      {
+        "error-logs": [{ id: "err-1", token: "redacted-error-token" }],
+        logs: [{ id: "log-1", session: "alpha" }],
+        traces: [{ id: "trace-1", step: "resume" }],
+        actions: [{ correlationId: "COR-1", action: "share" }],
+        supplemental: { build: "1.2.3" },
+      },
+      timestamp,
+    );
+
+    const archive = normalizeZipEntries(parseZipEntries(zipData));
+
+    expect(Object.keys(archive).sort()).toEqual([
+      `actions-${timestamp}.json`,
+      `error-logs-${timestamp}.json`,
+      `logs-${timestamp}.json`,
+      `supplemental-${timestamp}.json`,
+      `traces-${timestamp}.json`,
+    ]);
+    expect(archive[`error-logs-${timestamp}.json`]).toBeInstanceOf(Uint8Array);
+    expect(archive[`logs-${timestamp}.json`]).toBeInstanceOf(Uint8Array);
+    expect(archive[`traces-${timestamp}.json`]).toBeInstanceOf(Uint8Array);
+    expect(archive[`actions-${timestamp}.json`]).toBeInstanceOf(Uint8Array);
+    expect(archive[`supplemental-${timestamp}.json`]).toBeInstanceOf(Uint8Array);
   });
 
   it("formats diagnostics export timestamps in UTC filename-safe form", async () => {

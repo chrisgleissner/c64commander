@@ -5,7 +5,8 @@ PASS=0
 FAIL=0
 APP_ID="uk.gleissner.c64commander"
 DEFAULT_LONG_TIMEOUT_MS=20000
-HVSC_PERF_LONG_TIMEOUT_MS=180000
+HVSC_PERF_LONG_TIMEOUT_MS=600000
+HVSC_PERF_SETUP_LONG_TIMEOUT_MS=1800000
 
 is_keyguard_showing_output() {
   local status="${1,,}"
@@ -26,6 +27,10 @@ is_device_ready_for_automation() {
 
 select_long_timeout_ms() {
   local tag_source="$1"
+  if [[ "$tag_source" == *"hvsc-perf-setup"* ]]; then
+    printf '%s' "$HVSC_PERF_SETUP_LONG_TIMEOUT_MS"
+    return
+  fi
   if [[ "$tag_source" == *"hvsc-perf"* ]]; then
     printf '%s' "$HVSC_PERF_LONG_TIMEOUT_MS"
     return
@@ -88,8 +93,12 @@ assert_success \
   $'isStatusBarKeyguard=false\nmShowingLockscreen=false'
 
 assert_success \
-  "uses the extended timeout budget for hvsc benchmark flows" \
-  test "$(select_long_timeout_ms 'hvsc-perf,device')" = "180000"
+  "uses the extended timeout budget for hvsc measurement flows" \
+  test "$(select_long_timeout_ms 'hvsc-perf,device')" = "600000"
+
+assert_success \
+  "uses the longest timeout budget for hvsc setup flows" \
+  test "$(select_long_timeout_ms 'hvsc-perf-setup,device')" = "1800000"
 
 assert_success \
   "keeps the default timeout budget for non-hvsc flows" \

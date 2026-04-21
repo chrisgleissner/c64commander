@@ -128,6 +128,21 @@ describe("MachineControls", () => {
     expect(onPowerCycle).toHaveBeenCalledTimes(1);
   });
 
+  it("renders Power Cycle as disabled with an inline reason when the device does not support it", () => {
+    render(
+      <MachineControls
+        {...defaultProps}
+        powerCycleVisible={true}
+        powerCycleDisabledReason="Power Cycle is not available on Ultimate 64 Elite 3.14e."
+      />,
+    );
+
+    expect(screen.getByTestId("home-power-cycle")).toBeDisabled();
+    expect(screen.getByTestId("home-machine-note-powerCycle")).toHaveTextContent(
+      "Power Cycle: Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+    );
+  });
+
   it("renders overflow actions in the section header menu", () => {
     const rebootClearMemory = vi.fn();
     const saveReu = vi.fn();
@@ -158,5 +173,26 @@ describe("MachineControls", () => {
     );
 
     expect(screen.getByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent("Reboot (Clear RAM)…");
+  });
+
+  it("renders inline notes for disabled overflow actions", () => {
+    render(
+      <MachineControls
+        {...defaultProps}
+        overflowActions={[
+          {
+            id: "saveReuMemory",
+            label: "Save REU",
+            onSelect: vi.fn(),
+            disabled: true,
+            reason: "Save REU is not available on this device.",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("home-machine-note-saveReuMemory")).toHaveTextContent(
+      "Save REU: Save REU is not available on this device.",
+    );
   });
 });

@@ -59,14 +59,16 @@ vi.mock("@/hooks/use-toast", () => ({
 vi.mock("@/components/ConfigItemRow", () => ({
   ConfigItemRow: ({
     name,
+    value,
     rightAccessory,
     onValueChange,
   }: {
     name: string;
+    value?: string | number;
     rightAccessory?: ReactNode;
     onValueChange?: (value: string) => void;
   }) => (
-    <div>
+    <div data-testid={`row-${name.toLowerCase().replace(/\s+/g, "-")}`} data-value={String(value ?? "")}>
       <span>{name}</span>
       <button type="button" onClick={() => onValueChange?.("updated")}>
         Update {name}
@@ -333,6 +335,61 @@ describe("ConfigBrowserPage", () => {
           operation: "CONFIG_UPDATE",
         }),
       );
+    });
+  });
+
+  it("keeps the updated local value visible until the device payload catches up", async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["General"] },
+      isLoading: false,
+    });
+
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockUseC64SetConfig.mockReturnValue({ mutateAsync, isPending: false });
+
+    let selectedValue = "Off";
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Demo Option": { selected: selectedValue, options: ["Off", "updated"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    const router = buildRouter(<ConfigBrowserPage />);
+    const view = render(
+      <RouterProvider
+        router={router}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    fireEvent.click(screen.getByRole("button", { name: /update demo option/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("row-demo-option")).toHaveAttribute("data-value", "updated");
+    });
+
+    selectedValue = "Off";
+    view.rerender(
+      <RouterProvider
+        router={router}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("row-demo-option")).toHaveAttribute("data-value", "updated");
     });
   });
 

@@ -31,7 +31,7 @@ export interface InteractiveWriteOptions {
 
 export interface InteractiveWriteResult {
   /** Send one or more item updates to the device immediately. */
-  write: (updates: Record<string, string | number>) => void;
+  write: (updates: Record<string, string | number>) => Promise<void>;
   /** Whether a write is currently in-flight. */
   isPending: boolean;
 }
@@ -122,27 +122,26 @@ export function useInteractiveConfigWrite({
   }, []);
 
   const write = useCallback(
-    (updates: Record<string, string | number>) => {
+    async (updates: Record<string, string | number>) => {
       setIsPending(true);
-      void laneRef
-        .current!.schedule(updates)
-        .then(() => {
-          setIsPending(false);
-        })
-        .catch((error: unknown) => {
-          setIsPending(false);
-          reportUserError({
-            operation: `INTERACTIVE_WRITE_${categoryRef.current.toUpperCase().replace(/\s+/g, "_")}`,
-            title: "Update failed",
-            description: error instanceof Error ? error.message : String(error),
-            error,
-            context: { category: categoryRef.current, updates },
-            retry: () => write(updates),
-          });
-        })
-        .finally(() => {
-          scheduleReconciliation();
+      try {
+        await laneRef.current!.schedule(updates);
+      } catch (error: unknown) {
+        reportUserError({
+          operation: `INTERACTIVE_WRITE_${categoryRef.current.toUpperCase().replace(/\s+/g, "_")}`,
+          title: "Update failed",
+          description: error instanceof Error ? error.message : String(error),
+          error,
+          context: { category: categoryRef.current, updates },
+          retry: () => {
+            void write(updates);
+          },
         });
+        throw error;
+      } finally {
+        setIsPending(false);
+        scheduleReconciliation();
+      }
     },
     [scheduleReconciliation],
   );

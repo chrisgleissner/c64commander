@@ -211,11 +211,49 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "3" });
+      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toThrow("network failure");
       await vi.runAllTimersAsync();
     });
 
     expect(endBurst).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits only the last queued write after the caller unmounts mid-settle", async () => {
+    let releaseSettle!: () => void;
+    const settleGate = new Promise<void>((resolve) => {
+      releaseSettle = resolve;
+    });
+    mockWaitForMachineTransitionsToSettle.mockReturnValueOnce(settleGate);
+
+    const { result, unmount } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
+      wrapper: createWrapper(),
+    });
+
+    let firstWrite!: Promise<void>;
+    let lastWrite!: Promise<void>;
+    act(() => {
+      firstWrite = result.current.write({ "SID1 Volume": "9" });
+      lastWrite = result.current.write({ "SID1 Volume": "15" });
+    });
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+
+    unmount();
+
+    await act(async () => {
+      releaseSettle();
+      await vi.runAllTimersAsync();
+    });
+
+    await Promise.all([firstWrite, lastWrite]);
+
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockMutateAsync).toHaveBeenCalledWith({
+      category: "Audio Mixer",
+      updates: { "SID1 Volume": "15" },
+      immediate: true,
+      skipInvalidation: true,
+    });
   });
 
   it("surfaces errors via reportUserError and does not show a success toast", async () => {
@@ -227,7 +265,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "3" });
+      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toThrow("network failure");
       await vi.runAllTimersAsync();
     });
 
@@ -293,7 +331,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "2" });
+      await expect(result.current.write({ "SID1 Volume": "2" })).rejects.toThrow("oops");
       await vi.runAllTimersAsync();
     });
 
@@ -308,7 +346,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     await act(async () => {
-      result.current.write({ "SID1 Volume": "3" });
+      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toBe("network failure string");
       await vi.runAllTimersAsync();
     });
 

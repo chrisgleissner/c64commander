@@ -21,6 +21,14 @@ type GestureCallbacks = {
 
 const mocks = vi.hoisted(() => ({
   addLog: vi.fn(),
+  mountCounts: {
+    home: 0,
+    play: 0,
+    disks: 0,
+    config: 0,
+    settings: 0,
+    docs: 0,
+  },
 }));
 
 let currentProfile: "compact" | "medium" = "medium";
@@ -57,14 +65,52 @@ vi.mock("@/lib/i18n", () => ({
   t: (_key: string, fallback: string) => fallback,
 }));
 
-vi.mock("@/pages/HomePage", () => ({ default: () => <div>Home Page</div> }));
-vi.mock("@/pages/PlayFilesPage", () => ({ default: () => <div>Play Page</div> }));
-vi.mock("@/pages/DisksPage", () => ({ default: () => <div>Disks Page</div> }));
-vi.mock("@/pages/ConfigBrowserPage", () => ({ default: () => <div>Config Page</div> }));
-vi.mock("@/pages/SettingsPage", () => ({ default: () => <div>Settings Page</div> }));
+vi.mock("@/pages/HomePage", () => ({
+  default: function HomePageMock() {
+    React.useEffect(() => {
+      mocks.mountCounts.home += 1;
+    }, []);
+    return <div>Home Page</div>;
+  },
+}));
+vi.mock("@/pages/PlayFilesPage", () => ({
+  default: function PlayFilesPageMock() {
+    React.useEffect(() => {
+      mocks.mountCounts.play += 1;
+    }, []);
+    return <div>Play Page</div>;
+  },
+}));
+vi.mock("@/pages/DisksPage", () => ({
+  default: function DisksPageMock() {
+    React.useEffect(() => {
+      mocks.mountCounts.disks += 1;
+    }, []);
+    return <div>Disks Page</div>;
+  },
+}));
+vi.mock("@/pages/ConfigBrowserPage", () => ({
+  default: function ConfigBrowserPageMock() {
+    React.useEffect(() => {
+      mocks.mountCounts.config += 1;
+    }, []);
+    return <div>Config Page</div>;
+  },
+}));
+vi.mock("@/pages/SettingsPage", () => ({
+  default: function SettingsPageMock() {
+    React.useEffect(() => {
+      mocks.mountCounts.settings += 1;
+    }, []);
+    return <div>Settings Page</div>;
+  },
+}));
 vi.mock("@/pages/OpenSourceLicensesPage", () => ({ default: () => <div>Open Source Licenses Page</div> }));
 vi.mock("@/pages/DocsPage", () => ({
-  default: () => {
+  default: function DocsPageMock() {
+    React.useEffect(() => {
+      mocks.mountCounts.docs += 1;
+    }, []);
     if (shouldThrowDocsPage) {
       throw new Error("docs render failed");
     }
@@ -91,7 +137,13 @@ const InterstitialRegistrar = ({ active }: { active: boolean }) => {
   return null;
 };
 
-const renderLayer = (pathname: string, extra?: React.ReactNode, interstitialActive = false) => {
+const renderLayer = (
+  pathname: string,
+  extra?: React.ReactNode,
+  interstitialActive = false,
+  swipeNavigationEnabled = false,
+) => {
+  localStorage.setItem("c64u_enable_swipe_navigation", swipeNavigationEnabled ? "1" : "0");
   window.history.pushState({}, "", pathname);
   return render(
     <BrowserRouter>
@@ -110,6 +162,10 @@ describe("SwipeNavigationLayer", () => {
     currentProfile = "medium";
     capturedCallbacks = null;
     shouldThrowDocsPage = false;
+    localStorage.clear();
+    Object.keys(mocks.mountCounts).forEach((key) => {
+      mocks.mountCounts[key as keyof typeof mocks.mountCounts] = 0;
+    });
     mocks.addLog.mockReset();
     document.documentElement.dataset.c64MotionMode = "standard";
     delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
@@ -122,6 +178,18 @@ describe("SwipeNavigationLayer", () => {
   it("returns null for unknown routes", () => {
     renderLayer("/unknown");
     expect(screen.queryByTestId("swipe-navigation-runway")).not.toBeInTheDocument();
+  });
+
+  it("disables swipe gestures by default", async () => {
+    renderLayer("/");
+
+    expect(await screen.findByTestId("swipe-navigation-container")).toHaveAttribute("data-swipe-enabled", "false");
+
+    act(() => {
+      capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+    });
+
+    expect(screen.getByTestId("location-probe")).toHaveTextContent("/");
   });
 
   it("renders the requested slot and settings sub-routes", async () => {
@@ -140,7 +208,7 @@ describe("SwipeNavigationLayer", () => {
   });
 
   it("tracks drag progress and cancels back to the same page", async () => {
-    renderLayer("/play");
+    renderLayer("/play", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
 
     act(() => {
@@ -175,7 +243,7 @@ describe("SwipeNavigationLayer", () => {
   });
 
   it("commits swipe navigation with wrap-around and settles on transition end", async () => {
-    renderLayer("/docs");
+    renderLayer("/docs", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
 
     act(() => {
@@ -228,7 +296,7 @@ describe("SwipeNavigationLayer", () => {
 
   it("uses the slow-motion test probe duration for deterministic evidence", async () => {
     (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
-    renderLayer("/");
+    renderLayer("/", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
 
     act(() => {
@@ -239,7 +307,7 @@ describe("SwipeNavigationLayer", () => {
   });
 
   it("ignores further gesture updates while a transition is already in progress", async () => {
-    renderLayer("/play");
+    renderLayer("/play", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
 
     act(() => {
@@ -258,6 +326,23 @@ describe("SwipeNavigationLayer", () => {
     fireEvent.transitionEnd(runway, { target: runway });
     expect(runway).toHaveAttribute("data-runway-phase", "idle");
     expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  it("keeps the target page mounted across route transition completion", async () => {
+    renderLayer("/", <NavigationProbe />);
+
+    await screen.findByText("Home Page");
+    expect(mocks.mountCounts.config).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Go Config" }));
+
+    const runway = screen.getByTestId("swipe-navigation-runway");
+    expect(await screen.findByText("Config Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.config).toBe(1);
+
+    fireEvent.transitionEnd(runway, { target: runway });
+    expect(mocks.mountCounts.config).toBe(1);
+    expect(screen.getByTestId("swipe-slot-config")).toHaveAttribute("data-slot-active", "true");
   });
 
   it("suppresses inactive page render failures instead of showing the fallback", async () => {
@@ -284,7 +369,7 @@ describe("SwipeNavigationLayer", () => {
 
   it("forces idle via fallback timeout when transitionend never fires", async () => {
     // Render and find elements with real timers first so async queries work normally.
-    renderLayer("/");
+    renderLayer("/", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
 
     vi.useFakeTimers();

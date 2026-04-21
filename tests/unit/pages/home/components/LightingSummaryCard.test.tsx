@@ -6,15 +6,25 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LightingSummaryCard } from "@/pages/home/components/LightingSummaryCard";
 
-const { updateConfigValueSpy, resolveConfigValueSpy } = vi.hoisted(() => ({
+const { addLogSpy, buildErrorLogDetailsSpy, updateConfigValueSpy, resolveConfigValueSpy } = vi.hoisted(() => ({
+  addLogSpy: vi.fn(),
+  buildErrorLogDetailsSpy: vi.fn((error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: error.message,
+  })),
   updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
   resolveConfigValueSpy: vi.fn(
     (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
   ),
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: addLogSpy,
+  buildErrorLogDetails: buildErrorLogDetailsSpy,
 }));
 
 vi.mock("@/pages/home/hooks/ConfigActionsContext", () => ({
@@ -96,6 +106,7 @@ const defaultProps = {
 describe("LightingSummaryCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    interactiveWriteSpy.mockResolvedValue(undefined);
     resolveConfigValueSpy.mockImplementation(
       (_p: unknown, _c: string, _i: string, fallback: string | number) => fallback,
     );
@@ -169,6 +180,29 @@ describe("LightingSummaryCard", () => {
     expect(updateConfigValueSpy).not.toHaveBeenCalled();
   });
 
+  it("restores the resolved intensity after an interactive write failure", async () => {
+    interactiveWriteSpy.mockRejectedValueOnce(new Error("intensity failed"));
+    resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
+      if (itemName === "Strip Intensity") return "15";
+      return fallback;
+    });
+
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag"));
+
+    await waitFor(() => expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("15"));
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "warn",
+      "Lighting summary intensity preview failed",
+      expect.objectContaining({
+        category: "LED Strip",
+        itemName: "Strip Intensity",
+        value: 5,
+        error: "intensity failed",
+      }),
+    );
+  });
+
   it("ignores empty async slider payloads", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag-empty"));
@@ -186,6 +220,46 @@ describe("LightingSummaryCard", () => {
     fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
     expect(interactiveWriteSpy).toHaveBeenCalledTimes(1);
     expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Fixed Color": expect.any(String) });
+  });
+
+  it("restores the resolved color index after an interactive write failure", async () => {
+    interactiveWriteSpy.mockRejectedValueOnce(new Error("color failed"));
+    resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
+      if (itemName === "Fixed Color") return "Red";
+      return fallback;
+    });
+
+    render(
+      <LightingSummaryCard
+        {...defaultProps}
+        config={{
+          items: {
+            "LedStrip Auto SID Mode": {
+              selected: "Enabled",
+              options: ["Disabled", "Enabled"],
+            },
+            "Fixed Color": {
+              selected: "Red",
+              options: ["Red", "Green", "Blue", "White", "Yellow", "Purple"],
+            },
+          },
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+
+    await waitFor(() => expect(screen.getByTestId("led-strip-color-slider")).toHaveAttribute("data-value", "[0]"));
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "warn",
+      "Lighting summary fixed color preview failed",
+      expect.objectContaining({
+        category: "LED Strip",
+        itemName: "Fixed Color",
+        value: "Purple",
+        error: "color failed",
+      }),
+    );
   });
 
   it("shows intensity value from resolved config", () => {

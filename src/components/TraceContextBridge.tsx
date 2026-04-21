@@ -29,7 +29,7 @@ import {
 
 export const TraceContextBridge = () => {
   const location = useLocation();
-  const { flags } = useFeatureFlags();
+  const { resolved } = useFeatureFlags();
   const { status } = useC64Connection();
   const savedDevices = useSavedDevices();
   const playback = usePlaybackTraceSnapshot();
@@ -47,8 +47,8 @@ export const TraceContextBridge = () => {
   }, []);
 
   useEffect(() => {
-    setTraceFeatureFlags(flags);
-  }, [flags]);
+    setTraceFeatureFlags(Object.fromEntries(Object.values(resolved).map((entry) => [entry.id, entry.value])));
+  }, [resolved]);
 
   useEffect(() => {
     setTracePlaybackContext(playback);

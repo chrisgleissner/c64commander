@@ -26,6 +26,7 @@ type MachineOverflowAction = {
   onSelect: () => void;
   disabled?: boolean;
   loading?: boolean;
+  reason?: string | null;
 };
 
 export interface MachineControlsProps {
@@ -47,7 +48,9 @@ export interface MachineControlsProps {
   onPowerOff: () => void;
   onReboot: () => void;
   onToggleMenu: () => void;
+  powerCycleVisible?: boolean;
   onPowerCycle?: () => void;
+  powerCycleDisabledReason?: string | null;
   rebootLoading?: boolean;
   menuLoading?: boolean;
   powerCycleLoading?: boolean;
@@ -71,7 +74,9 @@ export function MachineControls({
   onPowerOff,
   onReboot,
   onToggleMenu,
+  powerCycleVisible,
   onPowerCycle,
+  powerCycleDisabledReason = null,
   rebootLoading = false,
   menuLoading = false,
   powerCycleLoading = false,
@@ -82,7 +87,22 @@ export function MachineControls({
 }: MachineControlsProps) {
   const effectiveBusy = machineTaskBusy || telnetBusy;
   const canRunPowerCycle = typeof onPowerCycle === "function";
+  const showPowerCycle = powerCycleVisible ?? canRunPowerCycle;
+  const powerCycleDisabled =
+    !status.isConnected || effectiveBusy || Boolean(powerCycleDisabledReason) || !canRunPowerCycle;
   const hasOverflowActions = overflowActions.length > 0;
+  const disabledCapabilityNotes = [
+    ...(showPowerCycle && powerCycleDisabledReason
+      ? [{ id: "powerCycle", label: "Power Cycle", reason: powerCycleDisabledReason }]
+      : []),
+    ...overflowActions
+      .filter((action) => action.disabled && action.reason)
+      .map((action) => ({
+        id: action.id,
+        label: action.label,
+        reason: action.reason as string,
+      })),
+  ];
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -114,6 +134,7 @@ export function MachineControls({
                     disabled={action.disabled || action.loading}
                     onSelect={() => action.onSelect()}
                     data-testid={`home-machine-overflow-${action.id}`}
+                    title={action.reason ?? undefined}
                   >
                     {action.loading ? `${action.label}…` : action.label}
                   </DropdownMenuItem>
@@ -187,15 +208,15 @@ export function MachineControls({
             disabled={!status.isConnected || effectiveBusy}
             loading={machineTaskId === "load-ram"}
           />
-          {canRunPowerCycle ? (
+          {showPowerCycle ? (
             <QuickActionCard
               icon={RefreshCw}
               label="Power Cycle"
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
               dataTestId="home-power-cycle"
-              onClick={() => void onPowerCycle()}
-              disabled={!status.isConnected || effectiveBusy}
+              onClick={() => void onPowerCycle?.()}
+              disabled={powerCycleDisabled}
               loading={powerCycleLoading}
             />
           ) : null}
@@ -209,6 +230,15 @@ export function MachineControls({
             loading={controls.powerOff.isPending}
           />
         </ProfileActionGrid>
+        {disabledCapabilityNotes.length > 0 ? (
+          <div className="space-y-1" data-testid="home-machine-capability-notes">
+            {disabledCapabilityNotes.map((note) => (
+              <p key={note.id} className="text-xs text-muted-foreground" data-testid={`home-machine-note-${note.id}`}>
+                {note.label}: {note.reason}
+              </p>
+            ))}
+          </div>
+        ) : null}
         {footer ? <div data-testid="home-machine-footer">{footer}</div> : null}
       </div>
     </motion.div>

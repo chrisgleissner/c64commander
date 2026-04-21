@@ -160,6 +160,7 @@ export const HomeDiskManager = () => {
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
+  const mountCompletionGenerationRef = useRef<Record<DriveKey, number>>({ a: 0, b: 0 });
   const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
   const [driveResetPending, setDriveResetPending] = useState<Record<string, boolean>>({});
@@ -439,9 +440,24 @@ export const HomeDiskManager = () => {
   );
 
   const handleMountDisk = trace(async (drive: DriveKey, disk: DiskEntry) => {
+    const mountGeneration = (mountCompletionGenerationRef.current[drive] ?? 0) + 1;
+    mountCompletionGenerationRef.current = {
+      ...mountCompletionGenerationRef.current,
+      [drive]: mountGeneration,
+    };
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
       await mountDiskToDrive(api, drive, disk, runtimeFile);
+      if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
+        addLog("debug", "Ignoring stale disk mount completion", {
+          drive,
+          diskId: disk.id,
+          path: disk.path,
+          mountGeneration,
+          currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
+        });
+        return;
+      }
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
@@ -549,7 +565,17 @@ export const HomeDiskManager = () => {
     if (!status.isConnected || driveResetPending[errorKey]) return;
     setDriveResetPending((prev) => ({ ...prev, [errorKey]: true }));
     try {
+      const typedDriveKey = driveKey as DriveKey;
+      mountCompletionGenerationRef.current = {
+        ...mountCompletionGenerationRef.current,
+        [typedDriveKey]: (mountCompletionGenerationRef.current[typedDriveKey] ?? 0) + 1,
+      };
       await api.resetDrive(driveKey);
+      setMountedByDrive((prev) => {
+        const next = { ...prev };
+        delete next[typedDriveKey];
+        return next;
+      });
       await refreshDrivesFromDevice();
       setDriveErrors((prev) => ({ ...prev, [errorKey]: "" }));
       toast({

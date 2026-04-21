@@ -98,11 +98,11 @@ const buildDiagnosticsZipEntries = (scope: DiagnosticsExportScope, data: unknown
   const entries = Object.fromEntries(
     DIAGNOSTICS_EXPORT_TABS.filter((tab) => scope === "all" || tab === scope).map((tab) => [
       buildDiagnosticsJsonFilename(tab, timestamp),
-      strToU8(JSON.stringify(payloads[tab] ?? [], null, 2)),
+      [strToU8(JSON.stringify(payloads[tab] ?? [], null, 2)), {}],
     ]),
   );
   if (scope === "all" && payloads.supplemental) {
-    entries[`supplemental-${timestamp}.json`] = strToU8(JSON.stringify(payloads.supplemental, null, 2));
+    entries[`supplemental-${timestamp}.json`] = [strToU8(JSON.stringify(payloads.supplemental, null, 2)), {}];
   }
   return entries;
 };

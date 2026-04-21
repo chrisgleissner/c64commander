@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { restoreRemoteReuFromTemp, saveRemoteReuFromTemp } from "@/lib/reu/reuTelnetWorkflow";
+import type { TelnetResolvedActionTarget } from "@/lib/telnet/telnetCapabilityDiscovery";
 import { TelnetError, type TelnetScreen, type TelnetSessionApi } from "@/lib/telnet/telnetTypes";
 
 const executeSpy = vi.fn().mockResolvedValue(undefined);
+const createActionExecutorSpy = vi.fn();
 
 const createScreen = (overrides: Partial<TelnetScreen>): TelnetScreen => ({
   width: 60,
@@ -30,9 +32,12 @@ const createSession = (screens: TelnetScreen[]): TelnetSessionApi => {
 };
 
 vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
-  createActionExecutor: vi.fn(() => ({
-    execute: executeSpy,
-  })),
+  createActionExecutor: (...args: unknown[]) => {
+    createActionExecutorSpy(...args);
+    return {
+      execute: executeSpy,
+    };
+  },
 }));
 
 describe("reuTelnetWorkflow", () => {
@@ -49,6 +54,31 @@ describe("reuTelnetWorkflow", () => {
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
     expect(executeSpy).toHaveBeenCalledWith("saveReuMemory");
+  });
+
+  it("passes the discovered save target to the action executor", async () => {
+    const session = createSession([
+      createScreen({ selectedItem: "Drive A" }),
+      createScreen({ selectedItem: "Temp" }),
+      createScreen({ selectedItem: "capture.reu" }),
+    ]);
+    const target: TelnetResolvedActionTarget = {
+      categoryLabel: "C64 Machine",
+      actionLabel: "Save REU Memory",
+      source: "initial",
+    };
+
+    await saveRemoteReuFromTemp(session, "F5", target);
+
+    expect(createActionExecutorSpy).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({
+        menuKey: "F5",
+        resolvedTargets: {
+          saveReuMemory: target,
+        },
+      }),
+    );
   });
 
   it("opens the selected file menu in /Temp and applies the requested restore action", async () => {

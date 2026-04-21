@@ -7,9 +7,20 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { exportSettingsSnapshot, importSettingsJson } from "@/lib/config/settingsTransfer";
+import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
 import * as appSettings from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
+
+const { featureFlagManagerMocks, isKnownFeatureFlagIdMock } = vi.hoisted(() => ({
+  featureFlagManagerMocks: {
+    load: vi.fn(async () => undefined),
+    getExplicitOverrides: vi.fn(() => ({ commoserve_enabled: true })),
+    replaceOverrides: vi.fn(async () => undefined),
+  },
+  isKnownFeatureFlagIdMock: vi.fn((value: string) =>
+    ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"].includes(value),
+  ),
+}));
 
 vi.mock("@/lib/config/appSettings", () => ({
   loadDebugLoggingEnabled: vi.fn(),
@@ -23,8 +34,6 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadArchiveHostOverride: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(),
   loadArchiveUserAgentOverride: vi.fn(),
-  loadCommoserveEnabled: vi.fn(),
-  DEFAULT_COMMOSERVE_ENABLED: true,
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
@@ -37,13 +46,18 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveArchiveHostOverride: vi.fn(),
   saveArchiveClientIdOverride: vi.fn(),
   saveArchiveUserAgentOverride: vi.fn(),
-  saveCommoserveEnabled: vi.fn(),
 
   clampConfigWriteIntervalMs: (v: number) => v,
   clampStartupDiscoveryWindowMs: (v: number) => v,
   clampBackgroundRediscoveryIntervalMs: (v: number) => v,
   clampDiscoveryProbeTimeoutMs: (v: number) => v,
   clampVolumeSliderPreviewIntervalMs: (v: number) => v,
+}));
+
+vi.mock("@/lib/config/featureFlags", () => ({
+  FEATURE_FLAG_IDS: ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"],
+  featureFlagManager: featureFlagManagerMocks,
+  isKnownFeatureFlagId: isKnownFeatureFlagIdMock,
 }));
 
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
@@ -68,13 +82,18 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
 describe("settingsTransfer", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    featureFlagManagerMocks.load.mockResolvedValue(undefined);
+    featureFlagManagerMocks.getExplicitOverrides.mockReturnValue({ commoserve_enabled: true });
+    featureFlagManagerMocks.replaceOverrides.mockResolvedValue(undefined);
+    isKnownFeatureFlagIdMock.mockImplementation((value: string) =>
+      ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"].includes(value),
+    );
   });
 
   describe("exportSettingsSnapshot", () => {
-    it("collects all settings", () => {
+    it("collects all settings and explicit feature overrides", async () => {
       vi.mocked(appSettings.loadDebugLoggingEnabled).mockReturnValue(true);
       vi.mocked(appSettings.loadVolumeSliderPreviewIntervalMs).mockReturnValue(250);
-      vi.mocked(appSettings.loadCommoserveEnabled).mockReturnValue(true);
       vi.mocked(appSettings.loadArchiveHostOverride).mockReturnValue("");
       vi.mocked(appSettings.loadArchiveClientIdOverride).mockReturnValue("");
       vi.mocked(appSettings.loadArchiveUserAgentOverride).mockReturnValue("");
@@ -83,18 +102,18 @@ describe("settingsTransfer", () => {
         // other props... spread mock return
       } as any);
 
-      const result = exportSettingsSnapshot();
-      expect(result.version).toBe(1);
+      const result = await exportSettingsSnapshot();
+      expect(result.version).toBe(SETTINGS_EXPORT_VERSION);
       expect(result.appSettings.debugLoggingEnabled).toBe(true);
       expect(result.appSettings.volumeSliderPreviewIntervalMs).toBe(250);
-      expect(result.appSettings.commoserveEnabled).toBe(true);
+      expect(result.featureFlags).toEqual({ commoserve_enabled: true });
       expect(result.deviceSafety.mode).toBe("RELAXED");
     });
   });
 
   describe("importSettingsJson", () => {
     const validPayload = {
-      version: 1,
+      version: SETTINGS_EXPORT_VERSION,
       appSettings: {
         debugLoggingEnabled: true,
         configWriteIntervalMs: 1000,
@@ -108,6 +127,7 @@ describe("settingsTransfer", () => {
         archiveClientIdOverride: "",
         archiveUserAgentOverride: "",
       },
+      featureFlags: {},
       deviceSafety: {
         mode: "BALANCED",
         ftpMaxConcurrency: 2,
@@ -126,42 +146,43 @@ describe("settingsTransfer", () => {
       },
     };
 
-    it("imports valid payload", () => {
-      const result = importSettingsJson(JSON.stringify(validPayload));
+    it("imports valid payload", async () => {
+      const result = await importSettingsJson(JSON.stringify(validPayload));
       expect(result).toEqual({ ok: true });
 
       expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
       expect(appSettings.saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(200);
       expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
+      expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({});
     });
 
-    it("rejects invalid JSON", () => {
-      expect(importSettingsJson("{ bad")).toEqual({
+    it("rejects invalid JSON", async () => {
+      await expect(importSettingsJson("{ bad")).resolves.toEqual({
         ok: false,
         error: expect.stringMatching(/JSON/),
       });
     });
 
-    it("rejects wrong version", () => {
-      const invalid = { ...validPayload, version: 2 };
-      expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+    it("rejects wrong version", async () => {
+      const invalid = { ...validPayload, version: 999 };
+      await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
         ok: false,
         error: "Unsupported settings export version.",
       });
     });
 
-    it("validates appSettings structure", () => {
+    it("validates appSettings structure", async () => {
       const invalid = {
         ...validPayload,
         appSettings: { ...validPayload.appSettings, badKey: 1 },
       };
-      expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
         ok: false,
         error: "appSettings contains unknown or missing keys.",
       });
     });
 
-    it("validates appSettings types", () => {
+    it("validates appSettings types", async () => {
       const invalid = {
         ...validPayload,
         appSettings: {
@@ -169,42 +190,42 @@ describe("settingsTransfer", () => {
           debugLoggingEnabled: "true",
         },
       };
-      expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
         ok: false,
         error: "debugLoggingEnabled must be boolean.",
       });
     });
 
-    it("validates deviceSafety types", () => {
+    it("validates deviceSafety types", async () => {
       const invalid = {
         ...validPayload,
         deviceSafety: { ...validPayload.deviceSafety, mode: "EXTREME" },
       };
-      expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
         ok: false,
         error: "deviceSafety.mode is invalid.",
       });
     });
 
-    it("rejects non-object appSettings", () => {
-      expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: null }))).toEqual({
+    it("rejects non-object appSettings", async () => {
+      await expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: null }))).resolves.toEqual({
         ok: false,
         error: "appSettings must be an object.",
       });
-      expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: "string" }))).toEqual({
+      await expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: "string" }))).resolves.toEqual({
         ok: false,
         error: "appSettings must be an object.",
       });
     });
 
-    it("rejects non-object deviceSafety", () => {
-      expect(importSettingsJson(JSON.stringify({ ...validPayload, deviceSafety: null }))).toEqual({
+    it("rejects non-object deviceSafety", async () => {
+      await expect(importSettingsJson(JSON.stringify({ ...validPayload, deviceSafety: null }))).resolves.toEqual({
         ok: false,
         error: "deviceSafety must be an object.",
       });
     });
 
-    it("validates each appSettings field individually", () => {
+    it("validates each appSettings field individually", async () => {
       const fields: Array<[string, unknown, string]> = [
         ["configWriteIntervalMs", "string", "configWriteIntervalMs must be a number."],
         ["automaticDemoModeEnabled", "x", "automaticDemoModeEnabled must be boolean."],
@@ -222,14 +243,14 @@ describe("settingsTransfer", () => {
           ...validPayload,
           appSettings: { ...validPayload.appSettings, [field]: value },
         };
-        expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+        await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
           ok: false,
           error: expectedError,
         });
       }
     });
 
-    it("rejects deviceSafety with non-finite numeric values", () => {
+    it("rejects deviceSafety with non-finite numeric values", async () => {
       const invalid = {
         ...validPayload,
         deviceSafety: {
@@ -237,13 +258,13 @@ describe("settingsTransfer", () => {
           ftpMaxConcurrency: "bad",
         },
       };
-      expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
         ok: false,
         error: "deviceSafety numeric values must be numbers.",
       });
     });
 
-    it("rejects deviceSafety when allowUserOverrideCircuit is not boolean", () => {
+    it("rejects deviceSafety when allowUserOverrideCircuit is not boolean", async () => {
       const invalid = {
         ...validPayload,
         deviceSafety: {
@@ -251,64 +272,120 @@ describe("settingsTransfer", () => {
           allowUserOverrideCircuit: "yes",
         },
       };
-      expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
         ok: false,
         error: "allowUserOverrideCircuit must be boolean.",
       });
     });
 
-    it("rejects deviceSafety with extra or missing keys", () => {
+    it("rejects deviceSafety with extra or missing keys", async () => {
       const invalid = {
         ...validPayload,
         deviceSafety: { ...validPayload.deviceSafety, unknownKey: 1 },
       };
-      expect(importSettingsJson(JSON.stringify(invalid))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(invalid))).resolves.toEqual({
         ok: false,
         error: "deviceSafety contains unknown or missing keys.",
       });
     });
 
-    it("rejects non-object outer payload", () => {
-      expect(importSettingsJson(JSON.stringify(null))).toEqual({
+    it("rejects non-object outer payload", async () => {
+      await expect(importSettingsJson(JSON.stringify(null))).resolves.toEqual({
         ok: false,
         error: "Payload must be a JSON object.",
       });
-      expect(importSettingsJson(JSON.stringify(42))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(42))).resolves.toEqual({
         ok: false,
         error: "Payload must be a JSON object.",
       });
     });
 
-    it("imports payload with commoserveEnabled", () => {
+    it("imports legacy payload with commoserveEnabled", async () => {
       const payload = {
         ...validPayload,
+        version: 1,
         appSettings: {
           ...validPayload.appSettings,
           commoserveEnabled: true,
         },
       };
-      const result = importSettingsJson(JSON.stringify(payload));
+      const result = await importSettingsJson(JSON.stringify(payload));
       expect(result).toEqual({ ok: true });
-      expect(appSettings.saveCommoserveEnabled).toHaveBeenCalledWith(true);
+      expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({ commoserve_enabled: true });
     });
 
-    it("uses defaults when optional archive keys are absent", () => {
-      const result = importSettingsJson(JSON.stringify(validPayload));
+    it("uses empty feature overrides when version 2 payload omits all flag overrides", async () => {
+      const result = await importSettingsJson(JSON.stringify(validPayload));
       expect(result).toEqual({ ok: true });
-      expect(appSettings.saveCommoserveEnabled).toHaveBeenCalledWith(true);
+      expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({});
     });
 
-    it("rejects non-boolean commoserveEnabled", () => {
+    it("rejects non-boolean commoserveEnabled in legacy payloads", async () => {
       const payload = {
         ...validPayload,
+        version: 1,
         appSettings: {
           ...validPayload.appSettings,
           commoserveEnabled: 1,
         },
       };
-      expect(importSettingsJson(JSON.stringify(payload))).toEqual({
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({
         ok: false,
         error: "commoserveEnabled must be boolean.",
+      });
+    });
+
+    it("rejects non-boolean feature flag values", async () => {
+      const payload = {
+        ...validPayload,
+        featureFlags: {
+          hvsc_enabled: "yes",
+        },
+      };
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({
+        ok: false,
+        error: "featureFlags.hvsc_enabled must be boolean.",
+      });
+    });
+
+    it("rejects non-object featureFlags payloads", async () => {
+      const payload = {
+        ...validPayload,
+        featureFlags: [],
+      };
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({
+        ok: false,
+        error: "featureFlags must be an object.",
+      });
+    });
+
+    it("ignores unknown feature flag keys while preserving known overrides", async () => {
+      const payload = {
+        ...validPayload,
+        featureFlags: {
+          hvsc_enabled: false,
+          unknown_flag: true,
+        },
+      };
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({ ok: true });
+      expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({ hvsc_enabled: false });
+    });
+
+    it("returns sanitizer exceptions when feature flag validation throws", async () => {
+      isKnownFeatureFlagIdMock.mockImplementationOnce(() => {
+        throw new Error("flag lookup failed");
+      });
+
+      const payload = {
+        ...validPayload,
+        featureFlags: {
+          hvsc_enabled: true,
+        },
+      };
+
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({
+        ok: false,
+        error: "flag lookup failed",
       });
     });
   });

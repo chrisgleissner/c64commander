@@ -15,13 +15,20 @@ SPEC.loader.exec_module(MODULE)
 
 
 class DumpC64UConfigTests(unittest.TestCase):
+    def test_infer_device_family_maps_known_products(self) -> None:
+        self.assertEqual(MODULE.infer_device_family("C64 Ultimate"), "c64u")
+        self.assertEqual(MODULE.infer_device_family("Ultimate 64"), "u64")
+        self.assertEqual(MODULE.infer_device_family("Ultimate 64 Elite"), "u64e")
+        self.assertEqual(MODULE.infer_device_family("Ultimate 64-II"), "u64e2")
+
     def test_resolve_output_paths_substitutes_firmware_version(self) -> None:
         output = Path("docs/c64/c64u-config.yaml")
 
         paths = MODULE.resolve_output_paths(
             output,
-            "docs/c64/devices/c64u/{firmware_version}/c64u-config.yaml",
+            "docs/c64/devices/{device_family}/{firmware_version}/c64u-config.yaml",
             "1.1.0",
+            "c64u",
         )
 
         self.assertEqual(
@@ -84,6 +91,31 @@ class DumpC64UConfigTests(unittest.TestCase):
         cfg_text = MODULE.build_cfg_text(snapshot)
 
         self.assertEqual(cfg_text, "[Only Category]\nEmpty=\nUnset=\n")
+
+    def test_resolve_output_paths_uses_device_family_placeholder(self) -> None:
+        output = Path("docs/c64/c64u-config.yaml")
+
+        paths = MODULE.resolve_output_paths(
+            output,
+            "docs/c64/devices/{device_family}/{firmware_version}/c64u-config.yaml",
+            "3.14e",
+            "u64e",
+        )
+
+        self.assertEqual(
+            paths,
+            [
+                Path("docs/c64/c64u-config.yaml"),
+                Path("docs/c64/devices/u64e/3.14e/u64e-config.yaml"),
+            ],
+        )
+
+    def test_resolve_output_paths_normalizes_explicit_u64e_device_output_name(self) -> None:
+        output = Path("docs/c64/devices/u64e/3.14e/c64u-config.yaml")
+
+        paths = MODULE.resolve_output_paths(output, None, "3.14e", "u64e")
+
+        self.assertEqual(paths, [Path("docs/c64/devices/u64e/3.14e/u64e-config.yaml")])
 
 
 if __name__ == "__main__":

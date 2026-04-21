@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const jsdomChunkCount = 32;
+export const coverageRunMaxAttempts = 2;
 
 export const dedicatedJsdomCoverageFiles = [
   "tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx",
@@ -161,22 +162,68 @@ export function getNycReportArgs(mergedDir, coverageDir) {
   ];
 }
 
-function runOrThrow(command, args, label, cwd) {
-  const result = spawnSync(command, args, {
-    cwd,
-    env: process.env,
-    stdio: "inherit",
-  });
+export function ensureReportsDirectory(reportsDirectory) {
+  mkdirSync(reportsDirectory, { recursive: true });
+  mkdirSync(path.join(reportsDirectory, ".tmp"), { recursive: true });
+}
 
-  if (result.status === 0) {
-    return;
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
+}
+
+export function wrapCommandWithDirectoryKeepalive(command, args, directory) {
+  const commandLine = [command, ...args].map((part) => shellQuote(part)).join(" ");
+  const keepaliveDirectory = shellQuote(directory);
+  const script = [
+    `keepalive_dir=${keepaliveDirectory}`,
+    'mkdir -p "$keepalive_dir"',
+    'keepalive() { while :; do mkdir -p "$keepalive_dir"; sleep 0.2; done; }',
+    "keepalive &",
+    "keepalive_pid=$!",
+    "trap 'kill \"$keepalive_pid\" >/dev/null 2>&1 || true' EXIT",
+    `${commandLine}`,
+    "status=$?",
+    'kill "$keepalive_pid" >/dev/null 2>&1 || true',
+    'wait "$keepalive_pid" 2>/dev/null || true',
+    "exit $status",
+  ].join("\n");
+  return {
+    command: "bash",
+    args: ["-lc", script],
+  };
+}
+
+export function runOrThrow(command, args, label, cwd, options = {}) {
+  const { maxAttempts = 1, spawn = spawnSync, onRetry, keepaliveDirectory } = options;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const invocation = keepaliveDirectory
+      ? wrapCommandWithDirectoryKeepalive(command, args, keepaliveDirectory)
+      : { command, args };
+
+    const result = spawn(invocation.command, invocation.args, {
+      cwd,
+      env: process.env,
+      stdio: "inherit",
+    });
+
+    if (result.status === 0) {
+      return;
+    }
+
+    if (typeof result.status === "number") {
+      if (attempt < maxAttempts) {
+        onRetry?.({ attempt, status: result.status });
+        continue;
+      }
+
+      const error = new Error(`${label} failed with exit code ${result.status}`);
+      error.exitCode = result.status;
+      throw error;
+    }
+
+    throw new Error(`${label} failed to start`);
   }
-
-  if (typeof result.status === "number") {
-    process.exit(result.status);
-  }
-
-  throw new Error(`${label} failed to start`);
 }
 
 function ensureFileExists(filePath, label) {
@@ -198,13 +245,17 @@ export function runUnitCoverage(rootDir = process.cwd()) {
   for (const runConfig of unitCoverageRuns) {
     const { projectName, reportKey } = runConfig;
     const reportsDirectory = plan.projectReports[reportKey];
-    mkdirSync(reportsDirectory, { recursive: true });
-    runOrThrow(
-      process.execPath,
-      getVitestCoverageArgs(rootDir, runConfig, reportsDirectory),
-      `${projectName}${typeof runConfig.chunkIndex === "number" ? ` chunk ${runConfig.chunkIndex + 1}/${runConfig.chunkCount}` : ""} coverage`,
-      rootDir,
-    );
+    const coverageLabel = `${projectName}${typeof runConfig.chunkIndex === "number" ? ` chunk ${runConfig.chunkIndex + 1}/${runConfig.chunkCount}` : ""} coverage`;
+    ensureReportsDirectory(reportsDirectory);
+    runOrThrow(process.execPath, getVitestCoverageArgs(rootDir, runConfig, reportsDirectory), coverageLabel, rootDir, {
+      maxAttempts: coverageRunMaxAttempts,
+      keepaliveDirectory: path.join(reportsDirectory, ".tmp"),
+      onRetry: ({ attempt, status }) => {
+        console.warn(`${coverageLabel} failed with exit code ${status} on attempt ${attempt}; retrying once.`);
+        rmSync(reportsDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+        ensureReportsDirectory(reportsDirectory);
+      },
+    });
 
     const coverageJson = path.join(reportsDirectory, "coverage-final.json");
     ensureFileExists(
@@ -225,5 +276,12 @@ export function runUnitCoverage(rootDir = process.cwd()) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runUnitCoverage();
+  try {
+    runUnitCoverage();
+  } catch (error) {
+    if (typeof error?.exitCode === "number") {
+      process.exit(error.exitCode);
+    }
+    throw error;
+  }
 }

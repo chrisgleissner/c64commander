@@ -87,6 +87,7 @@ import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeConte
 import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
@@ -208,14 +209,34 @@ function HomePageContent() {
     markManualLightingChange,
     isActiveProfileModified,
   } = useLightingStudio();
+  const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
+  const { value: reuSnapshotEnabled } = useFeatureFlag("reu_snapshot_enabled");
   const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const deviceControlBusy = deviceControlActionId !== null;
   const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
-  const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...reuSnapshots].sort(
+  const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...(reuSnapshotEnabled ? reuSnapshots : [])].sort(
     (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
   );
+  const getTelnetSupport = (actionId: TelnetActionId) => telnet.getActionSupport(actionId);
+  const getTelnetDisabledReason = (actionId: TelnetActionId) => {
+    const support = getTelnetSupport(actionId);
+    return support.status === "supported"
+      ? null
+      : (support.reason ?? `${TELNET_ACTIONS[actionId].label} is unavailable.`);
+  };
+  const getRequiredTelnetTarget = (actionId: TelnetActionId) => {
+    const support = getTelnetSupport(actionId);
+    if (support.status !== "supported" || !support.target) {
+      throw new Error(support.reason ?? `${TELNET_ACTIONS[actionId].label} is unavailable on this device.`);
+    }
+    return support.target;
+  };
+  const powerCycleDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("powerCycle") : null;
+  const saveReuDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveReuMemory") : null;
+  const saveConfigDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveConfigToFile") : null;
+  const clearFlashDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("clearFlashConfig") : null;
 
   const uint8ToBase64 = (value: Uint8Array) => {
     let binary = "";
@@ -292,7 +313,9 @@ function HomePageContent() {
         });
       },
       runSaveRemoteReu: () =>
-        withConnectedReuTelnetSession((session, menuKey) => saveRemoteReuFromTemp(session, menuKey)),
+        withConnectedReuTelnetSession((session, menuKey) =>
+          saveRemoteReuFromTemp(session, menuKey, getRequiredTelnetTarget("saveReuMemory")),
+        ),
       runRestoreRemoteReu: (fileName, mode) =>
         withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReuFromTemp(session, menuKey, fileName, mode)),
     });
@@ -354,7 +377,9 @@ function HomePageContent() {
       },
       persistLocalSnapshot: persistConfigSnapshotFile,
       runSaveRemoteConfig: () =>
-        withConnectedConfigTelnetSession((session, menuKey) => saveRemoteConfigFromTemp(session, menuKey)),
+        withConnectedConfigTelnetSession((session, menuKey) =>
+          saveRemoteConfigFromTemp(session, menuKey, getRequiredTelnetTarget("saveConfigToFile")),
+        ),
       runApplyRemoteConfig: (fileName) =>
         withConnectedConfigTelnetSession((session, menuKey) => applyRemoteConfigFromTemp(session, menuKey, fileName)),
       runApplyRemoteConfigByPath: (path) =>
@@ -576,13 +601,18 @@ function HomePageContent() {
       disabled: !isActive || machineTaskBusy || telnet.isBusy,
       loading: telnet.activeActionId === "rebootClearMemory" || deviceControlActionId === "rebootFull",
     },
-    {
-      id: "saveReuMemory",
-      label: TELNET_ACTIONS.saveReuMemory.label,
-      onSelect: () => void handleSaveReu(),
-      disabled: !isActive || machineTaskBusy || telnet.isBusy,
-      loading: telnet.activeActionId === "saveReuMemory",
-    },
+    ...(reuSnapshotEnabled
+      ? [
+          {
+            id: "saveReuMemory",
+            label: TELNET_ACTIONS.saveReuMemory.label,
+            onSelect: () => void handleSaveReu(),
+            disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
+            loading: telnet.activeActionId === "saveReuMemory",
+            reason: saveReuDisabledReason,
+          },
+        ]
+      : []),
   ];
 
   const ramDumpFolderDisplayPath = ramDumpFolder
@@ -720,7 +750,7 @@ function HomePageContent() {
   const handleCpuSpeedPreviewChange = useCallback(
     (nextValue: string) => {
       // Interactive write bypasses the queue for instant hardware feedback.
-      interactiveWriteU64({ "CPU Speed": nextValue });
+      void interactiveWriteU64({ "CPU Speed": nextValue }).catch(() => undefined);
     },
     [interactiveWriteU64],
   );
@@ -730,10 +760,13 @@ function HomePageContent() {
       // Commit via interactive write for the slider value, then trigger the
       // Turbo Control auto-adjustment as a one-shot deliberate write without
       // re-writing CPU Speed through the global queue.
-      interactiveWriteU64({ "CPU Speed": nextValue });
-      void handleTurboControlAutoAdjust(nextValue);
+      void interactiveWriteU64({ "CPU Speed": nextValue })
+        .then(() => handleTurboControlAutoAdjust(nextValue))
+        .catch(() => {
+          setCpuSpeedOptimisticValue(cpuSpeedValue);
+        });
     },
-    [interactiveWriteU64, handleTurboControlAutoAdjust],
+    [cpuSpeedValue, interactiveWriteU64, handleTurboControlAutoAdjust],
   );
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {
@@ -963,7 +996,9 @@ function HomePageContent() {
             onPowerOff={handlePowerOff}
             onReboot={() => void handleReboot()}
             onToggleMenu={() => void handleMenuToggle()}
-            onPowerCycle={telnet.isAvailable ? () => void handlePowerCycle() : undefined}
+            powerCycleVisible={telnet.isAvailable}
+            onPowerCycle={powerCycleDisabledReason === null ? () => void handlePowerCycle() : undefined}
+            powerCycleDisabledReason={powerCycleDisabledReason}
             rebootLoading={deviceControlActionId === "rebootKeepRam"}
             menuLoading={deviceControlActionId === "toggleMenu"}
             powerCycleLoading={telnet.activeActionId === "powerCycle"}
@@ -1288,49 +1323,53 @@ function HomePageContent() {
                   <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/60 bg-card/50 p-3">
                     <div className="space-y-2">
                       <SectionHeader title="LED LIGHTING" className="pt-0" />
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <span
-                          className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
-                          data-testid="home-lighting-profile-chip"
+                      {lightingStudioEnabled ? (
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span
+                            className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                            data-testid="home-lighting-profile-chip"
+                          >
+                            {lightingResolved.activeProfile
+                              ? `${lightingResolved.activeProfile.name}${isActiveProfileModified ? " *" : ""}`
+                              : "Device look"}
+                          </span>
+                          {lightingResolved.activeAutomationChip ? (
+                            <span
+                              className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                              data-testid="home-lighting-automation-chip"
+                            >
+                              {lightingResolved.activeAutomationChip}
+                            </span>
+                          ) : null}
+                          {manualLockEnabled ? (
+                            <span
+                              className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                              data-testid="home-lighting-lock-chip"
+                            >
+                              Manual lock
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    {lightingStudioEnabled ? (
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={openContextLens} data-testid="home-lighting-why">
+                          Why this look?
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={manualLockEnabled ? unlockCurrentLook : lockCurrentLook}
+                          data-testid="home-lighting-lock-toggle"
                         >
-                          {lightingResolved.activeProfile
-                            ? `${lightingResolved.activeProfile.name}${isActiveProfileModified ? " *" : ""}`
-                            : "Device look"}
-                        </span>
-                        {lightingResolved.activeAutomationChip ? (
-                          <span
-                            className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
-                            data-testid="home-lighting-automation-chip"
-                          >
-                            {lightingResolved.activeAutomationChip}
-                          </span>
-                        ) : null}
-                        {manualLockEnabled ? (
-                          <span
-                            className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
-                            data-testid="home-lighting-lock-chip"
-                          >
-                            Manual lock
-                          </span>
-                        ) : null}
+                          {manualLockEnabled ? "Resume auto" : "Hold look"}
+                        </Button>
+                        <Button size="sm" onClick={openStudio} data-testid="home-lighting-studio">
+                          Studio
+                        </Button>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={openContextLens} data-testid="home-lighting-why">
-                        Why this look?
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={manualLockEnabled ? unlockCurrentLook : lockCurrentLook}
-                        data-testid="home-lighting-lock-toggle"
-                      >
-                        {manualLockEnabled ? "Resume auto" : "Hold look"}
-                      </Button>
-                      <Button size="sm" onClick={openStudio} data-testid="home-lighting-studio">
-                        Studio
-                      </Button>
-                    </div>
+                    ) : null}
                   </div>
                 </div>
                 <LightingSummaryCard
@@ -1375,6 +1414,7 @@ function HomePageContent() {
               telnetAvailable={telnet.isAvailable}
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
+              getTelnetActionSupport={telnet.getActionSupport}
               onTelnetAction={async (actionId) => {
                 const successTitles: Partial<Record<TelnetActionId, string>> = {
                   driveAReset: "Drive A reset",
@@ -1410,6 +1450,7 @@ function HomePageContent() {
               telnetAvailable={telnet.isAvailable}
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
+              getTelnetActionSupport={telnet.getActionSupport}
               onTelnetAction={async (actionId) => {
                 const successTitles: Partial<Record<TelnetActionId, string>> = {
                   printerTurnOn: "Printer turned on",
@@ -1509,10 +1550,10 @@ function HomePageContent() {
                 <QuickActionCard
                   icon={Download}
                   label="Save"
-                  description="To File"
+                  description={saveConfigDisabledReason ?? "To File"}
                   dataTestId="home-config-save-file"
                   onClick={() => void handleSaveToFile()}
-                  disabled={!isActive || machineTaskBusy || telnet.isBusy}
+                  disabled={!isActive || machineTaskBusy || telnet.isBusy || saveConfigDisabledReason !== null}
                   loading={configFileTaskPending === "save"}
                 />
               )}
@@ -1531,11 +1572,11 @@ function HomePageContent() {
                 <QuickActionCard
                   icon={Trash2}
                   label="Clear Flash"
-                  description="Factory Reset"
+                  description={clearFlashDisabledReason ?? "Factory Reset"}
                   variant="danger"
                   dataTestId="home-config-clear-flash"
                   onClick={() => setClearFlashDialogOpen(true)}
-                  disabled={!isActive || machineTaskBusy || telnet.isBusy}
+                  disabled={!isActive || machineTaskBusy || telnet.isBusy || clearFlashDisabledReason !== null}
                   loading={telnet.activeActionId === "clearFlashConfig"}
                 />
               )}
@@ -1612,16 +1653,18 @@ function HomePageContent() {
           setSaveRamDialogOpen(false);
           void handleSaveRam(type, customRanges);
         }}
-        onSaveReu={handleSaveReu}
+        onSaveReu={reuSnapshotEnabled ? handleSaveReu : undefined}
         isSaving={machineTaskId === "save-ram" || reuTaskPending}
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}
+        telnetSaveReuDisabledReason={saveReuDisabledReason}
       />
 
       <SnapshotManagerDialog
         open={snapshotManagerOpen}
         onOpenChange={setSnapshotManagerOpen}
         snapshots={allSnapshots}
+        showReuFilter={reuSnapshotEnabled}
         onRestore={(snapshot) => {
           setRestoreTarget(snapshot);
         }}

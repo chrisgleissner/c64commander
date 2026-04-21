@@ -198,26 +198,21 @@ export default function CoverageProbePage() {
       await runProbe(
         "feature flags",
         async () => {
-          const defaults = Object.entries(FEATURE_FLAG_DEFINITIONS).reduce<Record<string, boolean>>(
-            (acc, [key, value]) => {
-              acc[key] = value.defaultValue;
-              return acc;
-            },
-            {},
-          );
-          const manager = new FeatureFlagManager(
-            new InMemoryFeatureFlagRepository({ hvsc_enabled: true }),
-            defaults as Record<"hvsc_enabled", boolean>,
-          );
+          if (!FEATURE_FLAG_DEFINITIONS.some((definition) => definition.id === "hvsc_enabled")) {
+            throw new Error("HVSC flag should exist in the registry");
+          }
+          const manager = new FeatureFlagManager(new InMemoryFeatureFlagRepository({ hvsc_enabled: true }), () => true);
           await manager.load();
           const snapshot = manager.getSnapshot();
           if (!isHvscEnabled(snapshot.flags)) {
             throw new Error("HVSC flag should be enabled after load");
           }
           await manager.setFlag("hvsc_enabled", false);
+          await manager.clearOverride("hvsc_enabled");
           await FeatureFlags.getFlag({ key: "hvsc_enabled" });
           await FeatureFlags.getAllFlags({ keys: ["hvsc_enabled"] });
           await FeatureFlags.setFlag({ key: "hvsc_enabled", value: true });
+          await FeatureFlags.clearFlag({ key: "hvsc_enabled" });
         },
         failures,
       );

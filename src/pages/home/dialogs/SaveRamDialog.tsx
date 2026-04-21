@@ -38,6 +38,7 @@ interface SaveRamDialogProps {
   isSaving: boolean;
   telnetAvailable?: boolean;
   telnetBusy?: boolean;
+  telnetSaveReuDisabledReason?: string | null;
 }
 
 const buildRangeTestId = (base: string, index: number) => (index === 0 ? base : `${base}-${index}`);
@@ -81,6 +82,7 @@ export function SaveRamDialog({
   isSaving,
   telnetAvailable = false,
   telnetBusy = false,
+  telnetSaveReuDisabledReason = null,
 }: SaveRamDialogProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customRanges, setCustomRanges] = useState<CustomSnapshotRangeDraft[]>(() => loadCustomSnapshotDrafts());
@@ -174,10 +176,12 @@ export function SaveRamDialog({
                     onSaveReu();
                     handleClose();
                   }}
-                  disabled={isSaving || telnetBusy}
+                  disabled={isSaving || telnetBusy || Boolean(telnetSaveReuDisabledReason)}
                 >
                   <div className="font-semibold text-sm">Save REU</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">REU expansion memory</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {telnetSaveReuDisabledReason ?? "REU expansion memory"}
+                  </div>
                 </button>
               )}
             </div>
