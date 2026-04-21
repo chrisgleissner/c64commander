@@ -48,6 +48,11 @@ env:
     visible: "Play Files"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
+- swipe:
+    start: 50%, 86%
+    end: 50%, 38%
+    duration: 400
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element: { id: hvsc-download }
     direction: DOWN
@@ -69,6 +74,11 @@ env:
 - extendedWaitUntil:
     visible: "Play Files"
     timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
+- swipe:
+    start: 50%, 86%
+    end: 50%, 38%
+    duration: 400
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: { id: hvsc-download }

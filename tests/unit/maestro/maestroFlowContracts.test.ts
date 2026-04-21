@@ -239,6 +239,7 @@ describe("Maestro flow contracts", () => {
       scrollUntilVisible: {
         element: { id: "hvsc-download" },
         direction: "DOWN",
+        speed: 80,
         timeout: "${LONG_TIMEOUT}",
         visibilityPercentage: 50,
         centerElement: true,
@@ -252,6 +253,7 @@ describe("Maestro flow contracts", () => {
       scrollUntilVisible: {
         element: { id: "hvsc-download" },
         direction: "DOWN",
+        speed: 80,
         timeout: "${LONG_TIMEOUT}",
         visibilityPercentage: 50,
         centerElement: true,
@@ -267,6 +269,22 @@ describe("Maestro flow contracts", () => {
     expect(smokeHvsc).toContain("id: hvsc-ingest");
     expect(smokeHvscLowRam).toContain("id: hvsc-download");
     expect(edgeConfigPersistence).toContain("id: hvsc-download");
+  });
+
+  it("primes Android HVSC flows below the playback sliders before searching for hvsc-download", () => {
+    const smokeHvsc = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc.yaml"), "utf8");
+    const smokeHvscLowRam = readFileSync(path.resolve(process.cwd(), ".maestro/smoke-hvsc-lowram.yaml"), "utf8");
+    const edgeConfigPersistence = readFileSync(
+      path.resolve(process.cwd(), ".maestro/edge-config-persistence.yaml"),
+      "utf8",
+    );
+
+    for (const rawSource of [smokeHvsc, smokeHvscLowRam, edgeConfigPersistence]) {
+      expect(rawSource).toContain('id: "tab-play"');
+      expect(rawSource).toContain("start: 50%, 86%");
+      expect(rawSource).toContain("end: 50%, 38%");
+      expect(rawSource).toContain("speed: 80");
+    }
   });
 
   it("keeps Android common navigation on tab ids instead of gesture-edge coordinates", () => {
