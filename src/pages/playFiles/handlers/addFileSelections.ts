@@ -184,6 +184,14 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
   return async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
+    const deferredFeedback: Array<() => void> = [];
+    const dispatchFeedback = (callback: () => void) => {
+      if (addItemsOverlayActiveRef.current) {
+        deferredFeedback.push(callback);
+        return;
+      }
+      callback();
+    };
     addItemsStartedAtRef.current = startedAt;
     const localTreeUri = source.type === "local" ? localSourceTreeUris.get(source.id) : null;
     if (localTreeUri) {
@@ -285,11 +293,13 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     try {
       if (source.type === "commoserve") {
         if (!selections.length) {
-          reportUserError({
-            operation: "PLAYLIST_ADD",
-            title: "No items selected",
-            description: "Choose at least one archive result to add.",
-            context: { sourceId: source.id, sourceType: source.type },
+          dispatchFeedback(() => {
+            reportUserError({
+              operation: "PLAYLIST_ADD",
+              title: "No items selected",
+              description: "Choose at least one archive result to add.",
+              context: { sourceId: source.id, sourceType: source.type },
+            });
           });
           setAddItemsProgress((prev) => ({
             ...prev,
@@ -376,9 +386,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
 
         await flushArchiveBatch();
-        toast({
-          title: "Items added",
-          description: `${appendedArchiveItems} archive result(s) added to playlist.`,
+        dispatchFeedback(() => {
+          toast({
+            title: "Items added",
+            description: `${appendedArchiveItems} archive result(s) added to playlist.`,
+          });
         });
         setAddItemsProgress((prev) => ({
           ...prev,
@@ -844,15 +856,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           reason,
           totalFiles: selectedFiles.length,
         });
-        reportUserError({
-          operation: "PLAYLIST_ADD",
-          title: "No supported files",
-          description: "Found no supported files.",
-          context: {
-            sourceId: source.id,
-            sourceType: source.type,
-            totalFiles: selectedFiles.length,
-          },
+        dispatchFeedback(() => {
+          reportUserError({
+            operation: "PLAYLIST_ADD",
+            title: "No supported files",
+            description: "Found no supported files.",
+            context: {
+              sourceId: source.id,
+              sourceType: source.type,
+              totalFiles: selectedFiles.length,
+            },
+          });
         });
         setAddItemsProgress((prev) => ({
           ...prev,
@@ -876,9 +890,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
-      toast({
-        title: "Items added",
-        description: `${appendedPlaylistItems} file(s) added to playlist.`,
+      dispatchFeedback(() => {
+        toast({
+          title: "Items added",
+          description: `${appendedPlaylistItems} file(s) added to playlist.`,
+        });
       });
       void recordSmokeBenchmarkSnapshot({
         scenario: "playlist-add",
@@ -935,16 +951,18 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       markPlaylistRepositoryPhase(playlistStorageKey, "ERROR", {
         lastError: err.message,
       });
-      reportUserError({
-        operation: "PLAYLIST_ADD",
-        title: "Add items failed",
-        description: err.message,
-        error: err,
-        context: {
-          sourceId: source.id,
-          sourceType: source.type,
-          details: listingDetails,
-        },
+      dispatchFeedback(() => {
+        reportUserError({
+          operation: "PLAYLIST_ADD",
+          title: "Add items failed",
+          description: err.message,
+          error: err,
+          context: {
+            sourceId: source.id,
+            sourceType: source.type,
+            details: listingDetails,
+          },
+        });
       });
       return false;
     } finally {
@@ -965,7 +983,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         setShowAddItemsOverlay(false);
         addItemsOverlayStartedAtRef.current = null;
         addItemsOverlayActiveRef.current = false;
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
+      deferredFeedback.splice(0).forEach((callback) => callback());
     }
   };
 };

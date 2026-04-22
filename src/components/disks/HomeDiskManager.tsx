@@ -83,6 +83,7 @@ import {
 } from "@/lib/config/playbackConfig";
 import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
 import {
   buildBusIdOptions,
@@ -146,6 +147,7 @@ const waitAtLeast = async (startedAt: number, durationMs: number) => {
 
 export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
+  const screenActive = useScreenActivity();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives(visibleQueryOptions);
   const trace = useActionTrace("HomeDiskManager");
@@ -384,6 +386,24 @@ export const HomeDiskManager = () => {
     }
   }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
+  useEffect(
+    () => () => {
+      mountCompletionGenerationRef.current = {
+        a: (mountCompletionGenerationRef.current.a ?? 0) + 1,
+        b: (mountCompletionGenerationRef.current.b ?? 0) + 1,
+      };
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (screenActive) return;
+    mountCompletionGenerationRef.current = {
+      a: (mountCompletionGenerationRef.current.a ?? 0) + 1,
+      b: (mountCompletionGenerationRef.current.b ?? 0) + 1,
+    };
+  }, [screenActive]);
+
   const handleAutoConfirmStart = useCallback(() => {
     setAddItemsSurface("page");
     setIsAddingItems(true);
@@ -465,6 +485,17 @@ export const HomeDiskManager = () => {
         description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
       });
     } catch (error) {
+      if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
+        addLog("debug", "Ignoring stale disk mount failure", {
+          drive,
+          diskId: disk.id,
+          path: disk.path,
+          mountGeneration,
+          currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
+          error: (error as Error).message,
+        });
+        return;
+      }
       setDriveErrors((prev) => ({
         ...prev,
         [drive]: (error as Error).message,

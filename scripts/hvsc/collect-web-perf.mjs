@@ -81,14 +81,14 @@ if (!runProfile.supported) {
             updateArchive,
         },
         status: 'unsupported',
-        runnerExitCode: 1,
+        runnerExitCode: 0,
         ...summarizeScenarioIterations([], { evidenceClass: runProfile.evidenceClass }),
         iterations: [],
     };
 
     writeFileSync(outFile, JSON.stringify(summary, null, 2), 'utf8');
     process.stdout.write(`${path.resolve(outFile)}\n`);
-    process.exit(1);
+    process.exit(0);
 }
 
 const iterations = [];

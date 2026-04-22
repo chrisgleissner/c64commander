@@ -465,6 +465,7 @@ test.describe("Disk management", () => {
       .getByRole("button", { name: /Drive A/i })
       .click();
     await expect.poll(() => Boolean(mountDriveRequest(server.requests, "a"))).toBe(true);
+    await expect(getDriveCard(page, "Drive A")).toContainText("Disk 1.d64");
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     const lightThemeButton = page.getByRole("button", { name: /Light|light theme/i }).first();

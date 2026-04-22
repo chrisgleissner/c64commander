@@ -42,13 +42,13 @@ describe("collect-web-perf", () => {
       },
     );
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(0);
 
     const summary = JSON.parse(readFileSync(outFile, "utf8"));
     expect(summary).toEqual(
       expect.objectContaining({
         status: "unsupported",
-        runnerExitCode: 1,
+        runnerExitCode: 0,
         mode: "hybrid-real-download-fixture-browse-web",
         evidenceClass: "hybrid",
       }),

@@ -9,6 +9,7 @@
 import { act, render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC64Connection";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { getC64API } from "@/lib/c64api";
@@ -463,6 +464,94 @@ describe("HomeDiskManager UI & Interactions", () => {
         }),
       );
     });
+  });
+
+  it("ignores stale mount failures after unmount", async () => {
+    const disk = createMockDisk({ id: "stale-d1", name: "Disk 1" });
+
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+    });
+
+    let rejectMount!: (error: Error) => void;
+    const mountGate = new Promise<never>((_, reject) => {
+      rejectMount = reject;
+    });
+    (mountDiskToDrive as any).mockImplementationOnce(() => mountGate);
+
+    const view = render(<HomeDiskManager />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => {
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+    });
+
+    view.unmount();
+
+    await act(async () => {
+      rejectMount(new Error("Host unreachable"));
+      await Promise.resolve();
+    });
+
+    expect(reportUserError).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "DISK_MOUNT",
+        title: "Mount failed",
+      }),
+    );
+  });
+
+  it("ignores stale mount failures after the screen becomes inactive", async () => {
+    const disk = createMockDisk({ id: "inactive-d1", name: "Disk 1" });
+
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+    });
+
+    let rejectMount!: (error: Error) => void;
+    const mountGate = new Promise<never>((_, reject) => {
+      rejectMount = reject;
+    });
+    (mountDiskToDrive as any).mockImplementationOnce(() => mountGate);
+
+    const view = render(
+      <ScreenActivityProvider active={true}>
+        <HomeDiskManager />
+      </ScreenActivityProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => {
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+    });
+
+    view.rerender(
+      <ScreenActivityProvider active={false}>
+        <HomeDiskManager />
+      </ScreenActivityProvider>,
+    );
+
+    await act(async () => {
+      rejectMount(new Error("Host unreachable"));
+      await Promise.resolve();
+    });
+
+    expect(reportUserError).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "DISK_MOUNT",
+        title: "Mount failed",
+      }),
+    );
   });
 
   it("eject failure reports error", async () => {

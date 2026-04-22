@@ -18,6 +18,7 @@ import {
   startStrictUiMonitoring,
   allowVisualOverflow,
 } from "./testArtifacts";
+import { expectOpenToast } from "./toasts";
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
 
 const getSlider = (page: Page, id: string) => page.getByTestId(`audio-mixer-slider-${id}`);
@@ -182,7 +183,7 @@ test.describe("Audio Mixer volumes", () => {
     await snap(page, testInfo, "audio-mixer-open");
 
     await page.getByRole("button", { name: "Reset" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Audio Mixer reset" }).first()).toBeVisible();
+    await expectOpenToast(page, "Audio Mixer reset");
     await snap(page, testInfo, "audio-mixer-reset");
   });
 });
