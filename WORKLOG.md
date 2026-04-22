@@ -1,3 +1,25 @@
+# Feature Flag Refactor Worklog
+
+## [2026-04-22 11:58:47 BST] FEATURE-FLAGS-PLAN-001: execution plan and local routing established
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+What was established before editing:
+
+- Confirmed the authoritative feature-flag path is `src/lib/config/feature-flags.yaml` -> `scripts/compile-feature-flags.mjs` -> `src/lib/config/featureFlagsRegistry.generated.ts` -> `src/lib/config/featureFlags.ts`.
+- Confirmed the redundant field `user_toggleable` is authored in the YAML, validated by the compiler, emitted into the generated registry, and consumed only by runtime editability logic and tests.
+- Confirmed the shared Vitest bootstrap in `tests/setup.ts` already seeds every registered flag to enabled in storage, which is the correct enforcement point for deterministic shared test behavior.
+- Selected the cheapest falsifiable validation path for the first refactor slice: compile-feature-flags unit tests plus runtime feature-flag unit tests.
+
+Next actions:
+
+- Remove `user_toggleable` from schema, compiler output, and runtime editability resolution.
+- Add a bootstrap assertion that disallows disabled shared test-state overrides.
+- Run focused feature-flag validation before widening to the repository audit.
+
 # HVSC Performance Worklog
 
 ## [2026-04-06 18:00] ANDROID-PILOT-BLOCKER-003: Perfetto stream capture fix landed; Pixel 4 pilot still blocked in playlist setup
@@ -216,6 +238,73 @@ What changed:
   - Selected timeline bands receive an explicit highlight border.
   - The detail list shows timestamp, overall status, percentile latency, and expandable per-probe details.
 - Added diagnostics regression coverage in:
+
+## [2026-04-22 12:09:30 BST] BRANDING-RESEARCH-001: repository discovery, classification, and evidence map established
+
+Classification for this pass:
+
+- `DOC_ONLY`
+
+What was verified before drafting:
+
+- The requested work is documentation-only; no executable code, assets, or generated runtime outputs need to change for this task.
+- Current branding is duplicated across shared config, native projects, web metadata, release workflows, and support scripts rather than originating from one source of truth.
+- Capacitor config currently carries both the canonical app ID and display name in `capacitor.config.ts`, and `cap sync` has already materialized those values into native `capacitor.config.json` files under Android assets and the iOS app bundle.
+- Android branding inputs are split across `android/app/build.gradle`, `android/app/src/main/res/values/strings.xml`, `AndroidManifest.xml`, adaptive-icon resources, and splash PNGs under density/orientation-specific `drawable-*` folders.
+- iOS branding inputs are split across `ios/App/App/Info.plist`, `ios/App/App.xcodeproj/project.pbxproj`, `Assets.xcassets/AppIcon.appiconset`, `Assets.xcassets/Splash.imageset`, and `LaunchScreen.storyboard`.
+- Web branding inputs are split across `index.html`, `public/manifest.webmanifest`, `public/*` icons, `public/sw.js`, `src/index.css`, `tailwind.config.ts`, and a hard-coded logo reference in `src/pages/HomePage.tsx`.
+- Release identity is also hard-coded today in GitHub Actions artifact names, Docker image naming, Android package references, iOS bundle ID usage, and helper scripts such as `scripts/web-auto-update.sh`, `scripts/run-maestro-gating.sh`, and `scripts/ci/ios-maestro-run-flow.sh`.
+- Existing environment-driven config is present for versioning and test/runtime modes (`VITE_APP_VERSION`, `VITE_GIT_SHA`, `VITE_BUILD_TIME`, `VITE_ENABLE_TEST_PROBES`, `VERSION_NAME`, `VERSION_CODE`, `APP_ID`, web server env), but not for centralized branding selection.
+
+External references gathered for the GitHub strategy section:
+
+- GitHub Docs on private fork permissions and visibility.
+- GitHub Docs on repository-level private forking policy.
+- GitHub Docs on branch protection limits, including push restrictions only for users who already have repository write access.
+- GitHub Docs on syncing a fork with upstream.
+- GitHub Docs on duplicating or mirroring a repository without forking.
+
+Next actions:
+
+- Compare realistic branding configuration models against the repository’s current native/web/CI seams.
+- Write the final branding research document with one explicit architecture recommendation and a precise rollout plan.
+
+## [2026-04-22 12:10:58 BST] BRANDING-RESEARCH-002: branding research document completed and execution record closed
+
+What was produced:
+
+- Added `docs/research/branding/branding.md`.
+- The document covers all required sections:
+  - current-state evidence for Android, iOS, web, and shared Capacitor/TypeScript surfaces
+  - branding dimensions
+  - five strategy options
+  - central resource format evaluation
+  - cross-platform integration strategy
+  - GitHub private-branding models
+  - release strategy
+  - testing impact
+  - risks and edge cases
+  - one decisive recommendation
+  - a detailed no-code implementation plan
+
+Final recommendation captured in the document:
+
+- Use a root-level YAML branding source of truth.
+- Generate immutable native/web branding assets and metadata at build time.
+- Also generate a runtime TypeScript branding module for shared UI usage.
+- Keep Android namespace and iOS target structure stable; vary package/bundle identifiers instead.
+- Use a separate private repository, not a private branch or private fork, for the confidential brand.
+
+Validation performed:
+
+- Confirmed the document contains all twelve required top-level sections in the requested order.
+- Re-checked the repo-specific evidence against the inspected source files and workflows.
+- Did not run builds, tests, or screenshots because this task remained `DOC_ONLY`.
+
+Why broader validation was not needed:
+
+- Only Markdown documentation and execution-trace files changed.
+- No executable code, runtime assets, generated outputs, or screenshots were modified.
   - `tests/unit/components/diagnostics/HealthHistoryPopup.test.tsx`
   - `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`
 - Updated `playwright/screenshots.spec.ts` so the history analysis screenshot explicitly selects a non-healthy timeline band and expands a detail row before capture.

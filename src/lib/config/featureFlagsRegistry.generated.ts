@@ -27,7 +27,6 @@ export interface FeatureFlagDefinition {
   readonly id: FeatureFlagId;
   readonly enabled: boolean;
   readonly visible_to_user: boolean;
-  readonly user_toggleable: boolean;
   readonly developer_only: boolean;
   readonly group: string;
   readonly title: string;
@@ -52,7 +51,6 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     id: "hvsc_enabled",
     enabled: true,
     visible_to_user: true,
-    user_toggleable: true,
     developer_only: false,
     group: "stable",
     title: "HVSC downloads",
@@ -62,7 +60,6 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     id: "commoserve_enabled",
     enabled: true,
     visible_to_user: true,
-    user_toggleable: true,
     developer_only: false,
     group: "stable",
     title: "CommoServe",
@@ -72,7 +69,6 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     id: "lighting_studio_enabled",
     enabled: false,
     visible_to_user: false,
-    user_toggleable: false,
     developer_only: true,
     group: "experimental",
     title: "Lighting Studio",
@@ -82,7 +78,6 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     id: "reu_snapshot_enabled",
     enabled: false,
     visible_to_user: false,
-    user_toggleable: false,
     developer_only: true,
     group: "experimental",
     title: "REU Snapshots",

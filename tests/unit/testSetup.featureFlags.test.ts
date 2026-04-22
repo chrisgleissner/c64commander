@@ -24,4 +24,10 @@ describe("test setup feature flag isolation", () => {
     expect(localStorage.getItem("c64u_feature_flag:future_flag")).toBeNull();
     expect(sessionStorage.getItem("c64u_feature_flag:future_flag")).toBeNull();
   });
+
+  it("rejects disabled shared feature-flag overrides so tests stay deterministic", () => {
+    expect(() => globalThis.__setFeatureFlagTestState?.({ overrides: { hvsc_enabled: false } })).toThrow(
+      /must keep all feature flags enabled/,
+    );
+  });
 });

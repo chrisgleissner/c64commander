@@ -37,7 +37,6 @@ const validRegistry = () => ({
       id: "hvsc_enabled",
       enabled: true,
       visible_to_user: true,
-      user_toggleable: true,
       developer_only: false,
       group: "experimental",
       title: "HVSC downloads",
@@ -144,11 +143,10 @@ describe("compile-feature-flags", () => {
       expect(() => validateRegistry(raw)).toThrow(/developer_only: true requires visible_to_user: false/);
     });
 
-    it("rejects user_toggleable: true without visible_to_user: true", () => {
+    it("rejects the removed legacy user_toggleable field", () => {
       const raw = validRegistry();
-      raw.features[0].user_toggleable = true;
-      raw.features[0].visible_to_user = false;
-      expect(() => validateRegistry(raw)).toThrow(/user_toggleable: true requires visible_to_user: true/);
+      (raw.features[0] as Record<string, unknown>).user_toggleable = true;
+      expect(() => validateRegistry(raw)).toThrow(/unknown fields: user_toggleable/);
     });
 
     it("rejects empty titles and descriptions", () => {
@@ -171,7 +169,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -195,6 +192,7 @@ describe("compile-feature-flags", () => {
       expect(output).toContain("export const FEATURE_REGISTRY_VERSION = 1 as const;");
       expect(output).toContain('export type FeatureFlagId = "hvsc_enabled";');
       expect(output).toContain('id: "hvsc_enabled",');
+      expect(output).not.toContain("user_toggleable");
       expect(output).toContain("AUTO-GENERATED FILE. Do not edit by hand.");
     });
   });
@@ -214,7 +212,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -242,7 +239,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -270,7 +266,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -298,7 +293,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",

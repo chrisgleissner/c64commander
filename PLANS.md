@@ -1,3 +1,40 @@
+# 2026-04-22 Feature Flag Semantics Refactor And Audit
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## 1. Refactor Plan
+
+- Files: `src/lib/config/feature-flags.yaml`, `scripts/compile-feature-flags.mjs`, `src/lib/config/featureFlagsRegistry.generated.ts`, `src/lib/config/featureFlags.ts`, `tests/unit/scripts/compileFeatureFlags.test.ts`, `tests/unit/hooks/useFeatureFlags.test.tsx`
+  Change: remove the redundant `user_toggleable` field from the authoritative schema, generated types, runtime resolution, and regression tests; derive standard-user editability from `visible_to_user && !developer_only`.
+  Validation: run the compiler regression slice and runtime feature-flag unit slice, then confirm no `user_toggleable` references remain.
+
+## 2. Repository Audit Plan
+
+- Files: `src/**`, `android/**`, `ios/**`, `scripts/**`, `agents/**`, `playwright/**`, `docs/research/feature-flags/audit-2026-04-22.md`
+  Change: perform a full-repo audit for features that are complex, fragile, performance-sensitive, integration-heavy, or non-core, then record only evidence-backed flag recommendations.
+  Validation: produce a structured audit report with recommendation and risk for each candidate and ensure every proposed new flag has explicit evidence.
+
+## 3. Feature-Flag Decision Framework
+
+- Files: `docs/research/feature-flags/audit-2026-04-22.md`, `src/lib/config/feature-flags.yaml` if changes are justified
+  Change: keep flags only for non-core risky surfaces, internal safety fallbacks, or experimental flows; reject speculative or core-feature gating.
+  Validation: review every existing and proposed flag against the framework and leave stable core flows ungated.
+
+## 4. Test Enforcement Strategy
+
+- Files: `tests/setup.ts`, `tests/unit/testSetup.featureFlags.test.ts`
+  Change: keep the shared test bootstrap in an all-flags-enabled state and add an explicit bootstrap assertion that prevents disabled shared test-state overrides.
+  Validation: run the test bootstrap regression and verify every registered flag is forced to `enabled=true` in shared test setup.
+
+## 5. Verification And Termination Criteria
+
+- Files: `WORKLOG.md`, `docs/research/feature-flags/feature-flags.md`, `docs/research/feature-flags/audit-2026-04-22.md`
+  Change: document the completed refactor, audit outcome, and validation evidence.
+  Validation: `rg user_toggleable`, focused feature-flag tests, `npm run lint`, `npm run build`, and `npm run test:coverage` with branch coverage at or above 91%.
+
 # HVSC Playlist Convergence Plan
 
 ## Classification
@@ -180,6 +217,41 @@ Evidence anchors:
   - `2026-04-06 00:20` (`P1.6`)
 
 ### Target Status Snapshot
+
+# 2026-04-22 Branding Configuration Research
+
+## Classification
+
+- `DOC_ONLY`
+
+## Scope And Impact Map
+
+- Docs to add or update:
+  - `docs/research/branding/branding.md`
+  - `PLANS.md`
+  - `WORKLOG.md`
+- Repository surfaces to inspect:
+  - Android: `android/app/build.gradle`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/res/**`, generated `android/app/src/main/assets/capacitor.config.json`
+  - iOS: `ios/App/App/Info.plist`, `ios/App/App.xcodeproj/project.pbxproj`, `ios/App/App/Assets.xcassets/**`, `ios/App/App/Base.lproj/LaunchScreen.storyboard`, generated `ios/App/App/capacitor.config.json`
+  - Web: `index.html`, `public/manifest.webmanifest`, `public/*`, `src/index.css`, `tailwind.config.ts`, `src/hooks/useTheme.ts`, `src/pages/HomePage.tsx`, `public/sw.js`
+  - Shared/build/release: `capacitor.config.ts`, `package.json`, `vite.config.ts`, `src/lib/buildVersion.ts`, `src/lib/versionLabel.ts`, `src/lib/buildInfo.ts`, `web/Dockerfile`, `web/server/src/**`, `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, `.github/workflows/web.yaml`, `.github/workflows/pages.yaml`, `scripts/**`
+- Screenshot scope:
+  - none; this is research-only and does not change visible UI
+- Validation scope:
+  - documentation accuracy and internal consistency only; no builds or tests because the task is `DOC_ONLY`
+
+## Phases
+
+- [x] Phase 1: Read repository guidance and classify the task.
+      Completion criteria: `README.md`, `.github/copilot-instructions.md`, and the relevant branding/build files have been reviewed; change class and validation scope are explicit.
+- [x] Phase 2: Map the current branding state across Android, iOS, web, Capacitor, and CI.
+      Completion criteria: app name, identifiers, assets, theming hooks, build-time config, and release/artifact naming locations are evidence-backed.
+- [x] Phase 3: Evaluate configuration and private-branding strategy options.
+      Completion criteria: platform-native, generated, runtime, hybrid, and CI-driven options are compared; GitHub private fork/branch/repo models are assessed with explicit risks.
+- [x] Phase 4: Write the implementation-ready research document.
+      Completion criteria: `docs/research/branding/branding.md` contains all required sections, one decisive recommendation, and a precise no-code implementation plan.
+- [x] Phase 5: Finalize the execution record.
+      Completion criteria: this plan and `WORKLOG.md` reflect the completed phases, validation scope, and final evidence.
 
 | Target | Current honest status                                                                | Evidence                                                                            |
 | ------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |

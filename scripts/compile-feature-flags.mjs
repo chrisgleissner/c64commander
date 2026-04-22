@@ -12,7 +12,6 @@
  *   - snake_case ids
  *   - feature.group references an existing groups key
  *   - developer_only: true implies visible_to_user: false
- *   - user_toggleable: true implies visible_to_user: true
  *
  * The generated TS is derived, not authoritative. It is committed so
  * lint/type-check and fresh clones work without running the build first.
@@ -33,7 +32,6 @@ const FEATURE_FIELDS = [
   "id",
   "enabled",
   "visible_to_user",
-  "user_toggleable",
   "developer_only",
   "group",
   "title",
@@ -128,7 +126,6 @@ export const validateRegistry = (raw) => {
 
     requireBoolean(entry.enabled, `feature "${id}".enabled`);
     requireBoolean(entry.visible_to_user, `feature "${id}".visible_to_user`);
-    requireBoolean(entry.user_toggleable, `feature "${id}".user_toggleable`);
     requireBoolean(entry.developer_only, `feature "${id}".developer_only`);
 
     requireNonEmptyString(entry.group, `feature "${id}".group`);
@@ -141,15 +138,11 @@ export const validateRegistry = (raw) => {
     if (entry.developer_only && entry.visible_to_user) {
       fail(`feature "${id}" violates invariant: developer_only: true requires visible_to_user: false`);
     }
-    if (entry.user_toggleable && !entry.visible_to_user) {
-      fail(`feature "${id}" violates invariant: user_toggleable: true requires visible_to_user: true`);
-    }
 
     features.push({
       id,
       enabled: entry.enabled,
       visible_to_user: entry.visible_to_user,
-      user_toggleable: entry.user_toggleable,
       developer_only: entry.developer_only,
       group: entry.group,
       title: entry.title,
@@ -209,7 +202,6 @@ export const renderRegistryModule = (registry) => {
     id: ${renderStringLiteral(f.id)},
     enabled: ${f.enabled},
     visible_to_user: ${f.visible_to_user},
-    user_toggleable: ${f.user_toggleable},
     developer_only: ${f.developer_only},
     group: ${renderStringLiteral(f.group)},
     title: ${renderStringLiteral(f.title)},
@@ -236,7 +228,6 @@ export interface FeatureFlagDefinition {
   readonly id: FeatureFlagId;
   readonly enabled: boolean;
   readonly visible_to_user: boolean;
-  readonly user_toggleable: boolean;
   readonly developer_only: boolean;
   readonly group: string;
   readonly title: string;
