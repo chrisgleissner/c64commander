@@ -19,6 +19,7 @@ describe("test setup feature flag isolation", () => {
     localStorage.setItem("c64u_feature_flag:future_flag", "1");
     sessionStorage.setItem("c64u_feature_flag:future_flag", "0");
 
+    expect(globalThis.__setFeatureFlagTestState).toBeTypeOf("function");
     globalThis.__setFeatureFlagTestState?.();
 
     expect(localStorage.getItem("c64u_feature_flag:future_flag")).toBeNull();
@@ -26,7 +27,10 @@ describe("test setup feature flag isolation", () => {
   });
 
   it("rejects disabled shared feature-flag overrides so tests stay deterministic", () => {
-    expect(() => globalThis.__setFeatureFlagTestState?.({ overrides: { hvsc_enabled: false } })).toThrow(
+    expect(globalThis.__setFeatureFlagTestState).toBeTypeOf("function");
+    const setFeatureFlagTestState = globalThis.__setFeatureFlagTestState!;
+
+    expect(() => setFeatureFlagTestState({ overrides: { hvsc_enabled: false } })).toThrow(
       /must keep all feature flags enabled/,
     );
   });
