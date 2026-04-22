@@ -15,6 +15,8 @@
   },
   "files.exclude": {
     ".tmp": true,
+    ".venv": true,
+    "node_modules": true,
     "artifacts": true,
     "ci-artifacts": true,
     "coverage": true,
@@ -35,6 +37,8 @@
   },
   "search.exclude": {
     "**/.tmp/**": true,
+    "**/.venv/**": true,
+    "**/node_modules/**": true,
     "**/artifacts/**": true,
     "**/ci-artifacts/**": true,
     "**/coverage/**": true,
@@ -55,6 +59,8 @@
   },
   "files.watcherExclude": {
     "**/.tmp/**": true,
+    "**/.venv/**": true,
+    "**/node_modules/**": true,
     "**/artifacts/**": true,
     "**/ci-artifacts/**": true,
     "**/coverage/**": true,
@@ -141,5 +147,14 @@
   "terminal.integrated.automationProfile.linux": {
     "path": "/bin/sh"
   },
-  "terminal.integrated.enablePersistentSessions": false
+  "terminal.integrated.enablePersistentSessions": false,
+  "github.copilot.ignoredFiles": [
+    "**/.venv/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/*.min.js",
+    "**/*.min.css"
+  ]
 }
