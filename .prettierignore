@@ -6,6 +6,7 @@ docs/research/**/rollout-artifacts/**
 docs/research/**/metrics/**
 docs/research/**/screenshots/**
 coverage/**
+src/lib/config/featureFlagsRegistry.generated.ts
 .cov-*/**
 dist/**
 ios/**/App/**

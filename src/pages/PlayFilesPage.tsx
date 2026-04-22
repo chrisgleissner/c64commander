@@ -77,7 +77,12 @@ import { HvscManager } from "@/pages/playFiles/components/HvscManager";
 import { HvscPreparationSheet } from "@/pages/playFiles/components/HvscPreparationSheet";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
-import { shouldShowHvscControls } from "@/pages/playFiles/hvscControlsVisibility";
+import {
+  shouldCancelHvscLifecycleOnDisable,
+  shouldIncludeHvscSource,
+  shouldOpenHvscPreparation,
+  shouldShowHvscControls,
+} from "@/pages/playFiles/hvscControlsVisibility";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
@@ -92,6 +97,12 @@ import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolved
 import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
+import {
+  isBackgroundExecutionEnabled,
+  shouldStartBackgroundExecution,
+  shouldStopBackgroundExecution,
+  shouldSyncBackgroundExecutionDueAt,
+} from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
@@ -254,6 +265,7 @@ export default function PlayFilesPage() {
 
   const featureFlags = useFeatureFlags();
   const hvscControlsEnabled = shouldShowHvscControls(featureFlags);
+  const backgroundExecutionEnabled = isBackgroundExecutionEnabled(featureFlags);
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
 
@@ -302,6 +314,7 @@ export default function PlayFilesPage() {
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
   const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
   const backgroundExecutionActiveRef = useRef(false);
+  const hvscDisableCancellationRequestedRef = useRef(false);
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
   const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);
   const [pendingConfigChange, setPendingConfigChange] = useState<PendingConfigChangeState | null>(null);
@@ -439,8 +452,14 @@ export default function PlayFilesPage() {
   }, [isPaused, isPlaying]);
 
   useEffect(() => {
-    if (isPlaying && !isPaused) {
-      if (backgroundExecutionActiveRef.current) return;
+    if (
+      shouldStartBackgroundExecution({
+        backgroundExecutionEnabled,
+        backgroundExecutionActive: backgroundExecutionActiveRef.current,
+        isPlaying,
+        isPaused,
+      })
+    ) {
       backgroundExecutionActiveRef.current = true;
       void startBackgroundExecution({
         source: "playback-controller",
@@ -458,7 +477,16 @@ export default function PlayFilesPage() {
       void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
       return;
     }
-    if (!backgroundExecutionActiveRef.current) return;
+    if (
+      !shouldStopBackgroundExecution({
+        backgroundExecutionEnabled,
+        backgroundExecutionActive: backgroundExecutionActiveRef.current,
+        isPlaying,
+        isPaused,
+      })
+    ) {
+      return;
+    }
     backgroundExecutionActiveRef.current = false;
     void stopBackgroundExecution({
       source: "playback-controller",
@@ -474,7 +502,7 @@ export default function PlayFilesPage() {
       });
     });
     void BackgroundExecution.setDueAtMs({ dueAtMs: null });
-  }, [autoAdvanceDueAtMs, isPaused, isPlaying, trackInstanceId]);
+  }, [autoAdvanceDueAtMs, backgroundExecutionEnabled, isPaused, isPlaying, trackInstanceId]);
 
   useEffect(
     () => () => {
@@ -499,10 +527,17 @@ export default function PlayFilesPage() {
   );
 
   useEffect(() => {
-    if (!backgroundExecutionActiveRef.current) return;
-    if (!isNativePlatform() || getPlatform() !== "android") return;
+    if (
+      !shouldSyncBackgroundExecutionDueAt(
+        backgroundExecutionEnabled,
+        backgroundExecutionActiveRef.current,
+        isNativePlatform() && getPlatform() === "android",
+      )
+    ) {
+      return;
+    }
     void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
-  }, [autoAdvanceDueAtMs]);
+  }, [autoAdvanceDueAtMs, backgroundExecutionEnabled]);
 
   useEffect(() => {
     if (!ACTIVE_ADD_ITEMS_PROGRESS_STATES.has(addItemsProgress.status)) return undefined;
@@ -523,11 +558,41 @@ export default function PlayFilesPage() {
   }, [browserOpen]);
 
   useEffect(() => {
-    if (!hvscPreparationOpen) return;
+    if (!hvscControlsEnabled || !hvscPreparationOpen) return;
     if (hvsc.hvscPreparationState === "READY") return;
     if (hvsc.hvscUpdating) return;
     void hvsc.runHvscPreparation();
-  }, [hvsc.hvscPreparationState, hvsc.hvscUpdating, hvsc.runHvscPreparation, hvscPreparationOpen]);
+  }, [hvsc.hvscPreparationState, hvsc.hvscUpdating, hvsc.runHvscPreparation, hvscControlsEnabled, hvscPreparationOpen]);
+
+  useEffect(() => {
+    if (hvscControlsEnabled) {
+      hvscDisableCancellationRequestedRef.current = false;
+      return;
+    }
+
+    if (hvscPreparationOpen) {
+      setHvscPreparationOpen(false);
+    }
+
+    if (!shouldCancelHvscLifecycleOnDisable(hvscControlsEnabled, hvsc.hvscPreparationState)) {
+      hvscDisableCancellationRequestedRef.current = false;
+      return;
+    }
+
+    if (hvscDisableCancellationRequestedRef.current) return;
+    hvscDisableCancellationRequestedRef.current = true;
+
+    void hvsc.handleHvscCancel().catch((error) => {
+      hvscDisableCancellationRequestedRef.current = false;
+      reportUserError({
+        operation: "HVSC_CANCEL",
+        title: "HVSC shutdown failed",
+        description: "HVSC was disabled, but the active preparation task could not be cancelled cleanly.",
+        error,
+        context: { preparationState: hvsc.hvscPreparationState },
+      });
+    });
+  }, [hvsc.handleHvscCancel, hvsc.hvscPreparationState, hvscControlsEnabled, hvscPreparationOpen]);
 
   useImportNavigationGuards(isImportNavigationBlocked);
 
@@ -548,8 +613,8 @@ export default function PlayFilesPage() {
       if (source.type !== "hvsc") {
         return true;
       }
-      if (hvsc.hvscPreparationState === "READY") {
-        return true;
+      if (!shouldOpenHvscPreparation(featureFlags, source.type, hvsc.hvscPreparationState)) {
+        return hvscControlsEnabled && hvsc.hvscPreparationState === "READY";
       }
 
       setBrowserOpen(false);
@@ -557,21 +622,22 @@ export default function PlayFilesPage() {
       setHvscPreparationOpen(true);
       return false;
     },
-    [hvsc.hvscPreparationState],
+    [featureFlags, hvsc.hvscPreparationState, hvscControlsEnabled],
   );
 
   const handleBrowsePreparedHvsc = useCallback(() => {
+    if (!hvscControlsEnabled) return;
     setHvscPreparationOpen(false);
     setBrowserInitialSourceId("hvsc-library");
     setBrowserOpen(true);
-  }, []);
+  }, [hvscControlsEnabled]);
 
   const handleCancelHvscPreparation = useCallback(async () => {
     if (hvsc.hvscPreparationState === "DOWNLOADING" || hvsc.hvscPreparationState === "INGESTING") {
       await hvsc.handleHvscCancel();
     }
     setHvscPreparationOpen(false);
-  }, [hvsc]);
+  }, [hvsc.handleHvscCancel, hvsc.hvscPreparationState]);
 
   const resolvedDeviceId = useResolvedPlaybackDeviceId(deviceInfoId);
   const playlistStorageKey = SHARED_PLAYLIST_STORAGE_KEY;
@@ -595,7 +661,7 @@ export default function PlayFilesPage() {
       { label: SOURCE_LABELS.local, sources: localGroupSources },
       { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
-    if (hvscAvailable) {
+    if (shouldIncludeHvscSource(featureFlags, hvscAvailable)) {
       groups.push({
         label: SOURCE_LABELS.hvsc,
         sources: [createHvscSourceLocation(hvscRoot.path)],
@@ -608,7 +674,7 @@ export default function PlayFilesPage() {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, hvscAvailable, hvscRoot.path, localSources]);
+  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources]);
 
   const handleLocalSourceInput = useCallback(
     (files: FileList | File[] | null) => {
@@ -1625,7 +1691,7 @@ export default function PlayFilesPage() {
           />
 
           <HvscPreparationSheet
-            open={hvscPreparationOpen}
+            open={hvscControlsEnabled && hvscPreparationOpen}
             onOpenChange={setHvscPreparationOpen}
             state={hvsc.hvscPreparationState}
             statusLabel={hvsc.hvscPreparationStatusLabel}

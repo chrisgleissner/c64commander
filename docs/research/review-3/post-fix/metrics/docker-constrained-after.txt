@@ -1,4 +1,0 @@
-HEALTHY=1
-READY_MS=1392
-STAT=c64-review3-postfix|0.02%|18.96MiB / 512MiB|3.70%|11
-HEALTHZ={"ok":true}

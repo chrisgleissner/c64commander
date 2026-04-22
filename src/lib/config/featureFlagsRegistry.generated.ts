@@ -13,7 +13,12 @@
 
 export const FEATURE_REGISTRY_VERSION = 1 as const;
 
-export type FeatureFlagId = "hvsc_enabled" | "commoserve_enabled" | "lighting_studio_enabled" | "reu_snapshot_enabled";
+export type FeatureFlagId = 
+  | "hvsc_enabled"
+  | "commoserve_enabled"
+  | "lighting_studio_enabled"
+  | "background_execution_enabled"
+  | "reu_snapshot_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -27,7 +32,6 @@ export interface FeatureFlagDefinition {
   readonly id: FeatureFlagId;
   readonly enabled: boolean;
   readonly visible_to_user: boolean;
-  readonly user_toggleable: boolean;
   readonly developer_only: boolean;
   readonly group: string;
   readonly title: string;
@@ -52,37 +56,42 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     id: "hvsc_enabled",
     enabled: true,
     visible_to_user: true,
-    user_toggleable: true,
     developer_only: false,
     group: "stable",
     title: "HVSC downloads",
-    description: "Show HVSC download and ingest controls on the Play page.",
+    description: "Show the HVSC source in Add Items.",
   },
   {
     id: "commoserve_enabled",
     enabled: true,
     visible_to_user: true,
-    user_toggleable: true,
     developer_only: false,
     group: "stable",
     title: "CommoServe",
-    description: "Show the CommoServe source in Add Items and Online Archive flows.",
+    description: "Show the CommoServe source in Add Items.",
   },
   {
     id: "lighting_studio_enabled",
     enabled: false,
     visible_to_user: false,
-    user_toggleable: false,
     developer_only: true,
     group: "experimental",
     title: "Lighting Studio",
     description: "Enable Lighting Studio entry points and dialog access.",
   },
   {
+    id: "background_execution_enabled",
+    enabled: true,
+    visible_to_user: false,
+    developer_only: true,
+    group: "experimental",
+    title: "Background execution",
+    description: "Allow native background playback timing and auto-advance scheduling.",
+  },
+  {
     id: "reu_snapshot_enabled",
     enabled: false,
     visible_to_user: false,
-    user_toggleable: false,
     developer_only: true,
     group: "experimental",
     title: "REU Snapshots",

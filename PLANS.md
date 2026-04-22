@@ -1,3 +1,116 @@
+# 2026-04-22 Variant Spec Minimal Patch
+
+## Classification
+
+- `DOC_ONLY`
+
+## Ordered Steps
+
+1. [x] Audit the current variant spec, prompt, and plan documents to identify the exact sections that need minimal amendments.
+2. [x] Perform a targeted repository audit for variant-sensitive external endpoints covering default device host resolution, HVSC runtime URLs, and CommoServe runtime URLs; reject speculative additions.
+3. [x] Update `docs/research/variants/variant-spec.md` first with only the required schema evolution, endpoint, identifier uniqueness, data-isolation, and generator-validation rules.
+4. [x] Update `docs/research/variants/prompt.md` to enforce schema-version awareness, evidence-based endpoint changes, uniqueness validation, variant-safe web isolation, and strict generator validation.
+5. [x] Update `docs/research/variants/plan.md` to add endpoint audit gating, schema evolution validation, identifier validation, storage/cache prefix validation, and blocking generator validation checks.
+6. [x] Verify the three variant documents are internally consistent, reflect the endpoint audit result, and contain no contradictions.
+7. [x] Mark this plan complete in `PLANS.md` after consistency verification finishes.
+
+# 2026-04-22 Minimal Operational Feature Flag Audit
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Scope And Constraints
+
+- Primary map: `docs/features-by-page.md`
+- Authoritative registry: `src/lib/config/feature-flags.yaml`
+- Runtime owners under review:
+  - `src/pages/HomePage.tsx`
+  - `src/pages/PlayFilesPage.tsx`
+  - `src/pages/playFiles/hooks/usePlaybackController.ts`
+  - `src/lib/native/backgroundExecutionManager.ts`
+  - `src/components/disks/HomeDiskManager.tsx`
+  - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`
+  - `src/components/UnifiedHealthBadge.tsx`
+  - `src/hooks/useTelnetActions.ts`
+- Deliverables:
+  - `docs/research/feature-flags/audit.md`
+  - `PLANS.md`
+  - `WORKLOG.md`
+  - feature-flag registry/runtime/tests only if a candidate survives strict evaluation
+
+## Ordered Steps
+
+1. Phase 1: Exhaustive targeted audit
+   Files: feature-surface docs plus the owning runtime files for Telnet, background playback, HVSC, disk sync, diagnostics, and saved-device switching.
+   Change: trace actual lifecycle control paths, external dependencies, timing sensitivity, and verified tests for each candidate area.
+   Verification: `docs/research/feature-flags/audit.md` records exact code locations, dependency shape, risk class, and verified test evidence.
+
+2. Phase 2: Strict evaluation
+   Files: `docs/research/feature-flags/audit.md`
+   Change: accept only candidates whose OFF state preserves a usable app, isolates non-core failure-prone behavior, has real mitigation value, and maps to a safe degraded mode.
+   Verification: each candidate is explicitly marked `ACCEPTED` or `REJECTED` with code-tied reasoning.
+
+3. Phase 3: Flag design for accepted candidates only
+   Files: `docs/research/feature-flags/audit.md`, `src/lib/config/feature-flags.yaml` if justified
+   Change: define identifier, default, scope, ON/OFF behavior, degraded mode, and mitigated failures; extend existing flags instead of creating overlaps when the behavior already has a flag.
+   Verification: every accepted flag has a deterministic OFF path and no overlapping responsibility.
+
+4. Phase 4: Runtime integration
+   Files: runtime owners for accepted flags only
+   Change: wire the OFF path through real control flow, not UI-only hiding, while preserving existing behavior when enabled.
+   Verification: accepted flags gate the full lifecycle of their feature area and leave the app usable when individually disabled.
+
+5. Phase 5: Test enforcement
+   Files: targeted unit/integration tests for each accepted flag
+   Change: add ON/OFF regressions and keep the default shared test bootstrap in the all-flags-enabled state.
+   Verification: at least one OFF-path assertion exists per implemented flag and default test setup still enables all registered flags.
+
+6. Phase 6: Validation and closeout
+   Files: `WORKLOG.md`
+   Change: record focused validation plus the required repository validation set for code changes.
+   Verification: targeted tests pass, `npm run lint` passes, `npm run build` passes, and `npm run test:coverage` passes with global branch coverage at or above 91%.
+
+# 2026-04-22 Feature Flag Semantics Refactor
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Ordered Steps
+
+1. Phase 1: Static analysis
+   Files: `src/lib/config/feature-flags.yaml`, `scripts/compile-feature-flags.mjs`, `src/lib/config/featureFlagsRegistry.generated.ts`, `src/lib/config/featureFlags.ts`, `tests/unit/**`, `docs/research/feature-flags/feature-flags.md`
+   Change: identify every schema, compile-time, generated-output, runtime, UI, and documentation reference tied to authored standard-user toggleability.
+   Verification: repository search and targeted reads show the controlling path is YAML -> compiler -> generated registry -> runtime resolver -> tests/docs.
+
+2. Phase 2: Schema simplification
+   Files: `src/lib/config/feature-flags.yaml`, `docs/research/feature-flags/feature-flags.md`
+   Change: keep only `enabled`, `visible_to_user`, and `developer_only` as authored semantics; document that standard-user editability is derived from `visible_to_user && !developer_only`.
+   Verification: YAML examples, comments, and documentation are internally consistent and no longer describe authored toggleability as a separate field.
+
+3. Phase 3: Compiler and generated output update
+   Files: `scripts/compile-feature-flags.mjs`, `src/lib/config/featureFlagsRegistry.generated.ts`, `tests/unit/scripts/compileFeatureFlags.test.ts`
+   Change: keep compile-time validation for `developer_only: true => visible_to_user: false`, emit the reduced feature shape, and lock the minimal emitted shape in tests.
+   Verification: compiler tests pass, generated output matches the reduced schema, and the generated registry stays up to date.
+
+4. Phase 4: Runtime resolution update
+   Files: `src/lib/config/featureFlags.ts`, `tests/unit/config/featureFlags.test.ts`, `tests/unit/hooks/useFeatureFlags.test.tsx`
+   Change: derive standard-user editability from visibility plus non-developer status, without changing developer-mode behavior, defaults, or visibility.
+   Verification: runtime tests prove visible public flags are editable, hidden developer-only flags stay hidden and non-editable, and developer mode still exposes everything.
+
+5. Phase 5: Dead reference elimination
+   Files: `PLANS.md`, `WORKLOG.md`, `docs/research/feature-flags/feature-flags.md`, `tests/unit/scripts/compileFeatureFlags.test.ts`
+   Change: remove stale references to the deleted authored field from plans, worklog, docs, and tests.
+   Verification: a repository-wide search for the removed field name returns zero matches.
+
+6. Phase 6: Validation and closeout
+   Files: `WORKLOG.md`
+   Change: record results for the focused feature-flag checks and the required repository validation set.
+   Verification: focused feature-flag tests pass, `npm run lint` passes, `npm run build` passes, and `npm run test:coverage` passes with global branch coverage at or above 91%.
+
 # HVSC Playlist Convergence Plan
 
 ## Classification
@@ -180,6 +293,41 @@ Evidence anchors:
   - `2026-04-06 00:20` (`P1.6`)
 
 ### Target Status Snapshot
+
+# 2026-04-22 Branding Configuration Research
+
+## Classification
+
+- `DOC_ONLY`
+
+## Scope And Impact Map
+
+- Docs to add or update:
+  - `docs/research/branding/branding.md`
+  - `PLANS.md`
+  - `WORKLOG.md`
+- Repository surfaces to inspect:
+  - Android: `android/app/build.gradle`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/res/**`, generated `android/app/src/main/assets/capacitor.config.json`
+  - iOS: `ios/App/App/Info.plist`, `ios/App/App.xcodeproj/project.pbxproj`, `ios/App/App/Assets.xcassets/**`, `ios/App/App/Base.lproj/LaunchScreen.storyboard`, generated `ios/App/App/capacitor.config.json`
+  - Web: `index.html`, `public/manifest.webmanifest`, `public/*`, `src/index.css`, `tailwind.config.ts`, `src/hooks/useTheme.ts`, `src/pages/HomePage.tsx`, `public/sw.js`
+  - Shared/build/release: `capacitor.config.ts`, `package.json`, `vite.config.ts`, `src/lib/buildVersion.ts`, `src/lib/versionLabel.ts`, `src/lib/buildInfo.ts`, `web/Dockerfile`, `web/server/src/**`, `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, `.github/workflows/web.yaml`, `.github/workflows/pages.yaml`, `scripts/**`
+- Screenshot scope:
+  - none; this is research-only and does not change visible UI
+- Validation scope:
+  - documentation accuracy and internal consistency only; no builds or tests because the task is `DOC_ONLY`
+
+## Phases
+
+- [x] Phase 1: Read repository guidance and classify the task.
+      Completion criteria: `README.md`, `.github/copilot-instructions.md`, and the relevant branding/build files have been reviewed; change class and validation scope are explicit.
+- [x] Phase 2: Map the current branding state across Android, iOS, web, Capacitor, and CI.
+      Completion criteria: app name, identifiers, assets, theming hooks, build-time config, and release/artifact naming locations are evidence-backed.
+- [x] Phase 3: Evaluate configuration and private-branding strategy options.
+      Completion criteria: platform-native, generated, runtime, hybrid, and CI-driven options are compared; GitHub private fork/branch/repo models are assessed with explicit risks.
+- [x] Phase 4: Write the implementation-ready research document.
+      Completion criteria: `docs/research/branding/branding.md` contains all required sections, one decisive recommendation, and a precise no-code implementation plan.
+- [x] Phase 5: Finalize the execution record.
+      Completion criteria: this plan and `WORKLOG.md` reflect the completed phases, validation scope, and final evidence.
 
 | Target | Current honest status                                                                | Evidence                                                                            |
 | ------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |

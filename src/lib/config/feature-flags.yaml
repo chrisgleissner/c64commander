@@ -8,15 +8,16 @@
 # Semantics:
 #   enabled          registry default when no explicit user override exists
 #   visible_to_user  whether the row is shown in standard (non-developer) Settings
-#   user_toggleable  whether a non-developer user may change the value
 #   developer_only   hides the row from standard users; requires visible_to_user: false
 #   group            logical grouping key for Settings sections (must exist under groups)
+#
+# Standard-user toggleability is derived, not authored:
+#   visible_to_user && !developer_only
 #
 # Invariants enforced at compile time:
 #   - feature ids are unique snake_case
 #   - every feature.group matches a groups key
 #   - developer_only: true requires visible_to_user: false
-#   - user_toggleable: true requires visible_to_user: true
 
 version: 1
 
@@ -32,34 +33,38 @@ features:
   - id: hvsc_enabled
     enabled: true
     visible_to_user: true
-    user_toggleable: true
     developer_only: false
     group: stable
     title: HVSC downloads
-    description: Show HVSC download and ingest controls on the Play page.
+    description: Show the HVSC source in Add Items.
 
   - id: commoserve_enabled
     enabled: true
     visible_to_user: true
-    user_toggleable: true
     developer_only: false
     group: stable
     title: CommoServe
-    description: Show the CommoServe source in Add Items and Online Archive flows.
+    description: Show the CommoServe source in Add Items.
 
   - id: lighting_studio_enabled
     enabled: false
     visible_to_user: false
-    user_toggleable: false
     developer_only: true
     group: experimental
     title: Lighting Studio
     description: Enable Lighting Studio entry points and dialog access.
 
+  - id: background_execution_enabled
+    enabled: true
+    visible_to_user: false
+    developer_only: true
+    group: experimental
+    title: Background execution
+    description: Allow native background playback timing and auto-advance scheduling.
+
   - id: reu_snapshot_enabled
     enabled: false
     visible_to_user: false
-    user_toggleable: false
     developer_only: true
     group: experimental
     title: REU Snapshots

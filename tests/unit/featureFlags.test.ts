@@ -27,7 +27,13 @@ describe("featureFlags persistence and logging", () => {
 
   it("exposes the expected initial registry", () => {
     const ids = FEATURE_FLAG_DEFINITIONS.map((definition) => definition.id);
-    expect(ids).toEqual(["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled", "reu_snapshot_enabled"]);
+    expect(ids).toEqual([
+      "hvsc_enabled",
+      "commoserve_enabled",
+      "lighting_studio_enabled",
+      "background_execution_enabled",
+      "reu_snapshot_enabled",
+    ]);
   });
 
   it("classifies stable and experimental flags via the registry", () => {
@@ -38,6 +44,7 @@ describe("featureFlags persistence and logging", () => {
       hvsc_enabled: "stable",
       commoserve_enabled: "stable",
       lighting_studio_enabled: "experimental",
+      background_execution_enabled: "experimental",
       reu_snapshot_enabled: "experimental",
     });
   });
@@ -96,6 +103,7 @@ describe("featureFlags persistence and logging", () => {
         hvsc_enabled: false,
         commoserve_enabled: true,
         lighting_studio_enabled: false,
+        background_execution_enabled: true,
         reu_snapshot_enabled: false,
       }),
     ).toBe(false);
@@ -104,6 +112,7 @@ describe("featureFlags persistence and logging", () => {
         hvsc_enabled: true,
         commoserve_enabled: true,
         lighting_studio_enabled: false,
+        background_execution_enabled: true,
         reu_snapshot_enabled: false,
       }),
     ).toBe(true);

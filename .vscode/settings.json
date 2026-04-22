@@ -13,6 +13,72 @@
     "**/.github/workflows/*.yaml": "yaml",
     "**/.github/workflows/*.yml": "yaml"
   },
+  "files.exclude": {
+    ".tmp": true,
+    ".venv": true,
+    "node_modules": true,
+    "artifacts": true,
+    "ci-artifacts": true,
+    "coverage": true,
+    "playwright-report": true,
+    "playwright-report-coverage": true,
+    "test-results": true,
+    "android/app/build": true,
+    "android/build": true,
+    "c64scope/artifacts": true,
+    "1541ultimate": true,
+    "android-mcp-server": true,
+    "c64bridge": true,
+    "c64stream": true,
+    "droidmind": true,
+    "mobile-mcp": true,
+    "test-data": true,
+    "vivipi": true
+  },
+  "search.exclude": {
+    "**/.tmp/**": true,
+    "**/.venv/**": true,
+    "**/node_modules/**": true,
+    "**/artifacts/**": true,
+    "**/ci-artifacts/**": true,
+    "**/coverage/**": true,
+    "**/playwright-report/**": true,
+    "**/playwright-report-coverage/**": true,
+    "**/test-results/**": true,
+    "**/android/**/build/**": true,
+    "**/c64scope/**/artifacts/**": true,
+    "**/c64scope/**/dist/**": true,
+    "1541ultimate/**": true,
+    "android-mcp-server/**": true,
+    "c64bridge/**": true,
+    "c64stream/**": true,
+    "droidmind/**": true,
+    "mobile-mcp/**": true,
+    "test-data/**": true,
+    "vivipi/**": true
+  },
+  "files.watcherExclude": {
+    "**/.tmp/**": true,
+    "**/.venv/**": true,
+    "**/node_modules/**": true,
+    "**/artifacts/**": true,
+    "**/ci-artifacts/**": true,
+    "**/coverage/**": true,
+    "**/playwright-report/**": true,
+    "**/playwright-report-coverage/**": true,
+    "**/test-results/**": true,
+    "**/android/**/build/**": true,
+    "**/c64scope/**/artifacts/**": true,
+    "**/c64scope/**/dist/**": true,
+    "1541ultimate/**": true,
+    "android-mcp-server/**": true,
+    "c64bridge/**": true,
+    "c64stream/**": true,
+    "droidmind/**": true,
+    "mobile-mcp/**": true,
+    "test-data/**": true,
+    "vivipi/**": true
+  },
   "files.trimTrailingWhitespace": true,
   "prettier.requireConfig": true,
   "java.configuration.updateBuildConfiguration": "automatic",
@@ -75,13 +141,20 @@
   "terminal.integrated.defaultProfile.linux": "bash-clean",
   "terminal.integrated.profiles.linux": {
     "bash-clean": {
-      "path": "/usr/bin/bash",
-      "args": ["-i"]
+      "path": "/usr/bin/bash"
     }
   },
   "terminal.integrated.automationProfile.linux": {
-    "path": "/usr/bin/bash",
-    "args": ["-i"]
+    "path": "/bin/sh"
   },
-  "terminal.integrated.enablePersistentSessions": false
+  "terminal.integrated.enablePersistentSessions": false,
+  "github.copilot.ignoredFiles": [
+    "**/.venv/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/*.min.js",
+    "**/*.min.css"
+  ]
 }

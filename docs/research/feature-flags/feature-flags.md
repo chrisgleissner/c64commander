@@ -122,7 +122,6 @@ features:
   - id: hvsc_enabled
     enabled: true
     visible_to_user: true
-    user_toggleable: true
     developer_only: false
     group: experimental
     title: HVSC downloads
@@ -131,7 +130,6 @@ features:
   - id: commoserve_enabled
     enabled: true
     visible_to_user: true
-    user_toggleable: true
     developer_only: false
     group: experimental
     title: CommoServe
@@ -140,7 +138,6 @@ features:
   - id: lighting_studio_enabled
     enabled: false
     visible_to_user: false
-    user_toggleable: false
     developer_only: true
     group: experimental
     title: Lighting Studio
@@ -157,9 +154,6 @@ features:
 
 - `visible_to_user`
   Whether the feature should appear in Settings when developer mode is off.
-
-- `user_toggleable`
-  Whether a non-developer user may change the feature in Settings when it is visible.
 
 - `developer_only`
   Whether the feature is hidden from standard users and only surfaced once developer mode is enabled.
@@ -180,7 +174,6 @@ type FeatureFlagDefinition = {
   id: string;
   enabled: boolean;
   visible_to_user: boolean;
-  user_toggleable: boolean;
   developer_only: boolean;
   group?: string;
   title: string;
@@ -203,8 +196,8 @@ type FeatureFlagDefinition = {
 4. `developer_only: true` means standard users do not see the row.
    Invariant: `developer_only: true` requires `visible_to_user: false`.
 
-5. `user_toggleable: false` means locked for standard users.
-   The row may still be shown in standard Settings if `visible_to_user: true`, but the control is disabled.
+5. Standard-user editability is derived, not authored.
+   A feature is editable for standard users if and only if `visible_to_user: true` and `developer_only: false`.
 
 6. The registry is authoritative for metadata.
    Code outside the resolver must not redefine visibility or mutability rules ad hoc.
@@ -269,7 +262,7 @@ else:
 if developer_mode_on:
   editable = true
 else:
-  editable = registry.visible_to_user && registry.user_toggleable
+  editable = registry.visible_to_user && !registry.developer_only
 ```
 
 ### Developer mode interaction
@@ -282,7 +275,7 @@ Developer mode is a UI and mutability override, not a value override.
 
 This is the cleanest way to satisfy the requested behavior:
 
-- When developer mode is off, only public user-toggleable features can be modified.
+- When developer mode is off, only public non-developer features can be modified.
 - Hidden features do not appear.
 - When developer mode is on, all feature flags become visible and editable.
 
@@ -629,18 +622,18 @@ HVSC and CommoServe are optional content sources, while Lighting Studio is a sec
 
 ### Consolidated recommended table
 
-| Internal ID / Property | Public Name | Scope When Enabled | What Gets Hidden or Disabled When Off | Settings Visibility |
-| --- | --- | --- | --- | --- |
-| `hvsc_enabled` | HVSC downloads | HVSC source, download, ingest, browse, and lifecycle controls on Play | HVSC source and HVSC lifecycle UI are removed; basic Local/C64U playback remains | Everyone |
-| `commoserve_enabled` | CommoServe | Online archive source and related Add Items / Online Archive flows | CommoServe source and archive search UI are removed; local and C64U sources remain | Everyone |
-| `lighting_studio_enabled` | Lighting Studio | Lighting Studio entry points, dialog, and automation/editor workflows | Lighting Studio launch points and secondary automation/editor surface are removed; regular config-based lighting still works | Developer mode only |
-| `diagnostics_enabled` | Diagnostics | Diagnostics overlay, health checks, trace/log drill-down, export/share, and support tooling | Diagnostics overlay and advanced support tooling are removed; a simpler passive connection badge should remain | Developer mode only |
-| `docs_enabled` | Built-in docs | `Docs` tab and static in-app documentation route | Docs tab and route are removed; external README/site docs can remain outside the app | Developer mode only |
-| `device_switcher_enabled` | Switch device | Badge long-press switcher and diagnostics switch-device workflows | Multi-device picker and switcher UI are hidden; standard single-target connection editing in Settings remains | Developer mode only |
-| `memory_snapshots_enabled` | RAM snapshots | Save RAM, Load RAM, and snapshot-manager workflows on Home | RAM snapshot dialogs and manager are removed; machine controls and config editing remain | Developer mode only |
-| `reu_snapshots_enabled` | REU snapshots | Save REU, REU snapshot storage, restore, and preload workflows | REU-specific snapshot actions and dialogs are removed; non-REU Home controls remain | Developer mode only |
-| `app_config_snapshots_enabled` | App config snapshots | Save/load/revert/manage app-local config snapshots and config snapshot file workflows | Local app-config snapshot workflows are removed; device flash save/load/reset remains | Developer mode only |
-| `stream_controls_enabled` | UDP streams | Home-page stream target editing and stream start/stop controls | Streams section is removed from Home; other device controls remain | Developer mode only |
+| Internal ID / Property         | Public Name          | Scope When Enabled                                                                          | What Gets Hidden or Disabled When Off                                                                                        | Settings Visibility |
+| ------------------------------ | -------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `hvsc_enabled`                 | HVSC downloads       | HVSC source, download, ingest, browse, and lifecycle controls on Play                       | HVSC source and HVSC lifecycle UI are removed; basic Local/C64U playback remains                                             | Everyone            |
+| `commoserve_enabled`           | CommoServe           | Online archive source and related Add Items / Online Archive flows                          | CommoServe source and archive search UI are removed; local and C64U sources remain                                           | Everyone            |
+| `lighting_studio_enabled`      | Lighting Studio      | Lighting Studio entry points, dialog, and automation/editor workflows                       | Lighting Studio launch points and secondary automation/editor surface are removed; regular config-based lighting still works | Developer mode only |
+| `diagnostics_enabled`          | Diagnostics          | Diagnostics overlay, health checks, trace/log drill-down, export/share, and support tooling | Diagnostics overlay and advanced support tooling are removed; a simpler passive connection badge should remain               | Developer mode only |
+| `docs_enabled`                 | Built-in docs        | `Docs` tab and static in-app documentation route                                            | Docs tab and route are removed; external README/site docs can remain outside the app                                         | Developer mode only |
+| `device_switcher_enabled`      | Switch device        | Badge long-press switcher and diagnostics switch-device workflows                           | Multi-device picker and switcher UI are hidden; standard single-target connection editing in Settings remains                | Developer mode only |
+| `memory_snapshots_enabled`     | RAM snapshots        | Save RAM, Load RAM, and snapshot-manager workflows on Home                                  | RAM snapshot dialogs and manager are removed; machine controls and config editing remain                                     | Developer mode only |
+| `reu_snapshots_enabled`        | REU snapshots        | Save REU, REU snapshot storage, restore, and preload workflows                              | REU-specific snapshot actions and dialogs are removed; non-REU Home controls remain                                          | Developer mode only |
+| `app_config_snapshots_enabled` | App config snapshots | Save/load/revert/manage app-local config snapshots and config snapshot file workflows       | Local app-config snapshot workflows are removed; device flash save/load/reset remains                                        | Developer mode only |
+| `stream_controls_enabled`      | UDP streams          | Home-page stream target editing and stream start/stop controls                              | Streams section is removed from Home; other device controls remain                                                           | Developer mode only |
 
 ## 9. Risks and Trade-offs
 

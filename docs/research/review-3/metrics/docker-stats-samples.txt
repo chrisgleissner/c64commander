@@ -1,7 +1,0 @@
-# docker stats samples (5s)
-2026-02-18T22:54:50+00:00
-c64-review3-smoke|0.01%|20.3MiB / 512MiB|3.96%|1.35kB / 700B|0B / 0B|11
-c64-review3-smoke|0.00%|19.66MiB / 512MiB|3.84%|1.35kB / 700B|0B / 0B|11
-c64-review3-smoke|0.01%|19.53MiB / 512MiB|3.81%|1.35kB / 700B|0B / 0B|11
-c64-review3-smoke|0.00%|19.46MiB / 512MiB|3.80%|1.35kB / 700B|0B / 0B|11
-c64-review3-smoke|0.00%|19.46MiB / 512MiB|3.80%|1.35kB / 700B|0B / 0B|11

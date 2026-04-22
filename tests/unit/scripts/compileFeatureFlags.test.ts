@@ -37,7 +37,6 @@ const validRegistry = () => ({
       id: "hvsc_enabled",
       enabled: true,
       visible_to_user: true,
-      user_toggleable: true,
       developer_only: false,
       group: "experimental",
       title: "HVSC downloads",
@@ -58,6 +57,15 @@ describe("compile-feature-flags", () => {
       const registry = validateRegistry(validRegistry());
       expect(registry.features).toHaveLength(1);
       expect(registry.groups.experimental.label).toBe("Experimental Features");
+      expect(registry.features[0]).toEqual({
+        id: "hvsc_enabled",
+        enabled: true,
+        visible_to_user: true,
+        developer_only: false,
+        group: "experimental",
+        title: "HVSC downloads",
+        description: "Show HVSC download and ingest controls on the Play page.",
+      });
     });
 
     it("rejects a non-mapping root", () => {
@@ -144,13 +152,6 @@ describe("compile-feature-flags", () => {
       expect(() => validateRegistry(raw)).toThrow(/developer_only: true requires visible_to_user: false/);
     });
 
-    it("rejects user_toggleable: true without visible_to_user: true", () => {
-      const raw = validRegistry();
-      raw.features[0].user_toggleable = true;
-      raw.features[0].visible_to_user = false;
-      expect(() => validateRegistry(raw)).toThrow(/user_toggleable: true requires visible_to_user: true/);
-    });
-
     it("rejects empty titles and descriptions", () => {
       const raw = validRegistry();
       raw.features[0].title = "";
@@ -171,7 +172,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -195,6 +195,8 @@ describe("compile-feature-flags", () => {
       expect(output).toContain("export const FEATURE_REGISTRY_VERSION = 1 as const;");
       expect(output).toContain('export type FeatureFlagId = "hvsc_enabled";');
       expect(output).toContain('id: "hvsc_enabled",');
+      expect(output).toContain("readonly visible_to_user: boolean;");
+      expect(output).toContain("readonly developer_only: boolean;");
       expect(output).toContain("AUTO-GENERATED FILE. Do not edit by hand.");
     });
   });
@@ -214,7 +216,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -242,7 +243,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -270,7 +270,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",
@@ -298,7 +297,6 @@ describe("compile-feature-flags", () => {
           "  - id: hvsc_enabled",
           "    enabled: true",
           "    visible_to_user: true",
-          "    user_toggleable: true",
           "    developer_only: false",
           "    group: experimental",
           "    title: HVSC downloads",

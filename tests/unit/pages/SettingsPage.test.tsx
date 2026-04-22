@@ -40,6 +40,7 @@ import {
   loadDiskAutostartMode,
   loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
+import { FEATURE_FLAG_DEFINITIONS, type FeatureFlagId } from "@/lib/config/featureFlagsRegistry.generated";
 
 vi.mock("framer-motion", () => ({
   motion: {
@@ -210,64 +211,26 @@ vi.mock("@/hooks/useListPreviewLimit", () => ({
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlags: () => ({
     flags: featureFlagsRef.current,
-    resolved: {
-      hvsc_enabled: {
-        id: "hvsc_enabled",
-        value: featureFlagsRef.current.hvsc_enabled,
-        visible: true,
-        editable: true,
-        definition: {
-          id: "hvsc_enabled",
-          title: "Enable HVSC downloads",
-          description: "Shows HVSC download and ingest controls on the Play page.",
-          group: "stable",
-          developer_only: false,
-          default: false,
-        },
-      },
-      commoserve_enabled: {
-        id: "commoserve_enabled",
-        value: featureFlagsRef.current.commoserve_enabled,
-        visible: true,
-        editable: true,
-        definition: {
-          id: "commoserve_enabled",
-          title: "CommoServe",
-          description: "Enable the online archive source.",
-          group: "stable",
-          developer_only: false,
-          default: false,
-        },
-      },
-      lighting_studio_enabled: {
-        id: "lighting_studio_enabled",
-        value: featureFlagsRef.current.lighting_studio_enabled,
-        visible: developerModeEnabledRef.current,
-        editable: developerModeEnabledRef.current,
-        definition: {
-          id: "lighting_studio_enabled",
-          title: "Lighting Studio",
-          description: "Show lighting automation controls and diagnostics.",
-          group: "experimental",
-          developer_only: true,
-          default: false,
-        },
-      },
-      reu_snapshot_enabled: {
-        id: "reu_snapshot_enabled",
-        value: featureFlagsRef.current.reu_snapshot_enabled,
-        visible: developerModeEnabledRef.current,
-        editable: developerModeEnabledRef.current,
-        definition: {
-          id: "reu_snapshot_enabled",
-          title: "REU Snapshots",
-          description: "Enable Save REU and Restore REU Snapshot functionality.",
-          group: "experimental",
-          developer_only: true,
-          default: false,
-        },
-      },
-    },
+    resolved: Object.fromEntries(
+      FEATURE_FLAG_DEFINITIONS.map((definition) => {
+        const id = definition.id as FeatureFlagId;
+        const value = featureFlagsRef.current[id] ?? definition.enabled;
+        const visible = definition.developer_only ? developerModeEnabledRef.current : definition.visible_to_user;
+        const editable = definition.developer_only
+          ? developerModeEnabledRef.current
+          : definition.visible_to_user && !definition.developer_only;
+        return [
+          id,
+          {
+            id,
+            value,
+            visible,
+            editable,
+            definition,
+          },
+        ];
+      }),
+    ),
     setFlag: mockSetFeatureFlag,
   }),
   useFeatureFlag: (
@@ -650,7 +613,7 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-delete-device")).toHaveAccessibleName("Delete device");
     expect(screen.getByRole("heading", { name: "HVSC" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Stable Features" })).toBeInTheDocument();
-    expect(screen.getByText(/enable hvsc downloads/i)).toBeInTheDocument();
+    expect(screen.getByText(/hvsc downloads/i)).toBeInTheDocument();
   });
 
   it("renders stable feature rows before experimental ones", () => {

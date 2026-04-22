@@ -117,6 +117,9 @@ const definitionFor = (id: FeatureFlagId): FeatureFlagDefinition => {
 export const isKnownFeatureFlagId = (id: string): id is FeatureFlagId =>
   Object.prototype.hasOwnProperty.call(FEATURE_FLAG_DEFINITION_BY_ID, id);
 
+const isStandardUserToggleable = (definition: FeatureFlagDefinition): boolean =>
+  definition.visible_to_user && !definition.developer_only;
+
 const computeResolution = (
   definition: FeatureFlagDefinition,
   override: boolean | undefined,
@@ -125,7 +128,7 @@ const computeResolution = (
   const hasOverride = typeof override === "boolean";
   const value = hasOverride ? (override as boolean) : definition.enabled;
   const visible = developerMode ? true : definition.visible_to_user;
-  const editable = developerMode ? true : definition.visible_to_user && definition.user_toggleable;
+  const editable = developerMode ? true : isStandardUserToggleable(definition);
   return {
     id: definition.id,
     definition,

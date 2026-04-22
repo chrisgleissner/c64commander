@@ -1,3 +1,51 @@
+# Feature Flag Audit Worklog
+
+## [2026-04-22 13:05:00 BST] FLAG-AUDIT-001: routing, classification, and first discriminating hypothesis established
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+What was verified before the first audit edit:
+
+- Confirmed the current registry remains small and live at `src/lib/config/feature-flags.yaml` with only four shipped ids: `hvsc_enabled`, `commoserve_enabled`, `lighting_studio_enabled`, and `reu_snapshot_enabled`.
+- Confirmed the highest-priority brittle areas are owned by a small set of runtime files rather than spread arbitrarily: Telnet machine actions in `src/pages/HomePage.tsx` and `src/hooks/useTelnetActions.ts`, background playback execution in `src/pages/PlayFilesPage.tsx` plus `src/lib/native/backgroundExecutionManager.ts`, HVSC lifecycle in `src/pages/PlayFilesPage.tsx` plus `src/pages/playFiles/hooks/useHvscLibrary.ts`, disk mount synchronization in `src/components/disks/HomeDiskManager.tsx`, and diagnostics runtime in `src/App.tsx`, `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`, and `src/components/UnifiedHealthBadge.tsx`.
+- Confirmed a meaningful degraded mode already exists in user-facing code for background playback: when background execution fails, foreground playback continues and only lock-screen auto-advance is degraded.
+- Confirmed the current `hvsc_enabled` flag does not yet control the full lifecycle: HVSC controls are hidden, but HVSC remains in Add Items source groups and can still open preparation flow.
+- Confirmed the Telnet-heavy reboot, power-cycle, and menu actions are part of the Home page's core machine-control surface, which raises the rejection bar for any new flag there.
+
+Current working hypothesis:
+
+- The minimal accepted set will likely be limited to one new operational fallback around background playback and one semantics-tightening change to an existing HVSC flag, while diagnostics and Telnet-heavy core controls will be accepted only if a later narrow read proves a cleaner full-lifecycle OFF path than the current evidence suggests.
+
+Cheapest checks selected to disconfirm that hypothesis:
+
+- Verify whether diagnostics can be disabled from a small number of root mounts without leaving broken routes or dead interactive affordances.
+- Verify whether any Telnet-dependent snapshot/config-file workflow is already isolated from core Home functionality strongly enough to justify a dedicated flag instead of rejection.
+
+# Feature Flag Refactor Worklog
+
+## [2026-04-22 11:58:47 BST] FEATURE-FLAGS-PLAN-001: execution plan and local routing established
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+What was established before editing:
+
+- Confirmed the authoritative feature-flag path is `src/lib/config/feature-flags.yaml` -> `scripts/compile-feature-flags.mjs` -> `src/lib/config/featureFlagsRegistry.generated.ts` -> `src/lib/config/featureFlags.ts`.
+- Confirmed the only behavior that still depended on authored standard-user toggleability was the standard-user editability calculation and its associated tests and documentation.
+- Confirmed the shared Vitest bootstrap in `tests/setup.ts` already seeds every registered flag to enabled in storage, which is the correct enforcement point for deterministic shared test behavior.
+- Selected the cheapest falsifiable validation path for the first refactor slice: compile-feature-flags unit tests plus runtime feature-flag unit tests.
+
+Planned follow-through:
+
+- Keep editability derived from `visible_to_user && !developer_only` for standard users.
+- Remove stale authored-toggleability references from tests and docs.
+- Run focused feature-flag validation before widening to the required repository validation set.
+
 # HVSC Performance Worklog
 
 ## [2026-04-06 18:00] ANDROID-PILOT-BLOCKER-003: Perfetto stream capture fix landed; Pixel 4 pilot still blocked in playlist setup
@@ -216,6 +264,73 @@ What changed:
   - Selected timeline bands receive an explicit highlight border.
   - The detail list shows timestamp, overall status, percentile latency, and expandable per-probe details.
 - Added diagnostics regression coverage in:
+
+## [2026-04-22 12:09:30 BST] BRANDING-RESEARCH-001: repository discovery, classification, and evidence map established
+
+Classification for this pass:
+
+- `DOC_ONLY`
+
+What was verified before drafting:
+
+- The requested work is documentation-only; no executable code, assets, or generated runtime outputs need to change for this task.
+- Current branding is duplicated across shared config, native projects, web metadata, release workflows, and support scripts rather than originating from one source of truth.
+- Capacitor config currently carries both the canonical app ID and display name in `capacitor.config.ts`, and `cap sync` has already materialized those values into native `capacitor.config.json` files under Android assets and the iOS app bundle.
+- Android branding inputs are split across `android/app/build.gradle`, `android/app/src/main/res/values/strings.xml`, `AndroidManifest.xml`, adaptive-icon resources, and splash PNGs under density/orientation-specific `drawable-*` folders.
+- iOS branding inputs are split across `ios/App/App/Info.plist`, `ios/App/App.xcodeproj/project.pbxproj`, `Assets.xcassets/AppIcon.appiconset`, `Assets.xcassets/Splash.imageset`, and `LaunchScreen.storyboard`.
+- Web branding inputs are split across `index.html`, `public/manifest.webmanifest`, `public/*` icons, `public/sw.js`, `src/index.css`, `tailwind.config.ts`, and a hard-coded logo reference in `src/pages/HomePage.tsx`.
+- Release identity is also hard-coded today in GitHub Actions artifact names, Docker image naming, Android package references, iOS bundle ID usage, and helper scripts such as `scripts/web-auto-update.sh`, `scripts/run-maestro-gating.sh`, and `scripts/ci/ios-maestro-run-flow.sh`.
+- Existing environment-driven config is present for versioning and test/runtime modes (`VITE_APP_VERSION`, `VITE_GIT_SHA`, `VITE_BUILD_TIME`, `VITE_ENABLE_TEST_PROBES`, `VERSION_NAME`, `VERSION_CODE`, `APP_ID`, web server env), but not for centralized branding selection.
+
+External references gathered for the GitHub strategy section:
+
+- GitHub Docs on private fork permissions and visibility.
+- GitHub Docs on repository-level private forking policy.
+- GitHub Docs on branch protection limits, including push restrictions only for users who already have repository write access.
+- GitHub Docs on syncing a fork with upstream.
+- GitHub Docs on duplicating or mirroring a repository without forking.
+
+Next actions:
+
+- Compare realistic branding configuration models against the repository’s current native/web/CI seams.
+- Write the final branding research document with one explicit architecture recommendation and a precise rollout plan.
+
+## [2026-04-22 12:10:58 BST] BRANDING-RESEARCH-002: branding research document completed and execution record closed
+
+What was produced:
+
+- Added `docs/research/branding/branding.md`.
+- The document covers all required sections:
+  - current-state evidence for Android, iOS, web, and shared Capacitor/TypeScript surfaces
+  - branding dimensions
+  - five strategy options
+  - central resource format evaluation
+  - cross-platform integration strategy
+  - GitHub private-branding models
+  - release strategy
+  - testing impact
+  - risks and edge cases
+  - one decisive recommendation
+  - a detailed no-code implementation plan
+
+Final recommendation captured in the document:
+
+- Use a root-level YAML branding source of truth.
+- Generate immutable native/web branding assets and metadata at build time.
+- Also generate a runtime TypeScript branding module for shared UI usage.
+- Keep Android namespace and iOS target structure stable; vary package/bundle identifiers instead.
+- Use a separate private repository, not a private branch or private fork, for the confidential brand.
+
+Validation performed:
+
+- Confirmed the document contains all twelve required top-level sections in the requested order.
+- Re-checked the repo-specific evidence against the inspected source files and workflows.
+- Did not run builds, tests, or screenshots because this task remained `DOC_ONLY`.
+
+Why broader validation was not needed:
+
+- Only Markdown documentation and execution-trace files changed.
+- No executable code, runtime assets, generated outputs, or screenshots were modified.
   - `tests/unit/components/diagnostics/HealthHistoryPopup.test.tsx`
   - `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`
 - Updated `playwright/screenshots.spec.ts` so the history analysis screenshot explicitly selects a non-healthy timeline band and expands a detail row before capture.

@@ -174,8 +174,19 @@ const clearFeatureFlagTestState = () => {
   }
 };
 
+const assertSharedFeatureFlagTestState = (overrides: Partial<Record<TestFeatureFlagId, boolean>>) => {
+  const disabledFlags = REGISTERED_FEATURE_FLAG_IDS.filter((id) => overrides[id] === false);
+  if (disabledFlags.length > 0) {
+    throw new Error(
+      `Shared test bootstrap must keep all feature flags enabled; disabled overrides are not allowed: ${disabledFlags.join(", ")}`,
+    );
+  }
+};
+
 const applyFeatureFlagTestState = (state: TestFeatureFlagState = {}) => {
   const { developerMode = true, overrides = {} } = state;
+
+  assertSharedFeatureFlagTestState(overrides);
 
   clearFeatureFlagTestState();
 
