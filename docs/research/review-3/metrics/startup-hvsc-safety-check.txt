@@ -1,1 +1,0 @@
-HVSC startup safety passed: no startup HVSC download activity detected.
