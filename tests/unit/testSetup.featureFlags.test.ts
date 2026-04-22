@@ -20,7 +20,9 @@ describe("test setup feature flag isolation", () => {
     sessionStorage.setItem("c64u_feature_flag:future_flag", "0");
 
     expect(globalThis.__setFeatureFlagTestState).toBeTypeOf("function");
-    globalThis.__setFeatureFlagTestState?.();
+    const setFeatureFlagTestState = globalThis.__setFeatureFlagTestState!;
+
+    setFeatureFlagTestState();
 
     expect(localStorage.getItem("c64u_feature_flag:future_flag")).toBeNull();
     expect(sessionStorage.getItem("c64u_feature_flag:future_flag")).toBeNull();

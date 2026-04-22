@@ -3,12 +3,7 @@
     "source.fixAll.eslint": "always"
   },
   "editor.formatOnSave": true,
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact"
-  ],
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
   "files.insertFinalNewline": true,
   "files.associations": {
     "*.yaml": "yaml",
@@ -141,16 +136,12 @@
   "terminal.integrated.profiles.linux": {
     "bash-clean": {
       "path": "/usr/bin/bash",
-      "args": [
-        "-i"
-      ]
+      "args": ["-i"]
     }
   },
   "terminal.integrated.automationProfile.linux": {
     "path": "/usr/bin/bash",
-    "args": [
-      "-i"
-    ]
+    "args": ["-i"]
   },
   "terminal.integrated.enablePersistentSessions": false
 }
