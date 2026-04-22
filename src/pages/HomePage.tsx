@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
+import { variant } from "@/generated/variant";
 import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { AppBar } from "@/components/AppBar";
@@ -485,12 +486,12 @@ function HomePageContent() {
         error,
         context: isDeviceControlError(error)
           ? {
-              deviceControlOperation: error.operation,
-              transport: error.transport,
-              endpoint: error.endpoint,
-              request: error.request,
-              response: error.response,
-            }
+            deviceControlOperation: error.operation,
+            transport: error.transport,
+            endpoint: error.endpoint,
+            request: error.request,
+            response: error.response,
+          }
           : undefined,
       });
     } finally {
@@ -603,15 +604,15 @@ function HomePageContent() {
     },
     ...(reuSnapshotEnabled
       ? [
-          {
-            id: "saveReuMemory",
-            label: TELNET_ACTIONS.saveReuMemory.label,
-            onSelect: () => void handleSaveReu(),
-            disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
-            loading: telnet.activeActionId === "saveReuMemory",
-            reason: saveReuDisabledReason,
-          },
-        ]
+        {
+          id: "saveReuMemory",
+          label: TELNET_ACTIONS.saveReuMemory.label,
+          onSelect: () => void handleSaveReu(),
+          disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
+          loading: telnet.activeActionId === "saveReuMemory",
+          reason: saveReuDisabledReason,
+        },
+      ]
       : []),
   ];
 
@@ -962,8 +963,8 @@ function HomePageContent() {
         leading={
           <div className="flex min-h-11 items-center gap-2 min-w-0">
             <img
-              src="/c64commander.png"
-              alt="C64 Commander"
+              src={variant.assets.public.homeLogoPng}
+              alt={variant.displayName}
               className="h-9 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-11"
               data-testid="home-header-logo"
             />

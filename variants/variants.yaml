@@ -1,0 +1,72 @@
+schema_version: 1
+
+repo:
+  default_variant: c64commander
+  publish_defaults:
+    release:
+      - c64commander
+    ci:
+      - c64commander
+
+variants:
+  c64commander:
+    display_name: C64 Commander
+    app_id: c64commander
+    description: Configure and control your Commodore 64 Ultimate over your local network.
+    exported_file_basename: c64commander
+    platform:
+      android:
+        application_id: uk.gleissner.c64commander
+        custom_url_scheme: uk.gleissner.c64commander
+      ios:
+        bundle_id: uk.gleissner.c64commander
+      web:
+        short_name: C64 Commander
+        theme_color: "#6C7EB7"
+        background_color: "#6C7EB7"
+        cache_prefix: c64commander-static
+        storage_prefix: c64commander
+        login_title: C64 Commander Login
+        login_heading: C64 Commander
+        image_repo: ghcr.io/chrisgleissner/c64commander
+    assets:
+      sources:
+        icon_svg: variants/assets/c64commander/icon.svg
+        logo_svg: variants/assets/c64commander/logo.svg
+        splash_svg: variants/assets/c64commander/splash.svg
+    runtime:
+      endpoints:
+        device_host: c64u
+        hvsc_base_url: https://hvsc.brona.dk/HVSC/
+        commoserve_base_url: http://commoserve.files.commodore.net
+
+  c64u-controller:
+    display_name: C64U Controller
+    app_id: c64u-controller
+    description: Configure and control your Commodore 64 Ultimate over your local network.
+    exported_file_basename: c64u-controller
+    platform:
+      android:
+        application_id: uk.gleissner.c64ucontroller
+        custom_url_scheme: uk.gleissner.c64ucontroller
+      ios:
+        bundle_id: uk.gleissner.c64ucontroller
+      web:
+        short_name: C64U Controller
+        theme_color: "#2F6B8B"
+        background_color: "#2F6B8B"
+        cache_prefix: c64u-controller-static
+        storage_prefix: c64u-controller
+        login_title: C64U Controller Login
+        login_heading: C64U Controller
+        image_repo: ghcr.io/chrisgleissner/c64u-controller
+    assets:
+      sources:
+        icon_svg: variants/assets/c64u-controller/icon.svg
+        logo_svg: variants/assets/c64u-controller/logo.svg
+        splash_svg: variants/assets/c64u-controller/splash.svg
+    runtime:
+      endpoints:
+        device_host: c64u
+        hvsc_base_url: https://hvsc.brona.dk/HVSC/
+        commoserve_base_url: http://commoserve.files.commodore.net

@@ -2,6 +2,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import type { ServerResponse } from "node:http";
 import { writeBuffer, writeJson, writeText } from "./httpIO.js";
+import { variant } from "./variant.generated.js";
 
 export type LogErrorDetails = (error: unknown) => Record<string, unknown>;
 export type LogError = (message: string, details?: Record<string, unknown>) => void;
@@ -20,7 +21,7 @@ const loginHtml = () => `<!doctype html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>C64 Commander Login</title>
+    <title>${variant.platform.web.loginTitle}</title>
     <style>
       body { font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b0b0c; color: #fff; }
       form { width: 320px; background: #17171a; padding: 24px; border-radius: 12px; border: 1px solid #2a2a31; }
@@ -33,7 +34,7 @@ const loginHtml = () => `<!doctype html>
   </head>
   <body>
     <form id="login-form">
-      <h1>C64 Commander</h1>
+      <h1>${variant.platform.web.loginHeading}</h1>
       <input id="password" type="password" placeholder="Network password" autocomplete="current-password" required />
       <button type="submit">Log in</button>
       <p id="error"></p>
