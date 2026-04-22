@@ -135,13 +135,11 @@
   "terminal.integrated.defaultProfile.linux": "bash-clean",
   "terminal.integrated.profiles.linux": {
     "bash-clean": {
-      "path": "/usr/bin/bash",
-      "args": ["-i"]
+      "path": "/usr/bin/bash"
     }
   },
   "terminal.integrated.automationProfile.linux": {
-    "path": "/usr/bin/bash",
-    "args": ["-i"]
+    "path": "/bin/sh"
   },
   "terminal.integrated.enablePersistentSessions": false
 }
