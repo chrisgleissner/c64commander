@@ -36,7 +36,7 @@ features:
     developer_only: false
     group: stable
     title: HVSC downloads
-    description: Show HVSC download and ingest controls on the Play page.
+    description: Show the HVSC source in Add Items.
 
   - id: commoserve_enabled
     enabled: true
@@ -44,7 +44,7 @@ features:
     developer_only: false
     group: stable
     title: CommoServe
-    description: Show the CommoServe source in Add Items and Online Archive flows.
+    description: Show the CommoServe source in Add Items.
 
   - id: lighting_studio_enabled
     enabled: false
@@ -53,6 +53,14 @@ features:
     group: experimental
     title: Lighting Studio
     description: Enable Lighting Studio entry points and dialog access.
+
+  - id: background_execution_enabled
+    enabled: true
+    visible_to_user: false
+    developer_only: true
+    group: experimental
+    title: Background execution
+    description: Allow native background playback timing and auto-advance scheduling.
 
   - id: reu_snapshot_enabled
     enabled: false

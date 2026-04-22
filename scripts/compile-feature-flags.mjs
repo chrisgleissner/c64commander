@@ -28,15 +28,7 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 export const DEFAULT_YAML_PATH = path.join(REPO_ROOT, "src/lib/config/feature-flags.yaml");
 export const DEFAULT_OUTPUT_PATH = path.join(REPO_ROOT, "src/lib/config/featureFlagsRegistry.generated.ts");
 
-const FEATURE_FIELDS = [
-  "id",
-  "enabled",
-  "visible_to_user",
-  "developer_only",
-  "group",
-  "title",
-  "description",
-];
+const FEATURE_FIELDS = ["id", "enabled", "visible_to_user", "developer_only", "group", "title", "description"];
 
 const ID_PATTERN = /^[a-z][a-z0-9_]*$/;
 
@@ -182,7 +174,8 @@ export const renderRegistryModule = (registry) => {
   const sortedGroupKeys = Object.keys(registry.groups);
   const renderStringLiteral = (value) => JSON.stringify(value);
   const renderObjectKey = (value) => (ID_PATTERN.test(value) ? value : renderStringLiteral(value));
-  const idsUnion = registry.features.map((f) => renderStringLiteral(f.id)).join(" | ");
+  const renderedIds = registry.features.map((f) => renderStringLiteral(f.id));
+  const idsUnion = renderedIds.length <= 1 ? renderedIds.join(" | ") : `\n  | ${renderedIds.join("\n  | ")}`;
 
   const groupEntries = sortedGroupKeys
     .map((key) => {
@@ -275,7 +268,7 @@ export const compileFeatureFlags = ({
     if (existing !== rendered) {
       fail(
         `generated file is out of date: ${path.relative(REPO_ROOT, outputPath)}\n` +
-        `  run: node scripts/compile-feature-flags.mjs`,
+          `  run: node scripts/compile-feature-flags.mjs`,
       );
     }
     return { registry, changed: false };

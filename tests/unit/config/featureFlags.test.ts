@@ -106,6 +106,33 @@ describe("featureFlags", () => {
       expect(resolution.editable).toBe(false);
     });
 
+    it("keeps every visible standard-user feature editable", async () => {
+      await manager.load();
+      const resolutions = Object.values(manager.getSnapshot().resolved).filter(
+        (resolution) => resolution.definition.visible_to_user && !resolution.definition.developer_only,
+      );
+
+      expect(resolutions.length).toBeGreaterThan(0);
+      resolutions.forEach((resolution) => {
+        expect(resolution.visible).toBe(true);
+        expect(resolution.editable).toBe(true);
+      });
+    });
+
+    it("keeps developer-only features hidden and non-editable for standard users", async () => {
+      await manager.load();
+      const resolutions = Object.values(manager.getSnapshot().resolved).filter(
+        (resolution) => resolution.definition.developer_only,
+      );
+
+      expect(resolutions.length).toBeGreaterThan(0);
+      resolutions.forEach((resolution) => {
+        expect(resolution.definition.visible_to_user).toBe(false);
+        expect(resolution.visible).toBe(false);
+        expect(resolution.editable).toBe(false);
+      });
+    });
+
     it("developer mode makes every feature visible and editable", async () => {
       manager = new FeatureFlagManager(repo, () => true);
       await manager.load();
@@ -366,19 +393,37 @@ describe("featureFlags", () => {
 
   describe("helpers", () => {
     it("isHvscEnabled is true by default", () => {
-      expect(isHvscEnabled({ hvsc_enabled: true, commoserve_enabled: true, lighting_studio_enabled: false })).toBe(
-        true,
-      );
+      expect(
+        isHvscEnabled({
+          hvsc_enabled: true,
+          commoserve_enabled: true,
+          lighting_studio_enabled: false,
+          background_execution_enabled: true,
+          reu_snapshot_enabled: false,
+        }),
+      ).toBe(true);
     });
 
     it("isHvscEnabled is false when hvsc_enabled is false", () => {
-      expect(isHvscEnabled({ hvsc_enabled: false, commoserve_enabled: true, lighting_studio_enabled: false })).toBe(
-        false,
-      );
+      expect(
+        isHvscEnabled({
+          hvsc_enabled: false,
+          commoserve_enabled: true,
+          lighting_studio_enabled: false,
+          background_execution_enabled: true,
+          reu_snapshot_enabled: false,
+        }),
+      ).toBe(false);
     });
 
     it("isFeatureEnabled reads the requested id", () => {
-      const flags = { hvsc_enabled: false, commoserve_enabled: true, lighting_studio_enabled: false };
+      const flags = {
+        hvsc_enabled: false,
+        commoserve_enabled: true,
+        lighting_studio_enabled: false,
+        background_execution_enabled: true,
+        reu_snapshot_enabled: false,
+      };
       expect(isFeatureEnabled(flags, "commoserve_enabled")).toBe(true);
       expect(isFeatureEnabled(flags, "hvsc_enabled")).toBe(false);
     });

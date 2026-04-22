@@ -94,13 +94,13 @@ const mockSnapshot: FeatureFlagSnapshot = {
 
 const mockSubscribe = vi.fn((listener: (s: FeatureFlagSnapshot) => void) => {
   listener(mockSnapshot);
-  return () => { };
+  return () => {};
 });
 
-const mockLoad = vi.fn(async () => { });
-const mockSetFlag = vi.fn(async (_key: FeatureFlagKey, _value: boolean) => { });
-const mockClearOverride = vi.fn(async (_key: FeatureFlagKey) => { });
-const mockSubscribeToDeveloperMode = vi.fn(() => () => { });
+const mockLoad = vi.fn(async () => {});
+const mockSetFlag = vi.fn(async (_key: FeatureFlagKey, _value: boolean) => {});
+const mockClearOverride = vi.fn(async (_key: FeatureFlagKey) => {});
+const mockSubscribeToDeveloperMode = vi.fn(() => () => {});
 const mockGetSnapshot = vi.fn(() => mockSnapshot);
 
 vi.mock("@/lib/config/featureFlags", () => ({
@@ -121,9 +121,9 @@ describe("useFeatureFlags", () => {
     mockGetSnapshot.mockReturnValue(mockSnapshot);
     mockSubscribe.mockImplementation((listener: (s: FeatureFlagSnapshot) => void) => {
       listener(mockSnapshot);
-      return () => { };
+      return () => {};
     });
-    mockSubscribeToDeveloperMode.mockReturnValue(() => { });
+    mockSubscribeToDeveloperMode.mockReturnValue(() => {});
   });
 
   describe("FeatureFlagsProvider + useFeatureFlags", () => {
@@ -147,7 +147,7 @@ describe("useFeatureFlags", () => {
     it("calls featureFlagManager.load on mount", async () => {
       const { FeatureFlagsProvider } = await import("@/hooks/useFeatureFlags");
       render(<FeatureFlagsProvider>{null}</FeatureFlagsProvider>);
-      await act(async () => { });
+      await act(async () => {});
       expect(mockLoad).toHaveBeenCalledTimes(1);
     });
 
@@ -180,7 +180,7 @@ describe("useFeatureFlags", () => {
       );
 
       screen.getByText("Toggle").click();
-      await act(async () => { });
+      await act(async () => {});
       expect(mockSetFlag).toHaveBeenCalledWith("hvsc_enabled", false);
     });
   });
@@ -203,7 +203,7 @@ describe("useFeatureFlags", () => {
       mockGetSnapshot.mockReturnValue(loadedSnapshot);
       mockSubscribe.mockImplementation((listener: (s: FeatureFlagSnapshot) => void) => {
         listener(loadedSnapshot);
-        return () => { };
+        return () => {};
       });
 
       const { FeatureFlagsProvider, useFeatureFlag } = await import("@/hooks/useFeatureFlags");

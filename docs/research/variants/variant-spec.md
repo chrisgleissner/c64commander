@@ -271,6 +271,10 @@ Where required for correctness, variants MUST support different web runtime name
 
 This is required when two variants might be built or tested against the same web origin or artifact store.
 
+`localStorage` and `sessionStorage` MUST use variant-derived prefixes.
+Service worker cache names MUST be variant-derived.
+Native platforms (Android and iOS) MAY rely on OS-level app sandboxing and do NOT require additional storage namespacing.
+
 ---
 
 ## 6. Compatibility And Non-Goals
@@ -304,7 +308,9 @@ Examples:
 
 Internal storage keys MAY remain stable where platform sandboxing already isolates variants and where user experience is unaffected.
 
-However, web caches and browser storage MUST become variant-derived if otherwise they would collide across builds.
+`localStorage` and `sessionStorage` MUST use variant-derived prefixes.
+Service worker cache names MUST be variant-derived.
+Native platform storage MAY rely on OS sandboxing; no additional namespacing is required.
 
 ### VARIANT-COMPAT-005
 
@@ -394,6 +400,12 @@ variants:
 
     exported_file_basename: c64commander
 
+    runtime:
+      endpoints:
+        device_host: c64u
+        hvsc_base_url: https://hvsc.brona.dk/HVSC/
+        commoserve_base_url: http://commoserve.files.commodore.net
+
   c64u-controller:
     display_name: C64U Controller
     app_id: c64u-controller
@@ -430,6 +442,12 @@ variants:
         splash_2732_png: variants/assets/c64u-controller/ios/splash-2732.png
 
     exported_file_basename: c64u-controller
+
+    runtime:
+      endpoints:
+        device_host: c64u
+        hvsc_base_url: https://hvsc.brona.dk/HVSC/
+        commoserve_base_url: http://commoserve.files.commodore.net
 ```
 
 ### VARIANT-SCHEMA-004 — Invariants
@@ -437,11 +455,56 @@ variants:
 The following MUST hold:
 
 - `variant` ids MUST be unique
-- `app_id` values MUST be unique
+- `app_id` values MUST be globally unique across all declared variants
+- Android `application_id` values MUST be globally unique across all declared variants
+- iOS `bundle_id` values MUST be globally unique across all declared variants
+- custom URL schemes MUST be globally unique across all declared variants
 - install identifiers MUST be unique across variants
 - all asset paths MUST exist
 - `repo.default_variant` MUST reference a declared variant
 - every publish-default entry MUST reference a declared variant
+
+The generator MUST validate uniqueness of `app_id`, `application_id`, `bundle_id`, and `custom_url_scheme` across all declared variants and MUST fail if any collision is detected.
+
+### VARIANT-SCHEMA-005 — Schema Evolution
+
+`schema_version` is REQUIRED in `variants/variants.yaml`.
+
+The following rules govern schema evolution:
+
+- the generator MUST fail with an explicit error if it encounters a `schema_version` value higher than its supported maximum
+- the generator MUST support all historical `schema_version` values used across the repository
+- any structural change to the variant schema MUST increment `schema_version`
+- schema changes MUST be backward-compatible OR include an explicit documented migration step
+
+The current supported schema version is `1`.
+
+### VARIANT-SCHEMA-006 — Runtime Endpoint Defaults
+
+A targeted audit of the repository identified the following hard-coded external endpoints:
+
+- **Device host** (`DEFAULT_DEVICE_HOST = "c64u"`, `DEFAULT_BASE_URL = "http://c64u"` in `src/lib/c64api/hostConfig.ts`)
+- **HVSC base URL** (`DEFAULT_BASE_URL = "https://hvsc.brona.dk/HVSC/"` in `src/lib/hvsc/hvscReleaseService.ts`)
+- **CommoServe base URL** (`baseUrl: "http://commoserve.files.commodore.net"` in `src/lib/archive/config.ts`)
+
+**Conclusion**: all three endpoints are confirmed variant-sensitive. Different variants MAY ship with different defaults for any of these endpoints.
+
+The variant schema MUST support a `runtime.endpoints` block at the variant level:
+
+```yaml
+runtime:
+  endpoints:
+    device_host: <string>
+    hvsc_base_url: <string>
+    commoserve_base_url: <string>
+```
+
+Rules:
+
+- all three fields are OPTIONAL; if omitted, the existing source-level default for that endpoint remains unchanged
+- the generator MUST expose all declared `runtime.endpoints` values via `src/generated/variant.ts`
+- runtime code MUST consume endpoint defaults only from the generated module, not from scattered source constants, once variant endpoint data is declared
+- these three keys correspond exactly to the identified endpoints; additional keys MUST NOT be added without a new targeted audit confirming variant sensitivity
 
 ---
 
@@ -545,6 +608,7 @@ It MUST expose at least:
 - user-visible export basename
 - selected asset references
 - variant-resolved feature defaults
+- all declared `runtime.endpoints` values (`device_host`, `hvsc_base_url`, `commoserve_base_url`)
 
 ### VARIANT-BUILD-003 — Execution Order
 
@@ -557,7 +621,7 @@ Variant generation MUST run before:
 - web build
 - release packaging
 
-### VARIANT-BUILD-004 — Check Mode
+### VARIANT-BUILD-004 — Check Mode And Validation
 
 A check mode MUST exist:
 
@@ -566,6 +630,17 @@ scripts/generate-variant.mjs --check --variant <id>
 ```
 
 CI MUST fail if generated outputs differ from checked-in outputs.
+
+The generator MUST additionally validate during both generation and check mode:
+
+- `schema_version` is present and does not exceed the supported maximum
+- `app_id` values are unique across all declared variants
+- `application_id` values are unique across all declared variants
+- `bundle_id` values are unique across all declared variants
+- `custom_url_scheme` values are unique across all declared variants
+- declared `runtime.endpoints` keys are a subset of the confirmed set (`device_host`, `hvsc_base_url`, `commoserve_base_url`) and their values are non-empty strings
+
+CI MUST fail on any validation violation.
 
 ---
 
@@ -610,7 +685,7 @@ Generated web outputs MUST cover:
 
 ### VARIANT-WEB-002
 
-Service worker cache prefixes and browser storage prefixes MUST be variant-derived whenever otherwise builds would collide on the same origin.
+Service worker cache names and `localStorage`/`sessionStorage` prefixes MUST be variant-derived. This is unconditional and does not depend on origin collision.
 
 ---
 

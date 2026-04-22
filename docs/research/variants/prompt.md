@@ -67,6 +67,11 @@ Then read the smallest relevant set of implementation files in:
 9. Every bug fix or regression discovered during implementation must get a dedicated regression test.
 10. Do not claim tests, builds, or screenshot updates you did not actually run.
 11. Keep this repository’s default publish behavior as `c64commander` only unless explicit multi-variant publication is requested.
+12. The generator must be schema-version-aware: read `schema_version` from `variants/variants.yaml` before processing and fail explicitly if the version is unsupported or absent.
+13. Three endpoints are confirmed variant-sensitive (`device_host`, `hvsc_base_url`, `commoserve_base_url`); expose their values from `src/generated/variant.ts` and consume them from there, not from scattered source constants. Do not add additional endpoint keys without a new targeted audit confirming variant sensitivity.
+14. Validate uniqueness of `app_id`, `application_id`, `bundle_id`, and `custom_url_scheme` across all declared variants in the generator and in CI; treat any collision as a hard failure.
+15. `localStorage`, `sessionStorage`, and service worker cache names must use variant-derived prefixes in all web surfaces; do not leave these as single-brand constants once variant data exists.
+16. The generator must enforce all invariants from VARIANT-SCHEMA-004 and VARIANT-SCHEMA-005 during both generation and check mode; CI must fail on any violation.
 
 ## Required End State
 
@@ -84,6 +89,12 @@ Your implementation is only complete when all of the following are true:
 - release workflows can intentionally publish multiple variants when explicitly configured
 - internal source/native layout remains stable
 - tests and helper tooling no longer assume one single hard-coded user-visible brand where that assumption is no longer valid
+- `variants/variants.yaml` declares `schema_version` and the generator validates it
+- the generator fails on unsupported `schema_version` values
+- uniqueness of `app_id`, `application_id`, `bundle_id`, and `custom_url_scheme` is validated by the generator and enforced in CI
+- `localStorage`, `sessionStorage`, and service worker cache names use variant-derived prefixes
+- `runtime.endpoints` values (`device_host`, `hvsc_base_url`, `commoserve_base_url`) are exposed by `src/generated/variant.ts` and runtime code consumes them from there
+- no additional endpoint keys are added to `runtime.endpoints` without a new targeted audit confirming variant sensitivity
 
 ## Required Architecture Outcome
 

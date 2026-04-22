@@ -32,6 +32,9 @@ The shipped end state must include:
 - Do not create a second independent feature-flag registry. Reuse `src/lib/config/feature-flags.yaml` as the canonical feature catalog.
 - Every bug or regression found during implementation must get a targeted regression test.
 - Final validation must include `npm run test:coverage` with global branch coverage `>= 91%`.
+- The endpoint audit is pre-resolved: `device_host`, `hvsc_base_url`, and `commoserve_base_url` are confirmed variant-sensitive; their schema block is defined in VARIANT-SCHEMA-006. Do not add additional endpoint keys without a new targeted audit.
+- Schema evolution validation is mandatory: generator must read and validate `schema_version` before any output is produced; CI must fail on an absent or unsupported version.
+- Identifier uniqueness validation is a blocking CI check: `app_id`, `application_id`, `bundle_id`, and `custom_url_scheme` must be validated across all declared variants; CI must fail on any collision.
 
 ## 3. Impact Map
 
@@ -111,11 +114,12 @@ The shipped end state must include:
 
 ## 5. Detailed Phases
 
-### Phase 0. Discovery and final impact map
+### Phase 0. Discovery, endpoint audit, and final impact map
 
 Goal:
 
 - confirm every currently hard-coded variant seam before editing
+- review the pre-resolved endpoint audit in VARIANT-SCHEMA-006 as part of discovery
 
 Read first:
 
@@ -125,16 +129,26 @@ Read first:
 - [variant-spec.md](./variant-spec.md)
 - the files listed in section 3 of this plan
 
+Endpoint audit (pre-resolved):
+
+The following endpoints have been audited and confirmed variant-sensitive:
+
+- `device_host` — `DEFAULT_DEVICE_HOST = "c64u"` in `src/lib/c64api/hostConfig.ts`
+- `hvsc_base_url` — `DEFAULT_BASE_URL = "https://hvsc.brona.dk/HVSC/"` in `src/lib/hvsc/hvscReleaseService.ts`
+- `commoserve_base_url` — `baseUrl: "http://commoserve.files.commodore.net"` in `src/lib/archive/config.ts`
+
+These three keys are the only permitted keys in `runtime.endpoints`. Any additional key requires a new targeted audit before being added to the schema.
+
 Deliverables:
 
 - explicit note that this implementation is `DOC_PLUS_CODE` and likely `UI_CHANGE`
 - explicit list of files where user-visible identity must change
 - explicit list of files where internal identifiers must remain stable
 - explicit list of tests and helper scripts that currently assume one app id or one artifact basename
-
 Exit criteria:
 
 - the implementation path is narrow enough to avoid speculative refactors
+- the endpoint audit is recorded; all three endpoints are confirmed variant-sensitive and covered by VARIANT-SCHEMA-006
 
 ### Phase 1. Canonical variant data model
 
@@ -144,7 +158,7 @@ Goal:
 
 Implementation targets:
 
-- add `variants/variants.yaml`
+- add `variants/variants.yaml` with `schema_version: 1`
 - add `variants/feature-flags/<variant>.yaml` for the initial variants
 - add asset directory conventions under `variants/assets/<variant>/...`
 - define and validate:
@@ -153,17 +167,21 @@ Implementation targets:
   - install identifiers
   - repo default publish sets
   - required asset references
+  - `schema_version` (REQUIRED field)
 
 Required tests:
 
 - schema validation tests
-- duplicate-id failure tests
+- duplicate-id failure tests (covering `app_id`, `application_id`, `bundle_id`, `custom_url_scheme`)
 - invalid publish-default reference tests
 - missing-asset failure tests
+- absent or unsupported `schema_version` failure tests
+- schema evolution: tests that verify the generator fails on a future unsupported `schema_version`
 
 Exit criteria:
 
 - the repository has one authored variant model and no competing authored source of truth for the same data
+- `schema_version` is declared and validated
 
 ### Phase 2. Generator and generated runtime module
 
@@ -176,8 +194,10 @@ Implementation targets:
 - add `scripts/generate-variant.mjs`
 - add `--variant <id>` support
 - add `--check` mode
+- the generator MUST, as its first step, read and validate `schema_version` and fail with an explicit error if it is absent or exceeds the supported maximum
+- the generator MUST validate uniqueness of `app_id`, `application_id`, `bundle_id`, and `custom_url_scheme` across all declared variants before producing any output
 - generate:
-  - `src/generated/variant.ts`
+  - `src/generated/variant.ts` — must include all declared `runtime.endpoints` values (`device_host`, `hvsc_base_url`, `commoserve_base_url`)
   - generated web metadata inputs
   - generated Android resource inputs
   - generated iOS metadata/resource inputs
@@ -192,10 +212,13 @@ Required tests:
 - generator happy-path tests
 - check-mode drift detection tests
 - deterministic output tests
+- schema version validation: absent, current, and unsupported-future version cases
+- identifier uniqueness: collision detection for each of `app_id`, `application_id`, `bundle_id`, `custom_url_scheme`
 
 Exit criteria:
 
 - one command can select a declared variant and fully materialize its generated surfaces
+- the generator fails fast and explicitly on schema version or uniqueness violations
 
 ### Phase 3. Variant-specific feature-flag defaults
 
@@ -239,17 +262,21 @@ Implementation targets:
   - web icon outputs under `public/`
 - update `web/server/src/staticAssets.ts` to use generated login branding
 - replace remaining hard-coded branded asset references in runtime UI with generated variant data
-- make service worker cache prefix and browser storage prefix variant-derived where collision would otherwise occur
+- `localStorage` and `sessionStorage` keys MUST use variant-derived prefixes; these MUST come from the generated runtime module (`src/generated/variant.ts`), not from scattered ad hoc constants
+- service worker cache names MUST be variant-derived
 
 Required tests:
 
 - generator tests for web metadata outputs
 - tests covering variant-driven login branding if practical
-- tests or assertions covering cache-prefix/storage-prefix derivation
+- tests proving `localStorage` and `sessionStorage` prefixes are sourced from the generated variant module
+- tests proving the service worker cache name is variant-derived
+- tests that would detect a hard-coded single-brand storage prefix regression
 
 Exit criteria:
 
 - browser-visible shell identity follows the selected variant consistently
+- `localStorage`, `sessionStorage`, and service worker cache names are unconditionally variant-derived, not contingent on origin collision
 
 ### Phase 5. Android and iOS integration
 
@@ -343,6 +370,17 @@ Implementation targets:
 - refresh screenshots only if visible documented UI branding changed
 - verify generated outputs are checked in or reproducible according to the chosen repository policy
 
+Blocking CI checks that MUST pass before declaring completion:
+
+- generator `--check` mode passes for `c64commander` variant (no drift)
+- generator fails as expected on absent `schema_version`
+- generator fails as expected on unsupported `schema_version`
+- generator fails as expected on `app_id` collision
+- generator fails as expected on `application_id` collision
+- generator fails as expected on `bundle_id` collision
+- generator fails as expected on `custom_url_scheme` collision
+- `localStorage`, `sessionStorage`, and service worker cache names are variant-derived and sourced from the generated module
+
 Required validation:
 
 - `npm run lint`
@@ -354,6 +392,7 @@ Required validation:
 Exit criteria:
 
 - code, tests, workflows, and docs all reflect the same variant model
+- all blocking CI checks pass
 
 ## 6. Minimal Delivery Sequence
 
@@ -383,3 +422,8 @@ This implementation is complete only when:
 - user-visible names and artifacts follow the selected variant
 - internal source/native layout remains stable
 - the repo passes the required validation set
+- `schema_version` is declared and validated by the generator
+- the generator fails explicitly on absent or unsupported `schema_version`
+- uniqueness of `app_id`, `application_id`, `bundle_id`, and `custom_url_scheme` is validated by the generator and enforced in CI
+- `localStorage`, `sessionStorage`, and service worker cache names are variant-derived and sourced from the generated module
+- declared `runtime.endpoints` values are exposed by the generated module and runtime code consumes them from there

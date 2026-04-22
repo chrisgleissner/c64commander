@@ -1,3 +1,29 @@
+# Feature Flag Audit Worklog
+
+## [2026-04-22 13:05:00 BST] FLAG-AUDIT-001: routing, classification, and first discriminating hypothesis established
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+What was verified before the first audit edit:
+
+- Confirmed the current registry remains small and live at `src/lib/config/feature-flags.yaml` with only four shipped ids: `hvsc_enabled`, `commoserve_enabled`, `lighting_studio_enabled`, and `reu_snapshot_enabled`.
+- Confirmed the highest-priority brittle areas are owned by a small set of runtime files rather than spread arbitrarily: Telnet machine actions in `src/pages/HomePage.tsx` and `src/hooks/useTelnetActions.ts`, background playback execution in `src/pages/PlayFilesPage.tsx` plus `src/lib/native/backgroundExecutionManager.ts`, HVSC lifecycle in `src/pages/PlayFilesPage.tsx` plus `src/pages/playFiles/hooks/useHvscLibrary.ts`, disk mount synchronization in `src/components/disks/HomeDiskManager.tsx`, and diagnostics runtime in `src/App.tsx`, `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`, and `src/components/UnifiedHealthBadge.tsx`.
+- Confirmed a meaningful degraded mode already exists in user-facing code for background playback: when background execution fails, foreground playback continues and only lock-screen auto-advance is degraded.
+- Confirmed the current `hvsc_enabled` flag does not yet control the full lifecycle: HVSC controls are hidden, but HVSC remains in Add Items source groups and can still open preparation flow.
+- Confirmed the Telnet-heavy reboot, power-cycle, and menu actions are part of the Home page's core machine-control surface, which raises the rejection bar for any new flag there.
+
+Current working hypothesis:
+
+- The minimal accepted set will likely be limited to one new operational fallback around background playback and one semantics-tightening change to an existing HVSC flag, while diagnostics and Telnet-heavy core controls will be accepted only if a later narrow read proves a cleaner full-lifecycle OFF path than the current evidence suggests.
+
+Cheapest checks selected to disconfirm that hypothesis:
+
+- Verify whether diagnostics can be disabled from a small number of root mounts without leaving broken routes or dead interactive affordances.
+- Verify whether any Telnet-dependent snapshot/config-file workflow is already isolated from core Home functionality strongly enough to justify a dedicated flag instead of rejection.
+
 # Feature Flag Refactor Worklog
 
 ## [2026-04-22 11:58:47 BST] FEATURE-FLAGS-PLAN-001: execution plan and local routing established
@@ -10,15 +36,15 @@ Classification for this pass:
 What was established before editing:
 
 - Confirmed the authoritative feature-flag path is `src/lib/config/feature-flags.yaml` -> `scripts/compile-feature-flags.mjs` -> `src/lib/config/featureFlagsRegistry.generated.ts` -> `src/lib/config/featureFlags.ts`.
-- Confirmed the redundant field `user_toggleable` is authored in the YAML, validated by the compiler, emitted into the generated registry, and consumed only by runtime editability logic and tests.
+- Confirmed the only behavior that still depended on authored standard-user toggleability was the standard-user editability calculation and its associated tests and documentation.
 - Confirmed the shared Vitest bootstrap in `tests/setup.ts` already seeds every registered flag to enabled in storage, which is the correct enforcement point for deterministic shared test behavior.
 - Selected the cheapest falsifiable validation path for the first refactor slice: compile-feature-flags unit tests plus runtime feature-flag unit tests.
 
-Next actions:
+Planned follow-through:
 
-- Remove `user_toggleable` from schema, compiler output, and runtime editability resolution.
-- Add a bootstrap assertion that disallows disabled shared test-state overrides.
-- Run focused feature-flag validation before widening to the repository audit.
+- Keep editability derived from `visible_to_user && !developer_only` for standard users.
+- Remove stale authored-toggleability references from tests and docs.
+- Run focused feature-flag validation before widening to the required repository validation set.
 
 # HVSC Performance Worklog
 
