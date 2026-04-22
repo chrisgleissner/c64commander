@@ -1,0 +1,109 @@
+{
+  "version": "2.0.0",
+  "presentation": {
+    "reveal": "never",
+    "revealProblems": "never",
+    "focus": false,
+    "showReuseMessage": false,
+    "panel": "dedicated",
+    "clear": false
+  },
+  "tasks": [
+    {
+      "label": "Run Playwright screenshots",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "screenshots"],
+      "isBackground": false,
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "Phase7 lint",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "lint"],
+      "isBackground": false
+    },
+    {
+      "label": "Phase7 test",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test"],
+      "isBackground": false
+    },
+    {
+      "label": "Phase7 build",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "isBackground": false
+    },
+    {
+      "label": "Web docker playwright auth",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "docker rm -f c64commander-e2e >/dev/null 2>&1 || true && mkdir -p .tmp/web-config && docker run -d --name c64commander-e2e -p 8080:8080 -v \"$PWD/.tmp/web-config:/config\" c64commander:local && for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/healthz >/dev/null && break || sleep 1; done && PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_PORT=8080 PLAYWRIGHT_WORKERS=1 PLAYWRIGHT_DEVICES=web npx playwright test playwright/webPlatformAuth.spec.ts --project=web; status=$?; docker rm -f c64commander-e2e >/dev/null 2>&1 || true; exit $status"
+      ]
+    },
+    {
+      "label": "Web docker playwright auth clean",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "docker rm -f c64commander-e2e >/dev/null 2>&1 || true && rm -rf .tmp/web-config && mkdir -p .tmp/web-config && docker run -d --name c64commander-e2e -p 8080:8080 -v \"$PWD/.tmp/web-config:/config\" c64commander:local && for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/healthz >/dev/null && break || sleep 1; done && PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_PORT=8080 PLAYWRIGHT_WORKERS=1 PLAYWRIGHT_DEVICES=web npx playwright test playwright/webPlatformAuth.spec.ts --project=web; status=$?; docker rm -f c64commander-e2e >/dev/null 2>&1 || true; exit $status"
+      ]
+    },
+    {
+      "label": "Web smoke host-net",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "set -euo pipefail; mkdir -p .tmp/web-config; chmod 0777 .tmp/web-config; docker rm -f c64commander-smoke >/dev/null 2>&1 || true; docker build -f web/Dockerfile -t c64commander:ci . >/dev/null; docker run -d --name c64commander-smoke --network host -v \"$PWD/.tmp/web-config:/config\" c64commander:ci >/dev/null; healthy=0; for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then healthy=1; break; fi; sleep 1; done; if [[ \"$healthy\" != \"1\" ]]; then echo FAILED_HEALTH; docker logs c64commander-smoke | cat; exit 1; fi; curl -fsS http://127.0.0.1:8080/healthz | cat; docker rm -f c64commander-smoke >/dev/null"
+      ]
+    },
+    {
+      "label": "Web CI reproduce 18080",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "set -euo pipefail; mkdir -p .tmp/web-config; chmod 0777 .tmp/web-config; docker rm -f c64commander-smoke >/dev/null 2>&1 || true; docker build -f web/Dockerfile -t c64commander:ci . >/dev/null; docker run -d --name c64commander-smoke -p 18080:8080 -v \"$PWD/.tmp/web-config:/config\" c64commander:ci >/dev/null; healthy=0; for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then healthy=1; break; fi; sleep 1; done; if [[ \"$healthy\" != \"1\" ]]; then echo failed-health; docker logs c64commander-smoke | cat; exit 1; fi; curl -fsS http://127.0.0.1:18080/healthz | cat; PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_PORT=18080 PLAYWRIGHT_WORKERS=1 PLAYWRIGHT_DEVICES=web npx playwright test playwright/webPlatformAuth.spec.ts --project=web; status=$?; docker rm -f c64commander-smoke >/dev/null 2>&1 || true; exit $status"
+      ]
+    },
+    {
+      "label": "Phase7 test coverage isolated",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "mkdir -p .tmp && rm -rf .cov-unit .nyc_output coverage/e2e coverage/merged coverage/lcov-merged.info && npx vitest run --coverage --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.lines=0 --coverage.reportsDirectory=.cov-unit > .tmp/vitest_cov.log 2>&1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Diagnostics screenshots targeted",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "set -euo pipefail; rm -rf docs/img/app/diagnostics; npx playwright test playwright/screenshots.spec.ts -g \"capture diagnostics screenshots|capture diagnostics profile screenshots\" --reporter=line"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Diagnostics screenshots targeted 2",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "set -euo pipefail; rm -rf docs/img/app/diagnostics; npx playwright test playwright/screenshots.spec.ts -g \"capture diagnostics screenshots|capture diagnostics profile screenshots\" --reporter=dot"
+      ],
+      "isBackground": false
+    }
+  ]
+}
