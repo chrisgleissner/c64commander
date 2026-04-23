@@ -683,9 +683,8 @@ describe("c64api branches", () => {
     updateC64APIConfig("http://localhost");
     // derivedHost is 'localhost', isLocalDeviceHost → true,
     // isLikelyFallbackOrigin → true (matches window.location.origin),
-    // so it falls back to stored host 'remote-device' and migrates it forward.
+    // so it falls back to the stored stable host key.
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("remote-device");
-    expect(localStorage.getItem("c64u_device_host")).toBeNull();
   });
 
   // #17: isNativePlatform with override, env check, Capacitor probe, and error fallback
@@ -1433,8 +1432,8 @@ describe("c64api branches", () => {
     // isLocalDeviceHost('') → normalized = '' → !normalized → return false → not local → no fallback
     updateC64APIConfig("http://192.168.1.100", undefined, "   ");
     // Confirms normalizeDeviceHost handles whitespace-only: '   '.trim() = '' → DEFAULT_DEVICE_HOST
+    // and persists that value using the stable host key.
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("c64u");
-    expect(localStorage.getItem("c64u_device_host")).toBeNull();
   });
 
   // #64: isLocalDeviceHost with IPv6 bracket notation (BRDA:361 TRUE: startsWith('['))
