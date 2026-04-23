@@ -6,13 +6,28 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-const FUZZ_MODE_KEY = "c64u_fuzz_mode_enabled";
-const FUZZ_MOCK_BASE_URL_KEY = "c64u_fuzz_mock_base_url";
-const FUZZ_STORAGE_SEEDED_KEY = "c64u_fuzz_storage_seeded";
-const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
-const AUTO_DEMO_MODE_KEY = "c64u_automatic_demo_mode_enabled";
-const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
-const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
+import { buildLocalStorageKey, buildSessionStorageKey } from "@/generated/variant";
+
+const FUZZ_MODE_KEY = buildLocalStorageKey("fuzz_mode_enabled");
+const FUZZ_MOCK_BASE_URL_KEY = buildLocalStorageKey("fuzz_mock_base_url");
+const FUZZ_STORAGE_SEEDED_KEY = buildLocalStorageKey("fuzz_storage_seeded");
+const DEBUG_LOGGING_KEY = buildLocalStorageKey("debug_logging_enabled");
+const AUTO_DEMO_MODE_KEY = buildLocalStorageKey("automatic_demo_mode_enabled");
+const STARTUP_DISCOVERY_WINDOW_MS_KEY = buildLocalStorageKey("startup_discovery_window_ms");
+const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = buildLocalStorageKey("background_rediscovery_interval_ms");
+const LOCAL_STORAGE_PREFIX = buildLocalStorageKey("");
+const SESSION_STORAGE_PREFIX = buildSessionStorageKey("");
+
+const clearPrefixedStorage = (storage: Storage, prefix: string) => {
+  const keys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix)) {
+      keys.push(key);
+    }
+  }
+  keys.forEach((key) => storage.removeItem(key));
+};
 
 const readStorageValue = (key: string) => {
   if (typeof localStorage === "undefined") return null;
@@ -42,14 +57,14 @@ export const resetFuzzStorage = () => {
   if (typeof localStorage !== "undefined") {
     if (localStorage.getItem(FUZZ_STORAGE_SEEDED_KEY) === "1") return;
     const fuzzMockBaseUrl = localStorage.getItem(FUZZ_MOCK_BASE_URL_KEY);
-    localStorage.clear();
+    clearPrefixedStorage(localStorage, LOCAL_STORAGE_PREFIX);
     localStorage.setItem(FUZZ_MODE_KEY, "1");
     if (fuzzMockBaseUrl) {
       localStorage.setItem(FUZZ_MOCK_BASE_URL_KEY, fuzzMockBaseUrl);
     }
   }
   if (typeof sessionStorage !== "undefined") {
-    sessionStorage.clear();
+    clearPrefixedStorage(sessionStorage, SESSION_STORAGE_PREFIX);
   }
 };
 

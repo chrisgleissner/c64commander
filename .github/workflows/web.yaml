@@ -6,6 +6,15 @@ on:
     branches: ["main"]
     tags: ["*"]
   workflow_dispatch:
+    inputs:
+      app_variant:
+        description: Selected variant id to build and test
+        required: false
+        type: string
+      publish_variants:
+        description: Comma-separated variant ids to publish; defaults to repo publish defaults
+        required: false
+        type: string
 
 concurrency:
   group: web-${{ github.ref }}
@@ -16,13 +25,50 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/chrisgleissner/c64commander
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  APP_VARIANT: ${{ github.event.inputs.app_variant || '' }}
+  APP_PUBLISH_VARIANTS: ${{ github.event.inputs.publish_variants || '' }}
   DOCKER_LIMIT_MEMORY: 512m
   DOCKER_LIMIT_CPUS: "2"
   DOCKER_TARGET_CPU_FREQ_MHZ: "2000"
 
 jobs:
+  variant-selection:
+    name: Variant | Resolve publish set
+    runs-on: ubuntu-latest
+    outputs:
+      publish_variants_json: ${{ steps.variant.outputs.publish_variants_json }}
+      publish_variants_csv: ${{ steps.variant.outputs.publish_variants_csv }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate variant metadata
+        run: npm run variant:generate
+
+      - name: Export publish variant selection
+        id: variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_json=${JSON.stringify(config.repo.selectedPublishVariants)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_csv=${config.repo.selectedPublishVariants.join(',')}\n`);
+          NODE
+
   web-build-and-test:
     name: Web | Build + tests (${{ matrix.platform }})
     runs-on: ubuntu-latest
@@ -274,10 +320,18 @@ jobs:
         run: docker rm -f c64commander-smoke || true
 
   web-docker-publish:
-    name: Web | Publish GHCR multi-arch
+    name: Web | Publish GHCR multi-arch (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    needs: web-build-and-test
+    needs: [variant-selection, web-build-and-test]
     if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJson(needs.variant-selection.outputs.publish_variants_json) }}
+
+    env:
+      APP_VARIANT: ${{ matrix.variant }}
+      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.publish_variants_csv }}
 
     steps:
       - name: Checkout
@@ -288,6 +342,37 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate selected variant metadata
+        run: npm run variant:generate
+
+      - name: Resolve web variant metadata
+        id: resolve_variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const entries = {
+            IMAGE_NAME: config.variant.platform.web.imageRepo,
+            VARIANT_ARTIFACT_BASENAME: config.variant.exportedFileBasename,
+          };
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('\n')}\n`,
+          );
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key.toLowerCase()}=${value}`)
+              .join('\n')}\n`,
+          );
+          NODE
 
       - name: Resolve app version
         id: resolve_version
@@ -354,6 +439,6 @@ jobs:
             VITE_GIT_SHA=${{ steps.resolve_version.outputs.git_sha }}
             VITE_BUILD_TIME=${{ steps.resolve_version.outputs.build_time }}
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ steps.verify_tag.outputs.normalized_tag }}
-            ${{ steps.verify_tag.outputs.raw_tag != steps.verify_tag.outputs.normalized_tag && format('{0}:{1}', env.IMAGE_NAME, steps.verify_tag.outputs.raw_tag) || '' }}
-            ${{ steps.verify_tag.outputs.is_rc != 'true' && format('{0}:latest', env.IMAGE_NAME) || '' }}
+            ${{ steps.resolve_variant.outputs.image_name }}:${{ steps.verify_tag.outputs.normalized_tag }}
+            ${{ steps.verify_tag.outputs.raw_tag != steps.verify_tag.outputs.normalized_tag && format('{0}:{1}', steps.resolve_variant.outputs.image_name, steps.verify_tag.outputs.raw_tag) || '' }}
+            ${{ steps.verify_tag.outputs.is_rc != 'true' && format('{0}:latest', steps.resolve_variant.outputs.image_name) || '' }}

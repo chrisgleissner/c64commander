@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
+import prettier from 'prettier';
 import sharp from 'sharp';
 import { parseRegistrySource } from './compile-feature-flags.mjs';
 
@@ -20,6 +21,12 @@ export const DEFAULT_WEB_INDEX_PATH = path.join(REPO_ROOT, 'index.html');
 export const DEFAULT_WEB_MANIFEST_PATH = path.join(REPO_ROOT, 'public/manifest.webmanifest');
 export const DEFAULT_WEB_SW_PATH = path.join(REPO_ROOT, 'public/sw.js');
 export const DEFAULT_WEB_SERVER_VARIANT_TS_PATH = path.join(REPO_ROOT, 'web/server/src/variant.generated.ts');
+export const DEFAULT_ANDROID_STRINGS_XML_PATH = path.join(REPO_ROOT, 'android/app/src/main/res/values/strings.xml');
+export const DEFAULT_ANDROID_LAUNCHER_BACKGROUND_XML_PATH = path.join(
+    REPO_ROOT,
+    'android/app/src/main/res/values/ic_launcher_background.xml',
+);
+export const DEFAULT_IOS_VARIANT_XCCONFIG_PATH = path.join(REPO_ROOT, 'ios/App/App/Config/Variant.generated.xcconfig');
 export const ALLOWED_ENDPOINT_KEYS = ['device_host', 'hvsc_base_url', 'commoserve_base_url'];
 
 const VARIANT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -38,6 +45,29 @@ const GENERATED_BANNER = `// AUTO-GENERATED FILE. Do not edit by hand.
 // Compiler: scripts/generate-variant.mjs
 // Run \`node scripts/generate-variant.mjs\` to regenerate.
 `;
+
+const GENERATED_XML_BANNER = `<!-- AUTO-GENERATED FILE. Do not edit by hand.
+     Source:   variants/variants.yaml
+     Compiler: scripts/generate-variant.mjs
+     Run \`node scripts/generate-variant.mjs\` to regenerate. -->\n`;
+
+const IOS_XCCONFIG_BANNER = `// AUTO-GENERATED FILE. Do not edit by hand.
+// Source:   variants/variants.yaml
+// Compiler: scripts/generate-variant.mjs
+// Run \`node scripts/generate-variant.mjs\` to regenerate.
+`;
+
+const ANDROID_ICON_SIZES = [
+    ['mdpi', 48],
+    ['hdpi', 72],
+    ['xhdpi', 96],
+    ['xxhdpi', 144],
+    ['xxxhdpi', 192],
+];
+
+const IOS_SPLASH_FILENAMES = ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'];
+
+const TRANSPARENT_BACKGROUND = { r: 0, g: 0, b: 0, alpha: 0 };
 
 class VariantCompileError extends Error {
     constructor(message) {
@@ -91,6 +121,14 @@ const parseYamlFile = (filePath, failureLabel) => {
         fail(`failed to parse ${failureLabel}: ${error.message}`);
     }
 };
+
+const xmlEscape = (value) =>
+    value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
 
 const ensureFileExists = (repoRoot, relativePath, label) => {
     requireNonEmptyString(relativePath, label);
@@ -600,12 +638,42 @@ self.addEventListener('fetch', (event) => {
 });
 `;
 
+export const renderAndroidStringsXml = (selection) => `${GENERATED_XML_BANNER}<resources>
+    <string name="app_name">${xmlEscape(selection.variant.displayName)}</string>
+    <string name="title_activity_main">${xmlEscape(selection.variant.displayName)}</string>
+    <string name="package_name">${xmlEscape(selection.variant.platform.android.applicationId)}</string>
+    <string name="custom_url_scheme">${xmlEscape(selection.variant.platform.android.customUrlScheme)}</string>
+</resources>
+`;
+
+export const renderAndroidLauncherBackgroundXml = (selection) => `${GENERATED_XML_BANNER}<resources>
+    <color name="ic_launcher_background">${xmlEscape(selection.variant.platform.web.backgroundColor)}</color>
+</resources>
+`;
+
+export const renderIosVariantXcconfig = (selection) => `${IOS_XCCONFIG_BANNER}VARIANT_DISPLAY_NAME = ${selection.variant.displayName}
+VARIANT_BUNDLE_IDENTIFIER = ${selection.variant.platform.ios.bundleId}
+`;
+
 export const renderWebServerVariantModule = (selection) => `${LICENSE_HEADER}
 ${GENERATED_BANNER}
 export const webServerVariantConfig = ${JSON.stringify(selection, null, 2)} as const;
 
 export const variant = webServerVariantConfig.variant;
 `;
+
+const formatGeneratedText = async ({ outputPath, rendered }) => {
+    const extension = path.extname(outputPath);
+    if (!['.json', '.ts', '.tsx'].includes(extension)) {
+        return rendered;
+    }
+
+    const config = (await prettier.resolveConfig(outputPath)) ?? {};
+    return prettier.format(rendered, {
+        ...config,
+        filepath: outputPath,
+    });
+};
 
 const writeOutputFile = ({ outputPath, rendered, check }) => {
     let existing = '';
@@ -659,6 +727,15 @@ const writeBinaryOutputFile = async ({ outputPath, content, check }) => {
     return true;
 };
 
+const rasterizeSvg = async (svgSource, { size, fit = 'contain', background = TRANSPARENT_BACKGROUND }) =>
+    sharp(Buffer.from(svgSource))
+        .resize(size, size, {
+            fit,
+            background,
+        })
+        .png()
+        .toBuffer();
+
 const renderPublicAssets = async ({ repoRoot, selection, check }) => {
     const iconSvgPath = path.join(repoRoot, selection.variant.assets.sources.iconSvg);
     const iconSvg = fs.readFileSync(iconSvgPath, 'utf8');
@@ -687,6 +764,97 @@ const renderPublicAssets = async ({ repoRoot, selection, check }) => {
             check,
         }),
     ];
+
+    return changes.some(Boolean);
+};
+
+const renderAndroidAssets = async ({ repoRoot, selection, check }) => {
+    const iconSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.iconSvg), 'utf8');
+    const splashSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.splashSvg), 'utf8');
+
+    const changes = [
+        writeOutputFile({
+            outputPath: path.join(repoRoot, 'android/app/src/main/res/values/strings.xml'),
+            rendered: renderAndroidStringsXml(selection),
+            check,
+        }),
+        writeOutputFile({
+            outputPath: path.join(repoRoot, 'android/app/src/main/res/values/ic_launcher_background.xml'),
+            rendered: renderAndroidLauncherBackgroundXml(selection),
+            check,
+        }),
+        await writeBinaryOutputFile({
+            outputPath: path.join(repoRoot, 'android/app/src/main/res/drawable/splash.png'),
+            content: await rasterizeSvg(splashSvg, {
+                size: 1366,
+                fit: 'contain',
+                background: selection.variant.platform.web.backgroundColor,
+            }),
+            check,
+        }),
+    ];
+
+    for (const [density, size] of ANDROID_ICON_SIZES) {
+        const directory = path.join(repoRoot, `android/app/src/main/res/mipmap-${density}`);
+        const iconPng = await rasterizeSvg(iconSvg, { size });
+        const foregroundPng = await rasterizeSvg(iconSvg, { size, fit: 'contain' });
+        changes.push(
+            await writeBinaryOutputFile({
+                outputPath: path.join(directory, 'ic_launcher.png'),
+                content: iconPng,
+                check,
+            }),
+        );
+        changes.push(
+            await writeBinaryOutputFile({
+                outputPath: path.join(directory, 'ic_launcher_round.png'),
+                content: iconPng,
+                check,
+            }),
+        );
+        changes.push(
+            await writeBinaryOutputFile({
+                outputPath: path.join(directory, 'ic_launcher_foreground.png'),
+                content: foregroundPng,
+                check,
+            }),
+        );
+    }
+
+    return changes.some(Boolean);
+};
+
+const renderIosAssets = async ({ repoRoot, selection, check }) => {
+    const iconSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.iconSvg), 'utf8');
+    const splashSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.splashSvg), 'utf8');
+    const splashPng = await rasterizeSvg(splashSvg, {
+        size: 2732,
+        fit: 'contain',
+        background: selection.variant.platform.web.backgroundColor,
+    });
+
+    const changes = [
+        writeOutputFile({
+            outputPath: path.join(repoRoot, 'ios/App/App/Config/Variant.generated.xcconfig'),
+            rendered: renderIosVariantXcconfig(selection),
+            check,
+        }),
+        await writeBinaryOutputFile({
+            outputPath: path.join(repoRoot, 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png'),
+            content: await rasterizeSvg(iconSvg, { size: 1024 }),
+            check,
+        }),
+    ];
+
+    for (const filename of IOS_SPLASH_FILENAMES) {
+        changes.push(
+            await writeBinaryOutputFile({
+                outputPath: path.join(repoRoot, 'ios/App/App/Assets.xcassets/Splash.imageset', filename),
+                content: splashPng,
+                check,
+            }),
+        );
+    }
 
     return changes.some(Boolean);
 };
@@ -737,17 +905,36 @@ export const compileVariant = async ({
     });
 
     const changed = [
-        writeOutputFile({ outputPath: resolvedRuntimeTsPath, rendered: renderVariantRuntimeModule(selection), check }),
-        writeOutputFile({ outputPath: resolvedRuntimeJsonPath, rendered: renderVariantJson(selection), check }),
+        writeOutputFile({
+            outputPath: resolvedRuntimeTsPath,
+            rendered: await formatGeneratedText({
+                outputPath: resolvedRuntimeTsPath,
+                rendered: renderVariantRuntimeModule(selection),
+            }),
+            check,
+        }),
+        writeOutputFile({
+            outputPath: resolvedRuntimeJsonPath,
+            rendered: await formatGeneratedText({
+                outputPath: resolvedRuntimeJsonPath,
+                rendered: renderVariantJson(selection),
+            }),
+            check,
+        }),
         writeOutputFile({ outputPath: resolvedWebIndexPath, rendered: renderWebIndexHtml(selection), check }),
         writeOutputFile({ outputPath: resolvedWebManifestPath, rendered: renderWebManifest(selection), check }),
         writeOutputFile({ outputPath: resolvedWebServiceWorkerPath, rendered: renderWebServiceWorker(selection), check }),
         writeOutputFile({
             outputPath: resolvedWebServerVariantTsPath,
-            rendered: renderWebServerVariantModule(selection),
+            rendered: await formatGeneratedText({
+                outputPath: resolvedWebServerVariantTsPath,
+                rendered: renderWebServerVariantModule(selection),
+            }),
             check,
         }),
         await renderPublicAssets({ repoRoot, selection, check }),
+        await renderAndroidAssets({ repoRoot, selection, check }),
+        await renderIosAssets({ repoRoot, selection, check }),
     ].some(Boolean);
 
     return {
@@ -802,9 +989,14 @@ const parseCliArgs = (args) => {
 if (isDirectInvocation()) {
     try {
         const args = parseCliArgs(process.argv.slice(2));
+        const envPublishVariants = (process.env.APP_PUBLISH_VARIANTS ?? '')
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean);
         const resolvedArgs = {
             ...args,
             variantId: args.variantId ?? process.env.APP_VARIANT ?? undefined,
+            explicitPublishVariants: args.explicitPublishVariants ?? (envPublishVariants.length > 0 ? envPublishVariants : null),
         };
         const result = await compileVariant(resolvedArgs);
         if (resolvedArgs.check) {

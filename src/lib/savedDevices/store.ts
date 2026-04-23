@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
 import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
@@ -73,7 +74,7 @@ export type SavedDevicesSnapshot = {
   actualDeviceIdByDeviceId: Record<string, string | null>;
 };
 
-const STORAGE_KEY = "c64u_saved_devices:v1";
+const STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
 const EVENT_NAME = "c64u-saved-devices-change";
 const LEGACY_DEVICE_HOST_KEY = "c64u_device_host";
 const LEGACY_BASE_URL_KEY = "c64u_base_url";
@@ -262,21 +263,21 @@ const parseEnvelope = (raw: string | null): PersistedSavedDevicesEnvelope | null
       summaries:
         parsed.summaries && typeof parsed.summaries === "object"
           ? Object.fromEntries(
-              Object.entries(parsed.summaries).map(([deviceId, summary]) => [
+            Object.entries(parsed.summaries).map(([deviceId, summary]) => [
+              deviceId,
+              {
                 deviceId,
-                {
-                  deviceId,
-                  verifiedAt: summary?.verifiedAt ?? null,
-                  lastHealthState: summary?.lastHealthState ?? null,
-                  lastConnectivityState: summary?.lastConnectivityState ?? null,
-                  lastProbeSucceededAt: summary?.lastProbeSucceededAt ?? null,
-                  lastProbeFailedAt: summary?.lastProbeFailedAt ?? null,
-                  lastVerifiedProduct: summary?.lastVerifiedProduct ?? null,
-                  lastVerifiedHostname: summary?.lastVerifiedHostname ?? null,
-                  lastVerifiedUniqueId: summary?.lastVerifiedUniqueId ?? null,
-                } satisfies DeviceSwitchSummary,
-              ]),
-            )
+                verifiedAt: summary?.verifiedAt ?? null,
+                lastHealthState: summary?.lastHealthState ?? null,
+                lastConnectivityState: summary?.lastConnectivityState ?? null,
+                lastProbeSucceededAt: summary?.lastProbeSucceededAt ?? null,
+                lastProbeFailedAt: summary?.lastProbeFailedAt ?? null,
+                lastVerifiedProduct: summary?.lastVerifiedProduct ?? null,
+                lastVerifiedHostname: summary?.lastVerifiedHostname ?? null,
+                lastVerifiedUniqueId: summary?.lastVerifiedUniqueId ?? null,
+              } satisfies DeviceSwitchSummary,
+            ]),
+          )
           : {},
       summaryLru: Array.isArray(parsed.summaryLru)
         ? parsed.summaryLru.filter((entry): entry is string => typeof entry === "string")
@@ -454,26 +455,26 @@ export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string
   const existingDevice = devices.find((device) => device.id === deviceId) ?? null;
   const candidateDevice: SavedDevice = existingDevice
     ? {
-        ...existingDevice,
-        host: normalizedHost,
-        name: normalizedName,
-        nameSource: normalizedName ? "custom" : "auto",
-      }
+      ...existingDevice,
+      host: normalizedHost,
+      name: normalizedName,
+      nameSource: normalizedName ? "custom" : "auto",
+    }
     : {
-        id: deviceId,
-        name: normalizedName,
-        nameSource: normalizedName ? "custom" : "auto",
-        host: normalizedHost,
-        httpPort: DEFAULT_HTTP_PORT,
-        ftpPort: DEFAULT_FTP_PORT,
-        telnetPort: DEFAULT_TELNET_PORT,
-        lastKnownProduct: null,
-        lastKnownHostname: null,
-        lastKnownUniqueId: null,
-        lastSuccessfulConnectionAt: null,
-        lastUsedAt: null,
-        hasPassword: false,
-      };
+      id: deviceId,
+      name: normalizedName,
+      nameSource: normalizedName ? "custom" : "auto",
+      host: normalizedHost,
+      httpPort: DEFAULT_HTTP_PORT,
+      ftpPort: DEFAULT_FTP_PORT,
+      telnetPort: DEFAULT_TELNET_PORT,
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      lastSuccessfulConnectionAt: null,
+      lastUsedAt: null,
+      hasPassword: false,
+    };
   const nextDevices = existingDevice
     ? devices.map((device) => (device.id === deviceId ? candidateDevice : device))
     : [...devices, candidateDevice];
@@ -589,22 +590,22 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
     devices: envelope.devices.map((device) =>
       device.id === deviceId
         ? (() => {
-            const host = update.host ? normalizeHostInput(update.host) : device.host;
-            const normalizedName =
-              update.name === undefined ? normalizeSavedDeviceName(device.name) : normalizeSavedDeviceName(update.name);
-            return {
-              ...device,
-              ...update,
-              host,
-              name: normalizedName,
-              nameSource:
-                update.name === undefined
-                  ? (device.nameSource ?? (normalizedName ? "custom" : "auto"))
-                  : normalizedName
-                    ? "custom"
-                    : "auto",
-            };
-          })()
+          const host = update.host ? normalizeHostInput(update.host) : device.host;
+          const normalizedName =
+            update.name === undefined ? normalizeSavedDeviceName(device.name) : normalizeSavedDeviceName(update.name);
+          return {
+            ...device,
+            ...update,
+            host,
+            name: normalizedName,
+            nameSource:
+              update.name === undefined
+                ? (device.nameSource ?? (normalizedName ? "custom" : "auto"))
+                : normalizedName
+                  ? "custom"
+                  : "auto",
+          };
+        })()
         : device,
     ),
   }));
@@ -620,11 +621,11 @@ export const updateSelectedSavedDeviceConnection = (update: {
     devices: envelope.devices.map((device) =>
       device.id === envelope.selectedDeviceId
         ? {
-            ...device,
-            host: stripHostPort(update.deviceHost),
-            httpPort: update.httpPort ?? splitHostAndHttpPort(update.deviceHost).httpPort,
-            hasPassword: update.passwordPresent,
-          }
+          ...device,
+          host: stripHostPort(update.deviceHost),
+          httpPort: update.httpPort ?? splitHostAndHttpPort(update.deviceHost).httpPort,
+          hasPassword: update.passwordPresent,
+        }
         : device,
     ),
   }));
@@ -636,10 +637,10 @@ export const updateSelectedSavedDevicePorts = (update: { ftpPort?: number; telne
     devices: envelope.devices.map((device) =>
       device.id === envelope.selectedDeviceId
         ? {
-            ...device,
-            ftpPort: update.ftpPort ?? device.ftpPort,
-            telnetPort: update.telnetPort ?? device.telnetPort,
-          }
+          ...device,
+          ftpPort: update.ftpPort ?? device.ftpPort,
+          telnetPort: update.telnetPort ?? device.telnetPort,
+        }
         : device,
     ),
   }));
@@ -657,9 +658,9 @@ export const selectSavedDevice = (deviceId: string) => {
       devices: envelope.devices.map((device) =>
         device.id === deviceId
           ? {
-              ...device,
-              lastUsedAt: nowIso,
-            }
+            ...device,
+            lastUsedAt: nowIso,
+          }
           : device,
       ),
     };

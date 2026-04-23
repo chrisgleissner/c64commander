@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import {
   clearFtpBridgeUrl,
   clearRuntimeFtpPortOverride,
@@ -17,6 +18,9 @@ import {
   setRuntimeFtpPortOverride,
   setStoredFtpPort,
 } from "@/lib/ftp/ftpConfig";
+
+const FTP_PORT_KEY = buildLocalStorageKey("ftp_port");
+const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
 
 const { mockUpdateSelectedSavedDevicePorts } = vi.hoisted(() => ({
   mockUpdateSelectedSavedDevicePorts: vi.fn(),
@@ -41,9 +45,9 @@ describe("ftpConfig", () => {
 
   it("returns default FTP port when missing or invalid", () => {
     expect(getStoredFtpPort()).toBe(21);
-    localStorage.setItem("c64u_ftp_port", "0");
+    localStorage.setItem(FTP_PORT_KEY, "0");
     expect(getStoredFtpPort()).toBe(21);
-    localStorage.setItem("c64u_ftp_port", "abc");
+    localStorage.setItem(FTP_PORT_KEY, "abc");
     expect(getStoredFtpPort()).toBe(21);
   });
 
@@ -68,21 +72,21 @@ describe("ftpConfig", () => {
 
   it("ignores invalid saved-device FTP ports outside the TCP range", () => {
     localStorage.setItem(
-      "c64u_saved_devices:v1",
+      SAVED_DEVICES_STORAGE_KEY,
       JSON.stringify({
         selectedDeviceId: "saved-device-1",
         devices: [{ id: "saved-device-1", ftpPort: 70000 }],
       }),
     );
-    localStorage.setItem("c64u_ftp_port", "2121");
+    localStorage.setItem(FTP_PORT_KEY, "2121");
 
     expect(getStoredFtpPort()).toBe(2121);
   });
 
   it("warns and falls back when saved-device FTP storage is malformed", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    localStorage.setItem("c64u_saved_devices:v1", "{");
-    localStorage.setItem("c64u_ftp_port", "2121");
+    localStorage.setItem(SAVED_DEVICES_STORAGE_KEY, "{");
+    localStorage.setItem(FTP_PORT_KEY, "2121");
 
     expect(getStoredFtpPort()).toBe(2121);
     expect(warnSpy).toHaveBeenCalledWith(
@@ -99,7 +103,7 @@ describe("ftpConfig", () => {
       throw new Error("sync failed");
     });
     localStorage.setItem(
-      "c64u_saved_devices:v1",
+      SAVED_DEVICES_STORAGE_KEY,
       JSON.stringify({
         selectedDeviceId: "saved-device-1",
         devices: [{ id: "saved-device-1", ftpPort: 21 }],
@@ -108,7 +112,7 @@ describe("ftpConfig", () => {
 
     setStoredFtpPort(2121);
 
-    expect(JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}").devices[0].ftpPort).toBe(2121);
+    expect(JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}").devices[0].ftpPort).toBe(2121);
     expect(warnSpy).toHaveBeenCalledWith(
       "Failed to sync FTP port to selected saved device",
       expect.objectContaining({ error: expect.any(Error) }),

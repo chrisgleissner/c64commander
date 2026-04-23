@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { loadLightingStudioState, saveLightingStudioState } from "@/lib/lighting/store";
+
+const STORAGE_KEY = buildLocalStorageKey("lighting_studio_state:v1");
 
 describe("lighting studio storage", () => {
   beforeEach(() => {
@@ -14,7 +17,7 @@ describe("lighting studio storage", () => {
 
   it("merges bundled profiles with stored user profiles", () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "user-profile",
         profiles: [
@@ -47,7 +50,7 @@ describe("lighting studio storage", () => {
   });
 
   it("falls back to defaults and logs a warning when storage is corrupt", () => {
-    localStorage.setItem("c64u_lighting_studio_state:v1", "{bad json");
+    localStorage.setItem(STORAGE_KEY, "{bad json");
     const state = loadLightingStudioState();
     expect(state.activeProfileId).toBeNull();
     expect(state.profiles.some((profile) => profile.bundled)).toBe(true);
@@ -56,6 +59,6 @@ describe("lighting studio storage", () => {
   it("persists the studio state back to localStorage", () => {
     const state = loadLightingStudioState();
     saveLightingStudioState(state);
-    expect(localStorage.getItem("c64u_lighting_studio_state:v1")).toContain('"profiles"');
+    expect(localStorage.getItem(STORAGE_KEY)).toContain('"profiles"');
   });
 });

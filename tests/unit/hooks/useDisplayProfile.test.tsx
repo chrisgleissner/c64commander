@@ -1,8 +1,12 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { DisplayProfileProvider, useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
-import { saveAutoRotationEnabled } from "@/lib/config/appSettings";
+import { APP_SETTINGS_KEYS, saveAutoRotationEnabled } from "@/lib/config/appSettings";
+
+const DISPLAY_PROFILE_OVERRIDE_KEY = buildLocalStorageKey("display_profile_override");
+const LIST_PREVIEW_LIMIT_KEY = buildLocalStorageKey("list_preview_limit");
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {
@@ -64,7 +68,7 @@ describe("DisplayProfileProvider", () => {
 
     expect(screen.getByTestId("override")).toHaveTextContent("expanded");
     expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
-    expect(localStorage.getItem("c64u_display_profile_override")).toBe("expanded");
+    expect(localStorage.getItem(DISPLAY_PROFILE_OVERRIDE_KEY)).toBe("expanded");
     expect(document.documentElement.dataset.displayProfile).toBe("expanded");
     expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17.5px");
 
@@ -90,12 +94,12 @@ describe("DisplayProfileProvider", () => {
     );
 
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
-    localStorage.setItem("c64u_display_profile_override", "expanded");
+    localStorage.setItem(DISPLAY_PROFILE_OVERRIDE_KEY, "expanded");
 
     act(() => {
       window.dispatchEvent(
         new StorageEvent("storage", {
-          key: "c64u_display_profile_override",
+          key: DISPLAY_PROFILE_OVERRIDE_KEY,
           newValue: "expanded",
           storageArea: window.localStorage,
         }),
@@ -121,7 +125,7 @@ describe("DisplayProfileProvider", () => {
     act(() => {
       window.dispatchEvent(
         new StorageEvent("storage", {
-          key: "c64u_list_preview_limit",
+          key: LIST_PREVIEW_LIMIT_KEY,
           newValue: "20",
           storageArea: window.localStorage,
         }),
@@ -159,7 +163,7 @@ describe("DisplayProfileProvider", () => {
     localStorage.clear();
     setViewportWidth(320);
     setViewportHeight(640);
-    localStorage.setItem("c64u_display_profile_override", "expanded");
+    localStorage.setItem(DISPLAY_PROFILE_OVERRIDE_KEY, "expanded");
 
     render(
       <DisplayProfileProvider>
@@ -170,7 +174,7 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("override")).toHaveTextContent("expanded");
     expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
 
-    localStorage.removeItem("c64u_display_profile_override");
+    localStorage.removeItem(DISPLAY_PROFILE_OVERRIDE_KEY);
 
     act(() => {
       window.dispatchEvent(
@@ -184,12 +188,12 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("override")).toHaveTextContent("auto");
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
 
-    localStorage.setItem("c64u_display_profile_override", "expanded");
+    localStorage.setItem(DISPLAY_PROFILE_OVERRIDE_KEY, "expanded");
 
     act(() => {
       window.dispatchEvent(
         new StorageEvent("storage", {
-          key: "c64u_display_profile_override",
+          key: DISPLAY_PROFILE_OVERRIDE_KEY,
           newValue: "expanded",
           storageArea: window.sessionStorage,
         }),
@@ -300,7 +304,7 @@ describe("DisplayProfileProvider", () => {
       saveAutoRotationEnabled(true);
       window.dispatchEvent(
         new CustomEvent("c64u-app-settings-updated", {
-          detail: { key: "c64u_auto_rotation_enabled", value: true },
+          detail: { key: APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY, value: true },
         }),
       );
     });

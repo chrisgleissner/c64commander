@@ -6,6 +6,15 @@ on:
     branches: ["main"]
     tags: ["*"]
   workflow_dispatch:
+    inputs:
+      app_variant:
+        description: Selected variant id to build and test
+        required: false
+        type: string
+      publish_variants:
+        description: Comma-separated variant ids to publish; defaults to repo publish defaults
+        required: false
+        type: string
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -16,7 +25,8 @@ permissions:
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  APP_ID: uk.gleissner.c64commander
+  APP_VARIANT: ${{ github.event.inputs.app_variant || '' }}
+  APP_PUBLISH_VARIANTS: ${{ github.event.inputs.publish_variants || '' }}
   IOS_ROLLOUT_STAGE: ${{ vars.IOS_ROLLOUT_STAGE || 'A' }}
 
 # Rollout policy:
@@ -37,6 +47,42 @@ env:
 # - The retained suite covers one smoke path plus iOS-only persistence behaviors.
 
 jobs:
+  variant-selection:
+    name: Variant | Resolve publish set
+    runs-on: ubuntu-latest
+    outputs:
+      publish_variants_json: ${{ steps.variant.outputs.publish_variants_json }}
+      publish_variants_csv: ${{ steps.variant.outputs.publish_variants_csv }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate variant metadata
+        run: npm run variant:generate
+
+      - name: Export publish variant selection
+        id: variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_json=${JSON.stringify(config.repo.selectedPublishVariants)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_csv=${config.repo.selectedPublishVariants.join(',')}\n`);
+          NODE
+
   ios-prepare:
     name: iOS | Prepare
     runs-on: macos-latest
@@ -57,6 +103,7 @@ jobs:
         run: npm ci
 
       - name: Resolve app version
+        id: resolve_version
         run: |
           APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           if [[ -z "$APP_VERSION" ]]; then
@@ -65,6 +112,23 @@ jobs:
           APP_BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "APP_BUILD_NUMBER=$APP_BUILD_NUMBER" >> $GITHUB_ENV
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate selected variant metadata
+        run: npm run variant:generate
+
+      - name: Resolve iOS variant metadata
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const lines = [
+            `APP_ID=${config.variant.platform.ios.bundleId}`,
+            `VARIANT_ARTIFACT_BASENAME=${config.variant.exportedFileBasename}`,
+          ];
+          fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join('\n')}\n`);
+          NODE
 
       - name: Print Xcode version
         run: |
@@ -159,6 +223,7 @@ jobs:
           path: .
 
       - name: Resolve app version
+        id: resolve_version
         run: |
           APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           if [[ -z "$APP_VERSION" ]]; then
@@ -167,6 +232,7 @@ jobs:
           APP_BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "APP_BUILD_NUMBER=$APP_BUILD_NUMBER" >> $GITHUB_ENV
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Ensure CocoaPods scripts are executable
         run: |
@@ -639,11 +705,19 @@ jobs:
           fi
 
   ios-package-altstore:
-    name: iOS | Package IPA
+    name: iOS | Package IPA (${{ matrix.variant }})
     runs-on: macos-latest
-    needs: ios-prepare
+    needs: [ios-prepare, variant-selection]
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJson(needs.variant-selection.outputs.publish_variants_json) }}
+
+    env:
+      APP_VARIANT: ${{ matrix.variant }}
+      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.publish_variants_csv }}
 
     steps:
       - name: Checkout
@@ -661,6 +735,7 @@ jobs:
         run: npm ci
 
       - name: Resolve app version
+        id: resolve_version
         run: |
           APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           if [[ -z "$APP_VERSION" ]]; then
@@ -669,12 +744,38 @@ jobs:
           APP_BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "APP_BUILD_NUMBER=$APP_BUILD_NUMBER" >> $GITHUB_ENV
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Download prepared iOS workspace
-        uses: actions/download-artifact@v4
-        with:
-          name: ios-prepared-workspace
-          path: .
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Resolve iOS variant metadata
+        id: resolve_variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const entries = {
+            APP_ID: config.variant.platform.ios.bundleId,
+            VARIANT_ARTIFACT_BASENAME: config.variant.exportedFileBasename,
+          };
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('\n')}\n`,
+          );
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key.toLowerCase()}=${value}`)
+              .join('\n')}\n`,
+          );
+          NODE
 
       - name: Ensure CocoaPods scripts are executable
         run: |
@@ -702,7 +803,7 @@ jobs:
       - name: Package iOS IPA
         run: |
           set -euo pipefail
-          IPA_BASENAME="c64commander-${APP_VERSION}-ios"
+          IPA_BASENAME="${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-ios"
           rm -rf ios/build/Payload
           mkdir -p ios/build/Payload
           cp -R ios/build/Build/Products/Release-iphoneos/App.app ios/build/Payload/App.app
@@ -714,9 +815,9 @@ jobs:
       - name: Upload iOS IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-ipa
+          name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-ios-ipa
           path: |
-            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
+            ios/build/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-ios.ipa
           if-no-files-found: error
 
       - name: Upload iOS package diagnostics on failure
@@ -752,7 +853,7 @@ jobs:
         run: |
           set -euo pipefail
           gh release upload "${GITHUB_REF_NAME}" \
-            "ios/build/c64commander-${APP_VERSION}-ios.ipa" \
+            "ios/build/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-ios.ipa" \
             --clobber
 
   ios-package-paid:

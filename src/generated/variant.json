@@ -2,16 +2,10 @@
   "repo": {
     "defaultVariant": "c64commander",
     "publishDefaults": {
-      "ci": [
-        "c64commander"
-      ],
-      "release": [
-        "c64commander"
-      ]
+      "ci": ["c64commander"],
+      "release": ["c64commander"]
     },
-    "selectedPublishVariants": [
-      "c64commander"
-    ]
+    "selectedPublishVariants": ["c64commander"]
   },
   "schemaVersion": 1,
   "selectedVariantId": "c64commander",

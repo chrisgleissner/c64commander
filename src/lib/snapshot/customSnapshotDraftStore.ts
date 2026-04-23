@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { addErrorLog } from "@/lib/logging";
 import {
   EMPTY_CUSTOM_SNAPSHOT_RANGE_DRAFT,
@@ -13,7 +14,7 @@ import {
   type CustomSnapshotRangeDraft,
 } from "./customSnapshotRanges";
 
-const CUSTOM_SNAPSHOT_DRAFTS_KEY = "c64u_custom_snapshot_ranges:v1";
+const CUSTOM_SNAPSHOT_DRAFTS_KEY = buildLocalStorageKey("custom_snapshot_ranges:v1");
 
 const buildDefaultDrafts = (): CustomSnapshotRangeDraft[] => [{ ...EMPTY_CUSTOM_SNAPSHOT_RANGE_DRAFT }];
 

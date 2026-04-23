@@ -9,10 +9,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
-import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
+import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
+
+const PLAYLIST_REPOSITORY_STORAGE_KEY = buildLocalStorageKey("playlist_repo:v1");
 
 const usePlaybackPersistenceHarness = ({
   resolvedDeviceId = "device-1",
@@ -457,7 +460,7 @@ describe("usePlaybackPersistence", () => {
   it("hydrates from repository data when legacy playlist payload is absent", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
-      "c64u_playlist_repo:v1",
+      PLAYLIST_REPOSITORY_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         tracks: {
@@ -518,7 +521,7 @@ describe("usePlaybackPersistence", () => {
   it("hydrates repository-backed local tracks with explicit sourceId", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
-      "c64u_playlist_repo:v1",
+      PLAYLIST_REPOSITORY_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         tracks: {
@@ -580,7 +583,7 @@ describe("usePlaybackPersistence", () => {
   it("hydrates repository-backed tracks with persisted config associations", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
-      "c64u_playlist_repo:v1",
+      PLAYLIST_REPOSITORY_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         tracks: {
@@ -647,7 +650,7 @@ describe("usePlaybackPersistence", () => {
   it("hydrates legacy repository local tracks by recovering sourceId from trackId", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
-      "c64u_playlist_repo:v1",
+      PLAYLIST_REPOSITORY_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         tracks: {
@@ -708,7 +711,7 @@ describe("usePlaybackPersistence", () => {
   it("hydrates repository local tracks by reusing non-path source locators as source ids", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
-      "c64u_playlist_repo:v1",
+      PLAYLIST_REPOSITORY_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         tracks: {
@@ -769,7 +772,7 @@ describe("usePlaybackPersistence", () => {
   it("leaves repository local track source ids empty when legacy track ids cannot be parsed", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
-      "c64u_playlist_repo:v1",
+      PLAYLIST_REPOSITORY_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         tracks: {
@@ -828,7 +831,7 @@ describe("usePlaybackPersistence", () => {
   it("leaves repository local track source ids empty when track ids do not use the local legacy prefix", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
-      "c64u_playlist_repo:v1",
+      PLAYLIST_REPOSITORY_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         tracks: {
@@ -909,7 +912,7 @@ describe("usePlaybackPersistence", () => {
 
     // Seed session in sessionStorage — playing, not paused, with known duration
     sessionStorage.setItem(
-      "c64u_playback_session:v1",
+      PLAYBACK_SESSION_KEY,
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/restore.sid",
@@ -969,7 +972,7 @@ describe("usePlaybackPersistence", () => {
 
     // Seed session in sessionStorage — playing, no duration
     sessionStorage.setItem(
-      "c64u_playback_session:v1",
+      PLAYBACK_SESSION_KEY,
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/nodur.sid",
@@ -1024,9 +1027,9 @@ describe("usePlaybackPersistence", () => {
 
     // Session stored with a DIFFERENT playlist key
     sessionStorage.setItem(
-      "c64u_playback_session:v1",
+      PLAYBACK_SESSION_KEY,
       JSON.stringify({
-        playlistKey: "c64u_playlist:other-device",
+        playlistKey: buildPlaylistStorageKey("other-device"),
         currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/demo.sid",
         currentIndex: 0,
         isPlaying: true,
@@ -1079,7 +1082,7 @@ describe("usePlaybackPersistence", () => {
 
     // Session refers to an item ID that doesn't exist in the restored playlist
     sessionStorage.setItem(
-      "c64u_playback_session:v1",
+      PLAYBACK_SESSION_KEY,
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/nonexistent.sid",
@@ -1204,7 +1207,7 @@ describe("usePlaybackPersistence", () => {
 
     // Session stored with isPaused = true
     sessionStorage.setItem(
-      "c64u_playback_session:v1",
+      PLAYBACK_SESSION_KEY,
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/paused.sid",
@@ -1278,7 +1281,7 @@ describe("usePlaybackPersistence", () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
 
     // Corrupt session data
-    sessionStorage.setItem("c64u_playback_session:v1", "NOT_VALID_JSON");
+    sessionStorage.setItem(PLAYBACK_SESSION_KEY, "NOT_VALID_JSON");
 
     localStorage.setItem(
       playlistStorageKey,

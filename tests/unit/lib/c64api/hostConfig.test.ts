@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
+
+const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
 
 const addLogMock = vi.fn();
 
@@ -59,7 +62,7 @@ describe("hostConfig", () => {
   });
 
   it("reads device hosts from direct storage and migrates legacy base URLs", () => {
-    localStorage.setItem("c64u_device_host", " demo-box.local ");
+    localStorage.setItem(DEVICE_HOST_KEY, " demo-box.local ");
     localStorage.setItem("c64u_base_url", "http://legacy-box.local");
     expect(resolveDeviceHostFromStorage()).toBe("demo-box.local");
     expect(localStorage.getItem("c64u_base_url")).toBeNull();
@@ -68,7 +71,7 @@ describe("hostConfig", () => {
     localStorage.setItem("c64u_base_url", "http://legacy-box.local:8080/rest");
 
     expect(resolveDeviceHostFromStorage()).toBe("legacy-box.local:8080");
-    expect(localStorage.getItem("c64u_device_host")).toBe("legacy-box.local:8080");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("legacy-box.local:8080");
   });
 
   it("falls back safely when storage or base URLs are unavailable", () => {
@@ -100,7 +103,7 @@ describe("hostConfig", () => {
   });
 
   it("prefers stored hosts when the base URL is only a fallback hostname", () => {
-    localStorage.setItem("c64u_device_host", "stored-box.local");
+    localStorage.setItem(DEVICE_HOST_KEY, "stored-box.local");
     expect(resolvePreferredDeviceHost("http://c64u")).toBe("stored-box.local");
     expect(addLogMock).toHaveBeenCalledWith(
       "info",
@@ -110,7 +113,7 @@ describe("hostConfig", () => {
   });
 
   it("ignores localhost fallback origins in favor of a stored remote host", () => {
-    localStorage.setItem("c64u_device_host", "stored-box.local");
+    localStorage.setItem(DEVICE_HOST_KEY, "stored-box.local");
     Object.defineProperty(globalThis, "window", {
       value: {
         location: {

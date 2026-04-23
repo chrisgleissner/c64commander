@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import type { HvscProgressEvent } from "./hvscTypes";
 import { addLog } from "@/lib/logging";
 
@@ -74,7 +75,7 @@ export type HvscStatusSummary = {
   lastUpdatedAt?: string | null;
 };
 
-const STORAGE_KEY = "c64u_hvsc_status:v1";
+const STORAGE_KEY = buildLocalStorageKey("hvsc_status:v1");
 
 export const getDefaultHvscStatusSummary = (): HvscStatusSummary => ({
   download: { status: "idle" },
@@ -193,10 +194,10 @@ export const applyHvscProgressEventToSummary = (
       download:
         summary.download.status === "in-progress"
           ? {
-              ...summary.download,
-              status: "success",
-              finishedAt: summary.download.finishedAt ?? now,
-            }
+            ...summary.download,
+            status: "success",
+            finishedAt: summary.download.finishedAt ?? now,
+          }
           : summary.download,
       extraction: {
         ...summary.extraction,
@@ -219,9 +220,9 @@ export const applyHvscProgressEventToSummary = (
     const stateToken =
       event.statusToken ??
       (typeof event.processedCount === "number" &&
-      typeof event.totalCount === "number" &&
-      event.totalCount > 0 &&
-      event.processedCount >= event.totalCount
+        typeof event.totalCount === "number" &&
+        event.totalCount > 0 &&
+        event.processedCount >= event.totalCount
         ? "done"
         : "running");
     const percent =

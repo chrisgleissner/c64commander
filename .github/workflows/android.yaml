@@ -6,6 +6,15 @@ on:
     tags: ["*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      app_variant:
+        description: Selected variant id to build and test
+        required: false
+        type: string
+      publish_variants:
+        description: Comma-separated variant ids to publish; defaults to repo publish defaults
+        required: false
+        type: string
 
 concurrency:
   group: android-${{ github.ref }}
@@ -16,8 +25,46 @@ permissions:
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  APP_VARIANT: ${{ github.event.inputs.app_variant || '' }}
+  APP_PUBLISH_VARIANTS: ${{ github.event.inputs.publish_variants || '' }}
 
 jobs:
+  variant-selection:
+    name: Variant | Resolve publish set
+    runs-on: ubuntu-latest
+    outputs:
+      publish_variants_json: ${{ steps.variant.outputs.publish_variants_json }}
+      publish_variants_csv: ${{ steps.variant.outputs.publish_variants_csv }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate variant metadata
+        run: npm run variant:generate
+
+      - name: Export publish variant selection
+        id: variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_json=${JSON.stringify(config.repo.selectedPublishVariants)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_csv=${config.repo.selectedPublishVariants.join(',')}\n`);
+          NODE
+
   notices:
     name: Notices | Generation + drift
     runs-on: ubuntu-latest
@@ -530,6 +577,9 @@ jobs:
     name: Android | Tests + Coverage
     runs-on: ubuntu-latest
     env:
+      ANDROID_API_LEVEL: "34"
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_SYSTEM_IMAGE: "system-images;android-34;google_apis;x86_64"
       GRADLE_MAX_WORKERS: "6"
 
     steps:
@@ -545,6 +595,7 @@ jobs:
           cache: npm
 
       - name: Resolve app version
+        id: resolve_version
         run: |
           APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           VERSION_CODE=$((1600 + GITHUB_RUN_NUMBER))
@@ -552,6 +603,7 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
@@ -982,6 +1034,31 @@ jobs:
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Resolve Android variant metadata
+        id: resolve_variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const entries = {
+            ANDROID_APPLICATION_ID: config.variant.platform.android.applicationId,
+            VARIANT_ARTIFACT_BASENAME: config.variant.exportedFileBasename,
+          };
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('\n')}\n`,
+          );
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key.toLowerCase()}=${value}`)
+              .join('\n')}\n`,
+          );
+          NODE
+
       - name: Build APK (debug)
         run: |
           start=$(date +%s)
@@ -999,7 +1076,7 @@ jobs:
             trap 'echo "${status:-1}" > "$code_file"' EXIT
             TELEMETRY_INTERVAL_SEC=1 \
             TELEMETRY_OUTPUT_DIR=ci-artifacts/telemetry/android \
-            ANDROID_PACKAGE_NAME=uk.gleissner.c64commander \
+            ANDROID_PACKAGE_NAME="$ANDROID_APPLICATION_ID" \
             TELEMETRY_DEVICE_NAME="${ANDROID_AVD_NAME}" \
             ci/telemetry/android/monitor_android.sh &
             monitor_child_pid=$!
@@ -1019,7 +1096,7 @@ jobs:
           set -euo pipefail
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          package_name="uk.gleissner.c64commander"
+          package_name="$ANDROID_APPLICATION_ID"
           SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
           if [[ -z "$SERIAL" ]]; then
             echo "::error::No emulator serial found"
@@ -1110,7 +1187,7 @@ jobs:
             exit 0
           fi
           adb -s "$SERIAL" logcat -c || true
-          adb -s "$SERIAL" shell am start -n uk.gleissner.c64commander/.MainActivity >/dev/null 2>&1 || true
+          adb -s "$SERIAL" shell am start -n "$ANDROID_APPLICATION_ID/.MainActivity" >/dev/null 2>&1 || true
           if ! timeout 45 bash -c 'until adb -s "$0" logcat -d | grep -q "Android memory class detected:"; do sleep 2; done' "$SERIAL"; then
             echo "::warning::MainActivity memory class log not found after launch+retry"
             adb -s "$SERIAL" logcat -d | tail -n 200 || true
@@ -1266,11 +1343,18 @@ jobs:
           fi
 
   android-packaging:
-    name: Android | Packaging
+    name: Android | Packaging (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    needs: [android-maestro]
+    needs: [android-maestro, variant-selection]
     env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
       GRADLE_MAX_WORKERS: "6"
+      APP_VARIANT: ${{ matrix.variant }}
+      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.publish_variants_csv }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJson(needs.variant-selection.outputs.publish_variants_json) }}
 
     steps:
       - name: Checkout
@@ -1285,6 +1369,7 @@ jobs:
           cache: npm
 
       - name: Resolve app version
+        id: resolve_version
         run: |
           APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           VERSION_CODE=$((1600 + GITHUB_RUN_NUMBER))
@@ -1292,6 +1377,7 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
@@ -1299,6 +1385,34 @@ jobs:
           npm ci
           end=$(date +%s)
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate selected variant metadata
+        run: npm run variant:generate
+
+      - name: Resolve Android variant metadata
+        id: resolve_variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const entries = {
+            ANDROID_APPLICATION_ID: config.variant.platform.android.applicationId,
+            VARIANT_ARTIFACT_BASENAME: config.variant.exportedFileBasename,
+          };
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('\n')}\n`,
+          );
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key.toLowerCase()}=${value}`)
+              .join('\n')}\n`,
+          );
+          NODE
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -1381,38 +1495,45 @@ jobs:
       - name: Rename release APK for publishing
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: |
-          mv android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}.apk \
-             android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk
+          mv android/app/build/outputs/apk/release/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}.apk \
+             android/app/build/outputs/apk/release/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android.apk
 
       - name: Upload APK artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: c64commander-release-apk
+          name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-apk
           path: |
-            android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk
+            android/app/build/outputs/apk/release/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-android.apk
 
       - name: Rename AAB for publishing
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: |
           mv android/app/build/outputs/bundle/release/app-release.aab \
-             android/app/build/outputs/bundle/release/c64commander-${{ env.APP_VERSION }}-android-play.aab
+             android/app/build/outputs/bundle/release/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android-play.aab
 
       - name: Upload AAB artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: c64commander-release-aab
-          path: android/app/build/outputs/bundle/release/c64commander-${{ env.APP_VERSION }}-android-play.aab
+          name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-aab
+          path: android/app/build/outputs/bundle/release/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-android-play.aab
 
   release-artifacts:
-    name: Release | Attach APK/AAB
+    name: Release | Attach APK/AAB (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    needs: [web-coverage-merge, android-tests, android-packaging]
+    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJson(needs.variant-selection.outputs.publish_variants_json) }}
     permissions:
       contents: write
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
+      APP_VARIANT: ${{ matrix.variant }}
+      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.publish_variants_csv }}
 
     steps:
       - name: Checkout
@@ -1420,10 +1541,49 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate selected variant metadata
+        run: npm run variant:generate
+
+      - name: Resolve Android variant metadata
+        id: resolve_variant
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const entries = {
+            ANDROID_APPLICATION_ID: config.variant.platform.android.applicationId,
+            VARIANT_ARTIFACT_BASENAME: config.variant.exportedFileBasename,
+          };
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('\n')}\n`,
+          );
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `${Object.entries(entries)
+              .map(([key, value]) => `${key.toLowerCase()}=${value}`)
+              .join('\n')}\n`,
+          );
+          NODE
+
       - name: Resolve app version
+        id: resolve_version
         run: |
           APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Resolve signing availability
         run: |
@@ -1437,22 +1597,22 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/download-artifact@v4
         with:
-          name: c64commander-release-apk
+          name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-apk
           path: artifacts/release-apk
 
       - name: Download release AAB artifact
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/download-artifact@v4
         with:
-          name: c64commander-release-aab
+          name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-aab
           path: artifacts/release-aab
 
       - name: Validate release artifact filenames
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: |
           set -euo pipefail
-          test -f "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk"
-          test -f "artifacts/release-aab/c64commander-${APP_VERSION}-android-play.aab"
+          test -f "artifacts/release-apk/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android.apk"
+          test -f "artifacts/release-aab/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android-play.aab"
           ! find artifacts -type f | grep -Ei '(debug|unsigned|altstore|app-release\.aab)'
 
       - name: Ensure GitHub release exists
@@ -1479,8 +1639,8 @@ jobs:
         run: |
           set -euo pipefail
           gh release upload "${GITHUB_REF_NAME}" \
-            "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk" \
-            "artifacts/release-aab/c64commander-${APP_VERSION}-android-play.aab" \
+            "artifacts/release-apk/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android.apk" \
+            "artifacts/release-aab/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android-play.aab" \
             --clobber
 
       - name: Verify Android release assets are attached
@@ -1493,16 +1653,16 @@ jobs:
           echo "Release assets:"
           echo "$assets_json"
 
-          grep -Fx "c64commander-${APP_VERSION}-android.apk" <<<"$assets_json" >/dev/null
-          grep -Fx "c64commander-${APP_VERSION}-android-play.aab" <<<"$assets_json" >/dev/null
+          grep -Fx "${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android.apk" <<<"$assets_json" >/dev/null
+          grep -Fx "${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android-play.aab" <<<"$assets_json" >/dev/null
 
       - name: Upload AAB to Google Play (internal)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: uk.gleissner.c64commander
-          releaseFiles: artifacts/release-aab/c64commander-${{ env.APP_VERSION }}-android-play.aab
+          packageName: ${{ steps.resolve_variant.outputs.android_application_id }}
+          releaseFiles: artifacts/release-aab/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-android-play.aab
           track: internal
           # TODO Change to 'completed' once all requirements met and app submitted once manually
           status: draft

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import * as appSettings from "@/lib/config/appSettings";
 
 describe("appSettings", () => {
@@ -15,13 +16,13 @@ describe("appSettings", () => {
     it("saves and loads true", () => {
       appSettings.saveDebugLoggingEnabled(true);
       expect(appSettings.loadDebugLoggingEnabled()).toBe(true);
-      expect(localStorage.getItem("c64u_debug_logging_enabled")).toBe("1");
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY)).toBe("1");
     });
 
     it("saves and loads false", () => {
       appSettings.saveDebugLoggingEnabled(false);
       expect(appSettings.loadDebugLoggingEnabled()).toBe(false);
-      expect(localStorage.getItem("c64u_debug_logging_enabled")).toBe("0");
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY)).toBe("0");
     });
 
     it("broadcasts change", () => {
@@ -59,7 +60,7 @@ describe("appSettings", () => {
     });
     it('saves true and stores "1" (BRDA:93)', () => {
       appSettings.saveAutomaticDemoModeEnabled(true);
-      expect(localStorage.getItem("c64u_automatic_demo_mode_enabled")).toBe("1");
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY)).toBe("1");
     });
   });
 

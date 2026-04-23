@@ -7,10 +7,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { JsonMediaIndex, LocalStorageMediaIndexStorage } from "@/lib/media-index/localStorageMediaIndex";
 import type { MediaEntry, MediaIndexStorage } from "@/lib/media-index/mediaIndex";
 
-const STORAGE_KEY = "c64u_media_index:v1";
+const STORAGE_KEY = buildLocalStorageKey("media_index:v1");
 
 describe("LocalStorageMediaIndexStorage", () => {
   let localStorageMock: {
@@ -64,7 +65,7 @@ describe("LocalStorageMediaIndexStorage", () => {
     it("returns null when JSON parse fails", async () => {
       localStorageMock.getItem.mockReturnValue("invalid json");
 
-      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
 
       const storage = new LocalStorageMediaIndexStorage();
       const result = await storage.read();

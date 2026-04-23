@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { addErrorLog } from "@/lib/logging";
 
-const RAM_DUMP_FOLDER_KEY = "c64u_ram_dump_folder:v1";
+const RAM_DUMP_FOLDER_KEY = buildLocalStorageKey("ram_dump_folder:v1");
 
 export type RamDumpFolderConfig = {
   treeUri: string;

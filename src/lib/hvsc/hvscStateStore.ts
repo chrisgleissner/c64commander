@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import type { HvscIngestionState, HvscStatus } from "./hvscTypes";
 import { addLog } from "@/lib/logging";
 
@@ -19,7 +20,7 @@ export type HvscState = HvscStatus & {
   updates: Record<number, HvscUpdateRecord>;
 };
 
-const STORAGE_KEY = "c64u_hvsc_state:v1";
+const STORAGE_KEY = buildLocalStorageKey("hvsc_state:v1");
 
 const validIngestionStates = new Set<HvscIngestionState>(["idle", "installing", "updating", "ready", "error"]);
 

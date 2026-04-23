@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { addErrorLog } from "@/lib/logging";
 import type { SnapshotStorageEntry, SnapshotType } from "./snapshotTypes";
 import { MAX_SNAPSHOTS } from "./snapshotTypes";
 
-const STORE_KEY = "c64u_snapshots:v1";
+const STORE_KEY = buildLocalStorageKey("snapshots:v1");
 const UPDATE_EVENT = "c64u-snapshots-updated";
 
 type StoreData = {

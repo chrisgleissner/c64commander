@@ -7,10 +7,11 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { JsonMediaIndex, LocalStorageMediaIndexStorage } from "@/lib/media-index/localStorageMediaIndex";
 import type { MediaIndexSnapshot } from "@/lib/media-index/mediaIndex";
 
-const STORAGE_KEY = "c64u_media_index:v1";
+const STORAGE_KEY = buildLocalStorageKey("media_index:v1");
 
 const buildSnapshot = (): MediaIndexSnapshot => ({
   version: 1,

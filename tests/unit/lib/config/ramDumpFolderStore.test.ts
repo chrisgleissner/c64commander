@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import {
   deriveRamDumpFolderDisplayPath,
   loadRamDumpFolderConfig,
@@ -14,6 +15,8 @@ import {
   clearRamDumpFolderConfig,
   type RamDumpFolderConfig,
 } from "@/lib/config/ramDumpFolderStore";
+
+const STORAGE_KEY = buildLocalStorageKey("ram_dump_folder:v1");
 
 // Mock addErrorLog
 vi.mock("@/lib/logging", () => ({
@@ -140,7 +143,7 @@ describe("ramDumpFolderStore", () => {
           constructor(
             public type: string,
             public detail: any,
-          ) {}
+          ) { }
         },
       });
 
@@ -153,7 +156,7 @@ describe("ramDumpFolderStore", () => {
 
       saveRamDumpFolderConfig(config);
 
-      expect(localStorage.setItem).toHaveBeenCalledWith("c64u_ram_dump_folder:v1", JSON.stringify(config));
+      expect(localStorage.setItem).toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify(config));
       expect(window.dispatchEvent).toHaveBeenCalled();
 
       vi.unstubAllGlobals();
@@ -185,13 +188,13 @@ describe("ramDumpFolderStore", () => {
           constructor(
             public type: string,
             public detail: any,
-          ) {}
+          ) { }
         },
       });
 
       clearRamDumpFolderConfig();
 
-      expect(localStorage.removeItem).toHaveBeenCalledWith("c64u_ram_dump_folder:v1");
+      expect(localStorage.removeItem).toHaveBeenCalledWith(STORAGE_KEY);
       expect(window.dispatchEvent).toHaveBeenCalled();
 
       vi.unstubAllGlobals();

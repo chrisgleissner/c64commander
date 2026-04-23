@@ -12,7 +12,7 @@ const connectionState = {
 };
 
 const discoverConnectionMock = vi.fn();
-const initializeConnectionManagerMock = vi.fn(async () => {});
+const initializeConnectionManagerMock = vi.fn(async () => { });
 const hasStoredPasswordFlagMock = vi.fn(() => false);
 const getPasswordMock = vi.fn(async () => "");
 
@@ -50,6 +50,9 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
+  APP_SETTINGS_KEYS: {
+    BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY: "c64commander:background_rediscovery_interval_ms",
+  },
   loadBackgroundRediscoveryIntervalMs: () => 60_000,
 }));
 
@@ -192,7 +195,7 @@ describe("ConnectionController", () => {
       discoverConnectionMock.mockClear();
       window.dispatchEvent(
         new CustomEvent("c64u-app-settings-updated", {
-          detail: { key: "c64u_background_rediscovery_interval_ms" },
+          detail: { key: "c64commander:background_rediscovery_interval_ms" },
         }),
       );
 

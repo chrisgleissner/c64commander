@@ -10,6 +10,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildSessionStorageKey } from "@/generated/variant";
+
+const INITIAL_SNAPSHOT_SESSION_KEY = `${buildSessionStorageKey("initial_snapshot_session")}:http://c64u`;
 
 const status = { isConnected: true, isConnecting: false };
 
@@ -344,16 +347,16 @@ describe("useAppConfigState", () => {
     status.isConnected = false;
     renderHook(() => useAppConfigState(), { wrapper });
     // Allow React to process effects
-    await act(async () => {});
+    await act(async () => { });
     // When disconnected, effect returns early before fetching
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
     status.isConnected = true;
   });
 
   it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
-    sessionStorage.setItem("c64u_initial_snapshot_session:http://c64u", "1");
+    sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
     renderHook(() => useAppConfigState(), { wrapper });
-    await act(async () => {});
+    await act(async () => { });
     expect(getCategories).not.toHaveBeenCalled();
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
   });

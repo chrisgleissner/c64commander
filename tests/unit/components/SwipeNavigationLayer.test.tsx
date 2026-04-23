@@ -10,6 +10,7 @@ import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
+import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
@@ -143,7 +144,7 @@ const renderLayer = (
   interstitialActive = false,
   swipeNavigationEnabled = false,
 ) => {
-  localStorage.setItem("c64u_enable_swipe_navigation", swipeNavigationEnabled ? "1" : "0");
+  localStorage.setItem(APP_SETTINGS_KEYS.ENABLE_SWIPE_NAVIGATION_KEY, swipeNavigationEnabled ? "1" : "0");
   window.history.pushState({}, "", pathname);
   return render(
     <BrowserRouter>

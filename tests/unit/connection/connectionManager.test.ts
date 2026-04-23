@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "../../../src/generated/variant";
 import * as logging from "../../../src/lib/logging";
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from "../../../src/lib/fuzz/fuzzMode";
 import {
@@ -15,6 +16,8 @@ import {
   loadStartupDiscoveryWindowMs,
 } from "../../../src/lib/config/appSettings";
 import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from "../../../src/lib/smoke/smokeMode";
+
+const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
 
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
@@ -242,7 +245,7 @@ describe("connectionManager", () => {
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
-    expect(localStorage.getItem("c64u_device_host")).toBe("127.0.0.1:9999");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("127.0.0.1:9999");
   });
 
   it("records smoke status transitions when enabled", async () => {

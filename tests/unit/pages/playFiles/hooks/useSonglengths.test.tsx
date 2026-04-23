@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { type LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { countSonglengthsEntries } from "@/lib/sid/songlengths";
+
+const SONGLENGTHS_FILE_STORAGE_KEY = buildLocalStorageKey("songlengths_file:v1");
 
 // Mocks
 vi.mock("@/hooks/use-toast", () => ({
@@ -22,13 +25,13 @@ vi.mock("@/lib/native/platform", () => ({
 // Mock songlengths library
 vi.mock("@/lib/songlengths", () => ({
   SongLengthServiceFacade: class {
-    constructor() {}
+    constructor() { }
     loadOnColdStart() {
       return Promise.resolve({ status: "ready" });
     }
   },
   InMemoryTextBackend: class {
-    constructor() {}
+    constructor() { }
     exportSnapshot() {
       return {};
     }
@@ -101,7 +104,7 @@ describe("useSonglengths", () => {
       });
     });
 
-    expect(localStorage.getItem("c64u_songlengths_file:v1")).toContain("file://sl.txt");
+    expect(localStorage.getItem(SONGLENGTHS_FILE_STORAGE_KEY)).toContain("file://sl.txt");
   });
 
   it("ignores invalid file types", () => {
@@ -187,7 +190,7 @@ describe("useSonglengths", () => {
       name: "Songlengths.txt",
       path: "/Songlengths.txt",
     };
-    localStorage.setItem("c64u_songlengths_file:v1", JSON.stringify(stored));
+    localStorage.setItem(SONGLENGTHS_FILE_STORAGE_KEY, JSON.stringify(stored));
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     await waitFor(() => {
       expect(result.current.songlengthsFiles).toHaveLength(1);
@@ -200,7 +203,7 @@ describe("useSonglengths", () => {
     vi.mocked(getPlatform).mockReturnValue("android" as any);
     vi.mocked(isNativePlatform).mockReturnValue(true);
     const stored = { uri: "file://sl.txt", name: "Songlengths.txt" }; // missing path
-    localStorage.setItem("c64u_songlengths_file:v1", JSON.stringify(stored));
+    localStorage.setItem(SONGLENGTHS_FILE_STORAGE_KEY, JSON.stringify(stored));
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));

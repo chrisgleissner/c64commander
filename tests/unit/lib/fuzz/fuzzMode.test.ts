@@ -7,15 +7,48 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey, buildSessionStorageKey } from "@/generated/variant";
+import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
+
+const FUZZ_MODE_KEY = buildLocalStorageKey("fuzz_mode_enabled");
+const FUZZ_MOCK_BASE_URL_KEY = buildLocalStorageKey("fuzz_mock_base_url");
+const FUZZ_STORAGE_SEEDED_KEY = buildLocalStorageKey("fuzz_storage_seeded");
+const TEMP_LOCAL_KEY = buildLocalStorageKey("temp");
+const TEMP_SESSION_KEY = buildSessionStorageKey("temp");
+
+const createStorageMock = () => {
+  const store = new Map<string, string>();
+
+  return {
+    get length() {
+      return store.size;
+    },
+    key: vi.fn((index: number) => Array.from(store.keys())[index] ?? null),
+    getItem: vi.fn((key: string) => store.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      store.set(key, String(value));
+    }),
+    removeItem: vi.fn((key: string) => {
+      store.delete(key);
+    }),
+    clear: vi.fn(() => {
+      store.clear();
+    }),
+  };
+};
 
 describe("fuzzMode", () => {
   let localStorageMock: {
+    readonly length: number;
+    key: ReturnType<typeof vi.fn>;
     getItem: ReturnType<typeof vi.fn>;
     setItem: ReturnType<typeof vi.fn>;
     removeItem: ReturnType<typeof vi.fn>;
     clear: ReturnType<typeof vi.fn>;
   };
   let sessionStorageMock: {
+    readonly length: number;
+    key: ReturnType<typeof vi.fn>;
     getItem: ReturnType<typeof vi.fn>;
     setItem: ReturnType<typeof vi.fn>;
     removeItem: ReturnType<typeof vi.fn>;
@@ -23,18 +56,8 @@ describe("fuzzMode", () => {
   };
 
   beforeEach(() => {
-    localStorageMock = {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn(),
-    };
-    sessionStorageMock = {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn(),
-    };
+    localStorageMock = createStorageMock();
+    sessionStorageMock = createStorageMock();
     Object.defineProperty(global, "localStorage", {
       value: localStorageMock,
       writable: true,
@@ -97,7 +120,7 @@ describe("fuzzMode", () => {
     it("sets fuzz mode in localStorage", async () => {
       const { markFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       markFuzzModeEnabled();
-      expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_fuzz_mode_enabled", "1");
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(FUZZ_MODE_KEY, "1");
     });
 
     it("does nothing when localStorage is undefined", async () => {
@@ -113,45 +136,37 @@ describe("fuzzMode", () => {
 
   describe("resetFuzzStorage", () => {
     it("does nothing when fuzz mode is not enabled", async () => {
-      localStorageMock.getItem.mockReturnValue(null);
       const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
-      expect(localStorageMock.clear).not.toHaveBeenCalled();
+      expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
     it("clears storage when fuzz mode is enabled", async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === "c64u_fuzz_mode_enabled") return "1";
-        if (key === "c64u_fuzz_storage_seeded") return null;
-        return null;
-      });
+      localStorageMock.setItem(FUZZ_MODE_KEY, "1");
+      localStorageMock.setItem(TEMP_LOCAL_KEY, "clear-me");
+      sessionStorageMock.setItem(TEMP_SESSION_KEY, "clear-me");
       const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
-      expect(localStorageMock.clear).toHaveBeenCalled();
-      expect(sessionStorageMock.clear).toHaveBeenCalled();
+      expect(localStorageMock.getItem(FUZZ_MODE_KEY)).toBe("1");
+      expect(localStorageMock.getItem(TEMP_LOCAL_KEY)).toBeNull();
+      expect(sessionStorageMock.getItem(TEMP_SESSION_KEY)).toBeNull();
     });
 
     it("preserves fuzz mock base URL when clearing", async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === "c64u_fuzz_mode_enabled") return "1";
-        if (key === "c64u_fuzz_storage_seeded") return null;
-        if (key === "c64u_fuzz_mock_base_url") return "http://localhost:3000";
-        return null;
-      });
+      localStorageMock.setItem(FUZZ_MODE_KEY, "1");
+      localStorageMock.setItem(FUZZ_MOCK_BASE_URL_KEY, "http://localhost:3000");
       const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
-      expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_fuzz_mock_base_url", "http://localhost:3000");
+      expect(localStorageMock.getItem(FUZZ_MOCK_BASE_URL_KEY)).toBe("http://localhost:3000");
     });
 
     it("does not clear if already seeded", async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === "c64u_fuzz_mode_enabled") return "1";
-        if (key === "c64u_fuzz_storage_seeded") return "1";
-        return null;
-      });
+      localStorageMock.setItem(FUZZ_MODE_KEY, "1");
+      localStorageMock.setItem(FUZZ_STORAGE_SEEDED_KEY, "1");
+      localStorageMock.setItem(TEMP_LOCAL_KEY, "still-here");
       const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
-      expect(localStorageMock.clear).not.toHaveBeenCalled();
+      expect(localStorageMock.getItem(TEMP_LOCAL_KEY)).toBe("still-here");
     });
   });
 
@@ -164,16 +179,12 @@ describe("fuzzMode", () => {
     });
 
     it("applies defaults when fuzz mode is enabled", async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === "c64u_fuzz_mode_enabled") return "1";
-        if (key === "c64u_fuzz_storage_seeded") return null;
-        return null;
-      });
+      localStorageMock.setItem(FUZZ_MODE_KEY, "1");
       const { applyFuzzModeDefaults } = await import("@/lib/fuzz/fuzzMode");
       applyFuzzModeDefaults();
-      expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_fuzz_storage_seeded", "1");
-      expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_debug_logging_enabled", "1");
-      expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_automatic_demo_mode_enabled", "1");
+      expect(localStorageMock.getItem(FUZZ_STORAGE_SEEDED_KEY)).toBe("1");
+      expect(localStorageMock.getItem(APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY)).toBe("1");
+      expect(localStorageMock.getItem(APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY)).toBe("1");
     });
 
     it("returns early when localStorage is undefined even if fuzz mode is enabled via window flag", async () => {

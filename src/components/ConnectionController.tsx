@@ -15,7 +15,7 @@ import {
   initializeConnectionManager,
 } from "@/lib/connection/connectionManager";
 import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from "@/lib/c64api";
-import { loadBackgroundRediscoveryIntervalMs } from "@/lib/config/appSettings";
+import { APP_SETTINGS_KEYS, loadBackgroundRediscoveryIntervalMs } from "@/lib/config/appSettings";
 import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/secureStorage";
 import { invalidateForConnectionStateTransition } from "@/lib/query/c64QueryInvalidation";
 import { getBackgroundRediscoveryDelayMs, getNextBackgroundFailureCount } from "@/lib/query/c64PollingGovernance";
@@ -172,7 +172,7 @@ export function ConnectionController() {
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { key?: string } | undefined;
-      if (detail?.key !== "c64u_background_rediscovery_interval_ms") return;
+      if (detail?.key !== APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY) return;
       setBackgroundScheduleVersion((previous) => previous + 1);
     };
 

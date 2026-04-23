@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { updateSelectedSavedDevicePorts } from "@/lib/savedDevices/store";
 
-const FTP_PORT_KEY = "c64u_ftp_port";
-const FTP_BRIDGE_URL_KEY = "c64u_ftp_bridge_url";
-const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const FTP_PORT_KEY = buildLocalStorageKey("ftp_port");
+const FTP_BRIDGE_URL_KEY = buildLocalStorageKey("ftp_bridge_url");
+const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
 const DEFAULT_FTP_PORT = 21;
 
 let runtimeFtpPortOverride: number | null = null;

@@ -8,6 +8,7 @@
 
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import {
   C64API,
   getC64API,
@@ -28,6 +29,8 @@ import {
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
+
+const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
@@ -776,7 +779,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -843,7 +846,7 @@ describe("c64api branches", () => {
       const controller = new AbortController();
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       // Let the first request fail, then abort before retry
       await Promise.resolve();
@@ -878,7 +881,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP in fetchWithTimeout when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -1041,7 +1044,7 @@ describe("c64api branches", () => {
   // #37: updateC64APIConfig smoke mode branch
   it("logs routing update in smoke mode", () => {
     smokeEnabledMock.mockReturnValue(true);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
 
     updateC64APIConfig("http://device", undefined, "device");
 
@@ -1435,11 +1438,11 @@ describe("c64api branches", () => {
 
   // #64: isLocalDeviceHost with IPv6 bracket notation (BRDA:361 TRUE: startsWith('['))
   it("resolvePreferredDeviceHost handles IPv6 bracket notation in device host", () => {
-    localStorage.setItem("c64u_device_host", "remote-host");
+    localStorage.setItem(DEVICE_HOST_KEY, "remote-host");
     // updateC64APIConfig with an IPv6 URL → isLocalDeviceHost('[::1]') → startsWith('[')
     // Strips brackets: normalized = '::1' → not localhost/127.0.0.1 → return false
     updateC64APIConfig("http://[::1]", undefined, "[::1]");
-    expect(localStorage.getItem("c64u_device_host")).toBe("[::1]");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("[::1]");
   });
 
   // #65: parseResponseJson allowNonJsonSuccess with no content-type (BRDA:598+600 TRUE)
@@ -1631,7 +1634,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     const pending = api.getInfo({ timeoutMs: 1 } as any);
-    void pending.catch(() => {}); // suppress unhandled rejection
+    void pending.catch(() => { }); // suppress unhandled rejection
 
     await expect(pending).rejects.toThrow("Host unreachable");
     // Clean up the hanging promise to prevent memory leaks

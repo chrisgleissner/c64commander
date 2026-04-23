@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { ensureWithinRoot, getParentPathWithinRoot } from "./paths";
 import { addErrorLog } from "@/lib/logging";
 import type { SourceEntry, SourceLocation } from "./types";
@@ -40,7 +41,7 @@ export type SourceNavigatorState = {
   refresh: () => void;
 };
 
-const buildNavKey = (source: SourceLocation) => `c64u_source_nav:${source.type}:${source.id}`;
+const buildNavKey = (source: SourceLocation) => `${buildLocalStorageKey("source_nav")}:${source.type}:${source.id}`;
 
 const getStoredPath = (source: SourceLocation) => {
   if (typeof localStorage === "undefined") return null;

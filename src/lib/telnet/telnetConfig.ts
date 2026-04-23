@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { TELNET_DEFAULT_PORT } from "@/lib/telnet/telnetTypes";
 import { updateSelectedSavedDevicePorts } from "@/lib/savedDevices/store";
 
-const TELNET_PORT_KEY = "c64u_telnet_port";
-const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const TELNET_PORT_KEY = buildLocalStorageKey("telnet_port");
+const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
 
 const isValidTelnetPort = (port: number) => Number.isInteger(port) && port >= 1 && port <= 65535;
 

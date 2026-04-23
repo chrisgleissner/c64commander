@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import {
   initializeSmokeMode,
   getSmokeConfig,
@@ -20,6 +21,10 @@ import { Capacitor } from "@capacitor/core";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
+
+const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
+const SMOKE_CONFIG_STORAGE_KEY = buildLocalStorageKey("smoke_config");
+const SMOKE_MODE_STORAGE_KEY = buildLocalStorageKey("smoke_mode_enabled");
 
 const smokeDeps = vi.hoisted(() => ({
   collectHvscPerfTimingsMock: vi.fn(() => [{ scope: "browse:query", durationMs: 12.3 }]),
@@ -103,7 +108,7 @@ describe("smokeMode", () => {
     smokeDeps.updateC64APIConfigMock.mockClear();
     smokeDeps.updateC64APIConfigMock.mockImplementation((_: string, __: string | undefined, deviceHost?: string) => {
       if (deviceHost) {
-        localStorage.setItem("c64u_device_host", deviceHost);
+        localStorage.setItem(DEVICE_HOST_KEY, deviceHost);
       }
     });
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
@@ -114,7 +119,7 @@ describe("smokeMode", () => {
 
   it("initializes from storage and persists host + logging", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "real",
         host: "http://Example.com",
@@ -134,8 +139,8 @@ describe("smokeMode", () => {
     expect(getSmokeConfig()).toEqual(config);
     expect(isSmokeModeEnabled()).toBe(true);
     expect(isSmokeReadOnlyEnabled()).toBe(false);
-    expect(localStorage.getItem("c64u_device_host")).toBe("example.com");
-    expect(localStorage.getItem("c64u_smoke_mode_enabled")).toBe("1");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("example.com");
+    expect(localStorage.getItem(SMOKE_MODE_STORAGE_KEY)).toBe("1");
     expect(smokeDeps.buildBaseUrlFromDeviceHostMock).toHaveBeenCalledWith("example.com");
     expect(smokeDeps.getC64APIConfigSnapshotMock).toHaveBeenCalledTimes(1);
     expect(smokeDeps.updateC64APIConfigMock).toHaveBeenCalledWith("http://example.com", "smoke-secret", "example.com");
@@ -194,7 +199,7 @@ describe("smokeMode", () => {
 
   it("applies smoke feature flags through the unified manager during initialization", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "mock",
         featureFlags: {
@@ -212,7 +217,7 @@ describe("smokeMode", () => {
 
   it("ignores unknown or invalid smoke feature flag values", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "mock",
         featureFlags: {
@@ -231,7 +236,7 @@ describe("smokeMode", () => {
   it("logs a warning when applying a smoke feature flag fails", async () => {
     vi.mocked(featureFlagManager.applyBootstrapOverride).mockRejectedValueOnce(new Error("bootstrap write failed"));
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "mock",
         featureFlags: {
@@ -249,7 +254,7 @@ describe("smokeMode", () => {
   it("records smoke status on native platforms", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "real",
         readOnly: true,
@@ -270,7 +275,7 @@ describe("smokeMode", () => {
 
   it("applies an HVSC base URL override during initialization", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "real",
         host: "u64",
@@ -286,7 +291,7 @@ describe("smokeMode", () => {
   it("records smoke benchmark snapshots with timings and benchmark metadata", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "real",
         host: "u64",
@@ -328,7 +333,7 @@ describe("smokeMode", () => {
 
   it("returns null for invalid config target", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "invalid-target",
       }),
@@ -340,14 +345,14 @@ describe("smokeMode", () => {
   });
 
   it("returns null for non-object config", async () => {
-    localStorage.setItem("c64u_smoke_config", '"not an object"');
+    localStorage.setItem(SMOKE_CONFIG_STORAGE_KEY, '"not an object"');
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
   });
 
   it("handles malformed JSON in storage gracefully", async () => {
-    localStorage.setItem("c64u_smoke_config", "{broken json");
+    localStorage.setItem(SMOKE_CONFIG_STORAGE_KEY, "{broken json");
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
@@ -356,7 +361,7 @@ describe("smokeMode", () => {
 
   it("skips host persistence when host is absent", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "mock",
       }),
@@ -364,12 +369,12 @@ describe("smokeMode", () => {
 
     const config = await initializeSmokeMode();
     expect(config?.host).toBeUndefined();
-    expect(localStorage.getItem("c64u_device_host")).toBeNull();
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBeNull();
   });
 
   it("defaults readOnly to true when not specified", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "mock",
       }),
@@ -388,7 +393,7 @@ describe("smokeMode", () => {
   it("skips recordSmokeStatus on non-native platform", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "mock",
       }),
@@ -401,7 +406,7 @@ describe("smokeMode", () => {
   it("logs warning when recordSmokeStatus write fails", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "mock",
       }),
@@ -449,7 +454,7 @@ describe("smokeMode", () => {
 
   it("normalizes host with empty string to undefined", async () => {
     localStorage.setItem(
-      "c64u_smoke_config",
+      SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
         target: "real",
         host: "  ",
@@ -516,7 +521,7 @@ describe("smokeMode", () => {
     const initSmokeNative = async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
       localStorage.setItem(
-        "c64u_smoke_config",
+        SMOKE_CONFIG_STORAGE_KEY,
         JSON.stringify({ target: "real", host: "u64", benchmarkRunId: "run-t" }),
       );
       await initializeSmokeMode();

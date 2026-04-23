@@ -8,6 +8,7 @@
 
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import {
@@ -25,8 +26,8 @@ import {
 import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import { setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 
-const SMOKE_CONFIG_STORAGE_KEY = "c64u_smoke_config";
-const SMOKE_MODE_STORAGE_KEY = "c64u_smoke_mode_enabled";
+const SMOKE_CONFIG_STORAGE_KEY = buildLocalStorageKey("smoke_config");
+const SMOKE_MODE_STORAGE_KEY = buildLocalStorageKey("smoke_mode_enabled");
 const SMOKE_CONFIG_FILENAME = "c64u-smoke.json";
 const SMOKE_STATUS_FILENAME = "c64u-smoke-status.json";
 const SMOKE_BENCHMARK_FILENAME_PREFIX = "c64u-smoke-benchmark-";

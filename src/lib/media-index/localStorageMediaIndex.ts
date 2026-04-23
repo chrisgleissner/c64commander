@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import type { MediaEntry, MediaIndex, MediaIndexSnapshot, MediaIndexStorage, MediaType } from "./mediaIndex";
 
-const STORAGE_KEY = "c64u_media_index:v1";
+const STORAGE_KEY = buildLocalStorageKey("media_index:v1");
 
 const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
   if (!raw) return null;
@@ -37,7 +38,7 @@ export class JsonMediaIndex implements MediaIndex {
   private entries = new Map<string, MediaEntry>();
   private loaded = false;
 
-  constructor(private readonly storage: MediaIndexStorage) {}
+  constructor(private readonly storage: MediaIndexStorage) { }
 
   async load(): Promise<void> {
     const snapshot = await this.storage.read();

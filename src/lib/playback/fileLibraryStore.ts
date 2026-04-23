@@ -6,13 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import type { FileLibraryEntry } from "./fileLibraryTypes";
 
 export type FileLibraryState = {
   entries: FileLibraryEntry[];
 };
 
-const STORE_PREFIX = "c64u_file_library:";
+const STORE_PREFIX = `${buildLocalStorageKey("file_library")}:`;
 
 export const loadFileLibrary = (key: string): FileLibraryState => {
   if (typeof localStorage === "undefined") return { entries: [] };

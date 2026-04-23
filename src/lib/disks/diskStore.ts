@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import type { DiskEntry } from "./diskTypes";
 
-const STORE_PREFIX = "c64u_disk_library:";
+const STORE_PREFIX = `${buildLocalStorageKey("disk_library")}:`;
 export const SHARED_DISK_LIBRARY_ID = "shared";
 
 export type DiskLibraryState = {

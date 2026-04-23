@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog } from "@/lib/logging";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
@@ -117,7 +118,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   );
 
   const isAndroid = getPlatform() === "android" && isNativePlatform();
-  const persistedKey = "c64u_songlengths_file:v1";
+  const persistedKey = buildLocalStorageKey("songlengths_file:v1");
 
   const formatKiB = useCallback((bytes: number | null | undefined) => {
     if (bytes === null || bytes === undefined || bytes <= 0) return null;
@@ -268,11 +269,11 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       const cacheKey = folderPath || "/";
       const filesByDir = extraFiles?.length
         ? extraFiles.reduce((map, entry) => {
-            const normalizedPath = normalizeSourcePath(entry.path);
-            const folder = normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1) || "/";
-            map.set(folder, entry.file);
-            return map;
-          }, new Map(songlengthsFilesByDir))
+          const normalizedPath = normalizeSourcePath(entry.path);
+          const folder = normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1) || "/";
+          map.set(folder, entry.file);
+          return map;
+        }, new Map(songlengthsFilesByDir))
         : songlengthsFilesByDir;
       const files = new Map<string, LocalPlayFile>();
       let current = cacheKey;

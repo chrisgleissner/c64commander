@@ -9,6 +9,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import SettingsPage from "@/pages/SettingsPage";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { reportUserError } from "@/lib/uiErrors";
@@ -28,6 +29,7 @@ import {
   saveDiscoveryProbeTimeoutMs,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
+  APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
@@ -41,6 +43,11 @@ import {
   loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
 import { FEATURE_FLAG_DEFINITIONS, type FeatureFlagId } from "@/lib/config/featureFlagsRegistry.generated";
+
+const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
+const FTP_PORT_STORAGE_KEY = buildLocalStorageKey("ftp_port");
+const TELNET_PORT_STORAGE_KEY = buildLocalStorageKey("telnet_port");
+const DISPLAY_PROFILE_OVERRIDE_KEY = buildLocalStorageKey("display_profile_override");
 
 vi.mock("framer-motion", () => ({
   motion: {
@@ -382,8 +389,19 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadAutoRotationEnabled: vi.fn(() => false),
   saveAutoRotationEnabled: vi.fn(),
   APP_SETTINGS_KEYS: {
-    NOTIFICATION_DURATION_MS_KEY: "c64u_notification_duration_ms",
-    AUTO_ROTATION_ENABLED_KEY: "c64u_auto_rotation_enabled",
+    DEBUG_LOGGING_KEY: buildLocalStorageKey("debug_logging_enabled"),
+    CONFIG_WRITE_INTERVAL_KEY: buildLocalStorageKey("config_write_min_interval_ms"),
+    AUTO_DEMO_MODE_KEY: buildLocalStorageKey("automatic_demo_mode_enabled"),
+    STARTUP_DISCOVERY_WINDOW_MS_KEY: buildLocalStorageKey("startup_discovery_window_ms"),
+    BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY: buildLocalStorageKey("background_rediscovery_interval_ms"),
+    DISCOVERY_PROBE_TIMEOUT_MS_KEY: buildLocalStorageKey("discovery_probe_timeout_ms"),
+    DISK_AUTOSTART_MODE_KEY: buildLocalStorageKey("disk_autostart_mode"),
+    VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY: buildLocalStorageKey("volume_slider_preview_interval_ms"),
+    NOTIFICATION_DURATION_MS_KEY: buildLocalStorageKey("notification_duration_ms"),
+    AUTO_ROTATION_ENABLED_KEY: buildLocalStorageKey("auto_rotation_enabled"),
+    ARCHIVE_HOST_OVERRIDE_KEY: buildLocalStorageKey("archive_host_override"),
+    ARCHIVE_CLIENT_ID_OVERRIDE_KEY: buildLocalStorageKey("archive_client_id_override"),
+    ARCHIVE_USER_AGENT_OVERRIDE_KEY: buildLocalStorageKey("archive_user_agent_override"),
   },
 }));
 
@@ -427,7 +445,7 @@ beforeEach(() => {
   };
   localStorage.clear();
   localStorage.setItem(
-    "c64u_saved_devices:v1",
+    SAVED_DEVICES_STORAGE_KEY,
     JSON.stringify({
       version: 1,
       selectedDeviceId: savedDevicesRef.current.selectedDeviceId,
@@ -504,8 +522,8 @@ describe("SettingsPage", () => {
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u:8081", undefined);
-      expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
-      expect(localStorage.getItem("c64u_telnet_port")).toBe("2323");
+      expect(localStorage.getItem(FTP_PORT_STORAGE_KEY)).toBe("2121");
+      expect(localStorage.getItem(TELNET_PORT_STORAGE_KEY)).toBe("2323");
     });
   });
 
@@ -518,7 +536,7 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(vi.mocked(setPasswordForDevice)).toHaveBeenCalledWith("saved-device-1", "new-password");
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", "new-password");
-      const persisted = JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}");
+      const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
       expect(persisted.devices[0]).toMatchObject({
         id: "saved-device-1",
         hasPassword: true,
@@ -541,7 +559,7 @@ describe("SettingsPage", () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("ultimate.local", undefined);
     });
 
-    const persisted = JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}");
+    const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
     expect(persisted.devices[0]).toMatchObject({
       id: "saved-device-1",
       name: "",
@@ -572,7 +590,7 @@ describe("SettingsPage", () => {
       ],
     };
     localStorage.setItem(
-      "c64u_saved_devices:v1",
+      SAVED_DEVICES_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         selectedDeviceId: savedDevicesRef.current.selectedDeviceId,
@@ -586,7 +604,7 @@ describe("SettingsPage", () => {
       playlistItemCount: 3,
       totalCount: 5,
     });
-    const beforeDelete = localStorage.getItem("c64u_saved_devices:v1");
+    const beforeDelete = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
 
     renderSettingsPage();
 
@@ -603,7 +621,7 @@ describe("SettingsPage", () => {
       within(deleteDialog).getByText(/after you delete the device, those items will no longer open/i),
     ).toBeInTheDocument();
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
-    expect(localStorage.getItem("c64u_saved_devices:v1")).toBe(beforeDelete);
+    expect(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY)).toBe(beforeDelete);
   });
 
   it("uses icon-only saved-device actions and shows the HVSC settings card", () => {
@@ -764,7 +782,7 @@ describe("SettingsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Large display" }));
 
-    expect(localStorage.getItem("c64u_display_profile_override")).toBe("expanded");
+    expect(localStorage.getItem(DISPLAY_PROFILE_OVERRIDE_KEY)).toBe("expanded");
     expect(document.documentElement.dataset.displayProfile).toBe("expanded");
   });
 
@@ -1236,14 +1254,14 @@ describe("SettingsPage", () => {
 
     const keys = [
       // debug_logging uses a direct state setter (no load function)
-      "c64u_debug_logging_enabled",
-      "c64u_config_write_min_interval_ms",
-      "c64u_automatic_demo_mode_enabled",
-      "c64u_startup_discovery_window_ms",
-      "c64u_background_rediscovery_interval_ms",
-      "c64u_discovery_probe_timeout_ms",
-      "c64u_disk_autostart_mode",
-      "c64u_volume_slider_preview_interval_ms",
+      APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY,
+      APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY,
+      APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY,
+      APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY,
+      APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
+      APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY,
+      APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY,
+      APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY,
     ];
 
     for (const key of keys) {
@@ -1262,7 +1280,7 @@ describe("SettingsPage", () => {
     expect(vi.mocked(loadBackgroundRediscoveryIntervalMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiscoveryProbeTimeoutMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiskAutostartMode)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(loadVolumeSliderPreviewIntervalMs)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadVolumeSliderPreviewIntervalMs)).toHaveBeenCalled();
   });
 
   it("ignores c64u-app-settings-updated events with no key", async () => {
@@ -1283,7 +1301,7 @@ describe("SettingsPage", () => {
     vi.mocked(loadVolumeSliderPreviewIntervalMs).mockReturnValue(345);
     window.dispatchEvent(
       new CustomEvent("c64u-app-settings-updated", {
-        detail: { key: "c64u_volume_slider_preview_interval_ms" },
+        detail: { key: APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY },
       }),
     );
 

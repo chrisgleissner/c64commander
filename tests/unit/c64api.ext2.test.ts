@@ -10,6 +10,7 @@
 // Targeted branch coverage for c64api.ts utility functions and request paths.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import {
   C64API,
   updateC64APIConfig,
@@ -19,6 +20,8 @@ import {
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
+
+const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
 
 // ── Node environment shims ─────────────────────────────────────────────────
 const ensureWindow = () => {
@@ -426,7 +429,7 @@ describe("c64api utility functions - targeted branch coverage", () => {
       localStorage.setItem("c64u_base_url", "http://legacy.local");
       const result = resolveDeviceHostFromStorage();
       expect(result).toBe("legacy.local");
-      expect(localStorage.getItem("c64u_device_host")).toBe("legacy.local");
+      expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("legacy.local");
       expect(localStorage.getItem("c64u_base_url")).toBeNull();
     });
 

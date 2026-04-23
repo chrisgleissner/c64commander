@@ -13,6 +13,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
@@ -20,6 +21,11 @@ import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
+
+const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
+const FTP_PORT_KEY = buildLocalStorageKey("ftp_port");
+const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
+const TELNET_PORT_KEY = buildLocalStorageKey("telnet_port");
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {
@@ -201,7 +207,7 @@ describe("DiagnosticsDialog", () => {
   beforeEach(async () => {
     localStorage.clear();
     localStorage.setItem(
-      "c64u_saved_devices:v1",
+      SAVED_DEVICES_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         selectedDeviceId: "device-office",
@@ -607,11 +613,11 @@ describe("DiagnosticsDialog", () => {
       expect(onRetryConnection).toHaveBeenCalledTimes(1);
     });
 
-    expect(localStorage.getItem("c64u_device_host")).toBe("ultimate.local:8081");
-    expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
-    expect(localStorage.getItem("c64u_telnet_port")).toBe("2323");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("ultimate.local:8081");
+    expect(localStorage.getItem(FTP_PORT_KEY)).toBe("2121");
+    expect(localStorage.getItem(TELNET_PORT_KEY)).toBe("2323");
 
-    const persisted = JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}");
+    const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
     expect(persisted.devices[0]).toMatchObject({
       id: "device-office",
       name: "Lab U64",

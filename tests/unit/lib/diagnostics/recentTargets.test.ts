@@ -7,7 +7,10 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { buildSessionStorageKey } from "@/generated/variant";
 import { clearRecentTargets, getRecentTargets, recordRecentTarget } from "@/lib/diagnostics/recentTargets";
+
+const STORAGE_KEY = buildSessionStorageKey("recent_switch_targets");
 
 // Minimal sessionStorage stub
 const store: Record<string, string> = {};
@@ -98,19 +101,19 @@ describe("getRecentTargets", () => {
 
   it("filters out entries missing host", () => {
     // Corrupt storage manually
-    sessionStorageStub.setItem("c64u_recent_switch_targets", JSON.stringify([{ host: "" }, { host: "valid.host" }]));
+    sessionStorageStub.setItem(STORAGE_KEY, JSON.stringify([{ host: "" }, { host: "valid.host" }]));
     const targets = getRecentTargets();
     expect(targets).toHaveLength(1);
     expect(targets[0].host).toBe("valid.host");
   });
 
   it("returns empty array when storage contains non-array JSON", () => {
-    sessionStorageStub.setItem("c64u_recent_switch_targets", '"not-an-array"');
+    sessionStorageStub.setItem(STORAGE_KEY, '"not-an-array"');
     expect(getRecentTargets()).toEqual([]);
   });
 
   it("returns empty array when storage is corrupted JSON", () => {
-    sessionStorageStub.setItem("c64u_recent_switch_targets", "{bad json}");
+    sessionStorageStub.setItem(STORAGE_KEY, "{bad json}");
     expect(getRecentTargets()).toEqual([]);
   });
 });

@@ -16,6 +16,7 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
+import { buildSessionStorageKey } from "@/generated/variant";
 import { getPassword as loadStoredPassword } from "@/lib/secureStorage";
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
@@ -352,8 +353,8 @@ const listeners = new Set<() => void>();
 let activeDiscovery: { abort: AbortController; cancel: () => void } | null = null;
 let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
-const DEMO_INTERSTITIAL_SESSION_KEY = "c64u_demo_interstitial_shown";
-const DEMO_MODE_PINNED_SESSION_KEY = "c64u_demo_mode_pinned";
+const DEMO_INTERSTITIAL_SESSION_KEY = buildSessionStorageKey("demo_interstitial_shown");
+const DEMO_MODE_PINNED_SESSION_KEY = buildSessionStorageKey("demo_mode_pinned");
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;

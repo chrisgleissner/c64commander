@@ -6,10 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { SecureStorage } from "@/lib/native/secureStorage";
 import { getSelectedSavedDevice, setSavedDevicePasswordFlag } from "@/lib/savedDevices/store";
 
-const HAS_PASSWORD_KEY = "c64u_has_password";
+const HAS_PASSWORD_KEY = buildLocalStorageKey("has_password");
 
 type PersistedPasswordState = {
   version: 1;

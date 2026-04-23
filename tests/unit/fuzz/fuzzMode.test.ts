@@ -7,6 +7,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey, buildSessionStorageKey } from "@/generated/variant";
+import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import {
   applyFuzzModeDefaults,
   fuzzModeKeys,
@@ -18,6 +20,8 @@ import {
 } from "@/lib/fuzz/fuzzMode";
 
 const { FUZZ_MODE_KEY, FUZZ_MOCK_BASE_URL_KEY, FUZZ_STORAGE_SEEDED_KEY } = fuzzModeKeys;
+const OTHER_VARIANT_LOCAL_KEY = "c64u-controller:debug_logging_enabled";
+const OTHER_VARIANT_SESSION_KEY = "c64u-controller:session";
 
 describe("fuzzMode", () => {
   beforeEach(() => {
@@ -46,16 +50,22 @@ describe("fuzzMode", () => {
     expect(isFuzzModeEnabled()).toBe(true);
   });
 
-  it("resets storage and preserves mock base URL", () => {
+  it("resets only the current variant namespace and preserves mock base URL", () => {
     localStorage.setItem(FUZZ_MODE_KEY, "1");
     localStorage.setItem(FUZZ_MOCK_BASE_URL_KEY, "http://localhost:3001");
-    localStorage.setItem("other", "value");
+    localStorage.setItem(buildLocalStorageKey("other"), "value");
+    localStorage.setItem(OTHER_VARIANT_LOCAL_KEY, "keep-local");
+    sessionStorage.setItem(buildSessionStorageKey("other"), "session-value");
+    sessionStorage.setItem(OTHER_VARIANT_SESSION_KEY, "keep-session");
 
     resetFuzzStorage();
 
     expect(localStorage.getItem(FUZZ_MODE_KEY)).toBe("1");
     expect(getFuzzMockBaseUrl()).toBe("http://localhost:3001");
-    expect(localStorage.getItem("other")).toBeNull();
+    expect(localStorage.getItem(buildLocalStorageKey("other"))).toBeNull();
+    expect(sessionStorage.getItem(buildSessionStorageKey("other"))).toBeNull();
+    expect(localStorage.getItem(OTHER_VARIANT_LOCAL_KEY)).toBe("keep-local");
+    expect(sessionStorage.getItem(OTHER_VARIANT_SESSION_KEY)).toBe("keep-session");
   });
 
   it("skips reset when already seeded", () => {
@@ -74,10 +84,10 @@ describe("fuzzMode", () => {
     applyFuzzModeDefaults();
 
     expect(localStorage.getItem(FUZZ_STORAGE_SEEDED_KEY)).toBe("1");
-    expect(localStorage.getItem("c64u_debug_logging_enabled")).toBe("1");
-    expect(localStorage.getItem("c64u_automatic_demo_mode_enabled")).toBe("1");
-    expect(localStorage.getItem("c64u_startup_discovery_window_ms")).toBe("500");
-    expect(localStorage.getItem("c64u_background_rediscovery_interval_ms")).toBe("1500");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY)).toBe("1");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY)).toBe("1");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY)).toBe("500");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY)).toBe("1500");
   });
 
   it("validates safe base URLs for fuzz mode", () => {

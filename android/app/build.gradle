@@ -133,6 +133,24 @@ def resolveAppVersionCode = { ->
     return 2
 }
 
+def loadVariantMetadata = {
+    def variantFile = rootProject.file("../src/generated/variant.json")
+    if (!variantFile.exists()) {
+        throw new GradleException("Missing generated variant metadata at ${variantFile}. Run: npm run variant:generate")
+    }
+
+    def parsed = new JsonSlurper().parse(variantFile)
+    if (!(parsed instanceof Map) || !(parsed.variant instanceof Map)) {
+        throw new GradleException("Generated variant metadata is invalid: ${variantFile}")
+    }
+
+    return parsed.variant
+}
+
+def variantMetadata = loadVariantMetadata()
+def androidApplicationId = variantMetadata.platform.android.applicationId.toString()
+def androidArtifactBasename = variantMetadata.exportedFileBasename.toString()
+
 android {
     namespace "uk.gleissner.c64commander"
     compileSdk rootProject.ext.compileSdkVersion
@@ -153,7 +171,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "uk.gleissner.c64commander"
+        applicationId androidApplicationId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         def envVersionName = resolveAppVersionName()
@@ -188,7 +206,7 @@ android {
             def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
             def storeFilePathValue = (System.getenv("KEYSTORE_STORE_FILE") ?: keystoreProps["storeFile"] ?: keystoreProps["KEYSTORE_STORE_FILE"] ?: "../keystore/release.keystore")?.toString()
             def storePasswordValue = (System.getenv("KEYSTORE_STORE_PASSWORD") ?: "")?.toString()
-            def keyAliasValue = (System.getenv("KEYSTORE_KEY_ALIAS") ?: keystoreProps["keyAlias"] ?: keystoreProps["KEYSTORE_KEY_ALIAS"] ?: "c64commander")?.toString()
+            def keyAliasValue = (System.getenv("KEYSTORE_KEY_ALIAS") ?: keystoreProps["keyAlias"] ?: keystoreProps["KEYSTORE_KEY_ALIAS"] ?: androidArtifactBasename)?.toString()
             def keyPasswordValue = (System.getenv("KEYSTORE_KEY_PASSWORD") ?: storePasswordValue ?: "")?.toString()
 
             if (isReleaseBuild) {
@@ -250,7 +268,7 @@ android {
             def versionNameValue = variant.versionName ?: resolveAppVersionName()
             def suffix = variant.buildType.name == 'debug' ? '-debug' : ''
             if (output.outputFileName?.toString()?.endsWith('.apk')) {
-                output.outputFileName = "c64commander-${versionNameValue}${suffix}.apk"
+                output.outputFileName = "${androidArtifactBasename}-${versionNameValue}${suffix}.apk"
             }
         }
     }

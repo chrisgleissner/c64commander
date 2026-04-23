@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { buildSessionStorageKey } from "@/generated/variant";
 import { getC64API, ConfigResponse, getDefaultBaseUrl } from "@/lib/c64api";
 import {
   AppConfigEntry,
@@ -118,7 +119,7 @@ export function useAppConfigState() {
   const [isSaving, setIsSaving] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const hasCapturedRef = useRef(false);
-  const sessionSnapshotKey = `c64u_initial_snapshot_session:${resolvedBaseUrl}`;
+  const sessionSnapshotKey = `${buildSessionStorageKey("initial_snapshot_session")}:${resolvedBaseUrl}`;
 
   useEffect(() => {
     setInitialSnapshot(loadInitialSnapshot(resolvedBaseUrl));

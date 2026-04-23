@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository";
 import { resetIndexedDbPlaylistRepositoryForTests } from "@/lib/playlistRepository/indexedDbRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
+
+const INDEXEDDB_RECOVERY_STORAGE_KEY = buildLocalStorageKey("playlist_repo:indexeddb:recovery");
 
 type FakeIndexedDbOptions = {
   failOpen?: boolean;
@@ -66,7 +69,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
         },
       }),
     }),
-    close: () => {},
+    close: () => { },
   };
 
   return {
@@ -378,7 +381,7 @@ describe("indexedDB playlist repository", () => {
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
 
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
@@ -428,7 +431,7 @@ describe("indexedDB playlist repository", () => {
       writable: true,
     });
 
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
@@ -445,7 +448,7 @@ describe("indexedDB playlist repository", () => {
       "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
       expect.objectContaining({ expectedVersion: 3, foundVersion: 999 }),
     );
-    expect(localStorage.getItem("c64u_playlist_repo:indexeddb:recovery")).toContain("incompatible-schema");
+    expect(localStorage.getItem(INDEXEDDB_RECOVERY_STORAGE_KEY)).toContain("incompatible-schema");
   });
 
   it("propagates write failures from IndexedDB", async () => {
@@ -656,7 +659,7 @@ describe("indexedDB playlist repository", () => {
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });

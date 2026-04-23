@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { addLog } from "@/lib/logging";
@@ -44,7 +45,7 @@ export type LocalSourceBuildResult = {
   runtimeFiles: Record<string, File>;
 };
 
-const STORE_KEY = "c64u_local_sources:v1";
+const STORE_KEY = buildLocalStorageKey("local_sources:v1");
 
 const runtimeFilesBySource = new Map<string, Record<string, File>>();
 

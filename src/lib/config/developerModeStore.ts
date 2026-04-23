@@ -6,9 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
+
 type DevModeEventDetail = { enabled: boolean };
 
-const DEV_MODE_KEY = "c64u_dev_mode_enabled";
+const DEV_MODE_KEY = buildLocalStorageKey("dev_mode_enabled");
 const DEV_MODE_EVENT = "c64u-dev-mode-change";
 
 export const getDeveloperModeEnabled = () => {
@@ -30,7 +32,7 @@ export const setDeveloperModeEnabled = (enabled: boolean) => {
 };
 
 export const subscribeDeveloperMode = (listener: (detail: DevModeEventDetail) => void) => {
-  if (typeof window === "undefined") return () => {};
+  if (typeof window === "undefined") return () => { };
   const handler = (event: Event) => {
     listener((event as CustomEvent<DevModeEventDetail>).detail);
   };

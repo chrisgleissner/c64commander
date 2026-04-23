@@ -486,12 +486,12 @@ function HomePageContent() {
         error,
         context: isDeviceControlError(error)
           ? {
-            deviceControlOperation: error.operation,
-            transport: error.transport,
-            endpoint: error.endpoint,
-            request: error.request,
-            response: error.response,
-          }
+              deviceControlOperation: error.operation,
+              transport: error.transport,
+              endpoint: error.endpoint,
+              request: error.request,
+              response: error.response,
+            }
           : undefined,
       });
     } finally {
@@ -604,15 +604,15 @@ function HomePageContent() {
     },
     ...(reuSnapshotEnabled
       ? [
-        {
-          id: "saveReuMemory",
-          label: TELNET_ACTIONS.saveReuMemory.label,
-          onSelect: () => void handleSaveReu(),
-          disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
-          loading: telnet.activeActionId === "saveReuMemory",
-          reason: saveReuDisabledReason,
-        },
-      ]
+          {
+            id: "saveReuMemory",
+            label: TELNET_ACTIONS.saveReuMemory.label,
+            onSelect: () => void handleSaveReu(),
+            disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
+            loading: telnet.activeActionId === "saveReuMemory",
+            reason: saveReuDisabledReason,
+          },
+        ]
       : []),
   ];
 

@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildLocalStorageKey } from "@/generated/variant";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { BUNDLED_LIGHTING_PROFILES, DEFAULT_LIGHTING_AUTOMATION_STATE } from "@/lib/lighting/constants";
 import type { LightingProfile, LightingStudioState } from "@/lib/lighting/types";
 
-const STORAGE_KEY = "c64u_lighting_studio_state:v1";
+const STORAGE_KEY = buildLocalStorageKey("lighting_studio_state:v1");
 
 const defaultLightingStudioState = (): LightingStudioState => ({
   activeProfileId: null,

@@ -10,13 +10,14 @@ import "@testing-library/jest-dom";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, vi } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import {
   FEATURE_FLAG_IDS as REGISTERED_FEATURE_FLAG_IDS,
   type FeatureFlagId,
 } from "@/lib/config/featureFlagsRegistry.generated";
 
-const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
-const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";
+const FEATURE_FLAG_STORAGE_PREFIX = `${buildLocalStorageKey("feature_flag")}:`;
+const DEVELOPER_MODE_KEY = buildLocalStorageKey("dev_mode_enabled");
 
 type TestFeatureFlagId = FeatureFlagId;
 type TestFeatureFlagState = {
@@ -268,11 +269,11 @@ if (typeof window !== "undefined") {
       matches: false,
       media: query,
       onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => {},
+      addListener: () => { },
+      removeListener: () => { },
+      addEventListener: () => { },
+      removeEventListener: () => { },
+      dispatchEvent: () => { },
     }),
   });
 
@@ -281,10 +282,10 @@ if (typeof window !== "undefined") {
     Element.prototype.hasPointerCapture = () => false;
   }
   if (!Element.prototype.setPointerCapture) {
-    Element.prototype.setPointerCapture = () => {};
+    Element.prototype.setPointerCapture = () => { };
   }
   if (!Element.prototype.releasePointerCapture) {
-    Element.prototype.releasePointerCapture = () => {};
+    Element.prototype.releasePointerCapture = () => { };
   }
 
   if (typeof (window as any).MouseEvent === "undefined") {
@@ -298,28 +299,28 @@ if (typeof window !== "undefined") {
 
   // Minimal PointerEvent polyfill for libraries expecting it.
   if (typeof (window as any).PointerEvent === "undefined") {
-    class PointerEvent extends (window as any).MouseEvent {}
+    class PointerEvent extends (window as any).MouseEvent { }
     (window as any).PointerEvent = PointerEvent;
   }
 
   // Used by Radix Select to bring the active item into view.
   if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = () => {};
+    Element.prototype.scrollIntoView = () => { };
   }
 
   // Add window.scrollTo mock
   Object.defineProperty(window, "scrollTo", {
     writable: true,
-    value: () => {},
+    value: () => { },
   });
 
   // Radix Slider uses ResizeObserver in JSDOM.
   if (typeof (window as any).ResizeObserver === "undefined") {
     (window as any).ResizeObserver = class {
-      constructor(_callback?: ResizeObserverCallback) {}
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+      constructor(_callback?: ResizeObserverCallback) { }
+      observe() { }
+      unobserve() { }
+      disconnect() { }
     };
   }
 }

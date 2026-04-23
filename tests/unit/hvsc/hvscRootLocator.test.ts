@@ -7,7 +7,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi, afterAll } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
 import { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from "@/lib/hvsc/hvscRootLocator";
+
+const STORAGE_KEY = buildLocalStorageKey("hvsc_root:v1");
 
 describe("hvscRootLocator", () => {
   beforeEach(() => {
@@ -33,13 +36,13 @@ describe("hvscRootLocator", () => {
   });
 
   it("returns default if stored JSON is valid but incomplete", () => {
-    localStorage.setItem("c64u_hvsc_root:v1", JSON.stringify({ path: "/foo" })); // missing label
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ path: "/foo" })); // missing label
     expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
   });
 
   it("returns default if stored content is malformed", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    localStorage.setItem("c64u_hvsc_root:v1", "{ invalid json ");
+    localStorage.setItem(STORAGE_KEY, "{ invalid json ");
     expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
     expect(warnSpy).toHaveBeenCalledWith("Failed to load HVSC root from storage", expect.any(Object));
     warnSpy.mockRestore();

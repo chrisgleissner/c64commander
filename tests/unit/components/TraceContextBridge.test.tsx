@@ -9,6 +9,9 @@
 import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { buildLocalStorageKey } from "@/generated/variant";
+
+const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlags: () => ({
@@ -57,7 +60,7 @@ describe("TraceContextBridge", () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem(
-      "c64u_saved_devices:v1",
+      SAVED_DEVICES_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         selectedDeviceId: "saved-1",
