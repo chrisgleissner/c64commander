@@ -25,7 +25,7 @@ describe("diagnosticsOverlay", () => {
         constructor(
           public type: string,
           public detail?: any,
-        ) { }
+        ) {}
       },
     });
   });
@@ -49,7 +49,7 @@ describe("diagnosticsOverlay", () => {
     });
 
     it("handles sessionStorage errors gracefully", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       vi.mocked(sessionStorage.setItem).mockImplementation(() => {
         throw new Error("QuotaExceeded");
       });
@@ -79,7 +79,7 @@ describe("diagnosticsOverlay", () => {
     });
 
     it("logs malformed structured requests and still supports legacy preset strings", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       vi.mocked(sessionStorage.getItem).mockReturnValue("header");
 
       expect(consumeDiagnosticsOpenRequest()).toEqual({ preset: "header", panel: null });
@@ -90,7 +90,7 @@ describe("diagnosticsOverlay", () => {
     });
 
     it("returns null for malformed requests that are not legacy presets", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       vi.mocked(sessionStorage.getItem).mockReturnValue("{bad-json}");
 
       expect(consumeDiagnosticsOpenRequest()).toBeNull();
@@ -106,7 +106,7 @@ describe("diagnosticsOverlay", () => {
     });
 
     it("handles sessionStorage errors gracefully", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       vi.mocked(sessionStorage.getItem).mockImplementation(() => {
         throw new Error("AccessDenied");
       });

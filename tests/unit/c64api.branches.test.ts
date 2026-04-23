@@ -684,8 +684,9 @@ describe("c64api branches", () => {
     updateC64APIConfig("http://localhost");
     // derivedHost is 'localhost', isLocalDeviceHost → true,
     // isLikelyFallbackOrigin → true (matches window.location.origin),
-    // so it falls back to stored host 'remote-device'
-    expect(localStorage.getItem("c64u_device_host")).toBe("remote-device");
+    // so it falls back to stored host 'remote-device' and migrates it forward.
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("remote-device");
+    expect(localStorage.getItem("c64u_device_host")).toBeNull();
   });
 
   // #17: isNativePlatform with override, env check, Capacitor probe, and error fallback
@@ -779,7 +780,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -846,7 +847,7 @@ describe("c64api branches", () => {
       const controller = new AbortController();
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => { });
+      void pending.catch(() => {});
 
       // Let the first request fail, then abort before retry
       await Promise.resolve();
@@ -881,7 +882,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP in fetchWithTimeout when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -1044,7 +1045,7 @@ describe("c64api branches", () => {
   // #37: updateC64APIConfig smoke mode branch
   it("logs routing update in smoke mode", () => {
     smokeEnabledMock.mockReturnValue(true);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
     updateC64APIConfig("http://device", undefined, "device");
 
@@ -1433,7 +1434,8 @@ describe("c64api branches", () => {
     // isLocalDeviceHost('') → normalized = '' → !normalized → return false → not local → no fallback
     updateC64APIConfig("http://192.168.1.100", undefined, "   ");
     // Confirms normalizeDeviceHost handles whitespace-only: '   '.trim() = '' → DEFAULT_DEVICE_HOST
-    expect(localStorage.getItem("c64u_device_host")).toBeTruthy();
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("c64u");
+    expect(localStorage.getItem("c64u_device_host")).toBeNull();
   });
 
   // #64: isLocalDeviceHost with IPv6 bracket notation (BRDA:361 TRUE: startsWith('['))
@@ -1634,7 +1636,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     const pending = api.getInfo({ timeoutMs: 1 } as any);
-    void pending.catch(() => { }); // suppress unhandled rejection
+    void pending.catch(() => {}); // suppress unhandled rejection
 
     await expect(pending).rejects.toThrow("Host unreachable");
     // Clean up the hanging promise to prevent memory leaks

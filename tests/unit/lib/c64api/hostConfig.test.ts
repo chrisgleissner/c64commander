@@ -74,6 +74,14 @@ describe("hostConfig", () => {
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("legacy-box.local:8080");
   });
 
+  it("migrates legacy device host storage into the variant-prefixed key", () => {
+    localStorage.setItem("c64u_device_host", " legacy-box.local:8080 ");
+
+    expect(resolveDeviceHostFromStorage()).toBe("legacy-box.local:8080");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("legacy-box.local:8080");
+    expect(localStorage.getItem("c64u_device_host")).toBeNull();
+  });
+
   it("falls back safely when storage or base URLs are unavailable", () => {
     // @ts-expect-error branch coverage: simulate environments without storage
     delete globalThis.localStorage;

@@ -32,7 +32,7 @@ export const setDeveloperModeEnabled = (enabled: boolean) => {
 };
 
 export const subscribeDeveloperMode = (listener: (detail: DevModeEventDetail) => void) => {
-  if (typeof window === "undefined") return () => { };
+  if (typeof window === "undefined") return () => {};
   const handler = (event: Event) => {
     listener((event as CustomEvent<DevModeEventDetail>).detail);
   };

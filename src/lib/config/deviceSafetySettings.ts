@@ -145,7 +145,7 @@ const broadcast = (key: string, value: unknown) => {
 };
 
 export const subscribeDeviceSafetyUpdates = (listener: (detail: { key?: string; value?: unknown }) => void) => {
-  if (typeof window === "undefined") return () => { };
+  if (typeof window === "undefined") return () => {};
   const handler = (event: Event) => {
     listener((event as CustomEvent<{ key?: string; value?: unknown }>).detail ?? {});
   };

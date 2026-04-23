@@ -12,7 +12,7 @@ const connectionState = {
 };
 
 const discoverConnectionMock = vi.fn();
-const initializeConnectionManagerMock = vi.fn(async () => { });
+const initializeConnectionManagerMock = vi.fn(async () => {});
 const hasStoredPasswordFlagMock = vi.fn(() => false);
 const getPasswordMock = vi.fn(async () => "");
 

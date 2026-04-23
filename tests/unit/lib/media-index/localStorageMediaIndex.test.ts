@@ -65,7 +65,7 @@ describe("LocalStorageMediaIndexStorage", () => {
     it("returns null when JSON parse fails", async () => {
       localStorageMock.getItem.mockReturnValue("invalid json");
 
-      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       const storage = new LocalStorageMediaIndexStorage();
       const result = await storage.read();

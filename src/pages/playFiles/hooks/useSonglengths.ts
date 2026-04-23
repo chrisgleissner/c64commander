@@ -269,11 +269,11 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       const cacheKey = folderPath || "/";
       const filesByDir = extraFiles?.length
         ? extraFiles.reduce((map, entry) => {
-          const normalizedPath = normalizeSourcePath(entry.path);
-          const folder = normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1) || "/";
-          map.set(folder, entry.file);
-          return map;
-        }, new Map(songlengthsFilesByDir))
+            const normalizedPath = normalizeSourcePath(entry.path);
+            const folder = normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1) || "/";
+            map.set(folder, entry.file);
+            return map;
+          }, new Map(songlengthsFilesByDir))
         : songlengthsFilesByDir;
       const files = new Map<string, LocalPlayFile>();
       let current = cacheKey;

@@ -102,5 +102,5 @@ export const variantConfig = {
 export const variant = variantConfig.variant;
 export const repoVariantConfig = variantConfig.repo;
 
-export const buildLocalStorageKey = (suffix) => variant.platform.web.storagePrefix + ":" + suffix;
-export const buildSessionStorageKey = (suffix) => variant.platform.web.storagePrefix + ":" + suffix;
+export const buildLocalStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ":" + suffix;
+export const buildSessionStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ":" + suffix;

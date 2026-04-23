@@ -25,13 +25,13 @@ vi.mock("@/lib/native/platform", () => ({
 // Mock songlengths library
 vi.mock("@/lib/songlengths", () => ({
   SongLengthServiceFacade: class {
-    constructor() { }
+    constructor() {}
     loadOnColdStart() {
       return Promise.resolve({ status: "ready" });
     }
   },
   InMemoryTextBackend: class {
-    constructor() { }
+    constructor() {}
     exportSnapshot() {
       return {};
     }

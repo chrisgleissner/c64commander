@@ -143,7 +143,7 @@ describe("ramDumpFolderStore", () => {
           constructor(
             public type: string,
             public detail: any,
-          ) { }
+          ) {}
         },
       });
 
@@ -188,7 +188,7 @@ describe("ramDumpFolderStore", () => {
           constructor(
             public type: string,
             public detail: any,
-          ) { }
+          ) {}
         },
       });
 

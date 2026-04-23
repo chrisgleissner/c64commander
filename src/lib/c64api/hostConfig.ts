@@ -168,9 +168,17 @@ export const resolveDeviceHostFromStorage = () => {
       });
     }
   }
-  const storedDeviceHost = localStorage.getItem(CURRENT_DEVICE_HOST_KEY) ?? localStorage.getItem("c64u_device_host");
+  const currentStoredDeviceHost = localStorage.getItem(CURRENT_DEVICE_HOST_KEY);
+  const legacyStoredDeviceHost = localStorage.getItem("c64u_device_host");
+  const storedDeviceHost = currentStoredDeviceHost ?? legacyStoredDeviceHost;
   const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
   if (storedDeviceHost) {
+    if (legacyStoredDeviceHost) {
+      if (!currentStoredDeviceHost) {
+        localStorage.setItem(CURRENT_DEVICE_HOST_KEY, normalizedStoredHost);
+      }
+      localStorage.removeItem("c64u_device_host");
+    }
     localStorage.removeItem(CURRENT_BASE_URL_KEY);
     localStorage.removeItem("c64u_base_url");
     return normalizedStoredHost;

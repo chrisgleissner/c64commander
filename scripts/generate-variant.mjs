@@ -133,7 +133,12 @@ const xmlEscape = (value) =>
 const ensureFileExists = (repoRoot, relativePath, label) => {
     requireNonEmptyString(relativePath, label);
     const absolutePath = path.resolve(repoRoot, relativePath);
-    if (!absolutePath.startsWith(repoRoot)) {
+    const relativeToRepoRoot = path.relative(repoRoot, absolutePath);
+    if (
+        relativeToRepoRoot === '..' ||
+        relativeToRepoRoot.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativeToRepoRoot)
+    ) {
         fail(`${label} must stay within the repository: ${relativePath}`);
     }
     if (!fs.existsSync(absolutePath)) {
@@ -475,8 +480,8 @@ export const variantConfig = ${serialized} as const;
 export const variant = variantConfig.variant;
 export const repoVariantConfig = variantConfig.repo;
 
-export const buildLocalStorageKey = (suffix) => variant.platform.web.storagePrefix + ':' + suffix;
-export const buildSessionStorageKey = (suffix) => variant.platform.web.storagePrefix + ':' + suffix;
+export const buildLocalStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ':' + suffix;
+export const buildSessionStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ':' + suffix;
 `;
 };
 
@@ -874,6 +879,7 @@ export const compileVariant = async ({
     explicitPublishVariants = null,
     check = false,
 } = {}) => {
+    const normalizedVariantId = normalizeOptionalVariantId(variantId);
     const repoRoot = path.resolve(path.dirname(variantsPath), '..');
     const resolvedRuntimeTsPath = runtimeTsPath ?? path.join(repoRoot, 'src/generated/variant.ts');
     const resolvedRuntimeJsonPath = runtimeJsonPath ?? path.join(repoRoot, 'src/generated/variant.json');
@@ -884,13 +890,15 @@ export const compileVariant = async ({
     const variantSource = fs.readFileSync(variantsPath, 'utf8');
     const config = parseVariantSource(variantSource, { repoRoot });
     const baseRegistry = parseRegistrySource(fs.readFileSync(featureFlagsPath, 'utf8'));
-    const overlayPath = path.join(overlaysDir, `${variantId ?? config.repo.defaultVariant}.yaml`);
+    const overlayPath = path.join(overlaysDir, `${normalizedVariantId ?? config.repo.defaultVariant}.yaml`);
     if (!fs.existsSync(overlayPath)) {
-        fail(`missing feature flag overlay for variant "${variantId ?? config.repo.defaultVariant}": ${path.relative(repoRoot, overlayPath)}`);
+        fail(
+            `missing feature flag overlay for variant "${normalizedVariantId ?? config.repo.defaultVariant}": ${path.relative(repoRoot, overlayPath)}`,
+        );
     }
     const overlay = parseFeatureFlagOverlaySource(fs.readFileSync(overlayPath, 'utf8'), {
         featureIds: new Set(baseRegistry.features.map((feature) => feature.id)),
-        variantId: variantId ?? config.repo.defaultVariant,
+        variantId: normalizedVariantId ?? config.repo.defaultVariant,
     });
     const publishVariants = resolvePublishVariants(config, {
         publishTarget,
@@ -898,7 +906,7 @@ export const compileVariant = async ({
     });
     const selection = buildVariantSelection({
         config,
-        variantId,
+        variantId: normalizedVariantId,
         baseRegistry,
         overlay,
         publishVariants,
@@ -986,6 +994,12 @@ const parseCliArgs = (args) => {
     return { variantId, publishTarget, explicitPublishVariants, check };
 };
 
+const normalizeOptionalVariantId = (value) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+};
+
 if (isDirectInvocation()) {
     try {
         const args = parseCliArgs(process.argv.slice(2));
@@ -995,7 +1009,7 @@ if (isDirectInvocation()) {
             .filter(Boolean);
         const resolvedArgs = {
             ...args,
-            variantId: args.variantId ?? process.env.APP_VARIANT ?? undefined,
+            variantId: normalizeOptionalVariantId(args.variantId) ?? normalizeOptionalVariantId(process.env.APP_VARIANT),
             explicitPublishVariants: args.explicitPublishVariants ?? (envPublishVariants.length > 0 ? envPublishVariants : null),
         };
         const result = await compileVariant(resolvedArgs);

@@ -347,7 +347,7 @@ describe("useAppConfigState", () => {
     status.isConnected = false;
     renderHook(() => useAppConfigState(), { wrapper });
     // Allow React to process effects
-    await act(async () => { });
+    await act(async () => {});
     // When disconnected, effect returns early before fetching
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
     status.isConnected = true;
@@ -356,7 +356,7 @@ describe("useAppConfigState", () => {
   it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
     sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
     renderHook(() => useAppConfigState(), { wrapper });
-    await act(async () => { });
+    await act(async () => {});
     expect(getCategories).not.toHaveBeenCalled();
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
   });

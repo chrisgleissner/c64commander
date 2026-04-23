@@ -38,7 +38,7 @@ export class JsonMediaIndex implements MediaIndex {
   private entries = new Map<string, MediaEntry>();
   private loaded = false;
 
-  constructor(private readonly storage: MediaIndexStorage) { }
+  constructor(private readonly storage: MediaIndexStorage) {}
 
   async load(): Promise<void> {
     const snapshot = await this.storage.read();

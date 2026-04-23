@@ -116,8 +116,8 @@ const flushPromises = async () => {
 beforeEach(() => {
   vi.restoreAllMocks();
   ensureStorage();
-  toastMock = vi.spyOn(toastModule, "toast").mockImplementation(() => { });
-  addErrorLogMock = vi.spyOn(loggingModule, "addErrorLog").mockImplementation(() => { });
+  toastMock = vi.spyOn(toastModule, "toast").mockImplementation(() => {});
+  addErrorLogMock = vi.spyOn(loggingModule, "addErrorLog").mockImplementation(() => {});
   buildLocalPlayFileFromUriMock = vi.mocked(buildLocalPlayFileFromUri);
   vi.spyOn(platformModule, "getPlatform").mockImplementation(() => platformState.platform);
   vi.spyOn(platformModule, "isNativePlatform").mockImplementation(() => platformState.native);

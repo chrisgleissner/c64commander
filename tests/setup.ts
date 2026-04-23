@@ -269,11 +269,11 @@ if (typeof window !== "undefined") {
       matches: false,
       media: query,
       onchange: null,
-      addListener: () => { },
-      removeListener: () => { },
-      addEventListener: () => { },
-      removeEventListener: () => { },
-      dispatchEvent: () => { },
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => {},
     }),
   });
 
@@ -282,10 +282,10 @@ if (typeof window !== "undefined") {
     Element.prototype.hasPointerCapture = () => false;
   }
   if (!Element.prototype.setPointerCapture) {
-    Element.prototype.setPointerCapture = () => { };
+    Element.prototype.setPointerCapture = () => {};
   }
   if (!Element.prototype.releasePointerCapture) {
-    Element.prototype.releasePointerCapture = () => { };
+    Element.prototype.releasePointerCapture = () => {};
   }
 
   if (typeof (window as any).MouseEvent === "undefined") {
@@ -299,28 +299,28 @@ if (typeof window !== "undefined") {
 
   // Minimal PointerEvent polyfill for libraries expecting it.
   if (typeof (window as any).PointerEvent === "undefined") {
-    class PointerEvent extends (window as any).MouseEvent { }
+    class PointerEvent extends (window as any).MouseEvent {}
     (window as any).PointerEvent = PointerEvent;
   }
 
   // Used by Radix Select to bring the active item into view.
   if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = () => { };
+    Element.prototype.scrollIntoView = () => {};
   }
 
   // Add window.scrollTo mock
   Object.defineProperty(window, "scrollTo", {
     writable: true,
-    value: () => { },
+    value: () => {},
   });
 
   // Radix Slider uses ResizeObserver in JSDOM.
   if (typeof (window as any).ResizeObserver === "undefined") {
     (window as any).ResizeObserver = class {
-      constructor(_callback?: ResizeObserverCallback) { }
-      observe() { }
-      unobserve() { }
-      disconnect() { }
+      constructor(_callback?: ResizeObserverCallback) {}
+      observe() {}
+      unobserve() {}
+      disconnect() {}
     };
   }
 }
