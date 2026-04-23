@@ -1388,6 +1388,23 @@ describe("connectionManager", () => {
     delete (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
   });
 
+  it("test-probe mode seeds runtime routing from the expected base URL during initialization", async () => {
+    const { initializeConnectionManager } = await import("../../../src/lib/connection/connectionManager");
+    const { applyC64APIRuntimeConfig } = await import("../../../src/lib/c64api");
+
+    localStorage.setItem(DEVICE_HOST_KEY, "c64u");
+    (window as Window & { __c64uTestProbeEnabled?: boolean; __c64uExpectedBaseUrl?: string }).__c64uTestProbeEnabled =
+      true;
+    (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:9999/";
+
+    await initializeConnectionManager();
+
+    expect(applyC64APIRuntimeConfig).toHaveBeenCalledWith("http://127.0.0.1:9999/", undefined, "127.0.0.1:9999");
+
+    delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+    delete (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
+  });
+
   it("pinDemoModeByUserChoice tolerates a missing sessionStorage object", async () => {
     const originalSessionStorage = globalThis.sessionStorage;
     // @ts-expect-error intentionally removing browser storage for branch coverage

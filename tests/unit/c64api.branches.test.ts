@@ -647,6 +647,24 @@ describe("c64api branches", () => {
     expect(localStorage.getItem("c64u_base_url")).toBeNull();
   });
 
+  it("getC64API uses injected test base URL during first singleton creation", async () => {
+    vi.resetModules();
+    (window as Window & { __c64uTestProbeEnabled?: boolean; __c64uExpectedBaseUrl?: string }).__c64uTestProbeEnabled =
+      true;
+    (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:9999/";
+    localStorage.setItem(DEVICE_HOST_KEY, "c64u");
+
+    const { getC64API: getFreshC64API } = await import("@/lib/c64api");
+    const api = getFreshC64API();
+
+    expect(api.getBaseUrl()).toBe("http://127.0.0.1:9999");
+    expect(api.getDeviceHost()).toBe("127.0.0.1:9999");
+
+    delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+    delete (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
+    vi.resetModules();
+  });
+
   // #15: isLocalProxy when new URL() fails
   it("handles invalid proxy base URL gracefully without crashing", async () => {
     const fetchMock = getFetchMock();
@@ -778,7 +796,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -845,7 +863,7 @@ describe("c64api branches", () => {
       const controller = new AbortController();
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       // Let the first request fail, then abort before retry
       await Promise.resolve();
@@ -880,7 +898,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP in fetchWithTimeout when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -1043,7 +1061,7 @@ describe("c64api branches", () => {
   // #37: updateC64APIConfig smoke mode branch
   it("logs routing update in smoke mode", () => {
     smokeEnabledMock.mockReturnValue(true);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
 
     updateC64APIConfig("http://device", undefined, "device");
 
@@ -1634,7 +1652,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     const pending = api.getInfo({ timeoutMs: 1 } as any);
-    void pending.catch(() => {}); // suppress unhandled rejection
+    void pending.catch(() => { }); // suppress unhandled rejection
 
     await expect(pending).rejects.toThrow("Host unreachable");
     // Clean up the hanging promise to prevent memory leaks

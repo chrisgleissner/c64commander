@@ -169,18 +169,18 @@ export const resolveDeviceHostFromStorage = () => {
       });
     }
   }
-  const currentStoredDeviceHost =
-    localStorage.getItem(CURRENT_DEVICE_HOST_KEY) ??
-    (() => {
-      const legacy = localStorage.getItem(LEGACY_DEVICE_HOST_KEY);
-      if (legacy) {
-        const normalized = normalizeDeviceHost(legacy);
-        localStorage.setItem(CURRENT_DEVICE_HOST_KEY, normalized);
-        localStorage.removeItem(LEGACY_DEVICE_HOST_KEY);
-        return normalized;
-      }
-      return null;
-    })();
+  const storedCurrentDeviceHost = localStorage.getItem(CURRENT_DEVICE_HOST_KEY);
+  const legacyStoredDeviceHost = localStorage.getItem(LEGACY_DEVICE_HOST_KEY);
+  let currentStoredDeviceHost = storedCurrentDeviceHost;
+  if (legacyStoredDeviceHost) {
+    const normalizedLegacyHost = normalizeDeviceHost(legacyStoredDeviceHost);
+    const normalizedCurrentHost = storedCurrentDeviceHost ? normalizeDeviceHost(storedCurrentDeviceHost) : null;
+    if (!normalizedCurrentHost || normalizedCurrentHost === DEFAULT_DEVICE_HOST) {
+      localStorage.setItem(CURRENT_DEVICE_HOST_KEY, normalizedLegacyHost);
+      currentStoredDeviceHost = normalizedLegacyHost;
+    }
+    localStorage.removeItem(LEGACY_DEVICE_HOST_KEY);
+  }
   const storedDeviceHost = currentStoredDeviceHost;
   const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
   if (storedDeviceHost) {

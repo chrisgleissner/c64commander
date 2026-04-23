@@ -849,6 +849,12 @@ export async function initializeConnectionManager() {
       error: (error as Error).message,
     });
   }
+  const testBaseUrl = resolveTestBaseUrl();
+  if (testBaseUrl) {
+    const savedPassword = await loadStoredPassword();
+    applyC64APIRuntimeConfig(testBaseUrl, savedPassword ?? undefined, getDeviceHostFromBaseUrl(testBaseUrl));
+    return;
+  }
   await applyC64APIConfigFromStorage();
 }
 
