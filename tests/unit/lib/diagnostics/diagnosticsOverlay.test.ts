@@ -7,10 +7,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { buildSessionStorageKey } from "@/generated/variant";
 import { requestDiagnosticsOpen, consumeDiagnosticsOpenRequest } from "@/lib/diagnostics/diagnosticsOverlay";
 
-const STORAGE_KEY = buildSessionStorageKey("diagnostics_open_preset");
+const STORAGE_KEY = "c64u_diagnostics_open_preset";
 
 describe("diagnosticsOverlay", () => {
   beforeEach(() => {

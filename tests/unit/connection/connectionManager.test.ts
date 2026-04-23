@@ -7,7 +7,6 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "../../../src/generated/variant";
 import * as logging from "../../../src/lib/logging";
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from "../../../src/lib/fuzz/fuzzMode";
 import {
@@ -17,7 +16,7 @@ import {
 } from "../../../src/lib/config/appSettings";
 import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from "../../../src/lib/smoke/smokeMode";
 
-const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
+const DEVICE_HOST_KEY = "c64u_device_host";
 
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),

@@ -7,11 +7,9 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { buildLocalStorageKey } from "@/generated/variant";
-
 type Theme = "light" | "dark" | "system";
 
-const THEME_STORAGE_KEY = buildLocalStorageKey("theme");
+const THEME_STORAGE_KEY = "c64u_theme";
 
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(() => {

@@ -45,7 +45,6 @@ type VariantDefinition = {
       theme_color: string;
       background_color: string;
       cache_prefix: string;
-      storage_prefix: string;
       login_title: string;
       login_heading: string;
       image_repo: string;
@@ -137,7 +136,6 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
             theme_color: "#6C7EB7",
             background_color: "#6C7EB7",
             cache_prefix: "c64commander-static",
-            storage_prefix: "c64commander",
             login_title: "C64 Commander Login",
             login_heading: "C64 Commander",
             image_repo: "ghcr.io/chrisgleissner/c64commander",
@@ -176,7 +174,6 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
             theme_color: "#2F6B8B",
             background_color: "#2F6B8B",
             cache_prefix: "c64u-controller-static",
-            storage_prefix: "c64u-controller",
             login_title: "C64U Controller Login",
             login_heading: "C64U Controller",
             image_repo: "ghcr.io/chrisgleissner/c64u-controller",
@@ -240,7 +237,6 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
       `        theme_color: '${variant.platform.web.theme_color}'`,
       `        background_color: '${variant.platform.web.background_color}'`,
       `        cache_prefix: ${variant.platform.web.cache_prefix}`,
-      `        storage_prefix: ${variant.platform.web.storage_prefix}`,
       `        login_title: ${variant.platform.web.login_title}`,
       `        login_heading: ${variant.platform.web.login_heading}`,
       `        image_repo: ${variant.platform.web.image_repo}`,
@@ -310,7 +306,7 @@ describe("generate-variant", () => {
     const config = parseVariantSource(buildVariantsYaml(), { repoRoot }) as any;
     expect(config.repo.defaultVariant).toBe("c64commander");
     expect(config.repo.publishDefaults.release).toEqual(["c64commander"]);
-    expect(config.variants["c64u-controller"].platform.web.storagePrefix).toBe("c64u-controller");
+    expect(config.variants["c64u-controller"].platform.web.cachePrefix).toBe("c64u-controller-static");
   });
 
   it("fails when schema_version is absent", () => {
@@ -362,7 +358,6 @@ describe("generate-variant", () => {
             theme_color: "#000000",
             background_color: "#000000",
             cache_prefix: "one-cache",
-            storage_prefix: "one",
             login_title: "One Login",
             login_heading: "One",
             image_repo: "repo/one",
@@ -395,7 +390,6 @@ describe("generate-variant", () => {
             theme_color: "#111111",
             background_color: "#111111",
             cache_prefix: "two-cache",
-            storage_prefix: "two",
             login_title: "Two Login",
             login_heading: "Two",
             image_repo: "repo/two",
@@ -472,7 +466,6 @@ describe("generate-variant", () => {
               theme_color: "#6C7EB7",
               background_color: "#6C7EB7",
               cache_prefix: "c64commander-static",
-              storage_prefix: "c64commander",
               login_title: "C64 Commander Login",
               login_heading: "C64 Commander",
               image_repo: "ghcr.io/chrisgleissner/c64commander",
@@ -536,7 +529,7 @@ describe("generate-variant", () => {
     expect(first.selection.variant.featureFlags.commoserve_enabled.enabled).toBe(false);
     expect(first.selection.repo.selectedPublishVariants).toEqual(["c64commander", "c64u-controller"]);
     expect(readFileSync(runtimeJsonPath, "utf8")).toContain('"selectedVariantId": "c64u-controller"');
-    expect(readFileSync(runtimeTsPath, "utf8")).toContain("buildLocalStorageKey");
+    expect(readFileSync(runtimeTsPath, "utf8")).not.toContain("buildLocalStorageKey");
     expect(readFileSync(path.join(repoRoot, "index.html"), "utf8")).toContain("C64U Controller");
     expect(readFileSync(path.join(repoRoot, "public/manifest.webmanifest"), "utf8")).toContain(
       "c64u-controller-192.png",
@@ -624,7 +617,7 @@ describe("generate-variant", () => {
     ]);
   });
 
-  it("renders a runtime module with variant storage helpers", () => {
+  it("renders a runtime module without storage helpers", () => {
     const moduleSource = renderVariantRuntimeModule({
       schemaVersion: 1,
       repo: {
@@ -635,12 +628,12 @@ describe("generate-variant", () => {
       selectedVariantId: "c64commander",
       variant: {
         id: "c64commander",
-        platform: { web: { storagePrefix: "c64commander" } },
+        platform: { web: { cachePrefix: "c64commander-static" } },
       },
     });
     expect(moduleSource).toContain("export const variantConfig =");
-    expect(moduleSource).toContain("buildLocalStorageKey");
-    expect(moduleSource).toContain("suffix: string");
+    expect(moduleSource).not.toContain("buildLocalStorageKey");
+    expect(moduleSource).not.toContain("suffix: string");
   });
 
   it("reports missing overlays with an explicit error", async () => {

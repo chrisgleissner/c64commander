@@ -10,14 +10,13 @@ import "@testing-library/jest-dom";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   FEATURE_FLAG_IDS as REGISTERED_FEATURE_FLAG_IDS,
   type FeatureFlagId,
 } from "@/lib/config/featureFlagsRegistry.generated";
 
-const FEATURE_FLAG_STORAGE_PREFIX = `${buildLocalStorageKey("feature_flag")}:`;
-const DEVELOPER_MODE_KEY = buildLocalStorageKey("dev_mode_enabled");
+const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
+const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";
 
 type TestFeatureFlagId = FeatureFlagId;
 type TestFeatureFlagState = {

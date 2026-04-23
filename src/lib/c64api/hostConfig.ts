@@ -7,11 +7,11 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { buildLocalStorageKey, variant } from "@/generated/variant";
+import { variant } from "@/generated/variant";
 
-const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
-const CURRENT_DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
-const CURRENT_BASE_URL_KEY = buildLocalStorageKey("base_url");
+const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const CURRENT_DEVICE_HOST_KEY = "c64u_device_host";
+const CURRENT_BASE_URL_KEY = "c64u_base_url";
 
 export const DEFAULT_DEVICE_HOST = variant.runtime.endpoints.device_host ?? "c64u";
 export const DEFAULT_BASE_URL = `http://${DEFAULT_DEVICE_HOST}`;

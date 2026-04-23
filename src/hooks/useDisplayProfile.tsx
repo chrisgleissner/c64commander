@@ -7,7 +7,6 @@
  */
 
 import React from "react";
-import { buildLocalStorageKey } from "@/generated/variant";
 
 import {
   type DisplayProfile,
@@ -82,7 +81,7 @@ const readViewportHeight = () => {
 
 const shouldRefreshOverrideFromStorage = (event: StorageEvent) => {
   if (event.storageArea !== localStorage) return false;
-  return event.key === null || event.key === buildLocalStorageKey("display_profile_override");
+  return event.key === null || event.key === "c64u_display_profile_override";
 };
 
 const applyProfileTokens = (profile: DisplayProfile) => {

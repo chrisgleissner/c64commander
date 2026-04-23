@@ -7,8 +7,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSessionStorageKey } from "@/generated/variant";
-
 const getTraceContextSnapshotMock = vi.hoisted(() =>
   vi.fn(() => ({
     ui: { route: "/", query: "" },
@@ -19,8 +17,8 @@ const getTraceContextSnapshotMock = vi.hoisted(() =>
   })),
 );
 
-const SESSION_COUNTERS_KEY = buildSessionStorageKey("persisted_trace_counters");
-const SESSION_STORAGE_KEY = buildSessionStorageKey("persisted_traces");
+const SESSION_COUNTERS_KEY = "c64u_persisted_trace_counters";
+const SESSION_STORAGE_KEY = "c64u_persisted_traces";
 
 vi.mock("@/lib/tracing/traceContext", () => ({
   getTraceContextSnapshot: () => getTraceContextSnapshotMock(),

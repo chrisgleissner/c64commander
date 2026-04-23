@@ -3,11 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { LightingStudioProvider, useLightingStudio } from "@/hooks/useLightingStudio";
 import * as solar from "@/lib/lighting/solar";
 
-const LIGHTING_STORAGE_KEY = buildLocalStorageKey("lighting_studio_state:v1");
+const LIGHTING_STORAGE_KEY = "c64u_lighting_studio_state:v1";
 
 const mocks = vi.hoisted(() => ({
   useC64Connection: vi.fn(),

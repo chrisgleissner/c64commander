@@ -13,7 +13,6 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
@@ -22,10 +21,10 @@ import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
 
-const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
-const FTP_PORT_KEY = buildLocalStorageKey("ftp_port");
-const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
-const TELNET_PORT_KEY = buildLocalStorageKey("telnet_port");
+const DEVICE_HOST_KEY = "c64u_device_host";
+const FTP_PORT_KEY = "c64u_ftp_port";
+const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const TELNET_PORT_KEY = "c64u_telnet_port";
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {

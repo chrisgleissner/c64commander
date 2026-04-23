@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
 import type {
   PlaylistItemRecord,
   PlaylistQueryOptions,
@@ -42,7 +41,7 @@ const DB_VERSION = 1;
 const STORE = "state";
 const LEGACY_STATE_KEY = "playlist-repository-state";
 const META_SCHEMA_KEY = "meta:schema";
-const INDEXEDDB_RECOVERY_STORAGE_KEY = buildLocalStorageKey("playlist_repo:indexeddb:recovery");
+const INDEXEDDB_RECOVERY_STORAGE_KEY = "c64u_playlist_repo:indexeddb:recovery";
 const CURRENT_SCHEMA_VERSION = 3;
 
 const stableHash = (value: string) => {

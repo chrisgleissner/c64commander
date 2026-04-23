@@ -7,7 +7,7 @@
  */
 
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
-import { buildLocalStorageKey, variant } from "@/generated/variant";
+import { variant } from "@/generated/variant";
 
 export type HvscReleaseStatus = {
   baselineVersion: number;
@@ -16,7 +16,7 @@ export type HvscReleaseStatus = {
 };
 
 const DEFAULT_BASE_URL = variant.runtime.endpoints.hvsc_base_url ?? "https://hvsc.brona.dk/HVSC/";
-const HVSC_BASE_URL_KEY = buildLocalStorageKey("hvsc_base_url");
+const HVSC_BASE_URL_KEY = "c64u_hvsc_base_url";
 
 const isNativePlatform = () => {
   try {

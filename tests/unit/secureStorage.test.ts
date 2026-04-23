@@ -7,7 +7,6 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   clearPassword,
   getCachedPassword,
@@ -18,7 +17,7 @@ import {
 import { SecureStorage } from "@/lib/native/secureStorage";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
-const HAS_PASSWORD_KEY = buildLocalStorageKey("has_password");
+const HAS_PASSWORD_KEY = "c64u_has_password";
 
 vi.mock("@/lib/native/secureStorage", () => ({
   SecureStorage: {

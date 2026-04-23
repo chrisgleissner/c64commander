@@ -7,7 +7,6 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   clearFtpBridgeUrl,
   clearRuntimeFtpPortOverride,
@@ -19,8 +18,8 @@ import {
   setStoredFtpPort,
 } from "@/lib/ftp/ftpConfig";
 
-const FTP_PORT_KEY = buildLocalStorageKey("ftp_port");
-const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
+const FTP_PORT_KEY = "c64u_ftp_port";
+const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 
 const { mockUpdateSelectedSavedDevicePorts } = vi.hoisted(() => ({
   mockUpdateSelectedSavedDevicePorts: vi.fn(),

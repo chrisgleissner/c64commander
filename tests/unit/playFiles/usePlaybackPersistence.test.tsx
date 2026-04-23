@@ -9,13 +9,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 
-const PLAYLIST_REPOSITORY_STORAGE_KEY = buildLocalStorageKey("playlist_repo:v1");
+const PLAYLIST_REPOSITORY_STORAGE_KEY = "c64u_playlist_repo:v1";
 
 const usePlaybackPersistenceHarness = ({
   resolvedDeviceId = "device-1",

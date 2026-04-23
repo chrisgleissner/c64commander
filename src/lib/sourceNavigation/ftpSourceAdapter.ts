@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
 import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
@@ -24,7 +23,7 @@ type FtpCacheState = {
   order: string[];
 };
 
-const CACHE_KEY = buildLocalStorageKey("ftp_cache:v1");
+const CACHE_KEY = "c64u_ftp_cache:v1";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 200;
 

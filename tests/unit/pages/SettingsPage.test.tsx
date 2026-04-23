@@ -9,7 +9,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import SettingsPage from "@/pages/SettingsPage";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { reportUserError } from "@/lib/uiErrors";
@@ -44,10 +43,10 @@ import {
 } from "@/lib/config/appSettings";
 import { FEATURE_FLAG_DEFINITIONS, type FeatureFlagId } from "@/lib/config/featureFlagsRegistry.generated";
 
-const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
-const FTP_PORT_STORAGE_KEY = buildLocalStorageKey("ftp_port");
-const TELNET_PORT_STORAGE_KEY = buildLocalStorageKey("telnet_port");
-const DISPLAY_PROFILE_OVERRIDE_KEY = buildLocalStorageKey("display_profile_override");
+const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const FTP_PORT_STORAGE_KEY = "c64u_ftp_port";
+const TELNET_PORT_STORAGE_KEY = "c64u_telnet_port";
+const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
 
 vi.mock("framer-motion", () => ({
   motion: {
@@ -389,19 +388,19 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadAutoRotationEnabled: vi.fn(() => false),
   saveAutoRotationEnabled: vi.fn(),
   APP_SETTINGS_KEYS: {
-    DEBUG_LOGGING_KEY: buildLocalStorageKey("debug_logging_enabled"),
-    CONFIG_WRITE_INTERVAL_KEY: buildLocalStorageKey("config_write_min_interval_ms"),
-    AUTO_DEMO_MODE_KEY: buildLocalStorageKey("automatic_demo_mode_enabled"),
-    STARTUP_DISCOVERY_WINDOW_MS_KEY: buildLocalStorageKey("startup_discovery_window_ms"),
-    BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY: buildLocalStorageKey("background_rediscovery_interval_ms"),
-    DISCOVERY_PROBE_TIMEOUT_MS_KEY: buildLocalStorageKey("discovery_probe_timeout_ms"),
-    DISK_AUTOSTART_MODE_KEY: buildLocalStorageKey("disk_autostart_mode"),
-    VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY: buildLocalStorageKey("volume_slider_preview_interval_ms"),
-    NOTIFICATION_DURATION_MS_KEY: buildLocalStorageKey("notification_duration_ms"),
-    AUTO_ROTATION_ENABLED_KEY: buildLocalStorageKey("auto_rotation_enabled"),
-    ARCHIVE_HOST_OVERRIDE_KEY: buildLocalStorageKey("archive_host_override"),
-    ARCHIVE_CLIENT_ID_OVERRIDE_KEY: buildLocalStorageKey("archive_client_id_override"),
-    ARCHIVE_USER_AGENT_OVERRIDE_KEY: buildLocalStorageKey("archive_user_agent_override"),
+    DEBUG_LOGGING_KEY: "c64u_debug_logging_enabled",
+    CONFIG_WRITE_INTERVAL_KEY: "c64u_config_write_min_interval_ms",
+    AUTO_DEMO_MODE_KEY: "c64u_automatic_demo_mode_enabled",
+    STARTUP_DISCOVERY_WINDOW_MS_KEY: "c64u_startup_discovery_window_ms",
+    BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY: "c64u_background_rediscovery_interval_ms",
+    DISCOVERY_PROBE_TIMEOUT_MS_KEY: "c64u_discovery_probe_timeout_ms",
+    DISK_AUTOSTART_MODE_KEY: "c64u_disk_autostart_mode",
+    VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY: "c64u_volume_slider_preview_interval_ms",
+    NOTIFICATION_DURATION_MS_KEY: "c64u_notification_duration_ms",
+    AUTO_ROTATION_ENABLED_KEY: "c64u_auto_rotation_enabled",
+    ARCHIVE_HOST_OVERRIDE_KEY: "c64u_archive_host_override",
+    ARCHIVE_CLIENT_ID_OVERRIDE_KEY: "c64u_archive_client_id_override",
+    ARCHIVE_USER_AGENT_OVERRIDE_KEY: "c64u_archive_user_agent_override",
   },
 }));
 

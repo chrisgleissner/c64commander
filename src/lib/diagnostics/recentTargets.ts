@@ -6,12 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildSessionStorageKey } from "@/generated/variant";
-
 // §8.2 — Recent successful switch-device targets (up to 3).
 
 const MAX_RECENT = 3;
-const STORAGE_KEY = buildSessionStorageKey("recent_switch_targets");
+const STORAGE_KEY = "c64u_recent_switch_targets";
 
 export type RecentTarget = {
   host: string;

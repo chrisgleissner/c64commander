@@ -10,9 +10,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSessionStorageKey } from "@/generated/variant";
 
-const INITIAL_SNAPSHOT_SESSION_KEY = `${buildSessionStorageKey("initial_snapshot_session")}:http://c64u`;
+const INITIAL_SNAPSHOT_SESSION_KEY = "c64u_initial_snapshot_session:http://c64u";
 
 const status = { isConnected: true, isConnecting: false };
 

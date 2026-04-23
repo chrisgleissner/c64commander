@@ -1,4 +1,3 @@
-import { buildLocalStorageKey } from "@/generated/variant";
 import { addErrorLog } from "@/lib/logging";
 import type { DiskEntry } from "@/lib/disks/diskTypes";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
@@ -18,8 +17,8 @@ type LocalPlaylistRepositoryState = {
   playlistItemsByPlaylistId?: Record<string, PlaylistItemRecord[]> | null;
 };
 
-const DISK_LIBRARY_PREFIX = `${buildLocalStorageKey("disk_library")}:`;
-const PLAYLIST_REPOSITORY_STORAGE_KEY = buildLocalStorageKey("playlist_repo:v1");
+const DISK_LIBRARY_PREFIX = "c64u_disk_library:";
+const PLAYLIST_REPOSITORY_STORAGE_KEY = "c64u_playlist_repo:v1";
 const PLAYLIST_REPOSITORY_DB_NAME = "c64u-playlist-repository";
 const PLAYLIST_REPOSITORY_DB_VERSION = 1;
 const PLAYLIST_REPOSITORY_STORE = "state";

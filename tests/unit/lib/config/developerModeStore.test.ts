@@ -7,14 +7,13 @@
  */
 
 import { describe, expect, it, beforeEach } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   getDeveloperModeEnabled,
   setDeveloperModeEnabled,
   subscribeDeveloperMode,
 } from "@/lib/config/developerModeStore";
 
-const DEVELOPER_MODE_KEY = buildLocalStorageKey("dev_mode_enabled");
+const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";
 
 describe("developerModeStore", () => {
   beforeEach(() => {

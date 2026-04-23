@@ -6,10 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
 import type { MediaEntry, MediaIndex, MediaIndexSnapshot, MediaIndexStorage, MediaType } from "./mediaIndex";
 
-const STORAGE_KEY = buildLocalStorageKey("media_index:v1");
+const STORAGE_KEY = "c64u_media_index:v1";
 
 const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
   if (!raw) return null;

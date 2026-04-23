@@ -6,17 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey, buildSessionStorageKey } from "@/generated/variant";
-
-const FUZZ_MODE_KEY = buildLocalStorageKey("fuzz_mode_enabled");
-const FUZZ_MOCK_BASE_URL_KEY = buildLocalStorageKey("fuzz_mock_base_url");
-const FUZZ_STORAGE_SEEDED_KEY = buildLocalStorageKey("fuzz_storage_seeded");
-const DEBUG_LOGGING_KEY = buildLocalStorageKey("debug_logging_enabled");
-const AUTO_DEMO_MODE_KEY = buildLocalStorageKey("automatic_demo_mode_enabled");
-const STARTUP_DISCOVERY_WINDOW_MS_KEY = buildLocalStorageKey("startup_discovery_window_ms");
-const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = buildLocalStorageKey("background_rediscovery_interval_ms");
-const LOCAL_STORAGE_PREFIX = buildLocalStorageKey("");
-const SESSION_STORAGE_PREFIX = buildSessionStorageKey("");
+const FUZZ_MODE_KEY = "c64u_fuzz_mode_enabled";
+const FUZZ_MOCK_BASE_URL_KEY = "c64u_fuzz_mock_base_url";
+const FUZZ_STORAGE_SEEDED_KEY = "c64u_fuzz_storage_seeded";
+const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
+const AUTO_DEMO_MODE_KEY = "c64u_automatic_demo_mode_enabled";
+const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
+const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
+const LOCAL_STORAGE_PREFIX = "c64u_";
+const SESSION_STORAGE_PREFIX = "c64u_";
 
 const clearPrefixedStorage = (storage: Storage, prefix: string) => {
   const keys: string[] = [];

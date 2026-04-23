@@ -228,10 +228,6 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
                     raw.platform.web.cache_prefix,
                     `variants.${variantId}.platform.web.cache_prefix`,
                 ),
-                storagePrefix: requireNonEmptyString(
-                    raw.platform.web.storage_prefix,
-                    `variants.${variantId}.platform.web.storage_prefix`,
-                ),
                 loginTitle: requireNonEmptyString(
                     raw.platform.web.login_title,
                     `variants.${variantId}.platform.web.login_title`,
@@ -479,9 +475,6 @@ export const variantConfig = ${serialized} as const;
 
 export const variant = variantConfig.variant;
 export const repoVariantConfig = variantConfig.repo;
-
-export const buildLocalStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ':' + suffix;
-export const buildSessionStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ':' + suffix;
 `;
 };
 

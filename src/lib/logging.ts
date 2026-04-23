@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { redactExportValue, redactExportText } from "@/lib/diagnostics/exportRedaction";
 import { formatLocalTime } from "@/lib/diagnostics/timeFormat";
@@ -28,7 +27,7 @@ export type LogEntry = {
 const MAX_STACK_LINES = 30;
 const MAX_STACK_CHARS = 3000;
 
-const LOG_KEY = buildLocalStorageKey("app_logs");
+const LOG_KEY = "c64u_app_logs";
 const MAX_LOGS = 500;
 let externalLogs: LogEntry[] = [];
 

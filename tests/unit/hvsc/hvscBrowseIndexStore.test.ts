@@ -7,8 +7,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
-
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
   Filesystem: {
@@ -37,8 +35,8 @@ import {
   verifyHvscBrowseIndexIntegrity,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 
-const BROWSE_INDEX_STORAGE_KEY = buildLocalStorageKey("hvsc_browse_index:v1");
-const MEDIA_INDEX_STORAGE_KEY = buildLocalStorageKey("media_index:v1");
+const BROWSE_INDEX_STORAGE_KEY = "c64u_hvsc_browse_index:v1";
+const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 
 describe("hvscBrowseIndexStore", () => {
   beforeEach(() => {

@@ -9,9 +9,8 @@
 import { loadDiskLibrary, saveDiskLibrary, SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 
-const DISK_LIBRARY_PREFIX = `${buildLocalStorageKey("disk_library")}:`;
+const DISK_LIBRARY_PREFIX = "c64u_disk_library:";
 
 describe("diskStore", () => {
   const mockId = "test-library";

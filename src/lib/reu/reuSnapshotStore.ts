@@ -7,11 +7,10 @@
  */
 
 import { useEffect, useState } from "react";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { addErrorLog } from "@/lib/logging";
 import type { ReuSnapshotStorageEntry } from "./reuSnapshotTypes";
 
-const STORE_KEY = buildLocalStorageKey("reu_snapshots:v1");
+const STORE_KEY = "c64u_reu_snapshots:v1";
 const UPDATE_EVENT = "c64u-reu-snapshots-updated";
 
 type StoreData = {

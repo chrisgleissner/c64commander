@@ -7,14 +7,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey, buildSessionStorageKey } from "@/generated/variant";
 import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 
-const FUZZ_MODE_KEY = buildLocalStorageKey("fuzz_mode_enabled");
-const FUZZ_MOCK_BASE_URL_KEY = buildLocalStorageKey("fuzz_mock_base_url");
-const FUZZ_STORAGE_SEEDED_KEY = buildLocalStorageKey("fuzz_storage_seeded");
-const TEMP_LOCAL_KEY = buildLocalStorageKey("temp");
-const TEMP_SESSION_KEY = buildSessionStorageKey("temp");
+const FUZZ_MODE_KEY = "c64u_fuzz_mode_enabled";
+const FUZZ_MOCK_BASE_URL_KEY = "c64u_fuzz_mock_base_url";
+const FUZZ_STORAGE_SEEDED_KEY = "c64u_fuzz_storage_seeded";
+const TEMP_LOCAL_KEY = "c64u_temp";
+const TEMP_SESSION_KEY = "c64u_temp";
 
 const createStorageMock = () => {
   const store = new Map<string, string>();

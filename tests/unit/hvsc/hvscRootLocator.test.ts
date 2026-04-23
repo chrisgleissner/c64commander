@@ -7,10 +7,9 @@
  */
 
 import { beforeEach, describe, expect, it, vi, afterAll } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from "@/lib/hvsc/hvscRootLocator";
 
-const STORAGE_KEY = buildLocalStorageKey("hvsc_root:v1");
+const STORAGE_KEY = "c64u_hvsc_root:v1";
 
 describe("hvscRootLocator", () => {
   beforeEach(() => {

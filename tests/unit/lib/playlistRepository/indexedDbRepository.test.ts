@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository";
 import { resetIndexedDbPlaylistRepositoryForTests } from "@/lib/playlistRepository/indexedDbRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 
-const INDEXEDDB_RECOVERY_STORAGE_KEY = buildLocalStorageKey("playlist_repo:indexeddb:recovery");
+const INDEXEDDB_RECOVERY_STORAGE_KEY = "c64u_playlist_repo:indexeddb:recovery";
 
 type FakeIndexedDbOptions = {
   failOpen?: boolean;

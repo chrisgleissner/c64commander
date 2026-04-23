@@ -7,7 +7,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   deriveRamDumpFolderDisplayPath,
   loadRamDumpFolderConfig,
@@ -16,7 +15,7 @@ import {
   type RamDumpFolderConfig,
 } from "@/lib/config/ramDumpFolderStore";
 
-const STORAGE_KEY = buildLocalStorageKey("ram_dump_folder:v1");
+const STORAGE_KEY = "c64u_ram_dump_folder:v1";
 
 // Mock addErrorLog
 vi.mock("@/lib/logging", () => ({

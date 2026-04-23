@@ -7,7 +7,6 @@
  */
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import { buildLocalStorageKey } from "@/generated/variant";
 import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
 import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
@@ -16,9 +15,9 @@ import { resolveLibraryPath } from "./hvscFilesystem";
 import { runWithHvscPerfScope } from "./hvscPerformance";
 
 const STORAGE_PATH = "hvsc/index/hvsc-browse-index-v1.json";
-const STORAGE_KEY = buildLocalStorageKey("hvsc_browse_index:v1");
+const STORAGE_KEY = "c64u_hvsc_browse_index:v1";
 const MEDIA_INDEX_STORAGE_PATH = "hvsc/index/media-index-v2.json";
-const MEDIA_INDEX_STORAGE_KEY = buildLocalStorageKey("media_index:v1");
+const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 const SCHEMA_VERSION = 2;
 const MAX_PERSISTED_FULL_SNAPSHOT_SONGS = 10000;
 

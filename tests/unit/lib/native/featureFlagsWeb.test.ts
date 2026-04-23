@@ -7,10 +7,9 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { FeatureFlagsWeb } from "@/lib/native/featureFlags.web";
 
-const buildFlagKey = (key: string) => `${buildLocalStorageKey("feature_flag")}:${key}`;
+const buildFlagKey = (key: string) => `c64u_feature_flag:${key}`;
 
 describe("FeatureFlagsWeb", () => {
   let plugin: FeatureFlagsWeb;

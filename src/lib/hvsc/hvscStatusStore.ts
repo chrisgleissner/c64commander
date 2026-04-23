@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
 import type { HvscProgressEvent } from "./hvscTypes";
 import { addLog } from "@/lib/logging";
 
@@ -75,7 +74,7 @@ export type HvscStatusSummary = {
   lastUpdatedAt?: string | null;
 };
 
-const STORAGE_KEY = buildLocalStorageKey("hvsc_status:v1");
+const STORAGE_KEY = "c64u_hvsc_status:v1";
 
 export const getDefaultHvscStatusSummary = (): HvscStatusSummary => ({
   download: { status: "idle" },

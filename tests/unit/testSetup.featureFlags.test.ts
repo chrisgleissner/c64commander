@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { FEATURE_FLAG_IDS } from "@/lib/config/featureFlagsRegistry.generated";
 
-const FEATURE_FLAG_STORAGE_PREFIX = `${buildLocalStorageKey("feature_flag")}:`;
+const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
 
 declare global {
   var __setFeatureFlagTestState:

@@ -1,12 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-
-import { buildLocalStorageKey } from "@/generated/variant";
 import { DisplayProfileProvider, useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { APP_SETTINGS_KEYS, saveAutoRotationEnabled } from "@/lib/config/appSettings";
 
-const DISPLAY_PROFILE_OVERRIDE_KEY = buildLocalStorageKey("display_profile_override");
-const LIST_PREVIEW_LIMIT_KEY = buildLocalStorageKey("list_preview_limit");
+const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
+const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {

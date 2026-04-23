@@ -8,7 +8,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   clearReuSnapshotStore,
   deleteReuSnapshotFromStore,
@@ -25,7 +24,7 @@ vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
-const STORE_KEY = buildLocalStorageKey("reu_snapshots:v1");
+const STORE_KEY = "c64u_reu_snapshots:v1";
 
 const makeEntry = (overrides: Partial<ReuSnapshotStorageEntry> = {}): ReuSnapshotStorageEntry => ({
   id: "entry-1",

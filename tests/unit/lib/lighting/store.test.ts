@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { loadLightingStudioState, saveLightingStudioState } from "@/lib/lighting/store";
 
-const STORAGE_KEY = buildLocalStorageKey("lighting_studio_state:v1");
+const STORAGE_KEY = "c64u_lighting_studio_state:v1";
 
 describe("lighting studio storage", () => {
   beforeEach(() => {

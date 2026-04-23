@@ -7,7 +7,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog } from "@/lib/logging";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
@@ -118,7 +117,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   );
 
   const isAndroid = getPlatform() === "android" && isNativePlatform();
-  const persistedKey = buildLocalStorageKey("songlengths_file:v1");
+  const persistedKey = "c64u_songlengths_file:v1";
 
   const formatKiB = useCallback((bytes: number | null | undefined) => {
     if (bytes === null || bytes === undefined || bytes <= 0) return null;

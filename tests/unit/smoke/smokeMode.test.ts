@@ -7,7 +7,6 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   initializeSmokeMode,
   getSmokeConfig,
@@ -22,9 +21,9 @@ import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 
-const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
-const SMOKE_CONFIG_STORAGE_KEY = buildLocalStorageKey("smoke_config");
-const SMOKE_MODE_STORAGE_KEY = buildLocalStorageKey("smoke_mode_enabled");
+const DEVICE_HOST_KEY = "c64u_device_host";
+const SMOKE_CONFIG_STORAGE_KEY = "c64u_smoke_config";
+const SMOKE_MODE_STORAGE_KEY = "c64u_smoke_mode_enabled";
 
 const smokeDeps = vi.hoisted(() => ({
   collectHvscPerfTimingsMock: vi.fn(() => [{ scope: "browse:query", durationMs: 12.3 }]),

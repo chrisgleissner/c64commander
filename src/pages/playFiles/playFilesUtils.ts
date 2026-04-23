@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey, buildSessionStorageKey } from "@/generated/variant";
 import { mergeAudioMixerOptions } from "@/lib/config/audioMixer";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
@@ -19,11 +18,11 @@ export type AudioMixerItem = {
 };
 
 export const CATEGORY_OPTIONS: PlayFileCategory[] = ["sid", "mod", "prg", "crt", "disk"];
-export const SHARED_PLAYLIST_STORAGE_KEY = buildLocalStorageKey("playlist:v2:shared");
-export const buildPlaylistStorageKey = (deviceId: string) => `${buildLocalStorageKey("playlist:v1")}:${deviceId}`;
-export const LAST_DEVICE_ID_KEY = buildLocalStorageKey("last_device_id");
-export const PLAYLIST_STORAGE_PREFIX = `${buildLocalStorageKey("playlist:v1")}:`;
-export const PLAYBACK_SESSION_KEY = buildSessionStorageKey("playback_session:v1");
+export const SHARED_PLAYLIST_STORAGE_KEY = "c64u_playlist:v2:shared";
+export const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
+export const LAST_DEVICE_ID_KEY = "c64u_last_device_id";
+export const PLAYLIST_STORAGE_PREFIX = "c64u_playlist:v1:";
+export const PLAYBACK_SESSION_KEY = "c64u_playback_session:v1";
 export const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 export const DURATION_MIN_SECONDS = 1;
 export const DURATION_MAX_SECONDS = 3600;

@@ -7,8 +7,6 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
-
 vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: vi.fn(),
 }));
@@ -29,9 +27,9 @@ import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { createUltimateSourceLocation, normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
-const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
-const HAS_PASSWORD_KEY = buildLocalStorageKey("has_password");
-const FTP_CACHE_KEY = buildLocalStorageKey("ftp_cache:v1");
+const DEVICE_HOST_KEY = "c64u_device_host";
+const HAS_PASSWORD_KEY = "c64u_has_password";
+const FTP_CACHE_KEY = "c64u_ftp_cache:v1";
 
 describe("ftpSourceAdapter", () => {
   beforeEach(() => {

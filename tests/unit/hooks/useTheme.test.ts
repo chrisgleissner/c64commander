@@ -8,10 +8,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { useTheme } from "@/hooks/useTheme";
 
-const THEME_STORAGE_KEY = buildLocalStorageKey("theme");
+const THEME_STORAGE_KEY = "c64u_theme";
 
 describe("useTheme", () => {
   let mediaQueryMock: {

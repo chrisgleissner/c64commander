@@ -9,12 +9,11 @@
 /* @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
-import { buildLocalStorageKey } from "@/generated/variant";
 import * as toastModule from "@/hooks/use-toast";
 import * as loggingModule from "@/lib/logging";
 import * as platformModule from "@/lib/native/platform";
 
-const SONGLENGTHS_FILE_STORAGE_KEY = buildLocalStorageKey("songlengths_file:v1");
+const SONGLENGTHS_FILE_STORAGE_KEY = "c64u_songlengths_file:v1";
 
 vi.mock("@/lib/playback/fileLibraryUtils", () => ({
   buildLocalPlayFileFromUri: vi.fn(),

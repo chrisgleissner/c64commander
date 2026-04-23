@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
 import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
@@ -74,7 +73,7 @@ export type SavedDevicesSnapshot = {
   actualDeviceIdByDeviceId: Record<string, string | null>;
 };
 
-const STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
+const STORAGE_KEY = "c64u_saved_devices:v1";
 const EVENT_NAME = "c64u-saved-devices-change";
 const LEGACY_DEVICE_HOST_KEY = "c64u_device_host";
 const LEGACY_BASE_URL_KEY = "c64u_base_url";

@@ -7,7 +7,6 @@
  */
 
 import { zipSync, strToU8 } from "fflate";
-import { buildSessionStorageKey } from "@/generated/variant";
 import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { redactHeaders, redactPayload, redactErrorMessage } from "@/lib/tracing/redaction";
@@ -260,8 +259,8 @@ export const replaceTraceEvents = (nextEvents: TraceEvent[]) => {
   }
 };
 
-const SESSION_STORAGE_KEY = buildSessionStorageKey("persisted_traces");
-const SESSION_COUNTERS_KEY = buildSessionStorageKey("persisted_trace_counters");
+const SESSION_STORAGE_KEY = "c64u_persisted_traces";
+const SESSION_COUNTERS_KEY = "c64u_persisted_trace_counters";
 
 type PersistedCounters = {
   eventCounter: number;

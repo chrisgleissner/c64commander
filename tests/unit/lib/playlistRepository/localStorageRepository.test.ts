@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { getLocalStoragePlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { addLog } from "@/lib/logging";
 
-const STORAGE_KEY = buildLocalStorageKey("playlist_repo:v1");
-const BACKUP_STORAGE_KEY = buildLocalStorageKey("playlist_repo:v1:backup");
-const RECOVERY_STORAGE_KEY = buildLocalStorageKey("playlist_repo:v1:recovery");
+const STORAGE_KEY = "c64u_playlist_repo:v1";
+const BACKUP_STORAGE_KEY = "c64u_playlist_repo:v1:backup";
+const RECOVERY_STORAGE_KEY = "c64u_playlist_repo:v1:recovery";
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),

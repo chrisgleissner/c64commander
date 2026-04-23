@@ -8,11 +8,10 @@
 
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { addLog } from "@/lib/logging";
 
-const STORAGE_KEY = buildLocalStorageKey("hvsc_state:v1");
+const STORAGE_KEY = "c64u_hvsc_state:v1";
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),

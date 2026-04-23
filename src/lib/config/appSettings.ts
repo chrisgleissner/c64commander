@@ -6,23 +6,21 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
-
-const DEBUG_LOGGING_KEY = buildLocalStorageKey("debug_logging_enabled");
-const CONFIG_WRITE_INTERVAL_KEY = buildLocalStorageKey("config_write_min_interval_ms");
-const AUTO_DEMO_MODE_KEY = buildLocalStorageKey("automatic_demo_mode_enabled");
-const STARTUP_DISCOVERY_WINDOW_MS_KEY = buildLocalStorageKey("startup_discovery_window_ms");
-const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = buildLocalStorageKey("background_rediscovery_interval_ms");
-const DISCOVERY_PROBE_TIMEOUT_MS_KEY = buildLocalStorageKey("discovery_probe_timeout_ms");
-const DISK_AUTOSTART_MODE_KEY = buildLocalStorageKey("disk_autostart_mode");
-const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = buildLocalStorageKey("volume_slider_preview_interval_ms");
-const NOTIFICATION_VISIBILITY_KEY = buildLocalStorageKey("notification_visibility");
-const NOTIFICATION_DURATION_MS_KEY = buildLocalStorageKey("notification_duration_ms");
-const AUTO_ROTATION_ENABLED_KEY = buildLocalStorageKey("auto_rotation_enabled");
-const ENABLE_SWIPE_NAVIGATION_KEY = buildLocalStorageKey("enable_swipe_navigation");
-const ARCHIVE_HOST_OVERRIDE_KEY = buildLocalStorageKey("archive_host_override");
-const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = buildLocalStorageKey("archive_client_id_override");
-const ARCHIVE_USER_AGENT_OVERRIDE_KEY = buildLocalStorageKey("archive_user_agent_override");
+const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
+const CONFIG_WRITE_INTERVAL_KEY = "c64u_config_write_min_interval_ms";
+const AUTO_DEMO_MODE_KEY = "c64u_automatic_demo_mode_enabled";
+const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
+const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
+const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
+const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
+const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
+const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
+const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
+const AUTO_ROTATION_ENABLED_KEY = "c64u_auto_rotation_enabled";
+const ENABLE_SWIPE_NAVIGATION_KEY = "c64u_enable_swipe_navigation";
+const ARCHIVE_HOST_OVERRIDE_KEY = "c64u_archive_host_override";
+const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
+const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";

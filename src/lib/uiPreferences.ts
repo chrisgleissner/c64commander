@@ -6,11 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
 import { type DisplayProfileOverride, isDisplayProfileOverride } from "@/lib/displayProfiles";
 
-const LIST_PREVIEW_LIMIT_KEY = buildLocalStorageKey("list_preview_limit");
-const DISPLAY_PROFILE_OVERRIDE_KEY = buildLocalStorageKey("display_profile_override");
+const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
+const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
 
 export const DEFAULT_LIST_PREVIEW_LIMIT = 50;
 export const MIN_LIST_PREVIEW_LIMIT = 1;

@@ -6,14 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildLocalStorageKey } from "@/generated/variant";
-
 export type HvscRootLocation = {
   path: string;
   label: string;
 };
 
-const STORAGE_KEY = buildLocalStorageKey("hvsc_root:v1");
+const STORAGE_KEY = "c64u_hvsc_root:v1";
 
 export const getDefaultHvscRoot = (): HvscRootLocation => ({
   path: "/",

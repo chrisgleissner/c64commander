@@ -7,8 +7,6 @@
  */
 
 // C64 Ultimate REST API Client
-
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   clearPassword as clearStoredPassword,
   getCachedPassword,
@@ -1807,9 +1805,8 @@ export function updateC64APIConfig(
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
-  localStorage.removeItem(buildLocalStorageKey("base_url"));
   localStorage.removeItem("c64u_base_url");
-  localStorage.setItem(buildLocalStorageKey("device_host"), resolvedDeviceHost);
+  localStorage.setItem("c64u_device_host", resolvedDeviceHost);
   localStorage.removeItem("c64u_password");
   updateSelectedSavedDeviceConnection({
     deviceHost: resolvedDeviceHost,

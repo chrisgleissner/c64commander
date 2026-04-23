@@ -7,7 +7,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   isUpdateApplied,
   loadHvscState,
@@ -21,7 +20,7 @@ vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
-const STORAGE_KEY = buildLocalStorageKey("hvsc_state:v1");
+const STORAGE_KEY = "c64u_hvsc_state:v1";
 
 describe("hvscStateStore", () => {
   let localStorageMock: {

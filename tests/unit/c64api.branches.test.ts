@@ -8,7 +8,6 @@
 
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   C64API,
   getC64API,
@@ -30,7 +29,7 @@ import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
 
-const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
+const DEVICE_HOST_KEY = "c64u_device_host";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";

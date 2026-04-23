@@ -7,7 +7,6 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   buildHvscBaselineUrl,
   buildHvscUpdateUrl,
@@ -17,7 +16,7 @@ import {
 } from "@/lib/hvsc/hvscReleaseService";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
-const HVSC_BASE_URL_KEY = buildLocalStorageKey("hvsc_base_url");
+const HVSC_BASE_URL_KEY = "c64u_hvsc_base_url";
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {

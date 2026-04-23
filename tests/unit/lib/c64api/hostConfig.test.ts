@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 
-const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
+const DEVICE_HOST_KEY = "c64u_device_host";
 
 const addLogMock = vi.fn();
 

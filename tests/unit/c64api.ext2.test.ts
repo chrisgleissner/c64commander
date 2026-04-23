@@ -10,7 +10,6 @@
 // Targeted branch coverage for c64api.ts utility functions and request paths.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import {
   C64API,
   updateC64APIConfig,
@@ -21,7 +20,7 @@ import {
 } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 
-const DEVICE_HOST_KEY = buildLocalStorageKey("device_host");
+const DEVICE_HOST_KEY = "c64u_device_host";
 
 // ── Node environment shims ─────────────────────────────────────────────────
 const ensureWindow = () => {

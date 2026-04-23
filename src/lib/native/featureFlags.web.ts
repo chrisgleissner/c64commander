@@ -7,9 +7,8 @@
  */
 
 import type { FeatureFlagsPlugin } from "./featureFlags";
-import { buildLocalStorageKey } from "@/generated/variant";
 
-const FLAG_PREFIX = `${buildLocalStorageKey("feature_flag")}:`;
+const FLAG_PREFIX = "c64u_feature_flag:";
 
 const buildKey = (key: string) => `${FLAG_PREFIX}${key}`;
 

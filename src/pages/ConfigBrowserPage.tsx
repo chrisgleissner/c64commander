@@ -10,7 +10,6 @@ import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "r
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from "lucide-react";
-import { buildSessionStorageKey } from "@/generated/variant";
 import {
   useC64Categories,
   useC64Category,
@@ -72,7 +71,7 @@ function CategorySection({
   const [isEditingVolumes, setIsEditingVolumes] = useState(false);
   const editTimeoutRef = useRef<number | null>(null);
   const skipSoloRoutingRef = useRef(false);
-  const soloSnapshotKey = buildSessionStorageKey("audio_mixer_solo_snapshot");
+  const soloSnapshotKey = "c64u_audio_mixer_solo_snapshot";
 
   useEffect(() => {
     if (isOpen) {

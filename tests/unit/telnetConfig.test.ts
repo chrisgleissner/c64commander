@@ -7,11 +7,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { clearStoredTelnetPort, getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
-const SAVED_DEVICES_STORAGE_KEY = buildLocalStorageKey("saved_devices:v1");
-const TELNET_PORT_KEY = buildLocalStorageKey("telnet_port");
+const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const TELNET_PORT_KEY = "c64u_telnet_port";
 
 const { mockUpdateSelectedSavedDevicePorts } = vi.hoisted(() => ({
   mockUpdateSelectedSavedDevicePorts: vi.fn(),

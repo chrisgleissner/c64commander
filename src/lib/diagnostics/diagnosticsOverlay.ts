@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { buildSessionStorageKey } from "@/generated/variant";
 import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnosticsOverlayState";
 
 /**
@@ -31,7 +30,7 @@ export type DiagnosticsOpenRequest = {
   panel?: DiagnosticsPanelKey | null;
 };
 
-const DIAGNOSTICS_OPEN_KEY = buildSessionStorageKey("diagnostics_open_preset");
+const DIAGNOSTICS_OPEN_KEY = "c64u_diagnostics_open_preset";
 
 export const clearDiagnosticsOpenRequest = () => {
   if (typeof window === "undefined") return;

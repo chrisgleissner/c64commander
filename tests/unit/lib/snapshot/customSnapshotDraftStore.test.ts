@@ -7,10 +7,9 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { loadCustomSnapshotDrafts, saveCustomSnapshotDrafts } from "@/lib/snapshot/customSnapshotDraftStore";
 
-const STORAGE_KEY = buildLocalStorageKey("custom_snapshot_ranges:v1");
+const STORAGE_KEY = "c64u_custom_snapshot_ranges:v1";
 
 const addErrorLogMock = vi.fn();
 

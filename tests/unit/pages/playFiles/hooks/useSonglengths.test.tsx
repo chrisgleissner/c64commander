@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { buildLocalStorageKey } from "@/generated/variant";
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { type LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { countSonglengthsEntries } from "@/lib/sid/songlengths";
 
-const SONGLENGTHS_FILE_STORAGE_KEY = buildLocalStorageKey("songlengths_file:v1");
+const SONGLENGTHS_FILE_STORAGE_KEY = "c64u_songlengths_file:v1";
 
 // Mocks
 vi.mock("@/hooks/use-toast", () => ({
