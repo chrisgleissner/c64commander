@@ -16,7 +16,7 @@ import {
 } from "../../../src/lib/config/appSettings";
 import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from "../../../src/lib/smoke/smokeMode";
 
-const DEVICE_HOST_KEY = "c64u_device_host";
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "../../../src/lib/c64api/hostConfig";
 
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),

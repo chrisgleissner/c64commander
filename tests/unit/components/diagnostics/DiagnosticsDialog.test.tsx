@@ -21,7 +21,7 @@ import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
 
-const DEVICE_HOST_KEY = "c64u_device_host";
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 const FTP_PORT_KEY = "c64u_ftp_port";
 const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 const TELNET_PORT_KEY = "c64u_telnet_port";

@@ -20,7 +20,7 @@ import {
 } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 
-const DEVICE_HOST_KEY = "c64u_device_host";
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 
 // ── Node environment shims ─────────────────────────────────────────────────
 const ensureWindow = () => {

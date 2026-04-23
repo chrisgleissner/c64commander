@@ -28,6 +28,7 @@ import {
   DEFAULT_BASE_URL,
   DEFAULT_DEVICE_HOST,
   DEFAULT_PROXY_URL,
+  CURRENT_DEVICE_HOST_KEY,
   WEB_PROXY_PATH,
   buildBaseUrlFromDeviceHost,
   getDeviceHostHttpPort,
@@ -1806,7 +1807,7 @@ export function updateC64APIConfig(
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
   localStorage.removeItem("c64u_base_url");
-  localStorage.setItem("c64u_device_host", resolvedDeviceHost);
+  localStorage.setItem(CURRENT_DEVICE_HOST_KEY, resolvedDeviceHost);
   localStorage.removeItem("c64u_password");
   updateSelectedSavedDeviceConnection({
     deviceHost: resolvedDeviceHost,

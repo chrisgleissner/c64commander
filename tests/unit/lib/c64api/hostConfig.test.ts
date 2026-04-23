@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { variant } from "@/generated/variant";
 
-const DEVICE_HOST_KEY = "c64u_device_host";
+const DEVICE_HOST_KEY = `${variant.id}:device_host`;
 
 const addLogMock = vi.fn();
 

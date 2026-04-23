@@ -169,6 +169,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate selected variant metadata
+        run: npm run variant:generate
+
+      - name: Resolve iOS variant metadata
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const lines = [
+            `APP_ID=${config.variant.platform.ios.bundleId}`,
+            `VARIANT_ARTIFACT_BASENAME=${config.variant.exportedFileBasename}`,
+          ];
+          fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join('\n')}\n`);
+          NODE
+
       - name: Download prepared iOS workspace
         uses: actions/download-artifact@v4
         with:

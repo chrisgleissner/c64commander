@@ -27,7 +27,7 @@ import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { createUltimateSourceLocation, normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
-const DEVICE_HOST_KEY = "c64u_device_host";
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 const HAS_PASSWORD_KEY = "c64u_has_password";
 const FTP_CACHE_KEY = "c64u_ftp_cache:v1";
 

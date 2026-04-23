@@ -21,7 +21,7 @@ import { addLog } from "@/lib/logging";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 
-const DEVICE_HOST_KEY = "c64u_device_host";
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 const SMOKE_CONFIG_STORAGE_KEY = "c64u_smoke_config";
 const SMOKE_MODE_STORAGE_KEY = "c64u_smoke_mode_enabled";
 

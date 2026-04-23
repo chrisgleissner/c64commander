@@ -10,7 +10,8 @@ import { addLog } from "@/lib/logging";
 import { variant } from "@/generated/variant";
 
 const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
-const CURRENT_DEVICE_HOST_KEY = "c64u_device_host";
+const LEGACY_DEVICE_HOST_KEY = "c64u_device_host";
+export const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 const CURRENT_BASE_URL_KEY = "c64u_base_url";
 
 export const DEFAULT_DEVICE_HOST = variant.runtime.endpoints.device_host ?? "c64u";
@@ -168,7 +169,18 @@ export const resolveDeviceHostFromStorage = () => {
       });
     }
   }
-  const currentStoredDeviceHost = localStorage.getItem(CURRENT_DEVICE_HOST_KEY);
+  const currentStoredDeviceHost =
+    localStorage.getItem(CURRENT_DEVICE_HOST_KEY) ??
+    (() => {
+      const legacy = localStorage.getItem(LEGACY_DEVICE_HOST_KEY);
+      if (legacy) {
+        const normalized = normalizeDeviceHost(legacy);
+        localStorage.setItem(CURRENT_DEVICE_HOST_KEY, normalized);
+        localStorage.removeItem(LEGACY_DEVICE_HOST_KEY);
+        return normalized;
+      }
+      return null;
+    })();
   const storedDeviceHost = currentStoredDeviceHost;
   const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
   if (storedDeviceHost) {

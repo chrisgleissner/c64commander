@@ -25,7 +25,7 @@ import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
-const DEVICE_HOST_KEY = "c64u_device_host";
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 const HAS_PASSWORD_KEY = "c64u_has_password";
 
 const ensureWindow = () => {
