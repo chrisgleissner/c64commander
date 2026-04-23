@@ -116,6 +116,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         localStorage.removeItem("c64u_has_password");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
         localStorage.setItem("c64u_device_host", host || "c64u");
+        localStorage.setItem("c64commander:device_host", host || "c64u");
         localStorage.setItem("c64u_notification_visibility", "all");
         localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
         sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, "1");
