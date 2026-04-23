@@ -58,16 +58,16 @@ If a network password is configured in **Settings > Device > Network password**,
 
 Variant metadata is authored once in `variants/variants.yaml` and generated into web, Android, iOS, and workflow inputs by `npm run variant:generate`.
 
-- Default behavior builds and publishes only the `c64commander` variant.
-- Set `APP_VARIANT=<variant-id>` before `npm run build`, `npm run cap:build`, or `npm run variant:generate` to build a different declared variant.
-- Set `APP_PUBLISH_VARIANTS=<variant-a,variant-b>` when you need an explicit multi-variant publish set; otherwise the repo uses `repo.publish_defaults` from `variants/variants.yaml`.
+- Android workflows intentionally support both `c64commander` and `c64u-controller`.
+- iOS and web workflows build and publish only the default `c64commander` variant in this repository.
+- Set `APP_VARIANT=c64u-controller` before `npm run cap:build` or `npm run variant:generate` when you want to generate the Android controller variant locally.
+- Local side-by-side web testing can still build different variants, but it relies on distinct origins such as different `localhost` ports rather than runtime storage partitioning.
 
 Examples:
 
 ```bash
-APP_VARIANT=c64u-controller npm run build
 APP_VARIANT=c64u-controller npm run cap:build
-APP_PUBLISH_VARIANTS=c64commander,c64u-controller npm run variant:generate
+APP_VARIANT=c64u-controller npm run variant:generate
 ```
 
 ### First Connection

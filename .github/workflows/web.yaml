@@ -6,15 +6,6 @@ on:
     branches: ["main"]
     tags: ["*"]
   workflow_dispatch:
-    inputs:
-      app_variant:
-        description: Selected variant id to build and test
-        required: false
-        type: string
-      publish_variants:
-        description: Comma-separated variant ids to publish; defaults to repo publish defaults
-        required: false
-        type: string
 
 concurrency:
   group: web-${{ github.ref }}
@@ -26,49 +17,11 @@ permissions:
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  APP_VARIANT: ${{ github.event.inputs.app_variant || '' }}
-  APP_PUBLISH_VARIANTS: ${{ github.event.inputs.publish_variants || '' }}
   DOCKER_LIMIT_MEMORY: 512m
   DOCKER_LIMIT_CPUS: "2"
   DOCKER_TARGET_CPU_FREQ_MHZ: "2000"
 
 jobs:
-  variant-selection:
-    name: Variant | Resolve publish set
-    runs-on: ubuntu-latest
-    outputs:
-      publish_variants_json: ${{ steps.variant.outputs.publish_variants_json }}
-      publish_variants_csv: ${{ steps.variant.outputs.publish_variants_csv }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CI_SHA }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Generate variant metadata
-        run: npm run variant:generate
-
-      - name: Export publish variant selection
-        id: variant
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-
-          const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_json=${JSON.stringify(config.repo.selectedPublishVariants)}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_csv=${config.repo.selectedPublishVariants.join(',')}\n`);
-          NODE
-
   web-build-and-test:
     name: Web | Build + tests (${{ matrix.platform }})
     runs-on: ubuntu-latest
@@ -320,18 +273,10 @@ jobs:
         run: docker rm -f c64commander-smoke || true
 
   web-docker-publish:
-    name: Web | Publish GHCR multi-arch (${{ matrix.variant }})
+    name: Web | Publish GHCR multi-arch
     runs-on: ubuntu-latest
-    needs: [variant-selection, web-build-and-test]
+    needs: [web-build-and-test]
     if: startsWith(github.ref, 'refs/tags/')
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: ${{ fromJson(needs.variant-selection.outputs.publish_variants_json) }}
-
-    env:
-      APP_VARIANT: ${{ matrix.variant }}
-      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.publish_variants_csv }}
 
     steps:
       - name: Checkout
@@ -357,7 +302,7 @@ jobs:
 
           const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
           const entries = {
-            IMAGE_NAME: config.variant.platform.web.imageRepo,
+            IMAGE_NAME: 'ghcr.io/chrisgleissner/c64commander',
             VARIANT_ARTIFACT_BASENAME: config.variant.exportedFileBasename,
           };
           fs.appendFileSync(

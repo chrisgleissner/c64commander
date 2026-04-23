@@ -224,10 +224,6 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
                     raw.platform.web.background_color,
                     `variants.${variantId}.platform.web.background_color`,
                 ),
-                cachePrefix: requireNonEmptyString(
-                    raw.platform.web.cache_prefix,
-                    `variants.${variantId}.platform.web.cache_prefix`,
-                ),
                 loginTitle: requireNonEmptyString(
                     raw.platform.web.login_title,
                     `variants.${variantId}.platform.web.login_title`,
@@ -236,7 +232,6 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
                     raw.platform.web.login_heading,
                     `variants.${variantId}.platform.web.login_heading`,
                 ),
-                imageRepo: requireNonEmptyString(raw.platform.web.image_repo, `variants.${variantId}.platform.web.image_repo`),
             },
         },
         assets: {
@@ -562,7 +557,7 @@ export const renderWebManifest = (selection) => {
     )}\n`;
 };
 
-export const renderWebServiceWorker = (selection) => `const CACHE_PREFIX = '${selection.variant.platform.web.cachePrefix}';
+export const renderWebServiceWorker = () => `const CACHE_PREFIX = 'c64commander-static';
 const STATIC_ASSETS = ['/manifest.webmanifest'];
 
 const buildId = (() => {

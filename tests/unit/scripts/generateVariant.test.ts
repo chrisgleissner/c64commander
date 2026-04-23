@@ -44,10 +44,8 @@ type VariantDefinition = {
       short_name: string;
       theme_color: string;
       background_color: string;
-      cache_prefix: string;
       login_title: string;
       login_heading: string;
-      image_repo: string;
     };
   };
   assets: {
@@ -135,10 +133,8 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
             short_name: "C64 Commander",
             theme_color: "#6C7EB7",
             background_color: "#6C7EB7",
-            cache_prefix: "c64commander-static",
             login_title: "C64 Commander Login",
             login_heading: "C64 Commander",
-            image_repo: "ghcr.io/chrisgleissner/c64commander",
           },
         },
         assets: {
@@ -173,10 +169,8 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
             short_name: "C64U Controller",
             theme_color: "#2F6B8B",
             background_color: "#2F6B8B",
-            cache_prefix: "c64u-controller-static",
             login_title: "C64U Controller Login",
             login_heading: "C64U Controller",
-            image_repo: "ghcr.io/chrisgleissner/c64u-controller",
           },
         },
         assets: {
@@ -236,10 +230,8 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
       `        short_name: ${variant.platform.web.short_name}`,
       `        theme_color: '${variant.platform.web.theme_color}'`,
       `        background_color: '${variant.platform.web.background_color}'`,
-      `        cache_prefix: ${variant.platform.web.cache_prefix}`,
       `        login_title: ${variant.platform.web.login_title}`,
       `        login_heading: ${variant.platform.web.login_heading}`,
-      `        image_repo: ${variant.platform.web.image_repo}`,
       "    assets:",
       "      sources:",
       `        icon_svg: ${variant.assets.sources.icon_svg}`,
@@ -306,7 +298,7 @@ describe("generate-variant", () => {
     const config = parseVariantSource(buildVariantsYaml(), { repoRoot }) as any;
     expect(config.repo.defaultVariant).toBe("c64commander");
     expect(config.repo.publishDefaults.release).toEqual(["c64commander"]);
-    expect(config.variants["c64u-controller"].platform.web.cachePrefix).toBe("c64u-controller-static");
+    expect(config.variants["c64u-controller"].platform.web.loginHeading).toBe("C64U Controller");
   });
 
   it("fails when schema_version is absent", () => {
@@ -357,10 +349,8 @@ describe("generate-variant", () => {
             short_name: "One",
             theme_color: "#000000",
             background_color: "#000000",
-            cache_prefix: "one-cache",
             login_title: "One Login",
             login_heading: "One",
-            image_repo: "repo/one",
           },
         },
         assets: {
@@ -389,10 +379,8 @@ describe("generate-variant", () => {
             short_name: "Two",
             theme_color: "#111111",
             background_color: "#111111",
-            cache_prefix: "two-cache",
             login_title: "Two Login",
             login_heading: "Two",
-            image_repo: "repo/two",
           },
         },
         assets: {
@@ -465,10 +453,8 @@ describe("generate-variant", () => {
               short_name: "C64 Commander",
               theme_color: "#6C7EB7",
               background_color: "#6C7EB7",
-              cache_prefix: "c64commander-static",
               login_title: "C64 Commander Login",
               login_heading: "C64 Commander",
-              image_repo: "ghcr.io/chrisgleissner/c64commander",
             },
           },
           assets: {
@@ -628,7 +614,7 @@ describe("generate-variant", () => {
       selectedVariantId: "c64commander",
       variant: {
         id: "c64commander",
-        platform: { web: { cachePrefix: "c64commander-static" } },
+        platform: { web: { loginHeading: "C64 Commander" } },
       },
     });
     expect(moduleSource).toContain("export const variantConfig =");

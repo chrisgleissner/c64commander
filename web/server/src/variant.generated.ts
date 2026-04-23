@@ -80,12 +80,9 @@ export const webServerVariantConfig = {
       },
       web: {
         backgroundColor: "#6C7EB7",
-        cachePrefix: "c64commander-static",
-        imageRepo: "ghcr.io/chrisgleissner/c64commander",
         loginHeading: "C64 Commander",
         loginTitle: "C64 Commander Login",
         shortName: "C64 Commander",
-        storagePrefix: "c64commander",
         themeColor: "#6C7EB7",
       },
     },

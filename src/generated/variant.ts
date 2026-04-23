@@ -80,12 +80,9 @@ export const variantConfig = {
       },
       web: {
         backgroundColor: "#6C7EB7",
-        cachePrefix: "c64commander-static",
-        imageRepo: "ghcr.io/chrisgleissner/c64commander",
         loginHeading: "C64 Commander",
         loginTitle: "C64 Commander Login",
         shortName: "C64 Commander",
-        storagePrefix: "c64commander",
         themeColor: "#6C7EB7",
       },
     },
@@ -101,6 +98,3 @@ export const variantConfig = {
 
 export const variant = variantConfig.variant;
 export const repoVariantConfig = variantConfig.repo;
-
-export const buildLocalStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ":" + suffix;
-export const buildSessionStorageKey = (suffix: string) => variant.platform.web.storagePrefix + ":" + suffix;
