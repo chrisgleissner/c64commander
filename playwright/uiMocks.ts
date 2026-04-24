@@ -80,6 +80,31 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       snapshot: unknown;
       seedFeatureFlagsByDefault: boolean;
     }) => {
+      const parseStoredPort = (value: string | null, fallback: number) => {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
+      };
+
+      const readSeededSavedDevice = () => {
+        const savedDevicesRaw = localStorage.getItem("c64u_saved_devices:v1");
+        if (!savedDevicesRaw) return null;
+        try {
+          const parsed = JSON.parse(savedDevicesRaw) as {
+            selectedDeviceId?: string;
+            devices?: Array<{
+              id?: string;
+              ftpPort?: number;
+              telnetPort?: number;
+              hasPassword?: boolean;
+            }>;
+          };
+          const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+          return devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0] ?? null;
+        } catch {
+          return null;
+        }
+      };
+
       try {
         delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
       } catch (error) {
@@ -112,9 +137,35 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
       const host = baseUrlArg?.replace(/^https?:\/\//, "");
       try {
+        const seededSavedDevice = readSeededSavedDevice();
+        const seededFtpPort = parseStoredPort(
+          localStorage.getItem("c64u_ftp_port"),
+          typeof seededSavedDevice?.ftpPort === "number" ? seededSavedDevice.ftpPort : 21,
+        );
+        const seededTelnetPort = parseStoredPort(
+          localStorage.getItem("c64u_telnet_port"),
+          typeof seededSavedDevice?.telnetPort === "number" ? seededSavedDevice.telnetPort : 64,
+        );
+        const preservedPassword = (
+          window as Window & {
+            __c64uSecureStorageOverride?: { password?: string | null };
+          }
+        ).__c64uSecureStorageOverride?.password;
+        const hasPassword = localStorage.getItem("c64u_has_password") === "1" || preservedPassword != null;
         localStorage.removeItem("c64u_password");
-        localStorage.removeItem("c64u_has_password");
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+        if (hasPassword && preservedPassword != null) {
+          localStorage.setItem("c64u_has_password", "1");
+          (
+            window as Window & {
+              __c64uSecureStorageOverride?: { password?: string | null };
+            }
+          ).__c64uSecureStorageOverride = {
+            password: preservedPassword,
+          };
+        } else {
+          localStorage.removeItem("c64u_has_password");
+          delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+        }
         let deviceHost = "c64u";
         let deviceHttpPort = 80;
         if (baseUrlArg) {
@@ -139,14 +190,14 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
                 nameSource: "auto",
                 host: deviceHost,
                 httpPort: deviceHttpPort,
-                ftpPort: 21,
-                telnetPort: 64,
+                ftpPort: seededFtpPort,
+                telnetPort: seededTelnetPort,
                 lastKnownProduct: null,
                 lastKnownHostname: null,
                 lastKnownUniqueId: null,
                 lastSuccessfulConnectionAt: null,
                 lastUsedAt: null,
-                hasPassword: false,
+                hasPassword,
               },
             ],
             summaries: {},

@@ -82,6 +82,39 @@ export const seedFtpConfig = async (
   options: { host: string; port: number; bridgeUrl: string; password?: string },
 ) => {
   await page.addInitScript(({ host, port, bridgeUrl, password }) => {
+    const syncSavedDevicePorts = () => {
+      const savedDevicesRaw = localStorage.getItem("c64u_saved_devices:v1");
+      if (!savedDevicesRaw) return;
+      try {
+        const parsed = JSON.parse(savedDevicesRaw) as {
+          selectedDeviceId?: string;
+          devices?: Array<{
+            id?: string;
+            ftpPort?: number;
+            hasPassword?: boolean;
+          }>;
+        };
+        if (!Array.isArray(parsed.devices) || parsed.devices.length === 0) return;
+        const selectedDeviceId = parsed.selectedDeviceId ?? parsed.devices[0]?.id;
+        const next = {
+          ...parsed,
+          selectedDeviceId,
+          devices: parsed.devices.map((device, index) => {
+            const isSelected = selectedDeviceId ? device.id === selectedDeviceId : index === 0;
+            if (!isSelected) return device;
+            return {
+              ...device,
+              ftpPort: port,
+              hasPassword: Boolean(password),
+            };
+          }),
+        };
+        localStorage.setItem("c64u_saved_devices:v1", JSON.stringify(next));
+      } catch {
+        // ignore malformed saved-device state in tests
+      }
+    };
+
     localStorage.setItem("c64u_ftp_port", String(port));
     localStorage.setItem("c64u_ftp_bridge_url", bridgeUrl);
     localStorage.removeItem("c64u_password");
@@ -98,6 +131,7 @@ export const seedFtpConfig = async (
       localStorage.removeItem("c64u_has_password");
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }
+    syncSavedDevicePorts();
     const routingWindow = window as Window & {
       __c64uAllowedBaseUrls?: string[];
     };

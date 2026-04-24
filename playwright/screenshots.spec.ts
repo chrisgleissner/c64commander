@@ -15,6 +15,7 @@ import * as fs from "node:fs/promises";
 import { promisify } from "node:util";
 import sharp from "sharp";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { variant } from "../src/generated/variant";
 // Load full YAML config for tests
 import "../tests/mocks/setupMockConfigForTests";
 import { seedUiMocks } from "./uiMocks";
@@ -56,6 +57,7 @@ import {
 const SCREENSHOT_ROOT = path.resolve("docs/img/app");
 const FORCE_REGENERATE_SCREENSHOTS = process.env.SCREENSHOT_FORCE_REGEN === "1";
 const execFile = promisify(execFileCb);
+const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 
 const screenshotPath = (relativePath: string) => path.resolve(SCREENSHOT_ROOT, relativePath);
 
@@ -2896,16 +2898,22 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       allowWarnings(testInfo, "Expected probe failures during offline discovery.");
 
-      await page.addInitScript(() => {
-        localStorage.setItem("c64u_startup_discovery_window_ms", "600");
-        localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
-        localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
-        localStorage.setItem("c64u_device_host", "127.0.0.1:1");
-        localStorage.removeItem("c64u_password");
-        localStorage.removeItem("c64u_has_password");
-        sessionStorage.removeItem("c64u_demo_interstitial_shown");
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
-      });
+      await page.addInitScript(
+        ({ currentDeviceHostKey }: { currentDeviceHostKey: string }) => {
+          localStorage.setItem("c64u_startup_discovery_window_ms", "600");
+          localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+          localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
+          localStorage.setItem("c64u_device_host", "127.0.0.1:1");
+          localStorage.setItem(currentDeviceHostKey, "127.0.0.1:1");
+          localStorage.removeItem("c64u_saved_devices:v1");
+          localStorage.removeItem("c64u_base_url");
+          localStorage.removeItem("c64u_password");
+          localStorage.removeItem("c64u_has_password");
+          sessionStorage.removeItem("c64u_demo_interstitial_shown");
+          delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+        },
+        { currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
+      );
 
       await page.goto("/", { waitUntil: "domcontentloaded" });
       const dialog = page.getByRole("dialog", { name: "Demo Mode" });
@@ -2934,11 +2942,14 @@ test.describe("App screenshots", () => {
       });
 
       await page.addInitScript(
-        ({ baseUrl }) => {
+        ({ baseUrl, currentDeviceHostKey }: { baseUrl: string; currentDeviceHostKey: string }) => {
           localStorage.setItem("c64u_startup_discovery_window_ms", "600");
           localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
           localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
           localStorage.setItem("c64u_device_host", "demo.invalid");
+          localStorage.setItem(currentDeviceHostKey, "demo.invalid");
+          localStorage.removeItem("c64u_saved_devices:v1");
+          localStorage.removeItem("c64u_base_url");
           localStorage.removeItem("c64u_password");
           localStorage.removeItem("c64u_has_password");
           delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
@@ -2949,7 +2960,7 @@ test.describe("App screenshots", () => {
             "http://demo.invalid",
           ];
         },
-        { baseUrl: server.baseUrl },
+        { baseUrl: server.baseUrl, currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
       );
 
       await page.goto("/play", { waitUntil: "domcontentloaded" });
