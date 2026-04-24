@@ -28,7 +28,7 @@ describe("telemetry release gate workflow rules", () => {
     const workflow = readWorkflow("android.yaml");
     expect(workflow).toContain(
       "if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')\n" +
-      "    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]",
+        "    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]",
     );
     const stableTagReleaseCondition =
       "if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'";
@@ -43,6 +43,7 @@ describe("telemetry release gate workflow rules", () => {
     const workflow = readWorkflow("android.yaml");
     expect(workflow).toContain("name: Release | Create prerelease");
     expect(workflow).toContain("if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-rc')");
+    expect(workflow).toContain("- name: Checkout");
     expect(workflow).toContain("- name: Ensure GitHub prerelease exists");
     expect(workflow).toContain('gh release edit "$TAG" --prerelease');
     expect(workflow).toContain(

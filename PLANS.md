@@ -45,13 +45,35 @@
 
 ## Historical Regression Table
 
-| Area                                    | Change                  | Likely Impact | Confidence |
-| --------------------------------------- | ----------------------- | ------------- | ---------- |
-| Android release creation                | Pending historical diff | Pending       | Pending    |
-| Android artifact upload gating          | Pending historical diff | Pending       | Pending    |
-| Variant selection / matrix publish flow | Pending historical diff | Pending       | Pending    |
-| CI contract tests                       | Pending historical diff | Pending       | Pending    |
-| Supporting scripts                      | Pending historical diff | Pending       | Pending    |
+| Area                                    | Change                                                                                                                                 | Likely Impact                                                                                              | Confidence |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------- |
+| Android release creation                | `360fdee9` changed `Ensure GitHub release exists` from tag-scoped to stable-tag-only-with-keystore while leaving RC prerelease logic in the step body | RC tags stopped creating GitHub prereleases because the release-creation step never ran for `*-rc*` tags | High       |
+| Android artifact upload gating          | `0.7.7` gated Android release artifacts on any tag with keystore; newer workflow tightened artifact, AAB, and Play upload steps to stable tags only | Stable-only artifact gating is correct, but it cannot also own RC prerelease creation                     | High       |
+| Variant selection / matrix publish flow | Variant-aware jobs added `variant-selection`, publish matrices, and per-variant artifact names to Android packaging and release attachment            | Variant support is incidental to the RC prerelease bug; the bug came from collapsing release creation and artifact publishing into one path | Medium     |
+| CI contract tests                       | `360fdee9` added the failing assertion that the Android artifact-attachment job itself must be stable-tag-only                                      | The test captured the intended stable-only artifact policy but lacked a companion assertion for RC prerelease creation | High       |
+| Supporting scripts                      | `scripts/resolve-build-version.mjs` and `web.yaml` retained correct tag-aware version semantics                                                     | Supporting scripts are not causal for the Android RC regression                                           | High       |
+
+## Root Cause Summary
+
+- Exact failing expectation from `tests/unit/ci/telemetryGateWorkflow.test.ts`:
+  - `if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')`
+  - `    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]`
+- Exact workflow mismatch before the fix:
+  - `release-artifacts` was still `if: startsWith(github.ref, 'refs/tags/')`
+  - `Ensure GitHub release exists` had been tightened to `if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'`
+- Why the mismatch existed:
+  - The stable-only artifact policy was applied to the release-creation step without introducing a separate RC prerelease path.
+  - That left RC prerelease logic text present inside the step body, but unreachable because the step no longer ran for RC tags.
+- Authoritative side:
+  - The intended CI policy is authoritative: RC tags must create prereleases and must not upload Android artifacts or Google Play builds.
+  - `0.7.7` proves prerelease creation belonged on the tag path, while the new test correctly proves artifact publication must be stable-only.
+  - The correct resolution is therefore `C) both diverged from the intended spec`: the workflow lost the RC prerelease path, and the test needed an additional assertion for that path.
+
+## Regression Commit Identification
+
+- First behavior regression: `360fdee9` (`Fix/android test coverage build (#237)`) tightened Android release creation behind the stable-tag artifact gate.
+- Earlier baseline behavior in `0.7.7` and `HEAD^` kept `Ensure GitHub release exists` tag-scoped, which allowed RC prerelease creation.
+- Variant support is incidental rather than causal for this specific regression; the decisive change was the stable-only guard added to the release-creation step itself.
 
 # 2026-04-22 Variant Spec Minimal Patch
 
