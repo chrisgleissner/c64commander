@@ -7,7 +7,6 @@
  */
 
 // C64 Ultimate REST API Client
-
 import {
   clearPassword as clearStoredPassword,
   getCachedPassword,
@@ -35,6 +34,7 @@ import {
   getDeviceHostFromBaseUrl,
   isLocalProxy,
   normalizeDeviceHost,
+  persistDeviceHostToStorage,
   resolveDeviceHostFromStorage,
   resolvePlatformApiBaseUrl,
   resolvePreferredDeviceHost,
@@ -248,18 +248,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-    | {
-        selected?: string | number;
-        options?: string[];
-        details?: {
-          min?: number;
-          max?: number;
-          format?: string;
-          presets?: string[];
-        };
-      }
-    | string
-    | number;
+  | {
+    selected?: string | number;
+    options?: string[];
+    details?: {
+      min?: number;
+      max?: number;
+      format?: string;
+      presets?: string[];
+    };
+  }
+  | string
+  | number;
 }
 
 export interface ConfigResponse {
@@ -680,8 +680,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = timeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                    })
+                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                  })
                   : null;
                 let response: Response;
                 try {
@@ -948,8 +948,8 @@ export class C64API {
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                })
+                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+              })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])
@@ -1769,12 +1769,42 @@ const createApiProxy = (api: C64API): C64API =>
     },
   });
 
+const isTestProbeEnabled = () => {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (typeof window !== "undefined") {
+    const win = window as Window & { __c64uTestProbeEnabled?: boolean };
+    return win.__c64uTestProbeEnabled === true;
+  }
+  return false;
+};
+
+const resolveInjectedTestBaseUrl = () => {
+  if (typeof window === "undefined" || !isTestProbeEnabled()) return null;
+  const win = window as Window & {
+    __c64uExpectedBaseUrl?: string;
+    __c64uMockServerBaseUrl?: string;
+  };
+  const rawUrl = win.__c64uExpectedBaseUrl ?? win.__c64uMockServerBaseUrl ?? null;
+  if (!rawUrl) return null;
+  try {
+    return new URL(rawUrl).toString();
+  } catch (error) {
+    addLog("warn", "Failed to parse injected test base URL", {
+      baseUrl: rawUrl,
+      error: (error as Error).message,
+    });
+    return rawUrl;
+  }
+};
+
 export function getC64API(): C64API {
   if (!apiInstance) {
-    const resolvedDeviceHost = resolveDeviceHostFromStorage();
+    const storedDeviceHost = resolveDeviceHostFromStorage();
+    const injectedTestBaseUrl = resolveInjectedTestBaseUrl();
+    const resolvedDeviceHost = injectedTestBaseUrl ? getDeviceHostFromBaseUrl(injectedTestBaseUrl) : storedDeviceHost;
     const resolvedBaseUrl = resolvePlatformApiBaseUrl(
       resolvedDeviceHost,
-      buildBaseUrlFromDeviceHost(resolvedDeviceHost),
+      injectedTestBaseUrl ?? buildBaseUrlFromDeviceHost(storedDeviceHost),
     );
     const cachedPassword = getCachedPassword();
     apiInstance = new C64API(resolvedBaseUrl, cachedPassword ?? undefined, resolvedDeviceHost);
@@ -1807,7 +1837,7 @@ export function updateC64APIConfig(
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
   localStorage.removeItem("c64u_base_url");
-  localStorage.setItem("c64u_device_host", resolvedDeviceHost);
+  persistDeviceHostToStorage(resolvedDeviceHost);
   localStorage.removeItem("c64u_password");
   updateSelectedSavedDeviceConnection({
     deviceHost: resolvedDeviceHost,

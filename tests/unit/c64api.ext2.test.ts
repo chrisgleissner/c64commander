@@ -20,6 +20,8 @@ import {
 } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
+
 // ── Node environment shims ─────────────────────────────────────────────────
 const ensureWindow = () => {
   if (typeof window !== "undefined") return;
@@ -426,8 +428,18 @@ describe("c64api utility functions - targeted branch coverage", () => {
       localStorage.setItem("c64u_base_url", "http://legacy.local");
       const result = resolveDeviceHostFromStorage();
       expect(result).toBe("legacy.local");
-      expect(localStorage.getItem("c64u_device_host")).toBe("legacy.local");
-      expect(localStorage.getItem("c64u_base_url")).toBeNull();
+      expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("legacy.local");
+    });
+
+    it("prefers a seeded legacy device host over a stale default current host", () => {
+      localStorage.setItem(DEVICE_HOST_KEY, "c64u");
+      localStorage.setItem("c64u_device_host", "127.0.0.1:35039");
+
+      const result = resolveDeviceHostFromStorage();
+
+      expect(result).toBe("127.0.0.1:35039");
+      expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("127.0.0.1:35039");
+      expect(localStorage.getItem("c64u_device_host")).toBe("127.0.0.1:35039");
     });
 
     it("returns DEFAULT_DEVICE_HOST when localStorage is empty", () => {

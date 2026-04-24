@@ -13,6 +13,8 @@ import * as toastModule from "@/hooks/use-toast";
 import * as loggingModule from "@/lib/logging";
 import * as platformModule from "@/lib/native/platform";
 
+const SONGLENGTHS_FILE_STORAGE_KEY = "c64u_songlengths_file:v1";
+
 vi.mock("@/lib/playback/fileLibraryUtils", () => ({
   buildLocalPlayFileFromUri: vi.fn(),
 }));
@@ -145,7 +147,7 @@ describe("useSonglengths", () => {
 
   it("accepts supported songlengths input and summarizes it", async () => {
     localStorage.setItem(
-      "c64u_songlengths_file:v1",
+      SONGLENGTHS_FILE_STORAGE_KEY,
       JSON.stringify({
         path: "/DOCUMENTS/Songlengths.md5",
         uri: "content://demo",
@@ -164,7 +166,7 @@ describe("useSonglengths", () => {
     });
     expect(result.current?.songlengthsSummary.entryCount).toBe(1);
     expect(result.current?.activeSonglengthsPath).toBe("/DOCUMENTS/Songlengths.md5");
-    expect(localStorage.getItem("c64u_songlengths_file:v1")).toBeNull();
+    expect(localStorage.getItem(SONGLENGTHS_FILE_STORAGE_KEY)).toBeNull();
   });
 
   it("reports empty songlengths file summary", async () => {
@@ -362,7 +364,7 @@ describe("useSonglengths", () => {
     );
 
     localStorage.setItem(
-      "c64u_songlengths_file:v1",
+      SONGLENGTHS_FILE_STORAGE_KEY,
       JSON.stringify({
         path: "/DOCUMENTS/Songlengths.md5",
         uri: "content://demo",
@@ -393,7 +395,7 @@ describe("useSonglengths", () => {
       await flushPromises();
     });
     expect(result.current?.songlengthsFiles[0]?.uri).toBe("content://picked");
-    expect(localStorage.getItem("c64u_songlengths_file:v1")).toMatch(/content:\/\/picked/);
+    expect(localStorage.getItem(SONGLENGTHS_FILE_STORAGE_KEY)).toMatch(/content:\/\/picked/);
 
     // Coverage for cache invalidation effect.
     rerender([
@@ -437,7 +439,7 @@ describe("useSonglengths", () => {
   it("logs persisted selection JSON parse failures", async () => {
     platformState.platform = "android";
     platformState.native = true;
-    localStorage.setItem("c64u_songlengths_file:v1", "{");
+    localStorage.setItem(SONGLENGTHS_FILE_STORAGE_KEY, "{");
 
     renderUseSonglengths([]);
     await act(async () => {

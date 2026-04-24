@@ -259,8 +259,8 @@ export const replaceTraceEvents = (nextEvents: TraceEvent[]) => {
   }
 };
 
-const SESSION_STORAGE_KEY = "__c64uPersistedTraces";
-const SESSION_COUNTERS_KEY = "__c64uPersistedTraceCounters";
+const SESSION_STORAGE_KEY = "c64u_persisted_traces";
+const SESSION_COUNTERS_KEY = "c64u_persisted_trace_counters";
 
 type PersistedCounters = {
   eventCounter: number;

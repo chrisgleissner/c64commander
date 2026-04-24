@@ -15,6 +15,7 @@ import * as fs from "node:fs/promises";
 import { promisify } from "node:util";
 import sharp from "sharp";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { variant } from "../src/generated/variant";
 // Load full YAML config for tests
 import "../tests/mocks/setupMockConfigForTests";
 import { seedUiMocks } from "./uiMocks";
@@ -56,6 +57,7 @@ import {
 const SCREENSHOT_ROOT = path.resolve("docs/img/app");
 const FORCE_REGENERATE_SCREENSHOTS = process.env.SCREENSHOT_FORCE_REGEN === "1";
 const execFile = promisify(execFileCb);
+const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 
 const screenshotPath = (relativePath: string) => path.resolve(SCREENSHOT_ROOT, relativePath);
 
@@ -138,11 +140,11 @@ const installHvscScreenshotMock = async (page: Page) => {
       ingestionSummary:
         state.installedVersion > 0
           ? {
-              totalSongs: state.totalSongs,
-              ingestedSongs: state.totalSongs,
-              failedSongs: 0,
-              songlengthSyntaxErrors: 0,
-            }
+            totalSongs: state.totalSongs,
+            ingestedSongs: state.totalSongs,
+            failedSongs: 0,
+            songlengthSyntaxErrors: 0,
+          }
           : null,
     });
 
@@ -197,7 +199,7 @@ const installHvscScreenshotMock = async (page: Page) => {
     window.__hvscMock__ = {
       addListener: (_event: string, listener: (event: Record<string, unknown>) => void) => {
         listeners.push(listener);
-        return { remove: async () => {} };
+        return { remove: async () => { } };
       },
       getHvscStatus: async () => buildStatus(),
       getHvscCacheStatus: async () => ({
@@ -847,7 +849,7 @@ const openImportDialog = async (page: Page) => {
     .getByRole("button", { name: /Add items|Add more items/i })
     .click();
   const dialog = page.getByRole("dialog");
-  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => { });
   if (!(await dialog.isVisible().catch(() => false))) {
     return null;
   }
@@ -856,7 +858,7 @@ const openImportDialog = async (page: Page) => {
 
 const waitForImportInterstitial = async (dialog: ReturnType<Page["getByRole"]>) => {
   const interstitial = dialog.getByTestId("import-selection-interstitial");
-  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
+  await interstitial.waitFor({ state: "visible", timeout: 3000 }).catch(() => { });
   if (await interstitial.isVisible().catch(() => false)) {
     return interstitial;
   }
@@ -971,10 +973,10 @@ const captureScreenshot = async (
   let screenshotBuffer = options?.locator
     ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
     : await page.screenshot({
-        animations: "disabled",
-        caret: "hide",
-        fullPage: options?.fullPage ?? false,
-      });
+      animations: "disabled",
+      caret: "hide",
+      fullPage: options?.fullPage ?? false,
+    });
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -1714,95 +1716,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                  {
-                    id: "snap-4",
-                    filename: "c64-custom-20260110-060000.c64snap",
-                    bytesBase64: buildSnap(3, 1736488800),
-                    createdAt: "2026-01-10T06:00:00.000Z",
-                    snapshotType: "custom",
-                    metadata: {
-                      snapshot_type: "custom",
-                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                      created_at: "2026-01-10 06:00:00",
-                    },
+                },
+                {
+                  id: "snap-4",
+                  filename: "c64-custom-20260110-060000.c64snap",
+                  bytesBase64: buildSnap(3, 1736488800),
+                  createdAt: "2026-01-10T06:00:00.000Z",
+                  snapshotType: "custom",
+                  metadata: {
+                    snapshot_type: "custom",
+                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                    created_at: "2026-01-10 06:00:00",
                   },
-                ]
+                },
+              ]
               : [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                ];
+                },
+              ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -2896,16 +2898,22 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       allowWarnings(testInfo, "Expected probe failures during offline discovery.");
 
-      await page.addInitScript(() => {
-        localStorage.setItem("c64u_startup_discovery_window_ms", "600");
-        localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
-        localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
-        localStorage.setItem("c64u_device_host", "127.0.0.1:1");
-        localStorage.removeItem("c64u_password");
-        localStorage.removeItem("c64u_has_password");
-        sessionStorage.removeItem("c64u_demo_interstitial_shown");
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
-      });
+      await page.addInitScript(
+        ({ currentDeviceHostKey }: { currentDeviceHostKey: string }) => {
+          localStorage.setItem("c64u_startup_discovery_window_ms", "600");
+          localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+          localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
+          localStorage.setItem("c64u_device_host", "127.0.0.1:1");
+          localStorage.setItem(currentDeviceHostKey, "127.0.0.1:1");
+          localStorage.removeItem("c64u_saved_devices:v1");
+          localStorage.removeItem("c64u_base_url");
+          localStorage.removeItem("c64u_password");
+          localStorage.removeItem("c64u_has_password");
+          sessionStorage.removeItem("c64u_demo_interstitial_shown");
+          delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+        },
+        { currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
+      );
 
       await page.goto("/", { waitUntil: "domcontentloaded" });
       const dialog = page.getByRole("dialog", { name: "Demo Mode" });
@@ -2934,11 +2942,14 @@ test.describe("App screenshots", () => {
       });
 
       await page.addInitScript(
-        ({ baseUrl }) => {
+        ({ baseUrl, currentDeviceHostKey }: { baseUrl: string; currentDeviceHostKey: string }) => {
           localStorage.setItem("c64u_startup_discovery_window_ms", "600");
           localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
           localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
           localStorage.setItem("c64u_device_host", "demo.invalid");
+          localStorage.setItem(currentDeviceHostKey, "demo.invalid");
+          localStorage.removeItem("c64u_saved_devices:v1");
+          localStorage.removeItem("c64u_base_url");
           localStorage.removeItem("c64u_password");
           localStorage.removeItem("c64u_has_password");
           delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
@@ -2949,7 +2960,7 @@ test.describe("App screenshots", () => {
             "http://demo.invalid",
           ];
         },
-        { baseUrl: server.baseUrl },
+        { baseUrl: server.baseUrl, currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
       );
 
       await page.goto("/play", { waitUntil: "domcontentloaded" });

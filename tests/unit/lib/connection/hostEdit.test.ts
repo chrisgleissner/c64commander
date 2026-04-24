@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const buildBaseUrlFromDeviceHost = vi.fn((host: string) => `http://${host}`);
 const getC64APIConfigSnapshot = vi.fn(() => ({ password: "pw" }));
+const resolveDeviceHostFromStorage = vi.fn(() => "c64u");
 const updateC64APIConfig = vi.fn();
 const discoverConnection = vi.fn();
 const dismissDemoInterstitial = vi.fn();
@@ -19,6 +20,7 @@ vi.mock("@/lib/c64api", () => ({
   buildBaseUrlFromDeviceHost: (...args: unknown[]) => buildBaseUrlFromDeviceHost(args[0] as string),
   getC64APIConfigSnapshot: () => getC64APIConfigSnapshot(),
   normalizeDeviceHost: (host?: string) => host?.trim() || "c64u",
+  resolveDeviceHostFromStorage: () => resolveDeviceHostFromStorage(),
   updateC64APIConfig: (...args: unknown[]) => updateC64APIConfig(...args),
 }));
 
@@ -37,6 +39,8 @@ describe("hostEdit", () => {
   beforeEach(() => {
     buildBaseUrlFromDeviceHost.mockClear();
     getC64APIConfigSnapshot.mockClear();
+    resolveDeviceHostFromStorage.mockReset();
+    resolveDeviceHostFromStorage.mockReturnValue("c64u");
     updateC64APIConfig.mockClear();
     discoverConnection.mockClear();
     dismissDemoInterstitial.mockClear();
@@ -51,32 +55,26 @@ describe("hostEdit", () => {
   });
 
   it("reads configured host from localStorage", () => {
-    localStorage.setItem("c64u_device_host", "10.0.0.5");
+    resolveDeviceHostFromStorage.mockReturnValue("10.0.0.5");
     expect(getConfiguredHost()).toBe("10.0.0.5");
   });
 
   it("returns default host and logs when localStorage read fails", () => {
-    const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    resolveDeviceHostFromStorage.mockImplementation(() => {
       throw new Error("boom");
     });
-    try {
-      expect(getConfiguredHost()).toBe("c64u");
-      expect(addLog).toHaveBeenCalledWith("warn", "Failed to read configured host from storage", expect.any(Object));
-    } finally {
-      getItemSpy.mockRestore();
-    }
+
+    expect(getConfiguredHost()).toBe("c64u");
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to read configured host from storage", expect.any(Object));
   });
 
   it("returns default host and logs when localStorage throws a non-Error value (BRDA:25)", () => {
-    const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    resolveDeviceHostFromStorage.mockImplementation(() => {
       throw "storage-error-string"; // non-Error throw to cover hostEdit.ts BRDA:25 FALSE branch
     });
-    try {
-      expect(getConfiguredHost()).toBe("c64u");
-      expect(addLog).toHaveBeenCalledWith("warn", "Failed to read configured host from storage", expect.any(Object));
-    } finally {
-      getItemSpy.mockRestore();
-    }
+
+    expect(getConfiguredHost()).toBe("c64u");
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to read configured host from storage", expect.any(Object));
   });
 
   it("saves host and retries with default trigger", () => {

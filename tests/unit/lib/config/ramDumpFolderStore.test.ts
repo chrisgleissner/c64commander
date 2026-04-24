@@ -15,6 +15,8 @@ import {
   type RamDumpFolderConfig,
 } from "@/lib/config/ramDumpFolderStore";
 
+const STORAGE_KEY = "c64u_ram_dump_folder:v1";
+
 // Mock addErrorLog
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -153,7 +155,7 @@ describe("ramDumpFolderStore", () => {
 
       saveRamDumpFolderConfig(config);
 
-      expect(localStorage.setItem).toHaveBeenCalledWith("c64u_ram_dump_folder:v1", JSON.stringify(config));
+      expect(localStorage.setItem).toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify(config));
       expect(window.dispatchEvent).toHaveBeenCalled();
 
       vi.unstubAllGlobals();
@@ -191,7 +193,7 @@ describe("ramDumpFolderStore", () => {
 
       clearRamDumpFolderConfig();
 
-      expect(localStorage.removeItem).toHaveBeenCalledWith("c64u_ram_dump_folder:v1");
+      expect(localStorage.removeItem).toHaveBeenCalledWith(STORAGE_KEY);
       expect(window.dispatchEvent).toHaveBeenCalled();
 
       vi.unstubAllGlobals();

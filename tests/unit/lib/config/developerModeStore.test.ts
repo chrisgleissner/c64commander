@@ -13,6 +13,8 @@ import {
   subscribeDeveloperMode,
 } from "@/lib/config/developerModeStore";
 
+const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";
+
 describe("developerModeStore", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -27,19 +29,19 @@ describe("developerModeStore", () => {
     const unsub = subscribeDeveloperMode((d) => events.push(d.enabled));
     setDeveloperModeEnabled(true);
     unsub();
-    expect(localStorage.getItem("c64u_dev_mode_enabled")).toBe("1");
+    expect(localStorage.getItem(DEVELOPER_MODE_KEY)).toBe("1");
     expect(getDeveloperModeEnabled()).toBe(true);
     expect(events).toEqual([true]);
   });
 
   it('setDeveloperModeEnabled(false) stores "0" and fires event (line 17 FALSE branch)', () => {
     // Pre-set to true so we can verify it changes to false
-    localStorage.setItem("c64u_dev_mode_enabled", "1");
+    localStorage.setItem(DEVELOPER_MODE_KEY, "1");
     const events: boolean[] = [];
     const unsub = subscribeDeveloperMode((d) => events.push(d.enabled));
     setDeveloperModeEnabled(false);
     unsub();
-    expect(localStorage.getItem("c64u_dev_mode_enabled")).toBe("0");
+    expect(localStorage.getItem(DEVELOPER_MODE_KEY)).toBe("0");
     expect(getDeveloperModeEnabled()).toBe(false);
     expect(events).toEqual([false]);
   });

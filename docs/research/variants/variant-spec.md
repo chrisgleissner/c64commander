@@ -1,5 +1,7 @@
 # Variant Spec
 
+Note: the Android-first V1 scope is corrected by [addendum-v1/variant-spec-addendum-v1.md](addendum-v1/variant-spec-addendum-v1.md). Where this document conflicts with the addendum, the addendum wins.
+
 ## 1. Goal
 
 This repository must support a small number of centrally defined app variants without creating a maintenance fork of the codebase.
@@ -378,11 +380,8 @@ variants:
         short_name: C64 Commander
         theme_color: "#6C7EB7"
         background_color: "#6C7EB7"
-        cache_prefix: c64commander-static
-        storage_prefix: c64commander
         login_title: C64 Commander Login
         login_heading: C64 Commander
-        image_repo: ghcr.io/chrisgleissner/c64commander
 
     assets:
       web:
@@ -421,11 +420,8 @@ variants:
         short_name: C64U Controller
         theme_color: "#6C7EB7"
         background_color: "#6C7EB7"
-        cache_prefix: c64u-controller-static
-        storage_prefix: c64u-controller
         login_title: C64U Controller Login
         login_heading: C64U Controller
-        image_repo: ghcr.io/chrisgleissner/c64u-controller
 
     assets:
       web:

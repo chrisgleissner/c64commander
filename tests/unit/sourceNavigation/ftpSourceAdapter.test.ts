@@ -7,7 +7,6 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-
 vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: vi.fn(),
 }));
@@ -28,13 +27,16 @@ import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { createUltimateSourceLocation, normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
+const HAS_PASSWORD_KEY = "c64u_has_password";
+const FTP_CACHE_KEY = "c64u_ftp_cache:v1";
 
 describe("ftpSourceAdapter", () => {
   beforeEach(() => {
     listFtpDirectoryMock.mockReset();
     localStorage.clear();
-    localStorage.setItem("c64u_device_host", "c64u");
-    localStorage.setItem("c64u_has_password", "1");
+    localStorage.setItem(DEVICE_HOST_KEY, "c64u");
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
   });
 
   it("caches directory listings and reuses cache", async () => {
@@ -155,7 +157,7 @@ describe("ftpSourceAdapter", () => {
 
   it("logs when cached FTP listing is corrupted", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    localStorage.setItem("c64u_ftp_cache:v1", "{bad-json");
+    localStorage.setItem(FTP_CACHE_KEY, "{bad-json");
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
 
     const source = createUltimateSourceLocation();
@@ -221,7 +223,7 @@ describe("ftpSourceAdapter", () => {
       cache[key] = { entries: [], updatedAt: Date.now() };
       order.push(key);
     }
-    localStorage.setItem("c64u_ftp_cache:v1", JSON.stringify({ entries: cache, order }));
+    localStorage.setItem(FTP_CACHE_KEY, JSON.stringify({ entries: cache, order }));
 
     listFtpDirectoryMock.mockResolvedValue({
       entries: [
@@ -237,7 +239,7 @@ describe("ftpSourceAdapter", () => {
     const source = createUltimateSourceLocation();
     await source.listEntries("/new");
 
-    const stored = JSON.parse(localStorage.getItem("c64u_ftp_cache:v1")!);
+    const stored = JSON.parse(localStorage.getItem(FTP_CACHE_KEY)!);
     // Should not exceed MAX_CACHE_ENTRIES
     expect(stored.order.length).toBeLessThanOrEqual(200);
   });
@@ -245,10 +247,10 @@ describe("ftpSourceAdapter", () => {
   it("handles localStorage.setItem quota exceeded gracefully", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     // Pre-populate cache so the loadCache read succeeds, then make setItem throw
-    localStorage.setItem("c64u_ftp_cache:v1", JSON.stringify({ entries: {}, order: [] }));
+    localStorage.setItem(FTP_CACHE_KEY, JSON.stringify({ entries: {}, order: [] }));
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key: string, value: string) {
-      if (key === "c64u_ftp_cache:v1") throw new DOMException("QuotaExceededError");
+      if (key === FTP_CACHE_KEY) throw new DOMException("QuotaExceededError");
       originalSetItem.call(this, key, value);
     };
 
@@ -272,7 +274,7 @@ describe("ftpSourceAdapter", () => {
   });
 
   it("handles null parsed cache (non-object)", async () => {
-    localStorage.setItem("c64u_ftp_cache:v1", "null");
+    localStorage.setItem(FTP_CACHE_KEY, "null");
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
 
     const source = createUltimateSourceLocation();
@@ -281,7 +283,7 @@ describe("ftpSourceAdapter", () => {
   });
 
   it("handles parsed.order not being an array", async () => {
-    localStorage.setItem("c64u_ftp_cache:v1", JSON.stringify({ entries: {}, order: "not-array" }));
+    localStorage.setItem(FTP_CACHE_KEY, JSON.stringify({ entries: {}, order: "not-array" }));
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
 
     const source = createUltimateSourceLocation();
@@ -321,7 +323,7 @@ describe("ftpSourceAdapter", () => {
 
   it("falls back to empty entries object when parsed cache has no entries key", async () => {
     // Covers parsed.entries ?? {} (line 37: ?? {} branch)
-    localStorage.setItem("c64u_ftp_cache:v1", JSON.stringify({ order: ["/"] }));
+    localStorage.setItem(FTP_CACHE_KEY, JSON.stringify({ order: ["/"] }));
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
     const source = createUltimateSourceLocation();
     const result = await source.listEntries("/");

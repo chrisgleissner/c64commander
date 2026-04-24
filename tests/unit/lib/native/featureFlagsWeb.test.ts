@@ -9,6 +9,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FeatureFlagsWeb } from "@/lib/native/featureFlags.web";
 
+const buildFlagKey = (key: string) => `c64u_feature_flag:${key}`;
+
 describe("FeatureFlagsWeb", () => {
   let plugin: FeatureFlagsWeb;
 
@@ -32,7 +34,7 @@ describe("FeatureFlagsWeb", () => {
   it('setFlag(false) stores "0" and getFlag returns false (line 25 FALSE branch)', async () => {
     // This covers the ternary FALSE branch: options.value = false → '0'
     await plugin.setFlag({ key: "test_flag", value: false });
-    expect(localStorage.getItem("c64u_feature_flag:test_flag")).toBe("0");
+    expect(localStorage.getItem(buildFlagKey("test_flag"))).toBe("0");
     const result = await plugin.getFlag({ key: "test_flag" });
     expect(result).toEqual({ value: false });
   });
@@ -48,13 +50,13 @@ describe("FeatureFlagsWeb", () => {
 
   it("clearFlag removes the stored override from localStorage and sessionStorage", async () => {
     await plugin.setFlag({ key: "clearable", value: true });
-    expect(localStorage.getItem("c64u_feature_flag:clearable")).toBe("1");
-    expect(sessionStorage.getItem("c64u_feature_flag:clearable")).toBe("1");
+    expect(localStorage.getItem(buildFlagKey("clearable"))).toBe("1");
+    expect(sessionStorage.getItem(buildFlagKey("clearable"))).toBe("1");
 
     await plugin.clearFlag({ key: "clearable" });
 
-    expect(localStorage.getItem("c64u_feature_flag:clearable")).toBeNull();
-    expect(sessionStorage.getItem("c64u_feature_flag:clearable")).toBeNull();
+    expect(localStorage.getItem(buildFlagKey("clearable"))).toBeNull();
+    expect(sessionStorage.getItem(buildFlagKey("clearable"))).toBeNull();
     const result = await plugin.getFlag({ key: "clearable" });
     expect(result).toEqual({});
   });

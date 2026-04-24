@@ -7,10 +7,11 @@
  */
 
 import type { CapacitorConfig } from "@capacitor/cli";
+import { variant } from "./src/generated/variant";
 
 const config: CapacitorConfig = {
-  appId: "uk.gleissner.c64commander",
-  appName: "C64 Commander",
+  appId: variant.platform.ios.bundleId,
+  appName: variant.displayName,
   webDir: "dist",
   server: {
     androidScheme: "http",

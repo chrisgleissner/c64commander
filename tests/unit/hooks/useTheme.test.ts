@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useTheme } from "@/hooks/useTheme";
 
+const THEME_STORAGE_KEY = "c64u_theme";
+
 describe("useTheme", () => {
   let mediaQueryMock: {
     matches: boolean;
@@ -41,13 +43,13 @@ describe("useTheme", () => {
     });
 
     it("reads stored light theme from localStorage", () => {
-      localStorage.setItem("c64u_theme", "light");
+      localStorage.setItem(THEME_STORAGE_KEY, "light");
       const { result } = renderHook(() => useTheme());
       expect(result.current.theme).toBe("light");
     });
 
     it("reads stored dark theme from localStorage", () => {
-      localStorage.setItem("c64u_theme", "dark");
+      localStorage.setItem(THEME_STORAGE_KEY, "dark");
       const { result } = renderHook(() => useTheme());
       expect(result.current.theme).toBe("dark");
     });
@@ -67,28 +69,28 @@ describe("useTheme", () => {
     });
 
     it("resolves to light when theme is explicitly light regardless of system", () => {
-      localStorage.setItem("c64u_theme", "light");
+      localStorage.setItem(THEME_STORAGE_KEY, "light");
       mediaQueryMock.matches = true;
       const { result } = renderHook(() => useTheme());
       expect(result.current.resolvedTheme).toBe("light");
     });
 
     it("resolves to dark when theme is explicitly dark regardless of system", () => {
-      localStorage.setItem("c64u_theme", "dark");
+      localStorage.setItem(THEME_STORAGE_KEY, "dark");
       mediaQueryMock.matches = false;
       const { result } = renderHook(() => useTheme());
       expect(result.current.resolvedTheme).toBe("dark");
     });
 
     it("applies the resolved theme class to document.documentElement", () => {
-      localStorage.setItem("c64u_theme", "dark");
+      localStorage.setItem(THEME_STORAGE_KEY, "dark");
       renderHook(() => useTheme());
       expect(document.documentElement.classList.contains("dark")).toBe(true);
     });
 
     it("removes conflicting theme class when applying new resolved theme", () => {
       document.documentElement.classList.add("dark");
-      localStorage.setItem("c64u_theme", "light");
+      localStorage.setItem(THEME_STORAGE_KEY, "light");
       renderHook(() => useTheme());
       expect(document.documentElement.classList.contains("dark")).toBe(false);
       expect(document.documentElement.classList.contains("light")).toBe(true);
@@ -109,7 +111,7 @@ describe("useTheme", () => {
       act(() => {
         result.current.setTheme("light");
       });
-      expect(localStorage.getItem("c64u_theme")).toBe("light");
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
     });
 
     it("updates resolvedTheme when explicit theme is set", () => {

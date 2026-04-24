@@ -7,11 +7,20 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { variant } from "@/generated/variant";
 
 const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const LEGACY_DEVICE_HOST_KEY = "c64u_device_host";
+export const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
+const CURRENT_BASE_URL_KEY = "c64u_base_url";
 
-export const DEFAULT_BASE_URL = "http://c64u";
-export const DEFAULT_DEVICE_HOST = "c64u";
+export const persistDeviceHostToStorage = (deviceHost: string) => {
+  localStorage.setItem(CURRENT_DEVICE_HOST_KEY, deviceHost);
+  localStorage.setItem(LEGACY_DEVICE_HOST_KEY, deviceHost);
+};
+
+export const DEFAULT_DEVICE_HOST = variant.runtime.endpoints.device_host ?? "c64u";
+export const DEFAULT_BASE_URL = `http://${DEFAULT_DEVICE_HOST}`;
 export const DEFAULT_HTTP_PORT = 80;
 export const DEFAULT_PROXY_URL = "http://127.0.0.1:8787";
 export const WEB_PROXY_PATH = "/api/rest";
@@ -165,20 +174,35 @@ export const resolveDeviceHostFromStorage = () => {
       });
     }
   }
-  const storedDeviceHost = localStorage.getItem("c64u_device_host");
+  const storedCurrentDeviceHost = localStorage.getItem(CURRENT_DEVICE_HOST_KEY);
+  const legacyStoredDeviceHost = localStorage.getItem(LEGACY_DEVICE_HOST_KEY);
+  let currentStoredDeviceHost = storedCurrentDeviceHost;
+  if (legacyStoredDeviceHost) {
+    const normalizedLegacyHost = normalizeDeviceHost(legacyStoredDeviceHost);
+    if (normalizedLegacyHost !== legacyStoredDeviceHost) {
+      localStorage.setItem(LEGACY_DEVICE_HOST_KEY, normalizedLegacyHost);
+    }
+    const normalizedCurrentHost = storedCurrentDeviceHost ? normalizeDeviceHost(storedCurrentDeviceHost) : null;
+    if (!normalizedCurrentHost || normalizedCurrentHost === DEFAULT_DEVICE_HOST) {
+      persistDeviceHostToStorage(normalizedLegacyHost);
+      currentStoredDeviceHost = normalizedLegacyHost;
+    }
+  }
+  const storedDeviceHost = currentStoredDeviceHost;
   const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
   if (storedDeviceHost) {
-    localStorage.removeItem("c64u_base_url");
+    persistDeviceHostToStorage(normalizedStoredHost);
+    localStorage.removeItem(CURRENT_BASE_URL_KEY);
     return normalizedStoredHost;
   }
-  const legacyBaseUrl = localStorage.getItem("c64u_base_url");
+  const legacyBaseUrl = localStorage.getItem(CURRENT_BASE_URL_KEY) ?? localStorage.getItem("c64u_base_url");
   if (legacyBaseUrl) {
     const migratedHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(legacyBaseUrl));
-    localStorage.setItem("c64u_device_host", migratedHost);
-    localStorage.removeItem("c64u_base_url");
+    persistDeviceHostToStorage(migratedHost);
+    localStorage.removeItem(CURRENT_BASE_URL_KEY);
     return migratedHost;
   }
-  localStorage.removeItem("c64u_base_url");
+  localStorage.removeItem(CURRENT_BASE_URL_KEY);
   return normalizedStoredHost;
 };
 

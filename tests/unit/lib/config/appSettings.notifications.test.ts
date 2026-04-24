@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import {
   DEFAULT_AUTO_ROTATION_ENABLED,
   clampNotificationDurationMs,
@@ -43,7 +44,7 @@ describe("loadNotificationVisibility", () => {
   });
 
   it("falls back to errors-only for unknown stored values", () => {
-    localStorage.setItem("c64u_notification_visibility", "bogus");
+    localStorage.setItem(APP_SETTINGS_KEYS.NOTIFICATION_VISIBILITY_KEY, "bogus");
     expect(loadNotificationVisibility()).toBe("errors-only");
   });
 });
@@ -51,7 +52,7 @@ describe("loadNotificationVisibility", () => {
 describe("saveNotificationVisibility", () => {
   it("persists the value to localStorage", () => {
     saveNotificationVisibility("all");
-    expect(localStorage.getItem("c64u_notification_visibility")).toBe("all");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.NOTIFICATION_VISIBILITY_KEY)).toBe("all");
   });
 
   it("broadcasts a settings-updated event", () => {
@@ -61,7 +62,7 @@ describe("saveNotificationVisibility", () => {
     saveNotificationVisibility("all");
     window.removeEventListener("c64u-app-settings-updated", handler);
     expect(events).toHaveLength(1);
-    expect(events[0].detail.key).toBe("c64u_notification_visibility");
+    expect(events[0].detail.key).toBe(APP_SETTINGS_KEYS.NOTIFICATION_VISIBILITY_KEY);
     expect(events[0].detail.value).toBe("all");
   });
 });
@@ -116,7 +117,7 @@ describe("saveNotificationDurationMs", () => {
     saveNotificationDurationMs(5000);
     window.removeEventListener("c64u-app-settings-updated", handler);
     expect(events).toHaveLength(1);
-    expect(events[0].detail.key).toBe("c64u_notification_duration_ms");
+    expect(events[0].detail.key).toBe(APP_SETTINGS_KEYS.NOTIFICATION_DURATION_MS_KEY);
     expect(events[0].detail.value).toBe(5000);
   });
 });

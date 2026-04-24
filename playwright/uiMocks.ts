@@ -80,6 +80,31 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       snapshot: unknown;
       seedFeatureFlagsByDefault: boolean;
     }) => {
+      const parseStoredPort = (value: string | null, fallback: number) => {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
+      };
+
+      const readSeededSavedDevice = () => {
+        const savedDevicesRaw = localStorage.getItem("c64u_saved_devices:v1");
+        if (!savedDevicesRaw) return null;
+        try {
+          const parsed = JSON.parse(savedDevicesRaw) as {
+            selectedDeviceId?: string;
+            devices?: Array<{
+              id?: string;
+              ftpPort?: number;
+              telnetPort?: number;
+              hasPassword?: boolean;
+            }>;
+          };
+          const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+          return devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0] ?? null;
+        } catch {
+          return null;
+        }
+      };
+
       try {
         delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
       } catch (error) {
@@ -112,10 +137,79 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
       const host = baseUrlArg?.replace(/^https?:\/\//, "");
       try {
+        const seededSavedDevice = readSeededSavedDevice();
+        const seededFtpPort = parseStoredPort(
+          localStorage.getItem("c64u_ftp_port"),
+          typeof seededSavedDevice?.ftpPort === "number" ? seededSavedDevice.ftpPort : 21,
+        );
+        const seededTelnetPort = parseStoredPort(
+          localStorage.getItem("c64u_telnet_port"),
+          typeof seededSavedDevice?.telnetPort === "number" ? seededSavedDevice.telnetPort : 64,
+        );
+        const preservedPassword = (
+          window as Window & {
+            __c64uSecureStorageOverride?: { password?: string | null };
+          }
+        ).__c64uSecureStorageOverride?.password;
+        const hasPassword = localStorage.getItem("c64u_has_password") === "1" || preservedPassword != null;
         localStorage.removeItem("c64u_password");
-        localStorage.removeItem("c64u_has_password");
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+        if (hasPassword && preservedPassword != null) {
+          localStorage.setItem("c64u_has_password", "1");
+          (
+            window as Window & {
+              __c64uSecureStorageOverride?: { password?: string | null };
+            }
+          ).__c64uSecureStorageOverride = {
+            password: preservedPassword,
+          };
+        } else {
+          localStorage.removeItem("c64u_has_password");
+          delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+        }
+        let deviceHost = "c64u";
+        let deviceHttpPort = 80;
+        if (baseUrlArg) {
+          try {
+            const parsedUrl = new URL(baseUrlArg);
+            deviceHost = parsedUrl.hostname || "c64u";
+            deviceHttpPort = Number(parsedUrl.port) || 80;
+          } catch {
+            // ignore
+          }
+        }
+        const testDeviceId = "test-device-mock";
+        localStorage.setItem(
+          "c64u_saved_devices:v1",
+          JSON.stringify({
+            version: 1,
+            selectedDeviceId: testDeviceId,
+            devices: [
+              {
+                id: testDeviceId,
+                name: "",
+                nameSource: "auto",
+                host: deviceHost,
+                httpPort: deviceHttpPort,
+                ftpPort: seededFtpPort,
+                telnetPort: seededTelnetPort,
+                lastKnownProduct: null,
+                lastKnownHostname: null,
+                lastKnownUniqueId: null,
+                lastSuccessfulConnectionAt: null,
+                lastUsedAt: null,
+                hasPassword,
+              },
+            ],
+            summaries: {},
+            summaryLru: [],
+            hasEverHadMultipleDevices: false,
+          }),
+        );
         localStorage.setItem("c64u_device_host", host || "c64u");
+        localStorage.setItem("c64commander:device_host", host || "c64u");
+        if (baseUrlArg) {
+          localStorage.setItem("c64u_base_url", baseUrlArg);
+        }
         localStorage.setItem("c64u_notification_visibility", "all");
         localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
         sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, "1");
@@ -141,7 +235,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       window.__hvscMock__ = {
         addListener: (_event: string, listener: (event: any) => void) => {
           listeners.push(listener);
-          return { remove: async () => {} };
+          return { remove: async () => { } };
         },
         getHvscStatus: async () => ({
           installedBaselineVersion: 83,
@@ -167,7 +261,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
-        cancelHvscInstall: async () => {},
+        cancelHvscInstall: async () => { },
         getHvscFolderListing: async ({ path }: { path: string }) => {
           const normalized = path || "/";
           if (normalized === "/") {

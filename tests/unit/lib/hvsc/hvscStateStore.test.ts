@@ -104,7 +104,7 @@ describe("hvscStateStore", () => {
         "Failed to load HVSC state from storage",
         expect.objectContaining({
           error: expect.any(String),
-          storageKey: "c64u_hvsc_state:v1",
+          storageKey: STORAGE_KEY,
         }),
       );
     });

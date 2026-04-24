@@ -11,6 +11,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const INITIAL_SNAPSHOT_SESSION_KEY = "c64u_initial_snapshot_session:http://c64u";
+
 const status = { isConnected: true, isConnecting: false };
 
 const getCategories = vi.fn(async () => ({ categories: ["Audio Mixer"] }));
@@ -351,7 +353,7 @@ describe("useAppConfigState", () => {
   });
 
   it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
-    sessionStorage.setItem("c64u_initial_snapshot_session:http://c64u", "1");
+    sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
     renderHook(() => useAppConfigState(), { wrapper });
     await act(async () => {});
     expect(getCategories).not.toHaveBeenCalled();

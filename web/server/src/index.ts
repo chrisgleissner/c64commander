@@ -11,6 +11,7 @@ import { applySecurityHeaders, getClientIp } from "./securityHeaders.js";
 import { readBody, readJsonBody, writeJson, writeText } from "./httpIO.js";
 import { createStaticAssetServer } from "./staticAssets.js";
 import { createAuthState } from "./authState.js";
+import { variant } from "./variant.generated.js";
 
 type AppConfig = {
   networkPassword: string | null;
@@ -142,7 +143,7 @@ const {
 
 const buildDefaultConfig = (): AppConfig => ({
   networkPassword: normalizePassword(process.env.C64U_NETWORK_PASSWORD) ?? null,
-  defaultDeviceHost: sanitizeHost(process.env.C64U_DEVICE_HOST) ?? "c64u",
+  defaultDeviceHost: sanitizeHost(process.env.C64U_DEVICE_HOST) ?? variant.runtime.endpoints.device_host ?? "c64u",
 });
 
 const isConfigPermissionError = (error: unknown) => {

@@ -16,6 +16,8 @@ import {
 } from "@/lib/hvsc/hvscReleaseService";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
+const HVSC_BASE_URL_KEY = "c64u_hvsc_base_url";
+
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
     isNativePlatform: vi.fn(() => false),
@@ -205,28 +207,28 @@ describe("hvscReleaseService", () => {
       const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
       vi.stubGlobal("localStorage", mockLS);
       setHvscBaseUrlOverride("https://example.com/hvsc");
-      expect(mockLS.setItem).toHaveBeenCalledWith("c64u_hvsc_base_url", "https://example.com/hvsc/");
+      expect(mockLS.setItem).toHaveBeenCalledWith(HVSC_BASE_URL_KEY, "https://example.com/hvsc/");
     });
 
     it("removes the stored URL when called with an empty string", () => {
       const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
       vi.stubGlobal("localStorage", mockLS);
       setHvscBaseUrlOverride("");
-      expect(mockLS.removeItem).toHaveBeenCalledWith("c64u_hvsc_base_url");
+      expect(mockLS.removeItem).toHaveBeenCalledWith(HVSC_BASE_URL_KEY);
     });
 
     it("removes the stored URL when called with null", () => {
       const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
       vi.stubGlobal("localStorage", mockLS);
       setHvscBaseUrlOverride(null);
-      expect(mockLS.removeItem).toHaveBeenCalledWith("c64u_hvsc_base_url");
+      expect(mockLS.removeItem).toHaveBeenCalledWith(HVSC_BASE_URL_KEY);
     });
 
     it("removes the stored URL when called with undefined", () => {
       const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
       vi.stubGlobal("localStorage", mockLS);
       setHvscBaseUrlOverride(undefined);
-      expect(mockLS.removeItem).toHaveBeenCalledWith("c64u_hvsc_base_url");
+      expect(mockLS.removeItem).toHaveBeenCalledWith(HVSC_BASE_URL_KEY);
     });
   });
 });

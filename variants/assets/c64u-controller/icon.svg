@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+    <title id="title">C64U Controller icon</title>
+    <desc id="desc">Rounded teal square with stylized UC initials.</desc>
+    <defs>
+        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#4A90B7" />
+            <stop offset="100%" stop-color="#184D66" />
+        </linearGradient>
+    </defs>
+    <rect width="512" height="512" rx="112" fill="url(#bg)" />
+    <rect x="74" y="74" width="364" height="364" rx="86" fill="#081A22" fill-opacity="0.16" />
+    <path d="M133 189h35v74c0 19 11 30 29 30s29-11 29-30v-74h35v75c0 40-24 61-64 61-41 0-64-22-64-61v-75Z" fill="#F3F7F8" />
+    <path d="M404 322c-43 0-74-29-74-68 0-39 31-68 74-68 22 0 41 7 55 20l-22 25c-10-8-20-13-33-13-23 0-39 16-39 36 0 20 16 35 39 35 13 0 24-4 33-12l22 24c-14 14-34 21-55 21Z" fill="#F3F7F8" />
+</svg>

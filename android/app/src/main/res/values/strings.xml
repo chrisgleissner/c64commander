@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='utf-8'?>
+<!-- AUTO-GENERATED FILE. Do not edit by hand.
+     Source:   variants/variants.yaml
+     Compiler: scripts/generate-variant.mjs
+     Run `node scripts/generate-variant.mjs` to regenerate. -->
 <resources>
     <string name="app_name">C64 Commander</string>
     <string name="title_activity_main">C64 Commander</string>

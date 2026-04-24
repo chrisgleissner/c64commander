@@ -1,0 +1,6 @@
+// AUTO-GENERATED FILE. Do not edit by hand.
+// Source:   variants/variants.yaml
+// Compiler: scripts/generate-variant.mjs
+// Run `node scripts/generate-variant.mjs` to regenerate.
+VARIANT_DISPLAY_NAME = C64 Commander
+VARIANT_BUNDLE_IDENTIFIER = uk.gleissner.c64commander

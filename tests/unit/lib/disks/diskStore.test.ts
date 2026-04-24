@@ -10,6 +10,8 @@ import { loadDiskLibrary, saveDiskLibrary, SHARED_DISK_LIBRARY_ID } from "@/lib/
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const DISK_LIBRARY_PREFIX = "c64u_disk_library:";
+
 describe("diskStore", () => {
   const mockId = "test-library";
   const mockDisk = createDiskEntry({ path: "/disk.d64", location: "local" });
@@ -34,13 +36,13 @@ describe("diskStore", () => {
   });
 
   it("handles invalid JSON gracefully", () => {
-    localStorage.setItem(`c64u_disk_library:${mockId}`, "invalid json");
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}${mockId}`, "invalid json");
     const loaded = loadDiskLibrary(mockId);
     expect(loaded.disks).toEqual([]);
   });
 
   it("handles valid JSON with invalid structure gracefully", () => {
-    localStorage.setItem(`c64u_disk_library:${mockId}`, JSON.stringify({ disks: "not an array" }));
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}${mockId}`, JSON.stringify({ disks: "not an array" }));
     const loaded = loadDiskLibrary(mockId);
     expect(loaded.disks).toEqual([]);
   });
@@ -48,8 +50,8 @@ describe("diskStore", () => {
   it("merges legacy per-device libraries into the shared disk library", () => {
     const diskA = createDiskEntry({ path: "/device-a/demo.d64", location: "local" });
     const diskB = createDiskEntry({ path: "/device-b/demo.d81", location: "local" });
-    localStorage.setItem("c64u_disk_library:device-a", JSON.stringify({ disks: [diskA] }));
-    localStorage.setItem("c64u_disk_library:device-b", JSON.stringify({ disks: [diskB] }));
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-a`, JSON.stringify({ disks: [diskA] }));
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-b`, JSON.stringify({ disks: [diskB] }));
 
     const loaded = loadDiskLibrary(SHARED_DISK_LIBRARY_ID);
 
@@ -73,8 +75,8 @@ describe("diskStore", () => {
     const diskA = createDiskEntry({ path: "/Usb0/demo.d64", location: "ultimate", origin: originA });
     const diskB = createDiskEntry({ path: "/Usb0/demo.d64", location: "ultimate", origin: originB });
 
-    localStorage.setItem("c64u_disk_library:device-a", JSON.stringify({ disks: [diskA] }));
-    localStorage.setItem("c64u_disk_library:device-b", JSON.stringify({ disks: [diskB] }));
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-a`, JSON.stringify({ disks: [diskA] }));
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-b`, JSON.stringify({ disks: [diskB] }));
 
     const loaded = loadDiskLibrary(SHARED_DISK_LIBRARY_ID);
 

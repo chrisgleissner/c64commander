@@ -17,6 +17,8 @@ import {
 import { SecureStorage } from "@/lib/native/secureStorage";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
+const HAS_PASSWORD_KEY = "c64u_has_password";
+
 vi.mock("@/lib/native/secureStorage", () => ({
   SecureStorage: {
     setPassword: vi.fn(async () => undefined),
@@ -45,14 +47,14 @@ describe("secureStorage", () => {
     const selectedDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
 
     expect(localStorage.getItem("c64u_password")).toBeNull();
-    expect(localStorage.getItem("c64u_has_password")).toBe("1");
+    expect(localStorage.getItem(HAS_PASSWORD_KEY)).toBe("1");
     expect(persisted.version).toBe(1);
     expect(persisted.legacyDefaultPassword).toBeNull();
     expect(persisted.passwordsByDeviceId[selectedDeviceId]).toBe("super-secret");
   });
 
   it("does not touch secure storage when flag is false", async () => {
-    localStorage.removeItem("c64u_has_password");
+    localStorage.removeItem(HAS_PASSWORD_KEY);
 
     const value = await getPassword();
 
@@ -63,7 +65,7 @@ describe("secureStorage", () => {
   it("does not read legacy localStorage for regular lookups", async () => {
     const getItemSpy = vi.spyOn(localStorage, "getItem");
     localStorage.setItem("c64u_password", "legacy-secret");
-    localStorage.setItem("c64u_has_password", "1");
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
 
     vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
       value: "secure-secret",
@@ -76,11 +78,11 @@ describe("secureStorage", () => {
   });
 
   it("clears password and removes presence flag", async () => {
-    localStorage.setItem("c64u_has_password", "1");
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
 
     await clearPassword();
 
-    expect(localStorage.getItem("c64u_has_password")).toBeNull();
+    expect(localStorage.getItem(HAS_PASSWORD_KEY)).toBeNull();
     expect(SecureStorage.clearPassword).toHaveBeenCalled();
   });
 
@@ -92,7 +94,7 @@ describe("secureStorage", () => {
 
   it("returns cached password on second call without re-fetching from native storage", async () => {
     // Covers the if (passwordLoaded) return cachedPassword branch (line 45)
-    localStorage.setItem("c64u_has_password", "1");
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
     vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
       value: "cached-pw",
     });
@@ -107,7 +109,7 @@ describe("secureStorage", () => {
 
   it("returns null when native secure storage has no password value", async () => {
     // Covers value ?? null when SecureStorage.getPassword returns { value: null }
-    localStorage.setItem("c64u_has_password", "1");
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
     // Default mock returns { value: null }
     const value = await getPassword();
     expect(value).toBeNull();

@@ -20,6 +20,8 @@ import {
 } from "@/lib/hvsc/hvscStatusStore";
 import { addLog } from "@/lib/logging";
 
+const STORAGE_KEY = "c64u_hvsc_status:v1";
+
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
@@ -97,7 +99,7 @@ describe("hvscStatusStore", () => {
 
     it("merges default metadata fields when older persisted summaries omit them", () => {
       localStorage.setItem(
-        "c64u_hvsc_status:v1",
+        STORAGE_KEY,
         JSON.stringify({
           download: { status: "success" },
           extraction: { status: "idle" },
@@ -121,28 +123,28 @@ describe("hvscStatusStore", () => {
         totalBytes: 20,
       });
 
-      const stored = JSON.parse(localStorage.getItem("c64u_hvsc_status:v1") ?? "{}");
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
       expect(stored.download?.downloadedBytes).toBe(10);
       expect(result.download.downloadedBytes).toBe(10);
       expect(result.download.ingestionId).toBe("test");
     });
 
     it("ignores updates when storage is corrupted", () => {
-      localStorage.setItem("c64u_hvsc_status:v1", "invalid-json{");
+      localStorage.setItem(STORAGE_KEY, "invalid-json{");
       const loaded = loadHvscStatusSummary();
       expect(loaded).toEqual(getDefaultHvscStatusSummary());
       expect(addLog).toHaveBeenCalledWith(
         "warn",
         "Failed to load HVSC status summary",
         expect.objectContaining({
-          storageKey: "c64u_hvsc_status:v1",
+          storageKey: STORAGE_KEY,
           error: expect.any(String),
         }),
       );
     });
 
     it("ignores updates when summary misses core properties", () => {
-      localStorage.setItem("c64u_hvsc_status:v1", "{}");
+      localStorage.setItem(STORAGE_KEY, "{}");
       const loaded = loadHvscStatusSummary();
       expect(loaded).toEqual(getDefaultHvscStatusSummary());
     });

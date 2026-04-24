@@ -7,7 +7,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 const getTraceContextSnapshotMock = vi.hoisted(() =>
   vi.fn(() => ({
     ui: { route: "/", query: "" },
@@ -17,6 +16,9 @@ const getTraceContextSnapshotMock = vi.hoisted(() =>
     device: null,
   })),
 );
+
+const SESSION_COUNTERS_KEY = "c64u_persisted_trace_counters";
+const SESSION_STORAGE_KEY = "c64u_persisted_traces";
 
 vi.mock("@/lib/tracing/traceContext", () => ({
   getTraceContextSnapshot: () => getTraceContextSnapshotMock(),
@@ -523,8 +525,8 @@ describe("traceSession", () => {
 
     persistTracesToSession();
 
-    expect(storage["__c64uPersistedTraces"]).toBeDefined();
-    expect(storage["__c64uPersistedTraceCounters"]).toBeDefined();
+    expect(storage[SESSION_STORAGE_KEY]).toBeDefined();
+    expect(storage[SESSION_COUNTERS_KEY]).toBeDefined();
 
     resetTraceSession(0, 0);
     setTraceIdCounters(0, 0);
@@ -535,7 +537,7 @@ describe("traceSession", () => {
     expect(getTraceEvents()).toHaveLength(1);
     const countersAfter = getCurrentTraceIdCounters();
     expect(countersAfter.eventCounter).toBe(countersBefore.eventCounter);
-    expect(storage["__c64uPersistedTraces"]).toBeUndefined();
+    expect(storage[SESSION_STORAGE_KEY]).toBeUndefined();
   });
 
   it("handles restore with no data", () => {

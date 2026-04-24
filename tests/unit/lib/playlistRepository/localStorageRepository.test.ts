@@ -3,6 +3,10 @@ import { getLocalStoragePlaylistDataRepository } from "@/lib/playlistRepository"
 import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { addLog } from "@/lib/logging";
 
+const STORAGE_KEY = "c64u_playlist_repo:v1";
+const BACKUP_STORAGE_KEY = "c64u_playlist_repo:v1:backup";
+const RECOVERY_STORAGE_KEY = "c64u_playlist_repo:v1:recovery";
+
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
@@ -44,7 +48,7 @@ describe("localStorage playlist repository", () => {
   });
 
   it("recovers from malformed or incompatible persisted state", async () => {
-    localStorage.setItem("c64u_playlist_repo:v1", "{bad json");
+    localStorage.setItem(STORAGE_KEY, "{bad json");
     let repository = getLocalStoragePlaylistDataRepository();
     let result = await repository.queryPlaylist({
       playlistId: "playlist-default",
@@ -57,14 +61,14 @@ describe("localStorage playlist repository", () => {
       "warn",
       "Failed to parse localStorage playlist repository state. Resetting repository state.",
       expect.objectContaining({
-        storageKey: "c64u_playlist_repo:v1",
+        storageKey: STORAGE_KEY,
         error: expect.any(String),
       }),
     );
-    expect(localStorage.getItem("c64u_playlist_repo:v1:backup")).toBe("{bad json");
-    expect(localStorage.getItem("c64u_playlist_repo:v1:recovery")).toContain("parse-failure");
+    expect(localStorage.getItem(BACKUP_STORAGE_KEY)).toBe("{bad json");
+    expect(localStorage.getItem(RECOVERY_STORAGE_KEY)).toContain("parse-failure");
 
-    localStorage.setItem("c64u_playlist_repo:v1", JSON.stringify({ version: 999, tracks: {} }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 999, tracks: {} }));
     repository = getLocalStoragePlaylistDataRepository();
     result = await repository.queryPlaylist({
       playlistId: "playlist-default",
@@ -77,13 +81,13 @@ describe("localStorage playlist repository", () => {
       "warn",
       "Incompatible localStorage playlist repository schema. Preserving backup and resetting repository state.",
       expect.objectContaining({
-        storageKey: "c64u_playlist_repo:v1",
-        backupStorageKey: "c64u_playlist_repo:v1:backup",
+        storageKey: STORAGE_KEY,
+        backupStorageKey: BACKUP_STORAGE_KEY,
         version: 999,
       }),
     );
-    expect(localStorage.getItem("c64u_playlist_repo:v1:backup")).toContain('"version":999');
-    expect(localStorage.getItem("c64u_playlist_repo:v1:recovery")).toContain("incompatible-schema");
+    expect(localStorage.getItem(BACKUP_STORAGE_KEY)).toContain('"version":999');
+    expect(localStorage.getItem(RECOVERY_STORAGE_KEY)).toContain("incompatible-schema");
   });
 
   it("persists tracks and playlist rows and supports deterministic query paging", async () => {
@@ -427,7 +431,7 @@ describe("localStorage playlist repository", () => {
   });
 
   it("recovers from null JSON state (parsed.version shows null in log)", async () => {
-    localStorage.setItem("c64u_playlist_repo:v1", "null");
+    localStorage.setItem(STORAGE_KEY, "null");
     const repository = getLocalStoragePlaylistDataRepository();
     const result = await repository.queryPlaylist({
       playlistId: "playlist-default",
@@ -446,7 +450,7 @@ describe("localStorage playlist repository", () => {
 
   it("recovers from partial valid state missing optional fields", async () => {
     // Store a legacy state with version=1 but missing optional fields.
-    localStorage.setItem("c64u_playlist_repo:v1", JSON.stringify({ version: 1 }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1 }));
     const repository = getLocalStoragePlaylistDataRepository();
     const result = await repository.queryPlaylist({
       playlistId: "playlist-default",

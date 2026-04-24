@@ -7,6 +7,7 @@
  */
 
 import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
+import { variant } from "@/generated/variant";
 import { addErrorLog } from "@/lib/logging";
 import {
   FEATURE_FLAG_DEFINITIONS,
@@ -111,7 +112,10 @@ const definitionFor = (id: FeatureFlagId): FeatureFlagDefinition => {
   if (!definition) {
     throw new Error(`Unknown feature flag id: ${id}`);
   }
-  return definition;
+  const variantOverride = variant.featureFlags[id] as
+    | Pick<FeatureFlagDefinition, "enabled" | "visible_to_user" | "developer_only">
+    | undefined;
+  return variantOverride ? { ...definition, ...variantOverride } : definition;
 };
 
 export const isKnownFeatureFlagId = (id: string): id is FeatureFlagId =>
@@ -147,7 +151,8 @@ const buildSnapshot = (
 ): FeatureFlagSnapshot => {
   const flags = {} as FeatureFlags;
   const resolved = {} as Record<FeatureFlagId, FeatureFlagResolution>;
-  FEATURE_FLAG_DEFINITIONS.forEach((definition) => {
+  FEATURE_FLAG_DEFINITIONS.forEach((baseDefinition) => {
+    const definition = definitionFor(baseDefinition.id);
     const resolution = computeResolution(definition, overrides[definition.id], developerMode);
     flags[definition.id] = resolution.value;
     resolved[definition.id] = resolution;

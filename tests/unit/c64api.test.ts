@@ -25,6 +25,9 @@ import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
+const HAS_PASSWORD_KEY = "c64u_has_password";
+
 const ensureWindow = () => {
   if (typeof window !== "undefined") return;
   const target = new EventTarget();
@@ -148,11 +151,11 @@ vi.mock("@/lib/deviceInteraction/deviceStateStore", async (importOriginal) => {
 
 vi.mock("@/lib/secureStorage", () => ({
   setPassword: vi.fn(async () => {
-    localStorage.setItem("c64u_has_password", "1");
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
   }),
   getPassword: vi.fn(async () => null),
   clearPassword: vi.fn(async () => {
-    localStorage.removeItem("c64u_has_password");
+    localStorage.removeItem(HAS_PASSWORD_KEY);
   }),
   hasStoredPasswordFlag: vi.fn(() => false),
   getCachedPassword: vi.fn(() => null),
@@ -259,11 +262,11 @@ describe("c64api", () => {
         const socketInfo =
           type === "Socket"
             ? {
-                localAddress: handle.localAddress,
-                localPort: handle.localPort,
-                remoteAddress: handle.remoteAddress,
-                remotePort: handle.remotePort,
-              }
+              localAddress: handle.localAddress,
+              localPort: handle.localPort,
+              remoteAddress: handle.remoteAddress,
+              remotePort: handle.remotePort,
+            }
             : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
@@ -424,15 +427,15 @@ describe("c64api", () => {
   });
 
   it("does not persist runtime config updates", async () => {
-    localStorage.setItem("c64u_has_password", "1");
-    localStorage.setItem("c64u_device_host", "saved-host");
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    localStorage.setItem(DEVICE_HOST_KEY, "saved-host");
 
     applyC64APIRuntimeConfig("http://runtime", "runtime-pass", "runtime-host");
 
     expect(localStorage.getItem("c64u_base_url")).toBeNull();
     expect(localStorage.getItem("c64u_password")).toBeNull();
-    expect(localStorage.getItem("c64u_has_password")).toBe("1");
-    expect(localStorage.getItem("c64u_device_host")).toBe("saved-host");
+    expect(localStorage.getItem(HAS_PASSWORD_KEY)).toBe("1");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("saved-host");
   });
 
   it("migrates legacy base url into device host storage", () => {
@@ -441,8 +444,7 @@ describe("c64api", () => {
     const resolvedHost = resolveDeviceHostFromStorage();
 
     expect(resolvedHost).toBe("192.168.1.55");
-    expect(localStorage.getItem("c64u_device_host")).toBe("192.168.1.55");
-    expect(localStorage.getItem("c64u_base_url")).toBeNull();
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("192.168.1.55");
   });
 
   it("handles non-string payloads on native platforms", async () => {
@@ -514,6 +516,7 @@ describe("c64api", () => {
     expect(localStorage.getItem("c64u_base_url")).toBeNull();
     expect(localStorage.getItem("c64u_password")).toBeNull();
     expect(storePasswordMock).toHaveBeenCalledWith("pw");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("host");
     expect(localStorage.getItem("c64u_device_host")).toBe("host");
     expect(storePasswordMock).toHaveBeenCalledWith("pw");
     expect(handler).toHaveBeenCalled();
@@ -525,16 +528,16 @@ describe("c64api", () => {
     updateC64APIConfig("http://host", "pw", "host");
     updateC64APIConfig("http://device");
     expect(localStorage.getItem("c64u_password")).toBeNull();
-    expect(localStorage.getItem("c64u_has_password")).toBeNull();
-    expect(localStorage.getItem("c64u_device_host")).toBe("device");
+    expect(localStorage.getItem(HAS_PASSWORD_KEY)).toBeNull();
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("device");
     expect(localStorage.getItem("c64u_base_url")).toBeNull();
     expect(clearPasswordMock).toHaveBeenCalled();
   });
 
   it("avoids localhost fallback when device host is stored", () => {
-    localStorage.setItem("c64u_device_host", "real-device");
+    localStorage.setItem(DEVICE_HOST_KEY, "real-device");
     updateC64APIConfig("http://localhost");
-    expect(localStorage.getItem("c64u_device_host")).toBe("real-device");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("real-device");
 
     applyC64APIRuntimeConfig("http://localhost");
     const snapshot = getC64API().getDeviceHost();
@@ -542,7 +545,7 @@ describe("c64api", () => {
   });
 
   it("uses stored device host when default hostname would otherwise be used", () => {
-    localStorage.setItem("c64u_device_host", "192.168.1.55");
+    localStorage.setItem(DEVICE_HOST_KEY, "192.168.1.55");
 
     applyC64APIRuntimeConfig("http://c64u");
 
@@ -654,7 +657,7 @@ describe("c64api", () => {
       const api = new C64API("http://c64u");
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await Promise.resolve();
       controller.abort();
@@ -1180,7 +1183,7 @@ describe("c64api", () => {
   });
 
   it("reuses singleton C64 API instance", () => {
-    localStorage.setItem("c64u_device_host", C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+    localStorage.setItem(DEVICE_HOST_KEY, C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const api1 = getC64API();
     const api2 = getC64API();
     expect(api1).toBe(api2);

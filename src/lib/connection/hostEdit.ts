@@ -10,6 +10,7 @@ import {
   buildBaseUrlFromDeviceHost,
   getC64APIConfigSnapshot,
   normalizeDeviceHost,
+  resolveDeviceHostFromStorage,
   updateC64APIConfig,
 } from "@/lib/c64api";
 import type { DiscoveryTrigger } from "@/lib/connection/connectionManager";
@@ -21,7 +22,7 @@ export const normalizeConfiguredHost = (input: string, fallbackHost: string) =>
 export const getConfiguredHost = () => {
   if (typeof window === "undefined") return "c64u";
   try {
-    return localStorage.getItem("c64u_device_host") || "c64u";
+    return resolveDeviceHostFromStorage();
   } catch (error) {
     const resolvedError = error instanceof Error ? error : new Error(String(error));
     addLog("warn", "Failed to read configured host from storage", {

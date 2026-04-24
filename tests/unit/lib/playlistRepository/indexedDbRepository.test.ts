@@ -3,6 +3,8 @@ import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository";
 import { resetIndexedDbPlaylistRepositoryForTests } from "@/lib/playlistRepository/indexedDbRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 
+const INDEXEDDB_RECOVERY_STORAGE_KEY = "c64u_playlist_repo:indexeddb:recovery";
+
 type FakeIndexedDbOptions = {
   failOpen?: boolean;
   failGet?: boolean;
@@ -445,7 +447,7 @@ describe("indexedDB playlist repository", () => {
       "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
       expect.objectContaining({ expectedVersion: 3, foundVersion: 999 }),
     );
-    expect(localStorage.getItem("c64u_playlist_repo:indexeddb:recovery")).toContain("incompatible-schema");
+    expect(localStorage.getItem(INDEXEDDB_RECOVERY_STORAGE_KEY)).toContain("incompatible-schema");
   });
 
   it("propagates write failures from IndexedDB", async () => {

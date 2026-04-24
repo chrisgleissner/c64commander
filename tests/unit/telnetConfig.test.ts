@@ -9,6 +9,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearStoredTelnetPort, getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
+const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
+const TELNET_PORT_KEY = "c64u_telnet_port";
+
 const { mockUpdateSelectedSavedDevicePorts } = vi.hoisted(() => ({
   mockUpdateSelectedSavedDevicePorts: vi.fn(),
 }));
@@ -32,9 +35,9 @@ describe("telnetConfig", () => {
 
   it("returns the default Telnet port when missing or invalid", () => {
     expect(getStoredTelnetPort()).toBe(23);
-    localStorage.setItem("c64u_telnet_port", "0");
+    localStorage.setItem(TELNET_PORT_KEY, "0");
     expect(getStoredTelnetPort()).toBe(23);
-    localStorage.setItem("c64u_telnet_port", "abc");
+    localStorage.setItem(TELNET_PORT_KEY, "abc");
     expect(getStoredTelnetPort()).toBe(23);
   });
 
@@ -52,10 +55,10 @@ describe("telnetConfig", () => {
   });
 
   it("rejects non-integer and out-of-range Telnet ports", () => {
-    localStorage.setItem("c64u_telnet_port", "70000");
+    localStorage.setItem(TELNET_PORT_KEY, "70000");
     expect(getStoredTelnetPort()).toBe(23);
 
-    localStorage.setItem("c64u_telnet_port", "12.5");
+    localStorage.setItem(TELNET_PORT_KEY, "12.5");
     expect(getStoredTelnetPort()).toBe(23);
 
     setStoredTelnetPort(2323);
@@ -66,8 +69,8 @@ describe("telnetConfig", () => {
 
   it("warns and falls back when saved-device Telnet storage is malformed", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    localStorage.setItem("c64u_saved_devices:v1", "{");
-    localStorage.setItem("c64u_telnet_port", "2323");
+    localStorage.setItem(SAVED_DEVICES_STORAGE_KEY, "{");
+    localStorage.setItem(TELNET_PORT_KEY, "2323");
 
     expect(getStoredTelnetPort()).toBe(2323);
     expect(warnSpy).toHaveBeenCalledWith(
@@ -84,7 +87,7 @@ describe("telnetConfig", () => {
       throw new Error("sync failed");
     });
     localStorage.setItem(
-      "c64u_saved_devices:v1",
+      SAVED_DEVICES_STORAGE_KEY,
       JSON.stringify({
         selectedDeviceId: "saved-device-1",
         devices: [{ id: "saved-device-1", telnetPort: 23 }],
@@ -93,7 +96,7 @@ describe("telnetConfig", () => {
 
     setStoredTelnetPort(2323);
 
-    expect(JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}").devices[0].telnetPort).toBe(2323);
+    expect(JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}").devices[0].telnetPort).toBe(2323);
     expect(warnSpy).toHaveBeenCalledWith(
       "Failed to sync Telnet port to selected saved device",
       expect.objectContaining({ error: expect.any(Error) }),

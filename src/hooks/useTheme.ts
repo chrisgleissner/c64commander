@@ -7,12 +7,13 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-
 type Theme = "light" | "dark" | "system";
+
+const THEME_STORAGE_KEY = "c64u_theme";
 
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const stored = localStorage.getItem("c64u_theme");
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
     return (stored as Theme) || "system";
   });
 
@@ -42,7 +43,7 @@ export function useTheme() {
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem("c64u_theme", newTheme);
+    localStorage.setItem(THEME_STORAGE_KEY, newTheme);
   }, []);
 
   return { theme, setTheme, resolvedTheme };

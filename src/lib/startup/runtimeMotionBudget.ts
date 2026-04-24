@@ -8,7 +8,7 @@
 
 import { addLog } from "@/lib/logging";
 
-const MOTION_MODE_STORAGE_KEY = "c64_motion_mode";
+const MOTION_MODE_STORAGE_KEY = "c64u_motion_mode";
 const LOW_END_DEVICE_MAX_CORES = 4;
 const LOW_END_DEVICE_MAX_MEMORY_GB = 4;
 

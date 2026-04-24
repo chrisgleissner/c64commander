@@ -16,6 +16,8 @@ import {
 } from "../../../src/lib/config/appSettings";
 import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from "../../../src/lib/smoke/smokeMode";
 
+import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "../../../src/lib/c64api/hostConfig";
+
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
   loadDebugLoggingEnabled: vi.fn(() => false),
@@ -242,7 +244,7 @@ describe("connectionManager", () => {
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
-    expect(localStorage.getItem("c64u_device_host")).toBe("127.0.0.1:9999");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("127.0.0.1:9999");
   });
 
   it("records smoke status transitions when enabled", async () => {
@@ -1381,6 +1383,23 @@ describe("connectionManager", () => {
     expect(startMockServer).not.toHaveBeenCalled();
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(isRealDeviceStickyLockEnabled()).toBe(false);
+
+    delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+    delete (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
+  });
+
+  it("test-probe mode seeds runtime routing from the expected base URL during initialization", async () => {
+    const { initializeConnectionManager } = await import("../../../src/lib/connection/connectionManager");
+    const { applyC64APIRuntimeConfig } = await import("../../../src/lib/c64api");
+
+    localStorage.setItem(DEVICE_HOST_KEY, "c64u");
+    (window as Window & { __c64uTestProbeEnabled?: boolean; __c64uExpectedBaseUrl?: string }).__c64uTestProbeEnabled =
+      true;
+    (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:9999/";
+
+    await initializeConnectionManager();
+
+    expect(applyC64APIRuntimeConfig).toHaveBeenCalledWith("http://127.0.0.1:9999/", undefined, "127.0.0.1:9999");
 
     delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
     delete (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;

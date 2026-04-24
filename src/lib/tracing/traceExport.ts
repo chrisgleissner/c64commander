@@ -10,6 +10,7 @@ import { zipSync, strToU8 } from "fflate";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
+import { variant } from "@/generated/variant";
 import { redactExportValue } from "@/lib/diagnostics/exportRedaction";
 import { addErrorLog } from "@/lib/logging";
 import { buildAppMetadata, exportTraceZip, getTraceEvents } from "@/lib/tracing/traceSession";
@@ -49,7 +50,10 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-export const downloadTraceZip = (filename = "c64commander-traces.zip", options: { redacted?: boolean } = {}) => {
+export const downloadTraceZip = (
+  filename = `${variant.exportedFileBasename}-traces.zip`,
+  options: { redacted?: boolean } = {},
+) => {
   const blob = buildTraceZipBlob(options);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -59,7 +63,10 @@ export const downloadTraceZip = (filename = "c64commander-traces.zip", options: 
   window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 };
 
-export const shareTraceZip = async (filename = "c64commander-traces.zip", options: { redacted?: boolean } = {}) => {
+export const shareTraceZip = async (
+  filename = `${variant.exportedFileBasename}-traces.zip`,
+  options: { redacted?: boolean } = {},
+) => {
   if (Capacitor.isNativePlatform()) {
     try {
       const blob = buildTraceZipBlob(options);

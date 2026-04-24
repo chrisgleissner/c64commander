@@ -67,6 +67,7 @@ import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
 import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
+  APP_SETTINGS_KEYS,
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
@@ -371,39 +372,39 @@ export default function SettingsPage() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { key?: string; value?: unknown } | undefined;
       if (!detail?.key) return;
-      if (detail.key === "c64u_debug_logging_enabled") {
+      if (detail.key === APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY) {
         setDebugLoggingEnabled(Boolean(detail.value));
       }
-      if (detail.key === "c64u_config_write_min_interval_ms") {
+      if (detail.key === APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY) {
         setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
       }
-      if (detail.key === "c64u_automatic_demo_mode_enabled") {
+      if (detail.key === APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY) {
         setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
       }
-      if (detail.key === "c64u_startup_discovery_window_ms") {
+      if (detail.key === APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY) {
         setStartupDiscoveryWindowInput(String(loadStartupDiscoveryWindowMs() / 1000));
       }
-      if (detail.key === "c64u_background_rediscovery_interval_ms") {
+      if (detail.key === APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY) {
         setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       }
-      if (detail.key === "c64u_discovery_probe_timeout_ms") {
+      if (detail.key === APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY) {
         setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       }
-      if (detail.key === "c64u_disk_autostart_mode") {
+      if (detail.key === APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY) {
         setDiskAutostartMode(loadDiskAutostartMode());
       }
-      if (detail.key === "c64u_volume_slider_preview_interval_ms") {
+      if (detail.key === APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY) {
         setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
       }
-      if (detail.key === "c64u_archive_host_override") {
+      if (detail.key === APP_SETTINGS_KEYS.ARCHIVE_HOST_OVERRIDE_KEY) {
         const next = loadArchiveHostOverride();
         setArchiveHostOverride(next);
         setArchiveHostError(validateArchiveHost(next));
       }
-      if (detail.key === "c64u_archive_client_id_override") {
+      if (detail.key === APP_SETTINGS_KEYS.ARCHIVE_CLIENT_ID_OVERRIDE_KEY) {
         setArchiveClientIdOverride(loadArchiveClientIdOverride());
       }
-      if (detail.key === "c64u_archive_user_agent_override") {
+      if (detail.key === APP_SETTINGS_KEYS.ARCHIVE_USER_AGENT_OVERRIDE_KEY) {
         setArchiveUserAgentOverride(loadArchiveUserAgentOverride());
       }
     };

@@ -9,6 +9,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadCustomSnapshotDrafts, saveCustomSnapshotDrafts } from "@/lib/snapshot/customSnapshotDraftStore";
 
+const STORAGE_KEY = "c64u_custom_snapshot_ranges:v1";
+
 const addErrorLogMock = vi.fn();
 
 vi.mock("@/lib/logging", () => ({
@@ -27,7 +29,7 @@ describe("customSnapshotDraftStore", () => {
 
   it("loads and sanitizes persisted drafts", () => {
     localStorage.setItem(
-      "c64u_custom_snapshot_ranges:v1",
+      STORAGE_KEY,
       JSON.stringify([
         { start: "$0400", end: "07e7" },
         { start: "d800", end: "dbff" },
@@ -41,7 +43,7 @@ describe("customSnapshotDraftStore", () => {
   });
 
   it("logs and falls back when storage contains invalid JSON", () => {
-    localStorage.setItem("c64u_custom_snapshot_ranges:v1", "{");
+    localStorage.setItem(STORAGE_KEY, "{");
 
     expect(loadCustomSnapshotDrafts()).toEqual([{ start: "", end: "" }]);
     expect(addErrorLogMock).toHaveBeenCalledWith(
@@ -53,20 +55,18 @@ describe("customSnapshotDraftStore", () => {
   it("saves sanitized drafts", () => {
     saveCustomSnapshotDrafts([{ start: "$0a00", end: "0bff" }]);
 
-    expect(JSON.parse(localStorage.getItem("c64u_custom_snapshot_ranges:v1") ?? "null")).toEqual([
-      { start: "0A00", end: "0BFF" },
-    ]);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")).toEqual([{ start: "0A00", end: "0BFF" }]);
   });
 
   it("saves defaults when passed an empty array", () => {
     saveCustomSnapshotDrafts([]);
 
-    const stored = JSON.parse(localStorage.getItem("c64u_custom_snapshot_ranges:v1") ?? "null");
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
     expect(stored).toEqual([{ start: "", end: "" }]);
   });
 
   it("logs and falls back when storage contains non-array JSON", () => {
-    localStorage.setItem("c64u_custom_snapshot_ranges:v1", JSON.stringify({ start: "0000", end: "FFFF" }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ start: "0000", end: "FFFF" }));
 
     expect(loadCustomSnapshotDrafts()).toEqual([{ start: "", end: "" }]);
     expect(addErrorLogMock).toHaveBeenCalledWith(
@@ -76,7 +76,7 @@ describe("customSnapshotDraftStore", () => {
   });
 
   it("logs and falls back when all entries are invalid", () => {
-    localStorage.setItem("c64u_custom_snapshot_ranges:v1", JSON.stringify([{ notStart: "x", notEnd: "y" }, 42, null]));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([{ notStart: "x", notEnd: "y" }, 42, null]));
 
     expect(loadCustomSnapshotDrafts()).toEqual([{ start: "", end: "" }]);
     expect(addErrorLogMock).toHaveBeenCalledWith(

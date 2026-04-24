@@ -7,7 +7,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
   Filesystem: {
@@ -35,6 +34,9 @@ import {
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
+
+const BROWSE_INDEX_STORAGE_KEY = "c64u_hvsc_browse_index:v1";
+const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 
 describe("hvscBrowseIndexStore", () => {
   beforeEach(() => {
@@ -260,7 +262,7 @@ describe("hvscBrowseIndexStore", () => {
     const { loadHvscBrowseIndexSnapshot } = await import("@/lib/hvsc/hvscBrowseIndexStore");
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
     if (typeof localStorage !== "undefined") {
-      localStorage.setItem("c64u_hvsc_browse_index:v1", JSON.stringify({ schemaVersion: 999, songs: {}, folders: {} }));
+      localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, JSON.stringify({ schemaVersion: 999, songs: {}, folders: {} }));
     }
     const result = await loadHvscBrowseIndexSnapshot();
     expect(result).toBeNull();
@@ -275,7 +277,7 @@ describe("hvscBrowseIndexStore", () => {
 
     const existing = build([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
     if (typeof localStorage !== "undefined") {
-      localStorage.setItem("c64u_hvsc_browse_index:v1", JSON.stringify(existing));
+      localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, JSON.stringify(existing));
     }
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("no filesystem"));
 
@@ -323,7 +325,7 @@ describe("hvscBrowseIndexStore", () => {
     if (typeof localStorage !== "undefined") localStorage.clear();
     await saveHvscBrowseIndexSnapshot(snapshot);
     if (typeof localStorage !== "undefined") {
-      const stored = localStorage.getItem("c64u_hvsc_browse_index:v1");
+      const stored = localStorage.getItem(BROWSE_INDEX_STORAGE_KEY);
       expect(stored).not.toBeNull();
       localStorage.clear();
     }
@@ -368,7 +370,7 @@ describe("hvscBrowseIndexStore", () => {
     if (typeof localStorage !== "undefined") {
       localStorage.clear();
       localStorage.setItem(
-        "c64u_media_index:v1",
+        MEDIA_INDEX_STORAGE_KEY,
         JSON.stringify({
           version: 1,
           updatedAt: snapshot.updatedAt,
@@ -427,7 +429,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
 
   it("parseSnapshot returns empty snapshot for JSON null (line 155 TRUE)", async () => {
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
-    localStorage.setItem("c64u_hvsc_browse_index:v1", JSON.stringify(null));
+    localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, JSON.stringify(null));
     const result = await loadHvscBrowseIndexSnapshot();
     // normalizeSnapshot(null) → createEmptyHvscBrowseIndexSnapshot
     expect(result).not.toBeNull();
@@ -450,7 +452,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
       },
       folders: {},
     };
-    localStorage.setItem("c64u_hvsc_browse_index:v1", JSON.stringify(fakeSnapshot));
+    localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, JSON.stringify(fakeSnapshot));
     const result = await loadHvscBrowseIndexSnapshot();
     // fileName was empty → falls back to getFileName → 'test.sid'
     expect(result?.songs["/DEMOS/test.sid"]?.fileName).toBe("test.sid");
@@ -464,7 +466,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
       songs: null,
       folders: {},
     };
-    localStorage.setItem("c64u_hvsc_browse_index:v1", JSON.stringify(fakeSnapshot));
+    localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, JSON.stringify(fakeSnapshot));
     const result = await loadHvscBrowseIndexSnapshot();
     expect(result).not.toBeNull();
     expect(Object.keys(result?.songs ?? {})).toHaveLength(0);
@@ -472,7 +474,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
 
   it("parseSnapshot returns null for invalid JSON in localStorage (line 187 catch)", async () => {
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("not found"));
-    localStorage.setItem("c64u_hvsc_browse_index:v1", "NOT VALID JSON {{{");
+    localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, "NOT VALID JSON {{{");
     const result = await loadHvscBrowseIndexSnapshot();
     expect(result).toBeNull();
   });
@@ -518,7 +520,7 @@ describe("hvscBrowseIndexStore branch coverage", () => {
 
   it("loadHvscBrowseIndexSnapshot uses localStorage when window undefined (line 279)", async () => {
     const snapshot = buildHvscBrowseIndexFromEntries([{ path: "/test2.sid", name: "test2.sid", type: "sid" }]);
-    localStorage.setItem("c64u_hvsc_browse_index:v1", JSON.stringify(snapshot));
+    localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, JSON.stringify(snapshot));
     vi.stubGlobal("window", undefined);
     const result = await loadHvscBrowseIndexSnapshot();
     expect(result?.songs["/test2.sid"]).toBeDefined();

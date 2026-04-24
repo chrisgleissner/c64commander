@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { addLog } from "@/lib/logging";
 
+const STORAGE_KEY = "c64u_hvsc_state:v1";
+
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
@@ -37,7 +39,7 @@ describe("hvscStateStore", () => {
   });
 
   it("logs and returns defaults when storage is corrupted", () => {
-    localStorage.setItem("c64u_hvsc_state:v1", "{broken");
+    localStorage.setItem(STORAGE_KEY, "{broken");
 
     const state = loadHvscState();
 
@@ -46,7 +48,7 @@ describe("hvscStateStore", () => {
       "warn",
       "Failed to load HVSC state from storage",
       expect.objectContaining({
-        storageKey: "c64u_hvsc_state:v1",
+        storageKey: STORAGE_KEY,
         error: expect.any(String),
       }),
     );

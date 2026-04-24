@@ -1,4 +1,7 @@
-<?xml version="1.0" encoding="utf-8"?>
+<!-- AUTO-GENERATED FILE. Do not edit by hand.
+     Source:   variants/variants.yaml
+     Compiler: scripts/generate-variant.mjs
+     Run `node scripts/generate-variant.mjs` to regenerate. -->
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#6C7EB7</color>
 </resources>

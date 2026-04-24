@@ -166,7 +166,7 @@ describe("usePlaybackPersistence – edge cases", () => {
       }),
     );
     // Store a JSON string that is not an object – this triggers line 221 branch
-    sessionStorage.setItem("c64u_playback_session:v1", '"hello"');
+    sessionStorage.setItem(PLAYBACK_SESSION_KEY, '"hello"');
 
     const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
@@ -222,7 +222,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     );
     // Session WITHOUT currentItemId – uses currentIndex (line 325 FALSE branch)
     sessionStorage.setItem(
-      "c64u_playback_session:v1",
+      PLAYBACK_SESSION_KEY,
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentIndex: 0,
@@ -357,7 +357,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     );
     // Session with isPlaying=true to trigger persist session save
     sessionStorage.setItem(
-      "c64u_playback_session:v1",
+      PLAYBACK_SESSION_KEY,
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentIndex: 0,
@@ -374,7 +374,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     // Capture the original prototype method before spying to avoid recursion
     const originalProtoSetItem = Storage.prototype.setItem;
     const setItemSpy = vi.spyOn(sessionStorage, "setItem").mockImplementation((key: string, value: string) => {
-      if (key === "c64u_playback_session:v1") {
+      if (key === PLAYBACK_SESSION_KEY) {
         throw new Error("Storage quota exceeded");
       }
       // Use prototype directly to avoid calling the spy again
@@ -490,7 +490,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     });
 
     await waitFor(() => {
-      const raw = sessionStorage.getItem("c64u_playback_session:v1");
+      const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
       expect(raw).not.toBeNull();
       const parsed = JSON.parse(raw as string) as {
         currentItemId: string | null;

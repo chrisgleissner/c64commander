@@ -17,6 +17,7 @@ import {
   getLogs,
   setExternalLogs,
 } from "@/lib/logging";
+import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { installConsoleDiagnosticsBridge, logger } from "@/lib/diagnostics/logger";
 import { setTraceDeviceContext } from "@/lib/tracing/traceContext";
@@ -169,7 +170,7 @@ describe("logging", () => {
   });
 
   it("records debug logs when enabled", () => {
-    localStorage.setItem("c64u_debug_logging_enabled", "1");
+    localStorage.setItem(APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY, "1");
     addLog("debug", "verbose");
     expect(getLogs()).toHaveLength(1);
     expect(getLogs()[0].message).toBe("verbose");

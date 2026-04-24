@@ -9,6 +9,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { requestDiagnosticsOpen, consumeDiagnosticsOpenRequest } from "@/lib/diagnostics/diagnosticsOverlay";
 
+const STORAGE_KEY = "c64u_diagnostics_open_preset";
+
 describe("diagnosticsOverlay", () => {
   beforeEach(() => {
     vi.stubGlobal("sessionStorage", {
@@ -35,7 +37,7 @@ describe("diagnosticsOverlay", () => {
     it("persists preset to sessionStorage and dispatches event", () => {
       requestDiagnosticsOpen("header");
       expect(sessionStorage.setItem).toHaveBeenCalledWith(
-        "c64u_diagnostics_open_preset",
+        STORAGE_KEY,
         JSON.stringify({ preset: "header", panel: null }),
       );
 
@@ -72,7 +74,7 @@ describe("diagnosticsOverlay", () => {
       const result = consumeDiagnosticsOpenRequest();
 
       expect(result).toEqual({ preset: "header", panel: null });
-      expect(sessionStorage.removeItem).toHaveBeenCalledWith("c64u_diagnostics_open_preset");
+      expect(sessionStorage.removeItem).toHaveBeenCalledWith(STORAGE_KEY);
     });
 
     it("logs malformed structured requests and still supports legacy preset strings", () => {

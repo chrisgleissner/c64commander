@@ -10,6 +10,7 @@ import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 import { TelnetSocket } from "@/lib/native/telnetSocket";
 import { TelnetMock } from "@/lib/telnet/telnetMock";
+import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 
 type CreateTelnetClientOptions = {
@@ -47,7 +48,7 @@ export const shouldUseMockTelnetTransport = () => {
     __c64uExpectedBaseUrl?: string;
     __c64uMockServerBaseUrl?: string;
   };
-  const storedHost = localStorage.getItem("c64u_device_host");
+  const storedHost = resolveDeviceHostFromStorage();
   if (!storedHost) {
     return false;
   }

@@ -7,6 +7,7 @@
  */
 
 import type { ArchiveClientConfigInput, ArchiveClientResolvedConfig } from "./types";
+import { variant } from "@/generated/variant";
 import { validateDeviceHost } from "@/lib/validation/connectionValidation";
 
 const DEFAULT_ARCHIVE_HEADERS = {
@@ -17,7 +18,7 @@ const DEFAULT_ARCHIVE_HEADERS = {
 export const DEFAULT_ARCHIVE_SOURCE_CONFIG: ArchiveClientConfigInput = {
   id: "archive-commoserve",
   name: "CommoServe",
-  baseUrl: "http://commoserve.files.commodore.net",
+  baseUrl: variant.runtime.endpoints.commoserve_base_url ?? "http://commoserve.files.commodore.net",
   headers: { ...DEFAULT_ARCHIVE_HEADERS },
   enabled: true,
 };

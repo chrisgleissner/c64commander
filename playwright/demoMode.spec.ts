@@ -9,6 +9,7 @@
 import { test, expect } from "@playwright/test";
 import type { Locator, Page, Route, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { variant } from "../src/generated/variant";
 import { seedUiMocks } from "./uiMocks";
 import {
   allowWarnings,
@@ -20,6 +21,8 @@ import {
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { saveCoverageFromPage } from "./withCoverage";
+
+const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   try {
@@ -118,7 +121,7 @@ test.describe("Automatic Demo Mode", () => {
       if (!page.isClosed()) {
         await finalizeEvidence(page, testInfo);
       }
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -245,11 +248,13 @@ test.describe("Automatic Demo Mode", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.addInitScript(
-      ({ baseUrl }: { baseUrl: string }) => {
+      ({ baseUrl, currentDeviceHostKey }: { baseUrl: string; currentDeviceHostKey: string }) => {
         localStorage.setItem("c64u_base_url", baseUrl);
         localStorage.removeItem("c64u_device_host");
+        localStorage.removeItem(currentDeviceHostKey);
+        localStorage.removeItem("c64u_saved_devices:v1");
       },
-      { baseUrl: server.baseUrl },
+      { baseUrl: server.baseUrl, currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -258,7 +263,10 @@ test.describe("Automatic Demo Mode", () => {
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
 
-    const storedHost = await page.evaluate(() => localStorage.getItem("c64u_device_host"));
+    const storedHost = await page.evaluate(
+      (currentDeviceHostKey: string) => localStorage.getItem(currentDeviceHostKey),
+      CURRENT_DEVICE_HOST_KEY,
+    );
     expect(storedHost).toBe(new URL(server.baseUrl).host);
     const legacyBase = await page.evaluate(() => localStorage.getItem("c64u_base_url"));
     expect(legacyBase).toBeNull();
@@ -440,7 +448,10 @@ test.describe("Automatic Demo Mode", () => {
 
     await expect.poll(() => server.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(true);
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 15000 });
-    const stored = await page.evaluate(() => localStorage.getItem("c64u_device_host"));
+    const stored = await page.evaluate(
+      (currentDeviceHostKey: string) => localStorage.getItem(currentDeviceHostKey),
+      CURRENT_DEVICE_HOST_KEY,
+    );
     expect(stored).toBe(new URL(server.baseUrl).host);
     await expectRestTraceSequence(page, testInfo, "/v1/info");
     await snap(page, testInfo, "demo-exit-connected");

@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LightingStudioProvider, useLightingStudio } from "@/hooks/useLightingStudio";
 import * as solar from "@/lib/lighting/solar";
 
+const LIGHTING_STORAGE_KEY = "c64u_lighting_studio_state:v1";
+
 const mocks = vi.hoisted(() => ({
   useC64Connection: vi.fn(),
   useC64ConfigItems: vi.fn(),
@@ -197,7 +199,7 @@ describe("LightingStudioProvider", () => {
 
   it("derives disks source cues from the route and writes resolved lighting state", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "bundled-connected",
         profiles: [],
@@ -220,7 +222,7 @@ describe("LightingStudioProvider", () => {
 
   it("falls back to idle and play source ownership on the play route", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "bundled-connected",
         profiles: [],
@@ -369,7 +371,7 @@ describe("LightingStudioProvider", () => {
     mocks.useC64Connection.mockImplementation(() => ({ status: statusRef.current }));
     mocks.useConnectionState.mockImplementation(() => snapshotRef.current);
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "profile-1",
         profiles: [
@@ -493,7 +495,7 @@ describe("LightingStudioProvider", () => {
 
   it("auto-resolves device location when circadian automation asks for it", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "profile-1",
         profiles: [
@@ -552,7 +554,7 @@ describe("LightingStudioProvider", () => {
 
   it("reports unavailable geolocation and keeps the circadian fallback unresolved until updated", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "profile-1",
         profiles: [
@@ -599,7 +601,7 @@ describe("LightingStudioProvider", () => {
 
   it("manages preview adoption and profile lifecycle operations", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "profile-1",
         profiles: [
@@ -651,7 +653,7 @@ describe("LightingStudioProvider", () => {
 
   it("reuses an existing profile when applying preview to a target and ignores missing duplicates", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "profile-1",
         profiles: [
@@ -704,7 +706,7 @@ describe("LightingStudioProvider", () => {
 
   it("resolves city-based circadian locations and falls back cleanly when solar resolution fails", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: null,
         profiles: [],
@@ -811,7 +813,7 @@ describe("LightingStudioProvider", () => {
 
   it("keeps the active profile when deleting a different profile", async () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "profile-1",
         profiles: [
@@ -853,7 +855,7 @@ describe("LightingStudioProvider", () => {
 
   it("surfaces connection sentinel states and profile drift from the live device state", () => {
     localStorage.setItem(
-      "c64u_lighting_studio_state:v1",
+      LIGHTING_STORAGE_KEY,
       JSON.stringify({
         activeProfileId: "profile-1",
         profiles: [

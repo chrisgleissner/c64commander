@@ -10,6 +10,7 @@ import { zipSync, strToU8 } from "fflate";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
+import { variant } from "@/generated/variant";
 import { addErrorLog } from "@/lib/logging";
 
 export type DiagnosticsExportTab = "error-logs" | "logs" | "traces" | "actions";
@@ -88,7 +89,7 @@ export const formatDiagnosticsExportTimestamp = (date = new Date()) => {
 const buildDiagnosticsJsonFilename = (tab: DiagnosticsExportTab, timestamp: string) => `${tab}-${timestamp}.json`;
 
 const buildDiagnosticsZipFilename = (scope: DiagnosticsExportScope, timestamp: string) =>
-  `c64commander-diagnostics-${scope}-${timestamp}.zip`;
+  `${variant.exportedFileBasename}-diagnostics-${scope}-${timestamp}.zip`;
 
 const buildDiagnosticsZipEntries = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) => {
   const payloads =
