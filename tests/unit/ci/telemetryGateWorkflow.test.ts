@@ -26,6 +26,10 @@ describe("telemetry release gate workflow rules", () => {
 
   it("does not publish Android release artifacts for rc tags", () => {
     const workflow = readWorkflow("android.yaml");
+    expect(workflow).toContain(
+      "if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')\n" +
+        "    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]",
+    );
     const stableTagReleaseCondition =
       "if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'";
     expect(workflow).toContain("- name: Build APK (release)");
