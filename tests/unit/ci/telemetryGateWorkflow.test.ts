@@ -5,13 +5,14 @@ import path from "node:path";
 const readWorkflow = (name: string) => readFileSync(path.resolve(process.cwd(), ".github/workflows", name), "utf8");
 
 describe("telemetry release gate workflow rules", () => {
-  it("hard-fails Android telemetry on monitor exit code 3 for release/tag flows", () => {
+  it("hard-fails Android telemetry on monitor exit code 3 for stable tag and release branch flows", () => {
     const workflow = readWorkflow("android.yaml");
     expect(workflow).toContain('if [[ "$code" == "3" ]]; then');
-    expect(workflow).toContain('if [[ "${GITHUB_REF_TYPE}" == "tag" || "${GITHUB_REF_NAME}" == release/* ]]; then');
+    expect(workflow).toContain('if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != *-rc* ]]; then');
+    expect(workflow).toContain("telemetry gate failed: main process disappearance/restart detected on stable tag flow");
     expect(workflow).toContain("telemetry gate failed: main process disappearance/restart detected on release flow");
     expect(workflow).toContain(
-      "telemetry gate warning: main process disappearance/restart detected (non-release flow)",
+      "telemetry gate warning: main process disappearance/restart detected (rc or non-release flow)",
     );
   });
 
@@ -21,6 +22,17 @@ describe("telemetry release gate workflow rules", () => {
     expect(workflow).toContain(
       "telemetry gate warning: monitor exited with code 137 (likely infra resource kill); see ci-artifacts/telemetry/android/monitor-run.log",
     );
+  });
+
+  it("does not publish Android release artifacts for rc tags", () => {
+    const workflow = readWorkflow("android.yaml");
+    const stableTagReleaseCondition =
+      "if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'";
+    expect(workflow).toContain("- name: Build APK (release)");
+    expect(workflow).toContain("- name: Upload AAB to Google Play (internal)");
+    expect(
+      workflow.match(new RegExp(stableTagReleaseCondition.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))?.length,
+    ).toBeGreaterThanOrEqual(10);
   });
 
   it("hard-fails iOS telemetry on monitor exit code 3 for stable tag and release branch flows", () => {
