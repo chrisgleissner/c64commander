@@ -1526,7 +1526,7 @@ jobs:
   release-artifacts:
     name: Release | Attach APK/AAB (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]
     strategy:
       fail-fast: false
