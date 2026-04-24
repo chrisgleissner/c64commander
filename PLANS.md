@@ -45,13 +45,13 @@
 
 ## Historical Regression Table
 
-| Area | Change | Likely Impact | Confidence |
-|------|--------|---------------|------------|
-| Android release creation | Pending historical diff | Pending | Pending |
-| Android artifact upload gating | Pending historical diff | Pending | Pending |
-| Variant selection / matrix publish flow | Pending historical diff | Pending | Pending |
-| CI contract tests | Pending historical diff | Pending | Pending |
-| Supporting scripts | Pending historical diff | Pending | Pending |
+| Area                                    | Change                  | Likely Impact | Confidence |
+| --------------------------------------- | ----------------------- | ------------- | ---------- |
+| Android release creation                | Pending historical diff | Pending       | Pending    |
+| Android artifact upload gating          | Pending historical diff | Pending       | Pending    |
+| Variant selection / matrix publish flow | Pending historical diff | Pending       | Pending    |
+| CI contract tests                       | Pending historical diff | Pending       | Pending    |
+| Supporting scripts                      | Pending historical diff | Pending       | Pending    |
 
 # 2026-04-22 Variant Spec Minimal Patch
 
