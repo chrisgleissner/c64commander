@@ -45,13 +45,13 @@
 
 ## Historical Regression Table
 
-| Area                                    | Change                                                                                                                                 | Likely Impact                                                                                              | Confidence |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------- |
-| Android release creation                | `360fdee9` changed `Ensure GitHub release exists` from tag-scoped to stable-tag-only-with-keystore while leaving RC prerelease logic in the step body | RC tags stopped creating GitHub prereleases because the release-creation step never ran for `*-rc*` tags | High       |
-| Android artifact upload gating          | `0.7.7` gated Android release artifacts on any tag with keystore; newer workflow tightened artifact, AAB, and Play upload steps to stable tags only | Stable-only artifact gating is correct, but it cannot also own RC prerelease creation                     | High       |
+| Area                                    | Change                                                                                                                                                | Likely Impact                                                                                                                               | Confidence |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Android release creation                | `360fdee9` changed `Ensure GitHub release exists` from tag-scoped to stable-tag-only-with-keystore while leaving RC prerelease logic in the step body | RC tags stopped creating GitHub prereleases because the release-creation step never ran for `*-rc*` tags                                    | High       |
+| Android artifact upload gating          | `0.7.7` gated Android release artifacts on any tag with keystore; newer workflow tightened artifact, AAB, and Play upload steps to stable tags only   | Stable-only artifact gating is correct, but it cannot also own RC prerelease creation                                                       | High       |
 | Variant selection / matrix publish flow | Variant-aware jobs added `variant-selection`, publish matrices, and per-variant artifact names to Android packaging and release attachment            | Variant support is incidental to the RC prerelease bug; the bug came from collapsing release creation and artifact publishing into one path | Medium     |
-| CI contract tests                       | `360fdee9` added the failing assertion that the Android artifact-attachment job itself must be stable-tag-only                                      | The test captured the intended stable-only artifact policy but lacked a companion assertion for RC prerelease creation | High       |
-| Supporting scripts                      | `scripts/resolve-build-version.mjs` and `web.yaml` retained correct tag-aware version semantics                                                     | Supporting scripts are not causal for the Android RC regression                                           | High       |
+| CI contract tests                       | `360fdee9` added the failing assertion that the Android artifact-attachment job itself must be stable-tag-only                                        | The test captured the intended stable-only artifact policy but lacked a companion assertion for RC prerelease creation                      | High       |
+| Supporting scripts                      | `scripts/resolve-build-version.mjs` and `web.yaml` retained correct tag-aware version semantics                                                       | Supporting scripts are not causal for the Android RC regression                                                                             | High       |
 
 ## Root Cause Summary
 
@@ -74,6 +74,25 @@
 - First behavior regression: `360fdee9` (`Fix/android test coverage build (#237)`) tightened Android release creation behind the stable-tag artifact gate.
 - Earlier baseline behavior in `0.7.7` and `HEAD^` kept `Ensure GitHub release exists` tag-scoped, which allowed RC prerelease creation.
 - Variant support is incidental rather than causal for this specific regression; the decisive change was the stable-only guard added to the release-creation step itself.
+
+## Validation Outcome
+
+- Local focused regression: `tests/unit/ci/telemetryGateWorkflow.test.ts` passed after both workflow edits.
+- Local validation: `npm run test` passed, `npm run build` passed, and `npm run test:coverage` passed with `91.99%` branch coverage.
+- Branch CI passed on corrected commit `8a92f6f67c4935eb8e5a898ceff193efd0503bd0`:
+  - Android: run `24907527691`
+  - iOS: run `24907527692`
+  - Web: run `24907527670`
+- RC tag `0.7.8-rc1` failed only in Android run `24906575010` because the new prerelease job lacked a checkout step; the tag and prerelease were deleted before retry.
+- RC tag `0.7.8-rc2` passed completely:
+  - Android: run `24907532176`
+  - iOS: run `24907532188`
+  - Web: run `24907532183`
+- RC release result for `0.7.8-rc2`:
+  - GitHub release exists and is marked `prerelease`
+  - Android `Release | Create prerelease` succeeded
+  - Android `Release | Attach APK/AAB (${{ matrix.variant }})` was skipped
+  - Attached assets contain only `c64commander-0.7.8-rc2-ios.ipa`, which confirms no Android APK/AAB release asset upload occurred for the RC tag
 
 # 2026-04-22 Variant Spec Minimal Patch
 

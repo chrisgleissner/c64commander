@@ -87,6 +87,68 @@ Validation targets for this RC attempt:
 - Android must not upload any AAB to Google Play.
 - Web and iOS tagged workflows must also complete successfully so the tag build is fully green.
 
+## [2026-04-24T19:39:36Z] CI-RECOVERY-004: `0.7.8-rc1` failure repaired and `0.7.8-rc2` passed end-to-end
+
+Observed `0.7.8-rc1` failure:
+
+- Branch PR runs for commit `d900a0acffd309fbec49cbd6b499464a8549ea3d` all completed successfully:
+  - Android `24905746902`
+  - iOS `24905746916`
+  - Web `24905746909`
+- RC tag `0.7.8-rc1` had mixed results:
+  - Android `24906575010`: failed
+  - iOS `24906575002`: success
+  - Web `24906575006`: success
+- Android failure was isolated to job `Release | Create prerelease`.
+- Failed job log root cause:
+  - `gh release create/edit` ran in a job without a checked-out repository
+  - GitHub runner error: `failed to run git: fatal: not a git repository (or any of the parent directories): .git`
+- Even on the failed attempt, the RC release semantics were partly confirmed:
+  - GitHub release `0.7.8-rc1` existed and was marked prerelease
+  - Attached assets contained only `c64commander-0.7.8-rc1-ios.ipa`
+  - Android release-attachment lane was skipped
+
+Repair for the `rc1` failure:
+
+- Added `actions/checkout@v4` to the Android `release-prerelease` job so `gh release create/edit` can run in a git worktree.
+- Added a regression assertion requiring the prerelease job to include checkout.
+- Re-ran the focused contract test: passed (`12` tests).
+
+Cleanup between attempts:
+
+- Deleted GitHub release `0.7.8-rc1`.
+- Deleted local tag `0.7.8-rc1`.
+- Deleted remote tag `0.7.8-rc1`.
+
+Corrected branch publish step:
+
+- Committed and pushed the repair as `8a92f6f67c4935eb8e5a898ceff193efd0503bd0` with message `ci: checkout repo before RC prerelease creation`.
+
+Successful final validation:
+
+- Branch PR runs on corrected commit `8a92f6f67c4935eb8e5a898ceff193efd0503bd0` all succeeded:
+  - Android `24907527691`
+  - iOS `24907527692`
+  - Web `24907527670`
+- RC tag `0.7.8-rc2` all succeeded:
+  - Android `24907532176`
+  - iOS `24907532188`
+  - Web `24907532183`
+- Final Android RC release-gate evidence from run `24907532176`:
+  - `Release | Create prerelease`: `completed success`
+  - `Release | Attach APK/AAB (${{ matrix.variant }})`: `completed skipped`
+- Final GitHub release evidence for `0.7.8-rc2`:
+  - `isPrerelease: true`
+  - attached assets: only `c64commander-0.7.8-rc2-ios.ipa`
+  - no Android release asset was uploaded for the RC tag
+
+Final policy check:
+
+- RC tags now create GitHub prereleases.
+- RC tags do not enter the Android artifact-attachment lane.
+- RC tags do not upload Android APK/AAB release assets.
+- Stable-tag Android artifact and Google Play conditions remain present and strict in the workflow.
+
 # Feature Flag Audit Worklog
 
 ## [2026-04-22 13:05:00 BST] FLAG-AUDIT-001: routing, classification, and first discriminating hypothesis established
