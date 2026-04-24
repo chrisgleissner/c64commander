@@ -1,5 +1,32 @@
 # Release Size Regression Worklog
 
+## [2026-04-24T22:24:22Z] RELSIZE-002: steering check confirmed icon budget and separated icon usage from native splash usage
+
+What changed:
+
+- Appended a steering TODO to `PLANS.md` to keep `c64commander.png` shipped while enforcing a `<= 256 KiB` cap and recording the actual SVG asset usage path.
+- Confirmed the current generated icon payload already satisfies the requested cap:
+  - `public/c64commander.png = 26,182 bytes`
+  - `public/c64commander-192.png = 7,947 bytes`
+  - `public/c64commander-maskable-512.png = 26,182 bytes`
+- Ran an ImageMagick probe to determine whether further manual optimization was necessary:
+  - `convert public/c64commander.png -strip -quality 90 PNG8:public/c64commander.optimized.png`
+  - probe result: `public/c64commander.optimized.png = 6,340 bytes`
+  - interpretation: the shipped asset is already well below the requested cap, so no generator rewrite or packaging fix is required to satisfy the size budget.
+- Traced the actual asset usage chain:
+  - `variants/assets/c64commander/icon.svg` drives generated public icons, Android launcher icons, and the iOS app icon asset.
+  - `variants/assets/c64commander/logo.svg` is embedded into `variants/assets/c64commander/splash.svg`.
+  - `variants/assets/c64commander/splash.svg` drives native cold-launch splash imagery on both platforms.
+  - `index.html` references `c64commander.png` as a web/app icon and Apple touch icon, not as the native cold-launch splash.
+  - iOS cold launch uses `LaunchScreen.storyboard` image `Splash`; Android main layout is a `WebView`, so any branded cold-launch surface comes from generated splash resources rather than `c64commander.png`.
+
+Validation:
+
+- Focused tests passed:
+  - `tests/unit/scripts/generateVariant.test.ts`
+  - `tests/unit/scripts/validateReleaseArtifact.test.ts`
+- Removed the temporary ImageMagick probe output from the worktree after measuring it.
+
 ## [2026-04-24T22:09:12Z] RELSIZE-001: investigation started, baseline captured, and first falsifiable hypothesis recorded
 
 Classification for this pass:

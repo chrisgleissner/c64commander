@@ -592,6 +592,33 @@ describe("generate-variant", () => {
     ).rejects.toThrow(/out of date/);
   });
 
+  it("keeps generated c64commander icon within budget and emits native splash assets", async () => {
+    const repoRoot = createTempDir("variant-compile-");
+    writeRepoFixtures(repoRoot);
+    const variantsPath = path.join(repoRoot, "variants/variants.yaml");
+    writeFile(variantsPath, buildVariantsYaml());
+    const runtimeTsPath = path.join(repoRoot, "src/generated/variant.ts");
+    const runtimeJsonPath = path.join(repoRoot, "src/generated/variant.json");
+
+    await compileVariantTyped({
+      variantsPath,
+      featureFlagsPath: path.join(repoRoot, "src/lib/config/feature-flags.yaml"),
+      overlaysDir: path.join(repoRoot, "variants/feature-flags"),
+      runtimeTsPath,
+      runtimeJsonPath,
+      variantId: "c64commander",
+    });
+
+    const publicIconPath = path.join(repoRoot, "public/c64commander.png");
+    const publicIconSize = readFileSync(publicIconPath).byteLength;
+
+    expect(publicIconSize).toBeLessThanOrEqual(256 * 1024);
+    expect(existsSync(path.join(repoRoot, "ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png"))).toBe(
+      true,
+    );
+    expect(existsSync(path.join(repoRoot, "android/app/src/main/res/drawable/splash.png"))).toBe(true);
+  });
+
   it("resolves default and explicit publish selections", () => {
     const repoRoot = createTempDir("variant-config-");
     writeRepoFixtures(repoRoot);

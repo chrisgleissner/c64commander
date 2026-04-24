@@ -45,6 +45,7 @@
 8. Run focused local validation plus the required repo validation set for code changes.
 9. Create or advance `0.7.9-rcN`, ensure the GitHub release is a prerelease, and validate the published RC Android and iOS artifacts.
 10. Write the final report at `doc/research/release-size-regression-0.7.7-to-0.7.8/report.md` and close all tasks only after artifact-backed proof is complete.
+11. Steering refinement: keep `c64commander.png` shipped, enforce a hard cap of `<= 256 KiB`, and record which SVG-derived assets drive web icons versus native cold-launch splash assets.
 
 ## RC Attempts
 
