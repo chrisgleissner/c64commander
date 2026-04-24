@@ -14,6 +14,11 @@ const LEGACY_DEVICE_HOST_KEY = "c64u_device_host";
 export const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 const CURRENT_BASE_URL_KEY = "c64u_base_url";
 
+export const persistDeviceHostToStorage = (deviceHost: string) => {
+  localStorage.setItem(CURRENT_DEVICE_HOST_KEY, deviceHost);
+  localStorage.setItem(LEGACY_DEVICE_HOST_KEY, deviceHost);
+};
+
 export const DEFAULT_DEVICE_HOST = variant.runtime.endpoints.device_host ?? "c64u";
 export const DEFAULT_BASE_URL = `http://${DEFAULT_DEVICE_HOST}`;
 export const DEFAULT_HTTP_PORT = 80;
@@ -179,21 +184,25 @@ export const resolveDeviceHostFromStorage = () => {
     }
     const normalizedCurrentHost = storedCurrentDeviceHost ? normalizeDeviceHost(storedCurrentDeviceHost) : null;
     if (!normalizedCurrentHost || normalizedCurrentHost === DEFAULT_DEVICE_HOST) {
-      localStorage.setItem(CURRENT_DEVICE_HOST_KEY, normalizedLegacyHost);
+      persistDeviceHostToStorage(normalizedLegacyHost);
       currentStoredDeviceHost = normalizedLegacyHost;
     }
   }
   const storedDeviceHost = currentStoredDeviceHost;
   const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
   if (storedDeviceHost) {
+    persistDeviceHostToStorage(normalizedStoredHost);
+    localStorage.removeItem(CURRENT_BASE_URL_KEY);
     return normalizedStoredHost;
   }
   const legacyBaseUrl = localStorage.getItem(CURRENT_BASE_URL_KEY) ?? localStorage.getItem("c64u_base_url");
   if (legacyBaseUrl) {
     const migratedHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(legacyBaseUrl));
-    localStorage.setItem(CURRENT_DEVICE_HOST_KEY, migratedHost);
+    persistDeviceHostToStorage(migratedHost);
+    localStorage.removeItem(CURRENT_BASE_URL_KEY);
     return migratedHost;
   }
+  localStorage.removeItem(CURRENT_BASE_URL_KEY);
   return normalizedStoredHost;
 };
 

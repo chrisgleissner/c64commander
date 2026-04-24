@@ -65,12 +65,17 @@ describe("hostConfig", () => {
     localStorage.setItem(DEVICE_HOST_KEY, " demo-box.local ");
     localStorage.setItem("c64u_base_url", "http://legacy-box.local");
     expect(resolveDeviceHostFromStorage()).toBe("demo-box.local");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("demo-box.local");
+    expect(localStorage.getItem("c64u_device_host")).toBe("demo-box.local");
+    expect(localStorage.getItem("c64u_base_url")).toBeNull();
 
     localStorage.clear();
     localStorage.setItem("c64u_base_url", "http://legacy-box.local:8080/rest");
 
     expect(resolveDeviceHostFromStorage()).toBe("legacy-box.local:8080");
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("legacy-box.local:8080");
+    expect(localStorage.getItem("c64u_device_host")).toBe("legacy-box.local:8080");
+    expect(localStorage.getItem("c64u_base_url")).toBeNull();
   });
 
   it("migrates legacy device host storage into the variant-prefixed key and preserves it for downstream readers", () => {

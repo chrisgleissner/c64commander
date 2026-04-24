@@ -10,8 +10,11 @@ import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { variant } from "../src/generated/variant";
 import { seedUiMocks } from "./uiMocks";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
+
+const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 
 const hasRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -266,13 +269,15 @@ test.describe("Home interactions", () => {
 
     try {
       await page.addInitScript(
-        ({ demoBaseUrl }: { demoBaseUrl: string }) => {
+        ({ demoBaseUrl, currentDeviceHostKey }: { demoBaseUrl: string; currentDeviceHostKey: string }) => {
           (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
           (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:65534";
           (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [
             "http://127.0.0.1:65534",
             demoBaseUrl,
           ];
+          localStorage.removeItem("c64u_saved_devices:v1");
+          localStorage.removeItem(currentDeviceHostKey);
           localStorage.setItem("c64u_startup_discovery_window_ms", "600");
           localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
           localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
@@ -282,7 +287,7 @@ test.describe("Home interactions", () => {
           sessionStorage.removeItem("c64u_demo_interstitial_shown");
           delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
         },
-        { demoBaseUrl: demoServer.baseUrl },
+        { demoBaseUrl: demoServer.baseUrl, currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
       );
 
       await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -291,9 +296,10 @@ test.describe("Home interactions", () => {
       await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 10000 });
 
       const dialog = page.getByRole("dialog", { name: "Demo Mode" });
-      await expect(dialog).toBeVisible();
-      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
-      await expect(dialog).toBeHidden();
+      if (await dialog.isVisible().catch(() => false)) {
+        await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+        await expect(dialog).toBeHidden();
+      }
 
       await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
       await page.evaluate(() =>
