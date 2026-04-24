@@ -49,6 +49,43 @@ const seedConnection = async (page: Page, baseUrl: string, snapshot: unknown) =>
       routingWindow.__c64uAllowedBaseUrls = [runtimeBaseUrl];
       routingWindow.__c64uTestProbeEnabled = true;
       const host = runtimeBaseUrl.replace(/^https?:\/\//, "");
+      let deviceHost = "c64u";
+      let deviceHttpPort = 80;
+      try {
+        const parsedUrl = new URL(runtimeBaseUrl);
+        deviceHost = parsedUrl.hostname || "c64u";
+        deviceHttpPort = Number(parsedUrl.port) || 80;
+      } catch {
+        // ignore
+      }
+      const testDeviceId = "test-device-mock";
+      localStorage.setItem(
+        "c64u_saved_devices:v1",
+        JSON.stringify({
+          version: 1,
+          selectedDeviceId: testDeviceId,
+          devices: [
+            {
+              id: testDeviceId,
+              name: "",
+              nameSource: "auto",
+              host: deviceHost,
+              httpPort: deviceHttpPort,
+              ftpPort: 21,
+              telnetPort: 64,
+              lastKnownProduct: null,
+              lastKnownHostname: null,
+              lastKnownUniqueId: null,
+              lastSuccessfulConnectionAt: null,
+              lastUsedAt: null,
+              hasPassword: false,
+            },
+          ],
+          summaries: {},
+          summaryLru: [],
+          hasEverHadMultipleDevices: false,
+        }),
+      );
       localStorage.setItem("c64u_device_host", host || "c64u");
       localStorage.removeItem("c64u_password");
       localStorage.removeItem("c64u_has_password");

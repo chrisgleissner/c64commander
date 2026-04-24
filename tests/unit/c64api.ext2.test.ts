@@ -429,7 +429,6 @@ describe("c64api utility functions - targeted branch coverage", () => {
       const result = resolveDeviceHostFromStorage();
       expect(result).toBe("legacy.local");
       expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("legacy.local");
-      expect(localStorage.getItem("c64u_base_url")).toBeNull();
     });
 
     it("prefers a seeded legacy device host over a stale default current host", () => {
@@ -440,7 +439,7 @@ describe("c64api utility functions - targeted branch coverage", () => {
 
       expect(result).toBe("127.0.0.1:35039");
       expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("127.0.0.1:35039");
-      expect(localStorage.getItem("c64u_device_host")).toBeNull();
+      expect(localStorage.getItem("c64u_device_host")).toBe("127.0.0.1:35039");
     });
 
     it("returns DEFAULT_DEVICE_HOST when localStorage is empty", () => {

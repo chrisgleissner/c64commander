@@ -174,30 +174,26 @@ export const resolveDeviceHostFromStorage = () => {
   let currentStoredDeviceHost = storedCurrentDeviceHost;
   if (legacyStoredDeviceHost) {
     const normalizedLegacyHost = normalizeDeviceHost(legacyStoredDeviceHost);
+    if (normalizedLegacyHost !== legacyStoredDeviceHost) {
+      localStorage.setItem(LEGACY_DEVICE_HOST_KEY, normalizedLegacyHost);
+    }
     const normalizedCurrentHost = storedCurrentDeviceHost ? normalizeDeviceHost(storedCurrentDeviceHost) : null;
     if (!normalizedCurrentHost || normalizedCurrentHost === DEFAULT_DEVICE_HOST) {
       localStorage.setItem(CURRENT_DEVICE_HOST_KEY, normalizedLegacyHost);
       currentStoredDeviceHost = normalizedLegacyHost;
     }
-    localStorage.removeItem(LEGACY_DEVICE_HOST_KEY);
   }
   const storedDeviceHost = currentStoredDeviceHost;
   const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
   if (storedDeviceHost) {
-    localStorage.removeItem(CURRENT_BASE_URL_KEY);
-    localStorage.removeItem("c64u_base_url");
     return normalizedStoredHost;
   }
   const legacyBaseUrl = localStorage.getItem(CURRENT_BASE_URL_KEY) ?? localStorage.getItem("c64u_base_url");
   if (legacyBaseUrl) {
     const migratedHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(legacyBaseUrl));
     localStorage.setItem(CURRENT_DEVICE_HOST_KEY, migratedHost);
-    localStorage.removeItem(CURRENT_BASE_URL_KEY);
-    localStorage.removeItem("c64u_base_url");
     return migratedHost;
   }
-  localStorage.removeItem(CURRENT_BASE_URL_KEY);
-  localStorage.removeItem("c64u_base_url");
   return normalizedStoredHost;
 };
 

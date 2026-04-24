@@ -445,7 +445,6 @@ describe("c64api", () => {
 
     expect(resolvedHost).toBe("192.168.1.55");
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("192.168.1.55");
-    expect(localStorage.getItem("c64u_base_url")).toBeNull();
   });
 
   it("handles non-string payloads on native platforms", async () => {

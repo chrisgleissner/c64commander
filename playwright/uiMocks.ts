@@ -115,7 +115,45 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
-        localStorage.removeItem("c64u_saved_devices:v1");
+        let deviceHost = "c64u";
+        let deviceHttpPort = 80;
+        if (baseUrlArg) {
+          try {
+            const parsedUrl = new URL(baseUrlArg);
+            deviceHost = parsedUrl.hostname || "c64u";
+            deviceHttpPort = Number(parsedUrl.port) || 80;
+          } catch {
+            // ignore
+          }
+        }
+        const testDeviceId = "test-device-mock";
+        localStorage.setItem(
+          "c64u_saved_devices:v1",
+          JSON.stringify({
+            version: 1,
+            selectedDeviceId: testDeviceId,
+            devices: [
+              {
+                id: testDeviceId,
+                name: "",
+                nameSource: "auto",
+                host: deviceHost,
+                httpPort: deviceHttpPort,
+                ftpPort: 21,
+                telnetPort: 64,
+                lastKnownProduct: null,
+                lastKnownHostname: null,
+                lastKnownUniqueId: null,
+                lastSuccessfulConnectionAt: null,
+                lastUsedAt: null,
+                hasPassword: false,
+              },
+            ],
+            summaries: {},
+            summaryLru: [],
+            hasEverHadMultipleDevices: false,
+          }),
+        );
         localStorage.setItem("c64u_device_host", host || "c64u");
         localStorage.setItem("c64commander:device_host", host || "c64u");
         if (baseUrlArg) {
