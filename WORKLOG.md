@@ -1,3 +1,154 @@
+# CI Integrity Recovery Worklog
+
+## [2026-04-24T18:23:55Z] CI-RECOVERY-001: initial routing, scope, and first falsifiable hypothesis
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+What was established before the first edit:
+
+- The known failing contract is `tests/unit/ci/telemetryGateWorkflow.test.ts`, which asserts string-level release and telemetry gating inside `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, and `.github/workflows/web.yaml`.
+- Android already keeps stable-tag-only guards on release APK/AAB build, upload-artifact, GitHub release asset upload, and Google Play upload steps.
+- Android's `release-artifacts` job itself still runs on all tags, but its `Ensure GitHub release exists` step is currently guarded by `startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'`.
+- iOS still creates a GitHub release for any tag and marks `*-rc*` tags as prereleases, which matches the intended RC policy.
+- Web tag handling already validates `X.Y.Z` and `X.Y.Z-rcN` formats, and repository memory confirms tag context must remain authoritative for version resolution.
+
+Current working hypothesis:
+
+- The Android workflow regressed during variant-aware release handling: RC tags no longer reach GitHub release creation because that step was folded under the stable artifact publishing gate instead of remaining tag-scoped with RC prerelease branching.
+
+Selected cheap disconfirming checks:
+
+- Compare `0.7.7` and current `android.yaml` around release creation and artifact publication.
+- Run the targeted unit test for `telemetryGateWorkflow` to see whether the failure is the expected RC release-creation mismatch or a second drift.
+
+Next action:
+
+- Perform the historical diff across workflows, tests, and supporting scripts, then run the focused CI contract test before making the workflow fix.
+
+## [2026-04-24T18:53:30Z] CI-RECOVERY-002: regression isolated, workflow repaired, and local validation completed
+
+Historical regression analysis results:
+
+- `0.7.7` kept Android GitHub release creation on the generic tag path and only gated APK/AAB upload and Play publication on tag plus keystore state.
+- `HEAD^` still kept `Ensure GitHub release exists` as `startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'`, so RC tags still reached prerelease creation even though they incorrectly still shared the artifact lane.
+- `360fdee9` tightened the Android `Ensure GitHub release exists` step to `startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'` and also added a new test asserting the Android artifact-attachment job should be stable-tag-only.
+
+Root cause determination:
+
+- The workflow was wrong because it removed the executable path that created RC prereleases.
+- The new test was incomplete rather than wholly wrong: it correctly asserted that Android artifact publication must be stable-tag-only, but it did not also assert that RC prerelease creation still exists outside that lane.
+- Variant support was incidental rather than causal for the regression. The actual break came from placing release creation under the stable-only artifact gate.
+
+Minimal fix implemented:
+
+- Added a dedicated Android `release-prerelease` job that runs only for `refs/tags/*` where `github.ref_name` contains `-rc`.
+- Made the Android `release-artifacts` job itself stable-tag-only so RC tags do not enter the artifact-attachment lane.
+- Kept all stable-tag artifact, AAB, and Google Play steps strict and unchanged inside the stable-only lane.
+- Added a dedicated regression assertion proving Android RC tags still create GitHub prereleases without using the stable artifact gate.
+
+Validation completed:
+
+- Focused regression: `tests/unit/ci/telemetryGateWorkflow.test.ts` passed with `12` tests after the workflow change.
+- Full unit suite: `npm run test` passed.
+- Build: `npm run build` passed.
+- Coverage: `npm run test:coverage` passed with `91.99%` branch coverage.
+- Formatter check for touched files: passed for `.github/workflows/android.yaml` and `tests/unit/ci/telemetryGateWorkflow.test.ts`.
+
+Validation note:
+
+- `npm run lint` is currently red in this workspace because `format:check:ts` reports pre-existing formatting drift in unrelated files and local environment content outside this fix. The touched files were formatted and verified clean.
+
+Remote CI state at this checkpoint:
+
+- Current branch is `fix/ci` with open PR `#238` to `main`.
+- Real `pull_request` CI is already running for commit `d900a0ac`.
+- `web` is green; `android` and `ios` are still in progress at this timestamp.
+
+## [2026-04-24T18:54:20Z] CI-RECOVERY-003: RC validation attempt `0.7.8-rc1` started
+
+RC tag actions:
+
+- Verified `0.7.8-rc1` did not exist locally, remotely, or as a GitHub release.
+- Created and pushed tag `0.7.8-rc1` at commit `d900a0acffd309fbec49cbd6b499464a8549ea3d`.
+
+Observed workflow runs after tag push:
+
+- Android run: `24906575010` (`in_progress`)
+- Web run: `24906575006` (`queued` at discovery)
+- iOS run: `24906575002` (`queued` at discovery)
+
+Validation targets for this RC attempt:
+
+- Android must create a GitHub release for `0.7.8-rc1` marked as prerelease.
+- Android must not upload release APK/AAB artifacts to the GitHub release.
+- Android must not upload any AAB to Google Play.
+- Web and iOS tagged workflows must also complete successfully so the tag build is fully green.
+
+## [2026-04-24T19:39:36Z] CI-RECOVERY-004: `0.7.8-rc1` failure repaired and `0.7.8-rc2` passed end-to-end
+
+Observed `0.7.8-rc1` failure:
+
+- Branch PR runs for commit `d900a0acffd309fbec49cbd6b499464a8549ea3d` all completed successfully:
+  - Android `24905746902`
+  - iOS `24905746916`
+  - Web `24905746909`
+- RC tag `0.7.8-rc1` had mixed results:
+  - Android `24906575010`: failed
+  - iOS `24906575002`: success
+  - Web `24906575006`: success
+- Android failure was isolated to job `Release | Create prerelease`.
+- Failed job log root cause:
+  - `gh release create/edit` ran in a job without a checked-out repository
+  - GitHub runner error: `failed to run git: fatal: not a git repository (or any of the parent directories): .git`
+- Even on the failed attempt, the RC release semantics were partly confirmed:
+  - GitHub release `0.7.8-rc1` existed and was marked prerelease
+  - Attached assets contained only `c64commander-0.7.8-rc1-ios.ipa`
+  - Android release-attachment lane was skipped
+
+Repair for the `rc1` failure:
+
+- Added `actions/checkout@v4` to the Android `release-prerelease` job so `gh release create/edit` can run in a git worktree.
+- Added a regression assertion requiring the prerelease job to include checkout.
+- Re-ran the focused contract test: passed (`12` tests).
+
+Cleanup between attempts:
+
+- Deleted GitHub release `0.7.8-rc1`.
+- Deleted local tag `0.7.8-rc1`.
+- Deleted remote tag `0.7.8-rc1`.
+
+Corrected branch publish step:
+
+- Committed and pushed the repair as `8a92f6f67c4935eb8e5a898ceff193efd0503bd0` with message `ci: checkout repo before RC prerelease creation`.
+
+Successful final validation:
+
+- Branch PR runs on corrected commit `8a92f6f67c4935eb8e5a898ceff193efd0503bd0` all succeeded:
+  - Android `24907527691`
+  - iOS `24907527692`
+  - Web `24907527670`
+- RC tag `0.7.8-rc2` all succeeded:
+  - Android `24907532176`
+  - iOS `24907532188`
+  - Web `24907532183`
+- Final Android RC release-gate evidence from run `24907532176`:
+  - `Release | Create prerelease`: `completed success`
+  - `Release | Attach APK/AAB (${{ matrix.variant }})`: `completed skipped`
+- Final GitHub release evidence for `0.7.8-rc2`:
+  - `isPrerelease: true`
+  - attached assets: only `c64commander-0.7.8-rc2-ios.ipa`
+  - no Android release asset was uploaded for the RC tag
+
+Final policy check:
+
+- RC tags now create GitHub prereleases.
+- RC tags do not enter the Android artifact-attachment lane.
+- RC tags do not upload Android APK/AAB release assets.
+- Stable-tag Android artifact and Google Play conditions remain present and strict in the workflow.
+
 # Feature Flag Audit Worklog
 
 ## [2026-04-22 13:05:00 BST] FLAG-AUDIT-001: routing, classification, and first discriminating hypothesis established

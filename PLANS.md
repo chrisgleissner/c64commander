@@ -1,3 +1,99 @@
+# 2026-04-24 CI Integrity Recovery
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- Restore full CI integrity for the current branch and tagged release flows.
+- Current known failure includes `tests/unit/ci/telemetryGateWorkflow.test.ts` and release/tag logic that diverged after variant-aware workflow changes.
+- RC tags must create GitHub prereleases while skipping Android artifact publication and Google Play upload.
+- Final tags must keep Android artifact upload and Google Play upload intact when signing material is present.
+
+## Failing CI Components
+
+- `tests/unit/ci/telemetryGateWorkflow.test.ts`
+- Android tag/release gating in `.github/workflows/android.yaml`
+- Variant-aware release artifact handling introduced after the `0.7.7` baseline
+- Tagged release semantics across Android, web, and iOS workflows
+
+## Ranked Hypotheses
+
+1. Android RC release creation regressed when release handling moved into variant-aware jobs: the tag-scoped `release-artifacts` job still runs for all tags, but the `Ensure GitHub release exists` step is now gated to stable tags with keystore presence, so RC tags no longer create prereleases.
+2. The failing unit test still encodes the intended CI policy, and the workflow is the side that drifted from that policy.
+3. Variant support is likely causal for the Android regression because variant matrix jobs now own release creation and artifact attachment, but web and iOS kept unconditional tag-scoped release creation.
+4. Any remaining failure beyond the unit test will likely be around release idempotence or tag-format handling rather than telemetry monitoring itself.
+
+## First Local Hypothesis And Cheap Check
+
+- Local hypothesis: `.github/workflows/android.yaml` incorrectly guards GitHub release creation behind the stable-tag artifact gate instead of allowing RC tags to create prereleases.
+- Cheap disconfirming check: compare the `release-artifacts` job and its `Ensure GitHub release exists` step against `0.7.7`, then run `tests/unit/ci/telemetryGateWorkflow.test.ts` to confirm the exact contract mismatch.
+
+## Execution Plan
+
+1. Read the failing CI contract test, Android/web/iOS workflows, and helper scripts that resolve build versions and variants.
+2. Compare CI workflows, CI tests, and supporting scripts across `0.7.7`, current `main`, and the working tree.
+3. Record the regression table below and identify the first commit that introduced the Android RC release regression if history is conclusive.
+4. Determine whether the workflow or the test is authoritative using the `0.7.7` baseline and the stated RC/final release policy.
+5. Apply the smallest workflow fix that restores RC prerelease creation without weakening stable-tag artifact and Play upload gates.
+6. Add or update regression coverage only where needed to lock the intended production behavior.
+7. Run focused validation first, then the required repository validation set for code changes.
+8. Validate branch CI locally as far as possible, then push incrementing RC tags (`0.7.8-rcN`) until one real GitHub Actions run passes and creates a prerelease without Android uploads.
+9. Confirm final-tag logic remains intact and clean up any temporary debugging before closeout.
+
+## Historical Regression Table
+
+| Area                                    | Change                                                                                                                                                | Likely Impact                                                                                                                               | Confidence |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Android release creation                | `360fdee9` changed `Ensure GitHub release exists` from tag-scoped to stable-tag-only-with-keystore while leaving RC prerelease logic in the step body | RC tags stopped creating GitHub prereleases because the release-creation step never ran for `*-rc*` tags                                    | High       |
+| Android artifact upload gating          | `0.7.7` gated Android release artifacts on any tag with keystore; newer workflow tightened artifact, AAB, and Play upload steps to stable tags only   | Stable-only artifact gating is correct, but it cannot also own RC prerelease creation                                                       | High       |
+| Variant selection / matrix publish flow | Variant-aware jobs added `variant-selection`, publish matrices, and per-variant artifact names to Android packaging and release attachment            | Variant support is incidental to the RC prerelease bug; the bug came from collapsing release creation and artifact publishing into one path | Medium     |
+| CI contract tests                       | `360fdee9` added the failing assertion that the Android artifact-attachment job itself must be stable-tag-only                                        | The test captured the intended stable-only artifact policy but lacked a companion assertion for RC prerelease creation                      | High       |
+| Supporting scripts                      | `scripts/resolve-build-version.mjs` and `web.yaml` retained correct tag-aware version semantics                                                       | Supporting scripts are not causal for the Android RC regression                                                                             | High       |
+
+## Root Cause Summary
+
+- Exact failing expectation from `tests/unit/ci/telemetryGateWorkflow.test.ts`:
+  - `if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')`
+  - `    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]`
+- Exact workflow mismatch before the fix:
+  - `release-artifacts` was still `if: startsWith(github.ref, 'refs/tags/')`
+  - `Ensure GitHub release exists` had been tightened to `if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'`
+- Why the mismatch existed:
+  - The stable-only artifact policy was applied to the release-creation step without introducing a separate RC prerelease path.
+  - That left RC prerelease logic text present inside the step body, but unreachable because the step no longer ran for RC tags.
+- Authoritative side:
+  - The intended CI policy is authoritative: RC tags must create prereleases and must not upload Android artifacts or Google Play builds.
+  - `0.7.7` proves prerelease creation belonged on the tag path, while the new test correctly proves artifact publication must be stable-only.
+  - The correct resolution is therefore `C) both diverged from the intended spec`: the workflow lost the RC prerelease path, and the test needed an additional assertion for that path.
+
+## Regression Commit Identification
+
+- First behavior regression: `360fdee9` (`Fix/android test coverage build (#237)`) tightened Android release creation behind the stable-tag artifact gate.
+- Earlier baseline behavior in `0.7.7` and `HEAD^` kept `Ensure GitHub release exists` tag-scoped, which allowed RC prerelease creation.
+- Variant support is incidental rather than causal for this specific regression; the decisive change was the stable-only guard added to the release-creation step itself.
+
+## Validation Outcome
+
+- Local focused regression: `tests/unit/ci/telemetryGateWorkflow.test.ts` passed after both workflow edits.
+- Local validation: `npm run test` passed, `npm run build` passed, and `npm run test:coverage` passed with `91.99%` branch coverage.
+- Branch CI passed on corrected commit `8a92f6f67c4935eb8e5a898ceff193efd0503bd0`:
+  - Android: run `24907527691`
+  - iOS: run `24907527692`
+  - Web: run `24907527670`
+- RC tag `0.7.8-rc1` failed only in Android run `24906575010` because the new prerelease job lacked a checkout step; the tag and prerelease were deleted before retry.
+- RC tag `0.7.8-rc2` passed completely:
+  - Android: run `24907532176`
+  - iOS: run `24907532188`
+  - Web: run `24907532183`
+- RC release result for `0.7.8-rc2`:
+  - GitHub release exists and is marked `prerelease`
+  - Android `Release | Create prerelease` succeeded
+  - Android `Release | Attach APK/AAB (${{ matrix.variant }})` was skipped
+  - Attached assets contain only `c64commander-0.7.8-rc2-ios.ipa`, which confirms no Android APK/AAB release asset upload occurred for the RC tag
+
 # 2026-04-22 Variant Spec Minimal Patch
 
 ## Classification
