@@ -1,3 +1,53 @@
+# Release Size Regression Worklog
+
+## [2026-04-24T22:09:12Z] RELSIZE-001: investigation started, baseline captured, and first falsifiable hypothesis recorded
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+Initial commands and baseline results:
+
+- `git status --short --branch`
+  - result: clean worktree on `fix/bundle-content`
+- `git branch --show-current`
+  - result: `fix/bundle-content`
+- `git remote -v`
+  - result: `origin git@github.com:chrisgleissner/c64commander.git`
+- `git tag --list '0.7.*' --sort=version:refname`
+  - result includes `0.7.7`, `0.7.8`, `0.7.8-rc2`, and `0.7.9-rc1`
+- `git --no-pager log --oneline --decorate --graph --max-count=30`
+  - result: `HEAD` is `55236960` with tag `0.7.8`; `0.7.7` is commit `43880201`
+- `git fetch --tags --force origin`
+  - result: tags refreshed successfully
+- `gh release view 0.7.7 --repo chrisgleissner/c64commander --json tagName,isPrerelease,isDraft,publishedAt,assets,url`
+  - result: published stable release with assets:
+    - `c64commander-0.7.7-android.apk` size `8,265,019`, digest `sha256:fa23a8705fa0c7c66d6e0817a684eb77e9088d8668973ef559be9763e5e8a259`
+    - `c64commander-0.7.7-android-play.aab` size `9,082,866`, digest `sha256:c2ecfe30cf5f88c14aef5df9f9ed20c9666f6225f6218b5e8bb3085c22bb89e0`
+    - `c64commander-0.7.7-ios.ipa` size `6,344,206`, digest `sha256:9b5e6cb455e071828d1d808f1e27c1b6dc1b0669215d3f15464696b85e205c94`
+- `gh release view 0.7.8 --repo chrisgleissner/c64commander --json tagName,isPrerelease,isDraft,publishedAt,assets,url`
+  - result: published stable release with assets:
+    - `c64commander-0.7.8-android.apk` size `5,790,272`, digest `sha256:9cb90e9d918e32ac6788bfe011141c662ae1ccdcb1775e577d735d2a4732447c`
+    - `c64commander-0.7.8-android-play.aab` size `6,604,238`, digest `sha256:8d9f7e5d733f6badd57fc9cba60ef312e5c2bfeb33ff7a0fa4c9cb470217e2a4`
+    - `c64commander-0.7.8-ios.ipa` size `3,100,332`, digest `sha256:d947a26597fcefb4fe2aa5740694b6997a2806db0a02bad37ba2fd0d13f0649c`
+- `gh release view 0.7.9-rc1 --repo chrisgleissner/c64commander --json tagName,isPrerelease,isDraft,publishedAt,assets,url`
+  - result: `release not found`
+
+Initial evidence and interpretation:
+
+- Real published artifact sizes confirm a severe regression on both platforms:
+  - Android APK shrank by `2,474,747` bytes from `0.7.7` to `0.7.8`
+  - iOS IPA shrank by `3,243,874` bytes from `0.7.7` to `0.7.8`
+- Because both platform artifacts shrank substantially, the first working hypothesis is a missing shared packaged payload rather than a platform-specific optimizer improvement.
+- The cheapest disconfirming check is to unpack the published APK and IPA pairs and compare inventories with 7-Zip-focused searches before touching source.
+
+Next actions committed:
+
+- Download the published `0.7.7` and `0.7.8` APK and IPA assets into `artifacts/release-size-investigation/`.
+- Record exact download paths, timestamps, file sizes, and checksums.
+- Generate deterministic unpacked inventories and diff the contents before making code changes.
+
 # CI Integrity Recovery Worklog
 
 ## [2026-04-24T18:23:55Z] CI-RECOVERY-001: initial routing, scope, and first falsifiable hypothesis
