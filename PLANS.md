@@ -1,3 +1,58 @@
+# 2026-04-24 CI Integrity Recovery
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- Restore full CI integrity for the current branch and tagged release flows.
+- Current known failure includes `tests/unit/ci/telemetryGateWorkflow.test.ts` and release/tag logic that diverged after variant-aware workflow changes.
+- RC tags must create GitHub prereleases while skipping Android artifact publication and Google Play upload.
+- Final tags must keep Android artifact upload and Google Play upload intact when signing material is present.
+
+## Failing CI Components
+
+- `tests/unit/ci/telemetryGateWorkflow.test.ts`
+- Android tag/release gating in `.github/workflows/android.yaml`
+- Variant-aware release artifact handling introduced after the `0.7.7` baseline
+- Tagged release semantics across Android, web, and iOS workflows
+
+## Ranked Hypotheses
+
+1. Android RC release creation regressed when release handling moved into variant-aware jobs: the tag-scoped `release-artifacts` job still runs for all tags, but the `Ensure GitHub release exists` step is now gated to stable tags with keystore presence, so RC tags no longer create prereleases.
+2. The failing unit test still encodes the intended CI policy, and the workflow is the side that drifted from that policy.
+3. Variant support is likely causal for the Android regression because variant matrix jobs now own release creation and artifact attachment, but web and iOS kept unconditional tag-scoped release creation.
+4. Any remaining failure beyond the unit test will likely be around release idempotence or tag-format handling rather than telemetry monitoring itself.
+
+## First Local Hypothesis And Cheap Check
+
+- Local hypothesis: `.github/workflows/android.yaml` incorrectly guards GitHub release creation behind the stable-tag artifact gate instead of allowing RC tags to create prereleases.
+- Cheap disconfirming check: compare the `release-artifacts` job and its `Ensure GitHub release exists` step against `0.7.7`, then run `tests/unit/ci/telemetryGateWorkflow.test.ts` to confirm the exact contract mismatch.
+
+## Execution Plan
+
+1. Read the failing CI contract test, Android/web/iOS workflows, and helper scripts that resolve build versions and variants.
+2. Compare CI workflows, CI tests, and supporting scripts across `0.7.7`, current `main`, and the working tree.
+3. Record the regression table below and identify the first commit that introduced the Android RC release regression if history is conclusive.
+4. Determine whether the workflow or the test is authoritative using the `0.7.7` baseline and the stated RC/final release policy.
+5. Apply the smallest workflow fix that restores RC prerelease creation without weakening stable-tag artifact and Play upload gates.
+6. Add or update regression coverage only where needed to lock the intended production behavior.
+7. Run focused validation first, then the required repository validation set for code changes.
+8. Validate branch CI locally as far as possible, then push incrementing RC tags (`0.7.8-rcN`) until one real GitHub Actions run passes and creates a prerelease without Android uploads.
+9. Confirm final-tag logic remains intact and clean up any temporary debugging before closeout.
+
+## Historical Regression Table
+
+| Area | Change | Likely Impact | Confidence |
+|------|--------|---------------|------------|
+| Android release creation | Pending historical diff | Pending | Pending |
+| Android artifact upload gating | Pending historical diff | Pending | Pending |
+| Variant selection / matrix publish flow | Pending historical diff | Pending | Pending |
+| CI contract tests | Pending historical diff | Pending | Pending |
+| Supporting scripts | Pending historical diff | Pending | Pending |
+
 # 2026-04-22 Variant Spec Minimal Patch
 
 ## Classification

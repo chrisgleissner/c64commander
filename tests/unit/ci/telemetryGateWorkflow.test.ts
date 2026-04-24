@@ -39,6 +39,17 @@ describe("telemetry release gate workflow rules", () => {
     ).toBeGreaterThanOrEqual(10);
   });
 
+  it("creates Android GitHub prereleases for rc tags without using the stable artifact gate", () => {
+    const workflow = readWorkflow("android.yaml");
+    expect(workflow).toContain("name: Release | Create prerelease");
+    expect(workflow).toContain("if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-rc')");
+    expect(workflow).toContain("- name: Ensure GitHub prerelease exists");
+    expect(workflow).toContain('gh release edit "$TAG" --prerelease');
+    expect(workflow).toContain(
+      'gh release create "$TAG" --target "$GITHUB_SHA" --verify-tag --prerelease --generate-notes',
+    );
+  });
+
   it("hard-fails iOS telemetry on monitor exit code 3 for stable tag and release branch flows", () => {
     const workflow = readWorkflow("ios.yaml");
     expect(workflow).toContain('if [[ "$code" == "3" ]]; then');

@@ -1,3 +1,33 @@
+# CI Integrity Recovery Worklog
+
+## [2026-04-24T18:23:55Z] CI-RECOVERY-001: initial routing, scope, and first falsifiable hypothesis
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+What was established before the first edit:
+
+- The known failing contract is `tests/unit/ci/telemetryGateWorkflow.test.ts`, which asserts string-level release and telemetry gating inside `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, and `.github/workflows/web.yaml`.
+- Android already keeps stable-tag-only guards on release APK/AAB build, upload-artifact, GitHub release asset upload, and Google Play upload steps.
+- Android's `release-artifacts` job itself still runs on all tags, but its `Ensure GitHub release exists` step is currently guarded by `startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'`.
+- iOS still creates a GitHub release for any tag and marks `*-rc*` tags as prereleases, which matches the intended RC policy.
+- Web tag handling already validates `X.Y.Z` and `X.Y.Z-rcN` formats, and repository memory confirms tag context must remain authoritative for version resolution.
+
+Current working hypothesis:
+
+- The Android workflow regressed during variant-aware release handling: RC tags no longer reach GitHub release creation because that step was folded under the stable artifact publishing gate instead of remaining tag-scoped with RC prerelease branching.
+
+Selected cheap disconfirming checks:
+
+- Compare `0.7.7` and current `android.yaml` around release creation and artifact publication.
+- Run the targeted unit test for `telemetryGateWorkflow` to see whether the failure is the expected RC release-creation mismatch or a second drift.
+
+Next action:
+
+- Perform the historical diff across workflows, tests, and supporting scripts, then run the focused CI contract test before making the workflow fix.
+
 # Feature Flag Audit Worklog
 
 ## [2026-04-22 13:05:00 BST] FLAG-AUDIT-001: routing, classification, and first discriminating hypothesis established
