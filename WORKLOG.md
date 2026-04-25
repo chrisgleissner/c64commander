@@ -129,6 +129,81 @@ Next action:
 
 - Close the remaining cold-start launch TODO by removing white-flash risk in the native and web launch shells, then add the required Maestro cold-start/resume flows.
 
+## [2026-04-25T23:33:46Z] STARTUP-LAUNCH-004: app-ready canvas background regression fixed and launch screenshots refreshed
+
+Action performed:
+
+- Traced the blue app-ready screenshot regression to the post-launch swipe canvas remaining transparent while the root `html` background still matched the C64 blue launch color.
+- Updated the swipe-navigation container to paint the resolved theme background so the home canvas no longer bleeds the launch backdrop after the startup overlay unmounts.
+- Added a focused Playwright regression assertion that verifies the swipe canvas matches the body background and no longer resolves to the root `html` launch color.
+- Re-recorded the launch profile screenshots after the fix so the `04-app-ready.png` frames for `compact`, `medium`, and `expanded` show the correct home-page canvas.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `src/components/SwipeNavigationLayer.tsx`
+- `playwright/launchSequence.spec.ts`
+- `docs/img/app/launch/profiles/compact/01-fade-in.png`
+- `docs/img/app/launch/profiles/compact/02-hold.png`
+- `docs/img/app/launch/profiles/compact/03-fade-out.png`
+- `docs/img/app/launch/profiles/compact/04-app-ready.png`
+- `docs/img/app/launch/profiles/medium/01-fade-in.png`
+- `docs/img/app/launch/profiles/medium/02-hold.png`
+- `docs/img/app/launch/profiles/medium/03-fade-out.png`
+- `docs/img/app/launch/profiles/medium/04-app-ready.png`
+- `docs/img/app/launch/profiles/expanded/01-fade-in.png`
+- `docs/img/app/launch/profiles/expanded/02-hold.png`
+- `docs/img/app/launch/profiles/expanded/03-fade-out.png`
+- `docs/img/app/launch/profiles/expanded/04-app-ready.png`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `npx playwright test playwright/launchSequence.spec.ts -g "shows the launch sequence on fresh load, reaches app-ready, and does not replay on SPA or resume signals|keeps compact launch fade-out smooth when runtime motion remains standard|@screenshots captures launch sequence screenshots for each display profile" --reporter=line`
+
+Validation result:
+
+- Focused Playwright launch validation passed: `3 passed`.
+- Regenerated `04-app-ready.png` screenshots for `compact`, `medium`, and `expanded` now show the correct light app canvas instead of the C64 blue launch backdrop.
+
+Next action:
+
+- Run the broader required validation set for this code change, then resume the remaining launch and PR convergence work.
+
+## [2026-04-25T23:58:01Z] STARTUP-LAUNCH-005: halo viewport regression fixed for tablet CI layout checks
+
+Action performed:
+
+- Traced the failing Android-tablet Playwright shards to the startup halo extending beyond the active viewport during cold start.
+- Constrained `.startup-launch-sequence__halo` to the viewport bounds instead of rendering with a negative inset, eliminating the boundary-check violations without changing the launch sequence control flow.
+- Added a startup stylesheet regression assertion so the halo contract stays bounded in future edits.
+
+Files modified:
+
+- `WORKLOG.md`
+- `src/index.css`
+- `tests/unit/startup/launchSequence.test.ts`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `npx playwright test playwright/diskManagement.spec.ts -g "is non-destructive @layout|importing non-disk files shows warning @layout|FTP login failure surfaces error @layout|FTP server unavailable surfaces error @layout" --project=android-tablet --reporter=line`
+- `npx playwright test playwright/launchSequence.spec.ts -g "shows the launch sequence on fresh load, reaches app-ready, and does not replay on SPA or resume signals|keeps compact launch fade-out smooth when runtime motion remains standard|@screenshots captures launch sequence screenshots for each display profile" --reporter=line`
+- `npm run lint`
+- `npm run build`
+
+Validation result:
+
+- The previously failing Android-tablet disk-management layout slice passed: `4 passed`.
+- Focused Playwright launch validation and screenshot regeneration still passed: `3 passed`.
+- `npm run lint` passed on the current tree.
+- `npm run build` passed on the current tree.
+
+Next action:
+
+- Finish the full coverage gate on the current tree, then push the convergence commit and resolve the remaining review threads.
+
 # Release Size Regression Worklog
 
 ## [2026-04-24T22:24:22Z] RELSIZE-002: steering check confirmed icon budget and separated icon usage from native splash usage

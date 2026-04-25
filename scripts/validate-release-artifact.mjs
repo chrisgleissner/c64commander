@@ -1,5 +1,6 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export class ReleaseArtifactValidationError extends Error {
     constructor(message, summary) {
@@ -107,8 +108,24 @@ const detectPlatform = (artifactPath) => {
     throw new Error(`Unable to infer platform from artifact path: ${artifactPath}`);
 };
 
-const listZipEntries = (artifactPath) => {
-    const stdout = execFileSync('unzip', ['-Z1', artifactPath], {
+export const ensureCommandAvailable = (command, probe = spawnSync) => {
+    const result = probe(command, ['-v'], {
+        encoding: 'utf8',
+        stdio: 'ignore',
+    });
+
+    if (result.error) {
+        throw new Error(
+            result.error.code === 'ENOENT'
+                ? `Required binary "${command}" is not available on PATH; install it before validating release artifacts.`
+                : `Failed to probe required binary "${command}": ${result.error.message}`,
+        );
+    }
+};
+
+export const listZipEntries = (artifactPath, { execFile = execFileSync, ensureCommand = ensureCommandAvailable } = {}) => {
+    ensureCommand('unzip');
+    const stdout = execFile('unzip', ['-Z1', artifactPath], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -167,6 +184,8 @@ export const validateArtifactFile = (artifactPath, explicitPlatform = null) => {
     return validateArtifactEntries(platform, entries, artifactPath);
 };
 
+export const isDirectExecution = (argvPath, moduleUrl) => Boolean(argvPath) && moduleUrl === pathToFileURL(argvPath).href;
+
 const parseArgs = (argv) => {
     const options = {
         artifactPath: null,
@@ -214,9 +233,9 @@ const formatSummary = (summary) => {
     ].join('\n');
 };
 
-const isDirectExecution = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const directExecution = isDirectExecution(process.argv[1], import.meta.url);
 
-if (isDirectExecution) {
+if (directExecution) {
     try {
         const options = parseArgs(process.argv.slice(2));
         const summary = validateArtifactFile(options.artifactPath, options.platform);

@@ -339,7 +339,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   return (
     <div
       ref={containerRef}
-      className="relative w-screen overflow-hidden"
+      className="relative w-screen overflow-hidden bg-background"
       style={{ height: "calc(100dvh - var(--app-tab-bar-reserved-height))", touchAction: "pan-y pinch-zoom" }}
       inert={interstitialActive ? "" : undefined}
       data-testid="swipe-navigation-container"

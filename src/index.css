@@ -256,7 +256,7 @@
 
 .startup-launch-sequence[data-phase="fade-in"] {
   opacity: 1;
-  animation: startup-launch-fade-in 300ms ease-out forwards;
+  animation: startup-launch-fade-in var(--startup-launch-fade-in-ms, 300ms) ease-out forwards;
 }
 
 .startup-launch-sequence[data-phase="hold"] {
@@ -265,12 +265,12 @@
 
 .startup-launch-sequence[data-phase="fade-out"] {
   opacity: 0;
-  animation: startup-launch-fade-out 250ms ease-in forwards;
+  animation: startup-launch-fade-out var(--startup-launch-fade-out-ms, 250ms) ease-in forwards;
 }
 
 .startup-launch-sequence__halo {
   position: absolute;
-  inset: -18%;
+  inset: 0;
   background:
     radial-gradient(circle at 50% 24%, rgb(255 255 255 / 0.18), transparent 30%),
     radial-gradient(circle at 50% 62%, rgb(15 23 42 / 0.28), transparent 48%);

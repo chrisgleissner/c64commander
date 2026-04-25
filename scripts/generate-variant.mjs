@@ -69,6 +69,12 @@ const IOS_SPLASH_FILENAMES = ['splash-2732x2732.png', 'splash-2732x2732-1.png', 
 
 const TRANSPARENT_BACKGROUND = { r: 0, g: 0, b: 0, alpha: 0 };
 const SUPPORTED_ASSET_SOURCE_FORMATS = ['png', 'svg', 'jpg', 'jpeg', 'webp'];
+const PNG_WRITE_OPTIONS = {
+    compressionLevel: 9,
+    effort: 10,
+    palette: true,
+    quality: 100,
+};
 
 class VariantCompileError extends Error {
     constructor(message) {
@@ -815,12 +821,12 @@ const renderImageAsPng = async (inputPath, { size, fit = 'contain', background =
             background,
         });
     }
-    return pipeline.png().toBuffer();
+    return pipeline.png(PNG_WRITE_OPTIONS).toBuffer();
 };
 
 const loadSourcePng = async (inputPath, format) => {
     if (format === 'png') {
-        return fs.readFileSync(inputPath);
+        return sharp(inputPath).png(PNG_WRITE_OPTIONS).toBuffer();
     }
     return renderImageAsPng(inputPath);
 };

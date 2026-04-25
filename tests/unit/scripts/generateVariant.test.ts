@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import prettier from "prettier";
 import {
   VariantCompileError,
@@ -92,6 +93,7 @@ const resolvePublishVariantsTyped = resolvePublishVariants as (
   config: any,
   options?: { publishTarget?: string; explicitVariants?: string[] | null },
 ) => string[];
+const REAL_REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 const tempDirs: string[] = [];
 
@@ -302,7 +304,7 @@ const writeRepoFixtures = (repoRoot: string) => {
   writeFile(path.join(repoRoot, "variants/feature-flags/c64commander.yaml"), "overrides: {}\n");
   writeFile(
     path.join(repoRoot, "variants/feature-flags/c64u-controller.yaml"),
-    ["overrides:", "  commoserve_enabled:", "    enabled: false", ""].join("\n"),
+    ["overrides:", "  hvsc_enabled:", "    enabled: false", ""].join("\n"),
   );
 };
 
@@ -533,7 +535,8 @@ describe("generate-variant", () => {
     });
 
     expect(first.changed).toBe(true);
-    expect(first.selection.variant.featureFlags.commoserve_enabled.enabled).toBe(false);
+    expect(first.selection.variant.featureFlags.hvsc_enabled.enabled).toBe(false);
+    expect(first.selection.variant.featureFlags.commoserve_enabled.enabled).toBe(true);
     expect(first.selection.repo.selectedPublishVariants).toEqual(["c64commander", "c64u-controller"]);
     expect(readFileSync(runtimeJsonPath, "utf8")).toContain('"selectedVariantId": "c64u-controller"');
     expect(readFileSync(runtimeTsPath, "utf8")).not.toContain("buildLocalStorageKey");
@@ -555,7 +558,7 @@ describe("generate-variant", () => {
       'customColorSpace="sRGB"',
     );
     expect(readFileSync(path.join(repoRoot, "ios/App/App/Base.lproj/LaunchScreen.storyboard"), "utf8")).not.toContain(
-      'systemBackgroundColor',
+      "systemBackgroundColor",
     );
     expect(readFileSync(path.join(repoRoot, "ios/App/App/Config/Variant.generated.xcconfig"), "utf8")).toContain(
       "VARIANT_BUNDLE_IDENTIFIER = uk.gleissner.c64ucontroller",
@@ -620,7 +623,7 @@ describe("generate-variant", () => {
     ).rejects.toThrow(/out of date/);
   });
 
-  it("keeps generated c64commander icon within budget and emits native splash assets", async () => {
+  it("keeps the checked-in c64commander icon within budget and emits native splash assets", async () => {
     const repoRoot = createTempDir("variant-compile-");
     writeRepoFixtures(repoRoot);
     const variantsPath = path.join(repoRoot, "variants/variants.yaml");
@@ -637,7 +640,7 @@ describe("generate-variant", () => {
       variantId: "c64commander",
     });
 
-    const publicIconPath = path.join(repoRoot, "public/c64commander.png");
+    const publicIconPath = path.join(REAL_REPO_ROOT, "public/c64commander.png");
     const publicIconSize = readFileSync(publicIconPath).byteLength;
 
     expect(publicIconSize).toBeLessThanOrEqual(256 * 1024);

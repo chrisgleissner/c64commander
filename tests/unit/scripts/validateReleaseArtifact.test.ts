@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   ReleaseArtifactValidationError,
+  ensureCommandAvailable,
+  isDirectExecution,
+  listZipEntries,
   validateArtifactEntries,
 } from "../../../scripts/validate-release-artifact.mjs";
 
@@ -62,5 +65,37 @@ describe("validate-release-artifact", () => {
         "Payload/App.app/Frameworks/Capacitor.framework/native-bridge.js",
       ]),
     ).toThrowError(ReleaseArtifactValidationError);
+  });
+
+  it("reports a clear error when unzip is unavailable", () => {
+    expect(() =>
+      ensureCommandAvailable("unzip", () => ({
+        error: Object.assign(new Error("spawn unzip ENOENT"), { code: "ENOENT" }),
+      })),
+    ).toThrow(/Required binary "unzip" is not available on PATH/);
+  });
+
+  it("checks for unzip before attempting to list archive contents", () => {
+    expect(() =>
+      listZipEntries("artifact.apk", {
+        ensureCommand: () => {
+          throw new Error(
+            'Required binary "unzip" is not available on PATH; install it before validating release artifacts.',
+          );
+        },
+      }),
+    ).toThrow(/Required binary "unzip" is not available on PATH/);
+  });
+
+  it("uses a file URL helper for direct execution paths with spaces", () => {
+    expect(
+      isDirectExecution(
+        "/tmp/release assets/validate-release-artifact.mjs",
+        "file:///tmp/release%20assets/validate-release-artifact.mjs",
+      ),
+    ).toBe(true);
+    expect(isDirectExecution("/tmp/release assets/validate-release-artifact.mjs", "file:///tmp/other-script.mjs")).toBe(
+      false,
+    );
   });
 });

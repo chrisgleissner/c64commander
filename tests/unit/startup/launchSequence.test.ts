@@ -1,122 +1,132 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-    DEFAULT_LAUNCH_SEQUENCE_TIMINGS,
-    getLaunchSequenceTotalMs,
-    markStartupLaunchSequenceComplete,
-    resetStartupLaunchSequenceStateForTests,
-    resolveStartupLaunchSequenceTimings,
-    runLaunchSequence,
-    shouldShowStartupLaunchSequence,
-} from '@/lib/startup/launchSequence';
+  DEFAULT_LAUNCH_SEQUENCE_TIMINGS,
+  getLaunchSequenceTotalMs,
+  markStartupLaunchSequenceComplete,
+  resetStartupLaunchSequenceStateForTests,
+  resolveStartupLaunchSequenceTimings,
+  runLaunchSequence,
+  shouldShowStartupLaunchSequence,
+} from "@/lib/startup/launchSequence";
 
-describe('launchSequence', () => {
-    beforeEach(() => {
-        resetStartupLaunchSequenceStateForTests();
+describe("launchSequence", () => {
+  beforeEach(() => {
+    resetStartupLaunchSequenceStateForTests();
+  });
+
+  it("emits the cold-start launch phases in order with the expected timings", () => {
+    vi.useFakeTimers();
+
+    const phases: string[] = [];
+    runLaunchSequence({
+      onPhaseChange: (phase) => {
+        phases.push(phase);
+      },
+      schedule: (callback, delayMs) => setTimeout(callback, delayMs),
+      cancel: (handle) => clearTimeout(handle),
     });
 
-    it('emits the cold-start launch phases in order with the expected timings', () => {
-        vi.useFakeTimers();
+    expect(phases).toEqual(["fade-in"]);
 
-        const phases: string[] = [];
-        runLaunchSequence({
-            onPhaseChange: (phase) => {
-                phases.push(phase);
-            },
-            schedule: (callback, delayMs) => setTimeout(callback, delayMs),
-            cancel: (handle) => clearTimeout(handle),
-        });
+    vi.advanceTimersByTime(DEFAULT_LAUNCH_SEQUENCE_TIMINGS.fadeInMs);
+    expect(phases).toEqual(["fade-in", "hold"]);
 
-        expect(phases).toEqual(['fade-in']);
+    vi.advanceTimersByTime(DEFAULT_LAUNCH_SEQUENCE_TIMINGS.holdMs);
+    expect(phases).toEqual(["fade-in", "hold", "fade-out"]);
 
-        vi.advanceTimersByTime(DEFAULT_LAUNCH_SEQUENCE_TIMINGS.fadeInMs);
-        expect(phases).toEqual(['fade-in', 'hold']);
+    vi.advanceTimersByTime(DEFAULT_LAUNCH_SEQUENCE_TIMINGS.fadeOutMs);
+    expect(phases).toEqual(["fade-in", "hold", "fade-out", "app-ready"]);
 
-        vi.advanceTimersByTime(DEFAULT_LAUNCH_SEQUENCE_TIMINGS.holdMs);
-        expect(phases).toEqual(['fade-in', 'hold', 'fade-out']);
+    vi.useRealTimers();
+  });
 
-        vi.advanceTimersByTime(DEFAULT_LAUNCH_SEQUENCE_TIMINGS.fadeOutMs);
-        expect(phases).toEqual(['fade-in', 'hold', 'fade-out', 'app-ready']);
+  it("cancels pending phase transitions when the launch sequence is torn down", () => {
+    vi.useFakeTimers();
 
-        vi.useRealTimers();
+    const phases: string[] = [];
+    const stop = runLaunchSequence({
+      onPhaseChange: (phase) => {
+        phases.push(phase);
+      },
+      schedule: (callback, delayMs) => setTimeout(callback, delayMs),
+      cancel: (handle) => clearTimeout(handle),
     });
 
-    it('cancels pending phase transitions when the launch sequence is torn down', () => {
-        vi.useFakeTimers();
+    stop();
+    vi.advanceTimersByTime(getLaunchSequenceTotalMs());
 
-        const phases: string[] = [];
-        const stop = runLaunchSequence({
-            onPhaseChange: (phase) => {
-                phases.push(phase);
-            },
-            schedule: (callback, delayMs) => setTimeout(callback, delayMs),
-            cancel: (handle) => clearTimeout(handle),
-        });
+    expect(phases).toEqual(["fade-in"]);
 
-        stop();
-        vi.advanceTimersByTime(getLaunchSequenceTotalMs());
+    vi.useRealTimers();
+  });
 
-        expect(phases).toEqual(['fade-in']);
+  it("shows the launch sequence only once per runtime", () => {
+    expect(shouldShowStartupLaunchSequence()).toBe(true);
 
-        vi.useRealTimers();
+    markStartupLaunchSequenceComplete();
+
+    expect(shouldShowStartupLaunchSequence()).toBe(false);
+  });
+
+  it("prefers a window timing override when one is present", () => {
+    const originalWindow = globalThis.window;
+    const timingOverride = {
+      fadeInMs: 900,
+      holdMs: 1900,
+      fadeOutMs: 700,
+    };
+
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        __c64uLaunchSequenceTimings: timingOverride,
+      },
     });
 
-    it('shows the launch sequence only once per runtime', () => {
-        expect(shouldShowStartupLaunchSequence()).toBe(true);
+    expect(resolveStartupLaunchSequenceTimings()).toEqual(timingOverride);
 
-        markStartupLaunchSequenceComplete();
-
-        expect(shouldShowStartupLaunchSequence()).toBe(false);
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
     });
+  });
 
-    it('prefers a window timing override when one is present', () => {
-        const originalWindow = globalThis.window;
-        const timingOverride = {
-            fadeInMs: 900,
-            holdMs: 1900,
-            fadeOutMs: 700,
-        };
+  it("keeps the launch overlay fades as pure opacity transitions", () => {
+    const stylesheet = fs.readFileSync(path.resolve(process.cwd(), "src/index.css"), "utf8");
 
-        Object.defineProperty(globalThis, 'window', {
-            configurable: true,
-            value: {
-                __c64uLaunchSequenceTimings: timingOverride,
-            },
-        });
+    expect(stylesheet).toContain("@keyframes startup-launch-fade-in");
+    expect(stylesheet).toContain("from {\n    opacity: 0;\n  }");
+    expect(stylesheet).toContain("to {\n    opacity: 1;\n  }");
+    expect(stylesheet).toContain('.startup-launch-sequence[data-phase="fade-in"] {');
+    expect(stylesheet).toContain(
+      "animation: startup-launch-fade-in var(--startup-launch-fade-in-ms, 300ms) ease-out forwards;",
+    );
 
-        expect(resolveStartupLaunchSequenceTimings()).toEqual(timingOverride);
+    expect(stylesheet).toContain("@keyframes startup-launch-fade-out");
+    expect(stylesheet).toContain("from {\n    opacity: 1;\n  }");
+    expect(stylesheet).toContain("to {\n    opacity: 0;\n  }");
+    expect(stylesheet).toContain('.startup-launch-sequence[data-phase="fade-out"] {');
+    expect(stylesheet).toContain(
+      "animation: startup-launch-fade-out var(--startup-launch-fade-out-ms, 250ms) ease-in forwards;",
+    );
+    expect(stylesheet).toContain(".startup-launch-sequence__halo {");
+    expect(stylesheet).toContain("  inset: 0;");
+    expect(stylesheet).not.toContain("  inset: -18%;");
+    expect(stylesheet).not.toContain("startup-launch-backdrop-fade-out");
+  });
 
-        Object.defineProperty(globalThis, 'window', {
-            configurable: true,
-            value: originalWindow,
-        });
-    });
+  it("keeps the Android launch theme aligned with the generated icon background color", () => {
+    const stylesXml = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/res/values/styles.xml"),
+      "utf8",
+    );
 
-    it('keeps the fade keyframes as pure opacity transitions', () => {
-        const stylesheet = fs.readFileSync(path.resolve(process.cwd(), 'src/index.css'), 'utf8');
-
-        expect(stylesheet).toContain('@keyframes startup-launch-fade-in');
-        expect(stylesheet).toContain('from {\n    opacity: 0;\n  }');
-        expect(stylesheet).toContain('to {\n    opacity: 1;\n  }');
-        expect(stylesheet).toContain('animation: startup-launch-fade-in 300ms ease-out forwards;');
-
-        expect(stylesheet).toContain('@keyframes startup-launch-fade-out');
-        expect(stylesheet).toContain('from {\n    opacity: 1;\n  }');
-        expect(stylesheet).toContain('to {\n    opacity: 0;\n  }');
-        expect(stylesheet).toContain('animation: startup-launch-fade-out 250ms ease-in forwards;');
-    });
-
-    it('keeps the Android launch theme aligned with the generated icon background color', () => {
-        const stylesXml = fs.readFileSync(
-            path.resolve(process.cwd(), 'android/app/src/main/res/values/styles.xml'),
-            'utf8',
-        );
-
-        expect(stylesXml).toContain('<item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>');
-        expect(stylesXml).toContain('<item name="windowSplashScreenBackground">@color/ic_launcher_background</item>');
-        expect(stylesXml).toContain('<item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>');
-    });
+    expect(stylesXml).toContain('<item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>');
+    expect(stylesXml).toContain('<item name="windowSplashScreenBackground">@color/ic_launcher_background</item>');
+    expect(stylesXml).toContain('<item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>');
+  });
 });
