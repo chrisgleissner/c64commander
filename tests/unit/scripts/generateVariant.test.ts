@@ -538,6 +538,7 @@ describe("generate-variant", () => {
     expect(readFileSync(runtimeJsonPath, "utf8")).toContain('"selectedVariantId": "c64u-controller"');
     expect(readFileSync(runtimeTsPath, "utf8")).not.toContain("buildLocalStorageKey");
     expect(readFileSync(path.join(repoRoot, "index.html"), "utf8")).toContain("C64U Controller");
+    expect(readFileSync(path.join(repoRoot, "index.html"), "utf8")).toContain("background: #2F6B8B;");
     expect(readFileSync(path.join(repoRoot, "public/manifest.webmanifest"), "utf8")).toContain(
       "c64u-controller-192.png",
     );
@@ -550,6 +551,12 @@ describe("generate-variant", () => {
     expect(
       readFileSync(path.join(repoRoot, "android/app/src/main/res/values/ic_launcher_background.xml"), "utf8"),
     ).toContain("#2F6B8B");
+    expect(readFileSync(path.join(repoRoot, "ios/App/App/Base.lproj/LaunchScreen.storyboard"), "utf8")).toContain(
+      'customColorSpace="sRGB"',
+    );
+    expect(readFileSync(path.join(repoRoot, "ios/App/App/Base.lproj/LaunchScreen.storyboard"), "utf8")).not.toContain(
+      'systemBackgroundColor',
+    );
     expect(readFileSync(path.join(repoRoot, "ios/App/App/Config/Variant.generated.xcconfig"), "utf8")).toContain(
       "VARIANT_BUNDLE_IDENTIFIER = uk.gleissner.c64ucontroller",
     );

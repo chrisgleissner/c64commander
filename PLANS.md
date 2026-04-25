@@ -23,16 +23,17 @@
 
 ## Ordered TODOs
 
-| ID  | Status    | TODO                                       | Success criteria                                                                                                                                                                              |
-| --- | --------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `done`    | Establish authoritative execution records  | `PLANS.md` defines this task, `WORKLOG.md` has an initial timestamped entry, and schema owners plus the source logo properties are recorded.                                                  |
-| 2   | `done`    | Migrate the variant asset schema           | `variants/variants.yaml`, generator code, generated outputs, and regression tests use `assets.sources.{icon,logo,splash}.{path,format}` only and no `*_svg` keys remain in active code paths. |
-| 3   | `done`    | Replace variant branding assets with PNGs  | Each variant has `icon.png`, `logo.png`, and `splash.png` derived from `docs/img/c64commander.png`, icons are padded safely, and stale SVG branding assets are removed or detached.           |
-| 4   | `pending` | Implement the cold-start launch sequence   | Android, iOS, and web render the same premium launch sequence on cold start only, using variant display name, description, and logo with no white flash regressions.                          |
-| 5   | `pending` | Add automated launch validation            | Playwright covers fresh-load visibility and transition timing plus SPA non-retrigger behavior, and Maestro cold-start/resume flows are added.                                                 |
-| 6   | `pending` | Generate launch evidence artifacts         | Profile screenshots exist under `docs/img/app/launch/profiles/{compact,medium,expanded}/`, a launch video exists under an ignored artifact path, and the output paths are logged.             |
-| 7   | `pending` | Validate builds and non-launch regressions | Relevant tests, coverage, lint, build, Capacitor sync/build validation, and a 7-Zip regression check all pass or have a documented blocking limitation.                                       |
-| 8   | `pending` | Write final report and clean the worktree  | `doc/research/startup-launch/report.md` exists, non-git artifacts stay unstaged, and all task TODOs are marked `done`.                                                                        |
+| ID  | Status    | TODO                                          | Success criteria                                                                                                                                                                              |
+| --- | --------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `done`    | Establish authoritative execution records     | `PLANS.md` defines this task, `WORKLOG.md` has an initial timestamped entry, and schema owners plus the source logo properties are recorded.                                                  |
+| 2   | `done`    | Migrate the variant asset schema              | `variants/variants.yaml`, generator code, generated outputs, and regression tests use `assets.sources.{icon,logo,splash}.{path,format}` only and no `*_svg` keys remain in active code paths. |
+| 3   | `done`    | Replace variant branding assets with PNGs     | Each variant has `icon.png`, `logo.png`, and `splash.png` derived from `docs/img/c64commander.png`, icons are padded safely, and stale SVG branding assets are removed or detached.           |
+| 4   | `pending` | Implement the cold-start launch sequence      | Android, iOS, and web render the same premium launch sequence on cold start only, using variant display name, description, and logo with no white flash regressions.                          |
+| 5   | `pending` | Add automated launch validation               | Playwright covers fresh-load visibility and transition timing plus SPA non-retrigger behavior, and Maestro cold-start/resume flows are added.                                                 |
+| 6   | `done`    | Generate launch evidence artifacts            | Profile screenshots exist under `docs/img/app/launch/profiles/{compact,medium,expanded}/`, a launch video exists under an ignored artifact path, and the output paths are logged.             |
+| 6a  | `done`    | Apply steering refinement for launch evidence | `artifacts/video/` is ignored, the launch description is centered, and the launch screenshots plus video are re-recorded after the refinement.                                                |
+| 7   | `pending` | Validate builds and non-launch regressions    | Relevant tests, coverage, lint, build, Capacitor sync/build validation, and a 7-Zip regression check all pass or have a documented blocking limitation.                                       |
+| 8   | `pending` | Write final report and clean the worktree     | `doc/research/startup-launch/report.md` exists, non-git artifacts stay unstaged, and all task TODOs are marked `done`.                                                                        |
 
 # 2026-04-24 Release Size Regression 0.7.7 -> 0.7.8
 

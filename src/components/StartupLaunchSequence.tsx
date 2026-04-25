@@ -11,9 +11,11 @@ import React from 'react';
 import { variant } from '@/generated/variant';
 import { useDisplayProfile } from '@/hooks/useDisplayProfile';
 import {
-    DEFAULT_LAUNCH_SEQUENCE_TIMINGS,
+    markStartupLaunchSequenceComplete,
     type LaunchSequencePhase,
+    resolveStartupLaunchSequenceTimings,
     runLaunchSequence,
+    shouldShowStartupLaunchSequence,
 } from '@/lib/startup/launchSequence';
 
 const PROFILE_COPY_WIDTH = {
@@ -30,20 +32,26 @@ const PROFILE_LOGO_WIDTH = {
 
 export function StartupLaunchSequence() {
     const { profile } = useDisplayProfile();
+    const timings = React.useMemo(() => resolveStartupLaunchSequenceTimings(), []);
     const [phase, setPhase] = React.useState<LaunchSequencePhase>('fade-in');
-    const [visible, setVisible] = React.useState(true);
+    const [visible, setVisible] = React.useState(() => shouldShowStartupLaunchSequence());
 
     React.useEffect(() => {
+        if (!visible) {
+            return undefined;
+        }
+
         return runLaunchSequence({
-            timings: DEFAULT_LAUNCH_SEQUENCE_TIMINGS,
+            timings,
             onPhaseChange: (nextPhase) => {
                 setPhase(nextPhase);
                 if (nextPhase === 'app-ready') {
+                    markStartupLaunchSequenceComplete();
                     setVisible(false);
                 }
             },
         });
-    }, []);
+    }, [timings, visible]);
 
     if (!visible) {
         return null;
@@ -52,6 +60,9 @@ export function StartupLaunchSequence() {
     return (
         <div
             className="startup-launch-sequence"
+            data-fade-in-ms={timings.fadeInMs}
+            data-fade-out-ms={timings.fadeOutMs}
+            data-hold-ms={timings.holdMs}
             data-phase={phase}
             data-profile={profile}
             data-testid="startup-launch-sequence"

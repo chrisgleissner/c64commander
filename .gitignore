@@ -21,6 +21,7 @@ ource /home/chris/dev/c64/c64commander/.venv/bin/activate
 .gradle/
 android/**/build/
 artifacts/release-size-investigation/
+artifacts/video/
 ci-artifacts/
 dist/
 dist-ssr/

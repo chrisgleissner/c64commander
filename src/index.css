@@ -307,7 +307,7 @@
 .startup-launch-sequence__description {
   width: 100%;
   margin: 0;
-  text-align: left;
+  text-align: center;
   font-size: clamp(0.82rem, 0.52rem + 0.78vw, 1rem);
   line-height: 1.45;
   color: rgb(255 255 255 / 0.88);

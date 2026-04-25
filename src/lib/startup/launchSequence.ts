@@ -25,6 +25,8 @@ export const DEFAULT_LAUNCH_SEQUENCE_TIMINGS: LaunchSequenceTimings = {
     fadeOutMs: 250,
 };
 
+let hasCompletedStartupLaunchSequence = false;
+
 const normalizeDelay = (value: number, label: string) => {
     if (!Number.isFinite(value) || value < 0) {
         throw new Error(`${label} must be a finite non-negative number`);
@@ -50,6 +52,30 @@ export const normalizeLaunchSequenceTimings = (
 export const getLaunchSequenceTotalMs = (timings?: Partial<LaunchSequenceTimings>) => {
     const resolved = normalizeLaunchSequenceTimings(timings);
     return resolved.fadeInMs + resolved.holdMs + resolved.fadeOutMs;
+};
+
+export const resolveStartupLaunchSequenceTimings = (timings?: Partial<LaunchSequenceTimings>) => {
+    if (typeof window === 'undefined') {
+        return normalizeLaunchSequenceTimings(timings);
+    }
+
+    const globalOverride = (
+        window as Window & {
+            __c64uLaunchSequenceTimings?: Partial<LaunchSequenceTimings>;
+        }
+    ).__c64uLaunchSequenceTimings;
+
+    return normalizeLaunchSequenceTimings(globalOverride ?? timings);
+};
+
+export const shouldShowStartupLaunchSequence = () => !hasCompletedStartupLaunchSequence;
+
+export const markStartupLaunchSequenceComplete = () => {
+    hasCompletedStartupLaunchSequence = true;
+};
+
+export const resetStartupLaunchSequenceStateForTests = () => {
+    hasCompletedStartupLaunchSequence = false;
 };
 
 export const runLaunchSequence = ({

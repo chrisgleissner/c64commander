@@ -131,6 +131,23 @@ const xmlEscape = (value) =>
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&apos;');
 
+const hexColorToStoryboardRgb = (value, label) => {
+    const normalized = requireNonEmptyString(value, label);
+    const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized);
+    if (!match) {
+        fail(`${label} must be a 6-digit hex color`);
+    }
+
+    const hex = match[1];
+    const readChannel = (start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255;
+
+    return {
+        red: readChannel(0).toFixed(16),
+        green: readChannel(2).toFixed(16),
+        blue: readChannel(4).toFixed(16),
+    };
+};
+
 const ensureFileExists = (repoRoot, relativePath, label) => {
     requireNonEmptyString(relativePath, label);
     const absolutePath = path.resolve(repoRoot, relativePath);
@@ -534,6 +551,15 @@ export const renderWebIndexHtml = (selection) => {
     />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary" />
+        <style>
+            html,
+            body,
+            #root {
+                min-height: 100%;
+                margin: 0;
+                background: ${variant.platform.web.backgroundColor};
+            }
+        </style>
   </head>
 
   <body>
@@ -671,6 +697,43 @@ export const renderAndroidLauncherBackgroundXml = (selection) => `${GENERATED_XM
 export const renderIosVariantXcconfig = (selection) => `${IOS_XCCONFIG_BANNER}VARIANT_DISPLAY_NAME = ${selection.variant.displayName}
 VARIANT_BUNDLE_IDENTIFIER = ${selection.variant.platform.ios.bundleId}
 `;
+
+export const renderIosLaunchScreenStoryboard = (selection) => {
+    const { red, green, blue } = hexColorToStoryboardRgb(
+        selection.variant.platform.web.backgroundColor,
+        'variant.platform.web.backgroundColor',
+    );
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17132" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+    <device id="retina4_7" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17105"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--View Controller-->
+        <scene sceneID="EHf-IW-A2E">
+            <objects>
+                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                    <imageView key="view" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Splash" id="snD-IY-ifK">
+                        <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                        <color key="backgroundColor" red="${red}" green="${green}" blue="${blue}" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                    </imageView>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="53" y="375"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="Splash" width="1366" height="1366"/>
+    </resources>
+</document>
+`;
+};
 
 export const renderWebServerVariantModule = (selection) => `${LICENSE_HEADER}
 ${GENERATED_BANNER}
@@ -870,6 +933,11 @@ const renderIosAssets = async ({ repoRoot, selection, check }) => {
         writeOutputFile({
             outputPath: path.join(repoRoot, 'ios/App/App/Config/Variant.generated.xcconfig'),
             rendered: renderIosVariantXcconfig(selection),
+            check,
+        }),
+        writeOutputFile({
+            outputPath: path.join(repoRoot, 'ios/App/App/Base.lproj/LaunchScreen.storyboard'),
+            rendered: renderIosLaunchScreenStoryboard(selection),
             check,
         }),
         await writeBinaryOutputFile({

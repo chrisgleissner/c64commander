@@ -77,6 +77,58 @@ Next action:
 
 - Implement the cold-start launch sequence across web and native surfaces, then validate it with a narrow behavior-scoped test before widening to evidence generation.
 
+## [2026-04-25T17:36:36Z] STARTUP-LAUNCH-003: steering refinement applied and launch evidence regenerated
+
+Action performed:
+
+- Appended and executed the steering refinement inside the active startup-launch plan.
+- Ignored `artifacts/video/` in `.gitignore` so generated launch videos stay out of git.
+- Centered the launch description copy in the startup overlay.
+- Stabilized the focused Playwright launch suite so it samples the app's resolved launch timings, writes screenshots under `docs/img/app/launch/profiles/{compact,medium,expanded}/`, and saves a single named video artifact to `artifacts/video/startup-launch/launch-sequence-medium.webm`.
+- Added the missing `beforeEach` import in the startup unit regression and exposed resolved launch timings on the overlay for deterministic evidence capture.
+- Marked TODOs 6 and 6a as `done` in `PLANS.md`.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `.gitignore`
+- `src/index.css`
+- `src/components/StartupLaunchSequence.tsx`
+- `playwright/launchSequence.spec.ts`
+- `tests/unit/startup/launchSequence.test.ts`
+- `docs/img/app/launch/profiles/compact/01-fade-in.png`
+- `docs/img/app/launch/profiles/compact/02-hold.png`
+- `docs/img/app/launch/profiles/compact/03-fade-out.png`
+- `docs/img/app/launch/profiles/compact/04-app-ready.png`
+- `docs/img/app/launch/profiles/medium/01-fade-in.png`
+- `docs/img/app/launch/profiles/medium/02-hold.png`
+- `docs/img/app/launch/profiles/medium/03-fade-out.png`
+- `docs/img/app/launch/profiles/medium/04-app-ready.png`
+- `docs/img/app/launch/profiles/expanded/01-fade-in.png`
+- `docs/img/app/launch/profiles/expanded/02-hold.png`
+- `docs/img/app/launch/profiles/expanded/03-fade-out.png`
+- `docs/img/app/launch/profiles/expanded/04-app-ready.png`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- focused unit validation:
+  - `tests/unit/startup/launchSequence.test.ts`
+- focused Playwright validation and evidence generation:
+  - `PLAYWRIGHT_DEVICES=web PLAYWRIGHT_WORKERS=1 npx playwright test playwright/launchSequence.spec.ts --project=web`
+
+Validation result:
+
+- Startup unit regression passed: `5 passed, 0 failed`.
+- Focused Playwright launch suite passed: `3 passed, 0 failed`.
+- Re-recorded screenshot set exists for `compact`, `medium`, and `expanded` profiles.
+- Saved launch video exists at `artifacts/video/startup-launch/launch-sequence-medium.webm`.
+
+Next action:
+
+- Close the remaining cold-start launch TODO by removing white-flash risk in the native and web launch shells, then add the required Maestro cold-start/resume flows.
+
 # Release Size Regression Worklog
 
 ## [2026-04-24T22:24:22Z] RELSIZE-002: steering check confirmed icon budget and separated icon usage from native splash usage
