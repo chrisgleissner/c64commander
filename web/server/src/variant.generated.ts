@@ -26,16 +26,25 @@ export const webServerVariantConfig = {
     appId: "c64commander",
     assets: {
       public: {
-        faviconSvg: "/favicon.svg",
+        faviconPng: "/favicon.png",
         homeLogoPng: "/c64commander.png",
         icon192Png: "/c64commander-192.png",
-        icon512Png: "/c64commander.png",
+        icon512Png: "/c64commander-512.png",
         iconMaskable512Png: "/c64commander-maskable-512.png",
       },
       sources: {
-        iconSvg: "variants/assets/c64commander/icon.svg",
-        logoSvg: "variants/assets/c64commander/logo.svg",
-        splashSvg: "variants/assets/c64commander/splash.svg",
+        icon: {
+          format: "png",
+          path: "variants/assets/c64commander/icon.png",
+        },
+        logo: {
+          format: "png",
+          path: "variants/assets/c64commander/logo.png",
+        },
+        splash: {
+          format: "png",
+          path: "variants/assets/c64commander/splash.png",
+        },
       },
     },
     description: "Configure and control your Commodore 64 Ultimate over your local network.",

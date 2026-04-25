@@ -26,6 +26,57 @@ Next action:
 
 - Apply the schema migration in the generator and regression tests, then run the focused generator suite immediately.
 
+## [2026-04-25T11:54:02Z] STARTUP-LAUNCH-002: schema migration materialized, PNG assets generated, and detached SVG branding removed
+
+Action performed:
+
+- Ran the single-source brand sync from `docs/img/c64commander.png` to generate `icon.png`, `logo.png`, and `splash.png` for both variants under `variants/assets/`.
+- Regenerated the tracked variant outputs so runtime and web metadata now emit `faviconPng` plus semantic `assets.sources.{icon,logo,splash}` objects instead of SVG-era keys.
+- Removed the detached branding SVG files from `variants/assets/c64commander/` and `variants/assets/c64u-controller/`.
+- Updated the variant schema example in `docs/research/variants/variant-spec.md` to document the semantic PNG source contract instead of `*_svg` keys.
+- Marked TODOs 2 and 3 as `done` in `PLANS.md`.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `docs/research/variants/variant-spec.md`
+- `index.html`
+- `src/generated/variant.json`
+- `src/generated/variant.ts`
+- `web/server/src/variant.generated.ts`
+- `variants/assets/c64commander/icon.png`
+- `variants/assets/c64commander/logo.png`
+- `variants/assets/c64commander/splash.png`
+- `variants/assets/c64commander/icon.svg`
+- `variants/assets/c64commander/logo.svg`
+- `variants/assets/c64commander/splash.svg`
+- `variants/assets/c64u-controller/icon.png`
+- `variants/assets/c64u-controller/logo.png`
+- `variants/assets/c64u-controller/splash.png`
+- `variants/assets/c64u-controller/icon.svg`
+- `variants/assets/c64u-controller/logo.svg`
+- `variants/assets/c64u-controller/splash.svg`
+
+Commands executed:
+
+- `npm run assets:brand`
+- `node scripts/generate-variant.mjs`
+- focused unit validation for:
+  - `tests/unit/scripts/generateVariant.test.ts`
+  - `tests/unit/scripts/syncBrandAssets.test.ts`
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `git status --short -- variants/assets index.html src/generated/variant.ts src/generated/variant.json web/server/src/variant.generated.ts docs/research/variants/variant-spec.md PLANS.md WORKLOG.md package.json scripts/generate-variant.mjs scripts/sync-brand-assets.mjs tests/unit/scripts/generateVariant.test.ts tests/unit/scripts/syncBrandAssets.test.ts`
+
+Validation result:
+
+- Focused script regressions passed: `23 passed, 0 failed`.
+- Regenerated outputs now reference PNG public assets and semantic asset sources only.
+
+Next action:
+
+- Implement the cold-start launch sequence across web and native surfaces, then validate it with a narrow behavior-scoped test before widening to evidence generation.
+
 # Release Size Regression Worklog
 
 ## [2026-04-24T22:24:22Z] RELSIZE-002: steering check confirmed icon budget and separated icon usage from native splash usage

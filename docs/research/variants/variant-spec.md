@@ -384,18 +384,16 @@ variants:
         login_heading: C64 Commander
 
     assets:
-      web:
-        favicon_svg: variants/assets/c64commander/web/favicon.svg
-        icon_192_png: variants/assets/c64commander/web/c64commander-192.png
-        icon_512_png: variants/assets/c64commander/web/c64commander-512.png
-        icon_maskable_512_png: variants/assets/c64commander/web/c64commander-maskable-512.png
-      android:
-        launcher_foreground_png: variants/assets/c64commander/android/ic_launcher_foreground.png
-        launcher_background_xml: variants/assets/c64commander/android/ic_launcher_background.xml
-        splash_png: variants/assets/c64commander/android/splash.png
-      ios:
-        app_icon_1024_png: variants/assets/c64commander/ios/app-icon-1024.png
-        splash_2732_png: variants/assets/c64commander/ios/splash-2732.png
+      sources:
+        icon:
+          path: variants/assets/c64commander/icon.png
+          format: png
+        logo:
+          path: variants/assets/c64commander/logo.png
+          format: png
+        splash:
+          path: variants/assets/c64commander/splash.png
+          format: png
 
     exported_file_basename: c64commander
 
@@ -424,18 +422,16 @@ variants:
         login_heading: C64U Controller
 
     assets:
-      web:
-        favicon_svg: variants/assets/c64u-controller/web/favicon.svg
-        icon_192_png: variants/assets/c64u-controller/web/c64u-controller-192.png
-        icon_512_png: variants/assets/c64u-controller/web/c64u-controller-512.png
-        icon_maskable_512_png: variants/assets/c64u-controller/web/c64u-controller-maskable-512.png
-      android:
-        launcher_foreground_png: variants/assets/c64u-controller/android/ic_launcher_foreground.png
-        launcher_background_xml: variants/assets/c64u-controller/android/ic_launcher_background.xml
-        splash_png: variants/assets/c64u-controller/android/splash.png
-      ios:
-        app_icon_1024_png: variants/assets/c64u-controller/ios/app-icon-1024.png
-        splash_2732_png: variants/assets/c64u-controller/ios/splash-2732.png
+      sources:
+        icon:
+          path: variants/assets/c64u-controller/icon.png
+          format: png
+        logo:
+          path: variants/assets/c64u-controller/logo.png
+          format: png
+        splash:
+          path: variants/assets/c64u-controller/splash.png
+          format: png
 
     exported_file_basename: c64u-controller
 
