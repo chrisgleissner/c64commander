@@ -1,3 +1,39 @@
+# 2026-04-25 Startup Launch And Asset Convergence
+
+## Classification
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Goal
+
+- Converge branding, launch rendering, and validation around `docs/img/c64commander.png` as the single source of truth for variant branding assets and the cold-start launch experience.
+
+## Constraints
+
+- Do not upscale, recompress aggressively, or otherwise degrade `docs/img/c64commander.png`.
+- Migrate `variants/variants.yaml` to semantic asset keys only; no `*_svg` schema keys or compatibility layer.
+- Replace variant branding assets under `variants/assets/*` with PNG equivalents derived from the source logo.
+- Cold-start launch sequence must be deterministic, variant-aware, and skipped on resume.
+- Playwright validation is mandatory and must be executed.
+- Maestro flows must be added and executed when the environment allows; otherwise the limitation and command must be documented.
+- Video output must stay outside tracked paths.
+- Final closeout requires builds, tests, screenshots, video generation, and `doc/research/startup-launch/report.md`.
+
+## Ordered TODOs
+
+| ID  | Status        | TODO                                       | Success criteria                                                                                                                                                                              |
+| --- | ------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `done`        | Establish authoritative execution records  | `PLANS.md` defines this task, `WORKLOG.md` has an initial timestamped entry, and schema owners plus the source logo properties are recorded.                                                  |
+| 2   | `in_progress` | Migrate the variant asset schema           | `variants/variants.yaml`, generator code, generated outputs, and regression tests use `assets.sources.{icon,logo,splash}.{path,format}` only and no `*_svg` keys remain in active code paths. |
+| 3   | `pending`     | Replace variant branding assets with PNGs  | Each variant has `icon.png`, `logo.png`, and `splash.png` derived from `docs/img/c64commander.png`, icons are padded safely, and stale SVG branding assets are removed or detached.           |
+| 4   | `pending`     | Implement the cold-start launch sequence   | Android, iOS, and web render the same premium launch sequence on cold start only, using variant display name, description, and logo with no white flash regressions.                          |
+| 5   | `pending`     | Add automated launch validation            | Playwright covers fresh-load visibility and transition timing plus SPA non-retrigger behavior, and Maestro cold-start/resume flows are added.                                                 |
+| 6   | `pending`     | Generate launch evidence artifacts         | Profile screenshots exist under `docs/img/app/launch/profiles/{compact,medium,expanded}/`, a launch video exists under an ignored artifact path, and the output paths are logged.             |
+| 7   | `pending`     | Validate builds and non-launch regressions | Relevant tests, coverage, lint, build, Capacitor sync/build validation, and a 7-Zip regression check all pass or have a documented blocking limitation.                                       |
+| 8   | `pending`     | Write final report and clean the worktree  | `doc/research/startup-launch/report.md` exists, non-git artifacts stay unstaged, and all task TODOs are marked `done`.                                                                        |
+
 # 2026-04-24 Release Size Regression 0.7.7 -> 0.7.8
 
 ## Classification

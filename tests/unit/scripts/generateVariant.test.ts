@@ -50,14 +50,19 @@ type VariantDefinition = {
   };
   assets: {
     sources: {
-      icon_svg: string;
-      logo_svg: string;
-      splash_svg: string;
+      icon: VariantAssetSource;
+      logo: VariantAssetSource;
+      splash: VariantAssetSource;
     };
   };
   runtime: {
     endpoints: Record<string, string>;
   };
+};
+
+type VariantAssetSource = {
+  path: string;
+  format: string;
 };
 
 type VariantYamlOverrides = {
@@ -101,8 +106,18 @@ const writeFile = (filePath: string, contents: string) => {
   writeFileSync(filePath, contents, "utf8");
 };
 
-const writeSvg = (repoRoot: string, relativePath: string) => {
-  writeFile(path.join(repoRoot, relativePath), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>');
+const writeBinaryFile = (filePath: string, contents: Buffer) => {
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, contents);
+};
+
+const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=",
+  "base64",
+);
+
+const writePng = (repoRoot: string, relativePath: string) => {
+  writeBinaryFile(path.join(repoRoot, relativePath), TINY_PNG);
 };
 
 const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
@@ -139,9 +154,9 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
         },
         assets: {
           sources: {
-            icon_svg: "variants/assets/c64commander/icon.svg",
-            logo_svg: "variants/assets/c64commander/logo.svg",
-            splash_svg: "variants/assets/c64commander/splash.svg",
+            icon: { path: "variants/assets/c64commander/icon.png", format: "png" },
+            logo: { path: "variants/assets/c64commander/logo.png", format: "png" },
+            splash: { path: "variants/assets/c64commander/splash.png", format: "png" },
           },
         },
         runtime: {
@@ -175,9 +190,9 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
         },
         assets: {
           sources: {
-            icon_svg: "variants/assets/c64u-controller/icon.svg",
-            logo_svg: "variants/assets/c64u-controller/logo.svg",
-            splash_svg: "variants/assets/c64u-controller/splash.svg",
+            icon: { path: "variants/assets/c64u-controller/icon.png", format: "png" },
+            logo: { path: "variants/assets/c64u-controller/logo.png", format: "png" },
+            splash: { path: "variants/assets/c64u-controller/splash.png", format: "png" },
           },
         },
         runtime: {
@@ -234,9 +249,15 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
       `        login_heading: ${variant.platform.web.login_heading}`,
       "    assets:",
       "      sources:",
-      `        icon_svg: ${variant.assets.sources.icon_svg}`,
-      `        logo_svg: ${variant.assets.sources.logo_svg}`,
-      `        splash_svg: ${variant.assets.sources.splash_svg}`,
+      "        icon:",
+      `          path: ${variant.assets.sources.icon.path}`,
+      `          format: ${variant.assets.sources.icon.format}`,
+      "        logo:",
+      `          path: ${variant.assets.sources.logo.path}`,
+      `          format: ${variant.assets.sources.logo.format}`,
+      "        splash:",
+      `          path: ${variant.assets.sources.splash.path}`,
+      `          format: ${variant.assets.sources.splash.format}`,
       "    runtime:",
       "      endpoints:",
       ...Object.entries(variant.runtime.endpoints).map(([key, value]) => `        ${key}: ${value}`),
@@ -246,12 +267,12 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
 };
 
 const writeRepoFixtures = (repoRoot: string) => {
-  writeSvg(repoRoot, "variants/assets/c64commander/icon.svg");
-  writeSvg(repoRoot, "variants/assets/c64commander/logo.svg");
-  writeSvg(repoRoot, "variants/assets/c64commander/splash.svg");
-  writeSvg(repoRoot, "variants/assets/c64u-controller/icon.svg");
-  writeSvg(repoRoot, "variants/assets/c64u-controller/logo.svg");
-  writeSvg(repoRoot, "variants/assets/c64u-controller/splash.svg");
+  writePng(repoRoot, "variants/assets/c64commander/icon.png");
+  writePng(repoRoot, "variants/assets/c64commander/logo.png");
+  writePng(repoRoot, "variants/assets/c64commander/splash.png");
+  writePng(repoRoot, "variants/assets/c64u-controller/icon.png");
+  writePng(repoRoot, "variants/assets/c64u-controller/logo.png");
+  writePng(repoRoot, "variants/assets/c64u-controller/splash.png");
   writeFile(
     path.join(repoRoot, "src/lib/config/feature-flags.yaml"),
     [
@@ -355,9 +376,9 @@ describe("generate-variant", () => {
         },
         assets: {
           sources: {
-            icon_svg: "variants/assets/c64commander/icon.svg",
-            logo_svg: "variants/assets/c64commander/logo.svg",
-            splash_svg: "variants/assets/c64commander/splash.svg",
+            icon: { path: "variants/assets/c64commander/icon.png", format: "png" },
+            logo: { path: "variants/assets/c64commander/logo.png", format: "png" },
+            splash: { path: "variants/assets/c64commander/splash.png", format: "png" },
           },
         },
         runtime: { endpoints: { device_host: "c64u" } },
@@ -385,9 +406,9 @@ describe("generate-variant", () => {
         },
         assets: {
           sources: {
-            icon_svg: "variants/assets/c64u-controller/icon.svg",
-            logo_svg: "variants/assets/c64u-controller/logo.svg",
-            splash_svg: "variants/assets/c64u-controller/splash.svg",
+            icon: { path: "variants/assets/c64u-controller/icon.png", format: "png" },
+            logo: { path: "variants/assets/c64u-controller/logo.png", format: "png" },
+            splash: { path: "variants/assets/c64u-controller/splash.png", format: "png" },
           },
         },
         runtime: { endpoints: { device_host: "c64u" } },
@@ -419,8 +440,8 @@ describe("generate-variant", () => {
   it("fails when a declared asset path is missing", () => {
     const repoRoot = createTempDir("variant-config-");
     writeRepoFixtures(repoRoot);
-    rmSync(path.join(repoRoot, "variants/assets/c64u-controller/logo.svg"));
-    expect(() => parseVariantSource(buildVariantsYaml(), { repoRoot })).toThrow(/assets.sources.logo_svg is missing/);
+    rmSync(path.join(repoRoot, "variants/assets/c64u-controller/logo.png"));
+    expect(() => parseVariantSource(buildVariantsYaml(), { repoRoot })).toThrow(/assets.sources.logo.path is missing/);
   });
 
   it("rejects asset paths that escape the repository root", () => {
@@ -459,9 +480,9 @@ describe("generate-variant", () => {
           },
           assets: {
             sources: {
-              icon_svg: "../outside/icon.svg",
-              logo_svg: "variants/assets/c64commander/logo.svg",
-              splash_svg: "variants/assets/c64commander/splash.svg",
+              icon: { path: "../outside/icon.png", format: "png" },
+              logo: { path: "variants/assets/c64commander/logo.png", format: "png" },
+              splash: { path: "variants/assets/c64commander/splash.png", format: "png" },
             },
           },
           runtime: {

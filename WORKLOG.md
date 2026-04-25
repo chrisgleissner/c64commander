@@ -1,3 +1,31 @@
+# Startup Launch And Asset Convergence Worklog
+
+## [2026-04-25T11:31:24Z] STARTUP-LAUNCH-001: mapped schema owners and opened the execution track
+
+Action performed:
+
+- Mapped the controlling schema and generator ownership to `variants/variants.yaml`, `scripts/generate-variant.mjs`, and `tests/unit/scripts/generateVariant.test.ts`.
+- Confirmed the provided single-source branding asset is `docs/img/c64commander.png` with metadata `600x436`, format `png`, and alpha transparency.
+- Established the authoritative execution section in `PLANS.md` for this task.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `node --input-type=module -e "import sharp from 'sharp'; const meta = await sharp('docs/img/c64commander.png').metadata(); console.log(JSON.stringify({ width: meta.width, height: meta.height, format: meta.format, hasAlpha: meta.hasAlpha }, null, 2));"`
+
+Validation result:
+
+- Read-only routing only; no executable validation required yet.
+
+Next action:
+
+- Apply the schema migration in the generator and regression tests, then run the focused generator suite immediately.
+
 # Release Size Regression Worklog
 
 ## [2026-04-24T22:24:22Z] RELSIZE-002: steering check confirmed icon budget and separated icon usage from native splash usage
