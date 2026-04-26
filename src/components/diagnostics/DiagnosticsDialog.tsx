@@ -1503,14 +1503,12 @@ export function DiagnosticsDialog({
 
   const overflowPanel =
     overflowOpen && profile === "compact" ? (
-      <DialogPrimitive.Portal>
-        <div
-          className="fixed left-4 right-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-lg"
-          data-testid="diagnostics-overflow-panel"
-        >
-          {overflowPanelContent}
-        </div>
-      </DialogPrimitive.Portal>
+      <div
+        className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-lg"
+        data-testid="diagnostics-overflow-panel"
+      >
+        {overflowPanelContent}
+      </div>
     ) : overflowOpen ? (
       <div
         className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg"
