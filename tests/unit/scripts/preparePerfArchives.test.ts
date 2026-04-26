@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -54,5 +54,47 @@ describe("prepare-perf-archives", () => {
     expect(exportedEnv).toContain(`HVSC_PERF_BASELINE_ARCHIVE=${metadata.archives.baseline.path}`);
     expect(exportedEnv).toContain(`HVSC_PERF_UPDATE_ARCHIVE=${metadata.archives.update.path}`);
     expect(exportedEnv).toContain(`HVSC_UPDATE_84_CACHE=${cacheDir}`);
+  });
+
+  it("reuses persisted archive hashes on cache-hit runs", () => {
+    const root = createTempRoot();
+    const cacheDir = path.join(root, "hvsc-cache");
+    const outFile = path.join(root, "archive-preparation.json");
+    const baselinePayload = Buffer.from("baseline-archive").toString("base64");
+    const updatePayload = Buffer.from("update-archive").toString("base64");
+
+    const baseEnv = {
+      ...process.env,
+      HOME: path.join(root, "home"),
+      HVSC_ARCHIVE_PATH: path.join(cacheDir, "HVSC_84-all-of-them.7z"),
+      HVSC_UPDATE_84_CACHE: cacheDir,
+    };
+
+    execFileSync("node", [scriptPath, `--out=${outFile}`], {
+      encoding: "utf8",
+      env: {
+        ...baseEnv,
+        HVSC_PERF_BASELINE_ARCHIVE_URL: `data:application/octet-stream;base64,${baselinePayload}`,
+        HVSC_PERF_UPDATE_ARCHIVE_URL: `data:application/octet-stream;base64,${updatePayload}`,
+      },
+    });
+
+    const firstMetadata = JSON.parse(readFileSync(outFile, "utf8"));
+    const baselineHashPath = `${firstMetadata.archives.baseline.path}.sha256`;
+    const updateHashPath = `${firstMetadata.archives.update.path}.sha256`;
+
+    writeFileSync(baselineHashPath, `${"a".repeat(64)}\n`, "utf8");
+    writeFileSync(updateHashPath, `${"b".repeat(64)}\n`, "utf8");
+
+    execFileSync("node", [scriptPath, `--out=${outFile}`], {
+      encoding: "utf8",
+      env: baseEnv,
+    });
+
+    const secondMetadata = JSON.parse(readFileSync(outFile, "utf8"));
+
+    expect(secondMetadata.downloaded).toBe(false);
+    expect(secondMetadata.archives.baseline.sha256).toBe("a".repeat(64));
+    expect(secondMetadata.archives.update.sha256).toBe("b".repeat(64));
   });
 });

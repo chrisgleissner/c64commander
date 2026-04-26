@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const readWorkflow = (name: string) => readFileSync(path.resolve(process.cwd(), ".github/workflows", name), "utf8");
+const packageJson = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf8")) as {
+  scripts: Record<string, string>;
+};
 
 describe("perf-nightly workflow contracts", () => {
   it("prepares real HVSC archives into the stable cache before nightly perf runs", () => {
@@ -29,5 +32,12 @@ describe("perf-nightly workflow contracts", () => {
     expect(workflow).toContain("if: env.HVSC_PERF_PROFILE != 'smoke'");
     expect(workflow).toContain("if: always()");
     expect(workflow).toContain("name: hvsc-perf-${{ env.HVSC_PERF_PROFILE }}");
+  });
+
+  it("skips redundant archive preparation when the workflow already exported metadata", () => {
+    expect(packageJson.scripts["test:perf:nightly"]).toContain("HVSC_PERF_ARCHIVE_METADATA_FILE:-");
+    expect(packageJson.scripts["test:perf:nightly"]).toContain("npm run perf:prepare:archives");
+    expect(packageJson.scripts["test:perf:secondary:nightly"]).toContain("HVSC_PERF_ARCHIVE_METADATA_FILE:-");
+    expect(packageJson.scripts["test:perf:secondary:nightly"]).toContain("npm run perf:prepare:archives");
   });
 });

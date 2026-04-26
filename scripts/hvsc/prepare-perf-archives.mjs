@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { createReadStream, mkdirSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { ensureRealArchivePair } from './realArchiveCache.mjs';
@@ -25,12 +25,35 @@ const hashFile = async (filePath) =>
         stream.on('error', reject);
     });
 
-const buildArchiveIdentity = async (filePath) => {
+const resolveHashCachePath = (filePath) => `${filePath}.sha256`;
+
+const readPersistedHash = (filePath) => {
+    const hashCachePath = resolveHashCachePath(filePath);
+    if (!existsSync(hashCachePath)) {
+        return null;
+    }
+
+    const value = readFileSync(hashCachePath, 'utf8').trim();
+    return value.length === 64 ? value : null;
+};
+
+const persistHash = (filePath, sha256) => {
+    writeFileSync(resolveHashCachePath(filePath), `${sha256}\n`, 'utf8');
+};
+
+const buildArchiveIdentity = async (filePath, { refreshHash }) => {
     const fileStat = await stat(filePath);
+    const persistedHash = !refreshHash ? readPersistedHash(filePath) : null;
+    const sha256 = persistedHash ?? (await hashFile(filePath));
+
+    if (!persistedHash) {
+        persistHash(filePath, sha256);
+    }
+
     return {
         path: filePath,
         sizeBytes: fileStat.size,
-        sha256: await hashFile(filePath),
+        sha256,
     };
 };
 
@@ -64,8 +87,8 @@ const summary = {
             'https://hvsc.brona.dk/HVSC/HVSC_Update_84.7z',
     },
     archives: {
-        baseline: await buildArchiveIdentity(baselineArchive),
-        update: await buildArchiveIdentity(updateArchive),
+        baseline: await buildArchiveIdentity(baselineArchive, { refreshHash: downloaded }),
+        update: await buildArchiveIdentity(updateArchive, { refreshHash: downloaded }),
     },
 };
 
