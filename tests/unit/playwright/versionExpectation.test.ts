@@ -72,9 +72,7 @@ describe("playwright version expectation", () => {
         readGeneratedVersion: () => "",
         readPackageVersion: () => "0.7.9-rc1",
       }),
-    ).toMatchObject(
-      expect.any(RegExp),
-    );
+    ).toMatchObject(expect.any(RegExp));
     expect(
       resolveExpectedVersionPattern({
         env,

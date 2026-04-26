@@ -21,14 +21,14 @@ describe("web display profile zoom proof contracts", () => {
 
     expect(screenshotStep).toContain('PLAYWRIGHT_SKIP_BUILD: "1"');
     expect(screenshotStep).toContain("npm run screenshots");
-    expect(screenshotStep.match(/\n        run: \|/g)).toHaveLength(1);
+    expect(screenshotStep.match(/\n {8}run: \|/g)).toHaveLength(1);
 
     expect(webProofStep).toContain('PLAYWRIGHT_DEVICES: "web"');
     expect(webProofStep).toContain('SOURCE_DATE_EPOCH: "0"');
     expect(webProofStep).toContain(
       'npx playwright test playwright/displayProfiles.spec.ts -g "@web-platform" --project=web',
     );
-    expect(webProofStep.match(/\n        run: \|/g)).toHaveLength(1);
+    expect(webProofStep.match(/\n {8}run: \|/g)).toHaveLength(1);
   });
 
   it("marks the browser-zoom diagnostics proof as web-platform only so phone shards do not skip it", () => {
