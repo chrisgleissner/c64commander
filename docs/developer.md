@@ -54,6 +54,42 @@ Use these files as the current-state canonical references:
 - [docs/code-coverage.md](code-coverage.md) - coverage model and CI gates
 - [docs/c64/](c64/) - C64 Ultimate REST, FTP, and stream protocol docs
 
+## HVSC performance suites
+
+The HVSC perf tooling now has three explicit profiles:
+
+- `smoke`: short local checks with minimal loops for fast regressions.
+- `nightly`: CI-grade runs with stable loop counts and real archive preparation.
+- `manual-extended`: a wider manual profile for deeper perf investigations without changing the scheduled workflow runtime contract.
+
+Local smoke runs:
+
+```bash
+npm run test:perf
+```
+
+That command runs three deterministic lanes:
+
+- web scenario observation lane (`test:perf:smoke`)
+- web secondary browse/playback lane (`test:perf:secondary:smoke`)
+- Node data-path lane for HVSC and playlist hot paths (`test:perf:node:smoke`)
+
+Nightly/manual web runs use the same collector with `HVSC_PERF_PROFILE` and archive preparation metadata:
+
+```bash
+HVSC_PERF_PROFILE=nightly npm run test:perf:nightly
+HVSC_PERF_PROFILE=manual-extended npm run test:perf:secondary:nightly
+HVSC_PERF_PROFILE=manual-extended npm run test:perf:node:nightly
+```
+
+Artifacts are written under `ci-artifacts/hvsc-performance/`:
+
+- `archive-preparation.json` for the resolved real-archive contract
+- `web/*.json` and matching `web/*.md` summaries
+- `node/*.json` and matching `node/*.md` summaries
+
+The scheduled `perf-nightly` workflow resolves `HVSC_PERF_PROFILE=nightly` automatically. Manual dispatch keeps the same workflow but lets you select `smoke`, `nightly`, or `manual-extended` without editing YAML.
+
 ## Manual SID playback (local file)
 
 If you need to validate the exact local SID upload/playback path without launching the full app UI, use the
