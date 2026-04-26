@@ -135,8 +135,8 @@ const markdownSummaryFile =
     args.get('--summary') || process.env.HVSC_PERF_HUMAN_SUMMARY_FILE || outFile.replace(/\.json$/, '.md');
 const archivePreparation = readJsonIfExists(
     args.get('--archive-preparation') ||
-        process.env.HVSC_PERF_ARCHIVE_METADATA_FILE ||
-        'ci-artifacts/hvsc-performance/archive-preparation.json',
+    process.env.HVSC_PERF_ARCHIVE_METADATA_FILE ||
+    'ci-artifacts/hvsc-performance/archive-preparation.json',
 );
 const runtime = buildRuntimeMetadata(runProfile.profile);
 

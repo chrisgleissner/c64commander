@@ -34,7 +34,7 @@
 3. Implement deterministic provisioning before `test:perf:nightly` and `test:perf:secondary:nightly`, using explicit cache keys and clear failures.
 4. Audit the application’s concrete performance surfaces, then classify each candidate path for smoke, nightly, or later coverage.
 5. Expand the perf harness with short/nightly modes, scenario selection, stable artifacts, metadata capture, and useful thresholds.
-5a. Apply steering refinement: fix the sporadic post-push CI failure in `playwright/ui.spec.ts` by aligning the home-version expectation with the actual build-version resolver contract, and lock that behavior with a focused regression test.
+   5a. Apply steering refinement: fix the sporadic post-push CI failure in `playwright/ui.spec.ts` by aligning the home-version expectation with the actual build-version resolver contract, and lock that behavior with a focused regression test.
 6. Update package scripts, CI workflow steps, and documentation for local smoke use, nightly invocation, artifacts, cache paths, and deferred hardware/device lanes.
 7. Run focused local validation first, then the required repo validation set for code changes, including coverage.
 8. Trigger the manual `perf-nightly` workflow on the current branch, watch it to completion, and only close the task after the CI lane passes with useful artifacts.
