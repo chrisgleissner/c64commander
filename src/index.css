@@ -220,6 +220,108 @@
   }
 }
 
+@keyframes startup-launch-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes startup-launch-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.startup-launch-sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: max(1.5rem, calc(1rem + var(--safe-area-inset-top))) 1.5rem
+    max(1.5rem, calc(1rem + var(--safe-area-inset-bottom)));
+  color: hsl(var(--primary-foreground));
+  pointer-events: none;
+}
+
+.startup-launch-sequence[data-phase="fade-in"] {
+  opacity: 1;
+  animation: startup-launch-fade-in var(--startup-launch-fade-in-ms, 300ms) ease-out forwards;
+}
+
+.startup-launch-sequence[data-phase="hold"] {
+  opacity: 1;
+}
+
+.startup-launch-sequence[data-phase="fade-out"] {
+  opacity: 0;
+  animation: startup-launch-fade-out var(--startup-launch-fade-out-ms, 250ms) ease-in forwards;
+}
+
+.startup-launch-sequence__halo {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 24%, rgb(255 255 255 / 0.18), transparent 30%),
+    radial-gradient(circle at 50% 62%, rgb(15 23 42 / 0.28), transparent 48%);
+}
+
+.startup-launch-sequence__content {
+  position: relative;
+  width: var(--startup-launch-copy-width);
+  max-width: 100%;
+  transform: translateY(-3vh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  text-shadow: 0 10px 30px rgb(15 23 42 / 0.18);
+}
+
+.startup-launch-sequence__logo {
+  width: var(--startup-launch-logo-width);
+  max-width: 100%;
+  height: auto;
+}
+
+.startup-launch-sequence__title {
+  width: 100%;
+  margin: 0;
+  text-align: center;
+  font-size: clamp(1.35rem, 2vw + 0.95rem, 2rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+}
+
+.startup-launch-sequence__description {
+  width: 100%;
+  margin: 0;
+  text-align: center;
+  font-size: clamp(0.82rem, 0.52rem + 0.78vw, 1rem);
+  line-height: 1.45;
+  color: rgb(255 255 255 / 0.88);
+}
+
+:root[data-display-profile="compact"] .startup-launch-sequence__content {
+  gap: 0.7rem;
+  transform: translateY(-2vh);
+}
+
+:root[data-display-profile="compact"] .startup-launch-sequence__description {
+  font-size: 0.82rem;
+}
+
 .progress-indeterminate {
   width: 40%;
   animation: progress-indeterminate 1.4s ease-in-out infinite;

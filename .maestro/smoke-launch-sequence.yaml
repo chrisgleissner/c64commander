@@ -1,0 +1,19 @@
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+tags:
+  - device
+---
+- pressKey: Home
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "C64 Commander"
+    timeout: ${SHORT_TIMEOUT}
+- assertVisible: "Configure and control your Commodore 64 Ultimate over your local network."
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: ${LONG_TIMEOUT}
+- assertNotVisible: "C64 Commander"
+- takeScreenshot: smoke-launch-sequence-ready

@@ -796,7 +796,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -863,7 +863,7 @@ describe("c64api branches", () => {
       const controller = new AbortController();
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => { });
+      void pending.catch(() => {});
 
       // Let the first request fail, then abort before retry
       await Promise.resolve();
@@ -898,7 +898,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP in fetchWithTimeout when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -1061,7 +1061,7 @@ describe("c64api branches", () => {
   // #37: updateC64APIConfig smoke mode branch
   it("logs routing update in smoke mode", () => {
     smokeEnabledMock.mockReturnValue(true);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
     updateC64APIConfig("http://device", undefined, "device");
 
@@ -1652,7 +1652,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     const pending = api.getInfo({ timeoutMs: 1 } as any);
-    void pending.catch(() => { }); // suppress unhandled rejection
+    void pending.catch(() => {}); // suppress unhandled rejection
 
     await expect(pending).rejects.toThrow("Host unreachable");
     // Clean up the hanging promise to prevent memory leaks

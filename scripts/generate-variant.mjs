@@ -68,6 +68,13 @@ const ANDROID_ICON_SIZES = [
 const IOS_SPLASH_FILENAMES = ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'];
 
 const TRANSPARENT_BACKGROUND = { r: 0, g: 0, b: 0, alpha: 0 };
+const SUPPORTED_ASSET_SOURCE_FORMATS = ['png', 'svg', 'jpg', 'jpeg', 'webp'];
+const PNG_WRITE_OPTIONS = {
+    compressionLevel: 9,
+    effort: 10,
+    palette: true,
+    quality: 100,
+};
 
 class VariantCompileError extends Error {
     constructor(message) {
@@ -130,6 +137,23 @@ const xmlEscape = (value) =>
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&apos;');
 
+const hexColorToStoryboardRgb = (value, label) => {
+    const normalized = requireNonEmptyString(value, label);
+    const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized);
+    if (!match) {
+        fail(`${label} must be a 6-digit hex color`);
+    }
+
+    const hex = match[1];
+    const readChannel = (start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255;
+
+    return {
+        red: readChannel(0).toFixed(16),
+        green: readChannel(2).toFixed(16),
+        blue: readChannel(4).toFixed(16),
+    };
+};
+
 const ensureFileExists = (repoRoot, relativePath, label) => {
     requireNonEmptyString(relativePath, label);
     const absolutePath = path.resolve(repoRoot, relativePath);
@@ -145,6 +169,29 @@ const ensureFileExists = (repoRoot, relativePath, label) => {
         fail(`${label} is missing: ${relativePath}`);
     }
     return relativePath;
+};
+
+const normalizeAssetSource = (repoRoot, raw, label) => {
+    requireMapping(raw, label);
+    const assetPath = ensureFileExists(repoRoot, raw.path, `${label}.path`);
+    const explicitFormat = raw.format === undefined ? '' : requireNonEmptyString(raw.format, `${label}.format`).toLowerCase();
+    const inferredFormat = path.extname(assetPath).slice(1).toLowerCase();
+    const format = explicitFormat || inferredFormat;
+
+    if (!format) {
+        fail(`${label}.format must be provided or inferable from the file extension`);
+    }
+    if (explicitFormat && inferredFormat && explicitFormat !== inferredFormat) {
+        fail(`${label}.format "${explicitFormat}" does not match file extension ".${inferredFormat}"`);
+    }
+    if (!SUPPORTED_ASSET_SOURCE_FORMATS.includes(format)) {
+        fail(`${label}.format must be one of: ${SUPPORTED_ASSET_SOURCE_FORMATS.join(', ')}`);
+    }
+
+    return {
+        path: assetPath,
+        format,
+    };
 };
 
 const readSchemaVersion = (raw) => {
@@ -236,19 +283,19 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         },
         assets: {
             sources: {
-                iconSvg: ensureFileExists(repoRoot, raw.assets.sources.icon_svg, `variants.${variantId}.assets.sources.icon_svg`),
-                logoSvg: ensureFileExists(repoRoot, raw.assets.sources.logo_svg, `variants.${variantId}.assets.sources.logo_svg`),
-                splashSvg: ensureFileExists(
+                icon: normalizeAssetSource(repoRoot, raw.assets.sources.icon, `variants.${variantId}.assets.sources.icon`),
+                logo: normalizeAssetSource(repoRoot, raw.assets.sources.logo, `variants.${variantId}.assets.sources.logo`),
+                splash: normalizeAssetSource(
                     repoRoot,
-                    raw.assets.sources.splash_svg,
-                    `variants.${variantId}.assets.sources.splash_svg`,
+                    raw.assets.sources.splash,
+                    `variants.${variantId}.assets.sources.splash`,
                 ),
             },
             public: {
-                faviconSvg: '/favicon.svg',
+                faviconPng: '/favicon.png',
                 homeLogoPng: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}.png`,
                 icon192Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-192.png`,
-                icon512Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}.png`,
+                icon512Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-512.png`,
                 iconMaskable512Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-maskable-512.png`,
             },
         },
@@ -498,7 +545,7 @@ export const renderWebIndexHtml = (selection) => {
     />
     <meta name="author" content="${variant.displayName}" />
 
-    <link rel="icon" href="%BASE_URL%favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="%BASE_URL%${variant.assets.public.faviconPng.slice(1)}" type="image/png" />
     <link rel="icon" href="%BASE_URL%${variant.assets.public.icon512Png.slice(1)}" type="image/png" />
     <link rel="apple-touch-icon" href="%BASE_URL%${variant.assets.public.icon512Png.slice(1)}" />
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
@@ -510,6 +557,15 @@ export const renderWebIndexHtml = (selection) => {
     />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary" />
+        <style>
+            html,
+            body,
+            #root {
+                min-height: 100%;
+                margin: 0;
+                background: ${variant.platform.web.backgroundColor};
+            }
+        </style>
   </head>
 
   <body>
@@ -648,6 +704,43 @@ export const renderIosVariantXcconfig = (selection) => `${IOS_XCCONFIG_BANNER}VA
 VARIANT_BUNDLE_IDENTIFIER = ${selection.variant.platform.ios.bundleId}
 `;
 
+export const renderIosLaunchScreenStoryboard = (selection) => {
+    const { red, green, blue } = hexColorToStoryboardRgb(
+        selection.variant.platform.web.backgroundColor,
+        'variant.platform.web.backgroundColor',
+    );
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17132" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+    <device id="retina4_7" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17105"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--View Controller-->
+        <scene sceneID="EHf-IW-A2E">
+            <objects>
+                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                    <imageView key="view" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Splash" id="snD-IY-ifK">
+                        <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                        <color key="backgroundColor" red="${red}" green="${green}" blue="${blue}" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                    </imageView>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="53" y="375"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="Splash" width="1366" height="1366"/>
+    </resources>
+</document>
+`;
+};
+
 export const renderWebServerVariantModule = (selection) => `${LICENSE_HEADER}
 ${GENERATED_BANNER}
 export const webServerVariantConfig = ${JSON.stringify(selection, null, 2)} as const;
@@ -720,40 +813,56 @@ const writeBinaryOutputFile = async ({ outputPath, content, check }) => {
     return true;
 };
 
-const rasterizeSvg = async (svgSource, { size, fit = 'contain', background = TRANSPARENT_BACKGROUND }) =>
-    sharp(Buffer.from(svgSource))
-        .resize(size, size, {
+const renderImageAsPng = async (inputPath, { size, fit = 'contain', background = TRANSPARENT_BACKGROUND } = {}) => {
+    let pipeline = sharp(inputPath);
+    if (size !== undefined) {
+        pipeline = pipeline.resize(size, size, {
             fit,
             background,
-        })
-        .png()
-        .toBuffer();
+        });
+    }
+    return pipeline.png(PNG_WRITE_OPTIONS).toBuffer();
+};
+
+const loadSourcePng = async (inputPath, format) => {
+    if (format === 'png') {
+        return sharp(inputPath).png(PNG_WRITE_OPTIONS).toBuffer();
+    }
+    return renderImageAsPng(inputPath);
+};
 
 const renderPublicAssets = async ({ repoRoot, selection, check }) => {
-    const iconSvgPath = path.join(repoRoot, selection.variant.assets.sources.iconSvg);
-    const iconSvg = fs.readFileSync(iconSvgPath, 'utf8');
+    const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
+    const logoPath = path.join(repoRoot, selection.variant.assets.sources.logo.path);
 
     const changes = [
-        writeOutputFile({ outputPath: path.join(repoRoot, 'public/favicon.svg'), rendered: iconSvg, check }),
+        await writeBinaryOutputFile({
+            outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.faviconPng.slice(1)),
+            content: await renderImageAsPng(iconPath, { size: 64 }),
+            check,
+        }),
+        await writeBinaryOutputFile({
+            outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.homeLogoPng.slice(1)),
+            content: await loadSourcePng(logoPath, selection.variant.assets.sources.logo.format),
+            check,
+        }),
         await writeBinaryOutputFile({
             outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.icon192Png.slice(1)),
-            content: await sharp(Buffer.from(iconSvg)).resize(192, 192).png().toBuffer(),
+            content: await renderImageAsPng(iconPath, { size: 192 }),
             check,
         }),
         await writeBinaryOutputFile({
             outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.icon512Png.slice(1)),
-            content: await sharp(Buffer.from(iconSvg)).resize(512, 512).png().toBuffer(),
+            content: await renderImageAsPng(iconPath, { size: 512 }),
             check,
         }),
         await writeBinaryOutputFile({
             outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.iconMaskable512Png.slice(1)),
-            content: await sharp(Buffer.from(iconSvg))
-                .resize(512, 512, {
-                    fit: 'contain',
-                    background: selection.variant.platform.web.backgroundColor,
-                })
-                .png()
-                .toBuffer(),
+            content: await renderImageAsPng(iconPath, {
+                size: 512,
+                fit: 'contain',
+                background: selection.variant.platform.web.backgroundColor,
+            }),
             check,
         }),
     ];
@@ -762,8 +871,8 @@ const renderPublicAssets = async ({ repoRoot, selection, check }) => {
 };
 
 const renderAndroidAssets = async ({ repoRoot, selection, check }) => {
-    const iconSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.iconSvg), 'utf8');
-    const splashSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.splashSvg), 'utf8');
+    const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
+    const splashPath = path.join(repoRoot, selection.variant.assets.sources.splash.path);
 
     const changes = [
         writeOutputFile({
@@ -778,7 +887,7 @@ const renderAndroidAssets = async ({ repoRoot, selection, check }) => {
         }),
         await writeBinaryOutputFile({
             outputPath: path.join(repoRoot, 'android/app/src/main/res/drawable/splash.png'),
-            content: await rasterizeSvg(splashSvg, {
+            content: await renderImageAsPng(splashPath, {
                 size: 1366,
                 fit: 'contain',
                 background: selection.variant.platform.web.backgroundColor,
@@ -789,8 +898,8 @@ const renderAndroidAssets = async ({ repoRoot, selection, check }) => {
 
     for (const [density, size] of ANDROID_ICON_SIZES) {
         const directory = path.join(repoRoot, `android/app/src/main/res/mipmap-${density}`);
-        const iconPng = await rasterizeSvg(iconSvg, { size });
-        const foregroundPng = await rasterizeSvg(iconSvg, { size, fit: 'contain' });
+        const iconPng = await renderImageAsPng(iconPath, { size });
+        const foregroundPng = await renderImageAsPng(iconPath, { size, fit: 'contain' });
         changes.push(
             await writeBinaryOutputFile({
                 outputPath: path.join(directory, 'ic_launcher.png'),
@@ -818,9 +927,9 @@ const renderAndroidAssets = async ({ repoRoot, selection, check }) => {
 };
 
 const renderIosAssets = async ({ repoRoot, selection, check }) => {
-    const iconSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.iconSvg), 'utf8');
-    const splashSvg = fs.readFileSync(path.join(repoRoot, selection.variant.assets.sources.splashSvg), 'utf8');
-    const splashPng = await rasterizeSvg(splashSvg, {
+    const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
+    const splashPath = path.join(repoRoot, selection.variant.assets.sources.splash.path);
+    const splashPng = await renderImageAsPng(splashPath, {
         size: 2732,
         fit: 'contain',
         background: selection.variant.platform.web.backgroundColor,
@@ -832,9 +941,14 @@ const renderIosAssets = async ({ repoRoot, selection, check }) => {
             rendered: renderIosVariantXcconfig(selection),
             check,
         }),
+        writeOutputFile({
+            outputPath: path.join(repoRoot, 'ios/App/App/Base.lproj/LaunchScreen.storyboard'),
+            rendered: renderIosLaunchScreenStoryboard(selection),
+            check,
+        }),
         await writeBinaryOutputFile({
             outputPath: path.join(repoRoot, 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png'),
-            content: await rasterizeSvg(iconSvg, { size: 1024 }),
+            content: await renderImageAsPng(iconPath, { size: 1024 }),
             check,
         }),
     ];

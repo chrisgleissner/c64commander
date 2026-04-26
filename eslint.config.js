@@ -8,6 +8,8 @@ export default tseslint.config(
   {
     ignores: [
       "dist",
+      "artifacts/**",
+      "ci-artifacts/**",
       ".cov-unit/**",
       ".nyc_output/**",
       "android/**/build/**",

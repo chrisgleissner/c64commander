@@ -1,0 +1,16 @@
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+tags:
+  - device
+---
+- runFlow: subflows/launch-and-wait.yaml
+- assertVisible: "Home"
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: ${LONG_TIMEOUT}
+- assertNotVisible: "C64 Commander"
+- takeScreenshot: smoke-launch-resume-home

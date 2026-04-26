@@ -42,6 +42,7 @@ import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
 import { LightingStudioProvider } from "@/hooks/useLightingStudio";
 import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
+import { StartupLaunchSequence } from "@/components/StartupLaunchSequence";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -163,6 +164,7 @@ const App = () => (
             <RefreshControlProvider>
               <AppErrorBoundary>
                 <AppRoutes />
+                <StartupLaunchSequence />
               </AppErrorBoundary>
             </RefreshControlProvider>
           </FeatureFlagsProvider>

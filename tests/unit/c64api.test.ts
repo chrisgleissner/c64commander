@@ -262,11 +262,11 @@ describe("c64api", () => {
         const socketInfo =
           type === "Socket"
             ? {
-              localAddress: handle.localAddress,
-              localPort: handle.localPort,
-              remoteAddress: handle.remoteAddress,
-              remotePort: handle.remotePort,
-            }
+                localAddress: handle.localAddress,
+                localPort: handle.localPort,
+                remoteAddress: handle.remoteAddress,
+                remotePort: handle.remotePort,
+              }
             : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
@@ -657,7 +657,7 @@ describe("c64api", () => {
       const api = new C64API("http://c64u");
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => { });
+      void pending.catch(() => {});
 
       await Promise.resolve();
       controller.abort();

@@ -28,9 +28,15 @@ variants:
         login_heading: C64 Commander
     assets:
       sources:
-        icon_svg: variants/assets/c64commander/icon.svg
-        logo_svg: variants/assets/c64commander/logo.svg
-        splash_svg: variants/assets/c64commander/splash.svg
+        icon:
+          path: variants/assets/c64commander/icon.png
+          format: png
+        logo:
+          path: variants/assets/c64commander/logo.png
+          format: png
+        splash:
+          path: variants/assets/c64commander/splash.png
+          format: png
     runtime:
       endpoints:
         device_host: c64u
@@ -56,9 +62,15 @@ variants:
         login_heading: C64U Controller
     assets:
       sources:
-        icon_svg: variants/assets/c64u-controller/icon.svg
-        logo_svg: variants/assets/c64u-controller/logo.svg
-        splash_svg: variants/assets/c64u-controller/splash.svg
+        icon:
+          path: variants/assets/c64u-controller/icon.png
+          format: png
+        logo:
+          path: variants/assets/c64u-controller/logo.png
+          format: png
+        splash:
+          path: variants/assets/c64u-controller/splash.png
+          format: png
     runtime:
       endpoints:
         device_host: c64u

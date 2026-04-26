@@ -1,3 +1,286 @@
+# Startup Launch And Asset Convergence Worklog
+
+## [2026-04-25T11:31:24Z] STARTUP-LAUNCH-001: mapped schema owners and opened the execution track
+
+Action performed:
+
+- Mapped the controlling schema and generator ownership to `variants/variants.yaml`, `scripts/generate-variant.mjs`, and `tests/unit/scripts/generateVariant.test.ts`.
+- Confirmed the provided single-source branding asset is `docs/img/c64commander.png` with metadata `600x436`, format `png`, and alpha transparency.
+- Established the authoritative execution section in `PLANS.md` for this task.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `node --input-type=module -e "import sharp from 'sharp'; const meta = await sharp('docs/img/c64commander.png').metadata(); console.log(JSON.stringify({ width: meta.width, height: meta.height, format: meta.format, hasAlpha: meta.hasAlpha }, null, 2));"`
+
+Validation result:
+
+- Read-only routing only; no executable validation required yet.
+
+Next action:
+
+- Apply the schema migration in the generator and regression tests, then run the focused generator suite immediately.
+
+## [2026-04-25T11:54:02Z] STARTUP-LAUNCH-002: schema migration materialized, PNG assets generated, and detached SVG branding removed
+
+Action performed:
+
+- Ran the single-source brand sync from `docs/img/c64commander.png` to generate `icon.png`, `logo.png`, and `splash.png` for both variants under `variants/assets/`.
+- Regenerated the tracked variant outputs so runtime and web metadata now emit `faviconPng` plus semantic `assets.sources.{icon,logo,splash}` objects instead of SVG-era keys.
+- Removed the detached branding SVG files from `variants/assets/c64commander/` and `variants/assets/c64u-controller/`.
+- Updated the variant schema example in `docs/research/variants/variant-spec.md` to document the semantic PNG source contract instead of `*_svg` keys.
+- Marked TODOs 2 and 3 as `done` in `PLANS.md`.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `docs/research/variants/variant-spec.md`
+- `index.html`
+- `src/generated/variant.json`
+- `src/generated/variant.ts`
+- `web/server/src/variant.generated.ts`
+- `variants/assets/c64commander/icon.png`
+- `variants/assets/c64commander/logo.png`
+- `variants/assets/c64commander/splash.png`
+- `variants/assets/c64commander/icon.svg`
+- `variants/assets/c64commander/logo.svg`
+- `variants/assets/c64commander/splash.svg`
+- `variants/assets/c64u-controller/icon.png`
+- `variants/assets/c64u-controller/logo.png`
+- `variants/assets/c64u-controller/splash.png`
+- `variants/assets/c64u-controller/icon.svg`
+- `variants/assets/c64u-controller/logo.svg`
+- `variants/assets/c64u-controller/splash.svg`
+
+Commands executed:
+
+- `npm run assets:brand`
+- `node scripts/generate-variant.mjs`
+- focused unit validation for:
+  - `tests/unit/scripts/generateVariant.test.ts`
+  - `tests/unit/scripts/syncBrandAssets.test.ts`
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `git status --short -- variants/assets index.html src/generated/variant.ts src/generated/variant.json web/server/src/variant.generated.ts docs/research/variants/variant-spec.md PLANS.md WORKLOG.md package.json scripts/generate-variant.mjs scripts/sync-brand-assets.mjs tests/unit/scripts/generateVariant.test.ts tests/unit/scripts/syncBrandAssets.test.ts`
+
+Validation result:
+
+- Focused script regressions passed: `23 passed, 0 failed`.
+- Regenerated outputs now reference PNG public assets and semantic asset sources only.
+
+Next action:
+
+- Implement the cold-start launch sequence across web and native surfaces, then validate it with a narrow behavior-scoped test before widening to evidence generation.
+
+## [2026-04-25T17:36:36Z] STARTUP-LAUNCH-003: steering refinement applied and launch evidence regenerated
+
+Action performed:
+
+- Appended and executed the steering refinement inside the active startup-launch plan.
+- Ignored `artifacts/video/` in `.gitignore` so generated launch videos stay out of git.
+- Centered the launch description copy in the startup overlay.
+- Stabilized the focused Playwright launch suite so it samples the app's resolved launch timings, writes screenshots under `docs/img/app/launch/profiles/{compact,medium,expanded}/`, and saves a single named video artifact to `artifacts/video/startup-launch/launch-sequence-medium.webm`.
+- Added the missing `beforeEach` import in the startup unit regression and exposed resolved launch timings on the overlay for deterministic evidence capture.
+- Marked TODOs 6 and 6a as `done` in `PLANS.md`.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `.gitignore`
+- `src/index.css`
+- `src/components/StartupLaunchSequence.tsx`
+- `playwright/launchSequence.spec.ts`
+- `tests/unit/startup/launchSequence.test.ts`
+- `docs/img/app/launch/profiles/compact/01-fade-in.png`
+- `docs/img/app/launch/profiles/compact/02-hold.png`
+- `docs/img/app/launch/profiles/compact/03-fade-out.png`
+- `docs/img/app/launch/profiles/compact/04-app-ready.png`
+- `docs/img/app/launch/profiles/medium/01-fade-in.png`
+- `docs/img/app/launch/profiles/medium/02-hold.png`
+- `docs/img/app/launch/profiles/medium/03-fade-out.png`
+- `docs/img/app/launch/profiles/medium/04-app-ready.png`
+- `docs/img/app/launch/profiles/expanded/01-fade-in.png`
+- `docs/img/app/launch/profiles/expanded/02-hold.png`
+- `docs/img/app/launch/profiles/expanded/03-fade-out.png`
+- `docs/img/app/launch/profiles/expanded/04-app-ready.png`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- focused unit validation:
+  - `tests/unit/startup/launchSequence.test.ts`
+- focused Playwright validation and evidence generation:
+  - `PLAYWRIGHT_DEVICES=web PLAYWRIGHT_WORKERS=1 npx playwright test playwright/launchSequence.spec.ts --project=web`
+
+Validation result:
+
+- Startup unit regression passed: `5 passed, 0 failed`.
+- Focused Playwright launch suite passed: `3 passed, 0 failed`.
+- Re-recorded screenshot set exists for `compact`, `medium`, and `expanded` profiles.
+- Saved launch video exists at `artifacts/video/startup-launch/launch-sequence-medium.webm`.
+
+Next action:
+
+- Close the remaining cold-start launch TODO by removing white-flash risk in the native and web launch shells, then add the required Maestro cold-start/resume flows.
+
+## [2026-04-25T23:33:46Z] STARTUP-LAUNCH-004: app-ready canvas background regression fixed and launch screenshots refreshed
+
+Action performed:
+
+- Traced the blue app-ready screenshot regression to the post-launch swipe canvas remaining transparent while the root `html` background still matched the C64 blue launch color.
+- Updated the swipe-navigation container to paint the resolved theme background so the home canvas no longer bleeds the launch backdrop after the startup overlay unmounts.
+- Added a focused Playwright regression assertion that verifies the swipe canvas matches the body background and no longer resolves to the root `html` launch color.
+- Re-recorded the launch profile screenshots after the fix so the `04-app-ready.png` frames for `compact`, `medium`, and `expanded` show the correct home-page canvas.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `src/components/SwipeNavigationLayer.tsx`
+- `playwright/launchSequence.spec.ts`
+- `docs/img/app/launch/profiles/compact/01-fade-in.png`
+- `docs/img/app/launch/profiles/compact/02-hold.png`
+- `docs/img/app/launch/profiles/compact/03-fade-out.png`
+- `docs/img/app/launch/profiles/compact/04-app-ready.png`
+- `docs/img/app/launch/profiles/medium/01-fade-in.png`
+- `docs/img/app/launch/profiles/medium/02-hold.png`
+- `docs/img/app/launch/profiles/medium/03-fade-out.png`
+- `docs/img/app/launch/profiles/medium/04-app-ready.png`
+- `docs/img/app/launch/profiles/expanded/01-fade-in.png`
+- `docs/img/app/launch/profiles/expanded/02-hold.png`
+- `docs/img/app/launch/profiles/expanded/03-fade-out.png`
+- `docs/img/app/launch/profiles/expanded/04-app-ready.png`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `npx playwright test playwright/launchSequence.spec.ts -g "shows the launch sequence on fresh load, reaches app-ready, and does not replay on SPA or resume signals|keeps compact launch fade-out smooth when runtime motion remains standard|@screenshots captures launch sequence screenshots for each display profile" --reporter=line`
+
+Validation result:
+
+- Focused Playwright launch validation passed: `3 passed`.
+- Regenerated `04-app-ready.png` screenshots for `compact`, `medium`, and `expanded` now show the correct light app canvas instead of the C64 blue launch backdrop.
+
+Next action:
+
+- Run the broader required validation set for this code change, then resume the remaining launch and PR convergence work.
+
+## [2026-04-25T23:58:01Z] STARTUP-LAUNCH-005: halo viewport regression fixed for tablet CI layout checks
+
+Action performed:
+
+- Traced the failing Android-tablet Playwright shards to the startup halo extending beyond the active viewport during cold start.
+- Constrained `.startup-launch-sequence__halo` to the viewport bounds instead of rendering with a negative inset, eliminating the boundary-check violations without changing the launch sequence control flow.
+- Added a startup stylesheet regression assertion so the halo contract stays bounded in future edits.
+
+Files modified:
+
+- `WORKLOG.md`
+- `src/index.css`
+- `tests/unit/startup/launchSequence.test.ts`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `npx playwright test playwright/diskManagement.spec.ts -g "is non-destructive @layout|importing non-disk files shows warning @layout|FTP login failure surfaces error @layout|FTP server unavailable surfaces error @layout" --project=android-tablet --reporter=line`
+- `npx playwright test playwright/launchSequence.spec.ts -g "shows the launch sequence on fresh load, reaches app-ready, and does not replay on SPA or resume signals|keeps compact launch fade-out smooth when runtime motion remains standard|@screenshots captures launch sequence screenshots for each display profile" --reporter=line`
+- `npm run lint`
+- `npm run build`
+
+Validation result:
+
+- The previously failing Android-tablet disk-management layout slice passed: `4 passed`.
+- Focused Playwright launch validation and screenshot regeneration still passed: `3 passed`.
+- `npm run lint` passed on the current tree.
+- `npm run build` passed on the current tree.
+
+Next action:
+
+- Finish the full coverage gate on the current tree, then push the convergence commit and resolve the remaining review threads.
+
+# Release Size Regression Worklog
+
+## [2026-04-24T22:24:22Z] RELSIZE-002: steering check confirmed icon budget and separated icon usage from native splash usage
+
+What changed:
+
+- Appended a steering TODO to `PLANS.md` to keep `c64commander.png` shipped while enforcing a `<= 256 KiB` cap and recording the actual SVG asset usage path.
+- Confirmed the current generated icon payload already satisfies the requested cap:
+  - `public/c64commander.png = 26,182 bytes`
+  - `public/c64commander-192.png = 7,947 bytes`
+  - `public/c64commander-maskable-512.png = 26,182 bytes`
+- Ran an ImageMagick probe to determine whether further manual optimization was necessary:
+  - `convert public/c64commander.png -strip -quality 90 PNG8:public/c64commander.optimized.png`
+  - probe result: `public/c64commander.optimized.png = 6,340 bytes`
+  - interpretation: the shipped asset is already well below the requested cap, so no generator rewrite or packaging fix is required to satisfy the size budget.
+- Traced the actual asset usage chain:
+  - `variants/assets/c64commander/icon.svg` drives generated public icons, Android launcher icons, and the iOS app icon asset.
+  - `variants/assets/c64commander/logo.svg` is embedded into `variants/assets/c64commander/splash.svg`.
+  - `variants/assets/c64commander/splash.svg` drives native cold-launch splash imagery on both platforms.
+  - `index.html` references `c64commander.png` as a web/app icon and Apple touch icon, not as the native cold-launch splash.
+  - iOS cold launch uses `LaunchScreen.storyboard` image `Splash`; Android main layout is a `WebView`, so any branded cold-launch surface comes from generated splash resources rather than `c64commander.png`.
+
+Validation:
+
+- Focused tests passed:
+  - `tests/unit/scripts/generateVariant.test.ts`
+  - `tests/unit/scripts/validateReleaseArtifact.test.ts`
+- Removed the temporary ImageMagick probe output from the worktree after measuring it.
+
+## [2026-04-24T22:09:12Z] RELSIZE-001: investigation started, baseline captured, and first falsifiable hypothesis recorded
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+Initial commands and baseline results:
+
+- `git status --short --branch`
+  - result: clean worktree on `fix/bundle-content`
+- `git branch --show-current`
+  - result: `fix/bundle-content`
+- `git remote -v`
+  - result: `origin git@github.com:chrisgleissner/c64commander.git`
+- `git tag --list '0.7.*' --sort=version:refname`
+  - result includes `0.7.7`, `0.7.8`, `0.7.8-rc2`, and `0.7.9-rc1`
+- `git --no-pager log --oneline --decorate --graph --max-count=30`
+  - result: `HEAD` is `55236960` with tag `0.7.8`; `0.7.7` is commit `43880201`
+- `git fetch --tags --force origin`
+  - result: tags refreshed successfully
+- `gh release view 0.7.7 --repo chrisgleissner/c64commander --json tagName,isPrerelease,isDraft,publishedAt,assets,url`
+  - result: published stable release with assets:
+    - `c64commander-0.7.7-android.apk` size `8,265,019`, digest `sha256:fa23a8705fa0c7c66d6e0817a684eb77e9088d8668973ef559be9763e5e8a259`
+    - `c64commander-0.7.7-android-play.aab` size `9,082,866`, digest `sha256:c2ecfe30cf5f88c14aef5df9f9ed20c9666f6225f6218b5e8bb3085c22bb89e0`
+    - `c64commander-0.7.7-ios.ipa` size `6,344,206`, digest `sha256:9b5e6cb455e071828d1d808f1e27c1b6dc1b0669215d3f15464696b85e205c94`
+- `gh release view 0.7.8 --repo chrisgleissner/c64commander --json tagName,isPrerelease,isDraft,publishedAt,assets,url`
+  - result: published stable release with assets:
+    - `c64commander-0.7.8-android.apk` size `5,790,272`, digest `sha256:9cb90e9d918e32ac6788bfe011141c662ae1ccdcb1775e577d735d2a4732447c`
+    - `c64commander-0.7.8-android-play.aab` size `6,604,238`, digest `sha256:8d9f7e5d733f6badd57fc9cba60ef312e5c2bfeb33ff7a0fa4c9cb470217e2a4`
+    - `c64commander-0.7.8-ios.ipa` size `3,100,332`, digest `sha256:d947a26597fcefb4fe2aa5740694b6997a2806db0a02bad37ba2fd0d13f0649c`
+- `gh release view 0.7.9-rc1 --repo chrisgleissner/c64commander --json tagName,isPrerelease,isDraft,publishedAt,assets,url`
+  - result: `release not found`
+
+Initial evidence and interpretation:
+
+- Real published artifact sizes confirm a severe regression on both platforms:
+  - Android APK shrank by `2,474,747` bytes from `0.7.7` to `0.7.8`
+  - iOS IPA shrank by `3,243,874` bytes from `0.7.7` to `0.7.8`
+- Because both platform artifacts shrank substantially, the first working hypothesis is a missing shared packaged payload rather than a platform-specific optimizer improvement.
+- The cheapest disconfirming check is to unpack the published APK and IPA pairs and compare inventories with 7-Zip-focused searches before touching source.
+
+Next actions committed:
+
+- Download the published `0.7.7` and `0.7.8` APK and IPA assets into `artifacts/release-size-investigation/`.
+- Record exact download paths, timestamps, file sizes, and checksums.
+- Generate deterministic unpacked inventories and diff the contents before making code changes.
+
 # CI Integrity Recovery Worklog
 
 ## [2026-04-24T18:23:55Z] CI-RECOVERY-001: initial routing, scope, and first falsifiable hypothesis

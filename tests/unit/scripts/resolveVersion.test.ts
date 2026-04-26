@@ -20,6 +20,36 @@ afterEach(() => {
 });
 
 describe("resolve-version.sh", () => {
+  it("falls back to package.json when run outside a git checkout", () => {
+    const repoDir = createTempDir("resolve-version-no-git-");
+    const scriptsDir = path.join(repoDir, "scripts");
+    const srcDir = path.join(repoDir, "src");
+    const scriptPath = path.join(scriptsDir, "resolve-version.sh");
+
+    mkdirSync(scriptsDir, { recursive: true });
+    mkdirSync(srcDir, { recursive: true });
+
+    copyFileSync(sourceScriptPath, scriptPath);
+    chmodSync(scriptPath, 0o755);
+
+    writeFileSync(
+      path.join(repoDir, "package.json"),
+      JSON.stringify({ name: "resolve-version-fixture", version: "1.2.3" }, null, 2),
+      "utf8",
+    );
+
+    const result = spawnSync("bash", [scriptPath], {
+      cwd: repoDir,
+      encoding: "utf8",
+      env: process.env,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout.trim()).toBe("1.2.3");
+    expect(readFileSync(path.join(srcDir, "version.ts"), "utf8")).toBe("export const APP_VERSION = '1.2.3';\n");
+  });
+
   it("truncates git's minimum-length short sha output to exactly five characters", () => {
     const repoDir = createTempDir("resolve-version-");
     const scriptsDir = path.join(repoDir, "scripts");
@@ -46,6 +76,7 @@ describe("resolve-version.sh", () => {
       `#!/bin/sh
 set -eu
 case "$*" in
+  "rev-parse --show-toplevel") printf '%s\n' "$PWD" ;;
   "ls-files --error-unmatch src/version.ts") exit 1 ;;
   "fetch --tags --quiet") exit 0 ;;
   "describe --tags --abbrev=0") printf '1.2.3\n' ;;

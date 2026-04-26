@@ -5,6 +5,7 @@ WORKDIR /app
 ARG VITE_APP_VERSION
 ARG VITE_GIT_SHA
 ARG VITE_BUILD_TIME
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm ci
 COPY index.html ./
@@ -18,6 +19,7 @@ COPY src ./src
 COPY public ./public
 COPY variants ./variants
 COPY docs/c64 ./docs/c64
+COPY docs/img/c64commander.png ./docs/img/c64commander.png
 COPY web ./web
 ENV VITE_APP_VERSION=$VITE_APP_VERSION
 ENV VITE_GIT_SHA=$VITE_GIT_SHA

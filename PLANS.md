@@ -1,3 +1,105 @@
+# 2026-04-25 Startup Launch And Asset Convergence
+
+## Classification
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Goal
+
+- Converge branding, launch rendering, and validation around `docs/img/c64commander.png` as the single source of truth for variant branding assets and the cold-start launch experience.
+
+## Constraints
+
+- Do not upscale, recompress aggressively, or otherwise degrade `docs/img/c64commander.png`.
+- Migrate `variants/variants.yaml` to semantic asset keys only; no `*_svg` schema keys or compatibility layer.
+- Replace variant branding assets under `variants/assets/*` with PNG equivalents derived from the source logo.
+- Cold-start launch sequence must be deterministic, variant-aware, and skipped on resume.
+- Playwright validation is mandatory and must be executed.
+- Maestro flows must be added and executed when the environment allows; otherwise the limitation and command must be documented.
+- Video output must stay outside tracked paths.
+- Final closeout requires builds, tests, screenshots, video generation, and `doc/research/startup-launch/report.md`.
+
+## Ordered TODOs
+
+| ID  | Status    | TODO                                                 | Success criteria                                                                                                                                                                                                                                                       |
+| --- | --------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `done`    | Establish authoritative execution records            | `PLANS.md` defines this task, `WORKLOG.md` has an initial timestamped entry, and schema owners plus the source logo properties are recorded.                                                                                                                           |
+| 2   | `done`    | Migrate the variant asset schema                     | `variants/variants.yaml`, generator code, generated outputs, and regression tests use `assets.sources.{icon,logo,splash}.{path,format}` only and no `*_svg` keys remain in active code paths.                                                                          |
+| 3   | `done`    | Replace variant branding assets with PNGs            | Each variant has `icon.png`, `logo.png`, and `splash.png` derived from `docs/img/c64commander.png`, icons are padded safely, and stale SVG branding assets are removed or detached.                                                                                    |
+| 4   | `pending` | Implement the cold-start launch sequence             | Android, iOS, and web render the same premium launch sequence on cold start only, using variant display name, description, and logo with no white flash regressions.                                                                                                   |
+| 5   | `pending` | Add automated launch validation                      | Playwright covers fresh-load visibility and transition timing plus SPA non-retrigger behavior, and Maestro cold-start/resume flows are added.                                                                                                                          |
+| 6   | `done`    | Generate launch evidence artifacts                   | Profile screenshots exist under `docs/img/app/launch/profiles/{compact,medium,expanded}/`, a launch video exists under an ignored artifact path, and the output paths are logged.                                                                                      |
+| 6a  | `done`    | Apply steering refinement for launch evidence        | `artifacts/video/` is ignored, the launch description is centered, and the launch screenshots plus video are re-recorded after the refinement.                                                                                                                         |
+| 6b  | `done`    | Apply steering refinement for app-ready canvas color | The post-launch swipe canvas paints the resolved theme background instead of exposing the root launch color, focused Playwright launch coverage guards that regression, and refreshed profile screenshots no longer retain the C64 blue launch canvas behind the page. |
+| 7   | `pending` | Validate builds and non-launch regressions           | Relevant tests, coverage, lint, build, Capacitor sync/build validation, and a 7-Zip regression check all pass or have a documented blocking limitation.                                                                                                                |
+| 8   | `pending` | Write final report and clean the worktree            | `doc/research/startup-launch/report.md` exists, non-git artifacts stay unstaged, and all task TODOs are marked `done`.                                                                                                                                                 |
+
+# 2026-04-24 Release Size Regression 0.7.7 -> 0.7.8
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- Investigate the Android and iOS release-size regression between published tags `0.7.7` and `0.7.8` using the actual GitHub Release artifacts, not local builds.
+- Treat the size drop as a severe regression until artifact evidence proves otherwise.
+- 7-Zip support is mandatory and release-blocking if missing from Android or iOS artifacts.
+- Deliver a fixed prerelease candidate under the `0.7.9-rcN` sequence, validate the published RC artifacts, and identify the exact RC that is safe to promote.
+
+## Current Hypothesis
+
+- A shared packaged payload disappeared from both Android and iOS between `0.7.7` and `0.7.8`, most likely in the Capacitor-bundled web/native dependency path rather than in a platform-only toolchain optimization.
+- Because the size drop appears in both APK and IPA, the leading suspicion is missing bundled runtime content such as the 7-Zip dependency, an extraction bridge asset, or another cross-platform web/native payload that should have been copied into both release artifacts.
+
+## Cheap Disconfirming Check
+
+- Download the published `0.7.7` and `0.7.8` APK and IPA assets from GitHub Releases.
+- Unpack them into deterministic directories and compare full file inventories, directory sizes, and 7-Zip-related indicators (`7z`, `7zip`, `sevenzip`, `lzma`, `wasm`, `archive`, native libraries, and bridge assets).
+- If the missing bytes do not map to removed runtime payload, shift the root-cause search to release workflow artifact selection or packaging mode changes.
+
+## Baseline Evidence Collected
+
+- Current local branch: `fix/bundle-content`
+- Current HEAD: `55236960` (`tag: 0.7.8`)
+- Published release sizes:
+  - Android APK: `0.7.7 = 8,265,019 bytes`, `0.7.8 = 5,790,272 bytes`
+  - iOS IPA: `0.7.7 = 6,344,206 bytes`, `0.7.8 = 3,100,332 bytes`
+- Remote release metadata confirms both `0.7.7` and `0.7.8` have published Android and iOS assets.
+- Tag `0.7.9-rc1` exists in git, but no GitHub release currently exists for that tag.
+
+## Ordered Tasks
+
+1. Download the published `0.7.7` and `0.7.8` Android APK and iOS IPA assets into `artifacts/release-size-investigation/` and record URLs, sizes, checksums, and timestamps.
+2. Unpack each artifact into deterministic directories and generate full inventories, native-library inventories, directory-size summaries, extension summaries, and 7-Zip-focused search results.
+3. Compare `0.7.7` versus `0.7.8` artifact contents to isolate removed or reduced payload.
+4. Diff `0.7.7..0.7.8` source, packaging config, workflows, and scripts to identify the exact causal change.
+5. Decide whether the size drop is legitimate optimization or missing required functionality using artifact evidence plus source evidence.
+6. Apply the smallest correct fix if runtime payload is missing.
+7. Add deterministic release-artifact validation that asserts required packaged dependency presence, including 7-Zip indicators.
+8. Run focused local validation plus the required repo validation set for code changes.
+9. Create or advance `0.7.9-rcN`, ensure the GitHub release is a prerelease, and validate the published RC Android and iOS artifacts.
+10. Write the final report at `doc/research/release-size-regression-0.7.7-to-0.7.8/report.md` and close all tasks only after artifact-backed proof is complete.
+11. Steering refinement: keep `c64commander.png` shipped, enforce a hard cap of `<= 256 KiB`, and record which SVG-derived assets drive web icons versus native cold-launch splash assets.
+
+## RC Attempts
+
+| Tag         | Status                | Notes                                                                                                                |
+| ----------- | --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `0.7.9-rc1` | pending investigation | Git tag exists already; no GitHub release currently exists. Must be validated or superseded based on final fix path. |
+
+## Pass/Fail Gate
+
+- PASS only if published RC Android and iOS artifacts both contain the required bundled dependency set, 7-Zip support is present and evidenced, tests pass, the release is marked prerelease, and the artifact contents explain the size change.
+- FAIL if either platform remains missing required runtime payload or if the published RC artifacts cannot be proven equivalent to the expected packaged contents.
+
+## Remaining Work
+
+- All investigation, comparison, fix, validation, and RC release verification work remains open.
+
 # 2026-04-24 CI Integrity Recovery
 
 ## Classification

@@ -121,7 +121,7 @@ test.describe("Automatic Demo Mode", () => {
       if (!page.isClosed()) {
         await finalizeEvidence(page, testInfo);
       }
-      await server?.close?.().catch(() => { });
+      await server?.close?.().catch(() => {});
     }
   });
 

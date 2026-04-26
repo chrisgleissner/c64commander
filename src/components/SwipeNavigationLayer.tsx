@@ -111,7 +111,7 @@ const readRuntimeMotionMode = (): RuntimeMotionMode => {
   return document.documentElement.dataset.c64MotionMode === "reduced" ? "reduced" : "standard";
 };
 
-const resolveTransitionConfig = (profile: string, runtimeMotionMode: RuntimeMotionMode, velocityX: number) => {
+export const resolveTransitionConfig = (profile: string, runtimeMotionMode: RuntimeMotionMode, velocityX: number) => {
   if (
     import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
     (typeof window !== "undefined" && (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled)
@@ -138,7 +138,7 @@ const resolveTransitionConfig = (profile: string, runtimeMotionMode: RuntimeMoti
   return {
     durationMs,
     easing,
-    reducedEffects: runtimeMotionMode === "reduced" || profile === "compact",
+    reducedEffects: runtimeMotionMode === "reduced",
   };
 };
 
@@ -339,7 +339,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   return (
     <div
       ref={containerRef}
-      className="relative w-screen overflow-hidden"
+      className="relative w-screen overflow-hidden bg-background"
       style={{ height: "calc(100dvh - var(--app-tab-bar-reserved-height))", touchAction: "pan-y pinch-zoom" }}
       inert={interstitialActive ? "" : undefined}
       data-testid="swipe-navigation-container"
