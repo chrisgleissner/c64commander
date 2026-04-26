@@ -204,6 +204,8 @@ jobs:
         run: npm run test:perf:secondary:quick
 
       - name: Apply optional perf budgets
+        env:
+          HVSC_PERF_SUMMARY_FILE: ci-artifacts/hvsc-performance/web/web-secondary-smoke.json
         run: npm run test:perf:assert:web
 
       - name: Upload perf artifacts
@@ -290,12 +292,22 @@ jobs:
           PLAYWRIGHT_SKIP_BUILD: "1"
           VITE_GIT_SHA: "ci"
           VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
-          SOURCE_DATE_EPOCH: "0"
         run: |
           start=$(date +%s)
           npm run screenshots
           end=$(date +%s)
           echo "- screenshots: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run web display profile zoom proof
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
+          PLAYWRIGHT_DEVICES: "web"
+          PLAYWRIGHT_WORKERS: "1"
+          VITE_GIT_SHA: "ci"
+          VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
+          SOURCE_DATE_EPOCH: "0"
+        run: |
+          npx playwright test playwright/displayProfiles.spec.ts -g "@web-platform" --project=web
 
       - name: Upload screenshot evidence
         if: always()
@@ -887,6 +899,24 @@ jobs:
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
 
+          install_android_sdk_components() {
+            local system_image_dir="$ANDROID_SDK_ROOT/system-images/android-${ANDROID_API_LEVEL}/google_apis/x86_64"
+
+            for attempt in 1 2 3; do
+              if sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"; then
+                return 0
+              fi
+
+              if [[ "$attempt" -lt 3 ]]; then
+                echo "sdkmanager attempt ${attempt} failed; clearing cached Android system image artifacts before retry"
+                rm -rf "$system_image_dir"
+                rm -rf "$HOME/.android/cache"
+              fi
+            done
+
+            return 1
+          }
+
           echo "=== Restarting adb daemon ==="
           adb kill-server || true
           adb start-server
@@ -896,7 +926,7 @@ jobs:
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
 
           echo "=== Installing Android SDK components ==="
-          sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"
+          install_android_sdk_components
 
           echo "=== Listing existing AVDs ==="
           avdmanager list avd || true

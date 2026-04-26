@@ -22,15 +22,23 @@ describe("collect-web-perf", () => {
   it("returns success for unsupported real-archive scenario observation runs", () => {
     const tempDir = makeTempDir();
     const outFile = path.join(tempDir, "web-full-nightly.json");
+    const archiveMetadata = path.join(tempDir, "archive-preparation.json");
     const baselineArchive = path.join(tempDir, "HVSC_84-all-of-them.7z");
     const updateArchive = path.join(tempDir, "HVSC_Update_84.7z");
 
     writeFileSync(baselineArchive, "fixture");
     writeFileSync(updateArchive, "fixture");
+    writeFileSync(archiveMetadata, JSON.stringify({ baselineArchive, updateArchive }), "utf8");
 
     const result = spawnSync(
       process.execPath,
-      ["scripts/hvsc/collect-web-perf.mjs", "--suite=scenarios", `--out=${outFile}`],
+      [
+        "scripts/hvsc/collect-web-perf.mjs",
+        "--suite=scenarios",
+        "--profile=manual-extended",
+        `--archive-preparation=${archiveMetadata}`,
+        `--out=${outFile}`,
+      ],
       {
         cwd: path.resolve(__dirname, "../../.."),
         env: {
@@ -47,12 +55,14 @@ describe("collect-web-perf", () => {
     const summary = JSON.parse(readFileSync(outFile, "utf8"));
     expect(summary).toEqual(
       expect.objectContaining({
+        profile: "manual-extended",
         status: "unsupported",
         runnerExitCode: 0,
         mode: "hybrid-real-download-fixture-browse-web",
         evidenceClass: "hybrid",
       }),
     );
+    expect(summary.archivePreparation).toEqual(expect.objectContaining({ baselineArchive, updateArchive }));
     expect(summary.scenarioCoverage).toEqual([]);
   });
 });

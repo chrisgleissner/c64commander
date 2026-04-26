@@ -24,7 +24,11 @@ describe("webPerfSummary", () => {
     ]);
 
     expect(summary.browseLoadSnapshotMs.p50).toBe(8);
+    expect(summary.browseLoadSnapshotMs.sampleCount).toBe(2);
+    expect(summary.browseInitialQueryMs.mean).toBe(135);
+    expect(summary.browseInitialQueryMs.p75).toBe(150);
     expect(summary.browseInitialQueryMs.p95).toBe(150);
+    expect(summary.playbackLoadSidMs.p99).toBe(6);
     expect(summary.playbackLoadSidMs.samples).toEqual([4, 6]);
   });
 

@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: "15 4 * * *"
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Perf profile to execute
+        required: true
+        default: manual-extended
+        type: choice
+        options:
+          - smoke
+          - nightly
+          - manual-extended
 
 concurrency:
   group: perf-nightly
@@ -36,8 +46,19 @@ jobs:
       - name: Cache HVSC archives
         uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}/.cache/hvsc
-          key: hvsc-nightly-${{ runner.os }}
+          path: ~/.cache/c64commander/hvsc
+          key: hvsc-perf-archives-${{ runner.os }}-hvsc84-v1
+
+      - name: Prepare HVSC perf archives
+        run: node scripts/hvsc/prepare-perf-archives.mjs --out=ci-artifacts/hvsc-performance/archive-preparation.json --write-env="$GITHUB_ENV"
+
+      - name: Resolve perf profile
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "HVSC_PERF_PROFILE=${{ inputs.profile }}" >> "$GITHUB_ENV"
+          else
+            echo "HVSC_PERF_PROFILE=nightly" >> "$GITHUB_ENV"
+          fi
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -45,26 +66,24 @@ jobs:
       - name: Run HVSC microbenchmarks
         run: npm run test:bench
 
-      - name: Collect nightly HVSC full scenario summary
-        env:
-          HVSC_ARCHIVE_PATH: ${{ github.workspace }}/.cache/hvsc/HVSC_84-all-of-them.7z
-          HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
+      - name: Run HVSC node data-path perf suite
+        run: npm run test:perf:node:nightly
+
+      - name: Collect HVSC full scenario summary
         run: npm run test:perf:nightly
 
-      - name: Collect nightly HVSC secondary summary
-        env:
-          HVSC_ARCHIVE_PATH: ${{ github.workspace }}/.cache/hvsc/HVSC_84-all-of-them.7z
-          HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
+      - name: Collect HVSC secondary summary
         run: npm run test:perf:secondary:nightly
 
       - name: Apply optional perf budgets
+        if: env.HVSC_PERF_PROFILE != 'smoke'
         env:
-          HVSC_PERF_SUMMARY_FILE: ci-artifacts/hvsc-performance/web/web-secondary-nightly.json
+          HVSC_PERF_SUMMARY_FILE: ci-artifacts/hvsc-performance/web/web-secondary-${{ env.HVSC_PERF_PROFILE }}.json
         run: npm run test:perf:assert:web
 
       - name: Upload perf artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hvsc-perf-nightly
+          name: hvsc-perf-${{ env.HVSC_PERF_PROFILE }}
           path: ci-artifacts/hvsc-performance/**

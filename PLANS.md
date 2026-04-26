@@ -1,3 +1,56 @@
+# 2026-04-26 Perf Nightly Repair And Expansion
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- Repair the failing `perf-nightly` workflow, which currently requests real HVSC baseline/update archives without deterministically provisioning them on a cold CI runner.
+- Replace the current narrow nightly behavior with a more useful, idiomatic performance suite for the Capacitor app, centered on measurable HVSC, storage, and web-runtime hot paths rather than sleeps or arbitrary wall-clock padding.
+- Keep the existing benchmark lane intact or better, add stable artifacts and thresholds, and validate the final workflow on GitHub Actions with a manual run.
+
+## First Local Hypothesis
+
+- `.github/workflows/perf-nightly.yaml` restores an HVSC cache directory but never calls the existing real-archive provisioning path, while `scripts/hvsc/collect-web-perf.mjs` exits early in real-archive mode unless both baseline and update archives already exist.
+
+## Cheap Disconfirming Check
+
+- Reproduce the failure locally with the workflow-style environment and an empty cache directory. If the script fails with the missing-archive error before Playwright starts, the controlling fault is provisioning rather than browser/runtime execution.
+
+## Candidate CI Provisioning Approaches
+
+| Approach                                                                                                 | Pros                                                                                                                                          | Cons                                                                                                           | Status                                                  |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Reuse `scripts/hvsc/realArchiveCache.mjs` from a new `scripts/hvsc/prepare-perf-archives.mjs` entrypoint | Reuses existing tested download/cache logic, keeps local and CI paths aligned, supports documented env overrides, minimal workflow complexity | Needs orchestration script plus tests and artifact metadata plumbing                                           | `preferred`                                             |
+| Inline archive download in `.github/workflows/perf-nightly.yaml`                                         | Fast to wire                                                                                                                                  | Duplicates archive resolution logic, harder to test locally, worse maintainability                             | `rejected unless orchestration reuse fails`             |
+| Replace real archives with small committed fixtures for nightly                                          | Deterministic and cheap                                                                                                                       | Violates the current real-archive intent unless justified by upstream instability, reduces realism for nightly | `rejected for nightly; maybe acceptable only for smoke` |
+
+## Execution Plan
+
+1. Reproduce the missing-archive failure locally and record the exact command plus output in `WORKLOG.md`.
+2. Map the real-archive contract across workflow env, cache paths, override vars, helper scripts, docs, and tests.
+3. Implement deterministic provisioning before `test:perf:nightly` and `test:perf:secondary:nightly`, using explicit cache keys and clear failures.
+4. Audit the application’s concrete performance surfaces, then classify each candidate path for smoke, nightly, or later coverage.
+5. Expand the perf harness with short/nightly modes, scenario selection, stable artifacts, metadata capture, and useful thresholds.
+   5a. Apply steering refinement: fix the sporadic post-push CI failure in `playwright/ui.spec.ts` by aligning the home-version expectation with the actual build-version resolver contract, and lock that behavior with a focused regression test.
+   5b. Apply steering refinement: enable the currently skipped shard-11 Playwright test and fix the failing shard-11 Playwright test from run `24954447990`, then prove both behaviors with focused local validation before resuming wider CI convergence.
+   5c. Apply steering refinement: repair the malformed screenshot and web-zoom steps in `.github/workflows/android.yaml` so VS Code Prettier can parse the workflow again, and lock the step structure with a focused workflow contract test.
+6. Update package scripts, CI workflow steps, and documentation for local smoke use, nightly invocation, artifacts, cache paths, and deferred hardware/device lanes.
+7. Run focused local validation first, then the required repo validation set for code changes, including coverage.
+8. Trigger the manual `perf-nightly` workflow on the current branch, watch it to completion, and only close the task after the CI lane passes with useful artifacts.
+
+## Investigation Table
+
+| Candidate performance area                                        | Evidence from code/docs/tests                                                                                                     | User-visible risk                                   | Include in nightly | Proposed measurement method                        | Runtime budget | Threshold or artifact         | Reason                            |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------ | -------------------------------------------------- | -------------- | ----------------------------- | --------------------------------- |
+| HVSC real-archive baseline/update provisioning                    | `.github/workflows/perf-nightly.yaml`, `scripts/hvsc/collect-web-perf.mjs`, `scripts/hvsc/realArchiveCache.mjs`, repo memory note | Nightly lane fails before any performance work runs | `pending`          | CI orchestration + archive identity artifact       | `pending`      | archive metadata JSON         | First blocker to repair           |
+| HVSC import, update apply, index build, browse/query hot paths    | `tests/benchmarks/hvscHotPaths.bench.ts`, HVSC scripts, perf docs                                                                 | Slow ingest and browsing on large libraries         | `pending`          | Node deterministic benchmarks + scenario summaries | `pending`      | JSON summary with percentiles | High-value, CI-safe               |
+| Playlist scale operations and persistence                         | code/docs/tests under `src/lib` and pages to inspect                                                                              | Sluggish large playlist UX and hydration            | `pending`          | targeted Node/web measurements                     | `pending`      | per-scenario metrics artifact | Candidate nightly addition        |
+| Web runtime measurement around existing Playwright HVSC scenarios | `scripts/hvsc/collect-web-perf.mjs`, Playwright HVSC specs                                                                        | Runtime regressions in browser path                 | `pending`          | repeated Playwright scenario runs with metadata    | `pending`      | JSON + summary text           | Existing harness to strengthen    |
+| Android/iOS device lane                                           | existing startup/perf scripts and infra to inspect                                                                                | Platform-specific storage/filesystem regressions    | `later`            | deferred until safe infrastructure confirmed       | `n/a`          | documented deferral           | Do not claim unsupported coverage |
+
 # 2026-04-25 Startup Launch And Asset Convergence
 
 ## Classification

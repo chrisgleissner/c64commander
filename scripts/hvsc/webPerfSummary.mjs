@@ -9,12 +9,17 @@ export const quantile = (values, q) => {
 
 export const summarizeMetric = (values) => {
   const samples = toFiniteNumbers(values);
+  const mean = samples.length ? samples.reduce((total, sample) => total + sample, 0) / samples.length : null;
   return {
+    sampleCount: samples.length,
     samples,
     min: samples.length ? Math.min(...samples) : null,
     max: samples.length ? Math.max(...samples) : null,
+    mean,
     p50: quantile(samples, 0.5),
+    p75: quantile(samples, 0.75),
     p95: quantile(samples, 0.95),
+    p99: quantile(samples, 0.99),
   };
 };
 
@@ -65,17 +70,17 @@ const buildUnmeasuredBudgetResult = (budgetMs, source, reason) => ({
   source,
   budgetMs,
   actualMs: null,
-  status: 'unmeasured',
+  status: "unmeasured",
   reason,
 });
 
 const buildTargetEvidence = (scenarioSummaries, options = {}) => {
-  const evidenceClass = options.evidenceClass ?? 'full-scale';
+  const evidenceClass = options.evidenceClass ?? "full-scale";
   const nonEligibleReason =
-    evidenceClass === 'fixture'
-      ? 'Fixture web scenario runs are mechanism proof only and are not target-eligible.'
-      : evidenceClass === 'hybrid'
-        ? 'Hybrid web scenario runs mix real downloads with fixture-backed browse/playback and are not target-eligible.'
+    evidenceClass === "fixture"
+      ? "Fixture web scenario runs are mechanism proof only and are not target-eligible."
+      : evidenceClass === "hybrid"
+        ? "Hybrid web scenario runs mix real downloads with fixture-backed browse/playback and are not target-eligible."
         : null;
   const downloadP95 = scenarioSummaries["S1-download"]?.wallClockMs?.p95 ?? null;
   const ingestP95 = scenarioSummaries["S2-ingest"]?.wallClockMs?.p95 ?? null;
@@ -100,11 +105,11 @@ const buildTargetEvidence = (scenarioSummaries, options = {}) => {
 
   if (nonEligibleReason) {
     return {
-      T1: buildUnmeasuredBudgetResult(20_000, 'S1-download.wallClockMs.p95', nonEligibleReason),
-      T2: buildUnmeasuredBudgetResult(25_000, 'S2-ingest.wallClockMs.p95', nonEligibleReason),
-      T3: buildUnmeasuredBudgetResult(2_000, 'max(S3,S4,S5).wallClockMs.p95', nonEligibleReason),
-      T4: buildUnmeasuredBudgetResult(2_000, 'max(S8,S9,S10).wallClockMs.p95', nonEligibleReason),
-      T5: buildUnmeasuredBudgetResult(1_000, 'S11-playback-start.wallClockMs.p95', nonEligibleReason),
+      T1: buildUnmeasuredBudgetResult(20_000, "S1-download.wallClockMs.p95", nonEligibleReason),
+      T2: buildUnmeasuredBudgetResult(25_000, "S2-ingest.wallClockMs.p95", nonEligibleReason),
+      T3: buildUnmeasuredBudgetResult(2_000, "max(S3,S4,S5).wallClockMs.p95", nonEligibleReason),
+      T4: buildUnmeasuredBudgetResult(2_000, "max(S8,S9,S10).wallClockMs.p95", nonEligibleReason),
+      T5: buildUnmeasuredBudgetResult(1_000, "S11-playback-start.wallClockMs.p95", nonEligibleReason),
     };
   }
 
@@ -130,7 +135,7 @@ export const summarizeScenarioIterations = (iterations, options = {}) => {
   );
 
   return {
-    evidenceClass: options.evidenceClass ?? 'full-scale',
+    evidenceClass: options.evidenceClass ?? "full-scale",
     scenarioCoverage: scenarioNames.map((scenarioName) => ({
       scenario: scenarioName,
       sampleCount: scenarioSummaries[scenarioName]?.sampleCount ?? 0,

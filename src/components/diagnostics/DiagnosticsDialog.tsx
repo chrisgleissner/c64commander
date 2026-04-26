@@ -1138,15 +1138,15 @@ export function DiagnosticsDialog({
       selectedSavedDevice
         ? buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host)
         : buildSavedDeviceEditorDraft(
-            {
-              name: healthState.connectedDeviceLabel ?? snapshot.host,
-              host: snapshot.host,
-              httpPort: snapshot.httpPort,
-              ftpPort: snapshot.ftpPort,
-              telnetPort: snapshot.telnetPort,
-            },
-            snapshot.host,
-          ),
+          {
+            name: healthState.connectedDeviceLabel ?? snapshot.host,
+            host: snapshot.host,
+            httpPort: snapshot.httpPort,
+            ftpPort: snapshot.ftpPort,
+            telnetPort: snapshot.telnetPort,
+          },
+          snapshot.host,
+        ),
     );
   }, [defaultEvidenceTypes, healthState.connectedDeviceLabel, open, selectedSavedDevice]);
 
@@ -1340,6 +1340,184 @@ export function DiagnosticsDialog({
     navigate("/settings");
   }, [navigate, onOpenChange]);
 
+  const overflowPanelContent = (
+    <>
+      <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          openConnectionView();
+        }}
+        data-testid="diagnostics-connection-details-action"
+      >
+        Connection details
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          handleManageDevices();
+        }}
+        data-testid="diagnostics-manage-devices-action"
+      >
+        Manage devices
+      </button>
+      <div className="my-1 border-t border-border" />
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setConfigDriftOpen(true);
+        }}
+        data-testid="open-config-drift-screen"
+      >
+        Config drift
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setDecisionStateOpen(true);
+        }}
+        data-testid="open-decision-state-screen"
+      >
+        Decision state
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setLatencyOpen(true);
+        }}
+        data-testid="open-latency-screen"
+      >
+        Latency
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setHistoryOpen(true);
+        }}
+        data-testid="open-timeline-screen"
+      >
+        Health history
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setHeatMapVariant("REST");
+        }}
+        data-testid="open-rest-heatmap-screen"
+      >
+        REST heat map
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setHeatMapVariant("FTP");
+        }}
+        data-testid="open-ftp-heatmap-screen"
+      >
+        FTP heat map
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setHeatMapVariant("CONFIG");
+        }}
+        data-testid="open-config-heatmap-screen"
+      >
+        Config heat map
+      </button>
+      <div
+        className={cn(
+          profile === "compact" &&
+          "sticky bottom-0 mt-1 border-t border-border bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/80",
+        )}
+      >
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+          onClick={() => {
+            setOverflowOpen(false);
+            void onShareAll();
+          }}
+          data-testid="diagnostics-share-all"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          Share all
+        </button>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+          onClick={() => {
+            setOverflowOpen(false);
+            handleShareFiltered();
+          }}
+          data-testid="diagnostics-share-filtered"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          Share filtered
+        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
+              data-testid="diagnostics-clear-all-trigger"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear all
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent surface="confirmation">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
+              <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
+                Clear
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </>
+  );
+
+  const overflowPanel =
+    overflowOpen && profile === "compact" ? (
+      <div
+        className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-lg"
+        data-testid="diagnostics-overflow-panel"
+      >
+        {overflowPanelContent}
+      </div>
+    ) : overflowOpen ? (
+      <div
+        className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg"
+        data-testid="diagnostics-overflow-panel"
+      >
+        {overflowPanelContent}
+      </div>
+    ) : null;
+
   return (
     <>
       <AppSheet open={open} onOpenChange={onOpenChange}>
@@ -1357,170 +1535,7 @@ export function DiagnosticsDialog({
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
-                {overflowOpen ? (
-                  <div
-                    className={cn(
-                      "rounded-lg border border-border bg-background py-1 shadow-lg",
-                      profile === "compact"
-                        ? "fixed inset-x-4 top-[5.25rem] z-20 max-h-[calc(100dvh-6rem)] overflow-y-auto"
-                        : "absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))]",
-                    )}
-                    data-testid="diagnostics-overflow-panel"
-                  >
-                    <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Views
-                    </p>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        openConnectionView();
-                      }}
-                      data-testid="diagnostics-connection-details-action"
-                    >
-                      Connection details
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        handleManageDevices();
-                      }}
-                      data-testid="diagnostics-manage-devices-action"
-                    >
-                      Manage devices
-                    </button>
-                    <div className="my-1 border-t border-border" />
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        setConfigDriftOpen(true);
-                      }}
-                      data-testid="open-config-drift-screen"
-                    >
-                      Config drift
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        setDecisionStateOpen(true);
-                      }}
-                      data-testid="open-decision-state-screen"
-                    >
-                      Decision state
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        setLatencyOpen(true);
-                      }}
-                      data-testid="open-latency-screen"
-                    >
-                      Latency
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        setHistoryOpen(true);
-                      }}
-                      data-testid="open-timeline-screen"
-                    >
-                      Health history
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        setHeatMapVariant("REST");
-                      }}
-                      data-testid="open-rest-heatmap-screen"
-                    >
-                      REST heat map
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        setHeatMapVariant("FTP");
-                      }}
-                      data-testid="open-ftp-heatmap-screen"
-                    >
-                      FTP heat map
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        setHeatMapVariant("CONFIG");
-                      }}
-                      data-testid="open-config-heatmap-screen"
-                    >
-                      Config heat map
-                    </button>
-                    <div className="my-1 border-t border-border" />
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        void onShareAll();
-                      }}
-                      data-testid="diagnostics-share-all"
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share all
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        handleShareFiltered();
-                      }}
-                      data-testid="diagnostics-share-filtered"
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share filtered
-                    </button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
-                          data-testid="diagnostics-clear-all-trigger"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Clear all
-                        </button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent surface="confirmation">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
-                          <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
-                            Clear
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                ) : null}
+                {overflowPanel}
               </div>
             }
           >

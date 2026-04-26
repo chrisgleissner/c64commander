@@ -1,3 +1,215 @@
+# Perf Nightly Repair And Expansion Worklog
+
+## [2026-04-26T14:13:41Z] PERF-NIGHTLY-006: fixed the Android quick perf budget file contract exposed by CI
+
+Action performed:
+
+- Investigated the remote `Perf | Quick HVSC web benchmark` failure on commit `363e4bad` and traced it to a file-contract mismatch, not a measurement regression.
+- Confirmed the quick Android perf lane runs `test:perf:secondary:quick`, which aliases to the smoke profile and writes `ci-artifacts/hvsc-performance/web/web-secondary-smoke.json`.
+- Updated `.github/workflows/android.yaml` so the `Apply optional perf budgets` step exports `HVSC_PERF_SUMMARY_FILE=ci-artifacts/hvsc-performance/web/web-secondary-smoke.json` before invoking `npm run test:perf:assert:web`.
+- Added `tests/unit/ci/androidPerfWorkflowContracts.test.ts` to lock that quick-lane summary-file contract in place.
+
+Files modified:
+
+- `.github/workflows/android.yaml`
+- `tests/unit/ci/androidPerfWorkflowContracts.test.ts`
+- `WORKLOG.md`
+
+Commands executed:
+
+- GitHub Actions job inspection via `gh api` on failed jobs `73082599392` and `73082693885`
+
+Validation result:
+
+- Pre-edit evidence from the failed perf job showed `assert-web-perf-budgets.mjs` exiting with `ENOENT` for `ci-artifacts/hvsc-performance/web/web-secondary-quick.json` while the preceding collection step produced `web-secondary-smoke.json`.
+- Focused post-edit validation is the immediate next step: rerun the new Android perf workflow contract test plus the existing `assertWebPerfBudgets` unit test, then push and rerun CI.
+
+## [2026-04-26T14:13:41Z] PERF-NIGHTLY-005: steering refinement repaired the Android workflow so VS Code Prettier can parse it again
+
+Action performed:
+
+- Appended steering TODO `5c` to the active `perf-nightly` plan and executed it immediately.
+- Repaired `.github/workflows/android.yaml` so `Run screenshot tests` once again owns the `npm run screenshots` shell block.
+- Removed the duplicated `run` key and stray inline `SOURCE_DATE_EPOCH` assignment from `Run web display profile zoom proof`, keeping that step as a single valid YAML mapping that Prettier and GitHub Actions can parse.
+- Strengthened `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts` so it extracts each step block and asserts both the screenshot step and the web-only zoom-proof step contain exactly one `run` block.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `.github/workflows/android.yaml`
+- `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+
+Validation result:
+
+- Pre-edit diagnostics confirmed the root cause directly in `.github/workflows/android.yaml`: the screenshot step had no `run` property and the zoom-proof step had duplicate `run` keys, which is why VS Code Prettier reported `Map keys must be unique`.
+- Focused post-edit validation is the immediate next step: rerun the workflow contract test and Prettier against the touched workflow/test files.
+
+## [2026-04-26T11:55:00Z] PERF-NIGHTLY-004: steering refinement fixed the shard-11 version failure and routed the browser-zoom proof out of the phone shard
+
+Action performed:
+
+- Appended steering TODO `5b` to the active `perf-nightly` plan and executed it immediately.
+- Fixed the shard-11 Playwright version expectation by making `playwright/versionExpectation.ts` prefer the generated build label from `src/version.ts`, which is the same source of truth the built app renders in CI.
+- Added a focused regression in `tests/unit/playwright/versionExpectation.test.ts` that locks the generated-version precedence for branch builds.
+- Marked the browser-zoom Diagnostics proof in `playwright/displayProfiles.spec.ts` as `@web-platform` so it no longer appears as a skipped test in the sharded phone E2E lane, and kept explicit CDP cleanup in that proof.
+- Enabled that browser-zoom proof in CI by adding a dedicated Chromium web step to `.github/workflows/android.yaml` and locked that routing with `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`.
+- Added a small UI-side scroll offset in `src/index.css` so split sections scroll below the sticky app chrome instead of landing underneath it.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `playwright/versionExpectation.ts`
+- `tests/unit/playwright/versionExpectation.test.ts`
+- `playwright/displayProfiles.spec.ts`
+- `.github/workflows/android.yaml`
+- `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`
+- `src/index.css`
+
+Commands executed:
+
+- focused unit validation via `runTests` for:
+  - `tests/unit/playwright/versionExpectation.test.ts`
+  - `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`
+- focused Playwright validation:
+  - `CI=true PLAYWRIGHT_SKIP_BUILD=1 PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_PORT=4173 PLAYWRIGHT_DEVICES=phone PLAYWRIGHT_WORKERS=1 npx playwright test playwright/ui.spec.ts -g "home page shows resolved version" --reporter=line`
+  - `CI=true PLAYWRIGHT_SKIP_BUILD=1 PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_PORT=4173 PLAYWRIGHT_DEVICES=web PLAYWRIGHT_WORKERS=1 PLAYWRIGHT_TRACE_MODE=off PLAYWRIGHT_VIDEO_MODE=off PLAYWRIGHT_SCREENSHOT_MODE=off npx playwright test playwright/displayProfiles.spec.ts -g "@web-platform" --project=web --reporter=line --timeout=10000 --retries=0`
+
+Validation result:
+
+- Focused unit regressions passed: `4 passed, 0 failed`.
+- Focused Playwright version regression passed on `android-phone`: `UI coverage › home page shows resolved version`.
+- The web-only browser-zoom proof no longer produced a fresh `error-context.md` after the routing and scroll-offset fix; the terminal wrapper did not surface a final summary line before the process exited, so the absence of a new failure artifact is the recorded evidence for that rerun.
+
+Next action:
+
+- Resume broader CI convergence, starting with the remaining quick-perf workflow mismatch and then re-check the updated GitHub Actions run state after pushing these changes.
+
+## [2026-04-26T10:06:30Z] PERF-NIGHTLY-003: profile-aware perf suite expansion validated locally; remote manual CI dispatch blocked on unpublished workflow
+
+Action performed:
+
+- Added a deterministic Node perf lane for HVSC and playlist data paths via `scripts/hvsc/collect-node-perf.ts`.
+- Expanded the web perf collector to resolve explicit smoke/nightly/manual profiles, emit runtime metadata, carry archive-preparation metadata into artifacts, and write paired Markdown summaries.
+- Updated `package.json` perf commands so local smoke runs cover web scenario, web secondary, and Node data-path lanes, while nightly/manual commands honor `HVSC_PERF_PROFILE`.
+- Updated `.github/workflows/perf-nightly.yaml` to resolve `HVSC_PERF_PROFILE`, run the Node data-path lane, use profile-specific artifact names, and skip optional budget assertion for `smoke`.
+- Updated `README.md` and `docs/developer.md` to describe the new profile model and artifact layout.
+
+Files modified:
+
+- `scripts/hvsc/collect-node-perf.ts`
+- `scripts/hvsc/webPerfSummary.mjs`
+- `scripts/hvsc/webPerfEvidence.mjs`
+- `scripts/hvsc/collect-web-perf.mjs`
+- `package.json`
+- `.github/workflows/perf-nightly.yaml`
+- `tests/unit/scripts/collectNodePerf.test.ts`
+- `tests/unit/scripts/webPerfSummary.test.ts`
+- `tests/unit/scripts/webPerfEvidence.test.ts`
+- `tests/unit/scripts/collectWebPerf.test.ts`
+- `tests/unit/ci/perfNightlyWorkflowContracts.test.ts`
+- `README.md`
+- `docs/developer.md`
+
+Commands executed:
+
+- `PLAYWRIGHT_DEVICES=web npx playwright test playwright/ui.spec.ts -g "home page shows resolved version" --project=web`
+- `npm run test:perf`
+- `npm run lint`
+- `npm run build`
+- `gh workflow run perf-nightly.yaml --ref main -f profile=nightly`
+
+Validation result:
+
+- Focused version-flake Playwright regression passed.
+- Focused version-helper unit regression passed.
+- Node perf unit regression passed.
+- Web perf summary/evidence/collector unit tests passed.
+- Workflow contract tests passed.
+- Local smoke perf suite passed and produced `web-full-smoke.json`, `web-secondary-smoke.json`, `node-smoke.json`, and matching Markdown summaries.
+- `npm run lint` passed after formatting fixes.
+- `npm run build` passed.
+- `npm run test:coverage` was started and observed running green across many shard groups, but the terminal run did not reach a final merged exit within the session window, so no final aggregate coverage result is recorded here.
+
+Blocking issue:
+
+- Manual GitHub dispatch of `perf-nightly` with `profile=nightly` failed with `HTTP 422: Unexpected inputs provided: ["profile"]` because the remote repository workflow does not yet contain the locally added `workflow_dispatch.inputs.profile` contract.
+- Without committing and pushing these workflow changes to a remote ref, a manual GitHub Actions pass for the updated workflow cannot be truthfully obtained from this workspace state.
+
+Next action:
+
+- Push the workflow/script changes to a remote branch or the intended target ref, then re-run `gh workflow run perf-nightly.yaml -f profile=nightly` against that published ref and confirm the resulting GitHub Actions run passes.
+
+## [2026-04-26T08:36:28Z] PERF-NIGHTLY-002: steering refinement fixed the sporadic post-push home-version UI flake
+
+Action performed:
+
+- Appended steering TODO `5a` to the active `perf-nightly` execution plan instead of splitting into a new plan.
+- Traced the sporadic CI failure in `playwright/ui.spec.ts` to a contract mismatch: `scripts/resolve-version.sh` emits the latest clean tag on non-tag branch builds, while the Playwright expectation helper only accepted the `git describe --long` form and package-version fallbacks.
+- Extracted the version expectation helper into `playwright/versionExpectation.ts` and taught it to accept the same latest-tag contract that the build script uses.
+- Added a focused regression test for the clean-branch latest-tag case in `tests/unit/playwright/versionExpectation.test.ts`.
+
+Files modified:
+
+- `PLANS.md`
+- `playwright/versionExpectation.ts`
+- `playwright/ui.spec.ts`
+- `tests/unit/playwright/versionExpectation.test.ts`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `bash scripts/resolve-version.sh`
+- `git describe --tags --long --dirty --always`
+- `node -p "require('./package.json').version"`
+- `PLAYWRIGHT_DEVICES=web npx playwright test playwright/ui.spec.ts -g "home page shows resolved version" --project=web`
+
+Validation result:
+
+- Focused Playwright regression passed: `UI coverage › home page shows resolved version`.
+- Focused unit regression passed: `tests/unit/playwright/versionExpectation.test.ts`.
+
+Next action:
+
+- Resume the perf-nightly expansion from the interrupted harness patch, keeping the new steering fix in place while completing the remaining archive, suite, CI, and documentation work.
+
+## [2026-04-26T08:21:02Z] PERF-NIGHTLY-001: task opened, failing path anchored, and first root-cause hypothesis recorded
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+Action performed:
+
+- Opened the authoritative execution track in `PLANS.md` and `WORKLOG.md` for the `perf-nightly` repair and expansion task.
+- Read `.github/workflows/perf-nightly.yaml`, `package.json`, `scripts/hvsc/collect-web-perf.mjs`, `scripts/hvsc/realArchiveCache.mjs`, and the focused script tests to identify the controlling failure path.
+- Confirmed the current workflow restores `${{ github.workspace }}/.cache/hvsc` but does not explicitly prepare baseline/update archives before `npm run test:perf:nightly`.
+- Confirmed the current perf harness exits with a hard failure in real-archive mode when it cannot resolve both archives.
+- Recorded the leading hypothesis that cold-run CI fails because provisioning is missing, not because the browser scenario runner itself is broken.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+
+Validation result:
+
+- Read-only investigation only; the focused local reproduction is the next step.
+
+Next action:
+
+- Reproduce the missing-archive failure locally with the workflow-style environment, then implement the deterministic provisioning path that the workflow currently omits.
+
 # Startup Launch And Asset Convergence Worklog
 
 ## [2026-04-25T11:31:24Z] STARTUP-LAUNCH-001: mapped schema owners and opened the execution track

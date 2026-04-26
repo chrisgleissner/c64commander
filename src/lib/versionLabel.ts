@@ -21,6 +21,13 @@ type BuildVersionLabelInput = {
 
 const TAGGED_DESCRIBE_PATTERN = /^(?<tag>.+)-(?<distance>\d+)-g(?<sha>[0-9a-f]+)(?<dirty>-dirty)?$/i;
 const BARE_SHA_PATTERN = /^(?<sha>[0-9a-f]+)(?<dirty>-dirty)?$/i;
+const RELEASE_BASE_PATTERN = /^(?<release>\d+\.\d+\.\d+)(?<suffix>[-+].*)?$/;
+
+const resolveReleaseBaseVersion = (value: string) => {
+  const normalizedValue = value.trim();
+  const match = normalizedValue.match(RELEASE_BASE_PATTERN);
+  return match?.groups?.release ?? normalizedValue;
+};
 
 export const shortenGitId = (gitSha: string, length = 5) => gitSha.trim().slice(0, Math.max(0, length));
 
@@ -55,9 +62,14 @@ export const resolveBuildVersionLabel = ({
   fallbackVersion = "",
 }: BuildVersionLabelInput): string => {
   const normalizedGenerated = generatedVersionLabel.trim();
-  if (normalizedGenerated) return normalizedGenerated;
-
   const normalizedFallback = fallbackVersion.trim();
+  if (normalizedGenerated) {
+    if (!normalizedFallback) return normalizedGenerated;
+    if (resolveReleaseBaseVersion(normalizedGenerated) === resolveReleaseBaseVersion(normalizedFallback)) {
+      return normalizedGenerated;
+    }
+  }
+
   if (normalizedFallback) return normalizedFallback;
 
   return deriveVersionLabel({
