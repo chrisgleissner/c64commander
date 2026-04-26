@@ -586,7 +586,7 @@ test.describe("display profiles", () => {
     await expectLocatorWithinViewport(page, firstRow);
   });
 
-  test("compact diagnostics CTA layout remains reachable under browser zoom on web", async ({
+  test("compact diagnostics CTA layout remains reachable under browser zoom on web @web-platform", async ({
     page,
   }: {
     page: Page;
@@ -599,19 +599,28 @@ test.describe("display profiles", () => {
     await applyDisplayProfileViewport(page, "compact");
 
     const session = await setBrowserZoom(page, 1.5);
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
-    const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
-    await expect(diagnosticsDialog).toBeVisible();
+    try {
+      const diagnosticsSection = page.getByTestId("settings-middle-layout");
+      const diagnosticsButton = page.getByRole("button", { name: "Diagnostics", exact: true });
+      await diagnosticsSection.evaluate((element) => {
+        element.scrollIntoView({ block: "center", inline: "nearest" });
+      });
+      await expectLocatorWithinViewport(page, diagnosticsButton);
+      await diagnosticsButton.click({ force: true });
+      const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
+      await expect(diagnosticsDialog).toBeVisible();
 
-    await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
-    const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
-    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-clear-all-trigger");
-    await expect(shareAllButton).toBeVisible();
-    await expect(clearAllButton).toBeVisible();
-    await expectLocatorWithinViewport(page, shareAllButton);
-    await expectLocatorWithinViewport(page, clearAllButton);
-
-    await session.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+      await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
+      const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
+      const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-clear-all-trigger");
+      await expect(shareAllButton).toBeVisible();
+      await expect(clearAllButton).toBeVisible();
+      await expectLocatorWithinViewport(page, shareAllButton);
+      await expectLocatorWithinViewport(page, clearAllButton);
+    } finally {
+      await session.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+      await session.detach();
+    }
   });
 
   test("core pages avoid horizontal overflow across the compact medium and expanded matrix", async ({

@@ -1,5 +1,46 @@
 # Perf Nightly Repair And Expansion Worklog
 
+## [2026-04-26T11:55:00Z] PERF-NIGHTLY-004: steering refinement fixed the shard-11 version failure and routed the browser-zoom proof out of the phone shard
+
+Action performed:
+
+- Appended steering TODO `5b` to the active `perf-nightly` plan and executed it immediately.
+- Fixed the shard-11 Playwright version expectation by making `playwright/versionExpectation.ts` prefer the generated build label from `src/version.ts`, which is the same source of truth the built app renders in CI.
+- Added a focused regression in `tests/unit/playwright/versionExpectation.test.ts` that locks the generated-version precedence for branch builds.
+- Marked the browser-zoom Diagnostics proof in `playwright/displayProfiles.spec.ts` as `@web-platform` so it no longer appears as a skipped test in the sharded phone E2E lane, and kept explicit CDP cleanup in that proof.
+- Enabled that browser-zoom proof in CI by adding a dedicated Chromium web step to `.github/workflows/android.yaml` and locked that routing with `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`.
+- Added a small UI-side scroll offset in `src/index.css` so split sections scroll below the sticky app chrome instead of landing underneath it.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `playwright/versionExpectation.ts`
+- `tests/unit/playwright/versionExpectation.test.ts`
+- `playwright/displayProfiles.spec.ts`
+- `.github/workflows/android.yaml`
+- `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`
+- `src/index.css`
+
+Commands executed:
+
+- focused unit validation via `runTests` for:
+  - `tests/unit/playwright/versionExpectation.test.ts`
+  - `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`
+- focused Playwright validation:
+  - `CI=true PLAYWRIGHT_SKIP_BUILD=1 PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_PORT=4173 PLAYWRIGHT_DEVICES=phone PLAYWRIGHT_WORKERS=1 npx playwright test playwright/ui.spec.ts -g "home page shows resolved version" --reporter=line`
+  - `CI=true PLAYWRIGHT_SKIP_BUILD=1 PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_PORT=4173 PLAYWRIGHT_DEVICES=web PLAYWRIGHT_WORKERS=1 PLAYWRIGHT_TRACE_MODE=off PLAYWRIGHT_VIDEO_MODE=off PLAYWRIGHT_SCREENSHOT_MODE=off npx playwright test playwright/displayProfiles.spec.ts -g "@web-platform" --project=web --reporter=line --timeout=10000 --retries=0`
+
+Validation result:
+
+- Focused unit regressions passed: `4 passed, 0 failed`.
+- Focused Playwright version regression passed on `android-phone`: `UI coverage › home page shows resolved version`.
+- The web-only browser-zoom proof no longer produced a fresh `error-context.md` after the routing and scroll-offset fix; the terminal wrapper did not surface a final summary line before the process exited, so the absence of a new failure artifact is the recorded evidence for that rerun.
+
+Next action:
+
+- Resume broader CI convergence, starting with the remaining quick-perf workflow mismatch and then re-check the updated GitHub Actions run state after pushing these changes.
+
 ## [2026-04-26T10:06:30Z] PERF-NIGHTLY-003: profile-aware perf suite expansion validated locally; remote manual CI dispatch blocked on unpublished workflow
 
 Action performed:

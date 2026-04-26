@@ -18,6 +18,7 @@ const resolveReleaseBaseVersion = (version: string) => {
 type ResolveExpectedVersionsOptions = {
   env?: Record<string, string | undefined>;
   runGit?: (args: string[]) => string;
+  readGeneratedVersion?: () => string;
   readPackageVersion?: () => string;
 };
 
@@ -35,13 +36,28 @@ const defaultReadPackageVersion = () => {
   }
 };
 
+const GENERATED_VERSION_PATTERN = /APP_VERSION\s*=\s*['"](?<version>[^'"]+)['"]/;
+
+const defaultReadGeneratedVersion = () => {
+  try {
+    const versionModule = fs.readFileSync(path.resolve("src/version.ts"), "utf-8");
+    return versionModule.match(GENERATED_VERSION_PATTERN)?.groups?.version ?? "";
+  } catch {
+    return "";
+  }
+};
+
 export const resolveExpectedVersions = ({
   env = process.env,
   runGit = defaultRunGit,
+  readGeneratedVersion = defaultReadGeneratedVersion,
   readPackageVersion = defaultReadPackageVersion,
 }: ResolveExpectedVersionsOptions = {}) => {
   const envVersion = env.VITE_APP_VERSION || env.VERSION_NAME || "";
   if (envVersion) return [envVersion];
+
+  const generatedVersion = readGeneratedVersion();
+  if (generatedVersion) return [generatedVersion];
 
   if (env.GITHUB_REF_TYPE === "tag" && env.GITHUB_REF_NAME) {
     return [env.GITHUB_REF_NAME];

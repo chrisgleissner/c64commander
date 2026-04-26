@@ -290,6 +290,17 @@ jobs:
           PLAYWRIGHT_SKIP_BUILD: "1"
           VITE_GIT_SHA: "ci"
           VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
+
+      - name: Run web display profile zoom proof
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
+          PLAYWRIGHT_DEVICES: "web"
+          PLAYWRIGHT_WORKERS: "1"
+          VITE_GIT_SHA: "ci"
+          VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
+          SOURCE_DATE_EPOCH: "0"
+        run: |
+          npx playwright test playwright/displayProfiles.spec.ts -g "@web-platform" --project=web
           SOURCE_DATE_EPOCH: "0"
         run: |
           start=$(date +%s)

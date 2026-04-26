@@ -546,6 +546,7 @@ button:focus-visible,
     display: grid;
     gap: var(--display-profile-panel-gap);
     grid-template-columns: minmax(0, 1fr);
+    scroll-margin-top: calc(var(--safe-area-inset-top) + 5rem);
   }
 
   .profile-card {
