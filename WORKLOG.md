@@ -1,3 +1,37 @@
+# Perf Nightly Repair And Expansion Worklog
+
+## [2026-04-26T08:21:02Z] PERF-NIGHTLY-001: task opened, failing path anchored, and first root-cause hypothesis recorded
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+Action performed:
+
+- Opened the authoritative execution track in `PLANS.md` and `WORKLOG.md` for the `perf-nightly` repair and expansion task.
+- Read `.github/workflows/perf-nightly.yaml`, `package.json`, `scripts/hvsc/collect-web-perf.mjs`, `scripts/hvsc/realArchiveCache.mjs`, and the focused script tests to identify the controlling failure path.
+- Confirmed the current workflow restores `${{ github.workspace }}/.cache/hvsc` but does not explicitly prepare baseline/update archives before `npm run test:perf:nightly`.
+- Confirmed the current perf harness exits with a hard failure in real-archive mode when it cannot resolve both archives.
+- Recorded the leading hypothesis that cold-run CI fails because provisioning is missing, not because the browser scenario runner itself is broken.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+
+Validation result:
+
+- Read-only investigation only; the focused local reproduction is the next step.
+
+Next action:
+
+- Reproduce the missing-archive failure locally with the workflow-style environment, then implement the deterministic provisioning path that the workflow currently omits.
+
 # Startup Launch And Asset Convergence Worklog
 
 ## [2026-04-25T11:31:24Z] STARTUP-LAUNCH-001: mapped schema owners and opened the execution track
