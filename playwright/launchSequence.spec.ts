@@ -226,8 +226,6 @@ test.describe("launch sequence", () => {
     const launchSequence = page.getByTestId("startup-launch-sequence");
     await expect(launchSequence).toBeVisible();
     const resolvedTimings = await readResolvedLaunchTimings(page);
-    await waitForLaunchPhase(page, "fade-in");
-    await page.waitForTimeout(FADE_IN_SAMPLE_MS);
 
     await waitForHoldSample(page, resolvedTimings);
     await expect(launchSequence).toHaveAttribute("data-profile", "medium");
