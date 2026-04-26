@@ -1,5 +1,29 @@
 # Perf Nightly Repair And Expansion Worklog
 
+## [2026-04-26T14:13:41Z] PERF-NIGHTLY-006: fixed the Android quick perf budget file contract exposed by CI
+
+Action performed:
+
+- Investigated the remote `Perf | Quick HVSC web benchmark` failure on commit `363e4bad` and traced it to a file-contract mismatch, not a measurement regression.
+- Confirmed the quick Android perf lane runs `test:perf:secondary:quick`, which aliases to the smoke profile and writes `ci-artifacts/hvsc-performance/web/web-secondary-smoke.json`.
+- Updated `.github/workflows/android.yaml` so the `Apply optional perf budgets` step exports `HVSC_PERF_SUMMARY_FILE=ci-artifacts/hvsc-performance/web/web-secondary-smoke.json` before invoking `npm run test:perf:assert:web`.
+- Added `tests/unit/ci/androidPerfWorkflowContracts.test.ts` to lock that quick-lane summary-file contract in place.
+
+Files modified:
+
+- `.github/workflows/android.yaml`
+- `tests/unit/ci/androidPerfWorkflowContracts.test.ts`
+- `WORKLOG.md`
+
+Commands executed:
+
+- GitHub Actions job inspection via `gh api` on failed jobs `73082599392` and `73082693885`
+
+Validation result:
+
+- Pre-edit evidence from the failed perf job showed `assert-web-perf-budgets.mjs` exiting with `ENOENT` for `ci-artifacts/hvsc-performance/web/web-secondary-quick.json` while the preceding collection step produced `web-secondary-smoke.json`.
+- Focused post-edit validation is the immediate next step: rerun the new Android perf workflow contract test plus the existing `assertWebPerfBudgets` unit test, then push and rerun CI.
+
 ## [2026-04-26T14:13:41Z] PERF-NIGHTLY-005: steering refinement repaired the Android workflow so VS Code Prettier can parse it again
 
 Action performed:

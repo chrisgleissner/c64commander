@@ -204,6 +204,8 @@ jobs:
         run: npm run test:perf:secondary:quick
 
       - name: Apply optional perf budgets
+        env:
+          HVSC_PERF_SUMMARY_FILE: ci-artifacts/hvsc-performance/web/web-secondary-smoke.json
         run: npm run test:perf:assert:web
 
       - name: Upload perf artifacts
