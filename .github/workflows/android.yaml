@@ -899,6 +899,24 @@ jobs:
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
 
+          install_android_sdk_components() {
+            local system_image_dir="$ANDROID_SDK_ROOT/system-images/android-${ANDROID_API_LEVEL}/google_apis/x86_64"
+
+            for attempt in 1 2 3; do
+              if sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"; then
+                return 0
+              fi
+
+              if [[ "$attempt" -lt 3 ]]; then
+                echo "sdkmanager attempt ${attempt} failed; clearing cached Android system image artifacts before retry"
+                rm -rf "$system_image_dir"
+                rm -rf "$HOME/.android/cache"
+              fi
+            done
+
+            return 1
+          }
+
           echo "=== Restarting adb daemon ==="
           adb kill-server || true
           adb start-server
@@ -908,7 +926,7 @@ jobs:
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
 
           echo "=== Installing Android SDK components ==="
-          sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"
+          install_android_sdk_components
 
           echo "=== Listing existing AVDs ==="
           avdmanager list avd || true
