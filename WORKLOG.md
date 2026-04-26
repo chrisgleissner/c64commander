@@ -1,5 +1,60 @@
 # Perf Nightly Repair And Expansion Worklog
 
+## [2026-04-26T10:06:30Z] PERF-NIGHTLY-003: profile-aware perf suite expansion validated locally; remote manual CI dispatch blocked on unpublished workflow
+
+Action performed:
+
+- Added a deterministic Node perf lane for HVSC and playlist data paths via `scripts/hvsc/collect-node-perf.ts`.
+- Expanded the web perf collector to resolve explicit smoke/nightly/manual profiles, emit runtime metadata, carry archive-preparation metadata into artifacts, and write paired Markdown summaries.
+- Updated `package.json` perf commands so local smoke runs cover web scenario, web secondary, and Node data-path lanes, while nightly/manual commands honor `HVSC_PERF_PROFILE`.
+- Updated `.github/workflows/perf-nightly.yaml` to resolve `HVSC_PERF_PROFILE`, run the Node data-path lane, use profile-specific artifact names, and skip optional budget assertion for `smoke`.
+- Updated `README.md` and `docs/developer.md` to describe the new profile model and artifact layout.
+
+Files modified:
+
+- `scripts/hvsc/collect-node-perf.ts`
+- `scripts/hvsc/webPerfSummary.mjs`
+- `scripts/hvsc/webPerfEvidence.mjs`
+- `scripts/hvsc/collect-web-perf.mjs`
+- `package.json`
+- `.github/workflows/perf-nightly.yaml`
+- `tests/unit/scripts/collectNodePerf.test.ts`
+- `tests/unit/scripts/webPerfSummary.test.ts`
+- `tests/unit/scripts/webPerfEvidence.test.ts`
+- `tests/unit/scripts/collectWebPerf.test.ts`
+- `tests/unit/ci/perfNightlyWorkflowContracts.test.ts`
+- `README.md`
+- `docs/developer.md`
+
+Commands executed:
+
+- `PLAYWRIGHT_DEVICES=web npx playwright test playwright/ui.spec.ts -g "home page shows resolved version" --project=web`
+- `npm run test:perf`
+- `npm run lint`
+- `npm run build`
+- `gh workflow run perf-nightly.yaml --ref main -f profile=nightly`
+
+Validation result:
+
+- Focused version-flake Playwright regression passed.
+- Focused version-helper unit regression passed.
+- Node perf unit regression passed.
+- Web perf summary/evidence/collector unit tests passed.
+- Workflow contract tests passed.
+- Local smoke perf suite passed and produced `web-full-smoke.json`, `web-secondary-smoke.json`, `node-smoke.json`, and matching Markdown summaries.
+- `npm run lint` passed after formatting fixes.
+- `npm run build` passed.
+- `npm run test:coverage` was started and observed running green across many shard groups, but the terminal run did not reach a final merged exit within the session window, so no final aggregate coverage result is recorded here.
+
+Blocking issue:
+
+- Manual GitHub dispatch of `perf-nightly` with `profile=nightly` failed with `HTTP 422: Unexpected inputs provided: ["profile"]` because the remote repository workflow does not yet contain the locally added `workflow_dispatch.inputs.profile` contract.
+- Without committing and pushing these workflow changes to a remote ref, a manual GitHub Actions pass for the updated workflow cannot be truthfully obtained from this workspace state.
+
+Next action:
+
+- Push the workflow/script changes to a remote branch or the intended target ref, then re-run `gh workflow run perf-nightly.yaml -f profile=nightly` against that published ref and confirm the resulting GitHub Actions run passes.
+
 ## [2026-04-26T08:36:28Z] PERF-NIGHTLY-002: steering refinement fixed the sporadic post-push home-version UI flake
 
 Action performed:

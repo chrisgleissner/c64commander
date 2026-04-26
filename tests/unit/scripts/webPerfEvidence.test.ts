@@ -20,7 +20,9 @@ describe("webPerfEvidence", () => {
   });
 
   it("marks fixture scenario runs as supported mechanism proof", () => {
-    expect(resolveWebPerfRunProfile({ suite: "scenarios", useRealArchives: false, profile: "manual-extended" })).toEqual(
+    expect(
+      resolveWebPerfRunProfile({ suite: "scenarios", useRealArchives: false, profile: "manual-extended" }),
+    ).toEqual(
       expect.objectContaining({
         profile: "manual-extended",
         loops: 5,
