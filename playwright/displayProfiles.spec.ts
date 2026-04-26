@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { DISPLAY_PROFILE_VIEWPORT_SEQUENCE, DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
