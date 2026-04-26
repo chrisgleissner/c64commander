@@ -3,7 +3,43 @@ import { describe, expect, it } from "vitest";
 import { resolveExpectedVersionPattern, resolveExpectedVersions } from "../../../playwright/versionExpectation";
 
 describe("playwright version expectation", () => {
-  it("prefers the generated build version label over package and git heuristics", () => {
+  it("prefers the generated build version label when it matches the current release line", () => {
+    const env = {
+      VITE_APP_VERSION: "",
+      VERSION_NAME: "",
+      GITHUB_REF_TYPE: "branch",
+      GITHUB_REF_NAME: "fix/nightly-perf-test",
+      GITHUB_REF: "refs/heads/fix/nightly-perf-test",
+      GITHUB_SHA: "8e4b90b96da257bec5de53f7c183717e3e359b3f",
+    };
+    const runGit = (args: string[]) => {
+      const key = args.join(" ");
+      if (key === "describe --tags --long --dirty --always") return "8e4b90b96da257bec5de53f7c183717e3e359b3f";
+      if (key === "describe --tags --abbrev=0") return "";
+      if (key === "describe --tags --long --dirty") return "";
+      if (key === "rev-parse HEAD") return "8e4b90b96da257bec5de53f7c183717e3e359b3f";
+      return "";
+    };
+
+    expect(
+      resolveExpectedVersions({
+        env,
+        runGit,
+        readGeneratedVersion: () => "0.7.9-8e4b9",
+        readPackageVersion: () => "0.7.9-rc1",
+      }),
+    ).toEqual(["0.7.9-8e4b9"]);
+    expect(
+      resolveExpectedVersionPattern({
+        env,
+        runGit,
+        readGeneratedVersion: () => "0.7.9-8e4b9",
+        readPackageVersion: () => "0.7.9-rc1",
+      })?.test("0.7.9-8e4b9"),
+    ).toBe(true);
+  });
+
+  it("ignores a stale generated version from an older release line", () => {
     const env = {
       VITE_APP_VERSION: "",
       VERSION_NAME: "",
@@ -28,14 +64,14 @@ describe("playwright version expectation", () => {
         readGeneratedVersion: () => "0.7.8",
         readPackageVersion: () => "0.7.9-rc1",
       }),
-    ).toEqual(["0.7.8"]);
+    ).toEqual(["0.7.9-rc1", "0.7.9"]);
     expect(
       resolveExpectedVersionPattern({
         env,
         runGit,
         readGeneratedVersion: () => "0.7.8",
         readPackageVersion: () => "0.7.9-rc1",
-      })?.test("0.7.8"),
+      })?.test("0.7.9-rc1"),
     ).toBe(true);
   });
 

@@ -56,8 +56,14 @@ export const resolveExpectedVersions = ({
   const envVersion = env.VITE_APP_VERSION || env.VERSION_NAME || "";
   if (envVersion) return [envVersion];
 
+  const fallbackVersion = readPackageVersion();
   const generatedVersion = readGeneratedVersion();
-  if (generatedVersion) return [generatedVersion];
+  if (generatedVersion) {
+    if (!fallbackVersion) return [generatedVersion];
+    if (resolveReleaseBaseVersion(generatedVersion) === resolveReleaseBaseVersion(fallbackVersion)) {
+      return [generatedVersion];
+    }
+  }
 
   if (env.GITHUB_REF_TYPE === "tag" && env.GITHUB_REF_NAME) {
     return [env.GITHUB_REF_NAME];
@@ -69,7 +75,6 @@ export const resolveExpectedVersions = ({
   })();
   if (tagFromRef) return [tagFromRef];
 
-  const fallbackVersion = readPackageVersion();
   const gitSha = env.CI_SHA || env.GITHUB_SHA || runGit(["rev-parse", "HEAD"]);
   const gitDescribe = runGit(["describe", "--tags", "--long", "--dirty", "--always"]);
   const latestTag = runGit(["describe", "--tags", "--abbrev=0"]);
