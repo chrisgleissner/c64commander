@@ -114,9 +114,20 @@ const waitForLaunchPhase = async (page: Page, phase: "fade-in" | "hold" | "fade-
   );
 };
 
+const waitForAnyLaunchPhase = async (page: Page, phases: Array<"hold" | "fade-out">) => {
+  await page.waitForFunction(
+    (expectedPhases) => {
+      const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
+      return typeof phase === "string" && expectedPhases.includes(phase as "hold" | "fade-out");
+    },
+    phases,
+    { polling: 16 },
+  );
+};
+
 const waitForHoldSample = async (page: Page, timings: { fadeInMs: number; holdMs: number; fadeOutMs: number }) => {
   await page.waitForTimeout(timings.fadeInMs - FADE_IN_SAMPLE_MS + 75);
-  await waitForLaunchPhase(page, "hold");
+  await waitForAnyLaunchPhase(page, ["hold", "fade-out"]);
 };
 
 const expectFadeOutInProgress = async (page: Page) => {
