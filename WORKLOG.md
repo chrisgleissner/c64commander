@@ -1,5 +1,30 @@
 # Perf Nightly Repair And Expansion Worklog
 
+## [2026-04-26T14:13:41Z] PERF-NIGHTLY-005: steering refinement repaired the Android workflow so VS Code Prettier can parse it again
+
+Action performed:
+
+- Appended steering TODO `5c` to the active `perf-nightly` plan and executed it immediately.
+- Repaired `.github/workflows/android.yaml` so `Run screenshot tests` once again owns the `npm run screenshots` shell block.
+- Removed the duplicated `run` key and stray inline `SOURCE_DATE_EPOCH` assignment from `Run web display profile zoom proof`, keeping that step as a single valid YAML mapping that Prettier and GitHub Actions can parse.
+- Strengthened `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts` so it extracts each step block and asserts both the screenshot step and the web-only zoom-proof step contain exactly one `run` block.
+
+Files modified:
+
+- `PLANS.md`
+- `WORKLOG.md`
+- `.github/workflows/android.yaml`
+- `tests/unit/ci/webDisplayProfilesWorkflowContracts.test.ts`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+
+Validation result:
+
+- Pre-edit diagnostics confirmed the root cause directly in `.github/workflows/android.yaml`: the screenshot step had no `run` property and the zoom-proof step had duplicate `run` keys, which is why VS Code Prettier reported `Map keys must be unique`.
+- Focused post-edit validation is the immediate next step: rerun the workflow contract test and Prettier against the touched workflow/test files.
+
 ## [2026-04-26T11:55:00Z] PERF-NIGHTLY-004: steering refinement fixed the shard-11 version failure and routed the browser-zoom proof out of the phone shard
 
 Action performed:

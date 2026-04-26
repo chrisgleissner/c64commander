@@ -290,6 +290,11 @@ jobs:
           PLAYWRIGHT_SKIP_BUILD: "1"
           VITE_GIT_SHA: "ci"
           VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
+        run: |
+          start=$(date +%s)
+          npm run screenshots
+          end=$(date +%s)
+          echo "- screenshots: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Run web display profile zoom proof
         env:
@@ -301,12 +306,6 @@ jobs:
           SOURCE_DATE_EPOCH: "0"
         run: |
           npx playwright test playwright/displayProfiles.spec.ts -g "@web-platform" --project=web
-          SOURCE_DATE_EPOCH: "0"
-        run: |
-          start=$(date +%s)
-          npm run screenshots
-          end=$(date +%s)
-          echo "- screenshots: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload screenshot evidence
         if: always()
