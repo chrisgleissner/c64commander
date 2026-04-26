@@ -90,10 +90,18 @@ const expectLocatorWithinViewport = async (
   await locator.scrollIntoViewIfNeeded();
   await expect
     .poll(async () => {
-      const box = await locator.boundingBox();
-      const viewport = page.viewportSize();
-      if (!box || !viewport) return false;
-      return box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height;
+      return locator.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const scale = window.visualViewport?.scale ?? 1;
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+        const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+        return (
+          rect.left / scale >= 0 &&
+          rect.top / scale >= 0 &&
+          rect.right / scale <= viewportWidth &&
+          rect.bottom / scale <= viewportHeight
+        );
+      });
     })
     .toBe(true);
 };
@@ -610,9 +618,14 @@ test.describe("display profiles", () => {
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
 
-      await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
-      const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
-      const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-clear-all-trigger");
+      const overflowMenu = diagnosticsDialog.getByTestId("diagnostics-overflow-menu");
+      await expect(overflowMenu).toBeVisible();
+      await expectLocatorWithinViewport(page, overflowMenu);
+      await overflowMenu.focus();
+      await expect(overflowMenu).toBeFocused();
+      await overflowMenu.press("Enter");
+      const shareAllButton = page.getByTestId("diagnostics-share-all");
+      const clearAllButton = page.getByTestId("diagnostics-clear-all-trigger");
       await expect(shareAllButton).toBeVisible();
       await expect(clearAllButton).toBeVisible();
       await expectLocatorWithinViewport(page, shareAllButton);
