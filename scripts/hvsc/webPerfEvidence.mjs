@@ -1,7 +1,35 @@
-export const resolveWebPerfRunProfile = ({ suite, useRealArchives }) => {
+const PROFILE_LOOPS = {
+  smoke: {
+    scenarios: 1,
+    secondary: 3,
+  },
+  nightly: {
+    scenarios: 3,
+    secondary: 5,
+  },
+  'manual-extended': {
+    scenarios: 5,
+    secondary: 8,
+  },
+};
+
+export const resolvePerfProfileName = ({ profile, useRealArchives }) => {
+  if (profile === 'smoke' || profile === 'nightly' || profile === 'manual-extended') {
+    return profile;
+  }
+
+  return useRealArchives ? 'nightly' : 'smoke';
+};
+
+export const resolveWebPerfRunProfile = ({ suite, useRealArchives, profile }) => {
+  const resolvedProfile = resolvePerfProfileName({ profile, useRealArchives });
+  const loops = PROFILE_LOOPS[resolvedProfile]?.[suite] ?? 1;
+
   if (suite === 'scenarios') {
     if (useRealArchives) {
       return {
+        profile: resolvedProfile,
+        loops,
         mode: 'hybrid-real-download-fixture-browse-web',
         evidenceClass: 'hybrid',
         supported: false,
@@ -13,6 +41,8 @@ export const resolveWebPerfRunProfile = ({ suite, useRealArchives }) => {
     }
 
     return {
+      profile: resolvedProfile,
+      loops,
       mode: 'fixture-s1-s11-web',
       evidenceClass: 'fixture',
       supported: true,
@@ -22,6 +52,8 @@ export const resolveWebPerfRunProfile = ({ suite, useRealArchives }) => {
 
   if (useRealArchives) {
     return {
+      profile: resolvedProfile,
+      loops,
       mode: 'fixture-secondary-web',
       evidenceClass: 'fixture',
       supported: true,
@@ -30,6 +62,8 @@ export const resolveWebPerfRunProfile = ({ suite, useRealArchives }) => {
   }
 
   return {
+    profile: resolvedProfile,
+    loops,
     mode: 'fixture-secondary-web',
     evidenceClass: 'fixture',
     supported: true,

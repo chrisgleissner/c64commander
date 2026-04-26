@@ -1,5 +1,38 @@
 # Perf Nightly Repair And Expansion Worklog
 
+## [2026-04-26T08:36:28Z] PERF-NIGHTLY-002: steering refinement fixed the sporadic post-push home-version UI flake
+
+Action performed:
+
+- Appended steering TODO `5a` to the active `perf-nightly` execution plan instead of splitting into a new plan.
+- Traced the sporadic CI failure in `playwright/ui.spec.ts` to a contract mismatch: `scripts/resolve-version.sh` emits the latest clean tag on non-tag branch builds, while the Playwright expectation helper only accepted the `git describe --long` form and package-version fallbacks.
+- Extracted the version expectation helper into `playwright/versionExpectation.ts` and taught it to accept the same latest-tag contract that the build script uses.
+- Added a focused regression test for the clean-branch latest-tag case in `tests/unit/playwright/versionExpectation.test.ts`.
+
+Files modified:
+
+- `PLANS.md`
+- `playwright/versionExpectation.ts`
+- `playwright/ui.spec.ts`
+- `tests/unit/playwright/versionExpectation.test.ts`
+
+Commands executed:
+
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+- `bash scripts/resolve-version.sh`
+- `git describe --tags --long --dirty --always`
+- `node -p "require('./package.json').version"`
+- `PLAYWRIGHT_DEVICES=web npx playwright test playwright/ui.spec.ts -g "home page shows resolved version" --project=web`
+
+Validation result:
+
+- Focused Playwright regression passed: `UI coverage › home page shows resolved version`.
+- Focused unit regression passed: `tests/unit/playwright/versionExpectation.test.ts`.
+
+Next action:
+
+- Resume the perf-nightly expansion from the interrupted harness patch, keeping the new steering fix in place while completing the remaining archive, suite, CI, and documentation work.
+
 ## [2026-04-26T08:21:02Z] PERF-NIGHTLY-001: task opened, failing path anchored, and first root-cause hypothesis recorded
 
 Classification for this pass:

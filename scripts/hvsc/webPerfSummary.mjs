@@ -9,12 +9,17 @@ export const quantile = (values, q) => {
 
 export const summarizeMetric = (values) => {
   const samples = toFiniteNumbers(values);
+  const mean = samples.length ? samples.reduce((total, sample) => total + sample, 0) / samples.length : null;
   return {
+    sampleCount: samples.length,
     samples,
     min: samples.length ? Math.min(...samples) : null,
     max: samples.length ? Math.max(...samples) : null,
+    mean,
     p50: quantile(samples, 0.5),
+    p75: quantile(samples, 0.75),
     p95: quantile(samples, 0.95),
+    p99: quantile(samples, 0.99),
   };
 };
 

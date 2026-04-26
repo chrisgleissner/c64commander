@@ -18,94 +18,11 @@ import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUi
 import { enableTraceAssertions } from "./traceUtils";
 import { saveCoverageFromPage } from "./withCoverage";
 import { clickSourceSelectionButton } from "./sourceSelection";
-import { deriveVersionLabel } from "../src/lib/versionLabel";
+import { resolveExpectedVersionPattern } from "./versionExpectation";
 
 const runGit = (args: string[]) => {
   const result = spawnSync("git", args, { encoding: "utf-8" });
   return result.status === 0 ? result.stdout.trim() : "";
-};
-
-const SEMVER_PREFIX_PATTERN = /^(?<release>\d+\.\d+\.\d+)(?<suffix>[-+].*)?$/;
-const SEMVER_WITH_OPTIONAL_PRERELEASE_PATTERN = /\d+\.\d+\.\d+(?:-[0-9A-Za-z._-]+)?/;
-
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const resolveReleaseBaseVersion = (version: string) => {
-  const normalizedVersion = version.trim();
-  const match = normalizedVersion.match(SEMVER_PREFIX_PATTERN);
-  return match?.groups?.release ?? normalizedVersion;
-};
-
-// Resolve the expected version candidates using the same effective priority as CI builds:
-//   1. CI-injected explicit version (VITE_APP_VERSION, VERSION_NAME, tag context)
-//   2. Current git describe + HEAD SHA for branch builds
-//   3. package.json version, plus a release-tag-style fallback when the test
-//      checkout is shallow but the downloaded dist was built with tag metadata
-//
-// Version format: <tag>  OR  <tag>-<5-char-lowercase-hex-SHA>
-// Any other format is a test failure against the invariant.
-const resolveExpectedVersions = () => {
-  // Priority 1: CI explicit version injection
-  const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || "";
-  if (envVersion) return [envVersion];
-
-  if (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME) {
-    return [process.env.GITHUB_REF_NAME];
-  }
-
-  const tagFromRef = (() => {
-    const ref = process.env.GITHUB_REF?.trim() ?? "";
-    return ref.startsWith("refs/tags/") ? ref.slice("refs/tags/".length) : "";
-  })();
-  if (tagFromRef) return [tagFromRef];
-
-  let fallbackVersion = "";
-  try {
-    const pkgContent = fs.readFileSync(path.resolve("package.json"), "utf-8");
-    fallbackVersion = (JSON.parse(pkgContent) as { version?: string }).version || "";
-  } catch {
-    fallbackVersion = "";
-  }
-
-  const gitSha = process.env.CI_SHA || process.env.GITHUB_SHA || runGit(["rev-parse", "HEAD"]);
-  const gitDescribe = runGit(["describe", "--tags", "--long", "--dirty", "--always"]);
-  const derivedFromGit = deriveVersionLabel({
-    gitDescribe,
-    gitSha,
-    fallbackVersion,
-  });
-
-  const candidates = new Set<string>();
-  if (derivedFromGit) {
-    candidates.add(derivedFromGit);
-    const derivedReleaseBaseVersion = resolveReleaseBaseVersion(derivedFromGit);
-    if (derivedReleaseBaseVersion) {
-      candidates.add(derivedReleaseBaseVersion);
-    }
-  }
-  if (fallbackVersion) {
-    candidates.add(fallbackVersion);
-  }
-  if (!gitDescribe && gitSha) {
-    const releaseBaseVersion = resolveReleaseBaseVersion(fallbackVersion);
-    if (releaseBaseVersion) {
-      candidates.add(`${releaseBaseVersion}-${gitSha.trim().slice(0, 5)}`);
-    }
-  }
-
-  return [...candidates].filter(Boolean);
-};
-
-const resolveExpectedVersionPattern = () => {
-  const patterns = resolveExpectedVersions().map(escapeRegExp);
-  const gitSha = (process.env.CI_SHA || process.env.GITHUB_SHA || runGit(["rev-parse", "HEAD"])).trim().slice(0, 5);
-  const gitDescribe = runGit(["describe", "--tags", "--long", "--dirty"]);
-
-  if (!gitDescribe && gitSha) {
-    patterns.push(`${SEMVER_WITH_OPTIONAL_PRERELEASE_PATTERN.source}-${escapeRegExp(gitSha)}`);
-  }
-
-  return patterns.length === 0 ? null : new RegExp(`^(?:${patterns.join("|")})$`);
 };
 
 test.describe("UI coverage", () => {
