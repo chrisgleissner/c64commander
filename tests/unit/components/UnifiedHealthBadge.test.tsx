@@ -390,6 +390,27 @@ describe("UnifiedHealthBadge", () => {
     expect(mockState.requestDiagnosticsOpen).not.toHaveBeenCalled();
   });
 
+  it("preserves default mouse button behavior on pointer down while still suppressing touch long-press defaults", () => {
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    const mouseEvent = new PointerEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      pointerType: "mouse",
+    });
+    fireEvent(badge, mouseEvent);
+    expect(mouseEvent.defaultPrevented).toBe(false);
+
+    const touchEvent = new PointerEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      pointerType: "touch",
+    });
+    fireEvent(badge, touchEvent);
+    expect(touchEvent.defaultPrevented).toBe(true);
+  });
+
   it("suppresses the context-menu path and opens the switch picker instead of diagnostics", async () => {
     render(<UnifiedHealthBadge />);
 

@@ -376,7 +376,9 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
+      if (canSwitchDevices && event.pointerType === "touch") {
+        event.preventDefault();
+      }
       if (!canSwitchDevices) return;
       longPressHandledRef.current = false;
       suppressClickRef.current = false;

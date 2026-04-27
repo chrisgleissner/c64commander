@@ -295,6 +295,32 @@ describe("savedDevices store", () => {
     });
   });
 
+  it("reclassifies legacy inferred types from the verified product instead of stale pre-update fields", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64",
+      type: "U64E",
+      typeSource: undefined,
+      lastKnownProduct: null,
+    });
+
+    store.completeSavedDeviceVerification(initialDeviceId, {
+      product: "Ultimate 64 Elite",
+      hostname: "u64",
+      unique_id: "UID-U64-LEGACY",
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      type: "U64E",
+      typeSource: "INFERRED",
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "u64",
+      lastKnownUniqueId: "UID-U64-LEGACY",
+    });
+  });
+
   it("persists the selected device across reloads and projects its connection settings", async () => {
     const store = await loadStore();
     const initialSnapshot = store.getSavedDevicesSnapshot();
