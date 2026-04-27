@@ -13,7 +13,7 @@
 
 export const FEATURE_REGISTRY_VERSION = 1 as const;
 
-export type FeatureFlagId = 
+export type FeatureFlagId =
   | "hvsc_enabled"
   | "commoserve_enabled"
   | "demo_mode_enabled"
