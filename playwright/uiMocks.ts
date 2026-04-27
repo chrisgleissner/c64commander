@@ -236,7 +236,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       window.__hvscMock__ = {
         addListener: (_event: string, listener: (event: any) => void) => {
           listeners.push(listener);
-          return { remove: async () => { } };
+          return { remove: async () => {} };
         },
         getHvscStatus: async () => ({
           installedBaselineVersion: 83,
@@ -262,7 +262,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
-        cancelHvscInstall: async () => { },
+        cancelHvscInstall: async () => {},
         getHvscFolderListing: async ({ path }: { path: string }) => {
           const normalized = path || "/";
           if (normalized === "/") {

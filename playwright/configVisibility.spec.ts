@@ -35,8 +35,8 @@ test.describe("Config visibility across modes", () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await demoServer?.close?.().catch(() => { });
-      await server?.close?.().catch(() => { });
+      await demoServer?.close?.().catch(() => {});
+      await server?.close?.().catch(() => {});
     }
   });
 
