@@ -34,9 +34,16 @@ export function SavedDeviceEditorFields({
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}-name`} className="text-sm">
-          Device name
-        </Label>
+        <div className="flex items-center gap-2">
+          <Label htmlFor={`${idPrefix}-name`} className="text-sm">
+            Device name
+          </Label>
+          {draft.nameSource === "INFERRED" ? (
+            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Auto
+            </span>
+          ) : null}
+        </div>
         <Input
           id={`${idPrefix}-name`}
           value={draft.name}
@@ -53,8 +60,7 @@ export function SavedDeviceEditorFields({
           </p>
         ) : (
           <p id={`${idPrefix}-name-help`} className="text-xs text-muted-foreground">
-            Leave blank to keep the name inferred from the host. Host changes keep inferred names in sync; custom names
-            stay pinned. Max 10 characters.
+            Clear to follow the host. Max 10 characters.
           </p>
         )}
       </div>

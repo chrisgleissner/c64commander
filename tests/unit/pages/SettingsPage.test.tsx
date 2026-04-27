@@ -575,6 +575,19 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("keeps a legacy custom device name editable when the host changes", () => {
+    renderSettingsPage();
+
+    const deviceNameInput = screen.getByLabelText(/device name/i);
+    const hostInput = screen.getByLabelText(/c64u hostname \/ ip/i);
+
+    expect(deviceNameInput).toHaveValue("Office U64");
+
+    fireEvent.change(hostInput, { target: { value: "ultimate.local" } });
+
+    expect(deviceNameInput).toHaveValue("Office U64");
+  });
+
   it("warns before deleting a device that is still referenced by playlists or disks", async () => {
     savedDevicesRef.current = {
       ...savedDevicesRef.current,

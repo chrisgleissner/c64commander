@@ -20,7 +20,30 @@ export const sanitizeSavedDevicePortInput = (value: string) => value.replace(/[^
 const normalizeDraftSource = (source: SavedDevice["nameSource"] | SavedDevice["typeSource"] | undefined) =>
   source === "USER" || source === "custom" ? "USER" : "INFERRED";
 
+const normalizeDraftSourceInput = (
+  source: SavedDevice["nameSource"] | SavedDevice["typeSource"] | undefined,
+): SavedDeviceFieldSource | null => {
+  if (source === "USER" || source === "custom") return "USER";
+  if (source === "INFERRED" || source === "auto") return "INFERRED";
+  return null;
+};
+
 const inferDraftNameFromHost = (host: string) => host.trim();
+
+const compact = (value: string) => value.replace(/[^a-z0-9]+/gi, "");
+
+const resolveDraftNameSource = (
+  name: string | null | undefined,
+  host: string,
+  source: SavedDevice["nameSource"] | undefined,
+): SavedDeviceFieldSource => {
+  const rawName = (name ?? "").trim();
+  const normalizedSource = normalizeDraftSourceInput(source);
+  if (normalizedSource === "USER" && rawName) return "USER";
+  if (normalizedSource === "INFERRED") return "INFERRED";
+  if (!rawName) return "INFERRED";
+  return compact(rawName).toLowerCase() === compact(host).toLowerCase() ? "INFERRED" : "USER";
+};
 
 export const buildSavedDeviceEditorDraft = (
   device:
@@ -30,7 +53,7 @@ export const buildSavedDeviceEditorDraft = (
   fallbackHost = "c64u",
 ): SavedDeviceEditorDraft => {
   const host = device?.host ?? fallbackHost;
-  const nameSource = normalizeDraftSource(device?.nameSource);
+  const nameSource = resolveDraftNameSource(device?.name, host, device?.nameSource);
   const typeSource = normalizeDraftSource(device?.typeSource);
 
   return {

@@ -1,5 +1,42 @@
 # Demo Mode Gating And Diagnostics Reachability Worklog
 
+## [2026-04-27T12:06:10Z] DEMO-DIAG-002: restored auto-demo fallback behind the feature flag, closed the coverage gate, and validated the shipped Android build on Pixel
+
+Action performed:
+
+- Corrected the earlier overreach by keeping automatic demo fallback semantics in `src/lib/connection/connectionManager.ts`, but only when `demo_mode_enabled` is enabled and the persisted automatic-demo setting is enabled.
+- Kept the persisted demo preference default-disabled in `src/lib/config/appSettings.ts`, kept the Settings UI hidden when the feature flag is off in `src/pages/SettingsPage.tsx`, and restored the user-facing copy to `Automatic Demo Mode`.
+- Preserved the diagnostics isolation fix and the stale-result regressions in `src/lib/diagnostics/healthCheckEngine.ts` and its focused tests.
+- Fixed the isolated coverage failure in `tests/unit/playbackRouter.test.ts` by converting its `@/lib/config/appSettings` mock into a partial mock so `APP_SETTINGS_KEYS` stays available when `fuzzMode` is imported through `c64api` during coverage sharding.
+- Found and corrected a deployment-specific mismatch where the generated source variant had `demo_mode_enabled: false` but the stale Android web assets under `android/app/src/main/assets/public/assets/` still embedded an older `demo_mode_enabled: true` runtime variant. Resynced Capacitor assets with `npm run cap:build`, rebuilt the debug APK with `cd android && ./gradlew assembleDebug`, uninstalled the newer blocking build from the device, and reinstalled the fresh debug APK.
+
+Validation result:
+
+- Focused post-steer regressions passed:
+  - `tests/unit/connection/connectionManager.test.ts`
+  - `tests/unit/connection/connectionManager.startup.test.ts`
+  - `tests/unit/pages/SettingsPage.test.tsx`
+  - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`
+  - `tests/unit/featureFlags.test.ts`
+  - `tests/unit/playbackRouter.test.ts`
+- Repository validation passed for the touched code paths:
+  - `npm run test`
+  - `npm run build`
+  - `npm run test:coverage`
+- Coverage rerun completed successfully after the mock fix with aggregate branch coverage at `91.97%` (`19663/21378`).
+- `npm run lint` remains blocked by pre-existing Prettier violations outside this task in:
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/lib/diagnostics/healthCheckEngine.ts`
+  - `src/lib/savedDevices/store.ts`
+- Pixel 4 deployment and on-device validation completed on device `9B081FFAZ001WX`:
+  - installed fresh APK `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`
+  - dismissed the Android compatibility warning dialog shown for debug builds
+  - confirmed the clean-launch home screen reports `OFFLINE` and `Not connected`, not `DEMO`, which verifies the shipped Android build no longer auto-enters demo mode by default when the feature flag is off
+
+Closing note:
+
+- The steering refinement is fully applied: automatic demo remains available only behind `demo_mode_enabled`, remains default-off, stays hidden when the feature flag is off, and real-device diagnostics stay target-isolated instead of inheriting a demo-success result.
+
 ## [2026-04-27T09:56:42Z] DEMO-DIAG-001: opened the execution track and fixed the owning hypothesis before the first edit
 
 Classification for this pass:
