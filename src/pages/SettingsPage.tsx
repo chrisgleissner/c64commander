@@ -630,10 +630,10 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-      { value: "system", icon: Monitor, label: "Auto" },
-      { value: "light", icon: Sun, label: "Light" },
-      { value: "dark", icon: Moon, label: "Dark" },
-    ];
+    { value: "system", icon: Monitor, label: "Auto" },
+    { value: "light", icon: Sun, label: "Light" },
+    { value: "dark", icon: Moon, label: "Dark" },
+  ];
 
   const displayProfileOptions = DISPLAY_PROFILE_OVERRIDE_SEQUENCE.map((value) => ({
     value,
@@ -999,10 +999,10 @@ export default function SettingsPage() {
                   <div className="flex items-start justify-between gap-3 min-w-0">
                     <div className="space-y-1 min-w-0">
                       <Label htmlFor="demo-mode-enabled" className="font-medium">
-                        Enable Demo Mode
+                        Automatic Demo Mode
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                        Use the built-in simulated device instead of connecting to real hardware.
+                        Offer the built-in simulated device after real-device discovery fails.
                       </p>
                     </div>
                     <Checkbox
@@ -1310,10 +1310,10 @@ export default function SettingsPage() {
                 <div className="flex items-start justify-between gap-3 min-w-0">
                   <div className="space-y-1 min-w-0">
                     <Label htmlFor="demo-mode-enabled" className="font-medium">
-                      Enable Demo Mode
+                      Automatic Demo Mode
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Use the built-in simulated device instead of connecting to real hardware.
+                      Offer the built-in simulated device after real-device discovery fails.
                     </p>
                   </div>
                   <Checkbox

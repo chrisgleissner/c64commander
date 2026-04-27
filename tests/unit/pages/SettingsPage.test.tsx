@@ -709,19 +709,19 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("hides the explicit demo-mode setting when the feature flag is disabled", () => {
+  it("hides the automatic demo-mode setting when the feature flag is disabled", () => {
     renderSettingsPage();
 
-    expect(screen.queryByRole("checkbox", { name: /enable demo mode/i })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /automatic demo mode/i })).toBeNull();
   });
 
-  it("persists explicit demo mode and debug logging toggles", () => {
+  it("persists automatic demo mode and debug logging toggles", () => {
     featureFlagsRef.current.demo_mode_enabled = true;
     vi.mocked(loadDemoModeEnabled).mockReturnValue(true);
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /enable demo mode/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /automatic demo mode/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /enable debug logging/i }));
 
     expect(saveDemoModeEnabled).toHaveBeenCalledWith(false);

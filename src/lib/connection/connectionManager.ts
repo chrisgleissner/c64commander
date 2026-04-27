@@ -508,7 +508,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 };
 
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
-  trigger !== "background" && !demoInterstitialShownThisSession && !isDemoModeRequested();
+  trigger !== "background" && !demoInterstitialShownThisSession;
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   if (stickyRealDeviceLock) {
@@ -694,15 +694,6 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     return;
   }
 
-  if (isDemoModeRequested()) {
-    if (trigger === "background") {
-      return;
-    }
-    if (!discoveryRun.isCurrent()) return;
-    await transitionToDemoActive(trigger);
-    return;
-  }
-
   if (trigger === "manual") {
     transitionTo("DISCOVERING", trigger);
     const manualProbeTimeoutMs = Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000;
@@ -713,7 +704,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
         setTimeout(() => resolve(false), manualProbeTimeoutMs);
       }),
     ]);
-    await handleProbeOutcome(trigger, ok, false, discoveryRun.isCurrent);
+    await handleProbeOutcome(trigger, ok, isDemoModeRequested(), discoveryRun.isCurrent);
     return;
   }
 
@@ -771,7 +762,11 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     cancelled = true;
     globalThis.clearInterval(probeTimer);
     cancelActiveDiscovery();
-    await transitionToOfflineNoDemo(trigger);
+    if (isDemoModeRequested()) {
+      await transitionToDemoActive(trigger);
+    } else {
+      await transitionToOfflineNoDemo(trigger);
+    }
   };
   const windowTimer = globalThis.setTimeout(() => {
     void (async () => {

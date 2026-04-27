@@ -13,7 +13,7 @@
 
 export const FEATURE_REGISTRY_VERSION = 1 as const;
 
-export type FeatureFlagId =
+export type FeatureFlagId = 
   | "hvsc_enabled"
   | "commoserve_enabled"
   | "demo_mode_enabled"
@@ -76,7 +76,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     enabled: false,
     visible_to_user: true,
     developer_only: false,
-    group: "experimental",
+    group: "stable",
     title: "Demo Mode",
     description: "Allow the built-in simulated device mode in Settings and connection flows.",
   },
@@ -95,7 +95,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     visible_to_user: false,
     developer_only: true,
     group: "experimental",
-    title: "Background execution",
+    title: "Background Execution",
     description: "Allow native background playback timing and auto-advance scheduling.",
   },
   {

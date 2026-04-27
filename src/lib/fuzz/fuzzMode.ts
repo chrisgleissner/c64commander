@@ -6,13 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
+
 const FUZZ_MODE_KEY = "c64u_fuzz_mode_enabled";
 const FUZZ_MOCK_BASE_URL_KEY = "c64u_fuzz_mock_base_url";
 const FUZZ_STORAGE_SEEDED_KEY = "c64u_fuzz_storage_seeded";
-const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
-const AUTO_DEMO_MODE_KEY = "c64u_automatic_demo_mode_enabled";
-const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
-const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
+const DEBUG_LOGGING_KEY = APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY;
+const DEMO_MODE_ENABLED_KEY = APP_SETTINGS_KEYS.DEMO_MODE_ENABLED_KEY;
+const STARTUP_DISCOVERY_WINDOW_MS_KEY = APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY;
+const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY;
 const LOCAL_STORAGE_PREFIX = "c64u_";
 const SESSION_STORAGE_PREFIX = "c64u_";
 
@@ -73,7 +75,7 @@ export const applyFuzzModeDefaults = () => {
   resetFuzzStorage();
   localStorage.setItem(FUZZ_STORAGE_SEEDED_KEY, "1");
   localStorage.setItem(DEBUG_LOGGING_KEY, "1");
-  localStorage.setItem(AUTO_DEMO_MODE_KEY, "1");
+  localStorage.setItem(DEMO_MODE_ENABLED_KEY, "1");
   localStorage.setItem(STARTUP_DISCOVERY_WINDOW_MS_KEY, "500");
   localStorage.setItem(BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY, "1500");
 };

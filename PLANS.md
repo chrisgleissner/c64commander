@@ -31,6 +31,7 @@
 7. Add or update focused regression tests for demo defaults, feature-flag gating, explicit enable/disable behavior, unreachable real-device diagnostics, and cross-run target isolation.
 8. Run the required validation set for this code and UI change: focused tests first, then repo validation, coverage, Android build, and attached-device deployment.
 9. Deploy the newest APK to the attached Pixel 4 via adb, validate demo-mode and diagnostics behavior on-device, and record that evidence in `WORKLOG.md` before closing the task.
+10. Steering refinement: keep automatic demo fallback semantics intact behind `demo_mode_enabled` so the auto-demo setting remains default-off, hidden when the feature flag is off, and able to offer demo fallback only when the flag is enabled.
 
 # 2026-04-27 Launch, Badge, Health, And Device Model Convergence
 
