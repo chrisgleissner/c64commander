@@ -390,6 +390,29 @@ describe("UnifiedHealthBadge", () => {
     expect(mockState.requestDiagnosticsOpen).not.toHaveBeenCalled();
   });
 
+  it("suppresses the context-menu path and opens the switch picker instead of diagnostics", async () => {
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+
+    fireEvent(badge, event);
+
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
+    });
+    expect(mockState.requestDiagnosticsOpen).not.toHaveBeenCalled();
+  });
+
+  it("marks the badge content as non-selectable for long-press gestures", () => {
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+
+    expect(badge.className).toContain("select-none");
+  });
+
   it("keeps the switcher hidden when only one saved device exists", async () => {
     vi.useFakeTimers();
     const originalDevices = mockState.savedDevices.devices;

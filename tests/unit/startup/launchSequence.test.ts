@@ -98,6 +98,13 @@ describe("launchSequence", () => {
   it("keeps the launch overlay fades as pure opacity transitions", () => {
     const stylesheet = fs.readFileSync(path.resolve(process.cwd(), "src/index.css"), "utf8");
 
+    expect(stylesheet).toContain("@keyframes app-launch-fade-in");
+    expect(stylesheet).toContain('.app-launch-shell[data-launch-phase="fade-in"],');
+    expect(stylesheet).toContain('.app-launch-shell[data-launch-phase="fade-out"] {');
+    expect(stylesheet).toContain(
+      "animation: app-launch-fade-in var(--app-launch-fade-in-ms, 250ms) ease-out forwards;",
+    );
+
     expect(stylesheet).toContain("@keyframes startup-launch-fade-in");
     expect(stylesheet).toContain("from {\n    opacity: 0;\n  }");
     expect(stylesheet).toContain("to {\n    opacity: 1;\n  }");
@@ -115,6 +122,7 @@ describe("launchSequence", () => {
     );
     expect(stylesheet).toContain(".startup-launch-sequence__halo {");
     expect(stylesheet).toContain("  inset: 0;");
+    expect(stylesheet).toContain("  font-family: Arial, ui-sans-serif, system-ui, sans-serif;");
     expect(stylesheet).not.toContain("  inset: -18%;");
     expect(stylesheet).not.toContain("startup-launch-backdrop-fade-out");
   });

@@ -993,7 +993,7 @@ export function DiagnosticsDialog({
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
     null;
-  const selectedProductCode = selectedSavedDevice?.lastKnownProduct ?? "C64U";
+  const selectedProductCode = selectedSavedDevice?.type?.trim() || selectedSavedDevice?.lastKnownProduct || "Unknown";
   const showDeviceUi = shouldShowDiagnosticsDeviceUi(savedDevices);
 
   const allEntries = useMemo(() => {
@@ -1315,6 +1315,7 @@ export function DiagnosticsDialog({
     if (selectedSavedDevice) {
       updateSavedDevice(selectedSavedDevice.id, {
         name: connectionDraft.name,
+        nameSource: connectionDraft.nameSource,
         host: nextHost,
         httpPort: Number(connectionDraft.httpPort),
         ftpPort: Number(connectionDraft.ftpPort),

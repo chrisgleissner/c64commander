@@ -1,3 +1,94 @@
+# Launch, Badge, Health, And Device Model Convergence Worklog
+
+## [2026-04-27T08:30:36Z] CONVERGENCE-001: opened the execution track and pinned the first controlling faults
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+Action performed:
+
+- Opened a new authoritative execution section in `PLANS.md` for the launch, badge, health-check, and saved-device-model convergence task.
+- Read the controlling launch files (`src/main.tsx`, `src/App.tsx`, `src/components/StartupLaunchSequence.tsx`, `src/lib/startup/launchSequence.ts`, `src/index.css`, and `playwright/launchSequence.spec.ts`).
+- Read the badge gesture control point in `src/components/UnifiedHealthBadge.tsx` and compared it to the diagnostics dialog long-press trigger.
+- Read the health-check coordinator and probe implementations in `src/lib/diagnostics/healthCheckEngine.ts` plus the existing regression suite in `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`.
+- Read the saved-device persistence and editor surfaces in `src/lib/savedDevices/store.ts`, `src/lib/savedDevices/deviceEditor.ts`, `src/pages/SettingsPage.tsx`, and `src/components/diagnostics/DiagnosticsDialog.tsx`.
+
+Findings:
+
+- `src/main.tsx` still injects Google Fonts after the first paint, while `StartupLaunchSequence` inherits the late-loading sans stack, which makes a font-swap-driven launch-text mutation plausible.
+- `StartupLaunchSequence` currently fades only the overlay; the app tree is mounted beside it in `src/App.tsx`, so the handoff can still read as abrupt even though the overlay itself animates.
+- `src/components/UnifiedHealthBadge.tsx` already uses a timer-based long press, but it lacks the explicit `onContextMenu` suppression present in the diagnostics dialog trigger, so Android can still surface native text-selection UI.
+- `src/lib/savedDevices/store.ts` still implements the older `nameSource: auto|custom` plus product-derived auto-label flow and has no `typeSource` tracking or stale inferred-type clearing on host edits.
+- The top-level health-check coordinator already marks downstream probes skipped when REST fails, so the remaining false-positive risk sits in strict response validation and stale/inferred target state rather than the coordinator itself.
+
+Validation result:
+
+- Read-only routing and hypothesis capture only; focused code edits are next.
+
+Next action:
+
+- Patch the launch handoff and badge gesture control points first, then validate those slices immediately before widening into health-check and saved-device model changes.
+
+## [2026-04-27T09:23:40Z] CONVERGENCE-002: completed the launch, badge, health-check, and saved-device behavior repairs
+
+Action performed:
+
+- Refactored the launch flow so `src/App.tsx` owns a `StartupLaunchCoordinator`, while `src/components/StartupLaunchSequence.tsx` became a presentational surface fed by explicit phase/timing props.
+- Added app-shell crossfade styling in `src/index.css` and pinned the launch copy to a stable local font stack to eliminate late font-swap mutation.
+- Hardened `src/components/UnifiedHealthBadge.tsx` by preventing default selection on pointer down, suppressing the context menu, and disabling touch callouts/selection styling at the badge surface.
+- Refactored `src/lib/savedDevices/store.ts`, `src/lib/savedDevices/deviceEditor.ts`, `src/components/devices/SavedDeviceEditorFields.tsx`, `src/pages/SettingsPage.tsx`, and `src/components/diagnostics/DiagnosticsDialog.tsx` to use explicit inferred-versus-user `nameSource` and `typeSource` state with host-derived inferred names and stale inferred-type clearing on host changes.
+- Tightened `src/lib/native/ftpClient.web.ts` and `src/lib/diagnostics/healthCheckEngine.ts` so malformed FTP listings and unrecognized Telnet screens fail health checks instead of reporting success.
+
+Validation result:
+
+- Focused regression suites passed for:
+  - `tests/unit/startup/launchSequence.test.ts`
+  - `tests/unit/components/UnifiedHealthBadge.test.tsx`
+  - `tests/unit/lib/savedDevices/store.test.ts`
+  - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`
+  - `tests/unit/lib/native/ftpClient.web.test.ts`
+  - `tests/unit/components/TraceContextBridge.test.tsx`
+  - `tests/unit/pages/SettingsPage.test.tsx`
+  - `tests/unit/components/devices/SavedDeviceEditorFields.test.tsx`
+  - `tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx`
+- Focused Playwright launch validation passed earlier in the pass after rerunning against fresh build output.
+
+Next action:
+
+- Run the repository validation set required for this code-change/UI-change slice and record the aggregate result.
+
+## [2026-04-27T09:23:40Z] CONVERGENCE-003: repository validation completed and the execution plan is now fully verified
+
+Action performed:
+
+- Formatted the files flagged by Prettier so repo-level lint could run cleanly.
+- Ran the required repository validation commands for this code-change slice.
+- Calculated aggregate branch coverage directly from the merged `coverage/lcov.info` artifact to verify the documented `>= 91%` gate explicitly.
+
+Commands executed:
+
+- `npm run lint`
+- `npm run test`
+- `npm run build`
+- `npm run test:coverage`
+- `awk '...' coverage/lcov.info`
+
+Validation result:
+
+- `npm run lint`: passed.
+- `npm run test`: passed with `544` test files and `6195` tests passing.
+- `npm run build`: passed.
+- `npm run test:coverage`: passed.
+- Aggregate branch coverage from `coverage/lcov.info`: `91.95%` (`19630/21349`).
+- Screenshot regeneration was not required because this task changed runtime UI behavior but did not invalidate any repository documentation screenshots under `docs/img/`.
+
+Closing note:
+
+- All nine ordered tasks in the active convergence section of `PLANS.md` are now verified complete.
+
 # Perf Nightly Repair And Expansion Worklog
 
 ## [2026-04-26T14:13:41Z] PERF-NIGHTLY-006: fixed the Android quick perf budget file contract exposed by CI

@@ -97,7 +97,11 @@ export class FtpClientWeb implements FtpClientPlugin {
       path: options.path,
       traceContext: options.traceContext,
     });
-    return { entries: payload.entries || [] };
+    if (!payload || !Array.isArray(payload.entries)) {
+      throw new Error("FTP bridge error: invalid list payload");
+    }
+
+    return { entries: payload.entries };
   }
 
   async readFile(options: FtpReadOptions): Promise<{ data: string; sizeBytes?: number }> {

@@ -67,7 +67,10 @@ describe("TraceContextBridge", () => {
           {
             id: "saved-1",
             name: "Office U64",
+            nameSource: "USER",
             host: "office-u64",
+            type: "U64",
+            typeSource: "INFERRED",
             httpPort: 80,
             ftpPort: 21,
             telnetPort: 23,
@@ -123,7 +126,7 @@ describe("TraceContextBridge", () => {
       expect(snapshot.playback?.trackInstanceId).toBe(7);
       expect(snapshot.playback?.playlistItemId).toBe("item-2");
       expect(snapshot.device?.savedDeviceId).toBe("saved-1");
-      expect(snapshot.device?.savedDeviceNameSnapshot).toBe("U64");
+      expect(snapshot.device?.savedDeviceNameSnapshot).toBe("Office U64");
       expect(snapshot.device?.verifiedUniqueId).toBe("DEV-1");
     });
   });
@@ -140,7 +143,7 @@ describe("TraceContextBridge", () => {
     await waitFor(() => {
       const snapshot = getTraceContextSnapshot();
       expect(snapshot.device?.savedDeviceId).toBe("saved-1");
-      expect(snapshot.device?.savedDeviceNameSnapshot).toBe("U64");
+      expect(snapshot.device?.savedDeviceNameSnapshot).toBe("Office U64");
       expect(snapshot.device?.verifiedUniqueId).toBeNull();
     });
   });

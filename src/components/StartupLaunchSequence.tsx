@@ -10,13 +10,7 @@ import React from "react";
 
 import { variant } from "@/generated/variant";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import {
-  markStartupLaunchSequenceComplete,
-  type LaunchSequencePhase,
-  resolveStartupLaunchSequenceTimings,
-  runLaunchSequence,
-  shouldShowStartupLaunchSequence,
-} from "@/lib/startup/launchSequence";
+import { type LaunchSequencePhase } from "@/lib/startup/launchSequence";
 
 const PROFILE_COPY_WIDTH = {
   compact: "min(88vw, 16rem)",
@@ -30,39 +24,22 @@ const PROFILE_LOGO_WIDTH = {
   expanded: "min(46vw, 14rem)",
 } as const;
 
-export function StartupLaunchSequence() {
+export function StartupLaunchSequence({
+  phase,
+  timings,
+}: {
+  phase: LaunchSequencePhase;
+  timings: { fadeInMs: number; holdMs: number; fadeOutMs: number };
+}) {
   const { profile } = useDisplayProfile();
-  const timings = React.useMemo(() => resolveStartupLaunchSequenceTimings(), []);
-  const [phase, setPhase] = React.useState<LaunchSequencePhase>("fade-in");
-  const [visible, setVisible] = React.useState(() => shouldShowStartupLaunchSequence());
   const launchSequenceStyle = {
     backgroundColor: variant.platform.web.backgroundColor,
     "--startup-launch-copy-width": PROFILE_COPY_WIDTH[profile],
     "--startup-launch-fade-in-ms": `${timings.fadeInMs}ms`,
     "--startup-launch-fade-out-ms": `${timings.fadeOutMs}ms`,
+    "--app-launch-fade-in-ms": `${timings.fadeOutMs}ms`,
     "--startup-launch-logo-width": PROFILE_LOGO_WIDTH[profile],
   } as React.CSSProperties;
-
-  React.useEffect(() => {
-    if (!visible) {
-      return undefined;
-    }
-
-    return runLaunchSequence({
-      timings,
-      onPhaseChange: (nextPhase) => {
-        setPhase(nextPhase);
-        if (nextPhase === "app-ready") {
-          markStartupLaunchSequenceComplete();
-          setVisible(false);
-        }
-      },
-    });
-  }, [timings, visible]);
-
-  if (!visible) {
-    return null;
-  }
 
   return (
     <div

@@ -515,6 +515,7 @@ export default function SettingsPage() {
       }
       updateSavedDevice(selectedSavedDevice.id, {
         name: deviceDraft.name,
+        nameSource: deviceDraft.nameSource,
         host: nextHost,
         httpPort: Number(deviceDraft.httpPort),
         ftpPort: Number(deviceDraft.ftpPort),
@@ -619,10 +620,10 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-    { value: "system", icon: Monitor, label: "Auto" },
-    { value: "light", icon: Sun, label: "Light" },
-    { value: "dark", icon: Moon, label: "Dark" },
-  ];
+      { value: "system", icon: Monitor, label: "Auto" },
+      { value: "light", icon: Sun, label: "Light" },
+      { value: "dark", icon: Moon, label: "Dark" },
+    ];
 
   const displayProfileOptions = DISPLAY_PROFILE_OVERRIDE_SEQUENCE.map((value) => ({
     value,
@@ -899,9 +900,9 @@ export default function SettingsPage() {
                     {savedDevices.devices.map((device) => {
                       const isSelected = device.id === savedDevices.selectedDeviceId;
                       const productCode =
-                        device.lastKnownProduct ??
+                        (device.type?.trim() || device.lastKnownProduct) ??
                         resolveCanonicalProductFamilyCode(status.deviceInfo?.product) ??
-                        "C64U";
+                        "Unknown";
                       return (
                         <button
                           key={device.id}

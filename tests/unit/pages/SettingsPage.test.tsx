@@ -543,7 +543,7 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("removes badge-label authoring and keeps a blank device name on the product-based auto label path", async () => {
+  it("removes badge-label authoring and persists a host-derived inferred name when the user clears the field", async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
     renderSettingsPage();
@@ -561,8 +561,8 @@ describe("SettingsPage", () => {
     const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
     expect(persisted.devices[0]).toMatchObject({
       id: "saved-device-1",
-      name: "",
-      nameSource: "auto",
+      name: "ultimate.local",
+      nameSource: "INFERRED",
       host: "ultimate.local",
     });
   });

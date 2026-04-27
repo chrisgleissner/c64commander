@@ -186,7 +186,7 @@ describe("FtpClientWeb error handling", () => {
     await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow("FTP bridge error: HTTP 500");
   });
 
-  it("rejects listDirectory when file payload is empty entries", async () => {
+  it("rejects listDirectory when payload entries are missing", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ entries: null }), {
         status: 200,
@@ -196,8 +196,7 @@ describe("FtpClientWeb error handling", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    const result = await client.listDirectory({ host: "c64u" });
-    expect(result.entries).toEqual([]);
+    await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow("invalid list payload");
   });
 
   it("rejects readFile when payload is missing data field", async () => {

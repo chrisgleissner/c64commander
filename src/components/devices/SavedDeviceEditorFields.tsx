@@ -2,7 +2,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   MAX_SAVED_DEVICE_NAME_LENGTH,
-  sanitizeSavedDeviceNameInput,
+  applySavedDeviceDraftHostInput,
+  applySavedDeviceDraftNameInput,
   sanitizeSavedDevicePortInput,
   type SavedDeviceEditorDraft,
 } from "@/lib/savedDevices/deviceEditor";
@@ -39,8 +40,8 @@ export function SavedDeviceEditorFields({
         <Input
           id={`${idPrefix}-name`}
           value={draft.name}
-          onChange={(event) => onChange({ ...draft, name: sanitizeSavedDeviceNameInput(event.target.value) })}
-          placeholder="Defaults to the detected device type"
+          onChange={(event) => onChange(applySavedDeviceDraftNameInput(draft, event.target.value))}
+          placeholder="Defaults to the current host"
           className="font-sans"
           maxLength={MAX_SAVED_DEVICE_NAME_LENGTH}
           aria-describedby={nameError ? `${idPrefix}-name-error` : `${idPrefix}-name-help`}
@@ -52,8 +53,8 @@ export function SavedDeviceEditorFields({
           </p>
         ) : (
           <p id={`${idPrefix}-name-help`} className="text-xs text-muted-foreground">
-            Leave blank to use the detected device type, with a suffix added automatically for duplicates. Max 10
-            characters.
+            Leave blank to keep the name inferred from the host. Host changes keep inferred names in sync; custom names
+            stay pinned. Max 10 characters.
           </p>
         )}
       </div>
@@ -65,7 +66,7 @@ export function SavedDeviceEditorFields({
         <Input
           id={`${idPrefix}-host`}
           value={draft.host}
-          onChange={(event) => onChange({ ...draft, host: event.target.value })}
+          onChange={(event) => onChange(applySavedDeviceDraftHostInput(draft, event.target.value))}
           onBlur={(event) => onHostBlur?.(event.target.value)}
           className="font-sans"
           aria-describedby={hostError ? `${idPrefix}-host-error` : hostHint ? `${idPrefix}-host-help` : undefined}

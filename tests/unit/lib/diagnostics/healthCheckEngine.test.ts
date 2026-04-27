@@ -838,6 +838,25 @@ describe("runHealthCheck — FTP probe", () => {
     expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
   });
 
+  it("fails FTP when the directory listing payload is malformed", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue({ path: "/", entries: null } as never);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.FTP.outcome).toBe("Fail");
+    expect(result!.probes.FTP.reason).toBe("Invalid FTP listing payload");
+  });
+
   it("normalizes an HTTP device host with a port before probing FTP", async () => {
     const { getC64APIConfigSnapshot } = await import("@/lib/c64api");
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "127.0.0.1:8080" });
@@ -912,6 +931,19 @@ describe("runHealthCheck — TELNET probe", () => {
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
     expect(mockTelnetReadScreen).toHaveBeenCalledTimes(3);
+  });
+
+  it("fails TELNET when the banner matches but the parsed screen type is unknown", async () => {
+    setupAllProbesSuccess();
+    mockTelnetReadScreen.mockResolvedValue({
+      ...telnetScreen,
+      screenType: "unknown",
+    });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Fail");
+    expect(result!.probes.TELNET.reason).toContain("Unrecognized Telnet screen");
   });
 
   it("fails TELNET when the session connect step throws", async () => {

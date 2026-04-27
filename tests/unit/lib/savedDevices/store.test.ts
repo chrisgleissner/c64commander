@@ -38,14 +38,14 @@ describe("savedDevices store", () => {
     expect(firstSnapshot.devices).toHaveLength(1);
     expect(firstSnapshot.selectedDeviceId).toBe(firstSnapshot.devices[0]?.id);
     expect(firstSnapshot.devices[0]).toMatchObject({
-      name: "",
+      name: "backup-c64",
       host: "backup-c64",
       httpPort: 8080,
       ftpPort: 2021,
       telnetPort: 2323,
       hasPassword: true,
     });
-    expect(store.buildSavedDevicePrimaryLabel(firstSnapshot.devices[0]!)).toBe("C64U");
+    expect(store.buildSavedDevicePrimaryLabel(firstSnapshot.devices[0]!)).toBe("backup-c64");
 
     const persistedAfterFirstLoad = localStorage.getItem(store.getSavedDevicesStorageKey());
     expect(persistedAfterFirstLoad).not.toBeNull();
@@ -59,7 +59,7 @@ describe("savedDevices store", () => {
       selectedDeviceId: firstSnapshot.selectedDeviceId,
       devices: [
         {
-          name: "",
+          name: "backup-c64",
           host: "backup-c64",
           httpPort: 8080,
           ftpPort: 2021,
@@ -138,16 +138,16 @@ describe("savedDevices store", () => {
     });
 
     expect(store.getSavedDeviceById("device-auto-1")).toMatchObject({
-      name: "",
+      name: "blank-host",
       host: "blank-host",
     });
-    expect(store.buildSavedDevicePrimaryLabel(store.getSavedDeviceById("device-auto-1")!)).toBe("U64");
-    expect(store.buildSavedDevicePrimaryLabel(store.getSavedDeviceById("device-auto-2")!)).toBe("U64-2");
+    expect(store.buildSavedDevicePrimaryLabel(store.getSavedDeviceById("device-auto-1")!)).toBe("blank-host");
+    expect(store.buildSavedDevicePrimaryLabel(store.getSavedDeviceById("device-auto-2")!)).toBe("blank-host-2");
     expect(
       store.validateSavedDeviceName(
         [officeDevice, backupDevice, store.getSavedDeviceById("device-auto-1")!],
         backupDevice.id,
-        "U64",
+        "blank-host",
         backupDevice.host,
       ),
     ).toBe("Device name must be unique.");
@@ -160,19 +160,20 @@ describe("savedDevices store", () => {
           store.getSavedDeviceById("device-auto-2")!,
         ],
         backupDevice.id,
-        "U64-2",
+        "blank-host-2",
         backupDevice.host,
       ),
     ).toBe("Device name must be unique.");
   });
 
-  it("truncates custom device names to 10 characters when persisting updates", async () => {
+  it("keeps inferred names pinned to the host when the user clears the field", async () => {
     const store = await loadStore();
     const initialSnapshot = store.getSavedDevicesSnapshot();
     const initialDeviceId = initialSnapshot.selectedDeviceId;
 
     store.updateSavedDevice(initialDeviceId, {
-      name: "Ultimate FE 64",
+      name: "",
+      nameSource: "INFERRED",
       host: "c64u",
       httpPort: 80,
       ftpPort: 21,
@@ -180,9 +181,106 @@ describe("savedDevices store", () => {
     });
 
     expect(store.getSelectedSavedDevice()).toMatchObject({
-      name: "Ultimate F",
+      name: "c64u",
+      nameSource: "INFERRED",
     });
-    expect(store.buildSavedDevicePrimaryLabel(store.getSelectedSavedDevice()!)).toBe("Ultimate F");
+    expect(store.buildSavedDevicePrimaryLabel(store.getSelectedSavedDevice()!)).toBe("c64u");
+  });
+
+  it("preserves a user-authored name across host changes but recomputes inferred names and clears inferred type", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Studio",
+      nameSource: "USER",
+      host: "u64",
+      type: "U64",
+      typeSource: "INFERRED",
+      lastKnownProduct: "U64",
+      lastKnownHostname: "u64",
+      lastKnownUniqueId: "UID-U64",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+    });
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64-elite",
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      name: "Studio",
+      nameSource: "USER",
+      host: "u64-elite",
+      type: "",
+      typeSource: "INFERRED",
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+    });
+
+    store.updateSavedDevice(initialDeviceId, {
+      name: "",
+      nameSource: "INFERRED",
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      name: "u64-elite",
+      nameSource: "INFERRED",
+    });
+  });
+
+  it("preserves a same-as-host user name across host changes when nameSource is USER", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64",
+      name: "u64",
+      nameSource: "USER",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+    });
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64-elite",
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      host: "u64-elite",
+      name: "u64",
+      nameSource: "USER",
+    });
+  });
+
+  it("updates inferred type from successful verification after a host change", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64",
+      name: "",
+      nameSource: "INFERRED",
+      type: "",
+      typeSource: "INFERRED",
+    });
+
+    store.completeSavedDeviceVerification(initialDeviceId, {
+      product: "Ultimate 64 Elite",
+      hostname: "u64",
+      unique_id: "UID-U64",
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      name: "u64",
+      type: "U64E",
+      typeSource: "INFERRED",
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "u64",
+      lastKnownUniqueId: "UID-U64",
+    });
   });
 
   it("persists the selected device across reloads and projects its connection settings", async () => {

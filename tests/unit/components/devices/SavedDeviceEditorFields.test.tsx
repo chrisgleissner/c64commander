@@ -8,7 +8,16 @@ describe("SavedDeviceEditorFields", () => {
 
     render(
       <SavedDeviceEditorFields
-        draft={{ name: "", host: "c64u", httpPort: "80", ftpPort: "21", telnetPort: "64" }}
+        draft={{
+          name: "",
+          nameSource: "INFERRED",
+          host: "c64u",
+          type: "",
+          typeSource: "INFERRED",
+          httpPort: "80",
+          ftpPort: "21",
+          telnetPort: "64",
+        }}
         onChange={onChange}
         idPrefix="saved-device"
       />,
@@ -18,7 +27,10 @@ describe("SavedDeviceEditorFields", () => {
 
     expect(onChange).toHaveBeenCalledWith({
       name: "Ultimate F",
+      nameSource: "USER",
       host: "c64u",
+      type: "",
+      typeSource: "INFERRED",
       httpPort: "80",
       ftpPort: "21",
       telnetPort: "64",
