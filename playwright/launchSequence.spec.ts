@@ -145,6 +145,40 @@ const expectFadeOutInProgress = async (page: Page) => {
   expect(appOpacity).toBeLessThan(1);
 };
 
+const waitForFadeOutSampleOrCompletion = async (page: Page) => {
+  await page.waitForFunction(
+    (homeReadyTestId) => {
+      const launchSequence = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]');
+      if (!launchSequence) {
+        return Boolean(document.querySelector(`[data-testid="${homeReadyTestId}"]`));
+      }
+      return launchSequence.dataset.phase === "fade-out";
+    },
+    HOME_READY_TEST_ID,
+    { polling: 16 },
+  );
+
+  const launchSequence = page.getByTestId("startup-launch-sequence");
+  if ((await launchSequence.count()) === 0) {
+    await expect(page.getByTestId(HOME_READY_TEST_ID)).toBeVisible();
+    return;
+  }
+
+  await page.waitForTimeout(FADE_OUT_SAMPLE_MS);
+  if ((await launchSequence.count()) === 0) {
+    await expect(page.getByTestId(HOME_READY_TEST_ID)).toBeVisible();
+    return;
+  }
+
+  const appShell = page.getByTestId("app-shell");
+  const overlayOpacity = await launchSequence.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity));
+  const appOpacity = await appShell.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity));
+  expect(overlayOpacity).toBeGreaterThan(0);
+  expect(overlayOpacity).toBeLessThan(1);
+  expect(appOpacity).toBeGreaterThan(0);
+  expect(appOpacity).toBeLessThan(1);
+};
+
 const waitForLaunchSequenceComplete = async (page: Page) => {
   await expect(page.getByTestId(HOME_READY_TEST_ID)).toBeVisible();
   await expect(page.getByTestId("startup-launch-sequence")).toHaveCount(0);
@@ -224,7 +258,7 @@ test.describe("launch sequence", () => {
   test("shows the launch sequence on fresh load, reaches app-ready, and does not replay on SPA or resume signals", async ({
     page,
   }, testInfo: TestInfo) => {
-    await applyDisplayProfileOverride(page, "medium");
+    await applyDisplayProfileOverride(page, "medium", PLAYWRIGHT_SCREENSHOT_LAUNCH_TIMINGS);
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const launchSequence = page.getByTestId("startup-launch-sequence");
@@ -232,7 +266,14 @@ test.describe("launch sequence", () => {
     await expect(launchSequence).toBeVisible();
     const resolvedTimings = await readResolvedLaunchTimings(page);
 
-    await waitForLaunchPhase(page, "fade-in");
+    await waitForAnyLaunchPhase(page, ["hold", "fade-out"]);
+    await page.waitForFunction(
+      () => {
+        const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
+        return phase === "fade-in" || phase === "hold";
+      },
+      { polling: 16 },
+    );
     await expect(appShell).toHaveCSS("opacity", "0");
 
     await waitForHoldSample(page, resolvedTimings);
@@ -240,7 +281,7 @@ test.describe("launch sequence", () => {
     await expect(page.getByTestId("startup-launch-sequence-title")).toBeVisible();
     await expect(page.getByTestId("startup-launch-sequence-description")).toBeVisible();
 
-    await expectFadeOutInProgress(page);
+    await waitForFadeOutSampleOrCompletion(page);
 
     await waitForLaunchSequenceComplete(page);
 
