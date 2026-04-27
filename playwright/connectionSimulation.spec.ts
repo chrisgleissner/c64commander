@@ -170,6 +170,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "1500");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_background_rediscovery_interval_ms", "1000");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
@@ -220,6 +221,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "1500");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");
@@ -256,6 +258,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "500");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");
@@ -299,6 +302,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery = true;
         localStorage.setItem("c64u_startup_discovery_window_ms", "1000");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_background_rediscovery_interval_ms", "250");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
@@ -345,6 +349,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "400");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         const payload = {
           items: [
@@ -423,6 +428,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         localStorage.removeItem("c64u_has_password");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_startup_discovery_window_ms", "400");
         const playlistPayload = JSON.stringify({
           items: [
@@ -541,6 +547,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "400");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");
@@ -690,6 +697,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "1500");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");
@@ -853,6 +861,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "300");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");

@@ -38,6 +38,7 @@ import {
   getSavedDeviceSwitchStatus,
   type DeviceSwitchStatus,
 } from "@/lib/savedDevices/store";
+import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
 
 const BADGE_LONG_PRESS_MS = 450;
@@ -397,6 +398,7 @@ export function UnifiedHealthBadge({ className }: Props) {
       longPressHandledRef.current = false;
       return;
     }
+    handlePointerButtonClick(event);
     requestDiagnosticsOpen("header");
   }, []);
 

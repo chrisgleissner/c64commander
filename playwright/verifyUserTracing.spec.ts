@@ -125,7 +125,7 @@ test("verify comprehensive user tracing", async ({ page }) => {
     (t: any) =>
       t.data?.component === "GlobalInteraction" &&
       typeof t.data?.name === "string" &&
-      /click .*(c64u|demo mode|system unhealthy)/i.test(t.data.name),
+      /click .*(c64u|demo mode|system unhealthy|offline|device not reachable)/i.test(t.data.name),
   );
   expect(connectivityClick).toBeDefined();
   expect(connectivityClick.data.component).toBe("GlobalInteraction");

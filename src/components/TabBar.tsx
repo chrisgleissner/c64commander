@@ -13,6 +13,7 @@ import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -54,7 +55,16 @@ export function TabBar() {
               aria-label={tab.label}
               aria-current={isActive ? "page" : undefined}
               title={tab.label}
-              onClick={wrapUserEvent(() => navigate(tab.path), "click", "Tab", { title: tab.label }, "Tab")}
+              onClick={wrapUserEvent(
+                (event) => {
+                  handlePointerButtonClick(event);
+                  navigate(tab.path);
+                },
+                "click",
+                "Tab",
+                { title: tab.label },
+                "Tab",
+              )}
               className={`tab-item touch-none ${isActive ? "active" : ""}`}
             >
               <div className="relative">
