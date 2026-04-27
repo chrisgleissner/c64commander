@@ -19,6 +19,7 @@ import {
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { getSmokeConfig } from "@/lib/smoke/smokeMode";
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 
@@ -130,6 +131,7 @@ vi.mock("@/lib/fuzz/fuzzMode", () => ({
 }));
 
 vi.mock("@/lib/smoke/smokeMode", () => ({
+  getSmokeConfig: vi.fn(() => undefined),
   isSmokeModeEnabled: vi.fn(() => false),
   isSmokeReadOnlyEnabled: vi.fn(() => true),
 }));
@@ -185,6 +187,7 @@ vi.mock("@/lib/secureStorage", () => ({
 
 const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
+const getSmokeConfigMock = getSmokeConfig as unknown as ReturnType<typeof vi.fn>;
 
 const okJsonResponse = (body: object = { errors: [] }) =>
   new Response(JSON.stringify(body), {
@@ -212,6 +215,7 @@ describe("c64api utility functions - targeted branch coverage", () => {
   afterEach(() => {
     vi.clearAllMocks();
     getFetchMock().mockReset();
+    getSmokeConfigMock.mockReturnValue(undefined);
     localStorage.clear();
   });
 

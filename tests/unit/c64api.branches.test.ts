@@ -31,7 +31,7 @@ import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
 
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
-import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
+import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 const ensureWindow = () => {
@@ -191,6 +191,7 @@ vi.mock("@/lib/fuzz/fuzzMode", () => ({
 }));
 
 vi.mock("@/lib/smoke/smokeMode", () => ({
+  getSmokeConfig: vi.fn(() => undefined),
   isSmokeModeEnabled: vi.fn(() => false),
   isSmokeReadOnlyEnabled: vi.fn(() => true),
 }));
@@ -248,6 +249,7 @@ const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
 const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
+const getSmokeConfigMock = getSmokeConfig as unknown as ReturnType<typeof vi.fn>;
 const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
 const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
@@ -286,11 +288,13 @@ describe("c64api branches", () => {
     addLogMock.mockReset();
     fuzzEnabledMock.mockReset();
     fuzzSafeMock.mockReset();
+    getSmokeConfigMock.mockReset();
     smokeEnabledMock.mockReset();
     smokeReadOnlyMock.mockReset();
     fetchMock.mockReset();
     fuzzEnabledMock.mockReturnValue(false);
     fuzzSafeMock.mockReturnValue(true);
+    getSmokeConfigMock.mockReturnValue(undefined);
     smokeEnabledMock.mockReturnValue(false);
     smokeReadOnlyMock.mockReturnValue(true);
     deviceStateSnapshotMock.mockReturnValue({
