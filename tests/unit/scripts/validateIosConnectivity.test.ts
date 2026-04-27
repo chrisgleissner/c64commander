@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -60,9 +60,14 @@ describe("validate-ios-connectivity.sh", () => {
       encoding: "utf8",
       env: process.env,
     });
+    const validationPath = path.join(flowDir, "connectivity-validation.json");
+    const validationContents = readFileSync(validationPath, "utf8");
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('"flow": "ios-ci-smoke"');
     expect(result.stdout).toContain('"valid": true');
+    expect(validationContents).toContain('"flow": "ios-ci-smoke"');
+    expect(validationContents).toContain('"valid": true');
+    expect(JSON.parse(validationContents)).toEqual(JSON.parse(result.stdout));
   });
 });
