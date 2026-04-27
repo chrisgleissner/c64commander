@@ -146,6 +146,28 @@ describe("hostConfig", () => {
     );
   });
 
+  it("keeps an intentional localhost base URL when the caller marks it as preserved", () => {
+    localStorage.setItem(DEVICE_HOST_KEY, "stored-box.local");
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        location: {
+          origin: "http://localhost:4173",
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    expect(resolvePreferredDeviceHost("http://localhost:4173/", undefined, { preserveLocalhostBaseUrl: true })).toBe(
+      "localhost:4173",
+    );
+    expect(addLogMock).not.toHaveBeenCalledWith(
+      "warn",
+      "Ignoring localhost base URL in favor of stored host",
+      expect.anything(),
+    );
+  });
+
   it("returns port from URL when an explicit port is present", () => {
     expect(getDeviceHostHttpPort(undefined, "http://c64u:9090")).toBe(9090);
   });
