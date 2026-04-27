@@ -728,9 +728,9 @@ test.describe("Deterministic Connectivity Simulation", () => {
         if (await continueButton.isVisible().catch(() => false)) {
           await continueButton.click();
         } else {
-          await page.keyboard.press("Escape").catch(() => { });
+          await page.keyboard.press("Escape").catch(() => {});
         }
-        await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => { });
+        await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
       }
 
       try {
@@ -760,12 +760,12 @@ test.describe("Deterministic Connectivity Simulation", () => {
       await clickWithoutNavigationWait(page, saveAndConnectToDemo);
     }
     const dialog = page.getByRole("dialog", { name: "Demo Mode" });
-    await dialog.waitFor({ state: "visible", timeout: 8000 }).catch(() => { });
+    await dialog.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
     const dialogVisible = await dialog.isVisible().catch(() => false);
     if (dialogVisible) {
       await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
     }
-    await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => { });
+    await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 15000 });
     const currentUsingInDemo = page.getByText("Currently using:");
     await expect(currentUsingInDemo).toBeVisible();
