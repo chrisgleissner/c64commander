@@ -46,6 +46,14 @@ features:
     title: CommoServe
     description: Show the CommoServe source in Add Items.
 
+  - id: demo_mode_enabled
+    enabled: false
+    visible_to_user: true
+    developer_only: false
+    group: stable
+    title: Demo Mode
+    description: Allow the built-in simulated device mode in Settings and connection flows.
+
   - id: lighting_studio_enabled
     enabled: false
     visible_to_user: false
@@ -59,7 +67,7 @@ features:
     visible_to_user: false
     developer_only: true
     group: experimental
-    title: Background execution
+    title: Background Execution
     description: Allow native background playback timing and auto-advance scheduling.
 
   - id: reu_snapshot_enabled

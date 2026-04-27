@@ -24,6 +24,7 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadStartupDiscoveryWindowMs,
 } from "@/lib/config/appSettings";
+import { featureFlagManager } from "@/lib/config/featureFlags";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/lib/fuzz/fuzzMode";
 import { addLog } from "@/lib/logging";
@@ -89,6 +90,10 @@ const isRuntimeUsingTestTarget = (runtimeBaseUrl: string) => {
   const testBaseUrl = resolveTestBaseUrl();
   return Boolean(testBaseUrl && runtimeBaseUrl.startsWith(testBaseUrl));
 };
+
+const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mode_enabled;
+
+const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
 const loadPersistedConnectionConfig = async () => {
   const password = await loadStoredPassword();
@@ -328,8 +333,7 @@ export async function verifyCurrentConnectionTarget(): Promise<ProbeInfoResult> 
     lastProbeFailedAtMs: Date.now(),
     lastProbeError: result.error,
   });
-  const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
-  if (autoDemoEnabled) {
+  if (isDemoModeRequested()) {
     await transitionToDemoActive("switch");
   } else {
     await transitionToOfflineNoDemo("switch");
@@ -504,7 +508,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 };
 
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
-  trigger !== "background" && !demoInterstitialShownThisSession;
+  trigger !== "background" && !demoInterstitialShownThisSession && !isDemoModeRequested();
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   if (stickyRealDeviceLock) {
@@ -690,9 +694,17 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     return;
   }
 
+  if (isDemoModeRequested()) {
+    if (trigger === "background") {
+      return;
+    }
+    if (!discoveryRun.isCurrent()) return;
+    await transitionToDemoActive(trigger);
+    return;
+  }
+
   if (trigger === "manual") {
     transitionTo("DISCOVERING", trigger);
-    const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
     const manualProbeTimeoutMs = Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000;
     setSnapshot({ lastProbeAtMs: Date.now() });
     const ok = await Promise.race<boolean>([
@@ -701,7 +713,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
         setTimeout(() => resolve(false), manualProbeTimeoutMs);
       }),
     ]);
-    await handleProbeOutcome(trigger, ok, autoDemoEnabled, discoveryRun.isCurrent);
+    await handleProbeOutcome(trigger, ok, false, discoveryRun.isCurrent);
     return;
   }
 
@@ -752,8 +764,6 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   const abort = new AbortController();
   let cancelled = false;
   let probeInFlight = false;
-  const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
-
   const windowMs = loadStartupDiscoveryWindowMs();
   let windowExpired = false;
   const handleWindowExpiry = async () => {
@@ -761,11 +771,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     cancelled = true;
     globalThis.clearInterval(probeTimer);
     cancelActiveDiscovery();
-    if (autoDemoEnabled) {
-      await transitionToDemoActive(trigger);
-    } else {
-      await transitionToOfflineNoDemo(trigger);
-    }
+    await transitionToOfflineNoDemo(trigger);
   };
   const windowTimer = globalThis.setTimeout(() => {
     void (async () => {
@@ -826,6 +832,7 @@ export async function initializeConnectionManager() {
   cancelActiveDiscovery();
   applyFuzzModeDefaults();
   await initializeSmokeMode();
+  await featureFlagManager.load();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === "1";
   demoModePinnedByUser = sessionStorage.getItem(DEMO_MODE_PINNED_SESSION_KEY) === "1";
   stickyRealDeviceLock = false;

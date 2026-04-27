@@ -77,14 +77,14 @@ import {
   loadConfigWriteIntervalMs,
   clampBackgroundRediscoveryIntervalMs,
   clampStartupDiscoveryWindowMs,
-  loadAutomaticDemoModeEnabled,
+  loadDemoModeEnabled,
   loadBackgroundRediscoveryIntervalMs,
   loadDiscoveryProbeTimeoutMs,
   loadStartupDiscoveryWindowMs,
   loadDebugLoggingEnabled,
   loadDiskAutostartMode,
   loadVolumeSliderPreviewIntervalMs,
-  saveAutomaticDemoModeEnabled,
+  saveDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDiscoveryProbeTimeoutMs,
   saveStartupDiscoveryWindowMs,
@@ -221,7 +221,7 @@ export default function SettingsPage() {
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
-  const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(loadAutomaticDemoModeEnabled());
+  const [demoModeEnabled, setDemoModeEnabled] = useState(loadDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
@@ -286,6 +286,7 @@ export default function SettingsPage() {
     [resolved],
   );
   const commoserveEnabled = flags.commoserve_enabled;
+  const demoModeFeatureEnabled = flags.demo_mode_enabled;
   const resolvedArchiveConfig = useMemo(
     () =>
       resolveArchiveClientConfig(
@@ -378,8 +379,8 @@ export default function SettingsPage() {
       if (detail.key === APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY) {
         setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
       }
-      if (detail.key === APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY) {
-        setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
+      if (detail.key === APP_SETTINGS_KEYS.DEMO_MODE_ENABLED_KEY) {
+        setDemoModeEnabled(loadDemoModeEnabled());
       }
       if (detail.key === APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY) {
         setStartupDiscoveryWindowInput(String(loadStartupDiscoveryWindowMs() / 1000));
@@ -411,6 +412,15 @@ export default function SettingsPage() {
     window.addEventListener("c64u-app-settings-updated", handler);
     return () => window.removeEventListener("c64u-app-settings-updated", handler);
   }, []);
+
+  useEffect(() => {
+    if (demoModeFeatureEnabled || !demoModeEnabled) {
+      return;
+    }
+    setDemoModeEnabled(false);
+    saveDemoModeEnabled(false);
+    void discoverConnection("settings");
+  }, [demoModeEnabled, demoModeFeatureEnabled]);
 
   const refreshDeviceSafetyState = useCallback(() => {
     const next = loadDeviceSafetyConfig();
@@ -734,7 +744,7 @@ export default function SettingsPage() {
       refreshDeviceSafetyState();
       setDebugLoggingEnabled(loadDebugLoggingEnabled());
       setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
-      setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
+      setDemoModeEnabled(loadDemoModeEnabled());
       setStartupDiscoveryWindowInput(String(loadStartupDiscoveryWindowMs() / 1000));
       setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
@@ -984,27 +994,29 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="space-y-4 rounded-lg border border-border/70 p-3">
-                <div className="flex items-start justify-between gap-3 min-w-0">
-                  <div className="space-y-1 min-w-0">
-                    <Label htmlFor="auto-demo-mode" className="font-medium">
-                      Automatic Demo Mode
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      When no hardware is found during discovery, automatically offer Demo Mode for this session.
-                    </p>
+              {demoModeFeatureEnabled ? (
+                <div className="space-y-4 rounded-lg border border-border/70 p-3">
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <div className="space-y-1 min-w-0">
+                      <Label htmlFor="demo-mode-enabled" className="font-medium">
+                        Enable Demo Mode
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Use the built-in simulated device instead of connecting to real hardware.
+                      </p>
+                    </div>
+                    <Checkbox
+                      id="demo-mode-enabled"
+                      checked={demoModeEnabled}
+                      onCheckedChange={(checked) => {
+                        const enabled = checked === true;
+                        setDemoModeEnabled(enabled);
+                        saveDemoModeEnabled(enabled);
+                      }}
+                    />
                   </div>
-                  <Checkbox
-                    id="auto-demo-mode"
-                    checked={automaticDemoModeEnabled}
-                    onCheckedChange={(checked) => {
-                      const enabled = checked === true;
-                      setAutomaticDemoModeEnabled(enabled);
-                      saveAutomaticDemoModeEnabled(enabled);
-                    }}
-                  />
                 </div>
-              </div>
+              ) : null}
 
               <div className="flex gap-2 pt-2">
                 <Button onClick={handleSaveConnection} disabled={isSaving} className="flex-1">
@@ -1294,25 +1306,27 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <div className="space-y-1 min-w-0">
-                  <Label htmlFor="auto-demo-mode" className="font-medium">
-                    Automatic Demo Mode
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    When no hardware is found during discovery, automatically offer Demo Mode for this session.
-                  </p>
+              {demoModeFeatureEnabled ? (
+                <div className="flex items-start justify-between gap-3 min-w-0">
+                  <div className="space-y-1 min-w-0">
+                    <Label htmlFor="demo-mode-enabled" className="font-medium">
+                      Enable Demo Mode
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Use the built-in simulated device instead of connecting to real hardware.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="demo-mode-enabled"
+                    checked={demoModeEnabled}
+                    onCheckedChange={(checked) => {
+                      const enabled = checked === true;
+                      setDemoModeEnabled(enabled);
+                      saveDemoModeEnabled(enabled);
+                    }}
+                  />
                 </div>
-                <Checkbox
-                  id="auto-demo-mode"
-                  checked={automaticDemoModeEnabled}
-                  onCheckedChange={(checked) => {
-                    const enabled = checked === true;
-                    setAutomaticDemoModeEnabled(enabled);
-                    saveAutomaticDemoModeEnabled(enabled);
-                  }}
-                />
-              </div>
+              ) : null}
 
               <div className="space-y-2">
                 <Label htmlFor="startup-discovery-window" className="font-medium">
@@ -1395,7 +1409,13 @@ export default function SettingsPage() {
                       checked={feature.value}
                       disabled={!feature.editable}
                       onCheckedChange={(checked) => {
-                        void setFlag(feature.id, checked === true);
+                        const enabled = checked === true;
+                        void setFlag(feature.id, enabled);
+                        if (feature.id === "demo_mode_enabled" && !enabled) {
+                          setDemoModeEnabled(false);
+                          saveDemoModeEnabled(false);
+                          void discoverConnection("settings");
+                        }
                       }}
                       data-testid={`feature-flag-${feature.id}`}
                     />

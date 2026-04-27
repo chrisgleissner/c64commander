@@ -8,7 +8,8 @@
 
 const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
 const CONFIG_WRITE_INTERVAL_KEY = "c64u_config_write_min_interval_ms";
-const AUTO_DEMO_MODE_KEY = "c64u_automatic_demo_mode_enabled";
+const DEMO_MODE_ENABLED_KEY = "c64u_demo_mode_enabled";
+const LEGACY_AUTO_DEMO_MODE_KEY = "c64u_automatic_demo_mode_enabled";
 const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
 const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
@@ -28,7 +29,8 @@ export const DEFAULT_NOTIFICATION_VISIBILITY: NotificationVisibility = "errors-o
 export const DEFAULT_NOTIFICATION_DURATION_MS = 4000;
 export const NOTIFICATION_DURATION_MIN_MS = 2000;
 export const NOTIFICATION_DURATION_MAX_MS = 8000;
-export const DEFAULT_AUTO_DEMO_MODE_ENABLED = true;
+export const DEFAULT_DEMO_MODE_ENABLED = false;
+export const DEFAULT_AUTO_DEMO_MODE_ENABLED = DEFAULT_DEMO_MODE_ENABLED;
 export const DEFAULT_STARTUP_DISCOVERY_WINDOW_MS = 3000;
 export const DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS = 5000;
 export const DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS = 2500;
@@ -76,6 +78,15 @@ const readBoolean = (key: string, fallback: boolean) => {
   return raw === "1";
 };
 
+const readBooleanWithLegacy = (key: string, legacyKey: string, fallback: boolean) => {
+  if (typeof localStorage === "undefined") return fallback;
+  const raw = localStorage.getItem(key);
+  if (raw !== null) return raw === "1";
+  const legacyRaw = localStorage.getItem(legacyKey);
+  if (legacyRaw !== null) return legacyRaw === "1";
+  return fallback;
+};
+
 const readNumber = (key: string, fallback: number) => {
   if (typeof localStorage === "undefined") return fallback;
   const raw = localStorage.getItem(key);
@@ -110,13 +121,19 @@ export const saveConfigWriteIntervalMs = (value: number) => {
 
 export const clampConfigWriteIntervalMs = (value: number) => clampInterval(value);
 
-export const loadAutomaticDemoModeEnabled = () => readBoolean(AUTO_DEMO_MODE_KEY, DEFAULT_AUTO_DEMO_MODE_ENABLED);
+export const loadDemoModeEnabled = () =>
+  readBooleanWithLegacy(DEMO_MODE_ENABLED_KEY, LEGACY_AUTO_DEMO_MODE_KEY, DEFAULT_DEMO_MODE_ENABLED);
 
-export const saveAutomaticDemoModeEnabled = (enabled: boolean) => {
+export const saveDemoModeEnabled = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(AUTO_DEMO_MODE_KEY, enabled ? "1" : "0");
-  broadcast(AUTO_DEMO_MODE_KEY, enabled);
+  localStorage.setItem(DEMO_MODE_ENABLED_KEY, enabled ? "1" : "0");
+  localStorage.removeItem(LEGACY_AUTO_DEMO_MODE_KEY);
+  broadcast(DEMO_MODE_ENABLED_KEY, enabled);
 };
+
+export const loadAutomaticDemoModeEnabled = loadDemoModeEnabled;
+
+export const saveAutomaticDemoModeEnabled = saveDemoModeEnabled;
 
 export const loadStartupDiscoveryWindowMs = () =>
   clampDiscoveryWindowMs(readNumber(STARTUP_DISCOVERY_WINDOW_MS_KEY, DEFAULT_STARTUP_DISCOVERY_WINDOW_MS));
@@ -253,7 +270,8 @@ export const saveArchiveUserAgentOverride = (value: string) => saveString(ARCHIV
 export const APP_SETTINGS_KEYS = {
   DEBUG_LOGGING_KEY,
   CONFIG_WRITE_INTERVAL_KEY,
-  AUTO_DEMO_MODE_KEY,
+  DEMO_MODE_ENABLED_KEY,
+  AUTO_DEMO_MODE_KEY: DEMO_MODE_ENABLED_KEY,
   STARTUP_DISCOVERY_WINDOW_MS_KEY,
   BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
   DISCOVERY_PROBE_TIMEOUT_MS_KEY,

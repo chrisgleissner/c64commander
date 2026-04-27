@@ -172,6 +172,10 @@ export function ConnectionController() {
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { key?: string } | undefined;
+      if (detail?.key === APP_SETTINGS_KEYS.DEMO_MODE_ENABLED_KEY) {
+        void discoverConnection("settings");
+        return;
+      }
       if (detail?.key !== APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY) return;
       setBackgroundScheduleVersion((previous) => previous + 1);
     };

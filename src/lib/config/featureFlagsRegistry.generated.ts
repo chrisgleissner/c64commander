@@ -16,6 +16,7 @@ export const FEATURE_REGISTRY_VERSION = 1 as const;
 export type FeatureFlagId = 
   | "hvsc_enabled"
   | "commoserve_enabled"
+  | "demo_mode_enabled"
   | "lighting_studio_enabled"
   | "background_execution_enabled"
   | "reu_snapshot_enabled";
@@ -69,6 +70,15 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "stable",
     title: "CommoServe",
     description: "Show the CommoServe source in Add Items.",
+  },
+  {
+    id: "demo_mode_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Demo Mode",
+    description: "Allow the built-in simulated device mode in Settings and connection flows.",
   },
   {
     id: "lighting_studio_enabled",

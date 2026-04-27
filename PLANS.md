@@ -1,3 +1,37 @@
+# 2026-04-27 Demo Mode Gating And Diagnostics Reachability
+
+## Classification
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- Demo mode is still implicitly available through a default-on automatic fallback path, so the app can enter demo without an explicit product decision.
+- Global diagnostics currently run against the active runtime backend, which means an implicit fallback to demo can make an unreachable real-device target appear healthy.
+- The fix must make demo activation explicit, feature-flagged, default-disabled, and unable to contaminate real-device diagnostics.
+
+## First Local Hypothesis
+
+- The controlling fault is in `src/lib/connection/connectionManager.ts`: failed discovery still consults `loadAutomaticDemoModeEnabled()` and transitions to `DEMO_ACTIVE`, while `src/lib/diagnostics/healthCheckEngine.ts` builds global probe runtime from the current API runtime snapshot, so a fallback to demo can produce a false-success health run for an unreachable real target.
+
+## Cheap Disconfirming Check
+
+- Verify `appSettings` still defaults the demo toggle to `true`, `connectionManager` still routes failed discovery into `transitionToDemoActive()`, and the settings UI still exposes the control as "Automatic Demo Mode" instead of an explicit demo-mode enablement.
+
+## Ordered Tasks
+
+1. Update `PLANS.md`, `WORKLOG.md`, and `AGENTS.md` before touching application code, and keep both records current through final validation.
+2. Add a dedicated demo-mode feature flag with a default-disabled registry state and expose it through the existing feature-flag plumbing.
+3. Replace the old automatic-demo preference with an explicit persisted demo-mode setting that is disabled by default, remains hidden or disabled when the feature flag is off, and reuses the existing settings/preferences infrastructure.
+4. Refactor connection-state decisions so demo mode is entered only when the feature flag allows it and the explicit user setting enables it, never as an implicit fallback from failed discovery, failed connection checks, or unreachable real devices.
+5. Keep demo and real-device execution paths separated so real diagnostics always probe the intended real target and demo-only behavior stays scoped to explicit demo mode.
+6. Harden diagnostics regressions around repeated runs and device changes so stale successful results cannot leak across targets or later unreachable runs.
+7. Add or update focused regression tests for demo defaults, feature-flag gating, explicit enable/disable behavior, unreachable real-device diagnostics, and cross-run target isolation.
+8. Run the required validation set for this code and UI change: focused tests first, then repo validation, coverage, Android build, and attached-device deployment.
+9. Deploy the newest APK to the attached Pixel 4 via adb, validate demo-mode and diagnostics behavior on-device, and record that evidence in `WORKLOG.md` before closing the task.
+
 # 2026-04-27 Launch, Badge, Health, And Device Model Convergence
 
 ## Classification

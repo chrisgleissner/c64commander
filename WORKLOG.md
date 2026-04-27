@@ -1,3 +1,32 @@
+# Demo Mode Gating And Diagnostics Reachability Worklog
+
+## [2026-04-27T09:56:42Z] DEMO-DIAG-001: opened the execution track and fixed the owning hypothesis before the first edit
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+Action performed:
+
+- Opened a new authoritative execution section in `PLANS.md` for the demo-mode gating and diagnostics reachability task.
+- Read the controlling demo-mode logic in `src/lib/config/appSettings.ts`, `src/lib/connection/connectionManager.ts`, `src/pages/SettingsPage.tsx`, and the relevant connection-manager regressions.
+- Read the health-check runner in `src/lib/diagnostics/healthCheckEngine.ts`, its target-specific caller in `src/hooks/useSavedDeviceHealthChecks.ts`, and the current health-check regression suite.
+- Read the feature-flag registry sources in `src/lib/config/feature-flags.yaml`, `src/lib/config/featureFlagsRegistry.generated.ts`, and the feature-flag hook/provider path.
+- Confirmed the mandatory Pixel 4 completion rule already exists in `AGENTS.md` and queued a wording update so it explicitly requires on-device validation after adb deployment.
+
+Findings:
+
+- `src/lib/config/appSettings.ts` still defaults the persisted demo preference to enabled and still models it as `Automatic Demo Mode`, which is incompatible with the required explicit-opt-in behavior.
+- `src/lib/connection/connectionManager.ts` still sends failed startup/manual/settings verification into `transitionToDemoActive()` whenever that preference is enabled, so demo remains a discovery fallback instead of an explicit mode.
+- `src/lib/diagnostics/healthCheckEngine.ts` builds the default probe runtime from the currently active API runtime snapshot, so once the connection manager falls into demo, global diagnostics can report a healthy demo backend even when the selected real device is unreachable.
+- `runHealthCheckForTarget()` already provides a clean real-target seam for saved-device diagnostics, so the needed diagnostics fix should stay local to connection/runtime selection rather than a broad diagnostics rewrite.
+
+Next action:
+
+- Replace the automatic fallback contract with feature-flagged explicit demo activation, then immediately rerun the focused connection and health-check regressions.
+
 # Launch, Badge, Health, And Device Model Convergence Worklog
 
 ## [2026-04-27T08:30:36Z] CONVERGENCE-001: opened the execution track and pinned the first controlling faults
