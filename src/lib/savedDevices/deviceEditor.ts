@@ -1,10 +1,15 @@
-import type { SavedDevice } from "@/lib/savedDevices/store";
+import { buildInferredSavedDeviceName } from "@/lib/savedDevices/host";
+import type { SavedDevice, SavedDeviceFieldSource } from "@/lib/savedDevices/store";
+import { TELNET_DEFAULT_PORT } from "@/lib/telnet/telnetTypes";
 
 export const MAX_SAVED_DEVICE_NAME_LENGTH = 10;
 
 export type SavedDeviceEditorDraft = {
   name: string;
+  nameSource: SavedDeviceFieldSource;
   host: string;
+  type: string;
+  typeSource: SavedDeviceFieldSource;
   httpPort: string;
   ftpPort: string;
   telnetPort: string;
@@ -14,15 +19,83 @@ export const sanitizeSavedDeviceNameInput = (value: string) => value.trim().slic
 
 export const sanitizeSavedDevicePortInput = (value: string) => value.replace(/[^0-9]/g, "");
 
+const normalizeDraftSource = (source: SavedDevice["nameSource"] | SavedDevice["typeSource"] | undefined) =>
+  source === "USER" || source === "custom" ? "USER" : "INFERRED";
+
+const normalizeDraftSourceInput = (
+  source: SavedDevice["nameSource"] | SavedDevice["typeSource"] | undefined,
+): SavedDeviceFieldSource | null => {
+  if (source === "USER" || source === "custom") return "USER";
+  if (source === "INFERRED" || source === "auto") return "INFERRED";
+  return null;
+};
+
+const compact = (value: string) => value.replace(/[^a-z0-9]+/gi, "");
+
+const resolveDraftNameSource = (
+  name: string | null | undefined,
+  host: string,
+  source: SavedDevice["nameSource"] | undefined,
+): SavedDeviceFieldSource => {
+  const rawName = (name ?? "").trim();
+  const normalizedSource = normalizeDraftSourceInput(source);
+  if (normalizedSource === "USER" && rawName) return "USER";
+  if (normalizedSource === "INFERRED") return "INFERRED";
+  if (!rawName) return "INFERRED";
+  return compact(rawName).toLowerCase() === compact(host).toLowerCase() ? "INFERRED" : "USER";
+};
+
 export const buildSavedDeviceEditorDraft = (
-  device: Pick<SavedDevice, "name" | "host" | "httpPort" | "ftpPort" | "telnetPort"> | null | undefined,
+  device:
+    | Pick<SavedDevice, "name" | "nameSource" | "host" | "type" | "typeSource" | "httpPort" | "ftpPort" | "telnetPort">
+    | null
+    | undefined,
   fallbackHost = "c64u",
+): SavedDeviceEditorDraft => {
+  const host = device?.host ?? fallbackHost;
+  const nameSource = resolveDraftNameSource(device?.name, host, device?.nameSource);
+  const typeSource = normalizeDraftSource(device?.typeSource);
+
+  return {
+    name: nameSource === "USER" ? sanitizeSavedDeviceNameInput(device?.name ?? "") : buildInferredSavedDeviceName(host),
+    nameSource,
+    host,
+    type: typeSource === "USER" ? (device?.type?.trim() ?? "") : (device?.type?.trim() ?? ""),
+    typeSource,
+    httpPort: String(device?.httpPort ?? 80),
+    ftpPort: String(device?.ftpPort ?? 21),
+    telnetPort: String(device?.telnetPort ?? TELNET_DEFAULT_PORT),
+  };
+};
+
+export const applySavedDeviceDraftNameInput = (
+  draft: SavedDeviceEditorDraft,
+  value: string,
+): SavedDeviceEditorDraft => {
+  const name = sanitizeSavedDeviceNameInput(value);
+  if (!name) {
+    return {
+      ...draft,
+      name: buildInferredSavedDeviceName(draft.host),
+      nameSource: "INFERRED",
+    };
+  }
+
+  return {
+    ...draft,
+    name,
+    nameSource: "USER",
+  };
+};
+
+export const applySavedDeviceDraftHostInput = (
+  draft: SavedDeviceEditorDraft,
+  value: string,
 ): SavedDeviceEditorDraft => ({
-  name: sanitizeSavedDeviceNameInput(device?.name ?? ""),
-  host: device?.host ?? fallbackHost,
-  httpPort: String(device?.httpPort ?? 80),
-  ftpPort: String(device?.ftpPort ?? 21),
-  telnetPort: String(device?.telnetPort ?? 64),
+  ...draft,
+  host: value,
+  name: draft.nameSource === "INFERRED" ? buildInferredSavedDeviceName(value) : draft.name,
+  type: draft.typeSource === "INFERRED" ? "" : draft.type,
 });
 
 const isValidPort = (value: string) => {

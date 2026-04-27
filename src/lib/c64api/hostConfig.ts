@@ -236,7 +236,11 @@ const isLocalDeviceHost = (host: string) => {
   return normalized === "localhost" || normalized === "127.0.0.1";
 };
 
-export const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string) => {
+export const resolvePreferredDeviceHost = (
+  baseUrl: string,
+  deviceHost?: string,
+  options?: { preserveLocalhostBaseUrl?: boolean },
+) => {
   const explicitHost = deviceHost ? normalizeDeviceHost(deviceHost) : null;
   const derivedHost = normalizeDeviceHost(explicitHost ?? getDeviceHostFromBaseUrl(baseUrl));
   const storedHost = resolveDeviceHostFromStorage();
@@ -254,6 +258,9 @@ export const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string)
     return Boolean(origin && (baseUrl === origin || baseUrl.startsWith(`${origin}/`)));
   })();
   if (!explicitHost && isLocalDeviceHost(derivedHost) && isLikelyFallbackOrigin) {
+    if (options?.preserveLocalhostBaseUrl) {
+      return derivedHost;
+    }
     if (!isLocalDeviceHost(storedHost)) {
       addLog("warn", "Ignoring localhost base URL in favor of stored host", {
         baseUrl,

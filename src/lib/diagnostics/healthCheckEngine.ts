@@ -690,7 +690,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
 const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
-    const { durationMs } = await timedProbe(() =>
+    const { result, durationMs } = await timedProbe(() =>
       listFtpDirectory({
         host: runtime.host,
         port: runtime.ftpPort,
@@ -700,6 +700,10 @@ const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> 
         __c64uIntent: "system",
       }),
     );
+    const hasEntries = Array.isArray(result) || (!!result && Array.isArray(result.entries));
+    if (!hasEntries) {
+      return makeRecord("FTP", "Fail", durationMs, "Invalid FTP listing payload", startMs);
+    }
     return makeRecord("FTP", "Success", durationMs, null, startMs);
   } catch (error) {
     if (isTimeoutLike(error)) {
@@ -744,7 +748,7 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         readTimeoutMs,
       });
 
-      if (hasExpectedTelnetScreen(titleLine)) {
+      if (hasExpectedTelnetScreen(titleLine) && screen.screenType !== "unknown") {
         addLog("debug", "Health check TELNET probe accepted screen", {
           host: runtime.host,
           port: runtime.telnetPort,
@@ -755,7 +759,11 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       }
 
       lastReason =
-        titleLine.length > 0 ? `Unexpected Telnet screen: ${titleLine.slice(0, 80)}` : "Unexpected blank Telnet screen";
+        titleLine.length > 0
+          ? screen.screenType === "unknown"
+            ? `Unrecognized Telnet screen: ${titleLine.slice(0, 80)}`
+            : `Unexpected Telnet screen: ${titleLine.slice(0, 80)}`
+          : "Unexpected blank Telnet screen";
 
       if (attempt < TELNET_READ_RETRY_ATTEMPTS) {
         await waitMs(TELNET_READ_RETRY_DELAY_MS, signal);

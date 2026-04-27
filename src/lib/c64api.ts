@@ -17,7 +17,7 @@ import {
 import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
-import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
+import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
@@ -1830,7 +1830,9 @@ export function updateC64APIConfig(
   options?: { reason?: string },
 ) {
   const api = getC64API();
-  const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
+  const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost, {
+    preserveLocalhostBaseUrl: getSmokeConfig()?.target === "mock",
+  });
   const resolvedBaseUrl = resolvePlatformApiBaseUrl(resolvedDeviceHost, buildBaseUrlFromDeviceHost(resolvedDeviceHost));
 
   api.setBaseUrl(resolvedBaseUrl);
@@ -1906,7 +1908,9 @@ export function getC64APIConfigSnapshot(): C64ApiConfigSnapshot {
  */
 export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
-  const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
+  const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost, {
+    preserveLocalhostBaseUrl: getSmokeConfig()?.target === "mock",
+  });
   const resolvedBaseUrl = resolvePlatformApiBaseUrl(resolvedDeviceHost, baseUrl);
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);

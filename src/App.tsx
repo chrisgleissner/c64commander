@@ -43,6 +43,13 @@ import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
 import { LightingStudioProvider } from "@/hooks/useLightingStudio";
 import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
 import { StartupLaunchSequence } from "@/components/StartupLaunchSequence";
+import {
+  markStartupLaunchSequenceComplete,
+  resolveStartupLaunchSequenceTimings,
+  runLaunchSequence,
+  shouldShowStartupLaunchSequence,
+  type LaunchSequencePhase,
+} from "@/lib/startup/launchSequence";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -163,8 +170,7 @@ const App = () => (
           <FeatureFlagsProvider>
             <RefreshControlProvider>
               <AppErrorBoundary>
-                <AppRoutes />
-                <StartupLaunchSequence />
+                <StartupLaunchCoordinator />
               </AppErrorBoundary>
             </RefreshControlProvider>
           </FeatureFlagsProvider>
@@ -173,6 +179,48 @@ const App = () => (
     </ThemeProvider>
   </QueryClientProvider>
 );
+
+const StartupLaunchCoordinator = () => {
+  const timings = React.useMemo(() => resolveStartupLaunchSequenceTimings(), []);
+  const [phase, setPhase] = React.useState<LaunchSequencePhase>(() =>
+    shouldShowStartupLaunchSequence() ? "fade-in" : "app-ready",
+  );
+  const [visible, setVisible] = React.useState(() => shouldShowStartupLaunchSequence());
+
+  useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+
+    return runLaunchSequence({
+      timings,
+      onPhaseChange: (nextPhase) => {
+        setPhase(nextPhase);
+        if (nextPhase === "app-ready") {
+          markStartupLaunchSequenceComplete();
+          setVisible(false);
+        }
+      },
+    });
+  }, [timings, visible]);
+
+  const activePhase: LaunchSequencePhase = visible ? phase : "app-ready";
+
+  return (
+    <>
+      <div
+        className="app-launch-shell"
+        data-launch-phase={activePhase}
+        data-launch-visible={visible ? "true" : "false"}
+        data-testid="app-shell"
+        style={{ "--app-launch-fade-in-ms": `${timings.fadeOutMs}ms` } as React.CSSProperties}
+      >
+        <AppRoutes />
+      </div>
+      {visible ? <StartupLaunchSequence phase={phase} timings={timings} /> : null}
+    </>
+  );
+};
 
 const GlobalErrorListener = () => {
   useEffect(() => {

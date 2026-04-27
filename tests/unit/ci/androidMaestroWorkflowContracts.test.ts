@@ -108,9 +108,11 @@ describe("Android Maestro workflow contracts", () => {
     const workflow = readRepoFile(".github", "workflows", "android.yaml");
 
     expect(workflow).toContain("install_android_sdk_components() {");
-    expect(workflow).toContain('for attempt in 1 2 3; do');
-    expect(workflow).toContain('sdkmanager attempt ${attempt} failed; clearing cached Android system image artifacts before retry');
+    expect(workflow).toContain("for attempt in 1 2 3; do");
+    expect(workflow).toContain(
+      "sdkmanager attempt ${attempt} failed; clearing cached Android system image artifacts before retry",
+    );
     expect(workflow).toContain('rm -rf "$HOME/.android/cache"');
-    expect(workflow).toContain('install_android_sdk_components');
+    expect(workflow).toContain("install_android_sdk_components");
   });
 });

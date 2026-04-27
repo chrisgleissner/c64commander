@@ -113,6 +113,7 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
+import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import {
   cancelHealthCheck,
   isHealthCheckRunning,
@@ -387,11 +388,66 @@ describe("runHealthCheckForTarget", () => {
     expect(result.probes.CONFIG.reason).toContain("passive mode");
     expect(mockSetConfigValue).not.toHaveBeenCalled();
   });
+
+  it("reports the explicit target as offline when the device is unreachable even if the current runtime is in demo mode", async () => {
+    vi.mocked(getConnectionSnapshot).mockReturnValue({ state: "DEMO_ACTIVE" });
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
+      deviceHost: "demo.invalid",
+      password: "demo-secret",
+    });
+    mockGetInfo.mockRejectedValue(new Error("Connection refused"));
+
+    const result = await runHealthCheckForTarget(
+      {
+        deviceHost: "offline-u64.local:8080",
+        ftpPort: 2021,
+        telnetPort: 2323,
+        password: "target-secret",
+      },
+      { mode: "full" },
+    );
+
+    expect(result.connectivity).toBe("Offline");
+    expect(result.overallHealth).toBe("Unavailable");
+    expect(result.probes.REST.outcome).toBe("Fail");
+    expect(result.probes.REST.reason).toContain("Connection refused");
+    expect(result.probes.FTP.outcome).toBe("Skipped");
+    expect(result.probes.TELNET.outcome).toBe("Skipped");
+    expect(result.probes.CONFIG.outcome).toBe("Skipped");
+  });
 });
 
 // ─── runHealthCheck — REST probe failure ─────────────────────────────────────
 
 describe("runHealthCheck — REST probe failure", () => {
+  it("replaces a prior successful result when a later run targets a changed host that is unreachable", async () => {
+    setupAllProbesSuccess();
+
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "c64u.local" });
+    const firstResult = await runHealthCheck();
+
+    mockGetInfo.mockReset();
+    mockGetInfo.mockRejectedValue(new Error("Host unreachable"));
+    mockListFtpDirectory.mockReset();
+    mockTelnetConnect.mockReset();
+    mockTelnetReadScreen.mockReset();
+    mockTelnetDisconnect.mockReset();
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "backup-u64.local" });
+
+    const secondResult = await runHealthCheck();
+    const snapshot = getHealthCheckStateSnapshot();
+
+    expect(firstResult).not.toBeNull();
+    expect(firstResult!.probes.REST.outcome).toBe("Success");
+    expect(secondResult).not.toBeNull();
+    expect(secondResult!.runId).not.toBe(firstResult!.runId);
+    expect(secondResult!.probes.REST.outcome).toBe("Fail");
+    expect(secondResult!.probes.REST.reason).toContain("Host unreachable");
+    expect(secondResult!.overallHealth).toBe("Unhealthy");
+    expect(snapshot.latestResult?.runId).toBe(secondResult!.runId);
+    expect(snapshot.latestResult?.probes.REST.outcome).toBe("Fail");
+  });
+
   it("skips JIFFY, RASTER, CONFIG when REST fails", async () => {
     mockGetInfo.mockRejectedValue(new Error("Network error"));
     mockListFtpDirectory.mockResolvedValue([]);
@@ -838,6 +894,25 @@ describe("runHealthCheck — FTP probe", () => {
     expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
   });
 
+  it("fails FTP when the directory listing payload is malformed", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue({ path: "/", entries: null } as never);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.FTP.outcome).toBe("Fail");
+    expect(result!.probes.FTP.reason).toBe("Invalid FTP listing payload");
+  });
+
   it("normalizes an HTTP device host with a port before probing FTP", async () => {
     const { getC64APIConfigSnapshot } = await import("@/lib/c64api");
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "127.0.0.1:8080" });
@@ -912,6 +987,19 @@ describe("runHealthCheck — TELNET probe", () => {
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
     expect(mockTelnetReadScreen).toHaveBeenCalledTimes(3);
+  });
+
+  it("fails TELNET when the banner matches but the parsed screen type is unknown", async () => {
+    setupAllProbesSuccess();
+    mockTelnetReadScreen.mockResolvedValue({
+      ...telnetScreen,
+      screenType: "unknown",
+    });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Fail");
+    expect(result!.probes.TELNET.reason).toContain("Unrecognized Telnet screen");
   });
 
   it("fails TELNET when the session connect step throws", async () => {

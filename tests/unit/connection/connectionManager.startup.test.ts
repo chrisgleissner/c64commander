@@ -9,10 +9,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../src/lib/config/appSettings", () => ({
-  loadAutomaticDemoModeEnabled: vi.fn(() => true),
+  loadAutomaticDemoModeEnabled: vi.fn(() => false),
   loadDebugLoggingEnabled: vi.fn(() => false),
   loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 600),
+}));
+
+vi.mock("../../../src/lib/config/featureFlags", () => ({
+  featureFlagManager: {
+    load: vi.fn(async () => undefined),
+    getSnapshot: vi.fn(() => ({ flags: { demo_mode_enabled: false } })),
+  },
 }));
 
 vi.mock("../../../src/lib/fuzz/fuzzMode", () => ({
@@ -94,7 +101,7 @@ describe("connectionManager startup coverage", () => {
     stopMockServer.mockClear();
   });
 
-  it("falls back to demo mode when the startup discovery window expires", async () => {
+  it("falls back to offline mode when the startup discovery window expires and explicit demo mode is disabled", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
@@ -104,12 +111,12 @@ describe("connectionManager startup coverage", () => {
     void discoverConnection("startup");
     await vi.advanceTimersByTimeAsync(800);
 
-    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
     expect(getConnectionSnapshot().lastDiscoveryTrigger).toBe("startup");
-    expect(startMockServer).toHaveBeenCalledTimes(1);
+    expect(startMockServer).not.toHaveBeenCalled();
   });
 
-  it("returns to REAL_CONNECTED when a background probe succeeds after demo fallback", async () => {
+  it("returns to REAL_CONNECTED when a background probe succeeds after an offline startup timeout", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
@@ -118,7 +125,7 @@ describe("connectionManager startup coverage", () => {
     await initializeConnectionManager();
     void discoverConnection("startup");
     await vi.advanceTimersByTimeAsync(800);
-    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
 
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {

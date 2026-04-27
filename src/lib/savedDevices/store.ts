@@ -7,16 +7,31 @@
  */
 
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
+import {
+  buildInferredSavedDeviceName,
+  DEFAULT_SAVED_DEVICE_HOST,
+  DEFAULT_SAVED_DEVICE_HTTP_PORT,
+  normalizeSavedDeviceHostInput,
+  splitSavedDeviceHostAndHttpPort,
+  stripSavedDeviceHttpPort,
+} from "@/lib/savedDevices/host";
 import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
+import { TELNET_DEFAULT_PORT as DEFAULT_TELNET_PORT } from "@/lib/telnet/telnetTypes";
 import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
 
 export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
 
+export type SavedDeviceFieldSource = "INFERRED" | "USER";
+
+type SavedDeviceSourceInput = SavedDeviceFieldSource | "auto" | "custom";
+
 export type SavedDevice = {
   id: string;
   name: string;
-  nameSource?: "auto" | "custom";
+  nameSource?: SavedDeviceSourceInput;
   host: string;
+  type?: string;
+  typeSource?: SavedDeviceSourceInput;
   httpPort: number;
   ftpPort: number;
   telnetPort: number;
@@ -80,10 +95,9 @@ const LEGACY_BASE_URL_KEY = "c64u_base_url";
 const LEGACY_FTP_PORT_KEY = "c64u_ftp_port";
 const LEGACY_TELNET_PORT_KEY = "c64u_telnet_port";
 const LEGACY_HAS_PASSWORD_KEY = "c64u_has_password";
-const DEFAULT_DEVICE_HOST = "c64u";
-const DEFAULT_HTTP_PORT = 80;
+const DEFAULT_DEVICE_HOST = DEFAULT_SAVED_DEVICE_HOST;
+const DEFAULT_HTTP_PORT = DEFAULT_SAVED_DEVICE_HTTP_PORT;
 const DEFAULT_FTP_PORT = 21;
-const DEFAULT_TELNET_PORT = 64;
 const SUMMARY_NON_SELECTED_LIMIT = 3;
 
 const listeners = new Set<() => void>();
@@ -92,27 +106,63 @@ let snapshot: SavedDevicesSnapshot | null = null;
 
 const compact = (value: string) => value.replace(/[^a-z0-9]+/gi, "");
 
-const normalizeSavedDeviceName = (name: string | null | undefined) => sanitizeSavedDeviceNameInput(name ?? "");
-
-const resolveSavedDeviceNameSource = (name: string, host: string, nameSource?: SavedDevice["nameSource"]) => {
-  if (nameSource === "custom" && name) return "custom" as const;
-  if (nameSource === "auto") return "auto" as const;
-  if (!name) return "auto" as const;
-  return compact(name).toLowerCase() === compact(host).toLowerCase() ? ("auto" as const) : ("custom" as const);
+const normalizeSavedDeviceUserName = (name: string | null | undefined) => sanitizeSavedDeviceNameInput(name ?? "");
+const normalizeSavedDeviceType = (value: string | null | undefined) => value?.trim() ?? "";
+const normalizeSavedDeviceSourceInput = (source?: SavedDeviceSourceInput | null): SavedDeviceFieldSource | null => {
+  if (source === "USER" || source === "custom") return "USER";
+  if (source === "INFERRED" || source === "auto") return "INFERRED";
+  return null;
 };
 
-const normalizeHostInput = (input?: string | null) => {
-  const raw = input?.trim() ?? "";
-  if (!raw) return DEFAULT_DEVICE_HOST;
-  if (/^[a-z]+:\/\//i.test(raw)) {
-    try {
-      const url = new URL(raw);
-      return (url.host || url.hostname || DEFAULT_DEVICE_HOST).trim() || DEFAULT_DEVICE_HOST;
-    } catch {
-      return DEFAULT_DEVICE_HOST;
-    }
-  }
-  return raw.split("/")[0]?.trim() || DEFAULT_DEVICE_HOST;
+const resolveSavedDeviceNameSource = (
+  name: string,
+  host: string,
+  nameSource?: SavedDevice["nameSource"],
+): SavedDeviceFieldSource => {
+  const normalizedSource = normalizeSavedDeviceSourceInput(nameSource);
+  if (normalizedSource === "USER" && name) return "USER";
+  if (normalizedSource === "INFERRED") return "INFERRED";
+  if (!name) return "INFERRED";
+  return compact(name).toLowerCase() === compact(host).toLowerCase() ? "INFERRED" : "USER";
+};
+
+const resolveSavedDeviceTypeSource = (
+  type: string,
+  lastKnownProduct: ProductFamilyCode | null,
+  typeSource?: SavedDevice["typeSource"],
+): SavedDeviceFieldSource => {
+  const normalizedSource = normalizeSavedDeviceSourceInput(typeSource);
+  if (normalizedSource === "USER" && type) return "USER";
+  if (normalizedSource === "INFERRED") return "INFERRED";
+  if (!type) return "INFERRED";
+  return lastKnownProduct && type === lastKnownProduct ? "INFERRED" : "USER";
+};
+
+const resolveSavedDeviceStoredName = (
+  name: string | null | undefined,
+  host: string,
+  nameSource?: SavedDevice["nameSource"],
+) => {
+  const normalizedHost = normalizeSavedDeviceHostInput(host);
+  const normalizedName = normalizeSavedDeviceUserName(name);
+  const resolvedSource = resolveSavedDeviceNameSource(normalizedName, normalizedHost, nameSource);
+  return {
+    name: resolvedSource === "USER" ? normalizedName : buildInferredSavedDeviceName(normalizedHost),
+    nameSource: resolvedSource,
+  };
+};
+
+const resolveSavedDeviceStoredType = (
+  type: string | null | undefined,
+  lastKnownProduct: ProductFamilyCode | null,
+  typeSource?: SavedDevice["typeSource"],
+) => {
+  const normalizedType = normalizeSavedDeviceType(type);
+  const resolvedSource = resolveSavedDeviceTypeSource(normalizedType, lastKnownProduct, typeSource);
+  return {
+    type: resolvedSource === "USER" ? normalizedType : normalizedType || lastKnownProduct || "",
+    typeSource: resolvedSource,
+  };
 };
 
 const parsePort = (value: string | null | undefined, fallback: number) => {
@@ -121,41 +171,8 @@ const parsePort = (value: string | null | undefined, fallback: number) => {
   return parsed;
 };
 
-const splitHostAndHttpPort = (deviceHost?: string | null) => {
-  const normalized = normalizeHostInput(deviceHost);
-
-  if (normalized.startsWith("[")) {
-    const closeBracketIndex = normalized.indexOf("]");
-    if (closeBracketIndex !== -1) {
-      const host = normalized.slice(0, closeBracketIndex + 1);
-      const rest = normalized.slice(closeBracketIndex + 1);
-      if (rest.startsWith(":")) {
-        const httpPort = parsePort(rest.slice(1), DEFAULT_HTTP_PORT);
-        return { host, httpPort };
-      }
-      return { host, httpPort: DEFAULT_HTTP_PORT };
-    }
-  }
-
-  const colonCount = (normalized.match(/:/g) ?? []).length;
-  if (colonCount === 1) {
-    const separatorIndex = normalized.lastIndexOf(":");
-    const maybePort = normalized.slice(separatorIndex + 1);
-    if (/^\d+$/.test(maybePort)) {
-      return {
-        host: normalized.slice(0, separatorIndex) || DEFAULT_DEVICE_HOST,
-        httpPort: parsePort(maybePort, DEFAULT_HTTP_PORT),
-      };
-    }
-  }
-
-  return { host: normalized, httpPort: DEFAULT_HTTP_PORT };
-};
-
-const stripHostPort = (deviceHost?: string | null) => splitHostAndHttpPort(deviceHost).host;
-
 const buildDeviceHost = (host: string, httpPort: number) => {
-  const normalizedHost = normalizeHostInput(host);
+  const normalizedHost = normalizeSavedDeviceHostInput(host);
   if (httpPort === DEFAULT_HTTP_PORT) return normalizedHost;
   const bracketed =
     normalizedHost.includes(":") && !normalizedHost.startsWith("[") ? `[${normalizedHost}]` : normalizedHost;
@@ -167,13 +184,13 @@ const createId = () =>
   `${Date.now().toString(36)}-${Math.round(Math.random() * 1e9).toString(36)}`;
 
 const isSavedDeviceCustomNamed = (device: SavedDevice) => {
-  const normalizedName = normalizeSavedDeviceName(device.name);
+  const normalizedName = normalizeSavedDeviceUserName(device.name);
   if (!normalizedName) return false;
-  return resolveSavedDeviceNameSource(normalizedName, device.host, device.nameSource) === "custom";
+  return resolveSavedDeviceNameSource(normalizedName, device.host, device.nameSource) === "USER";
 };
 
-const getSavedDeviceProductLabel = (device: SavedDevice, verified?: VerifiedSavedDeviceIdentity | null) =>
-  verified?.product ?? device.lastKnownProduct ?? "C64U";
+const getSavedDeviceStoredName = (device: SavedDevice) =>
+  resolveSavedDeviceStoredName(device.name, device.host, device.nameSource).name;
 
 const buildSavedDeviceLabelMap = (
   devices: SavedDevice[],
@@ -184,13 +201,13 @@ const buildSavedDeviceLabelMap = (
 
   devices.forEach((device) => {
     if (isSavedDeviceCustomNamed(device)) {
-      const label = normalizeSavedDeviceName(device.name);
+      const label = normalizeSavedDeviceUserName(device.name);
       labels.set(device.id, label);
       used.add(label.toLowerCase());
       return;
     }
 
-    const baseLabel = getSavedDeviceProductLabel(device, verifiedByDeviceId[device.id] ?? null);
+    const baseLabel = getSavedDeviceStoredName(device);
     let candidate = baseLabel;
     let suffix = 2;
     while (used.has(candidate.toLowerCase())) {
@@ -208,7 +225,7 @@ const resolveSavedDeviceLabel = (
   device: SavedDevice,
   devices: SavedDevice[],
   verifiedByDeviceId: Record<string, VerifiedSavedDeviceIdentity | null> = {},
-) => buildSavedDeviceLabelMap(devices, verifiedByDeviceId).get(device.id) ?? getSavedDeviceProductLabel(device);
+) => buildSavedDeviceLabelMap(devices, verifiedByDeviceId).get(device.id) ?? getSavedDeviceStoredName(device);
 
 const isPasswordFlagSet = () => {
   if (typeof localStorage === "undefined") return false;
@@ -233,22 +250,17 @@ const parseEnvelope = (raw: string | null): PersistedSavedDevicesEnvelope | null
       selectedDeviceId,
       devices: devices.map((device) => ({
         id: device.id,
-        host: normalizeHostInput(device.host),
-        name: (() => {
-          const host = normalizeHostInput(device.host);
-          const normalizedName = normalizeSavedDeviceName(typeof device.name === "string" ? device.name : "");
-          return resolveSavedDeviceNameSource(normalizedName, host, device.nameSource) === "custom"
-            ? normalizedName
-            : "";
-        })(),
-        nameSource: (() => {
-          const host = normalizeHostInput(device.host);
-          return resolveSavedDeviceNameSource(
-            normalizeSavedDeviceName(typeof device.name === "string" ? device.name : ""),
-            host,
-            device.nameSource,
-          );
-        })(),
+        host: normalizeSavedDeviceHostInput(device.host),
+        ...resolveSavedDeviceStoredName(
+          typeof device.name === "string" ? device.name : "",
+          device.host,
+          device.nameSource,
+        ),
+        ...resolveSavedDeviceStoredType(
+          typeof device.type === "string" ? device.type : device.lastKnownProduct,
+          device.lastKnownProduct ?? null,
+          device.typeSource,
+        ),
         httpPort: parsePort(String(device.httpPort ?? ""), DEFAULT_HTTP_PORT),
         ftpPort: parsePort(String(device.ftpPort ?? ""), DEFAULT_FTP_PORT),
         telnetPort: parsePort(String(device.telnetPort ?? ""), DEFAULT_TELNET_PORT),
@@ -292,12 +304,14 @@ const createLegacyDevice = (): SavedDevice => {
   const storedHost = typeof localStorage === "undefined" ? null : localStorage.getItem(LEGACY_DEVICE_HOST_KEY);
   const legacyBaseUrl = typeof localStorage === "undefined" ? null : localStorage.getItem(LEGACY_BASE_URL_KEY);
   const resolvedHost = storedHost || legacyBaseUrl || DEFAULT_DEVICE_HOST;
-  const { host, httpPort } = splitHostAndHttpPort(resolvedHost);
+  const { host, httpPort } = splitSavedDeviceHostAndHttpPort(resolvedHost);
   return {
     id: createId(),
-    name: "",
-    nameSource: "auto",
+    name: host,
+    nameSource: "INFERRED",
     host,
+    type: "",
+    typeSource: "INFERRED",
     httpPort,
     ftpPort: parsePort(
       typeof localStorage === "undefined" ? null : localStorage.getItem(LEGACY_FTP_PORT_KEY),
@@ -441,8 +455,8 @@ export const buildSavedDevicePrimaryLabel = (device: SavedDevice, verified?: Ver
 };
 
 export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string, name: string, host: string) => {
-  const normalizedHost = normalizeHostInput(host);
-  const normalizedName = normalizeSavedDeviceName(name);
+  const normalizedHost = normalizeSavedDeviceHostInput(host);
+  const normalizedName = normalizeSavedDeviceUserName(name);
   const currentLabels = buildSavedDeviceLabelMap(devices);
   const reservedVisibleLabel =
     normalizedName !== "" &&
@@ -452,18 +466,26 @@ export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string
         (currentLabels.get(device.id)?.trim().toLowerCase() ?? "") === normalizedName.toLowerCase(),
     );
   const existingDevice = devices.find((device) => device.id === deviceId) ?? null;
+  const nextNameSource = resolveSavedDeviceNameSource(
+    normalizedName,
+    normalizedHost,
+    normalizedName ? "USER" : "INFERRED",
+  );
+  const nextName = nextNameSource === "USER" ? normalizedName : buildInferredSavedDeviceName(normalizedHost);
   const candidateDevice: SavedDevice = existingDevice
     ? {
         ...existingDevice,
         host: normalizedHost,
-        name: normalizedName,
-        nameSource: normalizedName ? "custom" : "auto",
+        name: nextName,
+        nameSource: nextNameSource,
       }
     : {
         id: deviceId,
-        name: normalizedName,
-        nameSource: normalizedName ? "custom" : "auto",
+        name: nextName,
+        nameSource: nextNameSource,
         host: normalizedHost,
+        type: "",
+        typeSource: "INFERRED",
         httpPort: DEFAULT_HTTP_PORT,
         ftpPort: DEFAULT_FTP_PORT,
         telnetPort: DEFAULT_TELNET_PORT,
@@ -558,13 +580,16 @@ export const addSavedDevice = (
   draft: Omit<SavedDevice, "id" | "lastSuccessfulConnectionAt" | "lastUsedAt"> & { id?: string },
 ) => {
   return updateSnapshot((envelope) => {
-    const host = normalizeHostInput(draft.host);
-    const normalizedName = normalizeSavedDeviceName(draft.name);
+    const host = normalizeSavedDeviceHostInput(draft.host);
+    const nextName = resolveSavedDeviceStoredName(draft.name, host, draft.nameSource);
+    const nextType = resolveSavedDeviceStoredType(draft.type, draft.lastKnownProduct ?? null, draft.typeSource);
     const nextDevice: SavedDevice = {
       id: draft.id ?? createId(),
-      name: normalizedName,
-      nameSource: normalizedName ? "custom" : "auto",
+      name: nextName.name,
+      nameSource: nextName.nameSource,
       host,
+      type: nextType.type,
+      typeSource: nextType.typeSource,
       httpPort: draft.httpPort,
       ftpPort: draft.ftpPort,
       telnetPort: draft.telnetPort,
@@ -589,20 +614,40 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
     devices: envelope.devices.map((device) =>
       device.id === deviceId
         ? (() => {
-            const host = update.host ? normalizeHostInput(update.host) : device.host;
-            const normalizedName =
-              update.name === undefined ? normalizeSavedDeviceName(device.name) : normalizeSavedDeviceName(update.name);
+            const host = update.host ? normalizeSavedDeviceHostInput(update.host) : device.host;
+            const hostChanged = host !== device.host;
+            const nextName = resolveSavedDeviceStoredName(
+              update.name === undefined ? device.name : update.name,
+              host,
+              update.nameSource ?? device.nameSource,
+            );
+            const nextType = resolveSavedDeviceStoredType(
+              update.type === undefined ? device.type : update.type,
+              update.lastKnownProduct ?? device.lastKnownProduct ?? null,
+              update.typeSource ?? device.typeSource,
+            );
             return {
               ...device,
               ...update,
               host,
-              name: normalizedName,
-              nameSource:
-                update.name === undefined
-                  ? (device.nameSource ?? (normalizedName ? "custom" : "auto"))
-                  : normalizedName
-                    ? "custom"
-                    : "auto",
+              name: nextName.name,
+              nameSource: nextName.nameSource,
+              type: nextType.typeSource === "USER" ? nextType.type : hostChanged ? "" : nextType.type,
+              typeSource: nextType.typeSource,
+              lastKnownProduct:
+                nextType.typeSource === "USER"
+                  ? (update.lastKnownProduct ?? device.lastKnownProduct)
+                  : hostChanged
+                    ? null
+                    : (update.lastKnownProduct ?? device.lastKnownProduct),
+              lastKnownHostname:
+                hostChanged && nextType.typeSource !== "USER"
+                  ? null
+                  : (update.lastKnownHostname ?? device.lastKnownHostname),
+              lastKnownUniqueId:
+                hostChanged && nextType.typeSource !== "USER"
+                  ? null
+                  : (update.lastKnownUniqueId ?? device.lastKnownUniqueId),
             };
           })()
         : device,
@@ -619,12 +664,26 @@ export const updateSelectedSavedDeviceConnection = (update: {
     ...envelope,
     devices: envelope.devices.map((device) =>
       device.id === envelope.selectedDeviceId
-        ? {
-            ...device,
-            host: stripHostPort(update.deviceHost),
-            httpPort: update.httpPort ?? splitHostAndHttpPort(update.deviceHost).httpPort,
-            hasPassword: update.passwordPresent,
-          }
+        ? (() => {
+            const nextHost = stripSavedDeviceHttpPort(update.deviceHost);
+            const hostChanged = nextHost !== device.host;
+            const nextName = resolveSavedDeviceStoredName(device.name, nextHost, device.nameSource);
+            return {
+              ...device,
+              host: nextHost,
+              name: nextName.name,
+              nameSource: nextName.nameSource,
+              type: device.typeSource === "USER" ? device.type : hostChanged ? "" : device.type,
+              lastKnownProduct:
+                device.typeSource === "USER" ? device.lastKnownProduct : hostChanged ? null : device.lastKnownProduct,
+              lastKnownHostname:
+                device.typeSource === "USER" ? device.lastKnownHostname : hostChanged ? null : device.lastKnownHostname,
+              lastKnownUniqueId:
+                device.typeSource === "USER" ? device.lastKnownUniqueId : hostChanged ? null : device.lastKnownUniqueId,
+              httpPort: update.httpPort ?? splitSavedDeviceHostAndHttpPort(update.deviceHost).httpPort,
+              hasPassword: update.passwordPresent,
+            };
+          })()
         : device,
     ),
   }));
@@ -736,6 +795,12 @@ export const completeSavedDeviceVerification = (
     const mismatch = resolveMismatch(device, verifiedIdentity);
     const updatedDevice: SavedDevice = {
       ...device,
+      type: device.typeSource === "USER" ? device.type : (product ?? ""),
+      typeSource: resolveSavedDeviceTypeSource(
+        device.typeSource === "USER" ? (device.type ?? "") : (product ?? ""),
+        product,
+        device.typeSource,
+      ),
       lastKnownProduct: product,
       lastKnownHostname: verifiedIdentity.hostname,
       lastKnownUniqueId: verifiedIdentity.uniqueId,

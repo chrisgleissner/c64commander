@@ -1,3 +1,103 @@
+# 2026-04-27 Demo Mode Gating And Diagnostics Reachability
+
+## Classification
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- Demo mode is still implicitly available through a default-on automatic fallback path, so the app can enter demo without an explicit product decision.
+- Global diagnostics currently run against the active runtime backend, which means an implicit fallback to demo can make an unreachable real-device target appear healthy.
+- The fix must make demo activation explicit, feature-flagged, default-disabled, and unable to contaminate real-device diagnostics.
+
+## First Local Hypothesis
+
+- The controlling fault is in `src/lib/connection/connectionManager.ts`: failed discovery still consults `loadAutomaticDemoModeEnabled()` and transitions to `DEMO_ACTIVE`, while `src/lib/diagnostics/healthCheckEngine.ts` builds global probe runtime from the current API runtime snapshot, so a fallback to demo can produce a false-success health run for an unreachable real target.
+
+## Cheap Disconfirming Check
+
+- Verify `appSettings` still defaults the demo toggle to `true`, `connectionManager` still routes failed discovery into `transitionToDemoActive()`, and the settings UI still exposes the control as "Automatic Demo Mode" instead of an explicit demo-mode enablement.
+
+## Ordered Tasks
+
+1. Update `PLANS.md`, `WORKLOG.md`, and `AGENTS.md` before touching application code, and keep both records current through final validation.
+2. Add a dedicated demo-mode feature flag with a default-disabled registry state and expose it through the existing feature-flag plumbing.
+3. Replace the old automatic-demo preference with an explicit persisted demo-mode setting that is disabled by default, remains hidden or disabled when the feature flag is off, and reuses the existing settings/preferences infrastructure.
+4. Refactor connection-state decisions so demo mode is entered only when the feature flag allows it and the explicit user setting enables it, never as an implicit fallback from failed discovery, failed connection checks, or unreachable real devices.
+5. Keep demo and real-device execution paths separated so real diagnostics always probe the intended real target and demo-only behavior stays scoped to explicit demo mode.
+6. Harden diagnostics regressions around repeated runs and device changes so stale successful results cannot leak across targets or later unreachable runs.
+7. Add or update focused regression tests for demo defaults, feature-flag gating, explicit enable/disable behavior, unreachable real-device diagnostics, and cross-run target isolation.
+8. Run the required validation set for this code and UI change: focused tests first, then repo validation, coverage, Android build, and attached-device deployment.
+9. Deploy the newest APK to the attached Pixel 4 via adb, validate demo-mode and diagnostics behavior on-device, and record that evidence in `WORKLOG.md` before closing the task.
+10. Steering refinement: keep automatic demo fallback semantics intact behind `demo_mode_enabled` so the auto-demo setting remains default-off, hidden when the feature flag is off, and able to offer demo fallback only when the flag is enabled.
+11. Steering refinement: align the saved-device/default Telnet port with the live U64 Telnet endpoint so health-check TELNET probes and home-page Telnet action discovery use the correct default port without changing explicit user-configured ports.
+
+# 2026-04-27 Launch, Badge, Health, And Device Model Convergence
+
+## Classification
+
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- Cold start still shows a visual text mutation shortly before the launch overlay disappears, and the handoff into the app remains a hard switch instead of a coordinated crossfade.
+- The header connectivity badge does not reliably deliver the Android long-press gesture because the browser/native text-selection path can still win the gesture race.
+- Health checks can report overly optimistic probe results for unreachable targets, so success criteria need to be tightened at the transport and response-validation boundaries.
+- Saved-device editing still follows the older product-derived naming model instead of the required host-primary inferred-vs-user state model.
+
+## First Local Hypotheses
+
+- Launch flicker is caused by deferred Google Font injection in `src/main.tsx` while `StartupLaunchSequence` inherits the late-loading sans stack, and the abrupt transition persists because `StartupLaunchSequence` fades itself independently of the already-mounted app tree.
+- The Android long-press failure is local to `src/components/UnifiedHealthBadge.tsx`: unlike the diagnostics header trigger, it does not suppress the context menu or selection path on the badge element.
+- The saved-device inconsistency is rooted in `src/lib/savedDevices/store.ts`, which still derives automatic labels from product identity and only tracks `nameSource: auto|custom` without any `typeSource` or stale-type clearing on host changes.
+- The health-check false positives are likely in the target probe boundary rather than the top-level state machine, because the run coordinator already marks downstream probes `Skipped` when REST genuinely fails.
+
+## Cheap Disconfirming Checks
+
+- Verify `src/main.tsx` still injects fonts after the first paint and `src/components/StartupLaunchSequence.tsx` lacks any app-shell crossfade contract.
+- Compare `src/components/UnifiedHealthBadge.tsx` against the diagnostics dialog long-press trigger and confirm the badge lacks `onContextMenu` prevention and selection suppression.
+- Verify `buildSavedDevicePrimaryLabel()` in `src/lib/savedDevices/store.ts` still falls back to product codes instead of host-derived inferred names.
+- Verify the per-target health runner uses the passed host correctly and then tighten the strict response validation in the FTP and Telnet probe helpers if they can still resolve success from weak responses.
+
+## Ordered Tasks
+
+1. Open the execution record in `PLANS.md` and `WORKLOG.md`, record the leading hypotheses, and keep both files current until every validation step is complete.
+2. Fix the cold-start launch overlay so its copy remains visually stable from first paint through teardown, including removal of late font-driven mutation on the launch text.
+3. Replace the hard launch/app handoff with a deterministic GPU-friendly crossfade that does not extend startup beyond actual readiness.
+4. Fix the header connectivity badge so short tap opens diagnostics, long press opens the device switcher, and Android text selection/context menus never intercept the gesture.
+5. Tighten health-check success criteria for REST, FTP, and Telnet so unreachable or invalid targets fail deterministically without stale success leakage.
+6. Refactor the saved-device model to a host-primary inferred/user source model for name and type, migrate persisted data, clear stale inferred type on host changes, and update the settings/diagnostics editors accordingly.
+7. Add or update focused regression tests for launch behavior, badge gesture behavior, health-check failure handling, and saved-device migration/update rules.
+8. Run the smallest focused checks first, then the required repository validation set for this code change, including coverage and the relevant UI validation.
+9. Document manual verification steps and evidence in `WORKLOG.md`, and only close this task after every item above is verified.
+
+## Completion Status
+
+- `done` 1. Execution records were opened and kept current in `PLANS.md` and `WORKLOG.md`.
+- `done` 2. The launch overlay now uses a stable local font stack instead of inheriting the late-loading font path.
+- `done` 3. The app shell and launch overlay now hand off through a coordinated crossfade driven by `StartupLaunchCoordinator`.
+- `done` 4. The connectivity badge now suppresses selection/context-menu interception and preserves tap-versus-long-press behavior on Android.
+- `done` 5. Health checks now reject malformed FTP list payloads and unrecognized Telnet screens instead of treating them as successful probes.
+- `done` 6. Saved devices now follow the host-primary inferred-versus-user model for name and type, including migration, stale inferred-type clearing, and source-aware settings/diagnostics editing.
+- `done` 7. Focused regressions were added or updated for launch flow, badge gestures, health-check probe hardening, saved-device persistence rules, editor behavior, settings persistence, diagnostics presentation, and trace attribution.
+- `done` 8. Focused checks plus repository validation were completed: targeted Vitest suites, focused Playwright launch validation earlier in the pass, `npm run lint`, `npm run test`, `npm run build`, and `npm run test:coverage` with aggregate branch coverage confirmed at `91.95%`.
+- `done` 9. Final evidence is recorded in `WORKLOG.md`; no screenshot refresh was needed because repository documentation images did not become inaccurate.
+
+## Validation Evidence
+
+- Focused unit suites passed for launch, badge, saved-device store/editor/settings/diagnostics, health-check probe handling, FTP bridge validation, and trace attribution.
+- Focused Playwright launch validation passed earlier in this execution pass after rerunning against fresh build output.
+- Repository validation passed:
+  - `npm run lint`
+  - `npm run test`
+  - `npm run build`
+  - `npm run test:coverage`
+- Aggregate branch coverage from `coverage/lcov.info`: `91.95%` (`19630/21349`).
+
 # 2026-04-26 Perf Nightly Repair And Expansion
 
 ## Classification

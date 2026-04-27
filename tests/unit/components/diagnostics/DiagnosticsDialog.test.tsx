@@ -544,7 +544,7 @@ describe("DiagnosticsDialog", () => {
     vi.useRealTimers();
   });
 
-  it("shows the effective auto-generated device name in connection details while keeping the edit field blank", async () => {
+  it("shows the effective host-derived inferred name in connection details and in the edit field", async () => {
     setViewportWidth(600);
     const store = await import("@/lib/savedDevices/store");
     const snapshot = store.getSavedDevicesSnapshot();
@@ -586,11 +586,10 @@ describe("DiagnosticsDialog", () => {
 
     const connectionView = screen.getByTestId("connection-view-surface");
     expect(connectionView).toBeVisible();
-    expect(within(connectionView).getByText("U64-2")).toBeVisible();
     expect(within(connectionView).getAllByText("u64-secondary").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId("connection-view-edit"));
-    expect(screen.getByLabelText(/device name/i)).toHaveValue("");
+    expect(screen.getByLabelText(/device name/i)).toHaveValue("u64-secondary");
   });
 
   it("persists connection edits and retries the connection", async () => {

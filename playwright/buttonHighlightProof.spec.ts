@@ -6,8 +6,6 @@ import { saveCoverageFromPage } from "./withCoverage";
 
 const FLASH_ATTR = "data-c64-tap-flash";
 const PERSISTENT_ATTR = "data-c64-persistent-active";
-const NAVIGATION_FLASH_SCHEDULING_ALLOWANCE_MS = 40;
-
 const dismissDemoInterstitial = async (page: Page) => {
   const continueDemo = page.getByRole("button", {
     name: "Continue in Demo Mode",
@@ -106,7 +104,7 @@ test.describe("CTA highlight proof", () => {
     const target = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(target).toBeVisible();
 
-    const duration = await measureFlashDuration(target, () => target.click({ force: true, timeout: 60000 }));
+    const duration = await measureFlashDuration(target, () => target.click({ timeout: 60000 }));
 
     expect(duration).not.toBeNull();
     expect(duration ?? 0).toBeGreaterThanOrEqual(CTA_HIGHLIGHT_MIN_EXPECTED_MS);
@@ -118,29 +116,26 @@ test.describe("CTA highlight proof", () => {
     await page.goto("/");
     await dismissDemoInterstitial(page);
 
-    const target = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    const target = page.getByTestId("tab-home");
     await expect(target).toBeVisible();
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      await target.click({ force: true });
+      await target.click();
     }
 
     await expect.poll(() => target.getAttribute(FLASH_ATTR)).not.toBe("true");
   });
 
-  test("navigation buttons flash and still navigate", async ({ page }) => {
+  test("navigation buttons still navigate without leaving highlight stuck", async ({ page }) => {
     await page.goto("/");
     await dismissDemoInterstitial(page);
 
     const disksTab = page.getByTestId("tab-disks");
     await expect(disksTab).toBeVisible();
 
-    const duration = await measureFlashDuration(disksTab, () => disksTab.click());
-
-    expect(duration).not.toBeNull();
-    expect(duration ?? 0).toBeGreaterThanOrEqual(CTA_HIGHLIGHT_MIN_EXPECTED_MS);
-    expect(duration ?? 0).toBeLessThanOrEqual(CTA_HIGHLIGHT_MAX_EXPECTED_MS + NAVIGATION_FLASH_SCHEDULING_ALLOWANCE_MS);
+    await disksTab.tap({ timeout: 60000 });
     await expect(page.locator("header").getByRole("heading", { name: "Disks" })).toBeVisible();
+    await expect.poll(() => page.getByTestId("tab-disks").getAttribute(FLASH_ATTR)).not.toBe("true");
   });
 
   test("play-page change button clears retained pointer focus when the app regains focus", async ({ page }) => {

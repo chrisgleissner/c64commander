@@ -993,7 +993,7 @@ export function DiagnosticsDialog({
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
     null;
-  const selectedProductCode = selectedSavedDevice?.lastKnownProduct ?? "C64U";
+  const selectedProductCode = selectedSavedDevice?.type?.trim() || selectedSavedDevice?.lastKnownProduct || "Unknown";
   const showDeviceUi = shouldShowDiagnosticsDeviceUi(savedDevices);
 
   const allEntries = useMemo(() => {
@@ -1138,15 +1138,15 @@ export function DiagnosticsDialog({
       selectedSavedDevice
         ? buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host)
         : buildSavedDeviceEditorDraft(
-          {
-            name: healthState.connectedDeviceLabel ?? snapshot.host,
-            host: snapshot.host,
-            httpPort: snapshot.httpPort,
-            ftpPort: snapshot.ftpPort,
-            telnetPort: snapshot.telnetPort,
-          },
-          snapshot.host,
-        ),
+            {
+              name: healthState.connectedDeviceLabel ?? snapshot.host,
+              host: snapshot.host,
+              httpPort: snapshot.httpPort,
+              ftpPort: snapshot.ftpPort,
+              telnetPort: snapshot.telnetPort,
+            },
+            snapshot.host,
+          ),
     );
   }, [defaultEvidenceTypes, healthState.connectedDeviceLabel, open, selectedSavedDevice]);
 
@@ -1315,6 +1315,7 @@ export function DiagnosticsDialog({
     if (selectedSavedDevice) {
       updateSavedDevice(selectedSavedDevice.id, {
         name: connectionDraft.name,
+        nameSource: connectionDraft.nameSource,
         host: nextHost,
         httpPort: Number(connectionDraft.httpPort),
         ftpPort: Number(connectionDraft.ftpPort),
@@ -1446,7 +1447,7 @@ export function DiagnosticsDialog({
       <div
         className={cn(
           profile === "compact" &&
-          "sticky bottom-0 mt-1 border-t border-border bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/80",
+            "sticky bottom-0 mt-1 border-t border-border bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/80",
         )}
       >
         <button

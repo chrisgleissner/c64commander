@@ -151,7 +151,7 @@ const shouldReadSmokeConfigFromFilesystem = () => {
   if (typeof window !== "undefined" && (window as SmokeBootstrapWindow).__c64uReadSmokeConfigFromFilesystem === true) {
     return true;
   }
-  return false;
+  return true;
 };
 
 const readSmokeConfigFromStorage = (): SmokeConfig | null => {

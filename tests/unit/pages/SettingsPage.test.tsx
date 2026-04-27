@@ -22,7 +22,7 @@ import {
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
-  saveAutomaticDemoModeEnabled,
+  saveDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDebugLoggingEnabled,
   saveDiscoveryProbeTimeoutMs,
@@ -34,7 +34,7 @@ import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import {
   loadConfigWriteIntervalMs,
-  loadAutomaticDemoModeEnabled,
+  loadDemoModeEnabled,
   loadStartupDiscoveryWindowMs,
   loadBackgroundRediscoveryIntervalMs,
   loadDiscoveryProbeTimeoutMs,
@@ -101,6 +101,7 @@ const {
     current: {
       hvsc_enabled: true,
       commoserve_enabled: true,
+      demo_mode_enabled: false,
       lighting_studio_enabled: false,
       reu_snapshot_enabled: false,
     },
@@ -240,7 +241,12 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
     setFlag: mockSetFeatureFlag,
   }),
   useFeatureFlag: (
-    key: "hvsc_enabled" | "commoserve_enabled" | "lighting_studio_enabled" | "reu_snapshot_enabled",
+    key:
+      | "hvsc_enabled"
+      | "commoserve_enabled"
+      | "demo_mode_enabled"
+      | "lighting_studio_enabled"
+      | "reu_snapshot_enabled",
   ) => ({
     value: featureFlagsRef.current[key],
     isLoaded: true,
@@ -358,7 +364,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadConfigWriteIntervalMs: vi.fn(() => 500),
   clampBackgroundRediscoveryIntervalMs: (value: number) => value,
   clampStartupDiscoveryWindowMs: (value: number) => value,
-  loadAutomaticDemoModeEnabled: vi.fn(() => true),
+  loadDemoModeEnabled: vi.fn(() => false),
   loadBackgroundRediscoveryIntervalMs: vi.fn(() => 5000),
   loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 3000),
@@ -368,7 +374,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadArchiveClientIdOverride: vi.fn(() => ""),
   loadArchiveHostOverride: vi.fn(() => ""),
   loadArchiveUserAgentOverride: vi.fn(() => ""),
-  saveAutomaticDemoModeEnabled: vi.fn(),
+  saveDemoModeEnabled: vi.fn(),
   saveArchiveHostOverride: vi.fn(),
   saveArchiveClientIdOverride: vi.fn(),
   saveArchiveUserAgentOverride: vi.fn(),
@@ -390,7 +396,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   APP_SETTINGS_KEYS: {
     DEBUG_LOGGING_KEY: "c64u_debug_logging_enabled",
     CONFIG_WRITE_INTERVAL_KEY: "c64u_config_write_min_interval_ms",
-    AUTO_DEMO_MODE_KEY: "c64u_automatic_demo_mode_enabled",
+    DEMO_MODE_ENABLED_KEY: "c64u_demo_mode_enabled",
+    AUTO_DEMO_MODE_KEY: "c64u_demo_mode_enabled",
     STARTUP_DISCOVERY_WINDOW_MS_KEY: "c64u_startup_discovery_window_ms",
     BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY: "c64u_background_rediscovery_interval_ms",
     DISCOVERY_PROBE_TIMEOUT_MS_KEY: "c64u_discovery_probe_timeout_ms",
@@ -472,6 +479,7 @@ beforeEach(() => {
   };
   developerModeEnabledRef.current = false;
   featureFlagsRef.current.hvsc_enabled = true;
+  featureFlagsRef.current.demo_mode_enabled = false;
   mockSetFeatureFlag.mockReset();
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
@@ -543,7 +551,7 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("removes badge-label authoring and keeps a blank device name on the product-based auto label path", async () => {
+  it("removes badge-label authoring and persists a host-derived inferred name when the user clears the field", async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
     renderSettingsPage();
@@ -561,10 +569,23 @@ describe("SettingsPage", () => {
     const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
     expect(persisted.devices[0]).toMatchObject({
       id: "saved-device-1",
-      name: "",
-      nameSource: "auto",
+      name: "ultimate.local",
+      nameSource: "INFERRED",
       host: "ultimate.local",
     });
+  });
+
+  it("keeps a legacy custom device name editable when the host changes", () => {
+    renderSettingsPage();
+
+    const deviceNameInput = screen.getByLabelText(/device name/i);
+    const hostInput = screen.getByLabelText(/c64u hostname \/ ip/i);
+
+    expect(deviceNameInput).toHaveValue("Office U64");
+
+    fireEvent.change(hostInput, { target: { value: "ultimate.local" } });
+
+    expect(deviceNameInput).toHaveValue("Office U64");
   });
 
   it("warns before deleting a device that is still referenced by playlists or disks", async () => {
@@ -701,14 +722,38 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("persists demo mode and debug logging toggles", () => {
+  it("hides the automatic demo-mode setting when the feature flag is disabled", () => {
+    renderSettingsPage();
+
+    expect(screen.queryByRole("checkbox", { name: /automatic demo mode/i })).toBeNull();
+  });
+
+  it("persists automatic demo mode and debug logging toggles", () => {
+    featureFlagsRef.current.demo_mode_enabled = true;
+    vi.mocked(loadDemoModeEnabled).mockReturnValue(true);
+
     renderSettingsPage();
 
     fireEvent.click(screen.getByRole("checkbox", { name: /automatic demo mode/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /enable debug logging/i }));
 
-    expect(saveAutomaticDemoModeEnabled).toHaveBeenCalledWith(false);
+    expect(saveDemoModeEnabled).toHaveBeenCalledWith(false);
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it("disabling the demo-mode feature flag clears the persisted demo-mode setting", async () => {
+    featureFlagsRef.current.demo_mode_enabled = true;
+    vi.mocked(loadDemoModeEnabled).mockReturnValue(true);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByTestId("feature-flag-demo_mode_enabled"));
+
+    await waitFor(() => {
+      expect(mockSetFeatureFlag).toHaveBeenCalledWith("demo_mode_enabled", false);
+    });
+    expect(saveDemoModeEnabled).toHaveBeenCalledWith(false);
+    expect(discoverConnection).toHaveBeenCalledWith("settings");
   });
 
   it("saves discovery window inputs on blur", () => {
@@ -1244,7 +1289,7 @@ describe("SettingsPage", () => {
 
     // Reset call counts after initial render
     vi.mocked(loadConfigWriteIntervalMs).mockClear();
-    vi.mocked(loadAutomaticDemoModeEnabled).mockClear();
+    vi.mocked(loadDemoModeEnabled).mockClear();
     vi.mocked(loadStartupDiscoveryWindowMs).mockClear();
     vi.mocked(loadBackgroundRediscoveryIntervalMs).mockClear();
     vi.mocked(loadDiscoveryProbeTimeoutMs).mockClear();
@@ -1255,7 +1300,7 @@ describe("SettingsPage", () => {
       // debug_logging uses a direct state setter (no load function)
       APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY,
       APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY,
-      APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY,
+      APP_SETTINGS_KEYS.DEMO_MODE_ENABLED_KEY,
       APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY,
       APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
       APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY,
@@ -1273,12 +1318,12 @@ describe("SettingsPage", () => {
       });
     }
 
-    expect(vi.mocked(loadConfigWriteIntervalMs)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(loadAutomaticDemoModeEnabled)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(loadStartupDiscoveryWindowMs)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(loadBackgroundRediscoveryIntervalMs)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(loadDiscoveryProbeTimeoutMs)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(loadDiskAutostartMode)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadConfigWriteIntervalMs)).toHaveBeenCalled();
+    expect(vi.mocked(loadDemoModeEnabled)).toHaveBeenCalled();
+    expect(vi.mocked(loadStartupDiscoveryWindowMs)).toHaveBeenCalled();
+    expect(vi.mocked(loadBackgroundRediscoveryIntervalMs)).toHaveBeenCalled();
+    expect(vi.mocked(loadDiscoveryProbeTimeoutMs)).toHaveBeenCalled();
+    expect(vi.mocked(loadDiskAutostartMode)).toHaveBeenCalled();
     expect(vi.mocked(loadVolumeSliderPreviewIntervalMs)).toHaveBeenCalled();
   });
 

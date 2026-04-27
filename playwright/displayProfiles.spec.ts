@@ -614,7 +614,9 @@ test.describe("display profiles", () => {
         element.scrollIntoView({ block: "center", inline: "nearest" });
       });
       await expectLocatorWithinViewport(page, diagnosticsButton);
-      await diagnosticsButton.click({ force: true });
+      await diagnosticsButton.focus();
+      await expect(diagnosticsButton).toBeFocused();
+      await diagnosticsButton.press("Enter");
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
 

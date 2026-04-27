@@ -31,7 +31,7 @@ import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
 
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
-import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
+import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 const ensureWindow = () => {
@@ -191,6 +191,7 @@ vi.mock("@/lib/fuzz/fuzzMode", () => ({
 }));
 
 vi.mock("@/lib/smoke/smokeMode", () => ({
+  getSmokeConfig: vi.fn(() => undefined),
   isSmokeModeEnabled: vi.fn(() => false),
   isSmokeReadOnlyEnabled: vi.fn(() => true),
 }));
@@ -248,6 +249,7 @@ const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
 const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
+const getSmokeConfigMock = getSmokeConfig as unknown as ReturnType<typeof vi.fn>;
 const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
 const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
@@ -286,11 +288,13 @@ describe("c64api branches", () => {
     addLogMock.mockReset();
     fuzzEnabledMock.mockReset();
     fuzzSafeMock.mockReset();
+    getSmokeConfigMock.mockReset();
     smokeEnabledMock.mockReset();
     smokeReadOnlyMock.mockReset();
     fetchMock.mockReset();
     fuzzEnabledMock.mockReturnValue(false);
     fuzzSafeMock.mockReturnValue(true);
+    getSmokeConfigMock.mockReturnValue(undefined);
     smokeEnabledMock.mockReturnValue(false);
     smokeReadOnlyMock.mockReturnValue(true);
     deviceStateSnapshotMock.mockReturnValue({
@@ -796,7 +800,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -863,7 +867,7 @@ describe("c64api branches", () => {
       const controller = new AbortController();
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       // Let the first request fail, then abort before retry
       await Promise.resolve();
@@ -898,7 +902,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP in fetchWithTimeout when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -1061,7 +1065,7 @@ describe("c64api branches", () => {
   // #37: updateC64APIConfig smoke mode branch
   it("logs routing update in smoke mode", () => {
     smokeEnabledMock.mockReturnValue(true);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
 
     updateC64APIConfig("http://device", undefined, "device");
 
@@ -1652,7 +1656,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     const pending = api.getInfo({ timeoutMs: 1 } as any);
-    void pending.catch(() => {}); // suppress unhandled rejection
+    void pending.catch(() => { }); // suppress unhandled rejection
 
     await expect(pending).rejects.toThrow("Host unreachable");
     // Clean up the hanging promise to prevent memory leaks

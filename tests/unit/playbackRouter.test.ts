@@ -111,9 +111,13 @@ vi.mock("@/lib/disks/diskMount", () => ({
   resolveLocalDiskBlob: vi.fn(),
 }));
 
-vi.mock("@/lib/config/appSettings", () => ({
-  loadDiskAutostartMode: vi.fn().mockReturnValue("kernal"),
-}));
+vi.mock("@/lib/config/appSettings", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/config/appSettings")>("@/lib/config/appSettings");
+  return {
+    ...actual,
+    loadDiskAutostartMode: vi.fn().mockReturnValue("kernal"),
+  };
+});
 
 vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot: vi.fn(),

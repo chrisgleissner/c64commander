@@ -2,7 +2,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   MAX_SAVED_DEVICE_NAME_LENGTH,
-  sanitizeSavedDeviceNameInput,
+  applySavedDeviceDraftHostInput,
+  applySavedDeviceDraftNameInput,
   sanitizeSavedDevicePortInput,
   type SavedDeviceEditorDraft,
 } from "@/lib/savedDevices/deviceEditor";
@@ -33,14 +34,21 @@ export function SavedDeviceEditorFields({
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}-name`} className="text-sm">
-          Device name
-        </Label>
+        <div className="flex items-center gap-2">
+          <Label htmlFor={`${idPrefix}-name`} className="text-sm">
+            Device name
+          </Label>
+          {draft.nameSource === "INFERRED" ? (
+            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Auto
+            </span>
+          ) : null}
+        </div>
         <Input
           id={`${idPrefix}-name`}
           value={draft.name}
-          onChange={(event) => onChange({ ...draft, name: sanitizeSavedDeviceNameInput(event.target.value) })}
-          placeholder="Defaults to the detected device type"
+          onChange={(event) => onChange(applySavedDeviceDraftNameInput(draft, event.target.value))}
+          placeholder="Defaults to the current host"
           className="font-sans"
           maxLength={MAX_SAVED_DEVICE_NAME_LENGTH}
           aria-describedby={nameError ? `${idPrefix}-name-error` : `${idPrefix}-name-help`}
@@ -52,8 +60,7 @@ export function SavedDeviceEditorFields({
           </p>
         ) : (
           <p id={`${idPrefix}-name-help`} className="text-xs text-muted-foreground">
-            Leave blank to use the detected device type, with a suffix added automatically for duplicates. Max 10
-            characters.
+            Clear to follow the host. Max 10 characters.
           </p>
         )}
       </div>
@@ -65,7 +72,7 @@ export function SavedDeviceEditorFields({
         <Input
           id={`${idPrefix}-host`}
           value={draft.host}
-          onChange={(event) => onChange({ ...draft, host: event.target.value })}
+          onChange={(event) => onChange(applySavedDeviceDraftHostInput(draft, event.target.value))}
           onBlur={(event) => onHostBlur?.(event.target.value)}
           className="font-sans"
           aria-describedby={hostError ? `${idPrefix}-host-error` : hostHint ? `${idPrefix}-host-help` : undefined}

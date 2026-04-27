@@ -30,6 +30,7 @@ describe("featureFlags persistence and logging", () => {
     expect(ids).toEqual([
       "hvsc_enabled",
       "commoserve_enabled",
+      "demo_mode_enabled",
       "lighting_studio_enabled",
       "background_execution_enabled",
       "reu_snapshot_enabled",
@@ -43,6 +44,7 @@ describe("featureFlags persistence and logging", () => {
     expect(groupsById).toEqual({
       hvsc_enabled: "stable",
       commoserve_enabled: "stable",
+      demo_mode_enabled: "stable",
       lighting_studio_enabled: "experimental",
       background_execution_enabled: "experimental",
       reu_snapshot_enabled: "experimental",
@@ -102,6 +104,7 @@ describe("featureFlags persistence and logging", () => {
       isHvscEnabled({
         hvsc_enabled: false,
         commoserve_enabled: true,
+        demo_mode_enabled: false,
         lighting_studio_enabled: false,
         background_execution_enabled: true,
         reu_snapshot_enabled: false,
@@ -111,6 +114,7 @@ describe("featureFlags persistence and logging", () => {
       isHvscEnabled({
         hvsc_enabled: true,
         commoserve_enabled: true,
+        demo_mode_enabled: false,
         lighting_studio_enabled: false,
         background_execution_enabled: true,
         reu_snapshot_enabled: false,

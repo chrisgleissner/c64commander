@@ -62,6 +62,11 @@ export const variantConfig = {
         enabled: true,
         visible_to_user: true,
       },
+      demo_mode_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       hvsc_enabled: {
         developer_only: false,
         enabled: true,

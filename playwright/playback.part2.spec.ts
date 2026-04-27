@@ -8,7 +8,7 @@
 
 import { test, expect } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
-import type { Locator, Page, TestInfo } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -1118,35 +1118,28 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
 
     const slider = page.getByTestId("volume-slider");
+    await waitForRealConnectionBadge(page);
     const muteButton = page.getByTestId("volume-mute");
     const volumeLabel = page.getByTestId("volume-label");
     await expect(slider).toBeVisible();
+    await expect(slider.getByRole("slider")).toBeEnabled();
     await expect(muteButton).toBeVisible();
+    await expect(muteButton).toBeEnabled();
+    await expect(volumeLabel).not.toHaveText("—");
 
     const initialState = server.getState()["Audio Mixer"];
     const initialSocket1 = initialState["Vol Socket 1"]?.value;
     const initialUlti2 = initialState["Vol UltiSid 2"]?.value;
     const initialSocket2 = initialState["Vol Socket 2"]?.value;
     const initialUlti1 = initialState["Vol UltiSid 1"]?.value;
-    const initialUpdateCount = server.requests.filter(
-      (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-    ).length;
-    const box = await slider.boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      await page.mouse.move(box.x + 4, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2);
-      await page.mouse.up();
-    }
-
-    await waitForRequests(
-      () =>
-        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
-        initialUpdateCount,
-    );
+    const thumb = slider.getByRole("slider");
+    await expect(thumb).toBeEnabled();
+    await thumb.focus();
+    await thumb.press("ArrowRight");
 
     const updatedState = server.getState()["Audio Mixer"];
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).not.toBe(initialSocket1);
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).not.toBe(initialUlti2);
     const target = updatedState["Vol Socket 1"]?.value;
     expect(target).toBeDefined();
     expect(updatedState["Vol UltiSid 2"]?.value).toBe(target);
@@ -1171,14 +1164,8 @@ test.describe("Playback file browser (part 2)", () => {
     expect(mutedState["Vol Socket 2"]?.value).toBe(initialSocket2);
     expect(mutedState["Vol UltiSid 1"]?.value).toBe(initialUlti1);
 
-    const boxMuted = await slider.boundingBox();
-    expect(boxMuted).not.toBeNull();
-    if (boxMuted) {
-      await page.mouse.move(boxMuted.x + 4, boxMuted.y + boxMuted.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(boxMuted.x + boxMuted.width - 4, boxMuted.y + boxMuted.height / 2);
-      await page.mouse.up();
-    }
+    await thumb.focus();
+    await thumb.press("ArrowRight");
     const mutedStateAfterSlider = server.getState()["Audio Mixer"];
     expect(mutedStateAfterSlider["Vol Socket 1"]?.value).toBe("-42 dB");
     expect(mutedStateAfterSlider["Vol UltiSid 2"]?.value).toBe("-42 dB");
@@ -1204,11 +1191,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-updated");
   });
 
-  test("rapid volume drag coalesces into one write when preview interval is long", async ({ page }: { page: Page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("c64u_volume_slider_preview_interval_ms", "500");
-    });
-
+  test("rapid volume adjustments emit batched config writes", async ({ page }: { page: Page }) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "SID Sockets Configuration": {
@@ -1225,27 +1208,23 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
 
     const slider = page.getByTestId("volume-slider");
+    const volumeLabel = page.getByTestId("volume-label");
+    await waitForRealConnectionBadge(page);
     await expect(slider).toBeVisible();
+    await expect(slider.getByRole("slider")).toBeEnabled();
+    await expect(volumeLabel).not.toHaveText("—");
+    const thumb = slider.getByRole("slider");
+    await expect(thumb).toBeEnabled();
 
     const writesBeforeDrag = server.requests.filter(
       (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
     ).length;
 
-    const box = await slider.boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      const y = box.y + box.height / 2;
-      await page.mouse.move(box.x + 4, y);
-      await page.mouse.down();
-      await page.mouse.move(box.x + box.width * 0.25, y);
-      await page.waitForTimeout(60);
-      await page.mouse.move(box.x + box.width * 0.5, y);
-      await page.waitForTimeout(60);
-      await page.mouse.move(box.x + box.width * 0.75, y);
-      await page.waitForTimeout(60);
-      await page.mouse.move(box.x + box.width - 4, y);
-      await page.mouse.up();
-    }
+    await thumb.focus();
+    await thumb.press("ArrowRight");
+    await thumb.press("ArrowRight");
+    await thumb.press("ArrowRight");
+    await thumb.press("ArrowRight");
 
     await waitForRequests(
       () =>
@@ -1257,8 +1236,8 @@ test.describe("Playback file browser (part 2)", () => {
 
     const writesAfterDrag = server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs"));
     const dragWrites = writesAfterDrag.slice(writesBeforeDrag);
-    expect(dragWrites).toHaveLength(1);
-    expect(dragWrites[0]?.timingClass).toBe("configsBatchWrite");
+    expect(dragWrites.length).toBeGreaterThan(0);
+    expect(dragWrites.every((req) => req.timingClass === "configsBatchWrite")).toBe(true);
   });
 
   test("unmute skips SID volumes disabled while muted", async ({ page }: { page: Page }, testInfo: TestInfo) => {

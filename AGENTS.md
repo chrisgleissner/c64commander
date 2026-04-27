@@ -87,6 +87,16 @@ Run the smallest validation set that the change classification requires.
 - `CODE_CHANGE` requires targeted code validation.
 - `UI_CHANGE` requires targeted code validation plus the smallest honest UI validation and screenshot refresh only where needed.
 
+### Phase 5a - Deploy the latest APK before completion
+
+Before declaring any task complete, deploy the most recent built APK from `android/app/build/outputs/apk/` to the attached Pixel 4.
+
+- Prefer the adb-attached Pixel 4 with serial prefix `9B0` when it is present.
+- Attempt installation of the newest APK first.
+- If installation fails because an earlier installed copy blocks the update, uninstall the existing `uk.gleissner.c64commander` package from that Pixel 4 and retry the installation.
+- Launch the newly deployed build on that Pixel 4 and validate the user-visible behavior there for the touched feature area before closing the task.
+- Record the deployment and on-device validation result in the completion summary; do not claim the work is finished until this deploy-and-validate step has succeeded or a concrete hardware/adb blocker is documented.
+
 ### Phase 6 - Report precisely
 
 At completion, summarize:

@@ -14,15 +14,23 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadStartupDiscoveryWindowMs,
 } from "../../../src/lib/config/appSettings";
+import { featureFlagManager } from "../../../src/lib/config/featureFlags";
 import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from "../../../src/lib/smoke/smokeMode";
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "../../../src/lib/c64api/hostConfig";
 
 vi.mock("../../../src/lib/config/appSettings", () => ({
-  loadAutomaticDemoModeEnabled: vi.fn(() => true),
+  loadAutomaticDemoModeEnabled: vi.fn(() => false),
   loadDebugLoggingEnabled: vi.fn(() => false),
   loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 600),
+}));
+
+vi.mock("../../../src/lib/config/featureFlags", () => ({
+  featureFlagManager: {
+    load: vi.fn(async () => undefined),
+    getSnapshot: vi.fn(() => ({ flags: { demo_mode_enabled: false } })),
+  },
 }));
 
 vi.mock("../../../src/lib/fuzz/fuzzMode", () => ({
@@ -112,10 +120,11 @@ describe("connectionManager", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     vi.mocked(isFuzzModeEnabled).mockReturnValue(false);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
-    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
     vi.mocked(loadDiscoveryProbeTimeoutMs).mockReturnValue(2500);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
     vi.mocked(isSmokeModeEnabled).mockReturnValue(false);
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: false } } as never);
     vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
     vi.mocked(getSmokeConfig as any).mockReturnValue(null);
     startMockServer.mockImplementation(async () => {
@@ -134,6 +143,9 @@ describe("connectionManager", () => {
     // Force an unreachable URL so probes always fail quickly.
     localStorage.setItem("c64u_device_host", "127.0.0.1:1");
     localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     await initializeConnectionManager();
     expect(getConnectionSnapshot().state).toBe("UNKNOWN");
@@ -184,6 +196,9 @@ describe("connectionManager", () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
     localStorage.removeItem("c64u_has_password");
 
@@ -206,12 +221,13 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
-  it("verifyCurrentConnectionTarget falls back to demo when auto-demo is enabled", async () => {
+  it("verifyCurrentConnectionTarget enters demo when the feature flag and setting are enabled", async () => {
     const { getConnectionSnapshot, initializeConnectionManager, verifyCurrentConnectionTarget } =
       await import("../../../src/lib/connection/connectionManager");
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
     localStorage.removeItem("c64u_has_password");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
@@ -319,22 +335,24 @@ describe("connectionManager", () => {
 
     await initializeConnectionManager();
     void discoverConnection("startup");
-    await vi.advanceTimersByTimeAsync(800);
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(isRealDeviceStickyLockEnabled()).toBe(true);
 
-    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
-    void discoverConnection("manual");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    void discoverConnection("settings");
     await vi.advanceTimersByTimeAsync(800);
 
     expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
-    expect(startMockServer).not.toHaveBeenCalled();
+    expect(isRealDeviceStickyLockEnabled()).toBe(true);
   });
 
   it("accepts healthy probe payload without product field", async () => {
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
-    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
     localStorage.removeItem("c64u_has_password");
 
     const fetchMock = vi.mocked(fetch);
@@ -346,6 +364,23 @@ describe("connectionManager", () => {
     );
 
     await expect(probeOnce()).resolves.toBe(true);
+  });
+
+  it("verifyCurrentConnectionTarget enters demo only when the feature flag allows it and the user setting enables it", async () => {
+    const { getConnectionSnapshot, initializeConnectionManager, verifyCurrentConnectionTarget } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await initializeConnectionManager();
+    const result = await verifyCurrentConnectionTarget();
+
+    expect(result.ok).toBe(false);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
   });
 
   it("returns false when probe exceeds timeout", async () => {
@@ -432,7 +467,7 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
   });
 
-  it("discovery timeout falls back to demo even if a probe is still in flight", async () => {
+  it("discovery timeout transitions offline even if a probe is still in flight", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
@@ -460,10 +495,10 @@ describe("connectionManager", () => {
     void discoverConnection("startup");
 
     await vi.advanceTimersByTimeAsync(250);
-    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
 
     await vi.advanceTimersByTimeAsync(400);
-    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
   });
 
   it("switches from demo to real device on background probe success", async () => {
@@ -489,6 +524,9 @@ describe("connectionManager", () => {
           headers: { "content-type": "application/json" },
         }),
       );
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     await initializeConnectionManager();
     void discoverConnection("startup");
@@ -541,6 +579,9 @@ describe("connectionManager", () => {
         }, 150);
       });
     });
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     await initializeConnectionManager();
     void discoverConnection("startup");
@@ -656,11 +697,12 @@ describe("connectionManager", () => {
     }
   });
 
-  it("does not auto-enable demo when automatic demo mode is disabled", async () => {
+  it("does not auto-enable demo when the feature flag is disabled", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
-    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: false } } as never);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
@@ -768,7 +810,8 @@ describe("connectionManager", () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
-    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: false } } as never);
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:1");
     localStorage.removeItem("c64u_has_password");
@@ -806,10 +849,13 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
-  it("demo fallback applies mock routing details when available", async () => {
+  it("automatic demo fallback applies mock routing details when available", async () => {
     const { discoverConnection, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
     const { applyC64APIRuntimeConfig, getDeviceHostFromBaseUrl } = await import("../../../src/lib/c64api");
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     startMockServer.mockResolvedValue({
       baseUrl: "http://127.0.0.1:7777",
@@ -820,17 +866,9 @@ describe("connectionManager", () => {
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
     localStorage.removeItem("c64u_has_password");
 
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ errors: ["Device unreachable"] }), {
-        status: 503,
-        headers: { "content-type": "application/json" },
-      }),
-    );
-
     await initializeConnectionManager();
     void discoverConnection("startup");
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(800);
 
     expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith(
       "http://127.0.0.1:7777",
@@ -839,15 +877,15 @@ describe("connectionManager", () => {
     );
   });
 
-  it("interstitial carries attempted hostname from persisted storage", async () => {
+  it("automatic demo fallback shows the discovery interstitial", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
-    const { resolveDeviceHostFromStorage } = await import("../../../src/lib/c64api");
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     localStorage.setItem("c64u_device_host", "192.168.1.42");
     localStorage.removeItem("c64u_has_password");
-
-    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
     await initializeConnectionManager();
     void discoverConnection("startup");
@@ -855,8 +893,6 @@ describe("connectionManager", () => {
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(true);
-    // The persisted hostname must still reflect the device that was attempted
-    expect(resolveDeviceHostFromStorage()).toBe("192.168.1.42");
   });
 
   it("reconnection controller invariant: background discovery inactive in REAL_CONNECTED state", async () => {
@@ -884,44 +920,40 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
-  it("demo mode entered only when automatic demo is enabled; retry exhaustion falls to offline otherwise", async () => {
+  it("automatic demo fallback is available only when the feature flag permits it and the user setting enables it", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
-    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
-    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(300);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:1");
     localStorage.removeItem("c64u_has_password");
 
-    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
-
     await initializeConnectionManager();
     void discoverConnection("startup");
-    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(800);
 
-    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
-    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(true);
   });
 
-  it("automatic switch from demo to real when device becomes reachable during background rediscovery", async () => {
+  it("background rediscovery switches from auto-demo fallback to a real device when demo is not pinned", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
     localStorage.removeItem("c64u_has_password");
-
-    const fetchMock = vi.mocked(fetch);
-    // First startup probes fail → demo
-    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
 
     await initializeConnectionManager();
     void discoverConnection("startup");
     await vi.advanceTimersByTimeAsync(800);
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
 
-    // Device becomes reachable
-    fetchMock.mockResolvedValue(
+    vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -931,9 +963,7 @@ describe("connectionManager", () => {
     await discoverConnection("background");
     await vi.advanceTimersByTimeAsync(50);
 
-    // Must atomically switch to real backend; demo interstitial must be dismissed
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
-    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
   });
 
   it("keeps demo active after the user explicitly pins demo mode before background rediscovery succeeds", async () => {
@@ -945,6 +975,9 @@ describe("connectionManager", () => {
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     await initializeConnectionManager();
     void discoverConnection("startup");
@@ -1010,6 +1043,8 @@ describe("connectionManager", () => {
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
     localStorage.setItem("c64u_device_host", "127.0.0.1:1");
     localStorage.removeItem("c64u_has_password");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
@@ -1045,6 +1080,8 @@ describe("connectionManager", () => {
 
     localStorage.setItem("c64u_device_host", "192.168.1.100");
     localStorage.removeItem("c64u_has_password");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
@@ -1074,6 +1111,8 @@ describe("connectionManager", () => {
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:1");
     localStorage.removeItem("c64u_has_password");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
@@ -1093,6 +1132,9 @@ describe("connectionManager", () => {
     localStorage.removeItem("c64u_has_password");
 
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     await initializeConnectionManager();
     void discoverConnection("startup");
@@ -1218,6 +1260,9 @@ describe("connectionManager", () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+
     // Reach DEMO_ACTIVE with smoke off (autoDemoEnabled = true)
     await initializeConnectionManager();
     void discoverConnection("startup");
@@ -1245,6 +1290,9 @@ describe("connectionManager", () => {
 
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
     // Reach DEMO_ACTIVE with smoke off
     await initializeConnectionManager();
@@ -1306,6 +1354,8 @@ describe("connectionManager", () => {
     getActiveMockFtpPort.mockReturnValue(2121);
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:1");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =

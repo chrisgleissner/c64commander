@@ -227,6 +227,11 @@ test.describe("Settings connection management", () => {
   });
 
   test("automatic demo mode toggle is visible and persisted", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_demo_mode_enabled", "1");
+      localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+    });
+
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
@@ -239,15 +244,21 @@ test.describe("Settings connection management", () => {
     await expect(autoDemoToggle).not.toBeChecked();
     await snap(page, testInfo, "auto-demo-off");
 
-    const storedOff = await page.evaluate(() => localStorage.getItem("c64u_automatic_demo_mode_enabled"));
-    expect(storedOff).toBe("0");
+    const storedOff = await page.evaluate(() => ({
+      current: localStorage.getItem("c64u_demo_mode_enabled"),
+      legacy: localStorage.getItem("c64u_automatic_demo_mode_enabled"),
+    }));
+    expect(storedOff).toEqual({ current: "0", legacy: null });
 
     await autoDemoToggle.click();
     await expect(autoDemoToggle).toBeChecked();
     await snap(page, testInfo, "auto-demo-on");
 
-    const storedOn = await page.evaluate(() => localStorage.getItem("c64u_automatic_demo_mode_enabled"));
-    expect(storedOn).toBe("1");
+    const storedOn = await page.evaluate(() => ({
+      current: localStorage.getItem("c64u_demo_mode_enabled"),
+      legacy: localStorage.getItem("c64u_automatic_demo_mode_enabled"),
+    }));
+    expect(storedOn).toEqual({ current: "1", legacy: null });
   });
 
   test("settings sections appear in expected order", async ({ page }: { page: Page }, testInfo: TestInfo) => {

@@ -38,6 +38,7 @@ import {
   getSavedDeviceSwitchStatus,
   type DeviceSwitchStatus,
 } from "@/lib/savedDevices/store";
+import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
 
 const BADGE_LONG_PRESS_MS = 450;
@@ -374,15 +375,21 @@ export function UnifiedHealthBadge({ className }: Props) {
     setPickerOpen(true);
   }, [canSwitchDevices]);
 
-  const handlePointerDown = useCallback(() => {
-    if (!canSwitchDevices) return;
-    longPressHandledRef.current = false;
-    suppressClickRef.current = false;
-    clearLongPress();
-    longPressTimerRef.current = window.setTimeout(() => {
-      openSwitchPicker();
-    }, BADGE_LONG_PRESS_MS);
-  }, [canSwitchDevices, clearLongPress, openSwitchPicker]);
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (canSwitchDevices && event.pointerType === "touch") {
+        event.preventDefault();
+      }
+      if (!canSwitchDevices) return;
+      longPressHandledRef.current = false;
+      suppressClickRef.current = false;
+      clearLongPress();
+      longPressTimerRef.current = window.setTimeout(() => {
+        openSwitchPicker();
+      }, BADGE_LONG_PRESS_MS);
+    },
+    [canSwitchDevices, clearLongPress, openSwitchPicker],
+  );
 
   const handleClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     if (suppressClickRef.current || longPressHandledRef.current) {
@@ -391,6 +398,7 @@ export function UnifiedHealthBadge({ className }: Props) {
       longPressHandledRef.current = false;
       return;
     }
+    handlePointerButtonClick(event);
     requestDiagnosticsOpen("header");
   }, []);
 
@@ -449,20 +457,25 @@ export function UnifiedHealthBadge({ className }: Props) {
         onPointerUp={clearLongPress}
         onPointerLeave={clearLongPress}
         onPointerCancel={clearLongPress}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openSwitchPicker();
+        }}
         onClick={handleClick}
         className={cn(
-          "app-chrome-badge inline-flex shrink min-w-0 items-center overflow-hidden rounded-md bg-transparent px-0 py-0 min-h-[44px] touch-none",
+          "app-chrome-badge inline-flex shrink min-w-0 select-none items-center overflow-hidden rounded-md bg-transparent px-0 py-0 min-h-[44px] touch-none",
           profile === "compact" ? "max-w-[min(48vw,12rem)]" : "max-w-full",
           "text-foreground transition-opacity hover:opacity-90 active:opacity-80",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-0",
           className,
         )}
+        style={{ WebkitTouchCallout: "none" }}
       >
         <span
-          className="app-chrome-badge-surface inline-flex min-w-0 max-w-full items-center overflow-hidden rounded-md px-2 py-[0.3rem]"
+          className="app-chrome-badge-surface inline-flex min-w-0 max-w-full select-none items-center overflow-hidden rounded-md px-2 py-[0.3rem]"
           aria-hidden="true"
         >
-          <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
+          <span className="inline-flex min-w-0 max-w-full select-none items-center overflow-hidden whitespace-nowrap leading-none">
             <span
               className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
               data-overlay-critical="badge"
