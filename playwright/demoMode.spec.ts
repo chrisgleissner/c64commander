@@ -287,6 +287,7 @@ test.describe("Automatic Demo Mode", () => {
       (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = ["http://127.0.0.1:1"];
       localStorage.setItem("c64u_startup_discovery_window_ms", "600");
       localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+      localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
       localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
       localStorage.setItem("c64u_device_host", "127.0.0.1:1");
       localStorage.removeItem("c64u_password");
@@ -370,6 +371,7 @@ test.describe("Automatic Demo Mode", () => {
       (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [unreachableBaseUrl];
       localStorage.setItem("c64u_startup_discovery_window_ms", "1000");
       localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+      localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
       localStorage.setItem("c64u_device_host", "127.0.0.1:1");
       localStorage.removeItem("c64u_password");
       localStorage.removeItem("c64u_has_password");
@@ -408,6 +410,7 @@ test.describe("Automatic Demo Mode", () => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_startup_discovery_window_ms", "3000");
       localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+      localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
       localStorage.setItem("c64u_device_host", "127.0.0.1:1");
       sessionStorage.removeItem("c64u_demo_interstitial_shown");
       localStorage.removeItem("c64u_password");
