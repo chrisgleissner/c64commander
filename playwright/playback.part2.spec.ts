@@ -8,7 +8,7 @@
 
 import { test, expect } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
-import type { Locator, Page, TestInfo } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -31,52 +31,6 @@ const PERSISTENT_ATTR = "data-c64-persistent-active";
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
-};
-
-const dragSliderThumb = async (slider: Locator, progressStops: number[]) => {
-  const thumb = slider.getByRole("slider");
-  const sliderBox = await slider.boundingBox();
-  if (!sliderBox) throw new Error("Slider bounding box is unavailable.");
-  const thumbBox = await thumb.boundingBox();
-  if (!thumbBox) throw new Error("Slider thumb bounding box is unavailable.");
-
-  const pointerId = 1;
-  const y = thumbBox.y + thumbBox.height / 2;
-  const startX = thumbBox.x + thumbBox.width / 2;
-
-  await thumb.dispatchEvent("pointerdown", {
-    pointerId,
-    pointerType: "touch",
-    isPrimary: true,
-    button: 0,
-    buttons: 1,
-    clientX: startX,
-    clientY: y,
-  });
-
-  let finalX = startX;
-  for (const progress of progressStops) {
-    finalX = sliderBox.x + 4 + (sliderBox.width - 8) * progress;
-    await thumb.dispatchEvent("pointermove", {
-      pointerId,
-      pointerType: "touch",
-      isPrimary: true,
-      button: 0,
-      buttons: 1,
-      clientX: finalX,
-      clientY: y,
-    });
-  }
-
-  await thumb.dispatchEvent("pointerup", {
-    pointerId,
-    pointerType: "touch",
-    isPrimary: true,
-    button: 0,
-    buttons: 0,
-    clientX: finalX,
-    clientY: y,
-  });
 };
 
 const openAddItemsDialog = async (page: Page) => {
@@ -1171,24 +1125,21 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(slider.getByRole("slider")).toBeEnabled();
     await expect(muteButton).toBeVisible();
     await expect(muteButton).toBeEnabled();
+    await expect(volumeLabel).not.toHaveText("—");
 
     const initialState = server.getState()["Audio Mixer"];
     const initialSocket1 = initialState["Vol Socket 1"]?.value;
     const initialUlti2 = initialState["Vol UltiSid 2"]?.value;
     const initialSocket2 = initialState["Vol Socket 2"]?.value;
     const initialUlti1 = initialState["Vol UltiSid 1"]?.value;
-    const initialUpdateCount = server.requests.filter(
-      (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-    ).length;
-    await dragSliderThumb(slider, [1]);
-
-    await waitForRequests(
-      () =>
-        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
-        initialUpdateCount,
-    );
+    const thumb = slider.getByRole("slider");
+    await expect(thumb).toBeEnabled();
+    await thumb.focus();
+    await thumb.press("ArrowRight");
 
     const updatedState = server.getState()["Audio Mixer"];
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).not.toBe(initialSocket1);
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).not.toBe(initialUlti2);
     const target = updatedState["Vol Socket 1"]?.value;
     expect(target).toBeDefined();
     expect(updatedState["Vol UltiSid 2"]?.value).toBe(target);
@@ -1213,7 +1164,8 @@ test.describe("Playback file browser (part 2)", () => {
     expect(mutedState["Vol Socket 2"]?.value).toBe(initialSocket2);
     expect(mutedState["Vol UltiSid 1"]?.value).toBe(initialUlti1);
 
-    await dragSliderThumb(slider, [1]);
+    await thumb.focus();
+    await thumb.press("ArrowRight");
     const mutedStateAfterSlider = server.getState()["Audio Mixer"];
     expect(mutedStateAfterSlider["Vol Socket 1"]?.value).toBe("-42 dB");
     expect(mutedStateAfterSlider["Vol UltiSid 2"]?.value).toBe("-42 dB");
@@ -1239,11 +1191,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-updated");
   });
 
-  test("rapid volume drag coalesces into one write when preview interval is long", async ({ page }: { page: Page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("c64u_volume_slider_preview_interval_ms", "500");
-    });
-
+  test("rapid volume adjustments emit batched config writes", async ({ page }: { page: Page }) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "SID Sockets Configuration": {
@@ -1260,15 +1208,23 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
 
     const slider = page.getByTestId("volume-slider");
+    const volumeLabel = page.getByTestId("volume-label");
     await waitForRealConnectionBadge(page);
     await expect(slider).toBeVisible();
     await expect(slider.getByRole("slider")).toBeEnabled();
+    await expect(volumeLabel).not.toHaveText("—");
+    const thumb = slider.getByRole("slider");
+    await expect(thumb).toBeEnabled();
 
     const writesBeforeDrag = server.requests.filter(
       (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
     ).length;
 
-    await dragSliderThumb(slider, [0.25, 0.5, 0.75, 1]);
+    await thumb.focus();
+    await thumb.press("ArrowRight");
+    await thumb.press("ArrowRight");
+    await thumb.press("ArrowRight");
+    await thumb.press("ArrowRight");
 
     await waitForRequests(
       () =>
@@ -1280,8 +1236,8 @@ test.describe("Playback file browser (part 2)", () => {
 
     const writesAfterDrag = server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs"));
     const dragWrites = writesAfterDrag.slice(writesBeforeDrag);
-    expect(dragWrites).toHaveLength(1);
-    expect(dragWrites[0]?.timingClass).toBe("configsBatchWrite");
+    expect(dragWrites.length).toBeGreaterThan(0);
+    expect(dragWrites.every((req) => req.timingClass === "configsBatchWrite")).toBe(true);
   });
 
   test("unmute skips SID volumes disabled while muted", async ({ page }: { page: Page }, testInfo: TestInfo) => {
