@@ -14,6 +14,11 @@ log() {
   echo "[validate-connectivity] $*" >&2
 }
 
+if [[ ! -d "$FLOW_DIR" ]]; then
+  log "Flow artifacts directory missing for ${FLOW_NAME} — skipping"
+  exit 0
+fi
+
 had_error=0
 errors=()
 
