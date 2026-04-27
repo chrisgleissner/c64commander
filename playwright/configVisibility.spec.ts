@@ -65,6 +65,7 @@ test.describe("Config visibility across modes", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "300");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");
@@ -130,6 +131,7 @@ test.describe("Config visibility across modes", () => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "300");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");

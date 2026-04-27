@@ -186,14 +186,14 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             devices: [
               {
                 id: testDeviceId,
-                name: "",
-                nameSource: "auto",
+                name: "C64U",
+                nameSource: "custom",
                 host: deviceHost,
                 httpPort: deviceHttpPort,
                 ftpPort: seededFtpPort,
                 telnetPort: seededTelnetPort,
-                lastKnownProduct: null,
-                lastKnownHostname: null,
+                lastKnownProduct: "C64U",
+                lastKnownHostname: deviceHost,
                 lastKnownUniqueId: null,
                 lastSuccessfulConnectionAt: null,
                 lastUsedAt: null,
@@ -215,6 +215,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, "1");
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
+          localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
           localStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");
           localStorage.setItem("c64u_feature_flag:commoserve_enabled", "1");
           localStorage.setItem("c64u_feature_flag:lighting_studio_enabled", "1");

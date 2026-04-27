@@ -1,5 +1,42 @@
 # Demo Mode Gating And Diagnostics Reachability Worklog
 
+## [2026-04-27T13:19:02Z] DEMO-DIAG-003: corrected the saved-device Telnet default so live U64 health probes and Telnet discovery use port 23 again
+
+Action performed:
+
+- Appended steering item 11 to `PLANS.md` and executed it immediately.
+- Fixed the saved-device layer to use the shared Telnet default (`23`) instead of the stale local default (`64`) by wiring `src/lib/savedDevices/store.ts` and `src/lib/savedDevices/deviceEditor.ts` to `TELNET_DEFAULT_PORT`.
+- Added a regression in `tests/unit/lib/savedDevices/store.test.ts` that locks a fresh saved-device snapshot to `telnetPort: 23`.
+- Repaired the touched store file's missing host-split helper reference so the updated slice remains compile-clean.
+
+Why it was changed:
+
+- Both the home-page Telnet action discovery path (`useTelnetActions`) and the TELNET branch of the health-check engine read the stored selected-device Telnet port.
+- The saved-device model was still seeding fresh devices with `64`, which mismatched the live U64 Telnet endpoint that is reachable on `23`, causing false Telnet probe failures and `Telnet action discovery failed` on Home even though direct Telnet access to `u64` worked.
+
+Validation:
+
+- Focused regressions passed:
+  - `tests/unit/lib/savedDevices/store.test.ts`
+  - `tests/unit/telnetConfig.test.ts`
+  - `tests/unit/hooks/useSavedDeviceHealthChecks.test.tsx`
+  - `tests/unit/components/devices/SavedDeviceEditorFields.test.tsx`
+  - `tests/unit/pages/SettingsPage.test.tsx`
+  - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`
+  - `tests/unit/hooks/useTelnetActions.test.tsx`
+- Repository validation passed:
+  - `npm run build`
+  - `npm run lint`
+  - `npm run test:coverage`
+- Coverage gate remained green after the fix: branch coverage `91.97%` (`19687/21405`).
+- Live hardware checks:
+  - `curl -fsS http://u64/v1/info` succeeded; `c64u` remained unreachable, so `u64` was the chosen hardware target.
+  - Direct Telnet proof via the repository contract client against `u64:23` succeeded and returned title line `*** Ultimate 64 Elite (V1.4B) 3.14e *** Remote ***` with `screenType: file_browser`.
+- Android deployment:
+  - `npm run cap:build` succeeded.
+  - `./gradlew assembleDebug` succeeded after one Gradle daemon restart.
+  - `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` installed successfully on Pixel `9B081FFAZ001WX` and launched.
+
 ## [2026-04-27T12:06:10Z] DEMO-DIAG-002: restored auto-demo fallback behind the feature flag, closed the coverage gate, and validated the shipped Android build on Pixel
 
 Action performed:

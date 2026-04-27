@@ -33,6 +33,52 @@ const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
 };
 
+const dragSliderThumb = async (slider: Locator, progressStops: number[]) => {
+  const thumb = slider.getByRole("slider");
+  const sliderBox = await slider.boundingBox();
+  if (!sliderBox) throw new Error("Slider bounding box is unavailable.");
+  const thumbBox = await thumb.boundingBox();
+  if (!thumbBox) throw new Error("Slider thumb bounding box is unavailable.");
+
+  const pointerId = 1;
+  const y = thumbBox.y + thumbBox.height / 2;
+  const startX = thumbBox.x + thumbBox.width / 2;
+
+  await thumb.dispatchEvent("pointerdown", {
+    pointerId,
+    pointerType: "touch",
+    isPrimary: true,
+    button: 0,
+    buttons: 1,
+    clientX: startX,
+    clientY: y,
+  });
+
+  let finalX = startX;
+  for (const progress of progressStops) {
+    finalX = sliderBox.x + 4 + (sliderBox.width - 8) * progress;
+    await thumb.dispatchEvent("pointermove", {
+      pointerId,
+      pointerType: "touch",
+      isPrimary: true,
+      button: 0,
+      buttons: 1,
+      clientX: finalX,
+      clientY: y,
+    });
+  }
+
+  await thumb.dispatchEvent("pointerup", {
+    pointerId,
+    pointerType: "touch",
+    isPrimary: true,
+    button: 0,
+    buttons: 0,
+    clientX: finalX,
+    clientY: y,
+  });
+};
+
 const openAddItemsDialog = async (page: Page) => {
   const addButton = page.getByRole("button", {
     name: /Add items|Add more items/i,
@@ -1118,10 +1164,13 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
 
     const slider = page.getByTestId("volume-slider");
+    await waitForRealConnectionBadge(page);
     const muteButton = page.getByTestId("volume-mute");
     const volumeLabel = page.getByTestId("volume-label");
     await expect(slider).toBeVisible();
+    await expect(slider.getByRole("slider")).toBeEnabled();
     await expect(muteButton).toBeVisible();
+    await expect(muteButton).toBeEnabled();
 
     const initialState = server.getState()["Audio Mixer"];
     const initialSocket1 = initialState["Vol Socket 1"]?.value;
@@ -1131,14 +1180,7 @@ test.describe("Playback file browser (part 2)", () => {
     const initialUpdateCount = server.requests.filter(
       (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
     ).length;
-    const box = await slider.boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      await page.mouse.move(box.x + 4, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2);
-      await page.mouse.up();
-    }
+    await dragSliderThumb(slider, [1]);
 
     await waitForRequests(
       () =>
@@ -1171,14 +1213,7 @@ test.describe("Playback file browser (part 2)", () => {
     expect(mutedState["Vol Socket 2"]?.value).toBe(initialSocket2);
     expect(mutedState["Vol UltiSid 1"]?.value).toBe(initialUlti1);
 
-    const boxMuted = await slider.boundingBox();
-    expect(boxMuted).not.toBeNull();
-    if (boxMuted) {
-      await page.mouse.move(boxMuted.x + 4, boxMuted.y + boxMuted.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(boxMuted.x + boxMuted.width - 4, boxMuted.y + boxMuted.height / 2);
-      await page.mouse.up();
-    }
+    await dragSliderThumb(slider, [1]);
     const mutedStateAfterSlider = server.getState()["Audio Mixer"];
     expect(mutedStateAfterSlider["Vol Socket 1"]?.value).toBe("-42 dB");
     expect(mutedStateAfterSlider["Vol UltiSid 2"]?.value).toBe("-42 dB");
@@ -1225,27 +1260,15 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
 
     const slider = page.getByTestId("volume-slider");
+    await waitForRealConnectionBadge(page);
     await expect(slider).toBeVisible();
+    await expect(slider.getByRole("slider")).toBeEnabled();
 
     const writesBeforeDrag = server.requests.filter(
       (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
     ).length;
 
-    const box = await slider.boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      const y = box.y + box.height / 2;
-      await page.mouse.move(box.x + 4, y);
-      await page.mouse.down();
-      await page.mouse.move(box.x + box.width * 0.25, y);
-      await page.waitForTimeout(60);
-      await page.mouse.move(box.x + box.width * 0.5, y);
-      await page.waitForTimeout(60);
-      await page.mouse.move(box.x + box.width * 0.75, y);
-      await page.waitForTimeout(60);
-      await page.mouse.move(box.x + box.width - 4, y);
-      await page.mouse.up();
-    }
+    await dragSliderThumb(slider, [0.25, 0.5, 0.75, 1]);
 
     await waitForRequests(
       () =>
