@@ -122,28 +122,41 @@ const findScrollUntilVisibleStep = (
   steps: JsonValue,
   selector: { id?: string; text?: string },
 ): JsonValue | undefined => {
-  if (!Array.isArray(steps)) {
+  if (Array.isArray(steps)) {
+    for (const step of steps) {
+      const match = findScrollUntilVisibleStep(step, selector);
+      if (match) {
+        return match;
+      }
+    }
+
     return undefined;
   }
 
-  return steps.find((step) => {
-    if (!step || typeof step !== "object" || Array.isArray(step)) {
-      return false;
-    }
+  if (!steps || typeof steps !== "object") {
+    return undefined;
+  }
 
-    const scrollUntilVisible = (step as Record<string, JsonValue>).scrollUntilVisible;
-    if (!scrollUntilVisible || typeof scrollUntilVisible !== "object" || Array.isArray(scrollUntilVisible)) {
-      return false;
-    }
-
+  const stepRecord = steps as Record<string, JsonValue>;
+  const scrollUntilVisible = stepRecord.scrollUntilVisible;
+  if (scrollUntilVisible && typeof scrollUntilVisible === "object" && !Array.isArray(scrollUntilVisible)) {
     const element = (scrollUntilVisible as Record<string, JsonValue>).element;
-    if (!element || typeof element !== "object" || Array.isArray(element)) {
-      return false;
+    if (element && typeof element === "object" && !Array.isArray(element)) {
+      const elementSelector = element as Record<string, JsonValue>;
+      if (Object.entries(selector).every(([key, value]) => elementSelector[key] === value)) {
+        return steps;
+      }
     }
+  }
 
-    const elementSelector = element as Record<string, JsonValue>;
-    return Object.entries(selector).every(([key, value]) => elementSelector[key] === value);
-  });
+  for (const value of Object.values(stepRecord)) {
+    const match = findScrollUntilVisibleStep(value, selector);
+    if (match) {
+      return match;
+    }
+  }
+
+  return undefined;
 };
 
 describe("Maestro flow contracts", () => {
@@ -211,8 +224,11 @@ describe("Maestro flow contracts", () => {
       expect(rawSource).toContain("duration: 400");
       expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).not.toContain('text: "Stable Features"');
-      expect(rawSource).not.toContain("retry:");
     }
+
+    expect(smokeHvsc).toContain("retry:");
+    expect(smokeHvsc).toContain("maxRetries: 3");
+    expect(smokeHvscLowRam).not.toContain("retry:");
 
     for (const rawSource of [smokeHvsc, smokeHvscLowRam, edgeConfigPersistence]) {
       expect(rawSource).not.toContain('point: "75%,95%"');
