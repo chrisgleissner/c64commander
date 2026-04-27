@@ -680,7 +680,7 @@ export const updateSelectedSavedDeviceConnection = (update: {
               device.typeSource === "USER" ? device.lastKnownHostname : hostChanged ? null : device.lastKnownHostname,
             lastKnownUniqueId:
               device.typeSource === "USER" ? device.lastKnownUniqueId : hostChanged ? null : device.lastKnownUniqueId,
-            httpPort: update.httpPort ?? splitHostAndHttpPort(update.deviceHost).httpPort,
+            httpPort: update.httpPort ?? splitSavedDeviceHostAndHttpPort(update.deviceHost).httpPort,
             hasPassword: update.passwordPresent,
           };
         })()
