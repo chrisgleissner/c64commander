@@ -32,6 +32,7 @@
 8. Run the required validation set for this code and UI change: focused tests first, then repo validation, coverage, Android build, and attached-device deployment.
 9. Deploy the newest APK to the attached Pixel 4 via adb, validate demo-mode and diagnostics behavior on-device, and record that evidence in `WORKLOG.md` before closing the task.
 10. Steering refinement: keep automatic demo fallback semantics intact behind `demo_mode_enabled` so the auto-demo setting remains default-off, hidden when the feature flag is off, and able to offer demo fallback only when the flag is enabled.
+11. Steering refinement: align the saved-device/default Telnet port with the live U64 Telnet endpoint so health-check TELNET probes and home-page Telnet action discovery use the correct default port without changing explicit user-configured ports.
 
 # 2026-04-27 Launch, Badge, Health, And Device Model Convergence
 

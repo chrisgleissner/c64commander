@@ -8,6 +8,7 @@
 
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
+import { TELNET_DEFAULT_PORT as DEFAULT_TELNET_PORT } from "@/lib/telnet/telnetTypes";
 import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
 
 export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
@@ -89,7 +90,6 @@ const LEGACY_HAS_PASSWORD_KEY = "c64u_has_password";
 const DEFAULT_DEVICE_HOST = "c64u";
 const DEFAULT_HTTP_PORT = 80;
 const DEFAULT_FTP_PORT = 21;
-const DEFAULT_TELNET_PORT = 64;
 const SUMMARY_NON_SELECTED_LIMIT = 3;
 
 const listeners = new Set<() => void>();

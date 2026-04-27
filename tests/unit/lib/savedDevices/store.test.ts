@@ -73,6 +73,18 @@ describe("savedDevices store", () => {
     );
   });
 
+  it("uses the Telnet default port for a fresh saved device", async () => {
+    const store = await loadStore();
+
+    const initialSnapshot = store.getSavedDevicesSnapshot();
+
+    expect(initialSnapshot.devices).toHaveLength(1);
+    expect(initialSnapshot.devices[0]).toMatchObject({
+      host: "c64u",
+      telnetPort: 23,
+    });
+  });
+
   it("derives product-based auto names and enforces unique final labels", async () => {
     const store = await loadStore();
     const officeDevice = {

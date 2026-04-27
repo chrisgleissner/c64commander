@@ -1,4 +1,5 @@
 import type { SavedDevice, SavedDeviceFieldSource } from "@/lib/savedDevices/store";
+import { TELNET_DEFAULT_PORT } from "@/lib/telnet/telnetTypes";
 
 export const MAX_SAVED_DEVICE_NAME_LENGTH = 10;
 
@@ -64,7 +65,7 @@ export const buildSavedDeviceEditorDraft = (
     typeSource,
     httpPort: String(device?.httpPort ?? 80),
     ftpPort: String(device?.ftpPort ?? 21),
-    telnetPort: String(device?.telnetPort ?? 64),
+    telnetPort: String(device?.telnetPort ?? TELNET_DEFAULT_PORT),
   };
 };
 
