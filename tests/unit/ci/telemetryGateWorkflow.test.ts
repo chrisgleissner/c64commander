@@ -28,7 +28,7 @@ describe("telemetry release gate workflow rules", () => {
     const workflow = readWorkflow("android.yaml");
     expect(workflow).toContain(
       "if: startsWith(github.ref, 'refs/tags/')\n" +
-        "    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]",
+      "    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]",
     );
     const signedTagReleaseCondition = "if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'";
     const stableTagPlayCondition =
