@@ -51,6 +51,7 @@
 8. Build the Android app, deploy the newest APK to the attached Pixel 4, validate the touched behavior on-device, and record the result.
 9. Prove stability with at least `3` consecutive clean validation passes over the retained CI-relevant checks.
 10. Finish with a change audit table in `PLANS.md`/`WORKLOG.md` that justifies every remaining file in the minimal patch.
+11. Steering refinement: repair tagged Android release publishing so RC tags also build and attach signed APK/AAB assets to GitHub releases, and keep the skipped release-attachment job name static so GitHub Actions does not show raw `matrix.variant` syntax in the UI.
 
 ## Completion Status
 

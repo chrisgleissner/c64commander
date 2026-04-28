@@ -1519,21 +1519,21 @@ jobs:
           echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Build APK (release)
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: cd android && ./gradlew assembleRelease
 
       - name: Build App Bundle (release)
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: cd android && ./gradlew bundleRelease
 
       - name: Rename release APK for publishing
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: |
           mv android/app/build/outputs/apk/release/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}.apk \
              android/app/build/outputs/apk/release/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android.apk
 
       - name: Upload APK artifact (release)
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-apk
@@ -1541,13 +1541,13 @@ jobs:
             android/app/build/outputs/apk/release/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-android.apk
 
       - name: Rename AAB for publishing
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: |
           mv android/app/build/outputs/bundle/release/app-release.aab \
              android/app/build/outputs/bundle/release/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android-play.aab
 
       - name: Upload AAB artifact (release)
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-aab
@@ -1581,9 +1581,9 @@ jobs:
           fi
 
   release-artifacts:
-    name: Release | Attach APK/AAB (${{ matrix.variant }})
+    name: Release | Attach Android artifacts
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]
     strategy:
       fail-fast: false
@@ -1656,21 +1656,21 @@ jobs:
           fi
 
       - name: Download release APK artifact
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/download-artifact@v4
         with:
           name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-apk
           path: artifacts/release-apk
 
       - name: Download release AAB artifact
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/download-artifact@v4
         with:
           name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-aab
           path: artifacts/release-aab
 
       - name: Validate release artifact filenames
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: |
           set -euo pipefail
           test -f "artifacts/release-apk/${VARIANT_ARTIFACT_BASENAME}-${APP_VERSION}-android.apk"
@@ -1678,7 +1678,7 @@ jobs:
           ! find artifacts -type f | grep -Ei '(debug|unsigned|altstore|app-release\.aab)'
 
       - name: Ensure GitHub release exists
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1688,14 +1688,19 @@ jobs:
             echo "Release already exists for $TAG"
           else
             if [[ "$TAG" == *-rc* ]]; then
-              gh release create "$TAG" --target "$GITHUB_SHA" --verify-tag --prerelease --generate-notes
+              if ! gh release create "$TAG" --target "$GITHUB_SHA" --verify-tag --prerelease --generate-notes; then
+                gh release view "$TAG" >/dev/null 2>&1
+                gh release edit "$TAG" --prerelease
+              fi
             else
-              gh release create "$TAG" --target "$GITHUB_SHA" --verify-tag --generate-notes
+              if ! gh release create "$TAG" --target "$GITHUB_SHA" --verify-tag --generate-notes; then
+                gh release view "$TAG" >/dev/null 2>&1
+              fi
             fi
           fi
 
       - name: Upload release artifacts to GitHub release
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1706,7 +1711,7 @@ jobs:
             --clobber
 
       - name: Verify Android release assets are attached
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
