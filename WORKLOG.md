@@ -30,6 +30,58 @@ Next action:
 
 - Remove the obviously unproven files first, then run the smallest focused validation slice to see which reverted changes actually reintroduce a concrete CI failure.
 
+## [2026-04-28T07:30:00Z] PR243-AUDIT-002: removed the unproven branch slice and proved the retained Playwright fixes under repeated focused validation
+
+Action performed:
+
+- Reverted the unproven branch changes in `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, `.maestro/smoke-hvsc.yaml`, `scripts/ci/validate-ios-connectivity.sh`, `scripts/run-maestro-gating.sh`, `tests/unit/maestro/maestroFlowContracts.test.ts`, `tests/unit/scripts/ciWorkflowRegression.test.ts`, `tests/unit/scripts/maestroGatingScript.test.ts`, and `tests/unit/scripts/validateIosConnectivity.test.ts`.
+- Kept only the two directly evidenced Playwright files in the effective functional patch: `playwright/playback.spec.ts` and `playwright/launchSequence.spec.ts`.
+- Tightened `playwright/launchSequence.spec.ts` beyond the original branch fix after focused validation showed the compact-mode test could legitimately skip from hold into completion without exposing a sampled `fade-out` phase.
+
+Why it was changed:
+
+- The retained playback and launch files were the only functional diffs with a direct causal line to recorded CI failures from inspected branch runs.
+- The remaining workflow, shell, Maestro, and supporting test changes either had no proven link to a specific failure mode or only defended other unproven changes, which violated the reduction rule for this task.
+
+Validation result:
+
+- Focused Playwright validation passed for `3` consecutive runs on the retained CI slice:
+  - `rapid play/stop/play sequences remain stable`
+  - `keeps compact launch fade-out smooth when runtime motion remains standard`
+- The repeated launch validation confirmed that the compact-mode test now accepts both sampled fade-out and already-finished teardown, which matches the real timing behavior seen in CI.
+
+Next action:
+
+- Run the full repository validation set, verify coverage, then complete the required Android deployment closeout on the attached Pixel 4.
+
+## [2026-04-28T08:20:00Z] PR243-AUDIT-003: completed repository validation, removed the last stray branch-only diff, and finished Android device deployment
+
+Action performed:
+
+- Ran the required repository validation for the reduced patch: `npm run lint`, `npm run test`, `npm run build`, and `npm run test:coverage`.
+- Confirmed the merged coverage run stayed above the repo gate at branch coverage `91.96%` (`19688/21408`).
+- Inspected the remaining effective diff versus `main` and found one extra file still present: `tests/unit/c64api.branches.test.ts`.
+- Reverted that file's formatting-only drift back to the `main` form because it had no behavioral impact and no causal tie to an observed CI failure.
+- Synced the Android project with `npm run cap:build`, assembled the debug APK with `cd android && ./gradlew assembleDebug`, installed `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` on Pixel `9B081FFAZ001WX`, and launched `uk.gleissner.c64commander/.MainActivity` successfully.
+
+Validation result:
+
+- Repository validation passed:
+  - `npm run lint`
+  - `npm run test`
+  - `npm run build`
+  - `npm run test:coverage`
+- Aggregate coverage result: `Statements 94.27%`, `Branches 91.96%`, `Functions 90.32%`, `Lines 94.27%`.
+- `tests/unit/c64api.branches.test.ts` reported no remaining errors after the formatting-only revert.
+- Android deployment closeout passed:
+  - attached device detected as `9B081FFAZ001WX`
+  - streamed install succeeded
+  - activity launch succeeded with `Starting: Intent { cmp=uk.gleissner.c64commander/.MainActivity }`
+
+Closing note:
+
+- The effective reduced patch is now limited to the two evidenced Playwright fixes plus the user-mandated audit records in `PLANS.md` and `WORKLOG.md`. No workflow, Maestro, shell, iOS, or unrelated test changes remain justified for this branch.
+
 # Demo Mode Gating And Diagnostics Reachability Worklog
 
 ## [2026-04-27T13:19:02Z] DEMO-DIAG-003: corrected the saved-device Telnet default so live U64 health probes and Telnet discovery use port 23 again

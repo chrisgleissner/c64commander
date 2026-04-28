@@ -52,6 +52,60 @@
 9. Prove stability with at least `3` consecutive clean validation passes over the retained CI-relevant checks.
 10. Finish with a change audit table in `PLANS.md`/`WORKLOG.md` that justifies every remaining file in the minimal patch.
 
+## Completion Status
+
+- `done` 1. `PLANS.md` and `WORKLOG.md` were kept current through the reduction audit.
+- `done` 2. Every file from the original `main...HEAD` branch diff was classified against an observed CI failure mode and either retained with evidence or removed locally.
+- `done` 3. Unproven workflow, iOS, Maestro-flow, shell-script, and branch-only test changes were removed from the effective patch.
+- `done` 4. The first reduction pass was followed immediately by focused validation on the touched slice.
+- `done` 5. The retained launch-spec fix was narrowed further after focused validation exposed an additional local timing gap in compact mode.
+- `done` 6. Repository validation passed for the reduced patch: `npm run lint`, `npm run test`, `npm run build`, and `npm run test:coverage`.
+- `done` 7. Coverage and feature scope were preserved: aggregate branch coverage remained above the repo gate at `91.96%` (`19688/21408`).
+- `done` 8. The current Android debug build was synced, assembled, installed on Pixel `9B081FFAZ001WX`, and launched successfully.
+- `done` 9. The retained CI-relevant checks passed in `3` consecutive focused Playwright validation runs.
+- `done` 10. The final audit table below justifies the remaining effective patch.
+
+## Validation Evidence
+
+- Focused reduction proof passed for `3` consecutive runs on the retained CI slice:
+  - `playwright/playback.spec.ts` `rapid play/stop/play sequences remain stable`
+  - `playwright/launchSequence.spec.ts` `keeps compact launch fade-out smooth when runtime motion remains standard`
+- Repository validation passed:
+  - `npm run lint`
+  - `npm run test`
+  - `npm run build`
+  - `npm run test:coverage`
+- Aggregate branch coverage from the merged coverage run: `91.96%` (`19688/21408`).
+- Android closeout passed:
+  - `npm run cap:build`
+  - `cd android && ./gradlew assembleDebug`
+  - installed `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` on Pixel `9B081FFAZ001WX`
+  - launched `uk.gleissner.c64commander/.MainActivity` successfully
+
+## Final Change Audit
+
+| File                                                 | Disposition | Proven failure link                           | Evidence and rationale                                                                                                                                                                                                                       |
+| ---------------------------------------------------- | ----------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/android.yaml`                     | `REMOVE`    | none proven                                   | Branch deleted `Install APK and prime telemetry`, but the observed zero-sample Android failure did not prove that deletion as the root cause. Local rollback was retained.                                                                   |
+| `.github/workflows/ios.yaml`                         | `REMOVE`    | none proven                                   | No inspected branch run tied the iOS workflow edits to a recorded CI failure mode.                                                                                                                                                           |
+| `.maestro/smoke-hvsc.yaml`                           | `REMOVE`    | none proven                                   | The added `retry:` wrapper only created contract drift with its paired unit test; no direct Android Maestro failure was proven to require it.                                                                                                |
+| `playwright/launchSequence.spec.ts`                  | `KEEP`      | shard-5 timeout waiting for fade-out          | Observed CI failure: `page.waitForFunction: Timeout 20000ms exceeded` while waiting for `startup-launch-sequence` fade-out. Retained fix now tolerates already-completed teardown and compact-mode phase skipping.                           |
+| `playwright/playback.spec.ts`                        | `KEEP`      | shard-2 trace mismatch                        | Observed CI failure: `Trace comparison failed` for `rapid play/stop/play sequences remain stable`. Retained fix keeps seeded playlist routing aligned with the saved-device selection state and locks both routing modes with focused tests. |
+| `scripts/ci/validate-ios-connectivity.sh`            | `REMOVE`    | none proven                                   | The early skip path had no direct evidence trail from the inspected branch failures.                                                                                                                                                         |
+| `scripts/run-maestro-gating.sh`                      | `REMOVE`    | telemetry failure hypothesis only             | Reordering device readiness remained an unproven hypothesis for the zero-sample Android telemetry job, so it was removed from the effective patch.                                                                                           |
+| `tests/unit/c64api.branches.test.ts`                 | `REMOVE`    | none                                          | Remaining branch diff was formatting-only churn with no behavioral effect or CI-failure link, so it was reverted locally.                                                                                                                    |
+| `tests/unit/maestro/maestroFlowContracts.test.ts`    | `REMOVE`    | only paired with unproven Maestro YAML change | Restored to the `main` contract after removing the unproven `.maestro/smoke-hvsc.yaml` retry wrapper.                                                                                                                                        |
+| `tests/unit/scripts/ciWorkflowRegression.test.ts`    | `REMOVE`    | none proven                                   | Added only to protect unproven workflow edits, so it was removed with those edits.                                                                                                                                                           |
+| `tests/unit/scripts/maestroGatingScript.test.ts`     | `REMOVE`    | only paired with unproven script reorder      | Restored to the `main` contract after removing the unproven `run-maestro-gating.sh` change.                                                                                                                                                  |
+| `tests/unit/scripts/validateIosConnectivity.test.ts` | `REMOVE`    | none proven                                   | Added only to protect the unproven iOS connectivity-script change.                                                                                                                                                                           |
+| `PLANS.md`                                           | `TRACK`     | user-mandated audit record                    | Retained only because this task explicitly required maintaining the execution plan and final audit table.                                                                                                                                    |
+| `WORKLOG.md`                                         | `TRACK`     | user-mandated audit record                    | Retained only because this task explicitly required maintaining the execution log and validation evidence.                                                                                                                                   |
+
+## Effective Reduced Patch
+
+- Functional CI-facing changes retained in the worktree versus `main`: `playwright/launchSequence.spec.ts` and `playwright/playback.spec.ts`.
+- Required execution-record changes retained by user instruction: `PLANS.md` and `WORKLOG.md`.
+
 # 2026-04-27 Demo Mode Gating And Diagnostics Reachability
 
 ## Classification
