@@ -65,10 +65,14 @@ const seedPlaylistStorage = async (
     durationMs?: number;
     sourceId?: string | null;
   }>,
+  options?: {
+    preserveSelectedSavedDevice?: boolean;
+  },
 ) => {
   await page.addInitScript(
     ({
       seedItems,
+      preserveSelectedSavedDevice,
     }: {
       seedItems: Array<{
         source: "ultimate" | "local" | "hvsc";
@@ -77,50 +81,122 @@ const seedPlaylistStorage = async (
         durationMs?: number;
         sourceId?: string | null;
       }>;
+      preserveSelectedSavedDevice?: boolean;
     }) => {
+      const parseStoredPort = (value: string | null, fallback: number) => {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
+      };
+
+      const readSavedDevicesState = () => {
+        const savedDevicesRaw = localStorage.getItem("c64u_saved_devices:v1");
+        if (!savedDevicesRaw) return null;
+        try {
+          const parsed = JSON.parse(savedDevicesRaw) as {
+            selectedDeviceId?: string;
+            devices?: Array<{
+              id?: string;
+              name?: string;
+              nameSource?: string;
+              host?: string;
+              httpPort?: number;
+              ftpPort?: number;
+              telnetPort?: number;
+              lastKnownProduct?: string | null;
+              lastKnownHostname?: string | null;
+              lastKnownUniqueId?: string | null;
+              lastSuccessfulConnectionAt?: string | null;
+              lastUsedAt?: string | null;
+              hasPassword?: boolean;
+            }>;
+            summaries?: Record<string, unknown>;
+            summaryLru?: string[];
+            hasEverHadMultipleDevices?: boolean;
+          };
+          const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+          const selectedDevice = devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0] ?? null;
+          return {
+            parsed,
+            devices,
+            selectedDevice,
+          };
+        } catch {
+          return null;
+        }
+      };
+
       const configuredHost = localStorage.getItem("c64u_device_host") ?? "c64u";
       const normalizedHost = configuredHost.trim() || "c64u";
       const separatorIndex = normalizedHost.lastIndexOf(":");
       const hasExplicitPort = separatorIndex > -1 && /^\d+$/.test(normalizedHost.slice(separatorIndex + 1));
       const host = hasExplicitPort ? normalizedHost.slice(0, separatorIndex) : normalizedHost;
       const httpPort = hasExplicitPort ? Number(normalizedHost.slice(separatorIndex + 1)) : 80;
-      const ftpPort = Number(localStorage.getItem("c64u_ftp_port") ?? "21");
-      const telnetPort = Number(localStorage.getItem("c64u_telnet_port") ?? "64");
+      const savedDevicesState = readSavedDevicesState();
+      const selectedDeviceId = preserveSelectedSavedDevice
+        ? (savedDevicesState?.selectedDevice?.id ?? savedDevicesState?.parsed.selectedDeviceId ?? "TEST-123")
+        : "TEST-123";
+      const ftpPort = parseStoredPort(
+        localStorage.getItem("c64u_ftp_port"),
+        typeof savedDevicesState?.selectedDevice?.ftpPort === "number" ? savedDevicesState.selectedDevice.ftpPort : 21,
+      );
+      const telnetPort = parseStoredPort(
+        localStorage.getItem("c64u_telnet_port"),
+        typeof savedDevicesState?.selectedDevice?.telnetPort === "number"
+          ? savedDevicesState.selectedDevice.telnetPort
+          : 64,
+      );
       const payload = {
         items: seedItems,
         currentIndex: -1,
       };
-      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
+      localStorage.setItem(`c64u_playlist:v1:${selectedDeviceId}`, JSON.stringify(payload));
       localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
-      localStorage.setItem("c64u_last_device_id", "TEST-123");
+      localStorage.setItem("c64u_last_device_id", selectedDeviceId);
+
+      const selectedDevice = savedDevicesState?.selectedDevice;
+      const nextSelectedDevice = {
+        ...(preserveSelectedSavedDevice ? (selectedDevice ?? {}) : {}),
+        id: selectedDeviceId,
+        name: preserveSelectedSavedDevice ? (selectedDevice?.name ?? "") : "",
+        nameSource: preserveSelectedSavedDevice ? (selectedDevice?.nameSource ?? "auto") : "auto",
+        host: preserveSelectedSavedDevice ? (selectedDevice?.host ?? (host || "c64u")) : host || "c64u",
+        httpPort:
+          preserveSelectedSavedDevice && typeof selectedDevice?.httpPort === "number" && selectedDevice.httpPort > 0
+            ? selectedDevice.httpPort
+            : Number.isInteger(httpPort) && httpPort > 0
+              ? httpPort
+              : 80,
+        ftpPort,
+        telnetPort,
+        lastKnownProduct: preserveSelectedSavedDevice ? (selectedDevice?.lastKnownProduct ?? null) : null,
+        lastKnownHostname: preserveSelectedSavedDevice ? (selectedDevice?.lastKnownHostname ?? null) : null,
+        lastKnownUniqueId: preserveSelectedSavedDevice ? (selectedDevice?.lastKnownUniqueId ?? null) : null,
+        lastSuccessfulConnectionAt: preserveSelectedSavedDevice
+          ? (selectedDevice?.lastSuccessfulConnectionAt ?? null)
+          : null,
+        lastUsedAt: preserveSelectedSavedDevice ? (selectedDevice?.lastUsedAt ?? null) : null,
+        hasPassword: preserveSelectedSavedDevice ? Boolean(selectedDevice?.hasPassword) : false,
+      };
+      const nextDevices =
+        preserveSelectedSavedDevice && savedDevicesState?.devices?.length
+          ? savedDevicesState.devices.map((device) =>
+              device.id === selectedDeviceId ? { ...device, ...nextSelectedDevice } : device,
+            )
+          : [nextSelectedDevice];
+
       localStorage.setItem(
         "c64u_saved_devices:v1",
         JSON.stringify({
           version: 1,
-          selectedDeviceId: "TEST-123",
-          devices: [
-            {
-              id: "TEST-123",
-              name: "",
-              nameSource: "auto",
-              host: host || "c64u",
-              httpPort: Number.isInteger(httpPort) && httpPort > 0 ? httpPort : 80,
-              ftpPort: Number.isInteger(ftpPort) && ftpPort > 0 ? ftpPort : 21,
-              telnetPort: Number.isInteger(telnetPort) && telnetPort > 0 ? telnetPort : 64,
-              lastKnownProduct: null,
-              lastKnownHostname: null,
-              lastKnownUniqueId: null,
-              lastSuccessfulConnectionAt: null,
-              lastUsedAt: null,
-              hasPassword: false,
-            },
-          ],
-          summaries: {},
-          summaryLru: [],
+          selectedDeviceId,
+          devices: nextDevices,
+          summaries: savedDevicesState?.parsed.summaries ?? {},
+          summaryLru: savedDevicesState?.parsed.summaryLru ?? [],
+          hasEverHadMultipleDevices: savedDevicesState?.parsed.hasEverHadMultipleDevices ?? nextDevices.length > 1,
         }),
       );
     },
-    { seedItems: items },
+    { seedItems: items, preserveSelectedSavedDevice: options?.preserveSelectedSavedDevice ?? false },
   );
 };
 
@@ -264,6 +340,66 @@ test.describe("Playback file browser", () => {
     await expect(playlistList).not.toContainText("C64 Ultimate");
     await expect(playlistList).not.toContainText("HVSC library file");
     await snap(page, testInfo, "mixed-source-source-transparent");
+  });
+
+  test("playlist seeding preserves selected saved-device routing", async ({ page }: { page: Page }) => {
+    await seedPlaylistStorage(
+      page,
+      [
+        {
+          source: "ultimate",
+          path: "/Usb0/Demos/Track_0001.sid",
+          name: "Track_0001.sid",
+          durationMs: 5000,
+        },
+      ],
+      { preserveSelectedSavedDevice: true },
+    );
+
+    await page.goto("/play");
+
+    const seededState = await page.evaluate(() => {
+      const raw = localStorage.getItem("c64u_saved_devices:v1");
+      const playlistRaw = localStorage.getItem("c64u_playlist:v1:test-device-mock");
+      return {
+        savedDevices: raw ? JSON.parse(raw) : null,
+        hasSeededPlaylist: Boolean(playlistRaw),
+        lastDeviceId: localStorage.getItem("c64u_last_device_id"),
+      };
+    });
+
+    expect(seededState.lastDeviceId).toBe("test-device-mock");
+    expect(seededState.hasSeededPlaylist).toBe(true);
+    expect(seededState.savedDevices?.selectedDeviceId).toBe("test-device-mock");
+    expect(seededState.savedDevices?.devices?.[0]?.host).toBe("127.0.0.1");
+    expect(seededState.savedDevices?.devices?.[0]?.ftpPort).toBe(ftpServers.ftpServer.port);
+  });
+
+  test("playlist seeding keeps the default trace device id unless saved-device routing is requested", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate",
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
+        durationMs: 5000,
+      },
+    ]);
+    await page.goto("/play");
+
+    const seededState = await page.evaluate(() => {
+      const playlistRaw = localStorage.getItem("c64u_playlist:v1:TEST-123");
+      return {
+        defaultPlaylistPresent: Boolean(playlistRaw),
+        selectedDeviceId: localStorage.getItem("c64u_last_device_id"),
+      };
+    });
+
+    expect(seededState.selectedDeviceId).toBe("TEST-123");
+    expect(seededState.defaultPlaylistPresent).toBe(true);
   });
 
   test("playback sends runner request to real device mock", async ({ page }: { page: Page }, testInfo: TestInfo) => {

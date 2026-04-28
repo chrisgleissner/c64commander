@@ -24,19 +24,22 @@ describe("telemetry release gate workflow rules", () => {
     );
   });
 
-  it("does not publish Android release artifacts for rc tags", () => {
+  it("publishes Android release artifacts for all signed tag builds while keeping Play upload stable-only", () => {
     const workflow = readWorkflow("android.yaml");
     expect(workflow).toContain(
-      "if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')\n" +
-        "    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]",
+      "if: startsWith(github.ref, 'refs/tags/')\n" +
+      "    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]",
     );
-    const stableTagReleaseCondition =
+    const signedTagReleaseCondition = "if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'";
+    const stableTagPlayCondition =
       "if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc') && env.HAS_KEYSTORE == 'true'";
     expect(workflow).toContain("- name: Build APK (release)");
+    expect(workflow).toContain("- name: Upload release artifacts to GitHub release");
     expect(workflow).toContain("- name: Upload AAB to Google Play (internal)");
     expect(
-      workflow.match(new RegExp(stableTagReleaseCondition.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))?.length,
-    ).toBeGreaterThanOrEqual(10);
+      workflow.match(new RegExp(signedTagReleaseCondition.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))?.length,
+    ).toBeGreaterThanOrEqual(9);
+    expect(workflow).toContain(stableTagPlayCondition);
   });
 
   it("creates Android GitHub prereleases for rc tags without using the stable artifact gate", () => {
