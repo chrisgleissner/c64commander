@@ -1,5 +1,29 @@
 # PR 243 CI Reduction Audit Worklog
 
+## [2026-04-28T09:15:00Z] PR243-AUDIT-004: restored RC Android release asset publishing and fixed the skipped-job GitHub Actions label leak
+
+Action performed:
+
+- Appended steering item 11 to `PLANS.md` and executed it immediately against the active PR `#243` audit track.
+- Updated `.github/workflows/android.yaml` so signed Android release APK/AAB packaging, artifact upload, and GitHub release attachment run for all tag builds, including `-rc` tags.
+- Kept `Upload AAB to Google Play (internal)` restricted to non-RC tags, so RC builds now attach GitHub release assets without changing Play promotion rules.
+- Replaced the matrix-based release-attachment job title with the static name `Release | Attach Android artifacts`, which avoids the raw `${{ matrix.variant }}` text that GitHub Actions shows when a job is skipped before matrix expansion.
+- Added `tests/unit/ci/androidReleaseWorkflowContracts.test.ts` and updated `tests/unit/ci/telemetryGateWorkflow.test.ts` to lock the RC publishing and stable-only Play-upload contracts.
+
+Why it was changed:
+
+- Tag `0.7.9-rc1` produced only the iOS prerelease artifact because the Android workflow created prereleases for RC tags but excluded RC tags from the signed release-build, artifact-upload, and release-attachment gates.
+- The GitHub Actions UI leak of `android / Release | Attach APK/AAB (${{ matrix.variant }})` on skipped jobs came from a job-level `if` preventing matrix expansion, so the name had to stop depending on `matrix.variant`.
+
+Validation result:
+
+- Focused workflow regressions passed:
+  - `tests/unit/ci/androidReleaseWorkflowContracts.test.ts`
+  - `tests/unit/ci/telemetryGateWorkflow.test.ts`
+- Repository coverage rerun passed via `npm run test:coverage` with aggregate branch coverage `91.96%` (`19683/21403`).
+- `npm run lint` no longer flags the new workflow-contract test; the rerun remains blocked only by unrelated pre-existing formatting drift in `tests/unit/c64api.branches.test.ts`.
+- Android closeout passed on Pixel `9B081FFAZ001WX` using the newest built APK `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`; streamed install succeeded and `uk.gleissner.c64commander/.MainActivity` launched successfully.
+
 ## [2026-04-28T06:30:00Z] PR243-AUDIT-001: opened the CI reduction track and captured the first falsifiable hypothesis
 
 Classification for this pass:
