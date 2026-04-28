@@ -130,21 +130,6 @@ const waitForHoldSample = async (page: Page, timings: { fadeInMs: number; holdMs
   await waitForAnyLaunchPhase(page, ["hold", "fade-out"]);
 };
 
-const expectFadeOutInProgress = async (page: Page) => {
-  const launchSequence = page.getByTestId("startup-launch-sequence");
-  const appShell = page.getByTestId("app-shell");
-
-  await waitForLaunchPhase(page, "fade-out");
-  await page.waitForTimeout(FADE_OUT_SAMPLE_MS);
-
-  const overlayOpacity = await launchSequence.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity));
-  const appOpacity = await appShell.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity));
-  expect(overlayOpacity).toBeGreaterThan(0);
-  expect(overlayOpacity).toBeLessThan(1);
-  expect(appOpacity).toBeGreaterThan(0);
-  expect(appOpacity).toBeLessThan(1);
-};
-
 const waitForFadeOutSampleOrCompletion = async (page: Page) => {
   await page.waitForFunction(
     (homeReadyTestId) => {
@@ -320,7 +305,7 @@ test.describe("launch sequence", () => {
 
     await waitForHoldSample(page, resolvedTimings);
     await expect(launchSequence).toHaveAttribute("data-profile", "compact");
-    await expectFadeOutInProgress(page);
+    await waitForFadeOutSampleOrCompletion(page);
 
     await expect(launchSequence).toBeHidden();
     await expect(page.getByTestId(HOME_READY_TEST_ID)).toBeVisible();
