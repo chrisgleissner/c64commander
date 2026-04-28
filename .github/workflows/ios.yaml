@@ -135,37 +135,12 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      - name: Build app for simulator
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/ios/_infra/xcodebuild
-          xcodebuild \
-            -workspace ios/App/App.xcworkspace \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
-            -derivedDataPath ios/build-prepared \
-            MARKETING_VERSION="$APP_VERSION" \
-            CURRENT_PROJECT_VERSION="$APP_BUILD_NUMBER" \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee artifacts/ios/_infra/xcodebuild/build-simulator.log
-
-      - name: Stage prepared simulator app
-        run: |
-          set -euo pipefail
-          prepared_app_dir="ios/prepared-simulator-app"
-          rm -rf "$prepared_app_dir"
-          mkdir -p "$prepared_app_dir"
-          cp -R ios/build-prepared/Build/Products/Debug-iphonesimulator/App.app "$prepared_app_dir/App.app"
-
       - name: Upload prepared iOS workspace
         uses: actions/upload-artifact@v4
         with:
           name: ios-prepared-workspace
           path: |
             ios/
-            !ios/build-prepared/**
             dist/
           if-no-files-found: error
 
@@ -331,13 +306,21 @@ jobs:
               fh.write(f"boot_start_ms={boot_start_ms}\n")
           PY
 
-      - name: Ensure prepared simulator app exists
+      - name: Build app for simulator
         run: |
           set -euo pipefail
-          if [[ ! -d ios/prepared-simulator-app/App.app ]]; then
-            echo "Prepared simulator app missing from ios-prepared-workspace artifact"
-            exit 1
-          fi
+          mkdir -p artifacts/ios/_infra/xcodebuild
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios/build \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="$APP_BUILD_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee artifacts/ios/_infra/xcodebuild/build-simulator.log
 
       - name: Wait for simulator boot readiness
         id: simulator_ready
@@ -489,7 +472,7 @@ jobs:
             --flows "${IOS_MAESTRO_FLOWS}"
             --group "${IOS_MAESTRO_GROUP}"
             --udid "${{ steps.simulator.outputs.udid }}"
-            --app-path "ios/prepared-simulator-app/App.app"
+            --app-path "ios/build/Build/Products/Debug-iphonesimulator/App.app"
           )
           if [[ ${#mock_port_args[@]} -gt 0 ]]; then
             maestro_cmd+=("${mock_port_args[@]}")
@@ -592,15 +575,15 @@ jobs:
         if: always() && github.ref_type == 'tag'
         run: |
           set -euo pipefail
-          mkdir -p artifacts/_combined
-          tar -czf artifacts/_combined/ios-maestro-evidence.tgz artifacts/ios
+          mkdir -p artifacts/ios/_combined
+          tar -czf artifacts/ios/_combined/ios-maestro-evidence.tgz artifacts/ios
 
       - name: Upload evidence archive on tag
         if: always() && github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
           name: ios-maestro-evidence-tgz
-          path: artifacts/_combined/ios-maestro-evidence.tgz
+          path: artifacts/ios/_combined/ios-maestro-evidence.tgz
           if-no-files-found: warn
 
       - name: Enforce iOS telemetry gates

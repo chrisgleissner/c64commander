@@ -1,3 +1,57 @@
+# 2026-04-28 PR 243 CI Reduction Audit
+
+## Classification
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+## Problem Statement
+
+- PR `#243` (`fix/android-tests`) currently contains `12` changed files against `main`, but only a subset is demonstrably tied to observed CI failures on this branch.
+- Historical branch runs show three concrete failure families that need evidence-backed handling before any change can be retained:
+  - Android workflow failure in `Android | Maestro gating` with telemetry gate output `expected multiple data rows, found 0` and `main_seen_once=0`.
+  - Android workflow shard failure in `Web | E2E (sharded) (2, 12)` with `Trace comparison failed` in `playwright/playback.spec.ts` for `rapid play/stop/play sequences remain stable`.
+  - Android workflow shard failure in `Web | E2E (sharded) (5, 12)` with `page.waitForFunction: Timeout 20000ms exceeded` in `playwright/launchSequence.spec.ts` while waiting for `startup-launch-sequence` fade-out.
+- Additional branch changes in Android/iOS workflow YAML, Maestro flow YAML, shell scripts, and test files currently lack a proven causal link to those failures and must be removed unless validated.
+
+## First Local Hypothesis
+
+- The minimal required patch is smaller than the current branch diff: the clearly justified fixes are local Playwright stabilizations in `playwright/playback.spec.ts` and `playwright/launchSequence.spec.ts`, while most workflow, iOS, Maestro-flow, and unrelated test edits are likely incidental carryover.
+- A second-tier hypothesis remains open for `scripts/run-maestro-gating.sh`: moving `ensure_device_ready_for_automation` after APK install and smoke-payload write may be the actual fix for the zero-sample Android telemetry failure, but the current evidence does not yet prove that change or the paired Android workflow deletion is necessary.
+
+## Cheap Disconfirming Check
+
+- Remove the obviously unproven files first, keep only the two directly evidenced Playwright fixes, then run the smallest focused validation slice:
+  - `tests/unit/scripts/ciWorkflowRegression.test.ts`
+  - `tests/unit/scripts/validateIosConnectivity.test.ts`
+  - `tests/unit/maestro/maestroFlowContracts.test.ts`
+  - `playwright/playback.spec.ts` test `rapid play/stop/play sequences remain stable`
+  - `playwright/launchSequence.spec.ts` test `keeps compact launch fade-out smooth when runtime motion remains standard`
+- If a reverted workflow/script/Maestro change causes a concrete regression in that slice or in the subsequent full validation runs, reintroduce only the smallest proven subset and record the evidence in `WORKLOG.md`.
+
+## Failure Matrix Snapshot
+
+| Failure signature                                                                                | First observed branch run                                | Root-cause hypothesis                                                                                                                                               | Reproducibility                                              | Affected tests/components                                                              | Current evidence                                                   |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `telemetry gate failed: expected multiple data rows, found 0`; `main_seen_once=0`                | `25021872155` (`4266cf97`)                               | App automation/preflight order prevented the telemetry monitor from ever seeing the app process; Android workflow priming deletion is unproven and may be unrelated | CI-observed; local repro pending                             | `.github/workflows/android.yaml`, `scripts/run-maestro-gating.sh`, Android Maestro job | log excerpt captured from failed job `73284029871`                 |
+| `Trace comparison failed` for `rapid play/stop/play sequences remain stable`                     | `25021872155` (`4266cf97`)                               | Playlist seeding/routing state diverged from the golden-trace contract under Android Playwright                                                                     | CI-observed; local repro expected via focused Playwright run | `playwright/playback.spec.ts`                                                          | failed shard-2 log from job `73284272342`                          |
+| `config remains visible after switching demo -> real` equality failure                           | `25021872155` (`4266cf97`)                               | Separate demo/real config-state instability not touched by the current diff; likely an external flake or already fixed elsewhere                                    | CI-only so far; not mapped to changed files                  | `playwright/configVisibility.spec.ts`                                                  | failed shard-7 log from job `73284272373`; no direct diff link yet |
+| `page.waitForFunction: Timeout 20000ms exceeded` waiting for fade-out phase                      | `25023540767` and `25024285662` (`0fe7b99d`, `58923a06`) | Launch test assumes `fade-out` is always sampled before completion; CI timing can jump directly from hold to completion                                             | CI-observed; local repro expected via focused Playwright run | `playwright/launchSequence.spec.ts`                                                    | failed shard-5 log from job `73291973318`                          |
+| Unit coverage failure in `tests/unit/maestro/maestroFlowContracts.test.ts` expecting no `retry:` | `25020282264` (`c734381b`)                               | Test contract drifted after `.maestro/smoke-hvsc.yaml` changed to include a retry wrapper; whether the YAML change itself is necessary is still unproven            | CI-observed; local repro expected via focused Vitest run     | `.maestro/smoke-hvsc.yaml`, `tests/unit/maestro/maestroFlowContracts.test.ts`          | failed unit-coverage log from job `73278789552`                    |
+
+## Ordered Tasks
+
+1. Keep this section and `WORKLOG.md` current as the authoritative record for the reduction audit.
+2. Classify every file in `main...HEAD` as `KEEP`, `SLIM`, or `REMOVE` against the failure matrix and document the evidence.
+3. Remove the changes with no current causal proof first, starting with files that do not touch the three directly observed failure families.
+4. After the first reduction edit, run the smallest focused validation slice before any broader reading or patching.
+5. If focused validation fails, isolate the minimal required subset, restore only that subset, and rerun the same validation.
+6. Once the branch diff contains only evidenced changes, run the repository validation required for a code-change task: `npm run lint`, `npm run test`, `npm run build`, and `npm run test:coverage`.
+7. Confirm coverage and behavior are unchanged or improved, with explicit attention to demo mode, diagnostics, connectivity, and the targeted CI flows.
+8. Build the Android app, deploy the newest APK to the attached Pixel 4, validate the touched behavior on-device, and record the result.
+9. Prove stability with at least `3` consecutive clean validation passes over the retained CI-relevant checks.
+10. Finish with a change audit table in `PLANS.md`/`WORKLOG.md` that justifies every remaining file in the minimal patch.
+
 # 2026-04-27 Demo Mode Gating And Diagnostics Reachability
 
 ## Classification

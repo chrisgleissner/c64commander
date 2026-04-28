@@ -48,22 +48,19 @@ env:
     visible: "Play Files"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
-- retry:
-    maxRetries: 3
-    commands:
-      - swipe:
-          start: 50%, 86%
-          end: 50%, 38%
-          duration: 400
-      - waitForAnimationToEnd
-      - scrollUntilVisible:
-          element:
-            id: hvsc-download
-          direction: DOWN
-          speed: 80
-          timeout: ${LONG_TIMEOUT}
-          visibilityPercentage: 50
-          centerElement: true
+- swipe:
+    start: 50%, 86%
+    end: 50%, 38%
+    duration: 400
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: hvsc-download
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
 - assertVisible:
     id: hvsc-download
 - takeScreenshot: hvsc-controls

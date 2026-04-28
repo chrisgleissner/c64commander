@@ -5,19 +5,14 @@ import { describe, expect, it } from "vitest";
 const scriptPath = path.resolve(process.cwd(), "scripts/run-maestro-gating.sh");
 
 describe("run-maestro-gating.sh", () => {
-  it("installs and configures the app before running device automation preflight", () => {
+  it("cleans stale Maestro processes and adb forwards before running flows", () => {
     const script = readFileSync(scriptPath, "utf8");
-    const installIndex = script.indexOf('log "Installing APK: $APK_PATH"');
-    const configureSmokeModeIndex = script.indexOf('log "Configuring app smoke mode (${C64U_TARGET})"');
-    const preflightIndex = script.indexOf('ensure_device_ready_for_automation "$DEVICE_ID"');
 
     expect(script).toContain("cleanup_maestro_processes()");
     expect(script).toContain("cleanup_maestro_processes\n");
     expect(script).toContain('adb -s "$DEVICE_ID" forward --remove-all >/dev/null 2>&1 || true');
     expect(script).toContain("ensure_device_ready_for_automation()");
     expect(script).toContain("trap cleanup_device_state EXIT");
-    expect(installIndex).toBeGreaterThan(-1);
-    expect(configureSmokeModeIndex).toBeGreaterThan(installIndex);
-    expect(preflightIndex).toBeGreaterThan(configureSmokeModeIndex);
+    expect(script).toContain('ensure_device_ready_for_automation "$DEVICE_ID"');
   });
 });

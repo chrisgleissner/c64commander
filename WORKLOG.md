@@ -1,3 +1,35 @@
+# PR 243 CI Reduction Audit Worklog
+
+## [2026-04-28T06:30:00Z] PR243-AUDIT-001: opened the CI reduction track and captured the first falsifiable hypothesis
+
+Classification for this pass:
+
+- `CODE_CHANGE`
+- `DOC_PLUS_CODE`
+
+Action performed:
+
+- Opened a new authoritative audit section in `PLANS.md` for PR `#243` reduction against `main...HEAD`.
+- Queried the active pull request metadata, current branch diff, branch commit history, and recent GitHub Actions run history for `fix/android-tests`.
+- Extracted the currently changed files: `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, `.maestro/smoke-hvsc.yaml`, `playwright/launchSequence.spec.ts`, `playwright/playback.spec.ts`, `scripts/ci/validate-ios-connectivity.sh`, `scripts/run-maestro-gating.sh`, `tests/unit/c64api.branches.test.ts`, `tests/unit/maestro/maestroFlowContracts.test.ts`, `tests/unit/scripts/ciWorkflowRegression.test.ts`, `tests/unit/scripts/maestroGatingScript.test.ts`, and `tests/unit/scripts/validateIosConnectivity.test.ts`.
+- Reconstructed the observed branch failure signatures from GitHub Actions logs:
+  - Android Maestro telemetry gate failure: `expected multiple data rows, found 0` with `main_seen_once=0`.
+  - Playwright shard-2 failure: `Trace comparison failed` in `playwright/playback.spec.ts` for `rapid play/stop/play sequences remain stable`.
+  - Playwright shard-5 failure: `page.waitForFunction: Timeout 20000ms exceeded` in `playwright/launchSequence.spec.ts` while waiting for fade-out.
+  - Coverage-unit failure in `tests/unit/maestro/maestroFlowContracts.test.ts` after `.maestro/smoke-hvsc.yaml` introduced `retry:`.
+  - Earlier shard-7 failure in `playwright/configVisibility.spec.ts`, which currently has no direct file-level link to the branch diff.
+
+Findings:
+
+- The two strongest causal links in the current diff are the Playwright changes in `playwright/playback.spec.ts` and `playwright/launchSequence.spec.ts`, because they match named failing tests from branch CI history.
+- The Android Maestro telemetry failure may relate to `scripts/run-maestro-gating.sh`, but the paired Android workflow deletion of `Install APK and prime telemetry` is not yet justified by the observed failure logs and may be incidental.
+- The iOS workflow and connectivity-validation script/test changes have no direct failure evidence from the branch runs inspected so far.
+- The `.maestro/smoke-hvsc.yaml` retry addition currently has only indirect evidence: it caused a contract-test failure that was then updated, but no Android Maestro log excerpt yet shows a direct HVSC flow failure.
+
+Next action:
+
+- Remove the obviously unproven files first, then run the smallest focused validation slice to see which reverted changes actually reintroduce a concrete CI failure.
+
 # Demo Mode Gating And Diagnostics Reachability Worklog
 
 ## [2026-04-27T13:19:02Z] DEMO-DIAG-003: corrected the saved-device Telnet default so live U64 health probes and Telnet discovery use port 23 again

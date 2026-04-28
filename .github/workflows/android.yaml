@@ -1121,6 +1121,65 @@ jobs:
             exit 1
           fi
 
+      - name: Install APK and prime telemetry
+        run: |
+          set -euo pipefail
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          package_name="$ANDROID_APPLICATION_ID"
+          SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
+          if [[ -z "$SERIAL" ]]; then
+            echo "::error::No emulator serial found"
+            adb devices -l || true
+            exit 1
+          fi
+          echo "Emulator serial: $SERIAL"
+
+          # Install APK so the app can be launched for telemetry priming.
+          # run-maestro-gating.sh will reinstall with -r (harmless).
+          debug_apk_dir="android/app/build/outputs/apk/debug"
+          apk_path="$debug_apk_dir/app-debug.apk"
+          if [[ ! -f "$apk_path" ]]; then
+            apk_path="$(find "$debug_apk_dir" -maxdepth 1 -type f -name '*-debug.apk' ! -name '*androidTest*.apk' | sort | head -n 1 || true)"
+          fi
+          if [[ -z "$apk_path" || ! -f "$apk_path" ]]; then
+            echo "::error::APK not found under $debug_apk_dir"
+            ls -la "$debug_apk_dir" || true
+            exit 1
+          fi
+          echo "Using APK: $apk_path"
+          adb -s "$SERIAL" install -r -t -d "$apk_path" || {
+            echo "APK install failed; trying uninstall + reinstall"
+            adb -s "$SERIAL" uninstall "$package_name" 2>/dev/null || true
+            adb -s "$SERIAL" install -t -d "$apk_path"
+          }
+          echo "APK installed, verifying package..."
+          timeout 15 bash -c "until adb -s '$SERIAL' shell pm list packages '$package_name' | tr -d '\r' | grep -q '$package_name'; do sleep 1; done" || {
+            echo "::error::Package not discoverable after install"
+            exit 1
+          }
+
+          # Launch app to prime the telemetry monitor with initial samples.
+          # Uses -W (wait) for synchronous launch confirmation.
+          echo "Launching app for telemetry priming..."
+          adb -s "$SERIAL" shell am start -W -n "${package_name}/.MainActivity" 2>&1 || true
+
+          # Wait for telemetry monitor to capture at least one sample row.
+          csv="ci-artifacts/telemetry/android/metrics.csv"
+          preflight_timeout="${TELEMETRY_PREFLIGHT_TIMEOUT_SEC:-30}"
+          if timeout "$preflight_timeout" bash -c "until [[ -f '$csv' ]] && [[ \$(wc -l < '$csv' 2>/dev/null || echo 0) -gt 1 ]]; do sleep 1; done"; then
+            echo "Telemetry priming OK: $(wc -l < "$csv") lines in metrics.csv"
+          else
+            echo "::warning::Telemetry priming: monitor did not capture samples within ${preflight_timeout}s"
+            echo "=== monitor diagnostics ==="
+            ls -la ci-artifacts/telemetry/android/ || true
+            tail -n 30 ci-artifacts/telemetry/android/monitor-run.log || true
+            tail -n 20 ci-artifacts/telemetry/android/events.log || true
+            adb -s "$SERIAL" shell "pidof $package_name" || echo "(pidof returned empty)"
+            adb -s "$SERIAL" shell "ps -A | grep -i c64" || echo "(ps grep returned empty)"
+            # Non-fatal: Maestro will relaunch the app and monitor should capture then.
+          fi
+
       - name: Run Maestro gating flows
         env:
           CI: "true"

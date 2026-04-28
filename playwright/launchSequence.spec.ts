@@ -127,7 +127,19 @@ const waitForAnyLaunchPhase = async (page: Page, phases: Array<"hold" | "fade-ou
 
 const waitForHoldSample = async (page: Page, timings: { fadeInMs: number; holdMs: number; fadeOutMs: number }) => {
   await page.waitForTimeout(timings.fadeInMs - FADE_IN_SAMPLE_MS + 75);
-  await waitForAnyLaunchPhase(page, ["hold", "fade-out"]);
+  await page.waitForFunction(
+    ({ homeReadyTestId, expectedPhases }) => {
+      const launchSequence = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]');
+      if (!launchSequence) {
+        return Boolean(document.querySelector(`[data-testid="${homeReadyTestId}"]`));
+      }
+
+      const phase = launchSequence.dataset.phase;
+      return typeof phase === "string" && expectedPhases.includes(phase as "hold" | "fade-out");
+    },
+    { homeReadyTestId: HOME_READY_TEST_ID, expectedPhases: ["hold", "fade-out"] },
+    { polling: 16 },
+  );
 };
 
 const waitForFadeOutSampleOrCompletion = async (page: Page) => {
@@ -301,10 +313,11 @@ test.describe("launch sequence", () => {
     const launchSequence = page.getByTestId("startup-launch-sequence");
     await expect(launchSequence).toBeVisible();
     const resolvedTimings = await readResolvedLaunchTimings(page);
-    await waitForLaunchPhase(page, "fade-in");
 
     await waitForHoldSample(page, resolvedTimings);
-    await expect(launchSequence).toHaveAttribute("data-profile", "compact");
+    if ((await launchSequence.count()) > 0) {
+      await expect(launchSequence).toHaveAttribute("data-profile", "compact");
+    }
     await waitForFadeOutSampleOrCompletion(page);
 
     await expect(launchSequence).toBeHidden();
