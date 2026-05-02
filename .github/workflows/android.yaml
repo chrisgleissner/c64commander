@@ -591,7 +591,6 @@ jobs:
     env:
       ANDROID_API_LEVEL: "34"
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      ANDROID_SYSTEM_IMAGE: "system-images;android-34;google_apis;x86_64"
       GRADLE_MAX_WORKERS: "6"
 
     steps:
@@ -642,18 +641,6 @@ jobs:
             echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           fi
 
-      - name: Cache Android SDK system images
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.ANDROID_SDK_ROOT }}/system-images
-            ${{ env.ANDROID_SDK_ROOT }}/emulator
-            ${{ env.ANDROID_SDK_ROOT }}/platform-tools
-            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
-            ~/.android/avd
-            ~/.android/adb*
-          key: android-sdk-${{ runner.os }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_SYSTEM_IMAGE }}
-
       - name: Decode keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -702,9 +689,14 @@ jobs:
       - name: Cache upstream 7-zip built binaries
         id: cache-upstream-7zip
         uses: actions/cache@v4
+        continue-on-error: true
         with:
           path: android/app/build/generated/jniLibs/upstream7zip
           key: upstream-7zip-${{ runner.os }}-3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16
+
+      - name: Reset upstream 7-zip cache after restore failure
+        if: steps.cache-upstream-7zip.outcome == 'failure'
+        run: rm -rf android/app/build/generated/jniLibs/upstream7zip
 
       - name: Verify Android assemble path (dry-run)
         run: |

@@ -115,4 +115,18 @@ describe("Android Maestro workflow contracts", () => {
     expect(workflow).toContain('rm -rf "$HOME/.android/cache"');
     expect(workflow).toContain("install_android_sdk_components");
   });
+
+  it("keeps the Android tests job independent from emulator SDK cache restores", () => {
+    const workflow = readRepoFile(".github", "workflows", "android.yaml");
+    const testsJobStart = workflow.indexOf("name: Android | Tests + Coverage");
+    const testsJobEnd = workflow.indexOf("  android-maestro:");
+    const testsJob = workflow.slice(testsJobStart, testsJobEnd);
+
+    expect(testsJobStart).toBeGreaterThanOrEqual(0);
+    expect(testsJobEnd).toBeGreaterThan(testsJobStart);
+    expect(testsJob).not.toContain("Cache Android SDK system images");
+    expect(testsJob).toContain("Cache upstream 7-zip built binaries");
+    expect(testsJob).toContain("continue-on-error: true");
+    expect(testsJob).toContain("Reset upstream 7-zip cache after restore failure");
+  });
 });
