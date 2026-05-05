@@ -199,6 +199,32 @@ describe("ramOperations", () => {
       expect(writtenImage[0xd800]).toBe(originalImage[0xd800]);
     });
 
+    it("preserves volatile CIA2 timer and interrupt registers from the live image", async () => {
+      const originalImage = new Uint8Array(FULL_RAM_SIZE_BYTES);
+      for (let i = 0; i < originalImage.length; i += 1) {
+        originalImage[i] = i % 251;
+      }
+      originalImage[0xdd00] = 0x3f;
+      originalImage[0xdd01] = 0xff;
+      originalImage[0xdd02] = 0x12;
+      originalImage[0xdd0f] = 0x34;
+      api.readMemory.mockImplementation(async (addr: string, length: number) => {
+        const start = parseInt(addr, 16);
+        return originalImage.slice(start, start + length);
+      });
+
+      const legacyCia2Range = new Uint8Array(0x100);
+      legacyCia2Range.fill(0xaa);
+      await loadMemoryRanges(api as any, [{ start: 0xdd00, bytes: legacyCia2Range }]);
+
+      const writtenImage = api.writeMemoryBlock.mock.calls[0][1] as Uint8Array;
+      expect(writtenImage[0xdd00]).toBe(0xaa);
+      expect(writtenImage[0xdd01]).toBe(0xaa);
+      expect(writtenImage[0xdd02]).toBe(0x12);
+      expect(writtenImage[0xdd0f]).toBe(0x34);
+      expect(writtenImage[0xddff]).toBe(originalImage[0xddff]);
+    });
+
     it("rejects empty snapshot ranges", async () => {
       await expect(loadMemoryRanges(api as any, [])).rejects.toThrow("loadMemoryRanges: no ranges provided");
     });

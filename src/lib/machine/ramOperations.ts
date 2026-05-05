@@ -20,6 +20,8 @@ const READ_CHUNK_SIZE_BYTES = 0x1000;
 const WRITE_CHUNK_SIZE_BYTES = 0x1000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
+const CIA2_VOLATILE_START = 0xdd02;
+const CIA2_VOLATILE_END_EXCLUSIVE = 0xde00;
 
 type RamRange = {
   start: number;
@@ -404,7 +406,18 @@ export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: numbe
   await runPaused(api, "Load RAM Snapshot", async () => {
     const image = await readRanges(api, FULL_RAM_RANGE, onRetry);
     for (const { start, bytes } of ranges) {
-      image.set(bytes, start);
+      let sourceOffset = 0;
+      while (sourceOffset < bytes.length) {
+        const absoluteStart = start + sourceOffset;
+        if (absoluteStart >= CIA2_VOLATILE_START && absoluteStart < CIA2_VOLATILE_END_EXCLUSIVE) {
+          sourceOffset = Math.min(bytes.length, CIA2_VOLATILE_END_EXCLUSIVE - start);
+          continue;
+        }
+        const nextVolatileStart =
+          absoluteStart < CIA2_VOLATILE_START ? Math.min(bytes.length, CIA2_VOLATILE_START - start) : bytes.length;
+        image.set(bytes.subarray(sourceOffset, nextVolatileStart), absoluteStart);
+        sourceOffset = nextVolatileStart;
+      }
     }
     await writeFullImage(api, image, onRetry);
   });

@@ -56,6 +56,9 @@ import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 const CONTROL_REQUEST_TIMEOUT_MS = 3000;
+const SCHEDULED_REQUEST_TIMEOUT_MS = 3000;
+const SCHEDULED_REQUEST_MAX_ATTEMPTS = 3;
+const SCHEDULED_REQUEST_RETRY_GUARD_MS = 6000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
@@ -63,7 +66,6 @@ const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
 const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);
-const RETRYABLE_IDLE_RECOVERY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const DEDUPEABLE_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const READ_REQUEST_BUDGET_WINDOW_MS = 500;
 const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
@@ -604,10 +606,12 @@ export class C64API {
           async () => {
             const requestId = buildRequestId();
             const idleContext = getIdleContext();
-            const canRetryAfterIdle = RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
-            const maxAttempts = canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
+            const scheduledRequest = intent === "background";
+            const requestTimeoutMs = timeoutMs ?? (scheduledRequest ? SCHEDULED_REQUEST_TIMEOUT_MS : undefined);
+            const maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1;
             const requestTrace = await inspectRequestPayload(requestOptions.body);
             let lastError: unknown = null;
+            const firstAttemptStartedAt = Date.now();
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
               const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -658,7 +662,7 @@ export class C64API {
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
                 const outerSignal = requestSignal;
-                const controller = timeoutMs ? new AbortController() : null;
+                const controller = requestTimeoutMs ? new AbortController() : null;
                 const abortFromOuter = () => controller?.abort();
                 if (outerSignal && controller) {
                   if (outerSignal.aborted) {
@@ -669,7 +673,7 @@ export class C64API {
                     });
                   }
                 }
-                const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+                const timeoutId = requestTimeoutMs ? setTimeout(() => controller?.abort(), requestTimeoutMs) : null;
                 const signal = controller ? controller.signal : outerSignal;
                 const responsePromise = fetch(url, {
                   ...requestOptions,
@@ -678,9 +682,9 @@ export class C64API {
                   ...(signal ? { signal } : {}),
                 });
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
-                const timeoutPromise = timeoutMs
+                const timeoutPromise = requestTimeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), requestTimeoutMs);
                     })
                   : null;
                 let response: Response;
@@ -813,9 +817,15 @@ export class C64API {
                   );
                 }
 
-                const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
+                const elapsedSinceFirstAttemptMs = Date.now() - firstAttemptStartedAt;
+                const shouldRetry =
+                  scheduledRequest &&
+                  !callerAborted &&
+                  attempt < maxAttempts &&
+                  isAbort &&
+                  elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
                 if (shouldRetry) {
-                  const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
+                  const retryDelayMs = 0;
                   addLog("warn", "C64 API retry scheduled after idle failure", {
                     requestId,
                     method,
@@ -823,6 +833,7 @@ export class C64API {
                     attempt,
                     maxAttempts,
                     retryDelayMs,
+                    elapsedSinceFirstAttemptMs,
                     idleMs: idleContext.idleMs,
                     wasIdle: idleContext.wasIdle,
                   });
@@ -835,9 +846,12 @@ export class C64API {
                       attempt,
                       maxAttempts,
                       retryDelayMs,
+                      elapsedSinceFirstAttemptMs,
                     }),
                   );
-                  await waitWithAbortSignal(retryDelayMs, requestSignal);
+                  if (retryDelayMs > 0) {
+                    await waitWithAbortSignal(retryDelayMs, requestSignal);
+                  }
                   continue;
                 }
 
@@ -1178,42 +1192,36 @@ export class C64API {
   async machineReset(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:reset", {
       method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machineReboot(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:reboot", {
       method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machinePause(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:pause", {
       method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machineResume(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:resume", {
       method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machinePowerOff(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:poweroff", {
       method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machineMenuButton(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:menu_button", {
       method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 

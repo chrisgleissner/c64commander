@@ -34,6 +34,7 @@ import { useDiagnosticsSuppressionActive } from "@/hooks/useDiagnosticsSuppressi
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { isDiagnosticsOverlaySuppressionArmed } from "@/lib/diagnostics/diagnosticsOverlayState";
 import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 export type C64QueryOptions = {
   active?: boolean;
@@ -45,6 +46,14 @@ export type C64QueryOptions = {
 export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
   intent: "user",
   refetchOnMount: "always",
+};
+
+const HEALTH_CHECK_INTERVAL_MS = 60_000;
+
+const shouldRunScheduledHealthCheck = () => {
+  const lastSuccessAtMs = getDeviceStateSnapshot().lastSuccessAtMs;
+  if (lastSuccessAtMs === null) return true;
+  return Date.now() - lastSuccessAtMs >= HEALTH_CHECK_INTERVAL_MS;
 };
 
 export interface ConnectionStatus {
@@ -111,10 +120,12 @@ export function useC64Connection() {
       screenActive &&
       !diagnosticsSuppressionActive &&
       (connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE"),
-    retry: 1,
-    retryDelay: 1000,
-    staleTime: 30000,
-    refetchInterval: !screenActive || diagnosticsSuppressionActive ? false : getInfoRefreshMinIntervalMs(),
+    retry: false,
+    staleTime: HEALTH_CHECK_INTERVAL_MS,
+    refetchInterval:
+      !screenActive || diagnosticsSuppressionActive
+        ? false
+        : () => (shouldRunScheduledHealthCheck() ? HEALTH_CHECK_INTERVAL_MS : false),
   });
 
   const rateLimitedInfoRefetch = useCallback(() => {
@@ -247,6 +258,7 @@ export function useC64Categories(options: C64QueryOptions = {}) {
     enabled: queryActive,
     staleTime: 60000,
     refetchOnMount: options.refetchOnMount,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -263,6 +275,7 @@ export function useC64Category(category: string, enabled = true, options: C64Que
     enabled: queryActive && enabled && !!category,
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -299,7 +312,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
       return api.getConfigItems(category, items, { __c64uIntent: intent });
     },
     enabled: queryActive && enabled && !!category && items.length > 0,
-    placeholderData,
+    placeholderData: (previousData) => previousData ?? placeholderData,
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
   });
@@ -339,6 +352,7 @@ export function useC64AllConfig(options: C64QueryOptions = {}) {
     enabled: queryActive && !!categories,
     staleTime: 30000,
     refetchOnMount: options.refetchOnMount,
+    placeholderData: (previousData) => previousData,
   });
 }
 

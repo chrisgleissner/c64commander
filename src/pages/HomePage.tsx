@@ -98,6 +98,7 @@ import {
   type DeviceControlOperation,
   type DeviceControlResult,
 } from "@/lib/deviceControl/deviceControl";
+import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
 
 export default function HomePage() {
   return (
@@ -199,7 +200,7 @@ function HomePageContent() {
 
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
-  const { configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
+  const { configWritePending, updateConfigValue, resolveConfigValue, setConfigOverride } = useSharedConfigActions();
   const {
     openStudio,
     openContextLens,
@@ -212,6 +213,7 @@ function HomePageContent() {
   } = useLightingStudio();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: reuSnapshotEnabled } = useFeatureFlag("reu_snapshot_enabled");
+  const { value: ramSnapshotsEnabled } = useFeatureFlag("ram_snapshots_enabled");
   const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
@@ -234,7 +236,12 @@ function HomePageContent() {
     }
     return support.target;
   };
-  const powerCycleDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("powerCycle") : null;
+  const deviceCode = inferConnectedDeviceCode(status.deviceInfo?.product);
+  const powerCycleSupportedByProduct = deviceCode === "c64u" || deviceCode === "u64e2";
+  const powerCycleSupport = telnet.isAvailable ? getTelnetSupport("powerCycle") : null;
+  const powerCycleVisible =
+    powerCycleSupportedByProduct && telnet.isAvailable && powerCycleSupport?.status === "supported";
+  const powerCycleDisabledReason = null;
   const saveReuDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveReuMemory") : null;
   const saveConfigDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveConfigToFile") : null;
   const clearFlashDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("clearFlashConfig") : null;
@@ -748,26 +755,26 @@ function HomePageContent() {
     await handleTurboControlAutoAdjust(nextValue);
   });
 
-  const handleCpuSpeedPreviewChange = useCallback(
-    (nextValue: string) => {
-      // Interactive write bypasses the queue for instant hardware feedback.
-      void interactiveWriteU64({ "CPU Speed": nextValue }).catch(() => undefined);
-    },
-    [interactiveWriteU64],
-  );
+  const handleCpuSpeedPreviewChange = useCallback((nextValue: string) => {
+    setCpuSpeedOptimisticValue(nextValue);
+  }, []);
 
   const handleCpuSpeedCommitChange = useCallback(
     (nextValue: string) => {
-      // Commit via interactive write for the slider value, then trigger the
-      // Turbo Control auto-adjustment as a one-shot deliberate write without
-      // re-writing CPU Speed through the global queue.
-      void interactiveWriteU64({ "CPU Speed": nextValue })
+      setConfigOverride("U64 Specific Settings", "CPU Speed", nextValue);
+      setCpuSpeedOptimisticValue(nextValue);
+      void Promise.resolve(interactiveWriteU64({ "CPU Speed": nextValue }))
         .then(() => handleTurboControlAutoAdjust(nextValue))
-        .catch(() => {
+        .catch((error) => {
+          addErrorLog("CPU speed commit failed", {
+            error: (error as Error).message,
+            value: nextValue,
+          });
           setCpuSpeedOptimisticValue(cpuSpeedValue);
+          setConfigOverride("U64 Specific Settings", "CPU Speed", cpuSpeedValue);
         });
     },
-    [cpuSpeedValue, interactiveWriteU64, handleTurboControlAutoAdjust],
+    [cpuSpeedValue, interactiveWriteU64, handleTurboControlAutoAdjust, setConfigOverride],
   );
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {
@@ -994,10 +1001,11 @@ function HomePageContent() {
             onPauseResume={handlePauseResume}
             onSaveRam={() => setSaveRamDialogOpen(true)}
             onLoadRam={() => setSnapshotManagerOpen(true)}
+            ramActionsVisible={ramSnapshotsEnabled}
             onPowerOff={handlePowerOff}
             onReboot={() => void handleReboot()}
             onToggleMenu={() => void handleMenuToggle()}
-            powerCycleVisible={telnet.isAvailable}
+            powerCycleVisible={powerCycleVisible}
             onPowerCycle={powerCycleDisabledReason === null ? () => void handlePowerCycle() : undefined}
             powerCycleDisabledReason={powerCycleDisabledReason}
             rebootLoading={deviceControlActionId === "rebootKeepRam"}

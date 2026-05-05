@@ -91,6 +91,31 @@ const buildDiagnosticsJsonFilename = (tab: DiagnosticsExportTab, timestamp: stri
 const buildDiagnosticsZipFilename = (scope: DiagnosticsExportScope, timestamp: string) =>
   `${variant.exportedFileBasename}-diagnostics-${scope}-${timestamp}.zip`;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const isBinaryPayloadBody = (value: unknown) => isRecord(value) && value.type === "binary";
+
+export const sanitizeDiagnosticsExportPayload = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDiagnosticsExportPayload(item));
+  }
+  if (!isRecord(value)) return value;
+
+  const sanitized = Object.entries(value).reduce<Record<string, unknown>>((acc, [key, item]) => {
+    if (key === "responsePayloadPreview" && "responseBody" in value && !isBinaryPayloadBody(value.responseBody)) {
+      return acc;
+    }
+    if (key === "responsePayloadPreview" && "responsePayload" in value && !isBinaryPayloadBody(value.responsePayload)) {
+      return acc;
+    }
+    acc[key] = sanitizeDiagnosticsExportPayload(item);
+    return acc;
+  }, {});
+
+  return sanitized;
+};
+
 const buildDiagnosticsZipEntries = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) => {
   const payloads =
     scope === "all"
@@ -99,7 +124,7 @@ const buildDiagnosticsZipEntries = (scope: DiagnosticsExportScope, data: unknown
   const entries = Object.fromEntries(
     DIAGNOSTICS_EXPORT_TABS.filter((tab) => scope === "all" || tab === scope).map((tab) => [
       buildDiagnosticsJsonFilename(tab, timestamp),
-      [strToU8(JSON.stringify(payloads[tab] ?? [], null, 2)), {}],
+      [strToU8(JSON.stringify(sanitizeDiagnosticsExportPayload(payloads[tab] ?? []), null, 2)), {}],
     ]),
   );
   if (scope === "all" && payloads.supplemental) {

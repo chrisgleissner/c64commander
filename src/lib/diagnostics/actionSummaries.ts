@@ -123,6 +123,14 @@ const readPayloadPreview = (value: unknown): PayloadPreview | null => {
   }
   return { byteCount, previewByteCount, hex, ascii, truncated };
 };
+
+const isBinaryPayloadBody = (value: unknown) => readRecord(value)?.type === "binary";
+
+const includeResponsePayloadPreview = (decodedPayload: unknown, preview: unknown) => {
+  if (!isBinaryPayloadBody(decodedPayload)) return null;
+  return readPayloadPreview(preview);
+};
+
 const readTraceHeaders = (value: unknown): TraceHeaders | undefined => {
   const record = readRecord(value);
   if (!record) return undefined;
@@ -322,8 +330,8 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         ...(readPayloadPreview(requestData.payloadPreview)
           ? { requestPayloadPreview: readPayloadPreview(requestData.payloadPreview) }
           : {}),
-        ...(readPayloadPreview(responseData.payloadPreview)
-          ? { responsePayloadPreview: readPayloadPreview(responseData.payloadPreview) }
+        ...(includeResponsePayloadPreview(responseData.body, responseData.payloadPreview)
+          ? { responsePayloadPreview: includeResponsePayloadPreview(responseData.body, responseData.payloadPreview) }
           : {}),
         ...(error !== null ? { error } : {}),
       });
@@ -384,8 +392,8 @@ const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
         ...(readPayloadPreview(data.requestPayloadPreview)
           ? { requestPayloadPreview: readPayloadPreview(data.requestPayloadPreview) }
           : {}),
-        ...(readPayloadPreview(data.responsePayloadPreview)
-          ? { responsePayloadPreview: readPayloadPreview(data.responsePayloadPreview) }
+        ...(includeResponsePayloadPreview(data.responsePayload, data.responsePayloadPreview)
+          ? { responsePayloadPreview: includeResponsePayloadPreview(data.responsePayload, data.responsePayloadPreview) }
           : {}),
         ...(error !== null ? { error } : {}),
       };

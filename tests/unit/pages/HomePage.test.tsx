@@ -13,8 +13,16 @@ import HomePage from "../../../src/pages/HomePage";
 import { clearRamDumpFolderConfig, saveRamDumpFolderConfig } from "../../../src/lib/config/ramDumpFolderStore";
 import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 
+const featureFlagsRef = vi.hoisted(() => ({
+  current: {
+    lighting_studio_enabled: true,
+    reu_snapshot_enabled: true,
+    ram_snapshots_enabled: true,
+  } as Record<string, boolean>,
+}));
+
 vi.mock("@/hooks/useFeatureFlags", () => ({
-  useFeatureFlag: () => ({ value: true }),
+  useFeatureFlag: (key: string) => ({ value: featureFlagsRef.current[key] ?? true }),
 }));
 
 const {
@@ -634,6 +642,11 @@ vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
 beforeEach(() => {
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();
+  featureFlagsRef.current = {
+    lighting_studio_enabled: true,
+    reu_snapshot_enabled: true,
+    ram_snapshots_enabled: true,
+  };
   queryClientMockRef.current = {
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
@@ -1170,6 +1183,16 @@ describe("HomePage SID status", () => {
     await waitFor(() => expect(machineControlPayloadRef.current.resume.mutateAsync).toHaveBeenCalledTimes(1));
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
   }, 20000);
+
+  it("hides experimental RAM actions when the feature flag is disabled", () => {
+    featureFlagsRef.current.ram_snapshots_enabled = false;
+
+    renderHomePage();
+
+    const machineControls = screen.getByTestId("home-machine-controls");
+    expect(within(machineControls).queryByRole("button", { name: /^save ram$/i })).toBeNull();
+    expect(within(machineControls).queryByRole("button", { name: /^load ram$/i })).toBeNull();
+  });
 
   it("manages app configs via dialogs", async () => {
     const savedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();

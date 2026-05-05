@@ -261,7 +261,7 @@ describe("ConnectionController", () => {
     }
   });
 
-  it("reprobes on visibility resume after the last probe has gone stale", async () => {
+  it("preserves the last known state on visibility resume without immediate rediscovery", async () => {
     const originalHidden = Object.getOwnPropertyDescriptor(document, "hidden");
     Object.defineProperty(document, "hidden", {
       configurable: true,
@@ -283,7 +283,8 @@ describe("ConnectionController", () => {
       discoverConnectionMock.mockClear();
       document.dispatchEvent(new Event("visibilitychange"));
 
-      expect(discoverConnectionMock).toHaveBeenCalledWith("resume");
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("resume");
+      expect(connectionState.value).toBe("REAL_CONNECTED");
     } finally {
       if (originalHidden) {
         Object.defineProperty(document, "hidden", originalHidden);

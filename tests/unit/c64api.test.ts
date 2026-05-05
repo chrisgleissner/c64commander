@@ -615,36 +615,96 @@ describe("c64api", () => {
     await expect(api.machineReset()).rejects.toThrow("Host unreachable");
   });
 
-  it("retries one idle GET request after a network failure", async () => {
+  it("does not retry user-triggered GET requests after a network failure", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toThrow("Host unreachable");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(addLogMock).not.toHaveBeenCalledWith(
+      "warn",
+      "C64 API retry scheduled after idle failure",
+      expect.anything(),
+    );
+  });
+
+  it("does not apply the scheduled 3-second timeout to user-triggered requests", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(
-        new Response(JSON.stringify({ errors: [] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+      fetchMock.mockImplementation(
+        (_url: string, options?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => {
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }),
       );
-      deviceStateSnapshotMock.mockReturnValue({
-        state: "READY",
-        connectionState: "REAL_CONNECTED",
-        busyCount: 0,
-        lastUpdatedAtMs: Date.now() - 15000,
-        lastErrorMessage: null,
-        lastSuccessAtMs: Date.now() - 15000,
-        circuitOpenUntilMs: null,
-      });
+      const controller = new AbortController();
 
       const api = new C64API("http://c64u");
-      const pending = api.getInfo();
-      await vi.advanceTimersByTimeAsync(200);
-      await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      const pending = api.getInfo({ signal: controller.signal, __c64uBypassCache: true });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      controller.abort();
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries scheduled requests at most twice after 3-second timeouts", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+
+      const api = new C64API("http://c64u");
+      const pending = api.getInfo({ __c64uIntent: "background", __c64uBypassCache: true });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(addLogMock).toHaveBeenCalledWith(
-        "warn",
-        "C64 API retry scheduled after idle failure",
-        expect.objectContaining({ wasIdle: true }),
-      );
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      await vi.advanceTimersByTimeAsync(3000);
+
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not start a scheduled retry when elapsed time already exceeds the retry guard", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+
+      const api = new C64API("http://c64u");
+      const pending = api.getInfo({
+        __c64uIntent: "background",
+        __c64uBypassCache: true,
+        timeoutMs: 6001,
+      });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(6001);
+
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }

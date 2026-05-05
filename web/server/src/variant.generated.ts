@@ -77,6 +77,11 @@ export const webServerVariantConfig = {
         enabled: false,
         visible_to_user: false,
       },
+      ram_snapshots_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       reu_snapshot_enabled: {
         developer_only: true,
         enabled: false,

@@ -92,7 +92,6 @@ describe("actionSummaries", () => {
           status: 200,
           requestHeaders: { accept: "application/json" },
           responseHeaders: { "content-type": "application/json" },
-          responsePayloadPreview: expect.objectContaining({ ascii: '{"product":"C64U"}' }),
         }),
         expect.objectContaining({
           type: "FTP",
@@ -102,6 +101,75 @@ describe("actionSummaries", () => {
           responsePayload: { entries: [] },
         }),
         expect.objectContaining({ type: "ERROR", message: "minor warning" }),
+      ]),
+    );
+  });
+
+  it("omits REST responsePayloadPreview for decoded JSON and text bodies", () => {
+    const events: TraceEvent[] = [
+      makeEvent("1", "action-start", "decoded", 10, { name: "Decoded REST" }),
+      makeEvent("2", "rest-request", "decoded", 11, {
+        method: "GET",
+        normalizedUrl: "/v1/info",
+      }),
+      makeEvent("3", "rest-response", "decoded", 12, {
+        status: 200,
+        body: { product: "C64U" },
+        payloadPreview: { byteCount: 18, previewByteCount: 18, hex: "7b", ascii: "{}", truncated: false },
+      }),
+      makeEvent("4", "rest-request", "decoded", 13, {
+        method: "GET",
+        normalizedUrl: "/v1/text",
+      }),
+      makeEvent("5", "rest-response", "decoded", 14, {
+        status: 200,
+        body: "plain text",
+        payloadPreview: {
+          byteCount: 10,
+          previewByteCount: 10,
+          hex: "70",
+          ascii: "plain text",
+          truncated: false,
+        },
+      }),
+      makeEvent("6", "action-end", "decoded", 15, { status: "success" }),
+    ];
+
+    const [summary] = buildActionSummaries(events);
+    const restEffects = summary.effects?.filter((effect) => effect.type === "REST") ?? [];
+    expect(restEffects).toHaveLength(2);
+    expect(restEffects[0]).not.toHaveProperty("responsePayloadPreview");
+    expect(restEffects[1]).not.toHaveProperty("responsePayloadPreview");
+  });
+
+  it("keeps REST responsePayloadPreview for binary bodies", () => {
+    const events: TraceEvent[] = [
+      makeEvent("1", "action-start", "binary", 10, { name: "Binary REST" }),
+      makeEvent("2", "rest-request", "binary", 11, {
+        method: "GET",
+        normalizedUrl: "/v1/file",
+      }),
+      makeEvent("3", "rest-response", "binary", 12, {
+        status: 200,
+        body: { type: "binary", sizeBytes: 4, mimeType: "application/octet-stream" },
+        payloadPreview: {
+          byteCount: 4,
+          previewByteCount: 4,
+          hex: "00 01 02 03",
+          ascii: "....",
+          truncated: false,
+        },
+      }),
+      makeEvent("4", "action-end", "binary", 13, { status: "success" }),
+    ];
+
+    const [summary] = buildActionSummaries(events);
+    expect(summary.effects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "REST",
+          responsePayloadPreview: expect.objectContaining({ hex: "00 01 02 03" }),
+        }),
       ]),
     );
   });

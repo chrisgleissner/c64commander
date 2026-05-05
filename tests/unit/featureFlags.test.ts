@@ -34,6 +34,7 @@ describe("featureFlags persistence and logging", () => {
       "lighting_studio_enabled",
       "background_execution_enabled",
       "reu_snapshot_enabled",
+      "ram_snapshots_enabled",
     ]);
   });
 
@@ -48,6 +49,7 @@ describe("featureFlags persistence and logging", () => {
       lighting_studio_enabled: "experimental",
       background_execution_enabled: "experimental",
       reu_snapshot_enabled: "experimental",
+      ram_snapshots_enabled: "experimental",
     });
   });
 
@@ -108,6 +110,7 @@ describe("featureFlags persistence and logging", () => {
         lighting_studio_enabled: false,
         background_execution_enabled: true,
         reu_snapshot_enabled: false,
+        ram_snapshots_enabled: false,
       }),
     ).toBe(false);
     expect(
@@ -118,6 +121,7 @@ describe("featureFlags persistence and logging", () => {
         lighting_studio_enabled: false,
         background_execution_enabled: true,
         reu_snapshot_enabled: false,
+        ram_snapshots_enabled: false,
       }),
     ).toBe(true);
   });

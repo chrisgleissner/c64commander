@@ -272,6 +272,63 @@ describe("diagnosticsExport", () => {
     expect(archive[`supplemental-${timestamp}.json`]).toBeInstanceOf(Uint8Array);
   });
 
+  it("omits redundant responsePayloadPreview for decoded JSON and text action responses", async () => {
+    const { sanitizeDiagnosticsExportPayload } = await import("@/lib/diagnostics/diagnosticsExport");
+    const actions = sanitizeDiagnosticsExportPayload([
+      {
+        correlationId: "json",
+        effects: [
+          {
+            type: "REST",
+            responseBody: { product: "C64U" },
+            responsePayloadPreview: { byteCount: 18, previewByteCount: 18, hex: "7b", ascii: "{}", truncated: false },
+          },
+          {
+            type: "REST",
+            responseBody: "plain text",
+            responsePayloadPreview: {
+              byteCount: 10,
+              previewByteCount: 10,
+              hex: "70",
+              ascii: "plain text",
+              truncated: false,
+            },
+          },
+        ],
+      },
+    ]) as Array<{ effects: Array<Record<string, unknown>> }>;
+
+    expect(actions[0].effects[0]).not.toHaveProperty("responsePayloadPreview");
+    expect(actions[0].effects[1]).not.toHaveProperty("responsePayloadPreview");
+  });
+
+  it("keeps responsePayloadPreview for binary action responses", async () => {
+    const { sanitizeDiagnosticsExportPayload } = await import("@/lib/diagnostics/diagnosticsExport");
+    const actions = sanitizeDiagnosticsExportPayload([
+      {
+        correlationId: "binary",
+        effects: [
+          {
+            type: "REST",
+            responseBody: { type: "binary", sizeBytes: 4, mimeType: "application/octet-stream" },
+            responsePayloadPreview: {
+              byteCount: 4,
+              previewByteCount: 4,
+              hex: "00 01 02 03",
+              ascii: "....",
+              truncated: false,
+            },
+          },
+        ],
+      },
+    ]) as Array<{ effects: Array<{ responsePayloadPreview?: unknown }> }>;
+
+    expect(actions[0].effects[0].responsePayloadPreview).toMatchObject({
+      byteCount: 4,
+      hex: "00 01 02 03",
+    });
+  });
+
   it("formats diagnostics export timestamps in UTC filename-safe form", async () => {
     const { formatDiagnosticsExportTimestamp } = await import("@/lib/diagnostics/diagnosticsExport");
     expect(formatDiagnosticsExportTimestamp(new Date("2026-03-12T09:13:33.000Z"))).toBe("2026-03-12-0913-33Z");

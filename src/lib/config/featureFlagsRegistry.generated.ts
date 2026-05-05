@@ -19,7 +19,8 @@ export type FeatureFlagId =
   | "demo_mode_enabled"
   | "lighting_studio_enabled"
   | "background_execution_enabled"
-  | "reu_snapshot_enabled";
+  | "reu_snapshot_enabled"
+  | "ram_snapshots_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -106,6 +107,15 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "experimental",
     title: "REU Snapshots",
     description: "Enable Save REU and Restore REU Snapshot functionality.",
+  },
+  {
+    id: "ram_snapshots_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Experimental RAM snapshots",
+    description: "Show experimental Save RAM and Load RAM actions on Home.",
   },
 ] as const;
 

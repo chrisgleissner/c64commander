@@ -11,8 +11,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import HomePage from "@/pages/HomePage";
 
+const featureFlagsRef = vi.hoisted(() => ({
+  current: {
+    lighting_studio_enabled: true,
+    reu_snapshot_enabled: true,
+    ram_snapshots_enabled: true,
+  } as Record<string, boolean>,
+}));
+
 vi.mock("@/hooks/useFeatureFlags", () => ({
-  useFeatureFlag: () => ({ value: true }),
+  useFeatureFlag: (key: string) => ({ value: featureFlagsRef.current[key] ?? true }),
 }));
 
 const {
@@ -105,7 +113,14 @@ vi.mock("@/hooks/useC64Connection", () => ({
     status: {
       isConnected: true,
       isConnecting: false,
-      deviceInfo: null,
+      deviceInfo: {
+        product: "C64U",
+        hostname: "c64u",
+        firmware_version: "3.12",
+        fpga_version: "1.0",
+        core_version: "1.0",
+        unique_id: "C64U-1",
+      },
     },
   }),
   useC64Drives: () => ({
@@ -419,6 +434,11 @@ describe("HomePage RAM actions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    featureFlagsRef.current = {
+      lighting_studio_enabled: true,
+      reu_snapshot_enabled: true,
+      ram_snapshots_enabled: true,
+    };
     (globalThis as any).__APP_VERSION__ = "test";
     (globalThis as any).__GIT_SHA__ = "deadbeef";
     (globalThis as any).__BUILD_TIME__ = "";
@@ -580,7 +600,7 @@ describe("HomePage RAM actions", () => {
     expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
   });
 
-  it("renders Power Cycle disabled with an explanatory note when discovery marks it unsupported", () => {
+  it("hides Power Cycle when discovery marks it unsupported", () => {
     telnetState.getActionSupport.mockImplementation((actionId: string) => {
       if (actionId === "powerCycle") {
         return {
@@ -604,10 +624,8 @@ describe("HomePage RAM actions", () => {
 
     renderHomePage();
 
-    expect(screen.getByRole("button", { name: /^power cycle$/i })).toBeDisabled();
-    expect(screen.getByTestId("home-machine-note-powerCycle")).toHaveTextContent(
-      "Power Cycle: Power Cycle is not available on Ultimate 64 Elite 3.14e.",
-    );
+    expect(screen.queryByRole("button", { name: /^power cycle$/i })).toBeNull();
+    expect(screen.queryByTestId("home-machine-note-powerCycle")).toBeNull();
   });
 
   it("falls back to REST clear-ram reboot when telnet execution fails", async () => {

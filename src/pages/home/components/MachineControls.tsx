@@ -45,6 +45,7 @@ export interface MachineControlsProps {
   onPauseResume: () => void;
   onSaveRam: () => void;
   onLoadRam: () => void;
+  ramActionsVisible?: boolean;
   onPowerOff: () => void;
   onReboot: () => void;
   onToggleMenu: () => void;
@@ -71,6 +72,7 @@ export function MachineControls({
   onPauseResume,
   onSaveRam,
   onLoadRam,
+  ramActionsVisible = false,
   onPowerOff,
   onReboot,
   onToggleMenu,
@@ -92,9 +94,6 @@ export function MachineControls({
     !status.isConnected || effectiveBusy || Boolean(powerCycleDisabledReason) || !canRunPowerCycle;
   const hasOverflowActions = overflowActions.length > 0;
   const disabledCapabilityNotes = [
-    ...(showPowerCycle && powerCycleDisabledReason
-      ? [{ id: "powerCycle", label: "Power Cycle", reason: powerCycleDisabledReason }]
-      : []),
     ...overflowActions
       .filter((action) => action.disabled && action.reason)
       .map((action) => ({
@@ -192,22 +191,26 @@ export function MachineControls({
             disabled={!status.isConnected || effectiveBusy}
             loading={menuLoading}
           />
-          <QuickActionCard
-            icon={Download}
-            label="Save RAM"
-            dataTestId="home-save-ram"
-            onClick={() => void onSaveRam()}
-            disabled={!status.isConnected || effectiveBusy}
-            loading={machineTaskId === "save-ram"}
-          />
-          <QuickActionCard
-            icon={Upload}
-            label="Load RAM"
-            dataTestId="home-load-ram"
-            onClick={() => void onLoadRam()}
-            disabled={!status.isConnected || effectiveBusy}
-            loading={machineTaskId === "load-ram"}
-          />
+          {ramActionsVisible ? (
+            <>
+              <QuickActionCard
+                icon={Download}
+                label="Save RAM"
+                dataTestId="home-save-ram"
+                onClick={() => void onSaveRam()}
+                disabled={!status.isConnected || effectiveBusy}
+                loading={machineTaskId === "save-ram"}
+              />
+              <QuickActionCard
+                icon={Upload}
+                label="Load RAM"
+                dataTestId="home-load-ram"
+                onClick={() => void onLoadRam()}
+                disabled={!status.isConnected || effectiveBusy}
+                loading={machineTaskId === "load-ram"}
+              />
+            </>
+          ) : null}
           {showPowerCycle ? (
             <QuickActionCard
               icon={RefreshCw}

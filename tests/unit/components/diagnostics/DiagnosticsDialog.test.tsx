@@ -939,4 +939,149 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("health-check-probe-raster")).toHaveTextContent("Success");
     expect(screen.getByTestId("health-check-probe-jiffy")).toHaveTextContent("Success");
   });
+
+  it("pages through all filtered activity and resets pagination when quick filters change", () => {
+    setViewportWidth(600);
+    const now = Date.now();
+    const actionSummaries = Array.from({ length: 25 }, (_, index) => ({
+      correlationId: `rest-${index}`,
+      actionName: `REST action ${index}`,
+      origin: "user" as const,
+      originalOrigin: "user" as const,
+      startTimestamp: new Date(now - index * 1000).toISOString(),
+      endTimestamp: new Date(now - index * 1000 + 50).toISOString(),
+      durationMs: 50,
+      outcome: "success" as const,
+      startRelativeMs: index,
+      effects: [
+        {
+          type: "REST" as const,
+          label: "GET /v1/info",
+          method: "GET",
+          path: "/v1/info",
+          target: null,
+          status: 200,
+          durationMs: 50,
+        },
+      ],
+    }));
+
+    renderDialog({ actionSummaries, errorLogs: [], logs: [], traceEvents: [] });
+
+    expect(screen.getByTestId("filters-result-count")).toHaveTextContent("25 of 25");
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("REST action 19");
+    expect(screen.queryByTestId("evidence-row-action-rest-24")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("load-more-activity"));
+
+    expect(screen.getByTestId("evidence-row-action-rest-24")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    fireEvent.click(screen.getByTestId("quick-filter-ftp"));
+
+    expect(screen.getAllByTestId("filters-result-count").map((element) => element.textContent)).toContain("0 of 25");
+    expect(screen.queryByTestId("evidence-row-action-rest-24")).toBeNull();
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("No matching activity.");
+  });
+
+  it("adds REST and FTP quick filters that narrow activity by contributor", () => {
+    setViewportWidth(600);
+    const now = Date.now();
+
+    renderDialog({
+      errorLogs: [],
+      logs: [],
+      traceEvents: [],
+      actionSummaries: [
+        {
+          correlationId: "rest-action",
+          actionName: "REST refresh",
+          origin: "user" as const,
+          originalOrigin: "user" as const,
+          startTimestamp: new Date(now).toISOString(),
+          endTimestamp: new Date(now + 10).toISOString(),
+          durationMs: 10,
+          outcome: "success" as const,
+          startRelativeMs: 0,
+          effects: [
+            {
+              type: "REST" as const,
+              label: "GET /v1/info",
+              method: "GET",
+              path: "/v1/info",
+              target: null,
+              status: 200,
+              durationMs: 10,
+            },
+          ],
+        },
+        {
+          correlationId: "ftp-action",
+          actionName: "FTP list",
+          origin: "user" as const,
+          originalOrigin: "user" as const,
+          startTimestamp: new Date(now - 1000).toISOString(),
+          endTimestamp: new Date(now - 990).toISOString(),
+          durationMs: 10,
+          outcome: "success" as const,
+          startRelativeMs: 1,
+          effects: [
+            {
+              type: "FTP" as const,
+              label: "LIST /USB0",
+              operation: "LIST",
+              command: "LIST",
+              hostname: "c64u",
+              port: 21,
+              path: "/USB0",
+              target: null,
+              result: "success",
+              durationMs: 10,
+            },
+          ],
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    fireEvent.click(screen.getByTestId("quick-filter-rest"));
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("REST refresh");
+    expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("FTP list");
+
+    fireEvent.click(screen.getByTestId("quick-filter-ftp"));
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("FTP list");
+    expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("REST refresh");
+
+    fireEvent.click(screen.getByTestId("quick-filter-reset"));
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("REST refresh");
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("FTP list");
+  });
+
+  it("suppresses routine system health checks that remain in progress", () => {
+    setViewportWidth(600);
+    const now = Date.now();
+
+    renderDialog({
+      errorLogs: [],
+      logs: [],
+      traceEvents: [],
+      actionSummaries: [
+        {
+          correlationId: "health-check",
+          actionName: "click Connected to 192.168.1.13, system healthy",
+          origin: "system" as const,
+          originalOrigin: "automatic" as const,
+          startTimestamp: new Date(now).toISOString(),
+          endTimestamp: null,
+          durationMs: null,
+          outcome: "in_progress" as const,
+          startRelativeMs: 0,
+          effects: [],
+        },
+      ],
+    });
+
+    expect(screen.queryByTestId("evidence-row-action-health-check")).toBeNull();
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("No matching activity.");
+  });
 });
