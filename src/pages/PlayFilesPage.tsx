@@ -284,8 +284,8 @@ export default function PlayFilesPage() {
     volumeSessionActiveRef,
     captureSidMuteSnapshot,
     snapshotToUpdates,
-    handleVolumeLocalChange,
-    handleVolumeAsyncChange,
+    handleVolumeDraftChange,
+    handleVolumePreview,
     handleVolumeCommit,
     handleToggleMute,
     resumingFromPauseRef,
@@ -1504,7 +1504,6 @@ export default function PlayFilesPage() {
                   <VolumeControls
                     volumeMuted={volumeMuted}
                     canControlVolume={canControlVolume}
-                    isPending={updateConfigBatch.isPending}
                     onToggleMute={() => {
                       void handleToggleMute().catch((error) => {
                         addErrorLog("Mute toggle failed", {
@@ -1520,8 +1519,8 @@ export default function PlayFilesPage() {
                     }}
                     volumeStepsCount={volumeSteps.length}
                     volumeIndex={volumeIndex}
-                    onVolumeChange={handleVolumeLocalChange}
-                    onVolumeChangeAsync={handleVolumeAsyncChange}
+                    onVolumeDraftChange={handleVolumeDraftChange}
+                    onVolumePreview={handleVolumePreview}
                     onVolumeCommit={(value) => void handleVolumeCommit(value)}
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
                     volumeLabel={volumeLabel}

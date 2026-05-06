@@ -6,14 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  resolveMidpointSnap,
-  resolveMidpointPercent,
-  shouldTriggerMidpointHaptic,
-  createSliderAsyncQueue,
-  SLIDER_MID_DRAG_THROTTLE_MS,
-} from "@/lib/ui/sliderBehavior";
+import { describe, it, expect, vi } from "vitest";
+import { resolveMidpointSnap, resolveMidpointPercent, shouldTriggerMidpointHaptic } from "@/lib/ui/sliderBehavior";
 
 describe("sliderBehavior", () => {
   describe("resolveMidpointSnap", () => {
@@ -121,86 +115,6 @@ describe("sliderBehavior", () => {
 
     it("returns false when previous is null and next is not midpoint (line 60 FALSE)", () => {
       expect(shouldTriggerMidpointHaptic({ ...base, previous: null, next: 55 })).toBe(false);
-    });
-  });
-
-  describe("createSliderAsyncQueue", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("throttles calls", () => {
-      const onChange = vi.fn();
-      const queue = createSliderAsyncQueue({ onChange, throttleMs: 100 });
-
-      queue.schedule(1);
-      queue.schedule(2);
-      queue.schedule(3);
-
-      expect(onChange).not.toHaveBeenCalled();
-
-      vi.advanceTimersByTime(100);
-      // schedule uses queueMicrotask flush
-      // We need to wait for microtasks
-    });
-
-    it("commits immediately", async () => {
-      const onCommit = vi.fn();
-      const queue = createSliderAsyncQueue({ onCommit });
-      await Promise.resolve(); // flush any microtasks?
-
-      queue.commit(5);
-      // commit also uses queueMicrotask
-      await Promise.resolve(); // yield to microtask
-      // Wait... Vitest might need explicit run?
-
-      // queueMicrotask is async.
-    });
-
-    it("commit falls back to onChange when onCommit absent (line 103 FALSE)", async () => {
-      const onChange = vi.fn();
-      const queue = createSliderAsyncQueue({ onChange });
-
-      queue.commit(7);
-      await Promise.resolve();
-
-      expect(onChange).toHaveBeenCalledWith(7);
-    });
-
-    it("commit is no-op when neither onCommit nor onChange provided (line 104 TRUE)", async () => {
-      const queue = createSliderAsyncQueue({});
-      // Should not throw
-      queue.commit(3);
-      await Promise.resolve();
-    });
-
-    it("cancel is no-op when no timer is running (line 110 FALSE)", () => {
-      const onChange = vi.fn();
-      const queue = createSliderAsyncQueue({ onChange });
-      // No schedule → timer = null
-      queue.cancel();
-      // Should not throw, no timer to clear
-    });
-
-    it("commit without prior schedule hits null pendingValue in flush (line 73 TRUE)", () => {
-      // flush() is called by commit(); pendingValue is null → TRUE branch fires
-      const onChange = vi.fn();
-      const queue = createSliderAsyncQueue({ onChange });
-      queue.commit(5);
-      expect(onChange).not.toHaveBeenCalled();
-    });
-
-    it("cancel clears a pending scheduled call", () => {
-      const onChange = vi.fn();
-      const queue = createSliderAsyncQueue({ onChange, throttleMs: 100 });
-
-      queue.schedule(1);
-      queue.cancel();
-      vi.advanceTimersByTime(200);
-      expect(onChange).not.toHaveBeenCalled();
     });
   });
 });

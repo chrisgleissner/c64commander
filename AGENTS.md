@@ -16,12 +16,13 @@ If instructions conflict, follow `.github/copilot-instructions.md` unless the ta
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
 2. REST API details live in `docs/c64/c64u-openapi.yaml`.
-3. Read the UX design in `docs/ux-guidelines.md` before any UX work.
-4. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
-5. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
-6. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
-7. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
-8. Use `.github/copilot-instructions.md` for mandatory workflows. It overrides this file on conflicts.
+3. Consult `docs/c64/c64u-telnet.yaml` before any Telnet-related change; treat it as the Telnet menu/source-of-truth reference.
+4. Read the UX design in `docs/ux-guidelines.md` before any UX work.
+5. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
+6. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
+7. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
+8. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
+9. Use `.github/copilot-instructions.md` for mandatory workflows. It overrides this file on conflicts.
 
 ## Required execution model
 
@@ -110,6 +111,7 @@ At completion, summarize:
 
 - **Primary rules and conventions**: `.github/copilot-instructions.md`
 - **REST API docs**: `docs/c64/c64u-openapi.yaml`
+- **Telnet menu reference**: `docs/c64/c64u-telnet.yaml` (consult before Telnet-related code or test changes)
 - **App entry**: `src/main.tsx`, `src/App.tsx`
 - **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
 - **App config state**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
@@ -252,6 +254,15 @@ Violating this rule is a release blocker.
 - The run must satisfy a safety margin of at least **91% branch coverage** globally.
 - If branch coverage is below 91%, continue adding meaningful tests until it is `>= 91%`.
 - For changes under `agents/`, also run `npm run test:agents` and confirm `>= 90%` branch coverage.
+
+### Exception: fast local Android deploy loop
+
+- If the user prompt explicitly includes `FAST_ANDROID_DEPLOY`, `fast deploy`, `quick deploy`, `deploy to device`, `device loop`, `device test`, or `no-coverage deploy`, treat it as a local device-debug workflow.
+- In that workflow, skip tests, coverage, lint, and screenshot regeneration unless the user explicitly asks for them.
+- Prefer `./build --skip-tests --install-apk` and let the build helper auto-select the attached device unless multiple devices are present.
+- If the user establishes an ongoing preference for this workflow, keep using the fast deploy path after each completed task until the user explicitly asks to run tests or widen validation.
+- This exception exists only to optimize local deploy/debug turnaround.
+- When the user invokes `.github/prompts/pr-converge.prompt.md`, the exception no longer applies and full validation plus coverage are mandatory again.
 
 ## Mandatory handling of concurrent changes
 

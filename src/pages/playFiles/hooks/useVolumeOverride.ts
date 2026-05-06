@@ -50,7 +50,7 @@ type PlaybackMixerWrite = {
 interface UseVolumeOverrideProps {
   isPlaying: boolean;
   isPaused: boolean;
-  previewIntervalMs: number;
+  previewIntervalMs?: number;
 }
 
 type EnsureUnmutedOptions = {
@@ -58,7 +58,7 @@ type EnsureUnmutedOptions = {
   refreshItems?: boolean;
 };
 
-export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: UseVolumeOverrideProps) {
+export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
 
@@ -121,7 +121,6 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
   const lastManualWriteRef = useRef<{ index: number; muted: boolean; setAtMs: number } | null>(null);
   const manualMuteIntentRef = useRef(false);
   const isDraggingVolumeRef = useRef(false);
-  const lastPreviewSentAtRef = useRef<number | null>(null);
   const playbackReconcileTimerRef = useRef<number | null>(null);
   const playbackWriteLaneRef = useRef<LatestIntentWriteLane<PlaybackMixerWrite> | null>(null);
   // Set to true during the pause-to-mute transition to prevent stale query
@@ -542,9 +541,8 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
     ],
   );
 
-  const handleVolumeLocalChange = useCallback(
-    (value: number[]) => {
-      const nextIndex = value[0] ?? 0;
+  const handleVolumeDraftChange = useCallback(
+    (nextIndex: number) => {
       isDraggingVolumeRef.current = true;
       dispatchVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
@@ -562,23 +560,12 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
     [reserveVolumeUiTarget, volumeMuted, volumeSteps],
   );
 
-  const handleVolumeAsyncChange = useCallback(
+  const handleVolumePreview = useCallback(
     (nextIndex: number) => {
       if (volumeMuted) return;
-      const now = Date.now();
-      const lastSentAt = lastPreviewSentAtRef.current;
-      if (lastSentAt !== null && now - lastSentAt < previewIntervalMs) {
-        addLog("debug", "Play volume preview suppressed by configured rate limit", {
-          index: nextIndex,
-          elapsedMs: now - lastSentAt,
-          previewIntervalMs,
-        });
-        return;
-      }
-      lastPreviewSentAtRef.current = now;
-      void sendVolumeWrite(nextIndex, "preview");
+      return sendVolumeWrite(nextIndex, "preview");
     },
-    [previewIntervalMs, sendVolumeWrite, volumeMuted],
+    [sendVolumeWrite, volumeMuted],
   );
 
   const handleVolumeCommit = useCallback(
@@ -598,7 +585,6 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
         }
         return;
       }
-      lastPreviewSentAtRef.current = null;
       await sendVolumeWrite(nextIndex, "commit");
     },
     [reserveVolumeUiTarget, sendVolumeWrite, volumeMuted, volumeSteps],
@@ -608,7 +594,6 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
     const cachedItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : await resolveEnabledSidVolumeItems();
     if (!cachedItems.length) return;
     isDraggingVolumeRef.current = false;
-    lastPreviewSentAtRef.current = null;
     const muteIndex = resolveMutedVolumeIndex(cachedItems);
     if (!volumeMuted) {
       previousVolumeIndexRef.current = volumeIndex;
@@ -905,8 +890,10 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
     volumeUpdateSeqRef,
     captureSidMuteSnapshot,
     snapshotToUpdates,
-    handleVolumeLocalChange,
-    handleVolumeAsyncChange,
+    handleVolumeLocalChange: handleVolumeDraftChange,
+    handleVolumeAsyncChange: handleVolumePreview,
+    handleVolumeDraftChange,
+    handleVolumePreview,
     handleVolumeCommit,
     handleToggleMute,
     ensureUnmuted,

@@ -288,13 +288,13 @@ describe("createMenuNavigator", () => {
         sendRaw: vi.fn(),
         readScreen: vi.fn(() => {
           readCount++;
-          // Read 1: no menu (triggers retry)
-          // Read 2: menu visible (retry succeeds)
-          // Read 3: submenu visible (after RIGHT)
-          // Read 4: after ENTER (menu closed)
-          if (readCount === 1) return Promise.resolve(emptyScreen);
-          if (readCount === 2) return Promise.resolve(menuScreen);
-          if (readCount === 3) return Promise.resolve(menuScreenWithSub);
+          // Reads 1-3: no menu (forces retry)
+          // Read 4: menu visible after retry
+          // Read 5: submenu visible (after RIGHT)
+          // Read 6: after ENTER (menu closed)
+          if (readCount <= 3) return Promise.resolve(emptyScreen);
+          if (readCount === 4) return Promise.resolve(menuScreen);
+          if (readCount === 5) return Promise.resolve(menuScreenWithSub);
           return Promise.resolve(afterExecScreen);
         }),
       };
@@ -306,6 +306,157 @@ describe("createMenuNavigator", () => {
         (c: string[]) => c[0] === "F5",
       );
       expect(f5Calls.length).toBe(2);
+    });
+
+    it("waits through delayed redraw frames before retrying the menu key", async () => {
+      const emptyScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [],
+        form: null,
+        selectedItem: null,
+        titleLine: "",
+        screenType: "file_browser",
+      };
+      const menuScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [
+          {
+            level: 0,
+            items: [
+              {
+                label: "Power & Reset",
+                selected: true,
+                enabled: true,
+              },
+            ],
+            selectedIndex: 0,
+            bounds: { x: 0, y: 0, width: 20, height: 5 },
+          },
+        ],
+        form: null,
+        selectedItem: "Power & Reset",
+        titleLine: "",
+        screenType: "action_menu",
+      };
+      const menuScreenWithSub: TelnetScreen = {
+        ...menuScreen,
+        menus: [
+          ...menuScreen.menus,
+          {
+            level: 1,
+            items: [
+              {
+                label: "Reset C64",
+                selected: true,
+                enabled: true,
+              },
+            ],
+            selectedIndex: 0,
+            bounds: { x: 20, y: 0, width: 20, height: 5 },
+          },
+        ],
+      };
+      const afterExecScreen: TelnetScreen = {
+        ...emptyScreen,
+        screenType: "file_browser",
+      };
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount <= 2) return Promise.resolve(emptyScreen);
+          if (readCount === 3) return Promise.resolve(menuScreen);
+          if (readCount === 4) return Promise.resolve(menuScreenWithSub);
+          return Promise.resolve(afterExecScreen);
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await nav.navigate(["Power & Reset", "Reset C64"], "F5");
+
+      const f5Calls = (fakeSession.sendKey as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (c: string[]) => c[0] === "F5",
+      );
+      expect(f5Calls.length).toBe(1);
+    });
+
+    it("falls back to the alternate menu key when the preferred key never opens the action menu", async () => {
+      const emptyScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [],
+        form: null,
+        selectedItem: null,
+        titleLine: "",
+        screenType: "file_browser",
+      };
+      const menuScreen: TelnetScreen = {
+        width: 60,
+        height: 24,
+        cells: [],
+        menus: [
+          {
+            level: 0,
+            items: [{ label: "Power & Reset", selected: true, enabled: true }],
+            selectedIndex: 0,
+            bounds: { x: 0, y: 0, width: 20, height: 5 },
+          },
+        ],
+        form: null,
+        selectedItem: "Power & Reset",
+        titleLine: "",
+        screenType: "action_menu",
+      };
+      const menuScreenWithSub: TelnetScreen = {
+        ...menuScreen,
+        menus: [
+          ...menuScreen.menus,
+          {
+            level: 1,
+            items: [{ label: "Reset C64", selected: true, enabled: true }],
+            selectedIndex: 0,
+            bounds: { x: 20, y: 0, width: 20, height: 5 },
+          },
+        ],
+      };
+      const afterExecScreen: TelnetScreen = {
+        ...emptyScreen,
+        screenType: "file_browser",
+      };
+
+      let readCount = 0;
+      const fakeSession: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        isConnected: vi.fn(() => true),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(() => {
+          readCount++;
+          if (readCount <= 6) return Promise.resolve(emptyScreen);
+          if (readCount === 7) return Promise.resolve(menuScreen);
+          if (readCount === 8) return Promise.resolve(menuScreenWithSub);
+          return Promise.resolve(afterExecScreen);
+        }),
+      };
+
+      const nav = createMenuNavigator(fakeSession);
+      await nav.navigate(["Power & Reset", "Reset C64"], "F1");
+
+      const sentKeys = (fakeSession.sendKey as ReturnType<typeof vi.fn>).mock.calls.map((call: string[]) => call[0]);
+      expect(sentKeys).toContain("F1");
+      expect(sentKeys).toContain("F5");
     });
 
     it("throws MENU_NOT_FOUND when menu not visible after two tries", async () => {
@@ -330,7 +481,9 @@ describe("createMenuNavigator", () => {
       };
 
       const nav = createMenuNavigator(fakeSession);
-      await expect(nav.navigate(["Power & Reset", "Reset C64"], "F5")).rejects.toThrow("tried twice");
+      await expect(nav.navigate(["Power & Reset", "Reset C64"], "F5")).rejects.toThrow(
+        "Action menu not visible after F5 or F1",
+      );
     });
   });
 

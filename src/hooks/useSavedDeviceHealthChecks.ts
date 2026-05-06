@@ -221,7 +221,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
               running: false,
               latestResult: result,
               liveProbes: null,
-              probeStates: resetHealthCheckProbeStates(),
+              probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
               error: null,
             }));
@@ -240,7 +240,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
               ...current,
               running: false,
               liveProbes: null,
-              probeStates: resetHealthCheckProbeStates(),
+              probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
               error: message,
             }));

@@ -19,6 +19,9 @@ This requires:
 5. Replying on and resolving every applicable review thread.
 6. Meeting repository coverage requirements.
 
+This prompt overrides any fast local deploy shortcut such as `FAST_ANDROID_DEPLOY`, `fast deploy`, `quick deploy`, `device loop`, or `no-coverage deploy`.
+When converging a PR, full repository validation and coverage evidence are mandatory again.
+
 Use the **gh tool** to interact with GitHub.
 
 ---
@@ -124,6 +127,7 @@ Follow repository validation rules.
 
 If repository policy requires coverage thresholds, you must verify them before declaring completion.
 If the default coverage command is flaky, use the smallest honest fallback that still proves the threshold result and say which command produced the evidence.
+Do not reuse a fast local deploy shortcut as a substitute for this validation.
 
 Examples:
 

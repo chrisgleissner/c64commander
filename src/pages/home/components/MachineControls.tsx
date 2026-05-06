@@ -8,7 +8,7 @@
 
 import { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw } from "lucide-react";
+import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw, LucideIcon } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { Button } from "@/components/ui/button";
@@ -23,10 +23,13 @@ import { ProfileActionGrid } from "@/components/layout/PageContainer";
 type MachineOverflowAction = {
   id: string;
   label: string;
-  onSelect: () => void;
+  icon?: LucideIcon;
+  onSelect: () => void | Promise<void>;
   disabled?: boolean;
   loading?: boolean;
   reason?: string | null;
+  variant?: "default" | "danger" | "success";
+  className?: string;
 };
 
 export interface MachineControlsProps {
@@ -92,7 +95,20 @@ export function MachineControls({
   const showPowerCycle = powerCycleVisible ?? canRunPowerCycle;
   const powerCycleDisabled =
     !status.isConnected || effectiveBusy || Boolean(powerCycleDisabledReason) || !canRunPowerCycle;
-  const hasOverflowActions = overflowActions.length > 0;
+  const machineActionEnabled = status.isConnected && !effectiveBusy;
+  const enabledQuickActionCount = [
+    machineActionEnabled,
+    machineActionEnabled,
+    machineActionEnabled,
+    machineActionEnabled,
+    ramActionsVisible && machineActionEnabled,
+    ramActionsVisible && machineActionEnabled,
+    showPowerCycle && !powerCycleDisabled,
+    machineActionEnabled,
+  ].filter(Boolean).length;
+  const enabledOverflowActionCount = overflowActions.filter((action) => !action.disabled).length;
+  const showOverflowMenu = overflowActions.length > 0 && enabledQuickActionCount + enabledOverflowActionCount > 8;
+  const inlineOverflowActions = showOverflowMenu ? [] : overflowActions;
   const disabledCapabilityNotes = [
     ...overflowActions
       .filter((action) => action.disabled && action.reason)
@@ -113,7 +129,7 @@ export function MachineControls({
       <SectionHeader
         title="Quick Actions"
         actions={
-          hasOverflowActions ? (
+          showOverflowMenu ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -131,7 +147,7 @@ export function MachineControls({
                   <DropdownMenuItem
                     key={action.id}
                     disabled={action.disabled || action.loading}
-                    onSelect={() => action.onSelect()}
+                    onSelect={() => void action.onSelect()}
                     data-testid={`home-machine-overflow-${action.id}`}
                     title={action.reason ?? undefined}
                   >
@@ -223,6 +239,22 @@ export function MachineControls({
               loading={powerCycleLoading}
             />
           ) : null}
+          {inlineOverflowActions.map((action) => {
+            const Icon = action.icon ?? RefreshCw;
+            return (
+              <QuickActionCard
+                key={action.id}
+                icon={Icon}
+                label={action.loading ? `${action.label}…` : action.label}
+                dataTestId={`home-machine-inline-${action.id}`}
+                onClick={() => void action.onSelect()}
+                disabled={action.disabled}
+                loading={action.loading}
+                variant={action.variant}
+                className={action.className}
+              />
+            );
+          })}
           <QuickActionCard
             icon={PowerOff}
             label="Power Off"

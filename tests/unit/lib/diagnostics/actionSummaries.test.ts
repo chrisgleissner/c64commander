@@ -243,7 +243,7 @@ describe("actionSummaries", () => {
       makeEvent("2", "telnet-operation", "telnet", 12, {
         actionId: "rebootClearMemory",
         actionLabel: "Reboot",
-        menuPath: ["Machine", "Reboot (Clear RAM)"],
+        menuPath: ["Machine", "Reboot (Clr Mem)"],
         target: "real-device",
         result: "success",
         durationMs: 321,
@@ -264,7 +264,7 @@ describe("actionSummaries", () => {
           type: "TELNET",
           actionId: "rebootClearMemory",
           actionLabel: "Reboot",
-          menuPath: ["Machine", "Reboot (Clear RAM)"],
+          menuPath: ["Machine", "Reboot (Clr Mem)"],
           result: "success",
           durationMs: 321,
         }),

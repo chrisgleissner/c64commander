@@ -1,6 +1,16 @@
 # Prompt Workflow Contract
 
-This folder contains reusable review and analysis prompts.
+This folder contains reusable review, analysis, and execution prompts.
+
+## Local Device Debug Cycle
+
+Use the fast local deploy prompt when you want maximum Android iteration speed on the attached phone:
+
+1. `fast-android-deploy.prompt.md`
+   - Trigger phrases: `FAST_ANDROID_DEPLOY`, `fast deploy`, `quick deploy`, `device loop`, `no-coverage deploy`
+   - Skips lint, tests, and coverage by default
+   - Uses `./build --skip-tests --install-apk` and relies on automatic device selection unless a specific device is required
+   - Intended only for local debug loops, not PR convergence
 
 ## Production Review Cycle
 

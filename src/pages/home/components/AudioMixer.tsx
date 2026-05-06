@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { getC64API } from "@/lib/c64api";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -44,14 +44,11 @@ interface AudioMixerProps {
 export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: AudioMixerProps) {
   const api = getC64API();
   const trace = useActionTrace("AudioMixer");
-  const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue, setConfigOverride } =
-    useSharedConfigActions();
+  const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category: "Audio Mixer" });
 
   const { sidControlEntries, sidSilenceTargets, sidAddressingCategory, ultiSidCategory, sidSocketsCategory } =
     useSidData(isConnected, configOverrides);
-
-  const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const ultiSidConfig = ultiSidCategory as Record<string, unknown> | undefined;
   const ultiSid1ProfileValue = String(
@@ -188,17 +185,9 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           const panCenterIndex = resolvePanCenterIndex(panOptions);
           const volumeMax = Math.max(volumeOptions.length - 1, 0);
           const panMax = Math.max(panOptions.length - 1, 0);
-          const volumeSliderId = `sid-${entry.key}-volume`;
-          const panSliderId = `sid-${entry.key}-pan`;
-          // Volume and pan use the interactive write path — not the global queue.
-          const volumePending = false;
-          const panPending = false;
-
           const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
-          const activeVolumeValue = activeSliders[volumeSliderId];
-          const activePanValue = activeSliders[panSliderId];
-          const volumeSliderValue = clampSliderValue(activeVolumeValue ?? volumeIndex, volumeMax);
-          const panSliderValue = clampSliderValue(activePanValue ?? panIndex, panMax);
+          const volumeSliderValue = clampSliderValue(volumeIndex, volumeMax);
+          const panSliderValue = clampSliderValue(panIndex, panMax);
 
           const isUltiSid = entry.key === "ultiSid1" || entry.key === "ultiSid2";
           const resolveVolumeIndexValue = (value: number) =>
@@ -214,29 +203,25 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           const panValueFormatter = (value: number) =>
             formatPanValue(String(panOptions[Math.round(value)] ?? panOptions[0] ?? ""));
 
-          const handleVolumeLocalChange = (val: number) => {
-            const snapped = clampSliderValue(applySoftDetent(val, volumeCenterIndex), volumeMax);
-            setActiveSliders((prev) => ({
-              ...prev,
-              [volumeSliderId]: snapped,
-            }));
+          const handleVolumePreview = (val: number) => {
+            return Promise.resolve(interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) })).catch(
+              (error) => {
+                addLog(
+                  "warn",
+                  "Audio Mixer volume preview failed",
+                  buildErrorLogDetails(error as Error, {
+                    itemName: entry.volumeItem,
+                    sidKey: entry.key,
+                    value: resolveVolumeOption(val),
+                  }),
+                );
+                throw error;
+              },
+            );
           };
-          const handleVolumeLocalCommit = (val: number) => {
-            // Pre-emptively set the config override so the slider doesn't snap back to
-            // the stale server value before the REST round-trip completes.
-            setConfigOverride("Audio Mixer", entry.volumeItem, resolveVolumeOption(val));
-            setActiveSliders((prev) => {
-              const next = { ...prev };
-              delete next[volumeSliderId];
-              return next;
-            });
-          };
-          const handleVolumeAsyncChange = (val: number) => {
-            void interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
-          };
-          const handleVolumeAsyncCommit = (val: number) => {
+          const handleVolumeCommit = (val: number) => {
             const nextValue = resolveVolumeOption(val);
-            void Promise.resolve(interactiveWrite({ [entry.volumeItem]: nextValue })).catch((error) => {
+            return Promise.resolve(interactiveWrite({ [entry.volumeItem]: nextValue })).catch((error) => {
               addLog(
                 "warn",
                 "Audio Mixer volume preview commit failed",
@@ -246,29 +231,26 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
                   value: nextValue,
                 }),
               );
-              setConfigOverride("Audio Mixer", entry.volumeItem, entry.volume);
+              throw error;
             });
           };
-          const handlePanLocalChange = (val: number) => {
-            const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
-            setActiveSliders((prev) => ({ ...prev, [panSliderId]: snapped }));
-          };
-          const handlePanLocalCommit = (val: number) => {
-            // Pre-emptively set the config override so the slider doesn't snap back to
-            // the stale server value before the REST round-trip completes.
-            setConfigOverride("Audio Mixer", entry.panItem, resolvePanOption(val));
-            setActiveSliders((prev) => {
-              const next = { ...prev };
-              delete next[panSliderId];
-              return next;
+          const handlePanPreview = (val: number) => {
+            return Promise.resolve(interactiveWrite({ [entry.panItem]: resolvePanOption(val) })).catch((error) => {
+              addLog(
+                "warn",
+                "Audio Mixer pan preview failed",
+                buildErrorLogDetails(error as Error, {
+                  itemName: entry.panItem,
+                  sidKey: entry.key,
+                  value: resolvePanOption(val),
+                }),
+              );
+              throw error;
             });
           };
-          const handlePanAsyncChange = (val: number) => {
-            void interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
-          };
-          const handlePanAsyncCommit = (val: number) => {
+          const handlePanCommit = (val: number) => {
             const nextValue = resolvePanOption(val);
-            void Promise.resolve(interactiveWrite({ [entry.panItem]: nextValue })).catch((error) => {
+            return Promise.resolve(interactiveWrite({ [entry.panItem]: nextValue })).catch((error) => {
               addLog(
                 "warn",
                 "Audio Mixer pan preview commit failed",
@@ -278,7 +260,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
                   value: nextValue,
                 }),
               );
-              setConfigOverride("Audio Mixer", entry.panItem, entry.pan);
+              throw error;
             });
           };
 
@@ -506,23 +488,19 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
               volume={volumeSliderValue}
               volumeMax={volumeMax}
               volumeStep={SID_SLIDER_STEP}
-              onVolumeChange={handleVolumeLocalChange}
-              onVolumeCommit={handleVolumeLocalCommit}
-              onVolumeChangeAsync={handleVolumeAsyncChange}
-              onVolumeCommitAsync={handleVolumeAsyncCommit}
+              onVolumeCommit={handleVolumeCommit}
+              onVolumePreview={handleVolumePreview}
+              volumeRound={resolveVolumeIndexValue}
               volumeValueFormatter={volumeValueFormatter}
               volumeMidpoint={volumeCenterIndex}
-              volumePending={volumePending}
               pan={panSliderValue}
               panMax={panMax}
               panStep={SID_SLIDER_STEP}
-              onPanChange={handlePanLocalChange}
-              onPanCommit={handlePanLocalCommit}
-              onPanChangeAsync={handlePanAsyncChange}
-              onPanCommitAsync={handlePanAsyncCommit}
+              onPanCommit={handlePanCommit}
+              onPanPreview={handlePanPreview}
+              panRound={resolvePanIndexValue}
               panValueFormatter={panValueFormatter}
               panMidpoint={panCenterIndex}
-              panPending={panPending}
               isConnected={isConnected}
               testIdSuffix={entry.key}
             />

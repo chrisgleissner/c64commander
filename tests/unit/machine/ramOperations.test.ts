@@ -274,7 +274,7 @@ describe("ramOperations", () => {
       // This test exercises clearRamAndReboot with a non-Error thrown value (covers asError line 44).
       api.writeMemoryBlock.mockRejectedValue("string-error");
 
-      await expect(clearRamAndReboot(api as any)).rejects.toThrow("Reboot (Clear RAM) failed");
+      await expect(clearRamAndReboot(api as any)).rejects.toThrow("Reboot (Clr Mem) failed");
     });
   });
 

@@ -10,6 +10,11 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  createNumericSliderDomain,
+  type DeviceBoundSliderPreviewMode,
+  useDeviceBoundSlider,
+} from "@/hooks/useDeviceBoundSlider";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -47,24 +52,26 @@ export interface SidCardProps {
   volume: number;
   volumeMax: number;
   volumeStep?: number;
-  onVolumeChange: (value: number) => void;
-  onVolumeCommit?: (value: number) => void;
-  onVolumeChangeAsync?: (value: number) => void;
-  onVolumeCommitAsync?: (value: number) => void;
+  onVolumeChange?: (value: number) => void;
+  onVolumeCommit: (value: number) => Promise<void> | void;
+  onVolumePreview?: (value: number) => Promise<void> | void;
+  volumePreviewMode?: DeviceBoundSliderPreviewMode;
+  volumePreviewThrottleMs?: number;
+  volumeRound?: (value: number) => number;
   volumeValueFormatter?: (value: number) => string;
   volumeMidpoint?: number | null;
-  volumePending?: boolean;
 
   pan: number;
   panMax: number;
   panStep?: number;
-  onPanChange: (value: number) => void;
-  onPanCommit?: (value: number) => void;
-  onPanChangeAsync?: (value: number) => void;
-  onPanCommitAsync?: (value: number) => void;
+  onPanChange?: (value: number) => void;
+  onPanCommit: (value: number) => Promise<void> | void;
+  onPanPreview?: (value: number) => Promise<void> | void;
+  panPreviewMode?: DeviceBoundSliderPreviewMode;
+  panPreviewThrottleMs?: number;
+  panRound?: (value: number) => number;
   panValueFormatter?: (value: number) => string;
   panMidpoint?: number | null;
-  panPending?: boolean;
 
   isConnected: boolean;
   className?: string;
@@ -95,27 +102,55 @@ export function SidCard({
   volumeStep,
   onVolumeChange,
   onVolumeCommit,
-  onVolumeChangeAsync,
-  onVolumeCommitAsync,
+  onVolumePreview,
+  volumePreviewMode = "throttled",
+  volumePreviewThrottleMs,
+  volumeRound,
   volumeValueFormatter,
   volumeMidpoint,
-  volumePending,
   pan,
   panMax,
   panStep,
   onPanChange,
   onPanCommit,
-  onPanChangeAsync,
-  onPanCommitAsync,
+  onPanPreview,
+  panPreviewMode = "throttled",
+  panPreviewThrottleMs,
+  panRound,
   panValueFormatter,
   panMidpoint,
-  panPending,
   isConnected,
   className,
   testIdSuffix,
 }: SidCardProps) {
   const { profile } = useDisplayProfile();
   const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
+  const volumeDomain = React.useMemo(
+    () => createNumericSliderDomain({ min: 0, max: volumeMax, round: volumeRound }),
+    [volumeMax, volumeRound],
+  );
+  const panDomain = React.useMemo(
+    () => createNumericSliderDomain({ min: 0, max: panMax, round: panRound }),
+    [panMax, panRound],
+  );
+  const volumeSlider = useDeviceBoundSlider({
+    deviceValue: volume,
+    domain: volumeDomain,
+    previewMode: volumePreviewMode,
+    preview: onVolumePreview,
+    previewThrottleMs: volumePreviewThrottleMs,
+    commit: onVolumeCommit,
+    onDraftChange: onVolumeChange,
+  });
+  const panSlider = useDeviceBoundSlider({
+    deviceValue: pan,
+    domain: panDomain,
+    previewMode: panPreviewMode,
+    preview: onPanPreview,
+    previewThrottleMs: panPreviewThrottleMs,
+    commit: onPanCommit,
+    onDraftChange: onPanChange,
+  });
 
   return (
     <div
@@ -231,21 +266,19 @@ export function SidCard({
             Vol
           </span>
           <Slider
-            value={[volume]}
+            value={[volumeSlider.sliderValue]}
             min={0}
             max={volumeMax}
             step={volumeStep ?? 1}
-            onValueChange={(vals) => onVolumeChange(vals[0])}
-            onValueCommit={(vals) => onVolumeCommit?.(vals[0])}
-            onValueChangeAsync={onVolumeChangeAsync}
-            onValueCommitAsync={onVolumeCommitAsync}
+            onValueChange={volumeSlider.onValueChange}
+            onValueCommit={volumeSlider.onValueCommit}
             valueFormatter={volumeValueFormatter}
             midpoint={
               volumeMidpoint !== null && volumeMidpoint !== undefined
                 ? { value: volumeMidpoint, haptics: true, notch: true }
                 : undefined
             }
-            disabled={!isConnected || volumePending}
+            disabled={!isConnected}
             className="flex-1"
             data-testid={`home-sid-volume-${testIdSuffix}`}
           />
@@ -260,21 +293,19 @@ export function SidCard({
             Pan
           </span>
           <Slider
-            value={[pan]}
+            value={[panSlider.sliderValue]}
             min={0}
             max={panMax}
             step={panStep ?? 1}
-            onValueChange={(vals) => onPanChange(vals[0])}
-            onValueCommit={(vals) => onPanCommit?.(vals[0])}
-            onValueChangeAsync={onPanChangeAsync}
-            onValueCommitAsync={onPanCommitAsync}
+            onValueChange={panSlider.onValueChange}
+            onValueCommit={panSlider.onValueCommit}
             valueFormatter={panValueFormatter}
             midpoint={
               panMidpoint !== null && panMidpoint !== undefined
                 ? { value: panMidpoint, haptics: true, notch: true }
                 : undefined
             }
-            disabled={!isConnected || panPending}
+            disabled={!isConnected}
             className="flex-1"
             data-testid={`home-sid-pan-${testIdSuffix}`}
           />

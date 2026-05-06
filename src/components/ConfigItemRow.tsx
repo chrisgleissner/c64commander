@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { createIndexedSliderDomain, useDeviceBoundSlider } from "@/hooks/useDeviceBoundSlider";
 import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
 import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -331,6 +332,28 @@ export function ConfigItemRow({
     () => (controlKind === "slider" ? getSliderOptions(optionList) : optionList),
     [controlKind, optionList],
   );
+  const safeSliderOptions = sliderOptions.length ? sliderOptions : [String(displayValue)];
+  const sliderControl = useDeviceBoundSlider({
+    deviceValue: String(
+      safeSliderOptions.find((option) => normalizeOption(option) === normalizeOption(String(displayValue))) ??
+        safeSliderOptions[0] ??
+        displayValue,
+    ),
+    domain: createIndexedSliderDomain(safeSliderOptions),
+    previewMode: "throttled",
+    onDraftChange: (nextValue) => {
+      setInputValue(String(nextValue));
+    },
+    preview: (nextValue) => {
+      if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;
+      return Promise.resolve(onValueChange(nextValue));
+    },
+    commit: (nextValue) => {
+      if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;
+      lastCommittedRef.current = String(nextValue);
+      return Promise.resolve(onValueChange(nextValue));
+    },
+  });
 
   if (controlKind === "checkbox" && checkboxMapping) {
     const checked = String(displayValue).trim().toLowerCase() === checkboxMapping.checkedValue.trim().toLowerCase();
@@ -425,8 +448,7 @@ export function ConfigItemRow({
 
     if (selectedIndex < 0) selectedIndex = 0;
 
-    const currentLabelRaw = sliderOptions[selectedIndex] ?? displayValue;
-    const currentLabel = formatOption(String(currentLabelRaw));
+    const currentLabel = formatOption(String(sliderControl.displayValue));
     const resolveSliderOption = (index: number) => sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? "";
     const formatSliderLabel = (index: number) => formatOption(String(resolveSliderOption(index)));
 
@@ -449,36 +471,13 @@ export function ConfigItemRow({
         >
           <div className={layout === "horizontal" ? "min-w-[180px] max-w-[260px] w-full" : "w-full"}>
             <Slider
-              value={[selectedIndex]}
+              value={[sliderControl.sliderValue]}
               min={0}
               max={sliderOptions.length - 1}
               step={1}
               disabled={isLoading || isItemLoading || isReadOnly}
-              onValueChange={(values) => {
-                if (isReadOnly) return;
-                const nextIndex = values[0] ?? 0;
-                const nextValue = resolveSliderOption(nextIndex);
-                setInputValue(String(nextValue));
-              }}
-              onValueCommit={(values) => {
-                if (isReadOnly) return;
-                const nextIndex = values[0] ?? 0;
-                const nextValue = resolveSliderOption(nextIndex);
-                setInputValue(String(nextValue));
-              }}
-              onValueChangeAsync={(nextIndex) => {
-                if (isReadOnly) return;
-                const nextValue = resolveSliderOption(nextIndex);
-                if (String(nextValue) === lastCommittedRef.current) return;
-                onValueChange(nextValue);
-              }}
-              onValueCommitAsync={(nextIndex) => {
-                if (isReadOnly) return;
-                const nextValue = resolveSliderOption(nextIndex);
-                if (String(nextValue) === lastCommittedRef.current) return;
-                lastCommittedRef.current = String(nextValue);
-                onValueChange(nextValue);
-              }}
+              onValueChange={sliderControl.onValueChange}
+              onValueCommit={sliderControl.onValueCommit}
               valueFormatter={formatSliderLabel}
               aria-label={`${displayLabel} slider`}
               data-testid={sliderTestId}

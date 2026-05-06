@@ -14,6 +14,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
@@ -27,6 +28,7 @@ class TelnetSocketPlugin : Plugin() {
   private val logTag = "TelnetSocketPlugin"
   private val defaultTimeoutMs = 5_000
   private val defaultReadTimeoutMs = 500
+  private val readDrainSliceTimeoutMs = 25
 
   internal var socketFactory: () -> Socket = { Socket() }
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
@@ -153,19 +155,10 @@ class TelnetSocketPlugin : Plugin() {
                   call.reject("Not connected")
                   return@Runnable
                 }
-                sock.soTimeout = timeoutMs
-
-                val buffer = ByteArray(4096)
-                val bytesRead =
-                        try {
-                          stream.read(buffer)
-                        } catch (_: SocketTimeoutException) {
-                          0
-                        }
-
+                val payload = readPayloadWithinBudget(stream, sock, timeoutMs)
                 val data =
-                        if (bytesRead > 0) {
-                          Base64.encodeToString(buffer.copyOf(bytesRead), Base64.NO_WRAP)
+                        if (payload.isNotEmpty()) {
+                          Base64.encodeToString(payload, Base64.NO_WRAP)
                         } else {
                           ""
                         }
@@ -193,6 +186,51 @@ class TelnetSocketPlugin : Plugin() {
     val result = JSObject()
     result.put("connected", connected)
     call.resolve(result)
+  }
+
+  private fun readPayloadWithinBudget(stream: InputStream, sock: Socket, timeoutMs: Int): ByteArray {
+    val boundedTimeoutMs = timeoutMs.coerceAtLeast(1)
+    val startedAtNs = System.nanoTime()
+    val buffer = ByteArray(4096)
+    val output = ByteArrayOutputStream()
+
+    try {
+      sock.soTimeout = boundedTimeoutMs
+      val firstRead =
+              try {
+                stream.read(buffer)
+              } catch (_: SocketTimeoutException) {
+                0
+              }
+      if (firstRead <= 0) {
+        return ByteArray(0)
+      }
+      output.write(buffer, 0, firstRead)
+
+      while (true) {
+        val elapsedMs = ((System.nanoTime() - startedAtNs) / 1_000_000L).toInt()
+        val remainingMs = boundedTimeoutMs - elapsedMs
+        if (remainingMs <= 0) {
+          break
+        }
+
+        sock.soTimeout = minOf(readDrainSliceTimeoutMs, remainingMs)
+        val nextRead =
+                try {
+                  stream.read(buffer)
+                } catch (_: SocketTimeoutException) {
+                  break
+                }
+        if (nextRead <= 0) {
+          break
+        }
+        output.write(buffer, 0, nextRead)
+      }
+
+      return output.toByteArray()
+    } finally {
+      sock.soTimeout = boundedTimeoutMs
+    }
   }
 
   private fun closeSocket() {

@@ -311,6 +311,32 @@ describe("C64API request identity", () => {
   });
 
   it("does not dedupe repeated writes even when their path is identical", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/v1/configs/Audio%20Mixer")) {
+          return new Response(
+            JSON.stringify({
+              "Audio Mixer": {
+                items: {
+                  "Vol Socket 1": {
+                    selected: "0 dB",
+                    options: ["0 dB"],
+                  },
+                },
+              },
+              errors: [],
+            } satisfies ConfigResponse),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
     const api = new C64API("http://127.0.0.1");
 
     await Promise.all([
@@ -318,7 +344,10 @@ describe("C64API request identity", () => {
       api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }, { immediate: true }),
     ]);
 
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(2);
+    const writeCalls = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.filter(([input, init]) => String(input).endsWith("/v1/configs") && init?.method === "POST");
+    expect(writeCalls).toHaveLength(2);
   });
 
   it("does not dedupe GET bursts when query parameters differ by address", async () => {

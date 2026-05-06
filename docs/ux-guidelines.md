@@ -503,6 +503,16 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 - Per-item refresh buttons
 - Category-level reset buttons
 
+### Device-bound slider contract
+
+- Device-bound sliders keep drag feedback local and immediate while the device write catches up in the background.
+- Slider writes must be validated against the live config spec before the network call and firmware `errors[]` responses must surface as failures.
+- Commit-only sliders may preview locally during drag, but they only send the device write on commit.
+- Throttled-preview sliders may send coalesced preview writes during drag, but they must still send a final commit write for the released value.
+- Slider disabled state must reflect actual control availability only; do not disable a device-bound slider just because an optimistic write is pending.
+- Reconciliation must compare semantic values, not just raw identity, so trim or type drift from the device cannot strand the slider.
+- Device-bound sliders must recover from stalled reconciliation automatically instead of freezing on a stale pending state.
+
 ### Component Inventory
 
 **SelectableActionList** - Universal list component used for:

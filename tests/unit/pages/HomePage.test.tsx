@@ -16,6 +16,7 @@ import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 const featureFlagsRef = vi.hoisted(() => ({
   current: {
     lighting_studio_enabled: true,
+    home_config_actions_enabled: false,
     reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   } as Record<string, boolean>,
@@ -644,6 +645,7 @@ beforeEach(() => {
   reportUserErrorSpy.mockReset();
   featureFlagsRef.current = {
     lighting_studio_enabled: true,
+    home_config_actions_enabled: false,
     reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   };
@@ -1192,9 +1194,34 @@ describe("HomePage SID status", () => {
     const machineControls = screen.getByTestId("home-machine-controls");
     expect(within(machineControls).queryByRole("button", { name: /^save ram$/i })).toBeNull();
     expect(within(machineControls).queryByRole("button", { name: /^load ram$/i })).toBeNull();
+    expect(screen.queryByTestId("home-ram-folder-row")).toBeNull();
+  });
+
+  it("hides advanced Home config actions unless the feature flag is enabled", () => {
+    statusPayloadRef.current.deviceInfo = {
+      product: "C64 Ultimate",
+      hostname: "c64u",
+      firmware_version: "1.1.0",
+      fpga_version: "122",
+      core_version: "1.49",
+      unique_id: "c64u-test",
+    };
+    const initialRender = renderHomePage();
+
+    expect(screen.queryByTestId("home-config-manage-app")).toBeNull();
+    expect(screen.queryByTestId("home-config-save-file")).toBeNull();
+    expect(screen.queryByTestId("home-config-load-file")).toBeNull();
+    expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
+
+    initialRender.unmount();
+    featureFlagsRef.current.home_config_actions_enabled = true;
+    renderHomePage();
+
+    expect(screen.getByTestId("home-config-manage-app")).toBeInTheDocument();
   });
 
   it("manages app configs via dialogs", async () => {
+    featureFlagsRef.current.home_config_actions_enabled = true;
     const savedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
     appConfigStatePayloadRef.current = {
       ...appConfigStatePayloadRef.current,
@@ -1315,11 +1342,10 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2");
 
     await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
-        "U64 Specific Settings",
-        "Turbo Control",
-        "Manual",
-      ),
+      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+        "CPU Speed": "2",
+        "Turbo Control": "Manual",
+      }),
     );
   });
 
@@ -1495,7 +1521,10 @@ describe("HomePage SID status", () => {
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
     await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value")).toHaveTextContent("1"));
-    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({ "CPU Speed": "2" });
+    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+      "CPU Speed": "2",
+      "Turbo Control": "Manual",
+    });
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1756,12 +1785,10 @@ describe("HomePage SID status", () => {
         "Turbo Control",
         "C64U Turbo Registers",
       );
-      // CPU Speed commit goes via interactive write; not via setConfigValue
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
-        "U64 Specific Settings",
-        "Turbo Control",
-        "Manual",
-      );
+      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+        "CPU Speed": "2",
+        "Turbo Control": "Manual",
+      });
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Badline Timing",

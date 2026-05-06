@@ -6,17 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export const SLIDER_MID_DRAG_THROTTLE_MS = 200;
-/** @deprecated Use SLIDER_MID_DRAG_THROTTLE_MS */
-export const DEFAULT_SLIDER_ASYNC_THROTTLE_MS = SLIDER_MID_DRAG_THROTTLE_MS;
 export const DEFAULT_MIDPOINT_SNAP_RATIO = 0.02;
 export const DEFAULT_MIDPOINT_HAPTIC_INTERVAL_MS = 200;
-
-export type SliderAsyncQueue = {
-  schedule: (value: number) => void;
-  commit: (value: number) => void;
-  cancel: () => void;
-};
 
 export const clampSliderValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -59,79 +50,4 @@ export const shouldTriggerMidpointHaptic = (params: {
   const crossed = (previous < midpoint && next >= midpoint) || (previous > midpoint && next <= midpoint);
   const snapped = next === midpoint && previous !== midpoint;
   return crossed || snapped;
-};
-
-export const createSliderAsyncQueue = (params: {
-  onChange?: (value: number) => void;
-  onCommit?: (value: number) => void;
-  throttleMs?: number;
-}): SliderAsyncQueue => {
-  const { onChange, onCommit, throttleMs } = params;
-  const delay = throttleMs ?? SLIDER_MID_DRAG_THROTTLE_MS;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let pendingValue: number | null = null;
-  let lastChangedValue: number | null = null;
-  let pendingChangedValue: number | null = null;
-  let pendingChangeToken = 0;
-
-  const queueChange = (value: number) => {
-    if (!onChange) return;
-    const token = ++pendingChangeToken;
-    pendingChangedValue = value;
-    queueMicrotask(() => {
-      onChange(value);
-      lastChangedValue = value;
-      if (pendingChangeToken === token) {
-        pendingChangedValue = null;
-      }
-    });
-  };
-
-  const hasPendingOrLastChangeValue = (value: number) =>
-    Object.is(pendingChangedValue, value) || Object.is(lastChangedValue, value);
-
-  const flush = () => {
-    if (pendingValue === null || !onChange) {
-      pendingValue = null;
-      timer = null;
-      return;
-    }
-    const value = pendingValue;
-    pendingValue = null;
-    timer = null;
-    queueChange(value);
-  };
-
-  return {
-    schedule: (value: number) => {
-      if (!onChange) return;
-      pendingValue = value;
-      if (timer !== null) return;
-      timer = setTimeout(flush, delay);
-    },
-    commit: (value: number) => {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      pendingValue = null;
-      const handler = onCommit ?? onChange;
-      if (!handler) return;
-      if (!onCommit && hasPendingOrLastChangeValue(value)) return;
-      queueMicrotask(() => {
-        handler(value);
-        if (!onCommit) {
-          lastChangedValue = value;
-          pendingChangedValue = null;
-        }
-      });
-    },
-    cancel: () => {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      pendingValue = null;
-    },
-  };
 };

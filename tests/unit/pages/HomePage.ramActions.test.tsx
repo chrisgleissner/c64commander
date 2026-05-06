@@ -14,6 +14,7 @@ import HomePage from "@/pages/HomePage";
 const featureFlagsRef = vi.hoisted(() => ({
   current: {
     lighting_studio_enabled: true,
+    home_config_actions_enabled: false,
     reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   } as Record<string, boolean>,
@@ -436,6 +437,7 @@ describe("HomePage RAM actions", () => {
     vi.clearAllMocks();
     featureFlagsRef.current = {
       lighting_studio_enabled: true,
+      home_config_actions_enabled: false,
       reu_snapshot_enabled: true,
       ram_snapshots_enabled: true,
     };
@@ -543,7 +545,7 @@ describe("HomePage RAM actions", () => {
     fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
 
     expect(await screen.findByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent(
-      /^Reboot \(Clear RAM\)$/,
+      /^Reboot \(Clr Mem\)$/,
     );
   });
 
@@ -575,6 +577,39 @@ describe("HomePage RAM actions", () => {
 
     fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
     fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
+
+    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
+    expect(rebootFullSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Machine rebooting" }), { timeout: 5000 });
+  });
+
+  it("runs clear-ram reboot from the inline quick action when overflow is not needed", async () => {
+    featureFlagsRef.current.reu_snapshot_enabled = false;
+    telnetState.getActionSupport.mockImplementation((actionId: string) => {
+      if (actionId === "powerCycle") {
+        return {
+          actionId,
+          status: "unsupported",
+          reason: "Power Cycle is not available on this device.",
+          target: null,
+        };
+      }
+      return {
+        actionId,
+        status: "supported",
+        reason: null,
+        target: {
+          categoryLabel: "Power & Reset",
+          actionLabel: "Reboot (Clr Mem)",
+          source: "initial",
+        },
+      };
+    });
+
+    renderHomePage();
+
+    expect(screen.queryByTestId("home-machine-overflow-trigger")).toBeNull();
+    fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
 
     await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
     expect(rebootFullSpy).not.toHaveBeenCalled();
@@ -654,6 +689,7 @@ describe("HomePage RAM actions", () => {
   }, 15000);
 
   it("saves config to a local file through the shared config workflow", async () => {
+    featureFlagsRef.current.home_config_actions_enabled = true;
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-config-save-file"));
@@ -667,6 +703,7 @@ describe("HomePage RAM actions", () => {
   });
 
   it("loads config from a local file through the shared config workflow", async () => {
+    featureFlagsRef.current.home_config_actions_enabled = true;
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-config-load-file"));

@@ -150,7 +150,7 @@ describe("MachineControls", () => {
     expect(screen.queryByTestId("home-machine-note-powerCycle")).not.toBeInTheDocument();
   });
 
-  it("renders overflow actions in the section header menu", () => {
+  it("renders extra quick actions inline when the enabled action count stays at eight or below", () => {
     const rebootClearMemory = vi.fn();
     const saveReu = vi.fn();
 
@@ -158,28 +158,46 @@ describe("MachineControls", () => {
       <MachineControls
         {...defaultProps}
         overflowActions={[
-          { id: "rebootClearMemory", label: "Reboot (Clear RAM)", onSelect: rebootClearMemory },
+          { id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: rebootClearMemory },
           { id: "saveReuMemory", label: "Save REU", onSelect: saveReu },
         ]}
       />,
     );
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-rebootClearMemory"));
-    fireEvent.click(screen.getByTestId("home-machine-overflow-saveReuMemory"));
+    expect(screen.queryByTestId("home-machine-overflow-menu")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
 
     expect(rebootClearMemory).toHaveBeenCalledTimes(1);
     expect(saveReu).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the overflow menu only when more than eight enabled actions are visible", () => {
+    render(
+      <MachineControls
+        {...defaultProps}
+        ramActionsVisible={true}
+        onPowerCycle={vi.fn()}
+        overflowActions={[{ id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn() }]}
+      />,
+    );
+
+    expect(screen.getByTestId("home-machine-overflow-menu")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-machine-inline-rebootClearMemory")).toBeNull();
   });
 
   it("renders loading overflow actions with an ellipsis label", () => {
     render(
       <MachineControls
         {...defaultProps}
-        overflowActions={[{ id: "rebootClearMemory", label: "Reboot (Clear RAM)", onSelect: vi.fn(), loading: true }]}
+        ramActionsVisible={true}
+        onPowerCycle={vi.fn()}
+        overflowActions={[{ id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn(), loading: true }]}
       />,
     );
 
-    expect(screen.getByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent("Reboot (Clear RAM)…");
+    expect(screen.getByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent("Reboot (Clr Mem)…");
   });
 
   it("renders inline notes for disabled overflow actions", () => {

@@ -355,11 +355,11 @@ export const clearRamAndReboot = async (api: C64API) => {
     await writeRanges(api, zeroBlock, CLEAR_RAM_RANGES);
     await withRetry("Reboot machine", () => api.machineReboot());
     await delay(800);
-    await ensureLiveness(api, "Reboot (Clear RAM)");
+    await ensureLiveness(api, "Reboot (Clr Mem)");
     rebooted = true;
     paused = false;
   } catch (error) {
-    operationError = asError(error, "Reboot (Clear RAM) failed");
+    operationError = asError(error, "Reboot (Clr Mem) failed");
   } finally {
     if (paused && !rebooted) {
       try {
@@ -375,13 +375,13 @@ export const clearRamAndReboot = async (api: C64API) => {
   }
 
   if (operationError && resumeFailure) {
-    throw new Error(`Reboot (Clear RAM) failed: ${operationError.message}; resume failed: ${resumeFailure.message}`);
+    throw new Error(`Reboot (Clr Mem) failed: ${operationError.message}; resume failed: ${resumeFailure.message}`);
   }
   if (operationError) {
-    throw new Error(`Reboot (Clear RAM) failed: ${operationError.message}`);
+    throw new Error(`Reboot (Clr Mem) failed: ${operationError.message}`);
   }
   if (resumeFailure) {
-    throw new Error(`Reboot (Clear RAM) failed while resuming: ${resumeFailure.message}`);
+    throw new Error(`Reboot (Clr Mem) failed while resuming: ${resumeFailure.message}`);
   }
 };
 

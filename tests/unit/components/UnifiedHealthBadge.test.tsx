@@ -10,6 +10,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
+const mockUseSavedDeviceHealthChecks = vi.fn();
+
 const mockState = vi.hoisted(() => ({
   healthState: {
     state: "Degraded" as const,
@@ -191,7 +193,10 @@ vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
 }));
 
 vi.mock("@/hooks/useSavedDeviceHealthChecks", () => ({
-  useSavedDeviceHealthChecks: () => mockState.savedDeviceHealthChecks,
+  useSavedDeviceHealthChecks: (...args: unknown[]) => {
+    mockUseSavedDeviceHealthChecks(...args);
+    return mockState.savedDeviceHealthChecks;
+  },
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
@@ -211,6 +216,7 @@ describe("UnifiedHealthBadge", () => {
     mockState.switchSavedDevice.mockReset();
     mockState.requestDiagnosticsOpen.mockReset();
     mockState.savedDeviceHealthChecks.refreshAll.mockReset();
+    mockUseSavedDeviceHealthChecks.mockReset();
   });
 
   afterEach(() => {
@@ -372,6 +378,14 @@ describe("UnifiedHealthBadge", () => {
     fireEvent.click(screen.getByTestId("unified-health-badge"));
 
     expect(mockState.requestDiagnosticsOpen).toHaveBeenCalledWith("header");
+  });
+
+  it("enables saved-device health polling on cold boot without opening the switcher", () => {
+    render(<UnifiedHealthBadge />);
+
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(mockState.savedDevices.devices, true);
+    expect(mockState.savedDeviceHealthChecks.refreshAll).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
   });
 
   it("opens the switch picker on long press without also opening diagnostics", async () => {

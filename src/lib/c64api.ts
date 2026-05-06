@@ -20,6 +20,12 @@ import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
+import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
+import {
+  getConfigCategoryItems,
+  validateConfigBatchWrite,
+  validateConfigWrite,
+} from "@/lib/config/validateConfigWrite";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -336,6 +342,7 @@ export class C64API {
   private apiBaseUrl: string;
   private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
   private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
+  private readonly configCategoryItemsCache = new Map<string, Record<string, unknown>>();
 
   constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
     this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
@@ -490,6 +497,95 @@ export class C64API {
   private resetRequestReadState() {
     this.inFlightReadRequests.clear();
     this.readRequestBudget.clear();
+    this.configCategoryItemsCache.clear();
+  }
+
+  private rememberConfigCategoryItems(category: string, payload: unknown) {
+    const nextItems = getConfigCategoryItems(payload, category);
+    if (!Object.keys(nextItems).length) {
+      return;
+    }
+    const previousItems = this.configCategoryItemsCache.get(category) ?? {};
+    this.configCategoryItemsCache.set(category, {
+      ...previousItems,
+      ...nextItems,
+    });
+  }
+
+  private setCachedConfigValue(category: string, item: string, value: string | number) {
+    const previousItems = this.configCategoryItemsCache.get(category);
+    if (!previousItems || previousItems[item] === undefined) {
+      return;
+    }
+    const previousConfig = previousItems[item];
+    if (typeof previousConfig !== "object" || previousConfig === null || Array.isArray(previousConfig)) {
+      this.configCategoryItemsCache.set(category, {
+        ...previousItems,
+        [item]: value,
+      });
+      return;
+    }
+    this.configCategoryItemsCache.set(category, {
+      ...previousItems,
+      [item]: {
+        ...(previousConfig as Record<string, unknown>),
+        selected: value,
+      },
+    });
+  }
+
+  private async ensureConfigCategoryItems(category: string, itemNames: string[]) {
+    const cachedItems = this.configCategoryItemsCache.get(category) ?? {};
+    const missingItems = itemNames.filter((item) => cachedItems[item] === undefined);
+    if (missingItems.length === 0) {
+      return cachedItems;
+    }
+
+    const categoryPayload = await this.getCategory(category, { __c64uIntent: "user" });
+    this.rememberConfigCategoryItems(category, categoryPayload);
+
+    let resolvedItems = this.configCategoryItemsCache.get(category) ?? {};
+    const remainingItems = itemNames.filter((item) => resolvedItems[item] === undefined);
+    if (remainingItems.length === 0) {
+      return resolvedItems;
+    }
+
+    await Promise.all(
+      remainingItems.map(async (item) => {
+        const itemPayload = await this.getConfigItem(category, item, { __c64uIntent: "user" });
+        this.rememberConfigCategoryItems(category, itemPayload);
+      }),
+    );
+    resolvedItems = this.configCategoryItemsCache.get(category) ?? {};
+    return resolvedItems;
+  }
+
+  private assertConfigWriteAccepted(
+    response: { errors?: string[] },
+    context: {
+      category?: string;
+      item?: string;
+      value?: string | number;
+      payload?: Record<string, Record<string, string | number>>;
+    },
+  ) {
+    const firmwareErrors = Array.isArray(response.errors)
+      ? response.errors.filter((entry) => entry.trim().length > 0)
+      : [];
+    if (firmwareErrors.length === 0) {
+      return;
+    }
+
+    const target =
+      context.item && context.category
+        ? `${context.category}/${context.item}`
+        : context.category
+          ? context.category
+          : "config write";
+    throw new FirmwareConfigWriteError(`Firmware rejected ${target}: ${firmwareErrors.join("; ")}`, {
+      ...context,
+      firmwareErrors,
+    });
   }
 
   private getReadRequestBudgetValue<T>(key: string, nowMs: number): T | null {
@@ -1072,13 +1168,17 @@ export class C64API {
 
   async getCategory(category: string, options: C64ReadRequestOptions = {}): Promise<ConfigResponse> {
     const encoded = encodeURIComponent(category);
-    return this.request(`/v1/configs/${encoded}`, options);
+    const response = await this.request<ConfigResponse>(`/v1/configs/${encoded}`, options);
+    this.rememberConfigCategoryItems(category, response);
+    return response;
   }
 
   async getConfigItem(category: string, item: string, options: C64ReadRequestOptions = {}): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
-    return this.request(`/v1/configs/${catEncoded}/${itemEncoded}`, options);
+    const response = await this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}`, options);
+    this.rememberConfigCategoryItems(category, response);
+    return response;
   }
 
   async getConfigItems(
@@ -1158,12 +1258,26 @@ export class C64API {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
     const valEncoded = encodeURIComponent(String(value));
-    return scheduleConfigWrite(() =>
-      this.request(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
+    const categoryPayload = {
+      [category]: {
+        items: await this.ensureConfigCategoryItems(category, [item]),
+      },
+    };
+    validateConfigWrite({
+      category,
+      item,
+      value,
+      categoryPayload,
+    });
+    const response = await scheduleConfigWrite(() =>
+      this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
         method: "PUT",
         ...options,
       }),
     );
+    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value });
+    this.setCachedConfigValue(category, item, value);
+    return response;
   }
 
   async saveConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
@@ -1182,15 +1296,34 @@ export class C64API {
     payload: Record<string, Record<string, string | number>>,
     options: { immediate?: boolean } = {},
   ): Promise<{ errors: string[] }> {
+    const categories = Object.entries(payload);
+    await Promise.all(
+      categories.map(async ([category, updates]) => {
+        const categoryPayload = {
+          [category]: {
+            items: await this.ensureConfigCategoryItems(category, Object.keys(updates)),
+          },
+        };
+        validateConfigBatchWrite({
+          category,
+          updates,
+          categoryPayload,
+        });
+      }),
+    );
     const run = (): Promise<{ errors: string[] }> =>
       this.request("/v1/configs", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-    if (options.immediate) {
-      return run();
-    }
-    return scheduleConfigWrite(run);
+    const response = options.immediate ? await run() : await scheduleConfigWrite(run);
+    this.assertConfigWriteAccepted(response, { payload });
+    categories.forEach(([category, updates]) => {
+      Object.entries(updates).forEach(([item, value]) => {
+        this.setCachedConfigValue(category, item, value);
+      });
+    });
+    return response;
   }
 
   // Machine control endpoints

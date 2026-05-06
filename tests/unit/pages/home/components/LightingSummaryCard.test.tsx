@@ -61,12 +61,11 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 vi.mock("@/components/ui/slider", () => ({
-  Slider: ({ value, onValueChange, onValueChangeAsync, disabled, "data-testid": testId }: any) => (
+  Slider: ({ value, onValueChange, disabled, "data-testid": testId }: any) => (
     <div data-testid={testId} data-disabled={String(disabled)} data-value={JSON.stringify(value)}>
       <button
         onClick={() => {
           onValueChange?.([5]);
-          onValueChangeAsync?.(5);
         }}
         data-testid={`${testId}-drag`}
       >
@@ -75,7 +74,6 @@ vi.mock("@/components/ui/slider", () => ({
       <button
         onClick={() => {
           onValueChange?.([]);
-          onValueChangeAsync?.(undefined);
         }}
         data-testid={`${testId}-drag-empty`}
       >
@@ -193,7 +191,7 @@ describe("LightingSummaryCard", () => {
     await waitFor(() => expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("15"));
     expect(addLogSpy).toHaveBeenCalledWith(
       "warn",
-      "Lighting summary intensity preview failed",
+      "Lighting summary slider write failed",
       expect.objectContaining({
         category: "LED Strip",
         itemName: "Strip Intensity",
@@ -252,7 +250,7 @@ describe("LightingSummaryCard", () => {
     await waitFor(() => expect(screen.getByTestId("led-strip-color-slider")).toHaveAttribute("data-value", "[0]"));
     expect(addLogSpy).toHaveBeenCalledWith(
       "warn",
-      "Lighting summary fixed color preview failed",
+      "Lighting summary slider write failed",
       expect.objectContaining({
         category: "LED Strip",
         itemName: "Fixed Color",

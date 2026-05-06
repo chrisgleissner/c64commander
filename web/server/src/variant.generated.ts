@@ -67,6 +67,11 @@ export const webServerVariantConfig = {
         enabled: false,
         visible_to_user: true,
       },
+      home_config_actions_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       hvsc_enabled: {
         developer_only: false,
         enabled: true,

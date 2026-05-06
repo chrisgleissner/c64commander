@@ -104,6 +104,19 @@ const listeners = new Set<() => void>();
 
 let snapshot: SavedDevicesSnapshot | null = null;
 
+type DebugSavedDeviceBootstrapInput = {
+  id?: unknown;
+  name?: unknown;
+  nameSource?: unknown;
+  host?: unknown;
+  type?: unknown;
+  typeSource?: unknown;
+  httpPort?: unknown;
+  ftpPort?: unknown;
+  telnetPort?: unknown;
+  hasPassword?: unknown;
+};
+
 const compact = (value: string) => value.replace(/[^a-z0-9]+/gi, "");
 
 const normalizeSavedDeviceUserName = (name: string | null | undefined) => sanitizeSavedDeviceNameInput(name ?? "");
@@ -330,7 +343,74 @@ const createLegacyDevice = (): SavedDevice => {
   };
 };
 
+const createDebugBootstrapDevices = (): SavedDevice[] | null => {
+  const raw = import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON;
+  if (!raw?.trim()) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as DebugSavedDeviceBootstrapInput[] | null;
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+    const seenIds = new Set<string>();
+    const devices = parsed.flatMap((entry, index) => {
+      if (!entry || typeof entry !== "object") return [];
+
+      const host = normalizeSavedDeviceHostInput(typeof entry.host === "string" ? entry.host : "");
+      if (!host) return [];
+
+      let id = typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : `debug-device-${index + 1}`;
+      if (seenIds.has(id)) {
+        id = `${id}-${index + 1}`;
+      }
+      seenIds.add(id);
+
+      return [
+        {
+          id,
+          host,
+          ...resolveSavedDeviceStoredName(
+            typeof entry.name === "string" ? entry.name : "",
+            host,
+            typeof entry.nameSource === "string" ? (entry.nameSource as SavedDeviceSourceInput) : undefined,
+          ),
+          ...resolveSavedDeviceStoredType(
+            typeof entry.type === "string" ? entry.type : "",
+            null,
+            typeof entry.typeSource === "string" ? (entry.typeSource as SavedDeviceSourceInput) : undefined,
+          ),
+          httpPort: parsePort(String(entry.httpPort ?? ""), DEFAULT_HTTP_PORT),
+          ftpPort: parsePort(String(entry.ftpPort ?? ""), DEFAULT_FTP_PORT),
+          telnetPort: parsePort(String(entry.telnetPort ?? ""), DEFAULT_TELNET_PORT),
+          lastKnownProduct: null,
+          lastKnownHostname: null,
+          lastKnownUniqueId: null,
+          lastSuccessfulConnectionAt: null,
+          lastUsedAt: null,
+          hasPassword: Boolean(entry.hasPassword),
+        } satisfies SavedDevice,
+      ];
+    });
+
+    return devices.length > 0 ? devices : null;
+  } catch (error) {
+    console.warn("Failed to parse debug saved devices bootstrap.", error);
+    return null;
+  }
+};
+
 const createInitialEnvelope = (): PersistedSavedDevicesEnvelope => {
+  const debugBootstrapDevices = createDebugBootstrapDevices();
+  if (debugBootstrapDevices) {
+    return {
+      version: 1,
+      selectedDeviceId: debugBootstrapDevices[0]!.id,
+      devices: debugBootstrapDevices,
+      summaries: {},
+      summaryLru: [],
+      hasEverHadMultipleDevices: debugBootstrapDevices.length > 1,
+    };
+  }
+
   const device = createLegacyDevice();
   return {
     version: 1,

@@ -137,25 +137,43 @@ vi.mock("@/pages/home/SidCard", () => ({
       <button data-testid="volume-change" onClick={() => props.onVolumeChange?.(5)}>
         VolChange
       </button>
-      <button data-testid="volume-commit" onClick={() => props.onVolumeCommit?.(5)}>
+      <button
+        data-testid="volume-commit"
+        onClick={() => void Promise.resolve(props.onVolumeCommit?.(5)).catch(() => undefined)}
+      >
         VolCommit
       </button>
-      <button data-testid="volume-async-change" onClick={() => props.onVolumeChangeAsync?.(5)}>
+      <button
+        data-testid="volume-async-change"
+        onClick={() => void Promise.resolve(props.onVolumePreview?.(5)).catch(() => undefined)}
+      >
         VolAsyncChange
       </button>
-      <button data-testid="volume-async-commit" onClick={() => props.onVolumeCommitAsync?.(5)}>
+      <button
+        data-testid="volume-async-commit"
+        onClick={() => void Promise.resolve(props.onVolumeCommit?.(5)).catch(() => undefined)}
+      >
         VolAsyncCommit
       </button>
       <button data-testid="pan-change" onClick={() => props.onPanChange?.(3)}>
         PanChange
       </button>
-      <button data-testid="pan-commit" onClick={() => props.onPanCommit?.(3)}>
+      <button
+        data-testid="pan-commit"
+        onClick={() => void Promise.resolve(props.onPanCommit?.(3)).catch(() => undefined)}
+      >
         PanCommit
       </button>
-      <button data-testid="pan-async-change" onClick={() => props.onPanChangeAsync?.(3)}>
+      <button
+        data-testid="pan-async-change"
+        onClick={() => void Promise.resolve(props.onPanPreview?.(3)).catch(() => undefined)}
+      >
         PanAsyncChange
       </button>
-      <button data-testid="pan-async-commit" onClick={() => props.onPanCommitAsync?.(3)}>
+      <button
+        data-testid="pan-async-commit"
+        onClick={() => void Promise.resolve(props.onPanCommit?.(3)).catch(() => undefined)}
+      >
         PanAsyncCommit
       </button>
       <button data-testid="identity-change" onClick={() => props.onIdentityChange?.("NewProfile")}>

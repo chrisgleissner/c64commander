@@ -530,41 +530,21 @@ describe("c64api branches", () => {
     fetchMock.mockResolvedValue(okJsonResponse());
 
     const api = new C64API("http://c64u");
-    // POST with a non-JSON string body triggers the extractRequestBody string path
-    await api.updateConfigBatch({} as Record<string, Record<string, string | number>>);
-    // The body is JSON.stringify({}), which is valid JSON, so won't fail.
-    // We need to test with an invalid JSON string body. Use the request method
-    // indirectly via a PUT with a string body.
-    // Actually we can check that valid JSON works, and for the failing path,
-    // we need to mock JSON.parse to fail. Let's do a simpler approach:
-
-    // Reset and test with a body that isn't valid JSON
-    fetchMock.mockReset();
-    fetchMock.mockResolvedValue(okJsonResponse());
     addLogMock.mockReset();
 
-    const origParse = JSON.parse;
-    let parseCallCount = 0;
-    JSON.parse = function (...args: Parameters<typeof origParse>) {
-      parseCallCount++;
-      // Fail on the first call which is extractRequestBody trying to parse the body
-      if (parseCallCount === 1) {
-        throw new Error("parse failed");
-      }
-      return origParse.apply(this, args);
-    } as typeof JSON.parse;
+    await (api as unknown as { request: (path: string, options: RequestInit) => Promise<unknown> }).request(
+      "/v1/test",
+      {
+        method: "POST",
+        body: "{not-valid-json",
+      },
+    );
 
-    try {
-      // updateConfigBatch sends JSON.stringify(payload) as body string
-      await api.updateConfigBatch({ Audio: { Volume: "0 dB" } });
-      expect(addLogMock).toHaveBeenCalledWith(
-        "warn",
-        "Failed to parse request body JSON",
-        expect.objectContaining({ error: "parse failed" }),
-      );
-    } finally {
-      JSON.parse = origParse;
-    }
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse request body JSON",
+      expect.objectContaining({ error: expect.any(String) }),
+    );
   });
 
   // #9: extractRequestBody with FormData containing File, Blob, and text fields
@@ -986,13 +966,32 @@ describe("c64api branches", () => {
   // #31: updateConfigBatch immediate mode
   it("runs updateConfigBatch immediately when immediate option is true", async () => {
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(okJsonResponse());
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/v1/configs/Audio")) {
+        return Promise.resolve(
+          okJsonResponse({
+            Audio: {
+              items: {
+                Volume: {
+                  selected: "0 dB",
+                  options: ["0 dB"],
+                },
+              },
+            },
+            errors: [],
+          }),
+        );
+      }
+      return Promise.resolve(okJsonResponse());
+    });
 
     const api = new C64API("http://c64u");
     const result = await api.updateConfigBatch({ Audio: { Volume: "0 dB" } }, { immediate: true });
     expect(result.errors).toEqual([]);
     expect(fetchMock).toHaveBeenCalled();
-    const [url, opts] = fetchMock.mock.calls[0];
+    const [, opts] = fetchMock.mock.calls.at(-1)!;
+    const [url] = fetchMock.mock.calls.at(-1)!;
     expect(opts.method).toBe("POST");
     expect(url).toContain("/v1/configs");
   });

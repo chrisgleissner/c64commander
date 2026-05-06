@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$ROOT_DIR/scripts/lib/build-fast-path.sh"
 APK_DEFAULT=""
 APK_VARIANT="debug"
 
@@ -37,6 +38,7 @@ RUN_CONTRACT_REPLAY=false
 RUN_CONTRACT_PARITY=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
+FAST_LOCAL_APK_INSTALL=false
 PLAYWRIGHT_DEVICES=""
 PLAYWRIGHT_PORT_RESOLVED=false
 APK_PATH=""
@@ -142,7 +144,7 @@ Build domain (default build only):
   --install-apk            Install APK to a connected Android device (via adb)
   --apk-variant <variant>  APK build/install variant: debug or release (default: debug)
   --apk-path <path>        APK path to install (default: android/app/build/outputs/apk/debug/app-debug.apk)
-  --device-id <id>         Device ID for adb (optional). If omitted, picks the first real phone.
+  --device-id <id>         Device ID for adb (optional). If omitted, auto-selects the sole real device or sole 9B0* device.
 
 Test modifiers (require one --test-* primary action):
   --coverage               Run coverage pipeline (unit + e2e)
@@ -202,6 +204,7 @@ Examples:
   ./build --skip-tests
   ./build --skip-format       # Skip time-consuming formatting step
   ./build --skip-tests --skip-format  # Quick APK build without tests or formatting
+  ./build --skip-tests --install-apk  # Fast local APK build/install on a single attached device
   ./build --install-apk --device-id <serial number>
   ./build --install-apk --apk-variant release
   ./build --apk-path /path/to/app-debug.apk --install-apk
@@ -231,6 +234,7 @@ Notes:
   --test-fuzz         Always targets mock devices; --c64u-target real is rejected.
   --coverage          Runs unit + E2E coverage regardless of test category.
   --apk-variant release requires Android release signing to be configured.
+  --skip-tests --install-apk automatically skips formatting, skips npm install when lockfiles are current, and syncs Android only.
   Playwright port     Auto-selected to avoid clashes; set PLAYWRIGHT_PORT to pin a specific port.
 EOF
 }
@@ -1488,6 +1492,10 @@ case "$PRIMARY_ACTION" in
     ;;
 esac
 
+if build_fast_local_apk_install_enabled "$PRIMARY_ACTION" "$SKIP_TESTS" "$INSTALL_APK"; then
+  apply_fast_local_apk_install_defaults "$ROOT_DIR" "$SKIP_INSTALL"
+fi
+
 if [[ "$RUN_TEST_MAESTRO_DOCKER" == "true" ]]; then
   if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" != "real" ]]; then
     echo "--test-maestro-docker requires --c64u-target real" >&2
@@ -1583,6 +1591,8 @@ fi
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
   (cd "$ROOT_DIR" && npm install --no-audit --no-fund)
+elif [[ "$FAST_LOCAL_APK_INSTALL" == "true" ]]; then
+  log "Skipping npm install (dependencies already current)"
 fi
 
 if [[ "$RUN_CONTRACT_TEST" == "true" ]]; then
@@ -1603,8 +1613,17 @@ if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then
 fi
 
 if [[ "$RUN_BUILD" == "true" ]]; then
-  log "Building web app + syncing Capacitor"
-  (cd "$ROOT_DIR" && npm run cap:build)
+  if [[ -z "${VITE_DEBUG_SAVED_DEVICES_JSON:-}" && "$APK_VARIANT" == "debug" ]]; then
+    export VITE_DEBUG_SAVED_DEVICES_JSON="$(build_debug_saved_devices_bootstrap_json)"
+  fi
+
+  if [[ "$FAST_LOCAL_APK_INSTALL" == "true" ]]; then
+    log "Building web app + syncing Android Capacitor"
+    (cd "$ROOT_DIR" && npm run build && npx cap sync android)
+  else
+    log "Building web app + syncing Capacitor"
+    (cd "$ROOT_DIR" && npm run cap:build)
+  fi
 
   if [[ -f "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle" ]]; then
     sed -i.bak '/flatDir{/,/}/d' "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle"
@@ -1797,14 +1816,7 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
     exit 1
   fi
 
-  if [[ -z "$DEVICE_ID" ]]; then
-    mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}' | grep -v '^emulator-')
-    if [[ ${#DEVICES[@]} -eq 0 ]]; then
-      echo "No adb devices found. Connect a device or pass --device-id <id>." >&2
-      exit 1
-    fi
-    DEVICE_ID="${DEVICES[0]}"
-  fi
+  DEVICE_ID="$(resolve_adb_device_id "$DEVICE_ID")"
 
   log "Installing APK to device: $DEVICE_ID"
   adb -s "$DEVICE_ID" install -r "$APK_PATH"

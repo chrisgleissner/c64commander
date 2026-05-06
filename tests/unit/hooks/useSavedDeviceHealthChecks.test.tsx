@@ -75,6 +75,57 @@ const makeResult = (label: string) => ({
   },
 });
 
+const makeProbeStates = () => ({
+  REST: {
+    state: "SUCCESS" as const,
+    outcome: "Success" as const,
+    startedAt: "2026-01-01T12:00:00.000Z",
+    endedAt: "2026-01-01T12:00:00.100Z",
+    durationMs: 100,
+    reason: null,
+  },
+  FTP: {
+    state: "SUCCESS" as const,
+    outcome: "Success" as const,
+    startedAt: "2026-01-01T12:00:00.101Z",
+    endedAt: "2026-01-01T12:00:00.200Z",
+    durationMs: 100,
+    reason: null,
+  },
+  TELNET: {
+    state: "SUCCESS" as const,
+    outcome: "Success" as const,
+    startedAt: "2026-01-01T12:00:00.201Z",
+    endedAt: "2026-01-01T12:00:00.300Z",
+    durationMs: 100,
+    reason: null,
+  },
+  CONFIG: {
+    state: "CANCELLED" as const,
+    outcome: "Skipped" as const,
+    startedAt: "2026-01-01T12:00:00.301Z",
+    endedAt: "2026-01-01T12:00:00.301Z",
+    durationMs: null,
+    reason: "Skipped: passive mode disables CONFIG pulse",
+  },
+  RASTER: {
+    state: "SUCCESS" as const,
+    outcome: "Success" as const,
+    startedAt: "2026-01-01T12:00:00.302Z",
+    endedAt: "2026-01-01T12:00:00.402Z",
+    durationMs: 100,
+    reason: null,
+  },
+  JIFFY: {
+    state: "SUCCESS" as const,
+    outcome: "Success" as const,
+    startedAt: "2026-01-01T12:00:00.403Z",
+    endedAt: "2026-01-01T12:00:00.503Z",
+    durationMs: 100,
+    reason: null,
+  },
+});
+
 describe("useSavedDeviceHealthChecks", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -145,6 +196,35 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+  });
+
+  it("preserves terminal probe states after an automatic cycle completes", async () => {
+    const finalProbeStates = makeProbeStates();
+    mockRunHealthCheckForTarget.mockImplementationOnce(async (_target, options) => {
+      options?.onProgress?.({
+        liveProbes: {
+          REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 1 },
+          FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 2 },
+          TELNET: { probe: "TELNET", outcome: "Success", durationMs: 100, reason: null, startMs: 3 },
+          CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+          RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 5 },
+          JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 6 },
+        },
+        probeStates: finalProbeStates,
+      });
+      return makeResult("office");
+    });
+    mockRunHealthCheckForTarget.mockImplementationOnce(async () => makeResult("backup"));
+
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(false);
+    expect(result.current.byDeviceId["device-office"]?.probeStates).toEqual(finalProbeStates);
+    expect(result.current.byDeviceId["device-office"]?.probeStates.REST.state).toBe("SUCCESS");
+    expect(result.current.byDeviceId["device-office"]?.probeStates.CONFIG.state).toBe("CANCELLED");
   });
 
   it("prefers seeded saved-device health state from the diagnostics test bridge", async () => {

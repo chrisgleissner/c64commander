@@ -35,6 +35,7 @@ describe("featureFlags persistence and logging", () => {
       "background_execution_enabled",
       "reu_snapshot_enabled",
       "ram_snapshots_enabled",
+      "home_config_actions_enabled",
     ]);
   });
 
@@ -50,6 +51,7 @@ describe("featureFlags persistence and logging", () => {
       background_execution_enabled: "experimental",
       reu_snapshot_enabled: "experimental",
       ram_snapshots_enabled: "experimental",
+      home_config_actions_enabled: "experimental",
     });
   });
 
@@ -111,6 +113,7 @@ describe("featureFlags persistence and logging", () => {
         background_execution_enabled: true,
         reu_snapshot_enabled: false,
         ram_snapshots_enabled: false,
+        home_config_actions_enabled: false,
       }),
     ).toBe(false);
     expect(
@@ -122,6 +125,7 @@ describe("featureFlags persistence and logging", () => {
         background_execution_enabled: true,
         reu_snapshot_enabled: false,
         ram_snapshots_enabled: false,
+        home_config_actions_enabled: false,
       }),
     ).toBe(true);
   });

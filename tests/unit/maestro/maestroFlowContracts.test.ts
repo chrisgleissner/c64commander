@@ -299,4 +299,22 @@ describe("Maestro flow contracts", () => {
     expect(commonNavigation).toContain('id: "tab-home"');
     expect(commonNavigation).not.toContain('point: "25%,95%"');
   });
+
+  it("covers Home CPU Speed slider persistence with probe-based latency assertions on real hardware", () => {
+    const rawSource = readFileSync(path.resolve(process.cwd(), ".maestro/edge-home-cpu-speed-latency.yaml"), "utf8");
+
+    expect(rawSource).toContain("cpu-slider");
+    expect(rawSource).toContain("real-network");
+    expect(rawSource).toContain('text: "Close"');
+    expect(rawSource).toContain('notVisible: "Diagnostics"');
+    expect(rawSource).toContain('visible: "CPU Speed"');
+    expect(rawSource).toContain('id: "home-cpu-speed-probe"');
+    expect(rawSource).toContain('durationMs < 1000');
+    expect(rawSource).toContain('id: "tab-play"');
+    expect(rawSource).toContain('id: "tab-home"');
+    expect(rawSource).toContain('authoritativeValue == output.firstProbe.targetValue');
+    expect(rawSource).toContain('authoritativeValue == output.secondProbe.targetValue');
+    expect(rawSource).toContain("C64U_HOME_CPU_SPEED_SLIDER_*");
+    expect(readYaml(path.resolve(process.cwd(), ".maestro/edge-home-cpu-speed-latency.yaml"))).toBeTruthy();
+  });
 });
