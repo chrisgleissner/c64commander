@@ -17,10 +17,10 @@ export type FeatureFlagId =
   | "hvsc_enabled"
   | "commoserve_enabled"
   | "demo_mode_enabled"
-  | "lighting_studio_enabled"
   | "background_execution_enabled"
-  | "home_telnet_reu_snapshot_enabled"
+  | "lighting_studio_enabled"
   | "ram_snapshots_enabled"
+  | "home_telnet_reu_snapshot_enabled"
   | "home_telnet_config_actions_enabled"
   | "home_telnet_drive_actions_enabled"
   | "home_telnet_printer_actions_enabled"
@@ -87,15 +87,6 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     description: "Allow the built-in simulated device mode in Settings and connection flows.",
   },
   {
-    id: "lighting_studio_enabled",
-    enabled: false,
-    visible_to_user: false,
-    developer_only: true,
-    group: "experimental",
-    title: "Lighting Studio",
-    description: "Enable Lighting Studio entry points and dialog access.",
-  },
-  {
     id: "background_execution_enabled",
     enabled: true,
     visible_to_user: false,
@@ -105,13 +96,13 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     description: "Allow native background playback timing and auto-advance scheduling.",
   },
   {
-    id: "home_telnet_reu_snapshot_enabled",
+    id: "lighting_studio_enabled",
     enabled: false,
     visible_to_user: false,
     developer_only: true,
     group: "experimental",
-    title: "REU Snapshots",
-    description: "Enable Save REU and Restore REU Snapshot functionality on Home. Depends on the Telnet interface.",
+    title: "Lighting Studio",
+    description: "Enable Lighting Studio entry points and dialog access.",
   },
   {
     id: "ram_snapshots_enabled",
@@ -121,6 +112,15 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "experimental",
     title: "RAM snapshots",
     description: "Show Save RAM and Load RAM actions on Home.",
+  },
+  {
+    id: "home_telnet_reu_snapshot_enabled",
+    enabled: false,
+    visible_to_user: false,
+    developer_only: true,
+    group: "experimental",
+    title: "REU Snapshots",
+    description: "Enable Save REU and Restore REU Snapshot functionality on Home. Depends on the Telnet interface.",
   },
   {
     id: "home_telnet_config_actions_enabled",

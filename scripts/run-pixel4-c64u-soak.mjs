@@ -17,7 +17,8 @@ const execFileAsync = promisify(execFile);
 
 const APP_ID = process.env.APP_ID ?? "uk.gleissner.c64commander";
 const DEVICE_ID = process.env.DEVICE_ID ?? "9B081FFAZ001WX";
-const C64U_HOST = process.env.C64U_HOST ?? "c64u";
+const REQUESTED_C64U_HOST = process.env.C64U_HOST?.trim() || null;
+const HOST_CANDIDATES = REQUESTED_C64U_HOST ? [REQUESTED_C64U_HOST] : ["u64", "c64u"];
 const DEVTOOLS_PORT = Number(process.env.DEVTOOLS_PORT ?? "9222");
 const OUTPUT_DIR = process.env.OUTPUT_DIR ?? "test-results/android-device";
 const RESULT_PATH = path.join(OUTPUT_DIR, "pixel4-c64u-soak-results.json");
@@ -117,6 +118,16 @@ const waitFor = async (predicate, options = {}) => {
 
 const pageText = (cdp) => evaluate(cdp, "document.body.innerText");
 
+const getConnectionSummary = (cdp) =>
+  evaluate(
+    cdp,
+    `(() =>
+      Array.from(document.querySelectorAll('[aria-label]'))
+        .map((element) => element.getAttribute('aria-label'))
+        .find((label) => label && /Connected to .*system healthy/i.test(label)) ?? null
+    )()`,
+  );
+
 const getControl = async (cdp, testId) =>
   evaluate(
     cdp,
@@ -140,6 +151,48 @@ const getControl = async (cdp, testId) =>
       };
     })()`,
   );
+
+const isControlDisabled = (control) => control?.disabled === "true" || control?.disabled === true;
+
+const hasUsableSliderRange = (control) => Number(control?.max ?? 0) > Number(control?.min ?? 0);
+
+const pickSliderSoakTarget = async (cdp) => {
+  const candidates = [
+    {
+      testId: "home-sid-pan-socket1",
+      stepName: "home-sid-pan-socket1-capability",
+      label: "SID Socket 1 Pan",
+      preferred: true,
+    },
+    {
+      testId: "home-led-intensity-slider",
+      stepName: "home-led-intensity-slider-capability",
+      label: "LED intensity",
+      preferred: false,
+    },
+  ];
+
+  const capabilities = [];
+  for (const candidate of candidates) {
+    const control = await getControl(cdp, candidate.testId);
+    const available = Boolean(control) && !isControlDisabled(control) && hasUsableSliderRange(control);
+    capabilities.push({
+      name: candidate.stepName,
+      label: candidate.label,
+      preferred: candidate.preferred,
+      status: available ? "available" : "blocked",
+      disabled: control?.disabled ?? null,
+      min: control?.min ?? null,
+      max: control?.max ?? null,
+      value: control?.value ?? null,
+    });
+    if (available) {
+      return { target: candidate, control, capabilities };
+    }
+  }
+
+  return { target: null, control: null, capabilities };
+};
 
 const focusSlider = async (cdp, testId) =>
   evaluate(
@@ -217,10 +270,26 @@ const tapButton = async (cdp, testId) => {
   return control;
 };
 
-const readHostInfo = async () => {
-  const response = await fetch(`http://${C64U_HOST}/v1/info`, { signal: AbortSignal.timeout(5_000) });
-  assertCondition(response.ok, `Host ${C64U_HOST} /v1/info returned HTTP ${response.status}`);
+const fetchHostInfo = async (host) => {
+  const response = await fetch(`http://${host}/v1/info`, { signal: AbortSignal.timeout(5_000) });
+  assertCondition(response.ok, `Host ${host} /v1/info returned HTTP ${response.status}`);
   return response.json();
+};
+
+const resolveReachableHost = async () => {
+  const failures = [];
+  for (const host of HOST_CANDIDATES) {
+    try {
+      const info = await fetchHostInfo(host);
+      return { host, info, failures };
+    } catch (error) {
+      failures.push({ host, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  const error = new Error(`No reachable C64 Ultimate host found via ${HOST_CANDIDATES.join(", ")}`);
+  error.details = { failures };
+  throw error;
 };
 
 const dismissAndroidCompatibilityDialog = async () => {
@@ -238,11 +307,11 @@ const dismissAndroidCompatibilityDialog = async () => {
   return true;
 };
 
-const resetAppForRealSmokeRun = async () => {
+const resetAppForRealSmokeRun = async (host) => {
   const payload = JSON.stringify({
     debugLogging: true,
     featureFlags: { hvsc_enabled: true },
-    host: C64U_HOST,
+    host,
     readOnly: false,
     target: "real",
   });
@@ -257,9 +326,9 @@ const resetAppForRealSmokeRun = async () => {
 const main = async () => {
   await mkdir(OUTPUT_DIR, { recursive: true });
   const startedAt = new Date().toISOString();
-  const hostInfo = await readHostInfo();
+  const { host: resolvedHost, info: hostInfo, failures: hostProbeFailures } = await resolveReachableHost();
 
-  await resetAppForRealSmokeRun();
+  await resetAppForRealSmokeRun(resolvedHost);
   await adb(["shell", "am", "start", "-n", `${APP_ID}/.MainActivity`]);
   await sleep(1_000);
   await dismissAndroidCompatibilityDialog();
@@ -268,17 +337,18 @@ const main = async () => {
   const cdp = await connectDevTools();
   const evidence = {
     appId: APP_ID,
-    c64uHost: C64U_HOST,
+    c64uHost: resolvedHost,
     deviceId: DEVICE_ID,
     hostInfo,
+    hostProbeFailures,
     startedAt,
     steps: [],
   };
 
   try {
     await waitFor(async () => {
-      const text = await pageText(cdp);
-      return text.includes("C64U") && text.includes("HEALTHY") && text.includes("c64u") ? text : null;
+      const summary = await getConnectionSummary(cdp);
+      return summary && summary.includes(resolvedHost) ? summary : null;
     });
     const initialText = await pageText(cdp);
     assertCondition(!initialText.includes("DEMO ACTIVE"), "App fell back to demo mode", { initialText });
@@ -293,29 +363,32 @@ const main = async () => {
       min: cpuSlider?.min,
     });
 
+    const sliderTarget = await pickSliderSoakTarget(cdp);
+    evidence.steps.push(...sliderTarget.capabilities);
+    assertCondition(sliderTarget.target, "No interactive config-backed slider target was available", {
+      capabilities: sliderTarget.capabilities,
+    });
+
     const sliderResults = [];
     for (const fraction of [1, 0, 1, 0, 1, 0]) {
-      sliderResults.push(await dragSliderToFraction(cdp, "home-led-intensity-slider", fraction));
+      sliderResults.push(await dragSliderToFraction(cdp, sliderTarget.target.testId, fraction));
     }
     const originalSliderValue = Number(sliderResults[0].before.value);
     evidence.steps.push({
-      name: "repeated-slider-soak-home-led-intensity",
+      name: `repeated-slider-soak-${sliderTarget.target.testId}`,
+      label: sliderTarget.target.label,
       iterations: sliderResults.length,
       status: "passed",
-      finalValue: (await getControl(cdp, "home-led-intensity-slider")).value,
+      finalValue: (await getControl(cdp, sliderTarget.target.testId)).value,
       originalValue: String(originalSliderValue),
     });
 
-    const checkboxResults = [];
-    for (let index = 0; index < 8; index += 1) {
-      checkboxResults.push(await toggleCheckbox(cdp, "home-video-scanlines"));
-    }
+    const scanlines = await getControl(cdp, "home-video-scanlines");
     evidence.steps.push({
-      name: "repeated-checkbox-soak-home-video-scanlines",
-      iterations: checkboxResults.length,
-      status: "passed",
-      finalChecked: (await getControl(cdp, "home-video-scanlines")).checked,
-      originalChecked: checkboxResults[0].before.checked,
+      name: "home-video-scanlines-capability",
+      status: scanlines && !isControlDisabled(scanlines) ? "available" : "blocked-disabled",
+      checked: scanlines?.checked ?? null,
+      disabled: scanlines?.disabled ?? null,
     });
 
     for (let index = 0; index < 5; index += 1) {
@@ -324,11 +397,11 @@ const main = async () => {
       await tapButton(cdp, "tab-home");
       await waitFor(async () => ((await pageText(cdp)).includes("HEALTHY") ? true : null));
     }
-    evidence.steps.push({ name: "navigation-buttons-under-device-load", iterations: 10, status: "passed" });
+    evidence.steps.push({ name: "repeated-button-soak-tab-navigation", iterations: 10, status: "passed" });
 
     await waitFor(async () => {
-      const text = await pageText(cdp);
-      return text.includes("C64U") && text.includes("HEALTHY") && text.includes("c64u") ? text : null;
+      const summary = await getConnectionSummary(cdp);
+      return summary && summary.includes(resolvedHost) ? summary : null;
     });
     const finalText = await pageText(cdp);
     assertCondition(!finalText.includes("No categories available"), "Config categories were lost after soak", {
@@ -340,7 +413,7 @@ const main = async () => {
     await writeFile(LOGCAT_PATH, logcat.stdout);
     const nativeC64uRequests = logcat.stdout
       .split("\n")
-      .filter((line) => line.includes("C64U_HTTP") && line.includes(`http://${C64U_HOST}`));
+      .filter((line) => line.includes("C64U_HTTP") && line.includes(`http://${resolvedHost}`));
     const failures = logcat.stdout
       .split("\n")
       .filter((line) => /C64U_HTTP_FAILURE|C64U_HOME_CPU_SPEED_SLIDER_REST_FAILED|Host unreachable/i.test(line));

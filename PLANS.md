@@ -72,14 +72,15 @@ Mandatory deliverables:
    - Covers: 100 drag updates, immediate local display, bounded preview writes, final commit.
    - Safety: no network, fake timers.
    - Safety: mocked API.
-5. `connectionManager waits for a slow successful startup probe inside the deadline instead of entering demo`
+4. `connectionManager waits for a slow successful startup probe inside the deadline instead of entering demo`
    - Layer/location: Vitest, `tests/unit/connection/connectionManager.startup.test.ts`.
    - Covers: slow real device prevents premature demo fallback.
    - Safety: mocked fetch, fake timers.
-6. `Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded`
+5. `Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded`
    - Layer/location: Playwright web structured soak, `playwright/structuredInteractionSoak.spec.ts`.
 
 ## Implementation Plan
+
 - [x] Read mandatory docs and inspect actual repo infrastructure.
 - [x] Record test design before coding.
 - [x] Create `docs/testing/test-architecture.md`.
@@ -91,8 +92,8 @@ Mandatory deliverables:
 
 ## Commands And Results
 
-  - Result: passed, 1 test, 36.8s.
-  - Artifacts: standard Playwright output under `test-results/playwright` and `playwright-report`.
+- Result: passed, 1 test, 36.8s.
+- Artifacts: standard Playwright output under `test-results/playwright` and `playwright-report`.
 - `npm run lint`
   - Task-owned files needing formatting: `playwright/structuredInteractionSoak.spec.ts`, `tests/unit/connection/connectionManager.startup.test.ts`, and `docs/testing/test-architecture.md`.
 - `npx prettier --write playwright/structuredInteractionSoak.spec.ts tests/unit/connection/connectionManager.startup.test.ts docs/testing/test-architecture.md`
@@ -149,24 +150,60 @@ Mandatory deliverables:
 - `npx vitest run tests/unit/lib/diagnostics/healthModel.test.ts`
   - Continuation result: passed, 87 tests, 1.57s.
   - Purpose: regression coverage for ignoring pre-connection REST/app gating failures after recovery.
+- `PATH="/home/chris/.maestro/bin:$PATH" MAESTRO_DRIVER_STARTUP_TIMEOUT=60000 scripts/run-maestro.sh --mode tags --tags +cpu-slider --device-id 9B081FFAZ001WX --apk-path android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk --output-dir test-results/maestro/pixel4-c64u-cpu-slider-smoke --c64u-target real --c64u-host c64u`
+  - Result: failed before execution because the wrapper's default `slow`/`edge` exclusions filtered the `cpu-slider` flow.
+  - Follow-up: direct flow execution used after smoke config was written.
+- `maestro test --udid 9B081FFAZ001WX ... .maestro/edge-home-cpu-speed-latency.yaml`
+  - Result: failed; evidence showed the CPU Speed slider is disabled/non-movable on the required `c64u` firmware, with `aria-disabled="true"` and only a single visible CPU Speed value. This is a hardware/firmware capability blocker for CPU-specific HIL on this target, not a passing CPU soak.
+- `node scripts/run-pixel4-c64u-soak.mjs`
+  - Result: partial execution only.
+  - Verified before hardware loss: Pixel 4 launched against `c64u`, host `/v1/info` initially passed, app reported `C64U HEALTHY`, Home CPU Speed was recorded as firmware-blocked/single-option, and the LED-intensity slider key-driven path reached the checkbox phase.
+  - Failure: the first coordinate/DOM-click checkbox attempts did not complete, and subsequent host probes showed `c64u` became unreachable at the network layer before a complete PASS run could be produced.
+  - Artifacts: `test-results/android-device/pixel4-c64u-soak-results.json`, `pixel4-c64u-after-host-timeout.png`, `pixel4-c64u-soak-failed*.png`.
+- `for i in $(seq 1 12); do curl --max-time 5 http://c64u/v1/info; sleep 10; done`
+  - Result: failed all 12 low-rate probes. `c64u` resolved to `192.168.1.167`, but connect failed with "Couldn't connect to server".
+- `ping -c 3 -W 2 c64u`
+  - Result: failed; `Destination Host Unreachable`.
+- `ip neigh show 192.168.1.167`
+  - Result: `FAILED`; ARP could not resolve the C64U.
+- `npx vitest run tests/unit/lib/diagnostics/healthModel.test.ts tests/unit/lib/c64api.test.ts tests/unit/c64api.branches.test.ts tests/unit/hooks/useAppConfigState.test.tsx tests/unit/hooks/useDeviceBoundSlider.test.ts tests/unit/lib/deviceInteraction/latestIntentWriteLane.test.ts tests/unit/configWriteThrottle.test.ts tests/unit/connection/connectionManager.startup.test.ts tests/unit/pages/home/components/homeCpuSpeedSliderProbe.test.ts`
+  - Result: passed, 9 files, 222 tests, 6.07s.
+- `npm run lint`
+  - Result: passed after applying Prettier to five dirty TypeScript/TSX files.
+- `node scripts/compile-feature-flags.mjs`
+  - Result: regenerated `src/lib/config/featureFlagsRegistry.generated.ts` after the feature flag registry check found it out of date.
+- `npm run lint`
+  - Final result: passed.
+- `PLAYWRIGHT_DEVICES=phone npx playwright test playwright/structuredInteractionSoak.spec.ts --project=android-phone`
+  - Result: passed, 1 test, 41.0s.
+- `npm run test:coverage`
+  - Result: interrupted by the execution environment after 36/37 coverage shards completed; no final summary was produced by that invocation.
+- Manual completion of the missing coverage shard using the repository harness arguments, then `npx nyc merge` and `npx nyc report`
+  - Result: passed. Coverage summary: statements 94.27%, branches 91.89%, functions 90.45%, lines 94.27%.
+- Final `curl -sS --max-time 5 http://c64u/v1/info && ip neigh show 192.168.1.167`
+  - Result: failed; `c64u` still unreachable and ARP remained `FAILED`.
 
 ## Blockers
 
-- On-device validation found a release blocker: current APK on Pixel 4 renders Home/Config data from `u64` but health remains `U64 UNHEALTHY` after waiting, matching the partial-connectivity/health-false-negative class.
+- Required real C64U host `c64u` is currently offline/unreachable. Verified failures: `curl http://c64u/v1/info`, `ping c64u`, and ARP for `192.168.1.167`.
+- The requested Home CPU Speed HIL slider cannot be exercised on the required `c64u` firmware because the app exposes it as a disabled/single-option control on that target.
+- A complete Pixel 4 + `c64u` button/checkbox/slider soak PASS artifact was not produced before the target became unreachable.
 - Physical A/V HIL was not executed; no c64scope evidence was collected.
-- Contract STRESS/breakpoint tests were not run against `u64` in this task to avoid broad hardware pressure beyond the bounded app launch/config validation.
+- Contract STRESS/breakpoint tests were not run against `c64u` after it became unreachable.
 
 ## Remaining Risks
 
 - Playwright web success does not prove native Android WebView, `CapacitorHttp`, LAN DNS/routing, background/foreground lifecycle, or real C64U safety.
 - Contract STRESS/breakpoint harness exists but was not run against hardware in this phase.
-- Partial connectivity UI semantics beyond hook-level recovery still need a Playwright degraded mock scenario and deeper HIL diagnostics. Pixel 4 validation already exposed health false-negative behavior while config remained populated.
+- Partial connectivity UI semantics beyond hook-level recovery still need a Playwright degraded mock scenario and deeper HIL diagnostics.
+- `scripts/run-pixel4-c64u-soak.mjs` is implemented for the required HIL path, but its full PASS run is blocked until `c64u` is reachable again.
 - Existing unrelated worktree changes may still affect full lint/build/coverage results.
 
 ## Release Readiness Classification
 
 - Classification target: `READY`.
-- Current classification remains `NOT READY` until the Pixel 4 is proven online against the real C64U host `c64u`, repeated button/checkbox and slider soak tests pass on-device, and the health badge is verified online.
+- Current classification is `BLOCKED BY HARDWARE`.
+- `READY` cannot be claimed while the required host `c64u` is unreachable and the complete Pixel 4 + real C64U soak has not passed.
 - User continuation requirement: complete the work, not merely document blockers. Real-device proof must use the attached Pixel 4 speaking to the real C64U available as hostname `c64u`.
 - Prior blocker to resolve: current APK on Pixel 4 rendered config data from `u64` but health stayed `U64 UNHEALTHY`.
 - Additional blockers to clear or explicitly run: physical Android repeated interaction soak, health online proof, relevant CI-safe regression tests, and release readiness reclassification to `READY`.
@@ -175,6 +212,8 @@ Mandatory deliverables:
 - Continuation fix: mark expected missing optional config metadata requests as expected trace failures, exclude expected failures from health rollup, and stop probing per-item metadata when the whole config category returns HTTP 404.
 - Continuation second finding: after that fix, the badge still counted stale startup `Device not ready for requests` traces that occurred before the first successful REST response.
 - Continuation second fix: REST health now evaluates the current window from the first successful REST response onward, and App health ignores pre-connection request-gating errors after recovery.
+- Continuation HIL result: Pixel 4 did show `C64U HEALTHY` against `c64u` after the health fixes, with screenshot evidence in `test-results/android-device/pixel4-c64u-healthy-after-fix.png`.
+- Continuation HIL blocker: `c64u` later became unreachable at the network layer, preventing a complete physical soak PASS and preventing a truthful `READY` classification.
 
 ## Final Completion Checklist
 
@@ -188,6 +227,9 @@ Mandatory deliverables:
 - [x] Broad validation commands/results are recorded.
 - [x] APK deploy/install/launch result is recorded.
 - [x] Release-readiness classification is recorded.
+- [ ] Complete Pixel 4 + `c64u` repeated slider/checkbox/button HIL soak passes.
+- [ ] `c64u` is reachable and online at final classification time.
+- [ ] Physical HIL/c64scope evidence exists for A/V-sensitive release blockers.
 - [x] No unnecessary runners or overlapping test categories were added.
 - [x] No broad unrelated refactors were made.
 - [x] No commits were made.
