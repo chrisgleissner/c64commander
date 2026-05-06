@@ -74,17 +74,14 @@ describe("deviceControl", () => {
 
   it("routes keep-ram reboot through REST only", async () => {
     const api = createApi();
-    const clearRamAndRebootImpl = vi.fn().mockResolvedValue(undefined);
     const control = createDeviceControl({
       api: api as C64API,
-      clearRamAndRebootImpl,
       initialMenuOpen: true,
     });
 
     const result = await control.rebootKeepRam();
 
     expect(api.machineReboot).toHaveBeenCalledTimes(1);
-    expect(clearRamAndRebootImpl).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       operation: "rebootKeepRam",
       transport: "REST",
@@ -101,35 +98,6 @@ describe("deviceControl", () => {
       transport: "REST",
       endpoint: "PUT /v1/machine:reboot",
     });
-  });
-
-  it("uses the full reboot sequence for rebootFull and powerCycle", async () => {
-    const api = createApi();
-    const clearRamAndRebootImpl = vi.fn().mockResolvedValue(undefined);
-    const control = createDeviceControl({
-      api: api as C64API,
-      clearRamAndRebootImpl,
-      initialMenuOpen: true,
-    });
-
-    const rebootResult = await control.rebootFull();
-    const powerCycleResult = await control.powerCycle();
-
-    expect(clearRamAndRebootImpl).toHaveBeenCalledTimes(2);
-    expect(clearRamAndRebootImpl).toHaveBeenNthCalledWith(1, api);
-    expect(clearRamAndRebootImpl).toHaveBeenNthCalledWith(2, api);
-    expect(api.machineReboot).not.toHaveBeenCalled();
-    expect(rebootResult).toMatchObject({
-      operation: "rebootFull",
-      transport: "REST",
-      menuOpen: false,
-    });
-    expect(powerCycleResult).toMatchObject({
-      operation: "powerCycle",
-      transport: "REST_FALLBACK_FULL_REBOOT",
-      menuOpen: false,
-    });
-    expect(control.describePowerCycleFallback()).toContain("PUT /v1/machine:pause");
   });
 
   it("logs structured failures for device-control errors", async () => {

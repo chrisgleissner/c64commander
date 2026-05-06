@@ -16,7 +16,7 @@ const mockSnapshot: FeatureFlagSnapshot = {
     hvsc_enabled: true,
     commoserve_enabled: true,
     lighting_studio_enabled: false,
-    reu_snapshot_enabled: false,
+    home_telnet_reu_snapshot_enabled: false,
   },
   resolved: {
     hvsc_enabled: {
@@ -70,16 +70,16 @@ const mockSnapshot: FeatureFlagSnapshot = {
       visible: false,
       editable: false,
     },
-    reu_snapshot_enabled: {
-      id: "reu_snapshot_enabled",
+    home_telnet_reu_snapshot_enabled: {
+      id: "home_telnet_reu_snapshot_enabled",
       definition: {
-        id: "reu_snapshot_enabled",
+        id: "home_telnet_reu_snapshot_enabled",
         enabled: false,
         visible_to_user: false,
         developer_only: true,
         group: "experimental",
         title: "REU Snapshots",
-        description: "Enable Save REU and Restore REU Snapshot functionality.",
+        description: "Enable Save REU and Restore REU Snapshot functionality on Home. Depends on the Telnet interface.",
       },
       value: false,
       hasOverride: false,

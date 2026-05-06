@@ -14,8 +14,11 @@ import HomePage from "@/pages/HomePage";
 const featureFlagsRef = vi.hoisted(() => ({
   current: {
     lighting_studio_enabled: true,
-    home_advanced_config_actions_enabled: false,
-    reu_snapshot_enabled: true,
+    home_telnet_config_actions_enabled: false,
+    home_telnet_drive_actions_enabled: false,
+    home_telnet_printer_actions_enabled: false,
+    home_telnet_power_cycle_enabled: false,
+    home_telnet_reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   } as Record<string, boolean>,
 }));
@@ -30,9 +33,7 @@ const {
   addErrorLogSpy,
   clearRamAndRebootSpy,
   executeTelnetActionSpy,
-  rebootFullSpy,
   rebootKeepRamSpy,
-  powerCycleSpy,
   toggleMenuSpy,
   selectRamDumpFolderSpy,
   saveRamDumpFolderConfigSpy,
@@ -55,9 +56,7 @@ const {
   addErrorLogSpy: vi.fn(),
   clearRamAndRebootSpy: vi.fn(),
   executeTelnetActionSpy: vi.fn(),
-  rebootFullSpy: vi.fn(),
   rebootKeepRamSpy: vi.fn(),
-  powerCycleSpy: vi.fn(),
   toggleMenuSpy: vi.fn(),
   selectRamDumpFolderSpy: vi.fn(),
   saveRamDumpFolderConfigSpy: vi.fn(),
@@ -402,32 +401,10 @@ vi.mock("@/lib/deviceControl/deviceControl", () => ({
   useDeviceControl: () => ({
     toggleMenu: toggleMenuSpy,
     rebootKeepRam: rebootKeepRamSpy,
-    rebootFull: rebootFullSpy,
-    powerCycle: powerCycleSpy,
     resetMenuState: vi.fn(),
     getMenuState: vi.fn().mockReturnValue(false),
-    describePowerCycleFallback: vi
-      .fn()
-      .mockReturnValue("PUT /v1/machine:pause -> PUT /v1/machine:writemem -> PUT /v1/machine:reboot"),
   }),
   isDeviceControlError: deviceControlErrorState.isDeviceControlError,
-}));
-
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuContent: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div {...props}>{children}</div>
-  ),
-  DropdownMenuItem: ({
-    children,
-    onSelect,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { onSelect?: () => void }) => (
-    <button type="button" onClick={onSelect} {...props}>
-      {children}
-    </button>
-  ),
 }));
 
 describe("HomePage RAM actions", () => {
@@ -437,8 +414,12 @@ describe("HomePage RAM actions", () => {
     vi.clearAllMocks();
     featureFlagsRef.current = {
       lighting_studio_enabled: true,
-      home_advanced_config_actions_enabled: false,
-      reu_snapshot_enabled: true,
+      home_telnet_config_actions_enabled: false,
+      home_telnet_drive_actions_enabled: false,
+      home_telnet_printer_actions_enabled: false,
+      home_telnet_power_cycle_enabled: false,
+      home_telnet_clear_ram_reboot_enabled: false,
+      home_telnet_reu_snapshot_enabled: true,
       ram_snapshots_enabled: true,
     };
     (globalThis as any).__APP_VERSION__ = "test";
@@ -446,25 +427,11 @@ describe("HomePage RAM actions", () => {
     (globalThis as any).__BUILD_TIME__ = "";
     clearRamAndRebootSpy.mockResolvedValue(undefined);
     executeTelnetActionSpy.mockResolvedValue(undefined);
-    rebootFullSpy.mockResolvedValue({
-      operation: "rebootFull",
-      transport: "REST",
-      endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
-      response: { errors: [] },
-      menuOpen: false,
-    });
     rebootKeepRamSpy.mockResolvedValue({
       operation: "rebootKeepRam",
       transport: "REST",
       endpoint: "PUT /v1/machine:reboot",
       response: { errors: [] },
-      menuOpen: false,
-    });
-    powerCycleSpy.mockResolvedValue({
-      operation: "powerCycle",
-      transport: "REST_FALLBACK_FULL_REBOOT",
-      endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
-      response: { errors: [], fallback: true },
       menuOpen: false,
     });
     toggleMenuSpy.mockResolvedValue({
@@ -538,13 +505,11 @@ describe("HomePage RAM actions", () => {
   }, 15000);
 
   it("keeps quick reboot and clear-ram reboot visibly distinct", async () => {
+    featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = true;
     renderHomePage();
 
     expect(screen.getByRole("button", { name: /^reboot$/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-
-    expect(await screen.findByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent(
+    expect(await screen.findByTestId("home-machine-inline-rebootClearMemory")).toHaveTextContent(
       /^Reboot \(Clr Mem\)$/,
     );
   });
@@ -563,68 +528,37 @@ describe("HomePage RAM actions", () => {
   });
 
   it("runs power cycle through telnet", async () => {
+    featureFlagsRef.current.home_telnet_power_cycle_enabled = true;
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /^power cycle$/i }));
 
     await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("powerCycle"), { timeout: 5000 });
-    expect(powerCycleSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Power cycled" }), { timeout: 5000 });
   });
 
-  it("runs clear-ram reboot from the overflow menu through telnet when available", async () => {
+  it("runs clear-ram reboot through telnet when the flag is enabled", async () => {
+    featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = true;
     renderHomePage();
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
-
-    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
-    expect(rebootFullSpy).not.toHaveBeenCalled();
-    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Machine rebooting" }), { timeout: 5000 });
-  });
-
-  it("runs clear-ram reboot from the inline quick action when overflow is not needed", async () => {
-    featureFlagsRef.current.reu_snapshot_enabled = false;
-    telnetState.getActionSupport.mockImplementation((actionId: string) => {
-      if (actionId === "powerCycle") {
-        return {
-          actionId,
-          status: "unsupported",
-          reason: "Power Cycle is not available on this device.",
-          target: null,
-        };
-      }
-      return {
-        actionId,
-        status: "supported",
-        reason: null,
-        target: {
-          categoryLabel: "Power & Reset",
-          actionLabel: "Reboot (Clr Mem)",
-          source: "initial",
-        },
-      };
-    });
-
-    renderHomePage();
-
-    expect(screen.queryByTestId("home-machine-overflow-trigger")).toBeNull();
     fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
 
     await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
-    expect(rebootFullSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Machine rebooting" }), { timeout: 5000 });
   });
 
-  it("falls back to REST clear-ram reboot when telnet is unavailable", async () => {
+  it("hides clear-ram reboot when the flag is off", () => {
+    renderHomePage();
+
+    expect(screen.queryByTestId("home-machine-inline-rebootClearMemory")).toBeNull();
+  });
+
+  it("hides clear-ram reboot when telnet is unavailable", () => {
+    featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = true;
     telnetState.isAvailable = false;
     renderHomePage();
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
-
-    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
-    expect(executeTelnetActionSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("home-machine-inline-rebootClearMemory")).toBeNull();
   });
 
   it("hides telnet-only home controls when telnet is unavailable", () => {
@@ -663,23 +597,6 @@ describe("HomePage RAM actions", () => {
     expect(screen.queryByTestId("home-machine-note-powerCycle")).toBeNull();
   });
 
-  it("falls back to REST clear-ram reboot when telnet execution fails", async () => {
-    executeTelnetActionSpy.mockRejectedValueOnce(new Error("telnet offline"));
-    renderHomePage();
-
-    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-    fireEvent.click(await screen.findByTestId("home-machine-overflow-rebootClearMemory"));
-
-    await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
-    await waitFor(() => expect(rebootFullSpy).toHaveBeenCalled(), { timeout: 5000 });
-    expect(addErrorLogSpy).toHaveBeenCalledWith(
-      "Reboot clear memory telnet failed; falling back to REST",
-      expect.objectContaining({
-        error: expect.objectContaining({ message: "telnet offline" }),
-      }),
-    );
-  });
-
   it("opens Save RAM dialog when Save RAM button is clicked", async () => {
     renderHomePage();
 
@@ -689,7 +606,7 @@ describe("HomePage RAM actions", () => {
   }, 15000);
 
   it("saves config to a local file through the shared config workflow", async () => {
-    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
+    featureFlagsRef.current.home_telnet_config_actions_enabled = true;
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-config-save-file"));
@@ -703,7 +620,7 @@ describe("HomePage RAM actions", () => {
   });
 
   it("loads config from a local file through the shared config workflow", async () => {
-    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
+    featureFlagsRef.current.home_telnet_config_actions_enabled = true;
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-config-load-file"));
@@ -760,8 +677,7 @@ describe("HomePage RAM actions", () => {
   it("runs Save REU through the REU workflow instead of the generic Telnet action", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
 
     await waitFor(() => expect(reuWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
     expect(executeTelnetActionSpy).not.toHaveBeenCalledWith("saveReuMemory");
@@ -788,8 +704,7 @@ describe("HomePage RAM actions", () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
 
     const dialog = await screen.findByTestId("reu-progress-dialog");
     expect(dialog).toBeInTheDocument();
@@ -817,8 +732,7 @@ describe("HomePage RAM actions", () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-trigger"));
-    fireEvent.click(await screen.findByTestId("home-machine-overflow-saveReuMemory"));
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
 
     await waitFor(() =>
       expect(reportUserErrorSpy).toHaveBeenCalledWith(

@@ -33,9 +33,13 @@ describe("featureFlags persistence and logging", () => {
       "demo_mode_enabled",
       "lighting_studio_enabled",
       "background_execution_enabled",
-      "reu_snapshot_enabled",
+      "home_telnet_reu_snapshot_enabled",
       "ram_snapshots_enabled",
-      "home_advanced_config_actions_enabled",
+      "home_telnet_config_actions_enabled",
+      "home_telnet_drive_actions_enabled",
+      "home_telnet_printer_actions_enabled",
+      "home_telnet_power_cycle_enabled",
+      "home_telnet_clear_ram_reboot_enabled",
     ]);
   });
 
@@ -49,9 +53,13 @@ describe("featureFlags persistence and logging", () => {
       demo_mode_enabled: "stable",
       lighting_studio_enabled: "experimental",
       background_execution_enabled: "experimental",
-      reu_snapshot_enabled: "experimental",
+      home_telnet_reu_snapshot_enabled: "experimental",
       ram_snapshots_enabled: "experimental",
-      home_advanced_config_actions_enabled: "experimental",
+      home_telnet_config_actions_enabled: "experimental",
+      home_telnet_drive_actions_enabled: "experimental",
+      home_telnet_printer_actions_enabled: "experimental",
+      home_telnet_power_cycle_enabled: "experimental",
+      home_telnet_clear_ram_reboot_enabled: "experimental",
     });
   });
 
@@ -111,9 +119,13 @@ describe("featureFlags persistence and logging", () => {
         demo_mode_enabled: false,
         lighting_studio_enabled: false,
         background_execution_enabled: true,
-        reu_snapshot_enabled: false,
+        home_telnet_reu_snapshot_enabled: false,
         ram_snapshots_enabled: false,
-        home_advanced_config_actions_enabled: false,
+        home_telnet_config_actions_enabled: false,
+        home_telnet_drive_actions_enabled: false,
+        home_telnet_printer_actions_enabled: false,
+        home_telnet_power_cycle_enabled: false,
+        home_telnet_clear_ram_reboot_enabled: false,
       }),
     ).toBe(false);
     expect(
@@ -123,10 +135,25 @@ describe("featureFlags persistence and logging", () => {
         demo_mode_enabled: false,
         lighting_studio_enabled: false,
         background_execution_enabled: true,
-        reu_snapshot_enabled: false,
+        home_telnet_reu_snapshot_enabled: false,
         ram_snapshots_enabled: false,
-        home_advanced_config_actions_enabled: false,
+        home_telnet_config_actions_enabled: false,
+        home_telnet_drive_actions_enabled: false,
+        home_telnet_printer_actions_enabled: false,
+        home_telnet_power_cycle_enabled: false,
+        home_telnet_clear_ram_reboot_enabled: false,
       }),
     ).toBe(true);
+  });
+
+  it("keeps home telnet flags consistently prefixed and documented", () => {
+    const homeTelnetDefinitions = FEATURE_FLAG_DEFINITIONS.filter((definition) =>
+      definition.id.startsWith("home_telnet_"),
+    );
+
+    expect(homeTelnetDefinitions.map((definition) => definition.id)).toContain("home_telnet_reu_snapshot_enabled");
+    homeTelnetDefinitions.forEach((definition) => {
+      expect(definition.description).toContain("Depends on the Telnet interface.");
+    });
   });
 });

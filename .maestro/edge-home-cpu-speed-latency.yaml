@@ -35,16 +35,16 @@ env:
     timeout: ${TIMEOUT}
 - copyTextFrom:
     id: "home-cpu-speed-probe"
-- evalScript: ${output.initialProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", ""))}
+- evalScript: ${output.initialProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
 
 - swipe:
-    start: 86%, 48%
-    end: 14%, 48%
+    start: 10%, 63%
+    end: 92%, 63%
     duration: 350
 - waitForAnimationToEnd
 - copyTextFrom:
     id: "home-cpu-speed-probe"
-- evalScript: ${output.firstProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", ""))}
+- evalScript: ${output.firstProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
 - assertTrue: ${output.firstProbe.phase == "success"}
 - assertTrue: ${output.firstProbe.durationMs < 1000}
 - assertTrue: ${output.firstProbe.displayValue != output.initialProbe.displayValue}
@@ -69,18 +69,18 @@ env:
     timeout: ${TIMEOUT}
 - copyTextFrom:
     id: "home-cpu-speed-probe"
-- evalScript: ${output.firstRefetchedProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", ""))}
+- evalScript: ${output.firstRefetchedProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
 - assertTrue: ${output.firstRefetchedProbe.authoritativeValue == output.firstProbe.targetValue}
 - assertTrue: ${output.firstRefetchedProbe.displayValue == output.firstProbe.targetValue}
 
 - swipe:
-    start: 14%, 48%
-    end: 86%, 48%
+    start: 92%, 63%
+    end: 10%, 63%
     duration: 350
 - waitForAnimationToEnd
 - copyTextFrom:
     id: "home-cpu-speed-probe"
-- evalScript: ${output.secondProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", ""))}
+- evalScript: ${output.secondProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
 - assertTrue: ${output.secondProbe.phase == "success"}
 - assertTrue: ${output.secondProbe.durationMs < 1000}
 - assertTrue: ${output.secondProbe.displayValue != output.firstProbe.displayValue}
@@ -105,7 +105,7 @@ env:
     timeout: ${TIMEOUT}
 - copyTextFrom:
     id: "home-cpu-speed-probe"
-- evalScript: ${output.secondRefetchedProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", ""))}
+- evalScript: ${output.secondRefetchedProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
 - assertTrue: ${output.secondRefetchedProbe.authoritativeValue == output.secondProbe.targetValue}
 - assertTrue: ${output.secondRefetchedProbe.displayValue == output.secondProbe.targetValue}
 

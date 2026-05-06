@@ -32,7 +32,6 @@ import { LoadConfigDialog } from "./home/dialogs/LoadConfigDialog";
 import { ManageConfigDialog } from "./home/dialogs/ManageConfigDialog";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { addErrorLog } from "@/lib/logging";
 import { useAppConfigState } from "@/hooks/useAppConfigState";
 import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
@@ -209,9 +208,13 @@ function HomePageContent() {
     isActiveProfileModified,
   } = useLightingStudio();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
-  const { value: reuSnapshotEnabled } = useFeatureFlag("reu_snapshot_enabled");
+  const { value: reuSnapshotEnabled } = useFeatureFlag("home_telnet_reu_snapshot_enabled");
   const { value: ramSnapshotsEnabled } = useFeatureFlag("ram_snapshots_enabled");
-  const { value: homeAdvancedConfigActionsEnabled } = useFeatureFlag("home_advanced_config_actions_enabled");
+  const { value: homeTelnetConfigActionsEnabled } = useFeatureFlag("home_telnet_config_actions_enabled");
+  const { value: homeTelnetDriveActionsEnabled } = useFeatureFlag("home_telnet_drive_actions_enabled");
+  const { value: homeTelnetPrinterActionsEnabled } = useFeatureFlag("home_telnet_printer_actions_enabled");
+  const { value: homeTelnetPowerCycleEnabled } = useFeatureFlag("home_telnet_power_cycle_enabled");
+  const { value: homeTelnetClearRamRebootEnabled } = useFeatureFlag("home_telnet_clear_ram_reboot_enabled");
   const deviceControlBusy = deviceControlActionId !== null;
   const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
   const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...(reuSnapshotEnabled ? reuSnapshots : [])].sort(
@@ -235,7 +238,10 @@ function HomePageContent() {
   const powerCycleSupportedByProduct = deviceCode === "c64u" || deviceCode === "u64e2";
   const powerCycleSupport = telnet.isAvailable ? getTelnetSupport("powerCycle") : null;
   const powerCycleVisible =
-    powerCycleSupportedByProduct && telnet.isAvailable && powerCycleSupport?.status === "supported";
+    homeTelnetPowerCycleEnabled &&
+    powerCycleSupportedByProduct &&
+    telnet.isAvailable &&
+    powerCycleSupport?.status === "supported";
   const powerCycleDisabledReason = null;
   const saveReuDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveReuMemory") : null;
   const saveConfigDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveConfigToFile") : null;
@@ -488,12 +494,12 @@ function HomePageContent() {
         error,
         context: isDeviceControlError(error)
           ? {
-            deviceControlOperation: error.operation,
-            transport: error.transport,
-            endpoint: error.endpoint,
-            request: error.request,
-            response: error.response,
-          }
+              deviceControlOperation: error.operation,
+              transport: error.transport,
+              endpoint: error.endpoint,
+              request: error.request,
+              response: error.response,
+            }
           : undefined,
       });
     } finally {
@@ -514,27 +520,8 @@ function HomePageContent() {
 
   const handleRebootClearMemory = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    if (telnet.isAvailable) {
-      try {
-        await telnet.executeAction("rebootClearMemory");
-        toast({ title: "Machine rebooting" });
-        setMachineExecutionState("running");
-        return;
-      } catch (error) {
-        const resolvedError = error as Error;
-        addErrorLog("Reboot clear memory telnet failed; falling back to REST", {
-          error: {
-            name: resolvedError.name,
-            message: resolvedError.message,
-            stack: resolvedError.stack,
-          },
-        });
-      }
-    }
-
-    await executeDeviceControl({
-      actionId: "rebootFull",
-      run: () => deviceControl.rebootFull(),
+    await executeTelnetAction({
+      actionId: "rebootClearMemory",
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
       failureTitle: "Reboot failed",
@@ -596,29 +583,36 @@ function HomePageContent() {
     );
   };
 
-  const machineOverflowActions = [
-    {
-      id: "rebootClearMemory",
-      label: "Reboot (Clr Mem)",
-      icon: Power,
-      variant: "danger" as const,
-      className: "border-destructive/40 bg-destructive/[0.04]",
-      onSelect: handleRebootClearMemory,
-      disabled: !isActive || machineTaskBusy || telnet.isBusy,
-      loading: telnet.activeActionId === "rebootClearMemory" || deviceControlActionId === "rebootFull",
-    },
+  const clearRamRebootSupport = telnet.isAvailable ? getTelnetSupport("rebootClearMemory") : null;
+  const clearRamRebootVisible =
+    homeTelnetClearRamRebootEnabled && telnet.isAvailable && clearRamRebootSupport?.status === "supported";
+  const machineExtraActions = [
+    ...(clearRamRebootVisible
+      ? [
+          {
+            id: "rebootClearMemory",
+            label: "Reboot (Clr Mem)",
+            icon: Power,
+            variant: "danger" as const,
+            className: "border-destructive/40 bg-destructive/[0.04]",
+            onSelect: handleRebootClearMemory,
+            disabled: !isActive || machineTaskBusy || telnet.isBusy,
+            loading: telnet.activeActionId === "rebootClearMemory",
+          },
+        ]
+      : []),
     ...(reuSnapshotEnabled
       ? [
-        {
-          id: "saveReuMemory",
-          label: TELNET_ACTIONS.saveReuMemory.label,
-          icon: Save,
-          onSelect: handleSaveReu,
-          disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
-          loading: telnet.activeActionId === "saveReuMemory",
-          reason: saveReuDisabledReason,
-        },
-      ]
+          {
+            id: "saveReuMemory",
+            label: TELNET_ACTIONS.saveReuMemory.label,
+            icon: Save,
+            onSelect: handleSaveReu,
+            disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
+            loading: telnet.activeActionId === "saveReuMemory",
+            reason: saveReuDisabledReason,
+          },
+        ]
       : []),
   ];
 
@@ -765,7 +759,7 @@ function HomePageContent() {
   });
 
   const localConfigFileActionsAvailable = telnet.isAvailable && isNativePlatform();
-  const advancedHomeConfigActionsVisible = homeAdvancedConfigActionsEnabled;
+  const advancedHomeConfigActionsVisible = homeTelnetConfigActionsEnabled;
 
   const handleSaveToFile = trace(async function handleSaveToFile() {
     setConfigFileTaskPending("save");
@@ -944,7 +938,7 @@ function HomePageContent() {
             rebootLoading={deviceControlActionId === "rebootKeepRam"}
             menuLoading={deviceControlActionId === "toggleMenu"}
             powerCycleLoading={telnet.activeActionId === "powerCycle"}
-            overflowActions={machineOverflowActions}
+            extraActions={machineExtraActions}
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
             footer={ramSnapshotsEnabled ? ramDumpFolderCard : null}
@@ -1327,7 +1321,7 @@ function HomePageContent() {
               machineTaskBusy={machineTaskBusy}
               machineTaskId={machineTaskId}
               onResetDrives={handleResetDrives}
-              telnetAvailable={telnet.isAvailable}
+              telnetAvailable={homeTelnetDriveActionsEnabled && telnet.isAvailable}
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
               getTelnetActionSupport={telnet.getActionSupport}
@@ -1363,7 +1357,7 @@ function HomePageContent() {
               machineTaskBusy={machineTaskBusy}
               machineTaskId={machineTaskId}
               onResetPrinter={handleResetPrinter}
-              telnetAvailable={telnet.isAvailable}
+              telnetAvailable={homeTelnetPrinterActionsEnabled && telnet.isAvailable}
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
               getTelnetActionSupport={telnet.getActionSupport}

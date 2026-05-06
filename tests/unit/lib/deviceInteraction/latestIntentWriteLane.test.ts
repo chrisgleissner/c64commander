@@ -61,6 +61,40 @@ describe("createLatestIntentWriteLane", () => {
     expect(writes).toEqual([1, 2]);
   });
 
+  it("settles a sustained slider-like burst with the first write plus the final intent only", async () => {
+    let releaseFirst!: () => void;
+    const firstRunDone = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const writes: number[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    const lane = createLatestIntentWriteLane<number>({
+      run: async (value) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        writes.push(value);
+        if (value === 1) {
+          await firstRunDone;
+        }
+        inFlight -= 1;
+      },
+    });
+
+    const scheduled = [lane.schedule(1)];
+    await Promise.resolve();
+    for (let value = 2; value <= 20; value += 1) {
+      scheduled.push(lane.schedule(value));
+    }
+
+    releaseFirst();
+    await Promise.all(scheduled);
+
+    expect(writes).toEqual([1, 20]);
+    expect(maxInFlight).toBe(1);
+  });
+
   it("rejects the settled write when no newer value supersedes a failure", async () => {
     const lane = createLatestIntentWriteLane<number>({
       run: async () => {

@@ -8,14 +8,13 @@
 
 import { useEffect, useRef } from "react";
 import { getC64API, type C64API } from "@/lib/c64api";
-import { clearRamAndReboot } from "@/lib/machine/ramOperations";
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 
-export type DeviceControlOperation = "toggleMenu" | "rebootKeepRam" | "rebootFull" | "powerCycle";
+export type DeviceControlOperation = "toggleMenu" | "rebootKeepRam";
 
-export type DeviceControlTransport = "REST" | "REST_FALLBACK_FULL_REBOOT";
+export type DeviceControlTransport = "REST";
 
 export type DeviceControlResult = {
   operation: DeviceControlOperation;
@@ -27,7 +26,6 @@ export type DeviceControlResult = {
 
 type DeviceControlDependencies = {
   api: C64API;
-  clearRamAndRebootImpl?: typeof clearRamAndReboot;
   initialMenuOpen?: boolean;
 };
 
@@ -43,13 +41,6 @@ type RunControlOperationOptions<T> = {
 };
 
 const DEVICE_CONTROL_COMPONENT = "deviceControl";
-const POWER_CYCLE_FALLBACK_ENDPOINTS = [
-  "PUT /v1/machine:pause",
-  "PUT /v1/machine:writemem",
-  "PUT /v1/machine:reboot",
-] as const;
-
-const formatEndpoint = (endpoint: EndpointDescriptor) => (Array.isArray(endpoint) ? endpoint.join(" -> ") : endpoint);
 
 const assertRestActionSucceeded = (operation: DeviceControlOperation, response: { errors?: string[] } | undefined) => {
   const errors = Array.isArray(response?.errors) ? response.errors.filter((entry) => entry.trim().length > 0) : [];
@@ -103,11 +94,7 @@ const asError = (error: unknown, fallback: string) => {
 export const isDeviceControlError = (error: unknown): error is DeviceControlError =>
   error instanceof DeviceControlError;
 
-export const createDeviceControl = ({
-  api,
-  clearRamAndRebootImpl = clearRamAndReboot,
-  initialMenuOpen = false,
-}: DeviceControlDependencies) => {
+export const createDeviceControl = ({ api, initialMenuOpen = false }: DeviceControlDependencies) => {
   let menuOpen = initialMenuOpen;
   let menuToggleQueue = Promise.resolve<void>(undefined);
 
@@ -264,44 +251,6 @@ export const createDeviceControl = ({
     return result;
   };
 
-  const rebootFull = async () => {
-    const result = await runControlOperation({
-      operation: "rebootFull",
-      transport: "REST",
-      endpoint: [...POWER_CYCLE_FALLBACK_ENDPOINTS],
-      request: {
-        strategy: "clear_ram_then_reboot",
-        preserveRam: false,
-        verifyRamClearBeforeReboot: true,
-      },
-      execute: async () => {
-        await clearRamAndRebootImpl(api);
-        menuOpen = false;
-        return { errors: [] };
-      },
-    });
-    return result;
-  };
-
-  const powerCycle = async () => {
-    const result = await runControlOperation({
-      operation: "powerCycle",
-      transport: "REST_FALLBACK_FULL_REBOOT",
-      endpoint: [...POWER_CYCLE_FALLBACK_ENDPOINTS],
-      request: {
-        strategy: "fallback_full_reboot",
-        reason: "no_rest_power_cycle_endpoint",
-        verifyRamClearBeforeReboot: true,
-      },
-      execute: async () => {
-        await clearRamAndRebootImpl(api);
-        menuOpen = false;
-        return { errors: [], fallback: true };
-      },
-    });
-    return result;
-  };
-
   const resetMenuState = () => {
     menuOpen = false;
   };
@@ -311,11 +260,8 @@ export const createDeviceControl = ({
   return {
     toggleMenu,
     rebootKeepRam,
-    rebootFull,
-    powerCycle,
     resetMenuState,
     getMenuState,
-    describePowerCycleFallback: () => formatEndpoint(POWER_CYCLE_FALLBACK_ENDPOINTS as unknown as EndpointDescriptor),
   };
 };
 

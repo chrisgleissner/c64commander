@@ -309,11 +309,11 @@ describe("Maestro flow contracts", () => {
     expect(rawSource).toContain('notVisible: "Diagnostics"');
     expect(rawSource).toContain('visible: "CPU Speed"');
     expect(rawSource).toContain('id: "home-cpu-speed-probe"');
-    expect(rawSource).toContain('durationMs < 1000');
+    expect(rawSource).toContain("durationMs < 1000");
     expect(rawSource).toContain('id: "tab-play"');
     expect(rawSource).toContain('id: "tab-home"');
-    expect(rawSource).toContain('authoritativeValue == output.firstProbe.targetValue');
-    expect(rawSource).toContain('authoritativeValue == output.secondProbe.targetValue');
+    expect(rawSource).toContain("authoritativeValue == output.firstProbe.targetValue");
+    expect(rawSource).toContain("authoritativeValue == output.secondProbe.targetValue");
     expect(rawSource).toContain("C64U_HOME_CPU_SPEED_SLIDER_*");
     expect(readYaml(path.resolve(process.cwd(), ".maestro/edge-home-cpu-speed-latency.yaml"))).toBeTruthy();
   });

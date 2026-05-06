@@ -16,8 +16,12 @@ import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 const featureFlagsRef = vi.hoisted(() => ({
   current: {
     lighting_studio_enabled: true,
-    home_advanced_config_actions_enabled: false,
-    reu_snapshot_enabled: true,
+    home_telnet_config_actions_enabled: false,
+    home_telnet_drive_actions_enabled: false,
+    home_telnet_printer_actions_enabled: false,
+    home_telnet_power_cycle_enabled: false,
+    home_telnet_clear_ram_reboot_enabled: false,
+    home_telnet_reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   } as Record<string, boolean>,
 }));
@@ -170,27 +174,8 @@ const {
         response: { errors: [] },
         menuOpen: false,
       }),
-      rebootFull: vi.fn().mockResolvedValue({
-        operation: "rebootFull",
-        transport: "REST",
-        endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
-        request: { strategy: "clear_ram_then_reboot" },
-        response: { errors: [] },
-        menuOpen: false,
-      }),
-      powerCycle: vi.fn().mockResolvedValue({
-        operation: "powerCycle",
-        transport: "REST_FALLBACK_FULL_REBOOT",
-        endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
-        request: { strategy: "fallback_full_reboot" },
-        response: { errors: [], fallback: true },
-        menuOpen: false,
-      }),
       resetMenuState: vi.fn(),
       getMenuState: vi.fn().mockReturnValue(false),
-      describePowerCycleFallback: vi
-        .fn()
-        .mockReturnValue("PUT /v1/machine:pause -> PUT /v1/machine:writemem -> PUT /v1/machine:reboot"),
     },
   },
   interactiveWriteMockRef: {
@@ -645,8 +630,12 @@ beforeEach(() => {
   reportUserErrorSpy.mockReset();
   featureFlagsRef.current = {
     lighting_studio_enabled: true,
-    home_advanced_config_actions_enabled: false,
-    reu_snapshot_enabled: true,
+    home_telnet_config_actions_enabled: false,
+    home_telnet_drive_actions_enabled: false,
+    home_telnet_printer_actions_enabled: false,
+    home_telnet_power_cycle_enabled: false,
+    home_telnet_clear_ram_reboot_enabled: false,
+    home_telnet_reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   };
   queryClientMockRef.current = {
@@ -1162,6 +1151,7 @@ describe("HomePage SID status", () => {
   });
 
   it("renders exactly seven machine controls with one pause-resume control", async () => {
+    featureFlagsRef.current.home_telnet_reu_snapshot_enabled = false;
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
@@ -1214,14 +1204,14 @@ describe("HomePage SID status", () => {
     expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
 
     initialRender.unmount();
-    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
+    featureFlagsRef.current.home_telnet_config_actions_enabled = true;
     renderHomePage();
 
     expect(screen.getByTestId("home-config-manage-app")).toBeInTheDocument();
   });
 
   it("manages app configs via dialogs", async () => {
-    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
+    featureFlagsRef.current.home_telnet_config_actions_enabled = true;
     const savedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
     appConfigStatePayloadRef.current = {
       ...appConfigStatePayloadRef.current,

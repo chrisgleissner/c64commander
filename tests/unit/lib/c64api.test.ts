@@ -192,8 +192,12 @@ describe("C64API getConfigItems", () => {
       errors: [],
     });
     expect(getConfigItem).toHaveBeenCalledTimes(2);
-    expect(getConfigItem).toHaveBeenNthCalledWith(1, "LED Strip Settings", "LedStrip Mode", {});
-    expect(getConfigItem).toHaveBeenNthCalledWith(2, "LED Strip Settings", "Fixed Color", {});
+    expect(getConfigItem).toHaveBeenNthCalledWith(1, "LED Strip Settings", "LedStrip Mode", {
+      __c64uExpectedMissing: true,
+    });
+    expect(getConfigItem).toHaveBeenNthCalledWith(2, "LED Strip Settings", "Fixed Color", {
+      __c64uExpectedMissing: true,
+    });
   });
 
   it("enriches scalar audio mixer items so Home SID sliders receive real ranges and positions", async () => {
@@ -257,8 +261,29 @@ describe("C64API getConfigItems", () => {
       errors: [],
     });
     expect(getConfigItem).toHaveBeenCalledTimes(2);
-    expect(getConfigItem).toHaveBeenNthCalledWith(1, "Audio Mixer", "Vol Socket 1", {});
-    expect(getConfigItem).toHaveBeenNthCalledWith(2, "Audio Mixer", "Pan Socket 1", {});
+    expect(getConfigItem).toHaveBeenNthCalledWith(1, "Audio Mixer", "Vol Socket 1", {
+      __c64uExpectedMissing: true,
+    });
+    expect(getConfigItem).toHaveBeenNthCalledWith(2, "Audio Mixer", "Pan Socket 1", {
+      __c64uExpectedMissing: true,
+    });
+  });
+
+  it("treats a missing category as unavailable without probing every requested item", async () => {
+    const api = new C64API("http://127.0.0.1");
+
+    vi.spyOn(api, "getCategory").mockRejectedValue(new Error("HTTP 404"));
+    const getConfigItem = vi.spyOn(api, "getConfigItem");
+
+    const response = await api.getConfigItems("Optional Category", ["A", "B", "C"]);
+
+    expect(response).toEqual({
+      "Optional Category": {
+        items: {},
+      },
+      errors: [],
+    });
+    expect(getConfigItem).not.toHaveBeenCalled();
   });
 });
 

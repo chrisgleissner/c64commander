@@ -19,9 +19,13 @@ export type FeatureFlagId =
   | "demo_mode_enabled"
   | "lighting_studio_enabled"
   | "background_execution_enabled"
-  | "reu_snapshot_enabled"
+  | "home_telnet_reu_snapshot_enabled"
   | "ram_snapshots_enabled"
-  | "home_advanced_config_actions_enabled";
+  | "home_telnet_config_actions_enabled"
+  | "home_telnet_drive_actions_enabled"
+  | "home_telnet_printer_actions_enabled"
+  | "home_telnet_power_cycle_enabled"
+  | "home_telnet_clear_ram_reboot_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -101,13 +105,13 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     description: "Allow native background playback timing and auto-advance scheduling.",
   },
   {
-    id: "reu_snapshot_enabled",
+    id: "home_telnet_reu_snapshot_enabled",
     enabled: false,
     visible_to_user: false,
     developer_only: true,
     group: "experimental",
     title: "REU Snapshots",
-    description: "Enable Save REU and Restore REU Snapshot functionality.",
+    description: "Enable Save REU and Restore REU Snapshot functionality on Home. Depends on the Telnet interface.",
   },
   {
     id: "ram_snapshots_enabled",
@@ -119,13 +123,49 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     description: "Show Save RAM and Load RAM actions on Home.",
   },
   {
-    id: "home_advanced_config_actions_enabled",
+    id: "home_telnet_config_actions_enabled",
     enabled: false,
     visible_to_user: true,
     developer_only: false,
     group: "experimental",
     title: "Home advanced config actions",
-    description: "Show advanced Home config actions such as file save/load and Clear Flash.",
+    description: "Show advanced Home config actions (file save/load and Clear Flash). Depends on the Telnet interface.",
+  },
+  {
+    id: "home_telnet_drive_actions_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Home drive shortcut actions",
+    description: "Show drive shortcut actions on Home (drive reset, Soft IEC turn on/reset/set dir, drive B turn on). Depends on the Telnet interface.",
+  },
+  {
+    id: "home_telnet_printer_actions_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Home printer shortcut actions",
+    description: "Show printer shortcut actions on Home (turn on, flush/eject, reset). Depends on the Telnet interface.",
+  },
+  {
+    id: "home_telnet_power_cycle_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Home power cycle action",
+    description: "Show the Power Cycle quick action on Home. Depends on the Telnet interface.",
+  },
+  {
+    id: "home_telnet_clear_ram_reboot_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Home clear-RAM reboot action",
+    description: "Show the Reboot (Clr Mem) quick action on Home. Depends on the Telnet interface.",
   },
 ] as const;
 

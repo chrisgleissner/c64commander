@@ -75,6 +75,31 @@ describe("useAppConfigState", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    status.isConnected = true;
+    status.isConnecting = false;
+    getCategories.mockReset();
+    getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
+    getCategory.mockReset();
+    getCategory.mockResolvedValue({
+      items: { Volume: { selected: "5" } },
+    });
+    updateConfigBatch.mockReset();
+    updateConfigBatch.mockResolvedValue(undefined);
+    loadInitialSnapshot.mockReset();
+    loadInitialSnapshot.mockReturnValue(null);
+    loadHasChanges.mockReset();
+    loadHasChanges.mockReturnValue(false);
+    listAppConfigs.mockReset();
+    listAppConfigs.mockReturnValue([]);
+    loadAppConfigs.mockReset();
+    loadAppConfigs.mockReturnValue([]);
+    createAppConfigEntry.mockReset();
+    createAppConfigEntry.mockImplementation((_baseUrl, name, data) => ({
+      id: `id-${name}`,
+      name,
+      data,
+      savedAt: "now",
+    }));
     sessionStorage.clear();
     ({ useAppConfigState } = await import("@/hooks/useAppConfigState"));
     queryClient = new QueryClient();
@@ -177,6 +202,38 @@ describe("useAppConfigState", () => {
 
     getCategories.mockReset();
     getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
+  });
+
+  it("recovers a failed initial snapshot after disconnect and reconnect", async () => {
+    getCategories.mockRejectedValueOnce(new Error("temporary config outage")).mockResolvedValue({
+      categories: ["Audio Mixer"],
+    });
+
+    const { result, rerender } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.fetchError).toBe("temporary config outage");
+    });
+    expect(saveInitialSnapshot).not.toHaveBeenCalled();
+
+    status.isConnected = false;
+    rerender();
+    status.isConnected = true;
+    rerender();
+
+    await waitFor(() => {
+      expect(saveInitialSnapshot).toHaveBeenCalledWith(
+        "http://c64u",
+        expect.objectContaining({
+          data: expect.objectContaining({
+            "Audio Mixer": expect.any(Object),
+          }),
+        }),
+      );
+    });
+
+    expect(result.current.fetchError).toBeNull();
+    expect(sessionStorage.getItem(INITIAL_SNAPSHOT_SESSION_KEY)).toBe("1");
   });
 
   it("logs at error level when initial snapshot capture fails", async () => {
@@ -401,6 +458,7 @@ describe("useAppConfigState", () => {
     getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
     getCategory
       .mockResolvedValueOnce({ items: { Volume: { selected: "5" } } })
+      .mockRejectedValueOnce(new Error("timeout"))
       .mockRejectedValueOnce(new Error("timeout"));
     renderHook(() => useAppConfigState(), { wrapper });
 

@@ -118,6 +118,7 @@ export function useAppConfigState() {
   const [isSaving, setIsSaving] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const hasCapturedRef = useRef(false);
+  const captureInFlightRef = useRef(false);
   const sessionSnapshotKey = `c64u_initial_snapshot_session:${resolvedBaseUrl}`;
 
   useEffect(() => {
@@ -142,14 +143,17 @@ export function useAppConfigState() {
   useEffect(() => {
     if (!status.isConnected) {
       hasCapturedRef.current = false;
+      captureInFlightRef.current = false;
+      setSnapshotLoading(false);
       return;
     }
     if (sessionStorage.getItem(sessionSnapshotKey) === "1") {
       hasCapturedRef.current = true;
     }
-    if (hasCapturedRef.current || isSnapshotLoading) return;
+    if (hasCapturedRef.current || captureInFlightRef.current) return;
 
     let isMounted = true;
+    captureInFlightRef.current = true;
     setSnapshotLoading(true);
 
     fetchAllConfig()
@@ -172,13 +176,14 @@ export function useAppConfigState() {
         setFetchError(message);
       })
       .finally(() => {
+        captureInFlightRef.current = false;
         if (isMounted) setSnapshotLoading(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [status.isConnected, isSnapshotLoading, resolvedBaseUrl, sessionSnapshotKey]);
+  }, [status.isConnected, resolvedBaseUrl, sessionSnapshotKey]);
 
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {

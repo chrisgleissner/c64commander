@@ -13,10 +13,7 @@ import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { logger } from "@/lib/diagnostics/logger";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isSmokeModeEnabled } from "@/lib/smoke/smokeMode";
-import {
-  createHomeCpuSpeedSliderProbeSnapshot,
-  formatHomeCpuSpeedSliderProbe,
-} from "./homeCpuSpeedSliderProbe";
+import { createHomeCpuSpeedSliderProbeSnapshot, formatHomeCpuSpeedSliderProbe } from "./homeCpuSpeedSliderProbe";
 import { resolveTurboControlValue } from "../utils/HomeConfigUtils";
 
 type HomeCpuSpeedSliderProps = {
@@ -40,7 +37,9 @@ export function HomeCpuSpeedSlider({
   const resolveCpuSpeedOption = (index: number) => sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? "1";
   const normalizedCpuSpeedValue = cpuSpeedValue.trim();
   const smokeModeEnabled = isSmokeModeEnabled();
-  const [probeSnapshot, setProbeSnapshot] = useState(() => createHomeCpuSpeedSliderProbeSnapshot(normalizedCpuSpeedValue));
+  const [probeSnapshot, setProbeSnapshot] = useState(() =>
+    createHomeCpuSpeedSliderProbeSnapshot(normalizedCpuSpeedValue),
+  );
 
   const { sliderValue, displayValue, onValueChange, onValueCommit } = useDeviceBoundSlider({
     deviceValue: cpuSpeedValue,

@@ -34,17 +34,6 @@ vi.mock("@/components/QuickActionCard", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: any) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
-  DropdownMenuContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  DropdownMenuItem: ({ children, onSelect, ...props }: any) => (
-    <button type="button" onClick={onSelect} {...props}>
-      {children}
-    </button>
-  ),
-}));
-
 const defaultProps = {
   status: { isConnected: true, isConnecting: false },
   machineTaskBusy: false,
@@ -150,21 +139,21 @@ describe("MachineControls", () => {
     expect(screen.queryByTestId("home-machine-note-powerCycle")).not.toBeInTheDocument();
   });
 
-  it("renders extra quick actions inline when the enabled action count stays at eight or below", () => {
+  it("renders all extra quick actions inline alongside the standard actions", () => {
     const rebootClearMemory = vi.fn();
     const saveReu = vi.fn();
 
     render(
       <MachineControls
         {...defaultProps}
-        overflowActions={[
+        ramActionsVisible={true}
+        onPowerCycle={vi.fn()}
+        extraActions={[
           { id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: rebootClearMemory },
           { id: "saveReuMemory", label: "Save REU", onSelect: saveReu },
         ]}
       />,
     );
-
-    expect(screen.queryByTestId("home-machine-overflow-menu")).toBeNull();
 
     fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
     fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
@@ -173,38 +162,22 @@ describe("MachineControls", () => {
     expect(saveReu).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the overflow menu only when more than eight enabled actions are visible", () => {
+  it("renders loading extra actions with an ellipsis label", () => {
     render(
       <MachineControls
         {...defaultProps}
-        ramActionsVisible={true}
-        onPowerCycle={vi.fn()}
-        overflowActions={[{ id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn() }]}
+        extraActions={[{ id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn(), loading: true }]}
       />,
     );
 
-    expect(screen.getByTestId("home-machine-overflow-menu")).toBeInTheDocument();
-    expect(screen.queryByTestId("home-machine-inline-rebootClearMemory")).toBeNull();
+    expect(screen.getByTestId("home-machine-inline-rebootClearMemory")).toHaveTextContent("Reboot (Clr Mem)…");
   });
 
-  it("renders loading overflow actions with an ellipsis label", () => {
+  it("renders inline notes for disabled extra actions", () => {
     render(
       <MachineControls
         {...defaultProps}
-        ramActionsVisible={true}
-        onPowerCycle={vi.fn()}
-        overflowActions={[{ id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn(), loading: true }]}
-      />,
-    );
-
-    expect(screen.getByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent("Reboot (Clr Mem)…");
-  });
-
-  it("renders inline notes for disabled overflow actions", () => {
-    render(
-      <MachineControls
-        {...defaultProps}
-        overflowActions={[
+        extraActions={[
           {
             id: "saveReuMemory",
             label: "Save REU",

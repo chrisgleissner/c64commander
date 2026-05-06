@@ -74,6 +74,7 @@ resolve_compiler_prefix() {
 
 BUILD_DIR="$EXTRACT_DIR/CPP/7zip/Bundles/Alone2"
 COMMON_WARN_FLAGS="-Wno-sign-conversion -Wno-implicit-int-conversion -Wno-shorten-64-to-32"
+ANDROID_PAGE_SIZE_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 
 for ABI in "${ABIS[@]}"; do
   PREFIX="$(resolve_compiler_prefix "$ABI")"
@@ -84,8 +85,8 @@ for ABI in "${ABIS[@]}"; do
   mkdir -p "$BUILD_DIR/$OUT_DIR"
   make -C "$BUILD_DIR" \
     O="$OUT_DIR" \
-    CC="$CC -fPIC -D_GNU_SOURCE $COMMON_WARN_FLAGS" \
-    CXX="$CXX -fPIC -D_GNU_SOURCE -static-libstdc++ $COMMON_WARN_FLAGS" \
+    CC="$CC -fPIC -D_GNU_SOURCE $COMMON_WARN_FLAGS $ANDROID_PAGE_SIZE_LDFLAGS" \
+    CXX="$CXX -fPIC -D_GNU_SOURCE -static-libstdc++ $COMMON_WARN_FLAGS $ANDROID_PAGE_SIZE_LDFLAGS" \
     LIB2="-ldl" \
     DISABLE_RAR=1 \
     --file ../../cmpl_clang.mak \

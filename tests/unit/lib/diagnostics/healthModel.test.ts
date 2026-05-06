@@ -100,9 +100,9 @@ describe("deriveRestContributorHealth", () => {
   it("returns Degraded when ~20–49% of REST responses fail", () => {
     // 1 of 4 = 25%
     const events = [
-      makeEvent("rest-response", 60_000, { status: 500 }),
+      makeEvent("rest-response", 60_000, { status: 200 }),
       makeEvent("rest-response", 50_000, { status: 200 }),
-      makeEvent("rest-response", 40_000, { status: 200 }),
+      makeEvent("rest-response", 40_000, { status: 500 }),
       makeEvent("rest-response", 30_000, { status: 200 }),
     ];
     expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Degraded", problemCount: 1 });
@@ -126,18 +126,52 @@ describe("deriveRestContributorHealth", () => {
     expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Unhealthy", problemCount: 1 });
   });
 
+  it("does not count expected optional config metadata misses as REST failures", () => {
+    const events = [
+      makeEvent("rest-response", 60_000, {
+        method: "GET",
+        path: "/v1/configs/Audio%20Mixer/Missing%20Optional%20Item",
+        status: 404,
+        error: "HTTP 404",
+        expectedFailure: true,
+      }),
+      makeEvent("rest-response", 30_000, { method: "GET", path: "/v1/info", status: 200 }),
+    ];
+    expect(deriveRestContributorHealth(events)).toMatchObject({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    });
+  });
+
   it("returns Healthy when failure ratio is below 20%", () => {
     // 1 of 7 ≈ 14.3% — below 20% threshold → Healthy (not Degraded)
     const events = [
-      makeEvent("rest-response", 60_000, { status: 500 }),
+      makeEvent("rest-response", 60_000, { status: 200 }),
       makeEvent("rest-response", 55_000, { status: 200 }),
       makeEvent("rest-response", 50_000, { status: 200 }),
       makeEvent("rest-response", 45_000, { status: 200 }),
-      makeEvent("rest-response", 40_000, { status: 200 }),
+      makeEvent("rest-response", 40_000, { status: 500 }),
       makeEvent("rest-response", 35_000, { status: 200 }),
       makeEvent("rest-response", 30_000, { status: 200 }),
     ];
     expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Healthy" });
+  });
+
+  it("ignores pre-connection REST failures once a later REST response succeeds", () => {
+    const events = [
+      makeEvent("rest-response", 90_000, { status: null, error: "Device not ready for requests" }),
+      makeEvent("rest-response", 80_000, { status: null, error: "Device not ready for requests" }),
+      makeEvent("rest-response", 70_000, { status: 200 }),
+      makeEvent("rest-response", 60_000, { status: 200 }),
+    ];
+    expect(deriveRestContributorHealth(events)).toMatchObject({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 2,
+      failedOperations: 0,
+    });
   });
 
   it("treats event with non-numeric status as success (status becomes null)", () => {
@@ -191,6 +225,16 @@ describe("deriveAppContributorHealth", () => {
   it("returns Degraded for 1–4 error events in window", () => {
     const events = [makeEvent("error", 30_000)];
     expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Degraded", problemCount: 1 });
+  });
+
+  it("does not count expected errors as app health failures", () => {
+    const events = [makeEvent("error", 30_000, { isExpected: true })];
+    expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle", problemCount: 0 });
+  });
+
+  it("does not count pre-connection request gating errors as app health failures", () => {
+    const events = [makeEvent("error", 30_000, { message: "Device not ready for requests" })];
+    expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle", problemCount: 0 });
   });
 
   it("returns Unhealthy for ≥5 error events in window", () => {

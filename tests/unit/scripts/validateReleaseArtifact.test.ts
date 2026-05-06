@@ -5,6 +5,8 @@ import {
   ensureCommandAvailable,
   isDirectExecution,
   listZipEntries,
+  parseElfLoadAlignments,
+  validateAndroidNativeAlignmentReports,
   validateArtifactEntries,
 } from "../../../scripts/validate-release-artifact.mjs";
 
@@ -85,6 +87,37 @@ describe("validate-release-artifact", () => {
         },
       }),
     ).toThrow(/Required binary "unzip" is not available on PATH/);
+  });
+
+  it("parses ELF LOAD segment alignments from readelf output", () => {
+    expect(
+      parseElfLoadAlignments(`
+  LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x0011c0 0x0011c0 R E 0x4000
+  LOAD           0x0011c0 0x00000000000051c0 0x00000000000051c0 0x000268 0x000268 RW  0x4000
+  GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0
+      `),
+    ).toEqual([0x4000, 0x4000]);
+  });
+
+  it("rejects arm64 native payloads whose LOAD segments stay at 4 KB alignment", () => {
+    const summary = validateAndroidNativeAlignmentReports([
+      {
+        entry: "lib/arm64-v8a/lib7zz.so",
+        alignments: [0x1000, 0x1000, 0x1000],
+      },
+      {
+        entry: "lib/arm64-v8a/libdatastore_shared_counter.so",
+        alignments: [0x4000, 0x4000, 0x4000],
+      },
+    ]);
+
+    expect(summary.failures).toEqual([
+      {
+        entry: "lib/arm64-v8a/lib7zz.so",
+        smallestAlignment: 0x1000,
+        minimumAlignment: 0x4000,
+      },
+    ]);
   });
 
   it("uses a file URL helper for direct execution paths with spaces", () => {

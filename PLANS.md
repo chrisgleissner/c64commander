@@ -1,70 +1,250 @@
-# Slider Responsiveness Stabilization — Research Plan
+# PLANS - Production-Readiness Test Architecture
 
-## Classification
+## Current Objective
 
-`DOC_ONLY` — research-only investigation. No source-code changes are made by this task.
+Create a repository-specific production-readiness test architecture and implement the highest-value missing tests proving that C64 Commander stays stable, responsive, connected, and device-safe under repeated realistic user pressure.
 
-## Problem Statement
+Mandatory deliverables:
 
-- The Home page **CPU Speed** slider feels considerably more laggy than the equivalent Config page CPU Speed slider, and sometimes becomes effectively non-responsive indefinitely.
-- The Home page **SID Volume / Pan** sliders feel consistently fast.
-- We need an evidence-driven explanation, a complete inventory of all slider-like controls in the project, and a stabilization design that can be implemented in a follow-up task.
+- `PLANS.md` as the authoritative execution log.
+- `docs/testing/test-architecture.md` as the status quo test landscape and release-readiness architecture.
+- Implemented and executed tests for request pacing/burst protection, repeated slider pressure, repeated checkbox pressure, recovery/partial connectivity, and discovery/demo correctness where feasible.
 
-## Deliverables
+## Constraints
 
-1. `PLANS.md` (this file) — authoritative phased plan, kept in sync with progress.
-2. `WORKLOG.md` — investigation notes, commands, evidence.
-3. `docs/research/stabilization/slider-responsiveness/research.md` — final research document with inventory, root-cause analysis, options, recommendation, validation plan, and acceptance criteria.
+- No commits.
+- Preserve unrelated/concurrent worktree changes.
+- Follow `.github/copilot-instructions.md`, then `AGENTS.md`, then the task prompt.
+- Classification: `DOC_PLUS_CODE`.
+- For code changes, run `npm run test:coverage` before completion and keep global branch coverage >= 91%.
+- Do not disable tests, weaken assertions, add arbitrary sleeps, or hide failures.
+- Extend existing runners; do not create overlapping harnesses.
+- Do not overload real C64U hardware from CI-safe tests.
+- Web Playwright, Android emulator, and physical Android + C64U evidence remain distinct.
+- Before completion, attempt latest APK deploy to attached Pixel 4 or document adb/hardware blocker.
 
-No source-code changes. No commits. No branches.
+## Repository Facts Discovered
 
-## Phases
+- Read `README.md`, `.github/copilot-instructions.md`, `docs/ux-guidelines.md`, and all mandatory testing docs named in the prompt.
+- `package.json` confirms key commands: `npm run test`, `npm run test:coverage`, `npm run test:e2e`, `npm run test:e2e:ci`, `npm run fuzz`, `npm run android:apk`, `npm run maestro:gating`, startup gates, and `scope:*`.
+- `playwright.config.ts` confirms E2E runs Vite preview with `VITE_ENABLE_TEST_PROBES=1`; project names emulate Android phone/tablet but remain web-only.
+- Test roots:
+  - `tests/unit` and `src/**/*.test.*`: Vitest unit/integration.
+  - `playwright`: web E2E, screenshots, fuzz, traces, evidence.
+  - `tests/contract`: REST/FTP/Telnet contract, SAFE/STRESS, matrix, breakpoint, replay.
+  - `.maestro`: native UI smoke/edge flows.
+  - `android/app/src/test`: Android JVM tests.
+  - `tests/android-emulator`: ADB/emulator specs.
+- Contract breakpoint support already exists under `tests/contract/lib/breakpoint*.ts` and `tests/contract/scenarios/rest/breakpointSidVolume.ts`.
+- Production request-safety primitives already exist:
+  - `src/hooks/useDeviceBoundSlider.ts`
+  - `src/hooks/useInteractiveConfigWrite.ts`
+  - `src/lib/deviceInteraction/latestIntentWriteLane.ts`
+  - `src/lib/config/configWriteThrottle.ts`
+- `useAppConfigState` had a production recovery bug: its snapshot effect depended on `isSnapshotLoading`, so setting loading could clean up the active capture and prevent retry/recovery after transient config failure.
+- Unit/integration: `npm run test`, targeted `npx vitest run <files>`, no hardware.
+- Contract: `npx tsc -p tests/contract/tsconfig.json`, then `node tests/contract/dist/run.js --config ...`; real C64U for SAFE/STRESS.
+- Playwright E2E: `npm run test:e2e` or targeted `npx playwright test`; web Vite preview only.
+- Structured interaction soak: no separate runner; correct CI-safe location is Playwright. Added `playwright/structuredInteractionSoak.spec.ts`.
+- Performance/startup: `test:perf*`, `startup:baseline`, `startup:gate`, `startup:gate:hvsc`.
+- Maestro/native: `.maestro`, `scripts/run-maestro-gating.sh`, build helper `--test-maestro-*`.
+- Android JVM/instrumentation: `cd android && ./gradlew testDebugUnitTest jacocoTestReport`; connected tests through `./build --android-tests`.
+- Physical HIL: physical-device matrix and agentic docs; app-first with droidmind/c64scope/c64bridge roles.
 
-| #   | Phase                                                                                                                         | Status | Output / Evidence                                                                                                                                                                                                                                                                   |
-| --- | ----------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Establish workspace and ground truth (read CLAUDE.md / .github/copilot-instructions.md, AGENTS.md, identify slider primitive) | done   | [src/components/ui/slider.tsx](src/components/ui/slider.tsx); [src/lib/ui/sliderBehavior.ts](src/lib/ui/sliderBehavior.ts); [src/lib/ui/sliderDeviceAdapter.ts](src/lib/ui/sliderDeviceAdapter.ts)                                                                                  |
-| 2   | Exhaustive slider inventory (search all `<Slider`, `IonRange`, `type="range"`, slider field paths)                            | done   | All call sites enumerated: HomePage, SidCard via AudioMixer, ConfigItemRow (Config page), VolumeControls (Play page), PlaybackSettingsPanel (duration), LightingSummaryCard, LightingStudioDialog, SettingsPage (notification duration). No Ionic / native range usage found.       |
-| 3   | Trace Home page CPU Speed end-to-end (UI → state → commit → REST → reconciliation → re-enable)                                | done   | [src/pages/HomePage.tsx:194-218,748-778,866,894-897,1056-1080](src/pages/HomePage.tsx#L194-L1080); [src/hooks/useInteractiveConfigWrite.ts](src/hooks/useInteractiveConfigWrite.ts); [src/hooks/useAuthoritativeConfigValueState.ts](src/hooks/useAuthoritativeConfigValueState.ts) |
-| 4   | Trace Config page CPU Speed end-to-end                                                                                        | done   | [src/pages/ConfigBrowserPage.tsx:268-293,587-604](src/pages/ConfigBrowserPage.tsx#L268-L604); [src/components/ConfigItemRow.tsx:413-491](src/components/ConfigItemRow.tsx#L413-L491); [src/hooks/useC64Connection.ts:359-374](src/hooks/useC64Connection.ts#L359-L374)              |
-| 5   | Trace Home page SID slider (Volume / Pan)                                                                                     | done   | [src/pages/home/components/AudioMixer.tsx:177-283,470-528](src/pages/home/components/AudioMixer.tsx#L177-L528); [src/pages/home/SidCard.tsx:233-281](src/pages/home/SidCard.tsx#L233-L281)                                                                                          |
-| 6   | Differential analysis (state ownership, disable logic, write path, reconciliation strategy)                                   | done   | Captured in research.md "Behavioural Differences" section.                                                                                                                                                                                                                          |
-| 7   | Categorise root-cause candidates by confidence                                                                                | done   | Captured in research.md "Root-Cause Candidates" section.                                                                                                                                                                                                                            |
-| 8   | Draft three implementation options (minimal fix, shared hook, config-field-level normalisation)                               | done   | research.md "Implementation Options".                                                                                                                                                                                                                                               |
-| 9   | Recommend a preferred approach with rationale and follow-up task list                                                         | done   | research.md "Recommended Approach".                                                                                                                                                                                                                                                 |
-| 10  | Define test/validation plan and acceptance criteria                                                                           | done   | research.md "Test And Validation Plan" + "Acceptance Criteria".                                                                                                                                                                                                                     |
+## Gap Analysis
 
-## Open Questions
+- Home CPU Speed slider had low-level coalescing code but no release-blocking repeated-pressure test.
+- Checkbox/config writes were serialized but only covered by small tests, not sustained toggle-style bursts and final-state convergence.
+- Partial config recovery tests did not prove a failed full snapshot could recover after reconnect.
+- Discovery tests existed but needed the slow-success-before-deadline boundary.
 
-All five questions from the initial draft were resolved by direct REST experimentation against `u64` (fw 3.14e) and `c64u` (fw 1.1.0). See "Empirical Device Findings" in the research document and the second worklog entry for raw transcripts. Resolutions, in short:
+## Designed And Implemented Tests
 
-1. **Firmware echo format** — bytes-identical on the happy path. **Type drift** (numeric vs string) is the real `Object.is` hazard.
-2. **Drag-time CPU Speed previews** — firmware-acceptable but UX-undesirable; CPU Speed is `commitOnly`. SID and Lighting stay `throttled`.
-3. **Auto-Turbo-Control batching** — the firmware accepts a single batch payload `{"CPU Speed": ..., "Turbo Control": ...}` atomically (54 ms). We should always batch.
-4. **Lighting slider disable pattern** — confirmed as latent dead code (no `setConfigOverride` for those items), so currently inert; clean up in the consolidation pass.
-5. **Pending memo** — replace with a write-mutation-bound registry as part of the consolidation; remove its slider call sites.
+1. `configWriteThrottle spaces a sustained checkbox-style burst and preserves the final intended state`
+   - Layer/location: Vitest, `tests/unit/configWriteThrottle.test.ts`.
+   - Covers: repeated checkbox-like writes, serialization, pacing, final-state convergence.
+2. `LatestIntentWriteLane settles a sustained slider-like burst with first write plus final intent only`
+   - Layer/location: Vitest, `tests/unit/lib/deviceInteraction/latestIntentWriteLane.test.ts`.
+   - Covers: rapid slider commits, bounded in-flight, final intent wins.
+   - Safety: no network, deterministic promise gate.
+3. `useDeviceBoundSlider keeps local response immediate and bounds throttled preview requests during a sustained drag`
+   - Layer/location: Vitest, `tests/unit/hooks/useDeviceBoundSlider.test.ts`.
+   - Covers: 100 drag updates, immediate local display, bounded preview writes, final commit.
+   - Safety: no network, fake timers.
+   - Safety: mocked API.
+5. `connectionManager waits for a slow successful startup probe inside the deadline instead of entering demo`
+   - Layer/location: Vitest, `tests/unit/connection/connectionManager.startup.test.ts`.
+   - Covers: slow real device prevents premature demo fallback.
+   - Safety: mocked fetch, fake timers.
+6. `Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded`
+   - Layer/location: Playwright web structured soak, `playwright/structuredInteractionSoak.spec.ts`.
 
-## Phase 11 — Consolidation research (added 2026-05-06)
+## Implementation Plan
+- [x] Read mandatory docs and inspect actual repo infrastructure.
+- [x] Record test design before coding.
+- [x] Create `docs/testing/test-architecture.md`.
+- [x] Implement CI-safe low-level pacing/coalescing tests.
+- [x] Implement deterministic repeated slider structured soak coverage.
+- [x] Implement deterministic repeated checkbox structured soak coverage.
+- [x] Implement partial config recovery coverage.
+- [x] Implement discovery/demo timing boundary coverage.
 
-| #   | Phase                                                                                                                        | Status | Output / Evidence                                                                      |
-| --- | ---------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------- |
-| 11  | Empirical device probing of `u64` and `c64u` (CPU Speed format, batch behaviour, latency, error-array semantics, type drift) | done   | `WORKLOG.md` empirical findings entry; `research.md` "Empirical Device Findings" table |
-| 12  | Identify overengineering / parallel mechanisms                                                                               | done   | `research.md` "Overengineering And Consolidation"                                      |
-| 13  | Codify UX-first slider invariants and per-domain interaction style                                                           | done   | `research.md` "UX-First Slider Behaviour Model"                                        |
-| 14  | Design `useDeviceBoundSlider` hook + five-step consolidation plan                                                            | done   | `research.md` "Consolidated Implementation Plan"                                       |
-| 15  | Update Recommended Approach to consolidation; preserve Option 1 as fallback                                                  | done   | `research.md` "Recommended Approach"                                                   |
-| 16  | Extend acceptance criteria (11–16) covering c64api correctness, validator, watchdog, no-pending-disable                      | done   | `research.md` "Updated Acceptance Criteria (consolidation)"                            |
+## Commands And Results
 
-### Empirical hazard discovered (must be flagged for the implementer)
+  - Result: passed, 1 test, 36.8s.
+  - Artifacts: standard Playwright output under `test-results/playwright` and `playwright-report`.
+- `npm run lint`
+  - Task-owned files needing formatting: `playwright/structuredInteractionSoak.spec.ts`, `tests/unit/connection/connectionManager.startup.test.ts`, and `docs/testing/test-architecture.md`.
+- `npx prettier --write playwright/structuredInteractionSoak.spec.ts tests/unit/connection/connectionManager.startup.test.ts docs/testing/test-architecture.md`
+- `npm run lint`
+- `npx prettier --write src/lib/diagnostics/healthCheckEngine.ts src/pages/home/components/HomeCpuSpeedSlider.tsx tests/unit/maestro/maestroFlowContracts.test.ts`
+  - Result: passed; mechanical formatting only to unblock repository-wide validation.
+  - Final result: passed.
+  - Included Prettier check, ESLint, display-profile breakpoint guard, variant output check, and feature-flag registry check.
+- `npm run test:coverage`
+  - Result: passed.
+  - Final coverage: statements 94.27%, branches 91.91%, functions 90.44%, lines 94.27%.
+  - Branch coverage satisfies the repository's >=91% gate.
+- `npm run cap:build`
+  - Result: passed.
+  - Purpose: production web build plus Capacitor asset sync before APK assembly.
+  - Notes: Vite reported existing browser-externalization/dynamic-import chunk warnings; Capacitor iOS sync reported missing CocoaPods/xcodebuild on this Linux host. Command exited 0.
+- `npm run android:apk`
+  - Result: passed.
+  - Purpose: assemble a current debug APK after Capacitor sync.
+  - Runtime: Gradle reported `BUILD SUCCESSFUL in 43s`.
+- `find android/app/build/outputs/apk -type f -name '*.apk' ...`
+  - Result: newest APK is `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`.
+- `adb devices`
+  - Result: preferred Pixel 4 attached as `9B081FFAZ001WX`.
+- `curl -sS --max-time 3 http://u64/v1/info`
+  - Result: passed; selected `u64`, product `Ultimate 64 Elite`, firmware `3.14e`, no reported errors.
+- `curl -sS --max-time 3 http://c64u/v1/info`
+  - Result: timed out after 3002ms; not selected.
+- `adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`
+  - Result: passed, `Success`; uninstall/retry was not needed.
+- `adb -s 9B081FFAZ001WX shell monkey -p uk.gleissner.c64commander 1`
+  - Result: launched the app.
+- `adb -s 9B081FFAZ001WX shell dumpsys window ...`
+  - Result: `uk.gleissner.c64commander/.MainActivity` foregrounded after dismissing the notification/lock shade.
+- `adb ... screencap`
+  - Result: captured evidence under `test-results/android-device/`:
+    - `pixel4-home-after-launch.png`
+    - `pixel4-home-top-after-recovery.png`
+    - `pixel4-home-top-20s-later.png`
+    - `pixel4-config-after-health-mismatch.png`
+- `adb -s 9B081FFAZ001WX logcat -d -t 1000 ... > test-results/android-device/pixel4-logcat-health.txt`
+  - Result: captured 168 filtered log lines.
+  - Evidence: repeated native `GET http://192.168.1.13/v1/info`, config/RAM REST calls, and `Capacitor: Host unreachable` entries while the UI showed `U64 UNHEALTHY`.
+- `curl -v --max-time 5 http://c64u/v1/info`
+  - Continuation result: passed; `c64u` resolved to `192.168.1.167`, product `C64 Ultimate`, firmware `1.1.0`, no reported errors.
+- `adb -s 9B081FFAZ001WX shell pm clear uk.gleissner.c64commander && adb -s 9B081FFAZ001WX shell monkey -p uk.gleissner.c64commander 1`
+  - Result: passed; reset the app to the default `c64u` saved device and relaunched.
+- `adb ... screencap/logcat`
+  - Result: captured `test-results/android-device/pixel4-c64u-after-clear-launch.png` and `pixel4-c64u-after-clear-launch-logcat.txt`.
+  - Evidence: native `CapacitorHttp` requests to `http://c64u/...` and Telnet connections to `c64u:23`; UI still showed `C64U UNHEALTHY`, proving the prior blocker on the requested host.
+- `npx vitest run tests/unit/lib/diagnostics/healthModel.test.ts tests/unit/lib/c64api.test.ts tests/unit/c64api.branches.test.ts`
+  - Result: passed, 3 files, 178 tests, 3.24s.
+  - Purpose: regression coverage for expected optional metadata misses not poisoning health and missing categories not creating item-probe storms.
+- `npx vitest run tests/unit/lib/diagnostics/healthModel.test.ts`
+  - Continuation result: passed, 87 tests, 1.57s.
+  - Purpose: regression coverage for ignoring pre-connection REST/app gating failures after recovery.
 
-Sending an invalid CPU Speed value inside a `POST /v1/configs` batch took the `u64` device offline for the rest of the session (TCP refused, ICMP ping 100% loss). Implementers must (a) reboot u64 manually before validation, and (b) treat client-side option validation as a release blocker.
+## Blockers
 
-## Out of Scope
+- On-device validation found a release blocker: current APK on Pixel 4 renders Home/Config data from `u64` but health remains `U64 UNHEALTHY` after waiting, matching the partial-connectivity/health-false-negative class.
+- Physical A/V HIL was not executed; no c64scope evidence was collected.
+- Contract STRESS/breakpoint tests were not run against `u64` in this task to avoid broad hardware pressure beyond the bounded app launch/config validation.
 
-- Implementation. This task is research-only.
-- Refreshing screenshots, running tests, or modifying source code.
-- Investigating non-slider responsiveness issues.
-- Recovering `u64` (must be done out-of-band before the implementation phase begins).
+## Remaining Risks
 
-## Steering TODO — 2026-05-06
+- Playwright web success does not prove native Android WebView, `CapacitorHttp`, LAN DNS/routing, background/foreground lifecycle, or real C64U safety.
+- Contract STRESS/breakpoint harness exists but was not run against hardware in this phase.
+- Partial connectivity UI semantics beyond hook-level recovery still need a Playwright degraded mock scenario and deeper HIL diagnostics. Pixel 4 validation already exposed health false-negative behavior while config remained populated.
+- Existing unrelated worktree changes may still affect full lint/build/coverage results.
 
-- TODO: For Telnet-related work, consult [docs/c64/c64u-telnet.yaml](/home/chris/dev/c64/c64commander/docs/c64/c64u-telnet.yaml) as source of truth before changing behavior or tests, and correct the C64U action label in [tests/unit/telnet/telnetActionExecutor.test.ts](/home/chris/dev/c64/c64commander/tests/unit/telnet/telnetActionExecutor.test.ts) to `Reboot (Clr Mem)`.
+## Release Readiness Classification
+
+- Classification target: `READY`.
+- Current classification remains `NOT READY` until the Pixel 4 is proven online against the real C64U host `c64u`, repeated button/checkbox and slider soak tests pass on-device, and the health badge is verified online.
+- User continuation requirement: complete the work, not merely document blockers. Real-device proof must use the attached Pixel 4 speaking to the real C64U available as hostname `c64u`.
+- Prior blocker to resolve: current APK on Pixel 4 rendered config data from `u64` but health stayed `U64 UNHEALTHY`.
+- Additional blockers to clear or explicitly run: physical Android repeated interaction soak, health online proof, relevant CI-safe regression tests, and release readiness reclassification to `READY`.
+- Continuation finding: after clearing Pixel 4 app data, the app selected `c64u` and native logcat showed `CapacitorHttp` requests to `http://c64u/...` plus Telnet connections to `c64u:23`, but the badge still showed `C64U UNHEALTHY`.
+- Continuation root cause: tolerated optional config metadata misses from Home startup were recorded as diagnostics REST/app failures, causing a false unhealthy badge even though the device was reachable and config-backed UI populated.
+- Continuation fix: mark expected missing optional config metadata requests as expected trace failures, exclude expected failures from health rollup, and stop probing per-item metadata when the whole config category returns HTTP 404.
+- Continuation second finding: after that fix, the badge still counted stale startup `Device not ready for requests` traces that occurred before the first successful REST response.
+- Continuation second fix: REST health now evaluates the current window from the first successful REST response onward, and App health ignores pre-connection request-gating errors after recovery.
+
+## Final Completion Checklist
+
+- [x] `PLANS.md` reflects current executed work.
+- [x] `docs/testing/test-architecture.md` exists and is repo-specific.
+- [x] Architecture distinguishes Playwright web, fuzz, contract, Maestro, Android runtime, and physical HIL roles.
+- [x] Device-safety and REST burst-protection testing is documented and implemented.
+- [x] At least one deterministic structured interaction soak test exists.
+- [x] Repeated slider, repeated checkbox, partial config recovery, and discovery/demo gaps are covered where feasible.
+- [x] Exact targeted commands/results are recorded.
+- [x] Broad validation commands/results are recorded.
+- [x] APK deploy/install/launch result is recorded.
+- [x] Release-readiness classification is recorded.
+- [x] No unnecessary runners or overlapping test categories were added.
+- [x] No broad unrelated refactors were made.
+- [x] No commits were made.
+
+---
+
+# PLANS — Telnet-dependent feature gating (parallel task)
+
+> This section tracks the Telnet feature-gating work and is intentionally appended below
+> the production-readiness section above. The two tasks share the worktree; per
+> `CLAUDE.md`, concurrent changes are preserved.
+
+## Current Objective
+
+Hide non-essential, user-facing Telnet-dependent functionality behind explicit feature flags so the app feels stable by default. Health check and diagnostics remain exempt because they help users detect instability.
+
+## Final shape
+
+Feature flags added/renamed (all `enabled: false`, `visible_to_user: true`, `developer_only: false`, `group: experimental`):
+
+- `home_telnet_config_actions_enabled` (renamed from `home_advanced_config_actions_enabled`).
+- `home_telnet_drive_actions_enabled` (drive cards Telnet footer).
+- `home_telnet_printer_actions_enabled` (printer card Telnet footer).
+- `home_telnet_power_cycle_enabled` (Power Cycle quick action).
+- `home_telnet_clear_ram_reboot_enabled` (Reboot (Clr Mem) quick action).
+
+Code-shape changes follow-up (this iteration):
+
+- `Reboot (Clr Mem)` is **Telnet-only**. The slow REST fallback was removed.
+- `deviceControl.rebootFull`, `deviceControl.powerCycle`, `describePowerCycleFallback`, the `REST_FALLBACK_FULL_REBOOT` transport, the `POWER_CYCLE_FALLBACK_ENDPOINTS` constant, and the `clearRamAndRebootImpl` injection point have all been removed from `src/lib/deviceControl/deviceControl.ts` since they are now unused.
+- The Quick Actions overflow dropdown (`home-machine-overflow-*`) was removed from `MachineControls`. Extras now render inline as standard quick action cards. The prop is renamed `overflowActions` → `extraActions`.
+- HomePage gates `Reboot (Clr Mem)` on `home_telnet_clear_ram_reboot_enabled && telnet.isAvailable && support === "supported"`, mirroring how Power Cycle is gated.
+
+## Telnet-dependent surfaces gated
+
+1. Power Cycle quick action.
+2. Reboot (Clr Mem) quick action (Telnet-only — no REST fallback).
+3. Drive cards Telnet footer.
+4. Printer card Telnet footer.
+5. Config grid `Save (file)`, `Load (file)`, `Clear Flash`.
+
+## Surfaces deliberately not gated
+
+- Reboot (REST-only) and other essential machine controls.
+- DiagnosticsDialog Telnet activity rows / health-check probes.
+- Settings Telnet port input.
+
+## Verification
+
+- `node scripts/compile-feature-flags.mjs --check` ✓
+- `node scripts/generate-variant.mjs --check` ✓
+- `npx prettier --write` on touched files ✓
+- `npx vitest run tests/unit/featureFlags.test.ts tests/unit/pages/HomePage.test.tsx tests/unit/pages/HomePage.ramActions.test.tsx tests/unit/pages/SettingsPage.test.tsx tests/unit/pages/home/components/MachineControls.test.tsx tests/unit/lib/deviceControl/deviceControl.test.ts` — 125/125 passed.
+- `npx vitest run tests/unit/pages/home/useHomeActions.test.tsx tests/unit/ramOperations.test.ts` — 26/26 passed (no impact from `clearRamAndReboot` removal in deviceControl).
+- `npx tsc -p tsconfig.app.json --noEmit` shows only pre-existing errors (unchanged before vs after these edits).
+
+## Open Questions / Risks
+
+- Reboot (Clr Mem) is now Telnet-only. If Telnet is offline or the device is uncapable, the action is hidden and the user must rely on the standard `Reboot` (REST keep-RAM) action.
+- `deviceControl.powerCycle` and `deviceControl.rebootFull` removal also drops the unused `clearRamAndRebootImpl` dependency injection. `clearRamAndReboot` itself remains exported from `@/lib/machine/ramOperations` (still used by `useHomeActions`).

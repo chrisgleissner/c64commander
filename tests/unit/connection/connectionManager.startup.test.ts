@@ -7,6 +7,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loadAutomaticDemoModeEnabled, loadStartupDiscoveryWindowMs } from "../../../src/lib/config/appSettings";
+import { featureFlagManager } from "../../../src/lib/config/featureFlags";
 
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => false),
@@ -138,5 +140,39 @@ describe("connectionManager startup coverage", () => {
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(getConnectionSnapshot().lastDiscoveryTrigger).toBe("background");
+  });
+
+  it("waits for a slow successful startup probe inside the deadline instead of entering demo", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
+    vi.mocked(fetch).mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve(
+              new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              }),
+            );
+          }, 500);
+        }),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(startMockServer).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 });

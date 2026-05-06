@@ -98,6 +98,45 @@ describe("useDeviceBoundSlider", () => {
     expect(preview).toHaveBeenLastCalledWith(7);
   });
 
+  it("keeps local response immediate and bounds preview requests during a sustained drag", () => {
+    const preview = vi.fn();
+    const commit = vi.fn();
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 0,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit,
+        previewThrottleMs: 200,
+      }),
+    );
+
+    for (let value = 1; value <= 100; value += 1) {
+      act(() => {
+        result.current.onValueChange([value]);
+        vi.advanceTimersByTime(10);
+      });
+      expect(result.current.sliderValue).toBe(value);
+      expect(result.current.displayValue).toBe(value);
+    }
+
+    expect(preview.mock.calls.length).toBeLessThanOrEqual(6);
+
+    act(() => {
+      result.current.onValueCommit([100]);
+    });
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commit).toHaveBeenCalledWith(100);
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(preview.mock.calls.length).toBeLessThanOrEqual(6);
+  });
+
   it("does not send previews in commit-only mode", () => {
     const preview = vi.fn();
     const { result } = renderHook(() =>

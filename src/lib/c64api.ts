@@ -292,6 +292,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassCooldown?: boolean;
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
+  __c64uExpectedMissing?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -648,6 +649,7 @@ export class C64API {
     const bypassCooldown = Boolean(options.__c64uBypassCooldown);
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
     const bypassCircuit = Boolean(options.__c64uBypassCircuit);
+    const expectedMissing = Boolean(options.__c64uExpectedMissing);
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -656,6 +658,7 @@ export class C64API {
     delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
+    delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -809,6 +812,7 @@ export class C64API {
                 if (!response.ok) {
                   const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
                   const failure = classifyError(err, "integration");
+                  const expectedFailure = expectedMissing && method === "GET" && response.status === 404;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -819,8 +823,11 @@ export class C64API {
                     payloadPreview: responseTrace.payloadPreview,
                     durationMs,
                     error: err,
+                    expectedFailure,
                   });
-                  recordTraceError(action, err, failure);
+                  if (!expectedFailure) {
+                    recordTraceError(action, err, failure);
+                  }
                   responseRecorded = true;
                   throw err;
                 }
@@ -1215,9 +1222,23 @@ export class C64API {
         });
       }
     } catch (error) {
+      const categoryErrorMessage = error instanceof Error ? error.message : String(error ?? "");
+      if (parseHttpStatusFromErrorMessage(categoryErrorMessage) === 404) {
+        addLog("debug", "Category config fetch returned 404; treating category as unavailable", {
+          category,
+          error: categoryErrorMessage,
+        });
+        return {
+          [category]: {
+            items: {},
+          },
+          errors: [],
+        } as ConfigResponse;
+      }
+
       addLog("warn", "Category config fetch failed; falling back to item fetches", {
         category,
-        error: (error as Error).message,
+        error: categoryErrorMessage,
       });
     }
 
@@ -1226,7 +1247,12 @@ export class C64API {
     );
     if (missingItems.length > 0) {
       const responses = await Promise.allSettled(
-        missingItems.map((item) => this.getConfigItem(category, item, options)),
+        missingItems.map((item) =>
+          this.getConfigItem(category, item, {
+            ...options,
+            __c64uExpectedMissing: true,
+          }),
+        ),
       );
       responses.forEach((result) => {
         if (result.status !== "fulfilled") return;
