@@ -1131,7 +1131,9 @@ export const installStableStorage = async (page: Page) => {
       localStorage.setItem("c64u_app_logs", JSON.stringify(logs));
       localStorage.setItem("c64u_hvsc_status:v1", JSON.stringify(hvscSummary));
       localStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");
+      localStorage.setItem("c64u_feature_flag:ram_snapshots_enabled", "1");
       sessionStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");
+      sessionStorage.setItem("c64u_feature_flag:ram_snapshots_enabled", "1");
       localStorage.setItem("c64u_demo_clock", fixedNowIso);
       if (!localStorage.getItem("c64u_local_sources:v1")) {
         localStorage.setItem(

@@ -625,9 +625,41 @@ describe("c64api", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(addLogMock).not.toHaveBeenCalledWith(
       "warn",
-      "C64 API retry scheduled after idle failure",
+      "C64 API retry scheduled after scheduled timeout",
       expect.anything(),
     );
+  });
+
+  it("applies the bounded control timeout to machine actions", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(
+        (_url: string, options?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => {
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }),
+      );
+
+      const api = new C64API("http://c64u");
+      const pending = api.machineReset();
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not apply the scheduled 3-second timeout to user-triggered requests", async () => {

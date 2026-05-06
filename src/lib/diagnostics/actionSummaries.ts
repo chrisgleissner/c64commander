@@ -309,6 +309,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
           ? null
           : (readNumber(responseData.status) ?? null)
         : (endStatus ?? null);
+      const responsePayloadPreview = includeResponsePayloadPreview(responseData.body, responseData.payloadPreview);
       restEffects.push({
         type: "REST",
         label: `${method} ${normalizedPath ?? path}`,
@@ -330,9 +331,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         ...(readPayloadPreview(requestData.payloadPreview)
           ? { requestPayloadPreview: readPayloadPreview(requestData.payloadPreview) }
           : {}),
-        ...(includeResponsePayloadPreview(responseData.body, responseData.payloadPreview)
-          ? { responsePayloadPreview: includeResponsePayloadPreview(responseData.body, responseData.payloadPreview) }
-          : {}),
+        ...(responsePayloadPreview ? { responsePayloadPreview } : {}),
         ...(error !== null ? { error } : {}),
       });
     }

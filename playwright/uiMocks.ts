@@ -219,6 +219,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           localStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");
           localStorage.setItem("c64u_feature_flag:commoserve_enabled", "1");
           localStorage.setItem("c64u_feature_flag:lighting_studio_enabled", "1");
+          localStorage.setItem("c64u_feature_flag:ram_snapshots_enabled", "1");
         }
       } catch {
         return;

@@ -285,6 +285,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassCache?: boolean;
   __c64uBypassCooldown?: boolean;
   __c64uBypassBackoff?: boolean;
+  __c64uBypassCircuit?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -550,6 +551,7 @@ export class C64API {
     const bypassCache = Boolean(options.__c64uBypassCache);
     const bypassCooldown = Boolean(options.__c64uBypassCooldown);
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
+    const bypassCircuit = Boolean(options.__c64uBypassCircuit);
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -557,6 +559,7 @@ export class C64API {
     delete (requestOptions as { __c64uBypassCache?: boolean }).__c64uBypassCache;
     delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
+    delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -602,6 +605,7 @@ export class C64API {
             bypassCache,
             bypassCooldown,
             bypassBackoff,
+            bypassCircuit,
           },
           async () => {
             const requestId = buildRequestId();
@@ -826,7 +830,7 @@ export class C64API {
                   elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
                 if (shouldRetry) {
                   const retryDelayMs = 0;
-                  addLog("warn", "C64 API retry scheduled after idle failure", {
+                  addLog("warn", "C64 API retry scheduled after scheduled timeout", {
                     requestId,
                     method,
                     path,
@@ -834,6 +838,7 @@ export class C64API {
                     maxAttempts,
                     retryDelayMs,
                     elapsedSinceFirstAttemptMs,
+                    retryTrigger: "scheduled_timeout_abort",
                     idleMs: idleContext.idleMs,
                     wasIdle: idleContext.wasIdle,
                   });
@@ -1192,36 +1197,42 @@ export class C64API {
   async machineReset(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:reset", {
       method: "PUT",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machineReboot(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:reboot", {
       method: "PUT",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machinePause(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:pause", {
       method: "PUT",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machineResume(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:resume", {
       method: "PUT",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machinePowerOff(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:poweroff", {
       method: "PUT",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   async machineMenuButton(): Promise<{ errors: string[] }> {
     return this.request("/v1/machine:menu_button", {
       method: "PUT",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
