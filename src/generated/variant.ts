@@ -67,7 +67,7 @@ export const variantConfig = {
         enabled: false,
         visible_to_user: true,
       },
-      home_config_actions_enabled: {
+      home_advanced_config_actions_enabled: {
         developer_only: false,
         enabled: false,
         visible_to_user: true,

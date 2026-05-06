@@ -14,7 +14,7 @@ import HomePage from "@/pages/HomePage";
 const featureFlagsRef = vi.hoisted(() => ({
   current: {
     lighting_studio_enabled: true,
-    home_config_actions_enabled: false,
+    home_advanced_config_actions_enabled: false,
     reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   } as Record<string, boolean>,
@@ -437,7 +437,7 @@ describe("HomePage RAM actions", () => {
     vi.clearAllMocks();
     featureFlagsRef.current = {
       lighting_studio_enabled: true,
-      home_config_actions_enabled: false,
+      home_advanced_config_actions_enabled: false,
       reu_snapshot_enabled: true,
       ram_snapshots_enabled: true,
     };
@@ -689,7 +689,7 @@ describe("HomePage RAM actions", () => {
   }, 15000);
 
   it("saves config to a local file through the shared config workflow", async () => {
-    featureFlagsRef.current.home_config_actions_enabled = true;
+    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-config-save-file"));
@@ -703,7 +703,7 @@ describe("HomePage RAM actions", () => {
   });
 
   it("loads config from a local file through the shared config workflow", async () => {
-    featureFlagsRef.current.home_config_actions_enabled = true;
+    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-config-load-file"));

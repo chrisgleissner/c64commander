@@ -102,7 +102,7 @@ const {
       hvsc_enabled: true,
       commoserve_enabled: true,
       demo_mode_enabled: false,
-      home_config_actions_enabled: false,
+      home_advanced_config_actions_enabled: false,
       lighting_studio_enabled: false,
       reu_snapshot_enabled: false,
     },
@@ -246,7 +246,7 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
       | "hvsc_enabled"
       | "commoserve_enabled"
       | "demo_mode_enabled"
-      | "home_config_actions_enabled"
+      | "home_advanced_config_actions_enabled"
       | "lighting_studio_enabled"
       | "reu_snapshot_enabled",
   ) => ({
@@ -482,7 +482,7 @@ beforeEach(() => {
   developerModeEnabledRef.current = false;
   featureFlagsRef.current.hvsc_enabled = true;
   featureFlagsRef.current.demo_mode_enabled = false;
-  featureFlagsRef.current.home_config_actions_enabled = false;
+  featureFlagsRef.current.home_advanced_config_actions_enabled = false;
   mockSetFeatureFlag.mockReset();
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
@@ -670,7 +670,9 @@ describe("SettingsPage", () => {
     const experimentalSection = screen.getByTestId("settings-feature-group-experimental");
     expect(within(stableSection).getByTestId("feature-flag-hvsc_enabled")).toBeInTheDocument();
     expect(within(stableSection).getByTestId("feature-flag-commoserve_enabled")).toBeInTheDocument();
-    expect(within(experimentalSection).getByTestId("feature-flag-home_config_actions_enabled")).toBeInTheDocument();
+    expect(
+      within(experimentalSection).getByTestId("feature-flag-home_advanced_config_actions_enabled"),
+    ).toBeInTheDocument();
     expect(within(experimentalSection).getByTestId("feature-flag-lighting_studio_enabled")).toBeInTheDocument();
   });
 

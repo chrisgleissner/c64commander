@@ -53,7 +53,8 @@ type StrictUiTracker = {
   consoleErrors: string[];
   consoleWarnings: string[];
   pageErrors: string[];
-  network404s: Array<{ method: string; url: string; resourceType: string }>;
+  network404s: Array<{ method: string; url: string; resourceType: string; requestBody?: string }>;
+  network5xx: Array<{ method: string; url: string; resourceType: string; status: number; requestBody?: string }>;
   requestFailures: Array<{ method: string; url: string; errorText: string }>;
   toastIssues: string[];
   horizontalOverflows: string[];
@@ -410,6 +411,7 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     consoleWarnings: [],
     pageErrors: [],
     network404s: [],
+    network5xx: [],
     requestFailures: [],
     toastIssues: [],
     horizontalOverflows: [],
@@ -444,13 +446,25 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
   };
 
   const recordResponse = (response: Response) => {
-    if (response.status() !== 404) return;
     const request = response.request();
-    tracker.network404s.push({
-      method: request.method(),
-      url: response.url(),
-      resourceType: request.resourceType(),
-    });
+    if (response.status() === 404) {
+      tracker.network404s.push({
+        method: request.method(),
+        url: response.url(),
+        resourceType: request.resourceType(),
+        requestBody: request.postData() ?? undefined,
+      });
+      return;
+    }
+    if (response.status() >= 500) {
+      tracker.network5xx.push({
+        method: request.method(),
+        url: response.url(),
+        resourceType: request.resourceType(),
+        status: response.status(),
+        requestBody: request.postData() ?? undefined,
+      });
+    }
   };
 
   const recordRequestFailed = (request: Request) => {
@@ -689,7 +703,12 @@ export const assertNoUiIssues = async (page: Page, testInfo: TestInfo) => {
   if (issues.length) {
     const diagnostics = [
       ...tracker.network404s.map(
-        ({ method, url, resourceType }) => `diagnostic network 404: ${method} ${url} [resourceType=${resourceType}]`,
+        ({ method, url, resourceType, requestBody }) =>
+          `diagnostic network 404: ${method} ${url} [resourceType=${resourceType}]${requestBody ? ` body=${requestBody}` : ""}`,
+      ),
+      ...tracker.network5xx.map(
+        ({ method, url, resourceType, status, requestBody }) =>
+          `diagnostic network ${status}: ${method} ${url} [resourceType=${resourceType}]${requestBody ? ` body=${requestBody}` : ""}`,
       ),
       ...tracker.requestFailures.map(
         ({ method, url, errorText }) => `diagnostic request failed: ${method} ${url} [error=${errorText}]`,

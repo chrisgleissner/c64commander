@@ -211,7 +211,7 @@ function HomePageContent() {
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: reuSnapshotEnabled } = useFeatureFlag("reu_snapshot_enabled");
   const { value: ramSnapshotsEnabled } = useFeatureFlag("ram_snapshots_enabled");
-  const { value: homeConfigActionsEnabled } = useFeatureFlag("home_config_actions_enabled");
+  const { value: homeAdvancedConfigActionsEnabled } = useFeatureFlag("home_advanced_config_actions_enabled");
   const deviceControlBusy = deviceControlActionId !== null;
   const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
   const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...(reuSnapshotEnabled ? reuSnapshots : [])].sort(
@@ -765,7 +765,7 @@ function HomePageContent() {
   });
 
   const localConfigFileActionsAvailable = telnet.isAvailable && isNativePlatform();
-  const advancedHomeConfigActionsVisible = homeConfigActionsEnabled;
+  const advancedHomeConfigActionsVisible = homeAdvancedConfigActionsEnabled;
 
   const handleSaveToFile = trace(async function handleSaveToFile() {
     setConfigFileTaskPending("save");
@@ -1454,16 +1454,14 @@ function HomePageContent() {
                 disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
                 loading={isApplying}
               />
-              {advancedHomeConfigActionsVisible && (
-                <QuickActionCard
-                  icon={FolderOpen}
-                  label="Manage"
-                  description="App Configs"
-                  dataTestId="home-config-manage-app"
-                  onClick={() => setManageDialogOpen(true)}
-                  disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
-                />
-              )}
+              <QuickActionCard
+                icon={FolderOpen}
+                label="Manage"
+                description="App Configs"
+                dataTestId="home-config-manage-app"
+                onClick={() => setManageDialogOpen(true)}
+                disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
+              />
               {advancedHomeConfigActionsVisible && localConfigFileActionsAvailable && (
                 <QuickActionCard
                   icon={Download}

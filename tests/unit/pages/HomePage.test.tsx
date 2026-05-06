@@ -16,7 +16,7 @@ import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 const featureFlagsRef = vi.hoisted(() => ({
   current: {
     lighting_studio_enabled: true,
-    home_config_actions_enabled: false,
+    home_advanced_config_actions_enabled: false,
     reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   } as Record<string, boolean>,
@@ -645,7 +645,7 @@ beforeEach(() => {
   reportUserErrorSpy.mockReset();
   featureFlagsRef.current = {
     lighting_studio_enabled: true,
-    home_config_actions_enabled: false,
+    home_advanced_config_actions_enabled: false,
     reu_snapshot_enabled: true,
     ram_snapshots_enabled: true,
   };
@@ -1197,7 +1197,7 @@ describe("HomePage SID status", () => {
     expect(screen.queryByTestId("home-ram-folder-row")).toBeNull();
   });
 
-  it("hides advanced Home config actions unless the feature flag is enabled", () => {
+  it("keeps app config management visible while gating advanced Home config actions", () => {
     statusPayloadRef.current.deviceInfo = {
       product: "C64 Ultimate",
       hostname: "c64u",
@@ -1208,20 +1208,20 @@ describe("HomePage SID status", () => {
     };
     const initialRender = renderHomePage();
 
-    expect(screen.queryByTestId("home-config-manage-app")).toBeNull();
+    expect(screen.getByTestId("home-config-manage-app")).toBeInTheDocument();
     expect(screen.queryByTestId("home-config-save-file")).toBeNull();
     expect(screen.queryByTestId("home-config-load-file")).toBeNull();
     expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
 
     initialRender.unmount();
-    featureFlagsRef.current.home_config_actions_enabled = true;
+    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
     renderHomePage();
 
     expect(screen.getByTestId("home-config-manage-app")).toBeInTheDocument();
   });
 
   it("manages app configs via dialogs", async () => {
-    featureFlagsRef.current.home_config_actions_enabled = true;
+    featureFlagsRef.current.home_advanced_config_actions_enabled = true;
     const savedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
     appConfigStatePayloadRef.current = {
       ...appConfigStatePayloadRef.current,

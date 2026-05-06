@@ -21,7 +21,7 @@ export type FeatureFlagId =
   | "background_execution_enabled"
   | "reu_snapshot_enabled"
   | "ram_snapshots_enabled"
-  | "home_config_actions_enabled";
+  | "home_advanced_config_actions_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -119,13 +119,13 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     description: "Show Save RAM and Load RAM actions on Home.",
   },
   {
-    id: "home_config_actions_enabled",
+    id: "home_advanced_config_actions_enabled",
     enabled: false,
     visible_to_user: true,
     developer_only: false,
     group: "experimental",
-    title: "Home config actions",
-    description: "Show advanced Home config actions such as Manage App Configs, file save/load, and Clear Flash.",
+    title: "Home advanced config actions",
+    description: "Show advanced Home config actions such as file save/load and Clear Flash.",
   },
 ] as const;
 

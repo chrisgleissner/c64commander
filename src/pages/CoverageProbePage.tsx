@@ -149,14 +149,18 @@ export default function CoverageProbePage() {
         "api + playback",
         async () => {
           const api = getC64API();
+          const volumeReset = await resolveAudioMixerResetValue("Audio Mixer", "Vol UltiSid 1");
+          if (typeof volumeReset !== "string") {
+            throw new Error("Volume reset option not resolved via API");
+          }
           await api.getVersion();
           await api.getInfo();
           await api.getCategories();
           await api.getConfigItems("Audio Mixer", AUDIO_MIXER_VOLUME_ITEMS);
           await api.getConfigItem("Audio Mixer", "Vol UltiSid 1");
-          await api.setConfigValue("Audio Mixer", "Vol UltiSid 1", "0 dB");
+          await api.setConfigValue("Audio Mixer", "Vol UltiSid 1", volumeReset);
           await api.updateConfigBatch({
-            "Audio Mixer": { "Vol UltiSid 1": "0 dB" },
+            "Audio Mixer": { "Vol UltiSid 1": volumeReset },
           });
           await api.saveConfig();
           await api.loadConfig();

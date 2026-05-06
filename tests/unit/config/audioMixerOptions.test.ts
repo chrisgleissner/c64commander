@@ -84,7 +84,7 @@ describe("mergeAudioMixerOptions", () => {
     mockApi.getConfigItem.mockRejectedValue(new Error("boom"));
 
     await expect(resolveAudioMixerResetValue("Audio Mixer", "Vol UltiSid 1")).resolves.toBe(0);
-    await expect(resolveAudioMixerResetValue("Audio Mixer", "Pan 1")).resolves.toBe("Center");
+    await expect(resolveAudioMixerResetValue("Audio Mixer", "Pan 1")).resolves.toBeUndefined();
   });
 
   it("merges when options or presets is undefined", () => {
@@ -162,5 +162,17 @@ describe("mergeAudioMixerOptions", () => {
       },
     });
     await expect(resolveAudioMixerResetValue("Audio Mixer", "Pan 1")).resolves.toBe("Center");
+  });
+
+  it("skips pan reset when no centered option is declared", async () => {
+    await expect(resolveAudioMixerResetValue("Audio Mixer", "Pan Socket 1", ["Left 1", "Right 1"])).resolves.toBe(
+      undefined,
+    );
+  });
+
+  it("accepts centered pan options that encode zero numerically", async () => {
+    await expect(
+      resolveAudioMixerResetValue("Audio Mixer", "Pan Socket 1", ["Left 1", "Center 0", "Right 1"]),
+    ).resolves.toBe("Center 0");
   });
 });
