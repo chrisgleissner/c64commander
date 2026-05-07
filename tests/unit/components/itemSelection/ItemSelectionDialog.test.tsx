@@ -292,6 +292,77 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(document.activeElement).not.toBe(close);
   });
 
+  it("re-enables the Local interstitial button after the picker is cancelled", async () => {
+    localStorage.clear();
+    const onAddLocalSource = vi.fn().mockResolvedValue(null);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Mount Disk"
+          confirmLabel="Mount"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={onAddLocalSource}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const localButton = screen.getByTestId("import-option-local");
+    fireEvent.click(localButton);
+
+    await waitFor(() => {
+      expect(onAddLocalSource).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(localButton).not.toBeDisabled();
+    });
+    expect(localButton.getAttribute("aria-busy")).toBe("false");
+
+    fireEvent.click(localButton);
+    await waitFor(() => {
+      expect(onAddLocalSource).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("uses the ultimate source's name as the interstitial button label", () => {
+    localStorage.clear();
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Mount Disk"
+          confirmLabel="Mount"
+          sourceGroups={[
+            {
+              label: "Sources",
+              sources: [
+                {
+                  id: "ultimate-u64",
+                  type: "ultimate",
+                  name: "U64",
+                  rootPath: "/",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const button = screen.getByTestId("import-option-c64u");
+    expect(button).toHaveAttribute("aria-label", "Add file / folder from U64");
+    expect(button.textContent).toContain("U64");
+  });
+
   it("shows the local source label in the selection heading", async () => {
     localStorage.clear();
 

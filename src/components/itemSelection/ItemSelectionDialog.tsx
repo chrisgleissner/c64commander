@@ -321,6 +321,7 @@ export const ItemSelectionDialog = ({
         setPendingLocalSourceId(newSourceId);
         return;
       }
+      setPendingLocalSource(false);
       setPendingLocalSourceId(null);
     } catch (error) {
       setPendingLocalSource(false);
@@ -421,7 +422,7 @@ export const ItemSelectionDialog = ({
                   disabled={!c64UltimateSource?.isAvailable}
                   id="import-option-c64u"
                   data-testid="import-option-c64u"
-                  aria-label="Add file / folder from C64U"
+                  aria-label={`Add file / folder from ${c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}`}
                 >
                   <span className={interstitialOptionContentClassName} aria-hidden="true">
                     <span className={interstitialIconSlotClassName}>
@@ -429,7 +430,7 @@ export const ItemSelectionDialog = ({
                     </span>
                     <span className={interstitialLabelClassName}>
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
-                        {SOURCE_LABELS.c64u}
+                        {c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}
                       </span>
                     </span>
                   </span>
