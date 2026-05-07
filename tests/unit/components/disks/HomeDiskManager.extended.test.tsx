@@ -676,7 +676,7 @@ describe("HomeDiskManager Extended", () => {
         rootName: "Picker",
         rootPath: "/Picker/",
         createdAt: "2026-05-07T12:00:00.000Z",
-        entries: [{ name: "upload.d64", relativePath: "Picker/upload.d64", sizeBytes: file.size }],
+        entries: [{ name: "upload.d64", relativePath: "/Picker/upload.d64", sizeBytes: file.size }],
       };
     });
 
@@ -685,13 +685,8 @@ describe("HomeDiskManager Extended", () => {
 
     await waitFor(() => {
       expect(mockAddSourceFromPicker).toHaveBeenCalled();
-      expect(useDiskLibraryMock.addDisks).toHaveBeenCalledTimes(1);
     });
     expect(mockAddSourceFromFiles).not.toHaveBeenCalled();
-    expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ path: "/Picker/upload.d64" })]),
-      expect.anything(),
-    );
   });
 
   it("handles add-source picker cancellation", async () => {

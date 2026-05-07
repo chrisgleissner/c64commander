@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   AppDialog,
@@ -101,6 +101,7 @@ export const ItemSelectionDialog = ({
   const [pendingLocalSourceCount, setPendingLocalSourceCount] = useState(0);
   const [pendingLocalSourceId, setPendingLocalSourceId] = useState<string | null>(null);
   const [autoConfirming, setAutoConfirming] = useState(false);
+  const autoConfirmInFlightRef = useRef(false);
 
   const localSources = useMemo(
     () => sourceGroups.flatMap((group) => group.sources).filter((item) => item.type === "local"),
@@ -156,11 +157,13 @@ export const ItemSelectionDialog = ({
     setPendingLocalSourceCount(0);
     setPendingLocalSourceId(null);
     setAutoConfirming(false);
+    autoConfirmInFlightRef.current = false;
   }, [initialSourceId, open]);
 
   const confirmLocalSource = useCallback(
     async (target: SourceLocation) => {
-      if (autoConfirming || isConfirming) return;
+      if (autoConfirmInFlightRef.current || autoConfirming || isConfirming) return;
+      autoConfirmInFlightRef.current = true;
       setAutoConfirming(true);
       const selections: SelectedItem[] = [
         {
@@ -187,8 +190,10 @@ export const ItemSelectionDialog = ({
           description: (error as Error).message,
           error,
         });
+      } finally {
+        autoConfirmInFlightRef.current = false;
+        setAutoConfirming(false);
       }
-      setAutoConfirming(false);
     },
     [
       autoConfirmCloseBefore,
@@ -273,20 +278,20 @@ export const ItemSelectionDialog = ({
     }
     const selections: SelectedItem[] = isArchiveSource
       ? Array.from(archiveSelection.values()).map((result) => ({
-          type: "file" as const,
-          name: result.name,
-          path: `${result.id}/${result.category}`,
-        }))
+        type: "file" as const,
+        name: result.name,
+        path: `${result.id}/${result.category}`,
+      }))
       : Array.from(selection.values()).map((entry) => ({
-          type: entry.type,
-          name: entry.name,
-          path: entry.path,
-          durationMs: entry.durationMs,
-          songNr: entry.songNr,
-          subsongCount: entry.subsongCount,
-          sizeBytes: entry.sizeBytes ?? null,
-          modifiedAt: entry.modifiedAt ?? null,
-        }));
+        type: entry.type,
+        name: entry.name,
+        path: entry.path,
+        durationMs: entry.durationMs,
+        songNr: entry.songNr,
+        subsongCount: entry.subsongCount,
+        sizeBytes: entry.sizeBytes ?? null,
+        modifiedAt: entry.modifiedAt ?? null,
+      }));
     try {
       const success = await onConfirm(source, selections);
       if (success) {
