@@ -96,8 +96,16 @@ export const resolveAudioMixerResetValue = async (
   }
 
   if (itemName.startsWith("Pan ")) {
-    const centerOption = options.find((option) => normalizeOption(option) === "center");
-    return centerOption ?? "Center";
+    return options.find((option) => {
+      const normalized = normalizeOption(option);
+      return (
+        normalized === "center" ||
+        normalized === "centre" ||
+        normalized.startsWith("center ") ||
+        normalized.startsWith("centre ") ||
+        parseNumeric(option) === 0
+      );
+    });
   }
 
   return undefined;

@@ -257,6 +257,27 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(result.current.data?.categories).toEqual(["Audio"]));
   });
 
+  it("preserves known-good categories across retryable load failure and recovers", async () => {
+    mockApi.getCategories
+      .mockResolvedValueOnce({ categories: ["Audio"], errors: [] })
+      .mockRejectedValueOnce(new Error("request timed out"))
+      .mockResolvedValueOnce({ categories: ["Audio", "Video"], errors: [] });
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Categories(), { wrapper });
+
+    await waitFor(() => expect(result.current.data?.categories).toEqual(["Audio"]));
+
+    await act(async () => {
+      await result.current.refetch();
+    });
+    expect(result.current.data?.categories).toEqual(["Audio"]);
+
+    await act(async () => {
+      await result.current.refetch();
+    });
+    await waitFor(() => expect(result.current.data?.categories).toEqual(["Audio", "Video"]));
+  });
+
   it("uses user intent for visible category queries", async () => {
     const { wrapper } = createWrapper();
 

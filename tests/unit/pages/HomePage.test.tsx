@@ -13,8 +13,21 @@ import HomePage from "../../../src/pages/HomePage";
 import { clearRamDumpFolderConfig, saveRamDumpFolderConfig } from "../../../src/lib/config/ramDumpFolderStore";
 import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 
+const featureFlagsRef = vi.hoisted(() => ({
+  current: {
+    lighting_studio_enabled: true,
+    home_telnet_config_actions_enabled: false,
+    home_telnet_drive_actions_enabled: false,
+    home_telnet_printer_actions_enabled: false,
+    home_telnet_power_cycle_enabled: false,
+    home_telnet_clear_ram_reboot_enabled: false,
+    home_telnet_reu_snapshot_enabled: true,
+    ram_snapshots_enabled: true,
+  } as Record<string, boolean>,
+}));
+
 vi.mock("@/hooks/useFeatureFlags", () => ({
-  useFeatureFlag: () => ({ value: true }),
+  useFeatureFlag: (key: string) => ({ value: featureFlagsRef.current[key] ?? true }),
 }));
 
 const {
@@ -161,27 +174,8 @@ const {
         response: { errors: [] },
         menuOpen: false,
       }),
-      rebootFull: vi.fn().mockResolvedValue({
-        operation: "rebootFull",
-        transport: "REST",
-        endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
-        request: { strategy: "clear_ram_then_reboot" },
-        response: { errors: [] },
-        menuOpen: false,
-      }),
-      powerCycle: vi.fn().mockResolvedValue({
-        operation: "powerCycle",
-        transport: "REST_FALLBACK_FULL_REBOOT",
-        endpoint: ["PUT /v1/machine:pause", "PUT /v1/machine:writemem", "PUT /v1/machine:reboot"],
-        request: { strategy: "fallback_full_reboot" },
-        response: { errors: [], fallback: true },
-        menuOpen: false,
-      }),
       resetMenuState: vi.fn(),
       getMenuState: vi.fn().mockReturnValue(false),
-      describePowerCycleFallback: vi
-        .fn()
-        .mockReturnValue("PUT /v1/machine:pause -> PUT /v1/machine:writemem -> PUT /v1/machine:reboot"),
     },
   },
   interactiveWriteMockRef: {
@@ -634,6 +628,16 @@ vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
 beforeEach(() => {
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();
+  featureFlagsRef.current = {
+    lighting_studio_enabled: true,
+    home_telnet_config_actions_enabled: false,
+    home_telnet_drive_actions_enabled: false,
+    home_telnet_printer_actions_enabled: false,
+    home_telnet_power_cycle_enabled: false,
+    home_telnet_clear_ram_reboot_enabled: false,
+    home_telnet_reu_snapshot_enabled: true,
+    ram_snapshots_enabled: true,
+  };
   queryClientMockRef.current = {
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
@@ -1147,6 +1151,7 @@ describe("HomePage SID status", () => {
   });
 
   it("renders exactly seven machine controls with one pause-resume control", async () => {
+    featureFlagsRef.current.home_telnet_reu_snapshot_enabled = false;
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
@@ -1171,7 +1176,42 @@ describe("HomePage SID status", () => {
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
   }, 20000);
 
+  it("hides experimental RAM actions when the feature flag is disabled", () => {
+    featureFlagsRef.current.ram_snapshots_enabled = false;
+
+    renderHomePage();
+
+    const machineControls = screen.getByTestId("home-machine-controls");
+    expect(within(machineControls).queryByRole("button", { name: /^save ram$/i })).toBeNull();
+    expect(within(machineControls).queryByRole("button", { name: /^load ram$/i })).toBeNull();
+    expect(screen.queryByTestId("home-ram-folder-row")).toBeNull();
+  });
+
+  it("keeps app config management visible while gating advanced Home config actions", () => {
+    statusPayloadRef.current.deviceInfo = {
+      product: "C64 Ultimate",
+      hostname: "c64u",
+      firmware_version: "1.1.0",
+      fpga_version: "122",
+      core_version: "1.49",
+      unique_id: "c64u-test",
+    };
+    const initialRender = renderHomePage();
+
+    expect(screen.getByTestId("home-config-manage-app")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-config-save-file")).toBeNull();
+    expect(screen.queryByTestId("home-config-load-file")).toBeNull();
+    expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
+
+    initialRender.unmount();
+    featureFlagsRef.current.home_telnet_config_actions_enabled = true;
+    renderHomePage();
+
+    expect(screen.getByTestId("home-config-manage-app")).toBeInTheDocument();
+  });
+
   it("manages app configs via dialogs", async () => {
+    featureFlagsRef.current.home_telnet_config_actions_enabled = true;
     const savedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
     appConfigStatePayloadRef.current = {
       ...appConfigStatePayloadRef.current,
@@ -1292,11 +1332,10 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2");
 
     await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
-        "U64 Specific Settings",
-        "Turbo Control",
-        "Manual",
-      ),
+      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+        "CPU Speed": "2",
+        "Turbo Control": "Manual",
+      }),
     );
   });
 
@@ -1472,7 +1511,10 @@ describe("HomePage SID status", () => {
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
     await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value")).toHaveTextContent("1"));
-    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({ "CPU Speed": "2" });
+    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+      "CPU Speed": "2",
+      "Turbo Control": "Manual",
+    });
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1733,12 +1775,10 @@ describe("HomePage SID status", () => {
         "Turbo Control",
         "C64U Turbo Registers",
       );
-      // CPU Speed commit goes via interactive write; not via setConfigValue
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
-        "U64 Specific Settings",
-        "Turbo Control",
-        "Manual",
-      );
+      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+        "CPU Speed": "2",
+        "Turbo Control": "Manual",
+      });
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Badline Timing",

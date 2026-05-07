@@ -123,6 +123,14 @@ const readPayloadPreview = (value: unknown): PayloadPreview | null => {
   }
   return { byteCount, previewByteCount, hex, ascii, truncated };
 };
+
+const isBinaryPayloadBody = (value: unknown) => readRecord(value)?.type === "binary";
+
+const includeResponsePayloadPreview = (decodedPayload: unknown, preview: unknown) => {
+  if (!isBinaryPayloadBody(decodedPayload)) return null;
+  return readPayloadPreview(preview);
+};
+
 const readTraceHeaders = (value: unknown): TraceHeaders | undefined => {
   const record = readRecord(value);
   if (!record) return undefined;
@@ -301,6 +309,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
           ? null
           : (readNumber(responseData.status) ?? null)
         : (endStatus ?? null);
+      const responsePayloadPreview = includeResponsePayloadPreview(responseData.body, responseData.payloadPreview);
       restEffects.push({
         type: "REST",
         label: `${method} ${normalizedPath ?? path}`,
@@ -322,9 +331,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         ...(readPayloadPreview(requestData.payloadPreview)
           ? { requestPayloadPreview: readPayloadPreview(requestData.payloadPreview) }
           : {}),
-        ...(readPayloadPreview(responseData.payloadPreview)
-          ? { responsePayloadPreview: readPayloadPreview(responseData.payloadPreview) }
-          : {}),
+        ...(responsePayloadPreview ? { responsePayloadPreview } : {}),
         ...(error !== null ? { error } : {}),
       });
     }
@@ -384,8 +391,8 @@ const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
         ...(readPayloadPreview(data.requestPayloadPreview)
           ? { requestPayloadPreview: readPayloadPreview(data.requestPayloadPreview) }
           : {}),
-        ...(readPayloadPreview(data.responsePayloadPreview)
-          ? { responsePayloadPreview: readPayloadPreview(data.responsePayloadPreview) }
+        ...(includeResponsePayloadPreview(data.responsePayload, data.responsePayloadPreview)
+          ? { responsePayloadPreview: includeResponsePayloadPreview(data.responsePayload, data.responsePayloadPreview) }
           : {}),
         ...(error !== null ? { error } : {}),
       };

@@ -83,19 +83,19 @@ export const SNAPSHOT_TYPE_LIST: SnapshotTypeConfig[] = [
   {
     type: "program",
     label: "Program Snapshot",
-    rangeDisplay: "$0000–$00FF, $0200–$FFFF",
+    rangeDisplay: "$0000–$00FF, $0200–$DCFF, $DE00–$FFFF",
     filePrefix: "program",
   },
   {
     type: "basic",
     label: "Basic Snapshot",
-    rangeDisplay: "$002B–$0038, $0801–STREND",
+    rangeDisplay: "$002B–$0038, $0801–$9FFF",
     filePrefix: "basic",
   },
   {
     type: "screen",
     label: "Screen Snapshot",
-    rangeDisplay: "VICBANK, $D000–$D02E, $D800–$DBFF, $DD00–$DD0F",
+    rangeDisplay: "VICBANK, $D000–$D02E, $D800–$DBFF, $DD00–$DD01",
     filePrefix: "screen",
   },
   {

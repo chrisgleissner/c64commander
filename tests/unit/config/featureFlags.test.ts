@@ -399,7 +399,7 @@ describe("featureFlags", () => {
           commoserve_enabled: true,
           lighting_studio_enabled: false,
           background_execution_enabled: true,
-          reu_snapshot_enabled: false,
+          home_telnet_reu_snapshot_enabled: false,
         }),
       ).toBe(true);
     });
@@ -411,7 +411,7 @@ describe("featureFlags", () => {
           commoserve_enabled: true,
           lighting_studio_enabled: false,
           background_execution_enabled: true,
-          reu_snapshot_enabled: false,
+          home_telnet_reu_snapshot_enabled: false,
         }),
       ).toBe(false);
     });
@@ -422,7 +422,7 @@ describe("featureFlags", () => {
         commoserve_enabled: true,
         lighting_studio_enabled: false,
         background_execution_enabled: true,
-        reu_snapshot_enabled: false,
+        home_telnet_reu_snapshot_enabled: false,
       };
       expect(isFeatureEnabled(flags, "commoserve_enabled")).toBe(true);
       expect(isFeatureEnabled(flags, "hvsc_enabled")).toBe(false);

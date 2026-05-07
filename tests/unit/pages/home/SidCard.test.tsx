@@ -71,10 +71,12 @@ describe("SidCard", () => {
     volume: 15,
     volumeMax: 15,
     onVolumeChange: vi.fn(),
+    onVolumeCommit: vi.fn(),
     volumeMidpoint: 0,
     pan: 0,
     panMax: 100,
     onPanChange: vi.fn(),
+    onPanCommit: vi.fn(),
     panMidpoint: 50,
     isConnected: true,
     testIdSuffix: "foo",
@@ -137,16 +139,13 @@ describe("SidCard", () => {
   it("handles volume interaction", () => {
     const commit = vi.fn();
     const change = vi.fn();
-    const { rerender } = render(<SidCard {...defaultProps} onVolumeCommit={commit} onVolumeChange={change} />);
+    render(<SidCard {...defaultProps} onVolumeCommit={commit} onVolumeChange={change} />);
     const sliders = screen.getAllByTestId("slider");
     const volSlider = sliders[0]; // First one is volume
     const input = volSlider.querySelector("input")!;
 
     fireEvent.change(input, { target: { value: "10" } });
     expect(change).toHaveBeenCalledWith(10);
-
-    // Update props to reflect change for controlled component
-    rerender(<SidCard {...defaultProps} volume={10} onVolumeCommit={commit} onVolumeChange={change} />);
 
     fireEvent.mouseUp(input);
     expect(commit).toHaveBeenCalledWith(10);
@@ -165,14 +164,14 @@ describe("SidCard", () => {
 
   it("handles pan commit interaction", () => {
     const commit = vi.fn();
-    const { rerender } = render(<SidCard {...defaultProps} onPanCommit={commit} />);
+    render(<SidCard {...defaultProps} onPanCommit={commit} />);
     const sliders = screen.getAllByTestId("slider");
     const panSlider = sliders[1];
     const input = panSlider.querySelector("input")!;
 
-    rerender(<SidCard {...defaultProps} pan={30} onPanCommit={commit} />);
+    fireEvent.change(input, { target: { value: "30" } });
     fireEvent.mouseUp(input);
-    expect(commit).toHaveBeenCalled();
+    expect(commit).toHaveBeenCalledWith(30);
   });
 
   it("disables controls when disconnected or pending", () => {

@@ -20,6 +20,7 @@ const {
   mockTelnetConnect,
   mockTelnetReadScreen,
   mockTelnetDisconnect,
+  mockWithTelnetInteraction,
 } = vi.hoisted(() => ({
   mockGetInfo: vi.fn(),
   mockReadMemory: vi.fn(),
@@ -30,6 +31,7 @@ const {
   mockTelnetConnect: vi.fn(),
   mockTelnetReadScreen: vi.fn(),
   mockTelnetDisconnect: vi.fn(),
+  mockWithTelnetInteraction: vi.fn(),
 }));
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
@@ -110,6 +112,10 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: vi.fn(() => ({ state: "REAL_CONNECTED" })),
 }));
 
+vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
+  withTelnetInteraction: mockWithTelnetInteraction,
+}));
+
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
@@ -123,6 +129,7 @@ import {
 } from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
+import type { ScreenCell } from "@/lib/telnet/telnetTypes";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -148,6 +155,18 @@ const telnetScreen = {
   selectedItem: null,
   titleLine: "Ultimate-II+ V3.11 - C64 Ultimate",
   screenType: "file_browser" as const,
+};
+
+const createTelnetCells = (text: string, row = 0, width = 60, height = 24): ScreenCell[][] => {
+  const cells = Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => ({ char: " ", reverse: false, color: 7 })),
+  );
+  text.split("").forEach((char, index) => {
+    if (index < width) {
+      cells[row]![index] = { char, reverse: false, color: 7 };
+    }
+  });
+  return cells;
 };
 
 const setupAllProbesSuccess = () => {
@@ -178,6 +197,8 @@ beforeEach(() => {
   mockTelnetConnect.mockReset();
   mockTelnetReadScreen.mockReset();
   mockTelnetDisconnect.mockReset();
+  mockWithTelnetInteraction.mockReset();
+  mockWithTelnetInteraction.mockImplementation((_meta: unknown, handler: () => Promise<unknown>) => handler());
   vi.clearAllMocks();
   clearHealthHistory();
   resetHealthCheckStateSnapshot();
@@ -233,6 +254,19 @@ describe("runHealthCheck — all-success path", () => {
     const result = await runHealthCheck();
     expect(result!.deviceInfo?.product).toBe("Ultimate 64 Elite");
     expect(result!.deviceInfo?.firmware).toBe("3.11");
+  });
+
+  it("bypasses REST circuit blocking for the diagnostic REST probe", async () => {
+    setupAllProbesSuccess();
+
+    await runHealthCheck();
+
+    expect(mockGetInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        __c64uBypassBackoff: true,
+        __c64uBypassCircuit: true,
+      }),
+    );
   });
 
   it("derives uptime from JIFFY bytes", async () => {
@@ -943,7 +977,7 @@ describe("runHealthCheck — FTP probe", () => {
 });
 
 describe("runHealthCheck — TELNET probe", () => {
-  it("fails TELNET when the session returns an unexpected screen title", async () => {
+  it("accepts TELNET when the session shows visible text even without an Ultimate banner", async () => {
     setupAllProbesSuccess();
     mockTelnetReadScreen.mockResolvedValue({
       ...telnetScreen,
@@ -952,22 +986,37 @@ describe("runHealthCheck — TELNET probe", () => {
 
     const result = await runHealthCheck();
 
-    expect(result!.probes.TELNET.outcome).toBe("Fail");
-    expect(result!.probes.TELNET.reason).toContain("Unexpected Telnet screen");
+    expect(result!.probes.TELNET.outcome).toBe("Success");
   });
 
-  it("fails TELNET when the session returns a blank screen title", async () => {
+  it("fails TELNET when the session returns no visible output", async () => {
     setupAllProbesSuccess();
     mockTelnetReadScreen.mockResolvedValue({
       ...telnetScreen,
       titleLine: "   ",
+      screenType: "unknown",
     });
 
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Fail");
-    expect(result!.probes.TELNET.reason).toBe("Unexpected blank Telnet screen");
+    expect(result!.probes.TELNET.reason).toBe("No telnet response");
     expect(mockTelnetReadScreen).toHaveBeenCalledTimes(5);
+  });
+
+  it("accepts TELNET when the title is blank but the screen still contains visible text", async () => {
+    setupAllProbesSuccess();
+    mockTelnetReadScreen.mockResolvedValue({
+      ...telnetScreen,
+      titleLine: "   ",
+      cells: createTelnetCells("Directory /USB1"),
+      screenType: "unknown",
+    });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Success");
+    expect(mockTelnetReadScreen).toHaveBeenCalledTimes(1);
   });
 
   it("accepts a later valid TELNET screen after blank initial reads", async () => {
@@ -976,10 +1025,12 @@ describe("runHealthCheck — TELNET probe", () => {
       .mockResolvedValueOnce({
         ...telnetScreen,
         titleLine: "   ",
+        screenType: "unknown",
       })
       .mockResolvedValueOnce({
         ...telnetScreen,
         titleLine: "",
+        screenType: "unknown",
       })
       .mockResolvedValueOnce(telnetScreen);
 
@@ -998,8 +1049,21 @@ describe("runHealthCheck — TELNET probe", () => {
 
     const result = await runHealthCheck();
 
-    expect(result!.probes.TELNET.outcome).toBe("Fail");
-    expect(result!.probes.TELNET.reason).toContain("Unrecognized Telnet screen");
+    expect(result!.probes.TELNET.outcome).toBe("Success");
+  });
+
+  it("runs TELNET through the shared Telnet interaction scheduler", async () => {
+    setupAllProbesSuccess();
+
+    await runHealthCheck();
+
+    expect(mockWithTelnetInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionId: "health-check",
+        intent: "system",
+      }),
+      expect.any(Function),
+    );
   });
 
   it("fails TELNET when the session connect step throws", async () => {

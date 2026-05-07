@@ -396,12 +396,12 @@ describe("c64api branches", () => {
     await expect(api.getInfo({ signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  // #3: waitWithAbortSignal timeout and abort listener
-  it("resolves after timeout in waitWithAbortSignal during retry", async () => {
+  // #3: scheduled retry path after a timeout/network failure
+  it("retries background GET requests after a scheduled timeout", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(okJsonResponse());
+      fetchMock.mockImplementationOnce(() => new Promise<Response>(() => {})).mockResolvedValueOnce(okJsonResponse());
 
       deviceStateSnapshotMock.mockReturnValue({
         state: "READY",
@@ -414,8 +414,8 @@ describe("c64api branches", () => {
       });
 
       const api = new C64API("http://c64u");
-      const pending = api.getInfo();
-      await vi.advanceTimersByTimeAsync(200);
+      const pending = api.getInfo({ __c64uIntent: "background", __c64uBypassCache: true });
+      await vi.advanceTimersByTimeAsync(3000);
       await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
@@ -530,41 +530,21 @@ describe("c64api branches", () => {
     fetchMock.mockResolvedValue(okJsonResponse());
 
     const api = new C64API("http://c64u");
-    // POST with a non-JSON string body triggers the extractRequestBody string path
-    await api.updateConfigBatch({} as Record<string, Record<string, string | number>>);
-    // The body is JSON.stringify({}), which is valid JSON, so won't fail.
-    // We need to test with an invalid JSON string body. Use the request method
-    // indirectly via a PUT with a string body.
-    // Actually we can check that valid JSON works, and for the failing path,
-    // we need to mock JSON.parse to fail. Let's do a simpler approach:
-
-    // Reset and test with a body that isn't valid JSON
-    fetchMock.mockReset();
-    fetchMock.mockResolvedValue(okJsonResponse());
     addLogMock.mockReset();
 
-    const origParse = JSON.parse;
-    let parseCallCount = 0;
-    JSON.parse = function (...args: Parameters<typeof origParse>) {
-      parseCallCount++;
-      // Fail on the first call which is extractRequestBody trying to parse the body
-      if (parseCallCount === 1) {
-        throw new Error("parse failed");
-      }
-      return origParse.apply(this, args);
-    } as typeof JSON.parse;
+    await (api as unknown as { request: (path: string, options: RequestInit) => Promise<unknown> }).request(
+      "/v1/test",
+      {
+        method: "POST",
+        body: "{not-valid-json",
+      },
+    );
 
-    try {
-      // updateConfigBatch sends JSON.stringify(payload) as body string
-      await api.updateConfigBatch({ Audio: { Volume: "0 dB" } });
-      expect(addLogMock).toHaveBeenCalledWith(
-        "warn",
-        "Failed to parse request body JSON",
-        expect.objectContaining({ error: "parse failed" }),
-      );
-    } finally {
-      JSON.parse = origParse;
-    }
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse request body JSON",
+      expect.objectContaining({ error: expect.any(String) }),
+    );
   });
 
   // #9: extractRequestBody with FormData containing File, Blob, and text fields
@@ -800,7 +780,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -867,7 +847,7 @@ describe("c64api branches", () => {
       const controller = new AbortController();
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => { });
+      void pending.catch(() => {});
 
       // Let the first request fail, then abort before retry
       await Promise.resolve();
@@ -902,7 +882,7 @@ describe("c64api branches", () => {
   it("logs C64U_HTTP in fetchWithTimeout when smoke mode is enabled", async () => {
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
@@ -986,13 +966,32 @@ describe("c64api branches", () => {
   // #31: updateConfigBatch immediate mode
   it("runs updateConfigBatch immediately when immediate option is true", async () => {
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(okJsonResponse());
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/v1/configs/Audio")) {
+        return Promise.resolve(
+          okJsonResponse({
+            Audio: {
+              items: {
+                Volume: {
+                  selected: "0 dB",
+                  options: ["0 dB"],
+                },
+              },
+            },
+            errors: [],
+          }),
+        );
+      }
+      return Promise.resolve(okJsonResponse());
+    });
 
     const api = new C64API("http://c64u");
     const result = await api.updateConfigBatch({ Audio: { Volume: "0 dB" } }, { immediate: true });
     expect(result.errors).toEqual([]);
     expect(fetchMock).toHaveBeenCalled();
-    const [url, opts] = fetchMock.mock.calls[0];
+    const [, opts] = fetchMock.mock.calls.at(-1)!;
+    const [url] = fetchMock.mock.calls.at(-1)!;
     expect(opts.method).toBe("POST");
     expect(url).toContain("/v1/configs");
   });
@@ -1065,7 +1064,7 @@ describe("c64api branches", () => {
   // #37: updateC64APIConfig smoke mode branch
   it("logs routing update in smoke mode", () => {
     smokeEnabledMock.mockReturnValue(true);
-    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
     updateC64APIConfig("http://device", undefined, "device");
 
@@ -1656,7 +1655,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     const pending = api.getInfo({ timeoutMs: 1 } as any);
-    void pending.catch(() => { }); // suppress unhandled rejection
+    void pending.catch(() => {}); // suppress unhandled rejection
 
     await expect(pending).rejects.toThrow("Host unreachable");
     // Clean up the hanging promise to prevent memory leaks

@@ -216,8 +216,38 @@ export const createLocalSourceFromPicker = async (
     }
   ).showDirectoryPicker;
   if (!picker) {
-    input?.click();
-    return null;
+    if (!input) {
+      return null;
+    }
+
+    return await new Promise<LocalSourceBuildResult | null>((resolve) => {
+      let settled = false;
+
+      const finish = (result: LocalSourceBuildResult | null) => {
+        if (settled) return;
+        settled = true;
+        input.removeEventListener("change", handleChange);
+        window.removeEventListener("focus", handleWindowFocus, true);
+        resolve(result);
+      };
+
+      const handleChange = () => {
+        const files = input.files ? Array.from(input.files) : [];
+        finish(files.length ? createLocalSourceFromFileList(files) : null);
+      };
+
+      const handleWindowFocus = () => {
+        window.setTimeout(() => {
+          if (settled) return;
+          const files = input.files ? Array.from(input.files) : [];
+          finish(files.length ? createLocalSourceFromFileList(files) : null);
+        }, 0);
+      };
+
+      input.addEventListener("change", handleChange, { once: true });
+      window.addEventListener("focus", handleWindowFocus, true);
+      input.click();
+    });
   }
 
   const directoryHandle = await picker();

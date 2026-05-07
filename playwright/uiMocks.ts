@@ -106,7 +106,11 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       };
 
       try {
-        delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
+        Object.defineProperty(window, "showDirectoryPicker", {
+          configurable: true,
+          writable: true,
+          value: undefined,
+        });
       } catch (error) {
         console.warn("Unable to clear showDirectoryPicker", error);
       }
@@ -219,6 +223,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           localStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");
           localStorage.setItem("c64u_feature_flag:commoserve_enabled", "1");
           localStorage.setItem("c64u_feature_flag:lighting_studio_enabled", "1");
+          localStorage.setItem("c64u_feature_flag:ram_snapshots_enabled", "1");
         }
       } catch {
         return;
@@ -236,7 +241,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       window.__hvscMock__ = {
         addListener: (_event: string, listener: (event: any) => void) => {
           listeners.push(listener);
-          return { remove: async () => {} };
+          return { remove: async () => { } };
         },
         getHvscStatus: async () => ({
           installedBaselineVersion: 83,
@@ -262,7 +267,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
-        cancelHvscInstall: async () => {},
+        cancelHvscInstall: async () => { },
         getHvscFolderListing: async ({ path }: { path: string }) => {
           const normalized = path || "/";
           if (normalized === "/") {

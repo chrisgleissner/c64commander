@@ -5,6 +5,7 @@ docs/research/**/artifacts/**
 docs/research/**/rollout-artifacts/**
 docs/research/**/metrics/**
 docs/research/**/screenshots/**
+docs/research/**/baseline/**
 coverage/**
 src/lib/config/featureFlagsRegistry.generated.ts
 .cov-*/**

@@ -17,10 +17,11 @@ import type {
   TelnetScreen,
   TelnetSessionApi,
 } from "@/lib/telnet/telnetTypes";
-import { TELNET_ACTIONS, TELNET_ACTION_IDS, TelnetError } from "@/lib/telnet/telnetTypes";
+import { getFallbackTelnetMenuKey, TELNET_ACTIONS, TELNET_ACTION_IDS, TelnetError } from "@/lib/telnet/telnetTypes";
 
 const LOG_TAG = "TelnetCapabilityDiscovery";
 const STEP_TIMEOUT_MS = 700;
+const MAX_OPEN_MENU_READS = 3;
 
 export type TelnetSupportStatus = "supported" | "unsupported" | "unknown";
 
@@ -174,13 +175,38 @@ const describeDirectEntry = (screen: TelnetScreen): TelnetDiscoveredDirectEntry 
 };
 
 const openActionMenu = async (session: TelnetSessionApi, menuKey: TelnetMenuKey) => {
+  const readUntilMenuVisible = async () => {
+    let lastScreen: TelnetScreen | null = null;
+    for (let attempt = 0; attempt < MAX_OPEN_MENU_READS; attempt += 1) {
+      lastScreen = await session.readScreen(STEP_TIMEOUT_MS);
+      if (lastScreen && findTopMenu(lastScreen)) {
+        return lastScreen;
+      }
+    }
+    return lastScreen;
+  };
+
   await session.sendKey(menuKey);
-  let screen = await session.readScreen(STEP_TIMEOUT_MS);
+  let screen = await readUntilMenuVisible();
   if (findTopMenu(screen)) return screen;
   await session.sendKey(menuKey);
-  screen = await session.readScreen(STEP_TIMEOUT_MS);
+  screen = await readUntilMenuVisible();
   if (findTopMenu(screen)) return screen;
-  throw new TelnetError(`Action menu not visible after ${menuKey}`, "MENU_NOT_FOUND", { menuKey });
+  const fallbackMenuKey = getFallbackTelnetMenuKey(menuKey);
+  addLog("warn", `${LOG_TAG}: action menu not visible after preferred key, trying alternate key`, {
+    menuKey,
+    fallbackMenuKey,
+  });
+  await session.sendKey(fallbackMenuKey);
+  screen = await readUntilMenuVisible();
+  if (findTopMenu(screen)) return screen;
+  await session.sendKey(fallbackMenuKey);
+  screen = await readUntilMenuVisible();
+  if (findTopMenu(screen)) return screen;
+  throw new TelnetError(`Action menu not visible after ${menuKey} or ${fallbackMenuKey}`, "MENU_NOT_FOUND", {
+    fallbackMenuKey,
+    menuKey,
+  });
 };
 
 const navigateToMenuIndex = async (

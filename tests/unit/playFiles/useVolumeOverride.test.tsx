@@ -176,10 +176,7 @@ describe("useVolumeOverride", () => {
     ]);
   });
 
-  it("rate-limits rapid previews and skips duplicate pending writes", async () => {
-    let nowMs = 1_000;
-    vi.spyOn(Date, "now").mockImplementation(() => nowMs);
-
+  it("skips duplicate pending preview writes once the latest intent is already in flight", async () => {
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }),
     );
@@ -189,25 +186,23 @@ describe("useVolumeOverride", () => {
       expect(result.current.volumeState.muted).toBe(false);
     });
 
-    act(() => {
-      result.current.handleVolumeAsyncChange(1);
+    await act(async () => {
+      await result.current.handleVolumeAsyncChange(1);
     });
 
     await waitFor(() => {
       expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
     });
 
-    act(() => {
-      result.current.handleVolumeAsyncChange(1);
+    await act(async () => {
+      await result.current.handleVolumeAsyncChange(1);
     });
 
     expect(addLog).toHaveBeenCalledWith(
       "debug",
-      "Play volume preview suppressed by configured rate limit",
-      expect.objectContaining({ index: 1, previewIntervalMs: 200 }),
+      "Play volume write skipped while identical write is pending",
+      expect.objectContaining({ context: "Volume preview", index: 1, muted: false }),
     );
-
-    nowMs += 250;
 
     act(() => {
       result.current.handleVolumeAsyncChange(1);

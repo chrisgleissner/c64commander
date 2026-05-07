@@ -33,6 +33,10 @@ Source: <https://docs.maestro.dev/api-reference/commands>
 - `smoke-launch`: Boots app and verifies baseline UI responsiveness on emulator/device.
 - `smoke-hvsc`: Verifies HVSC integration smoke path (browse/import surface) on Android.
 
+### Android flow details (manual edge coverage)
+
+- `edge-home-cpu-speed-latency`: Sweeps the Home CPU Speed slider twice against a real device, verifies the local value sticks, re-enters Home to confirm the authoritative device value matches, and records exact release/completion timing in logcat via `C64U_HOME_CPU_SPEED_SLIDER_*`.
+
 ### iPhone flow details (CI)
 
 - `ios-ci-smoke`: Launches the app, proves Settings and Play are reachable on iOS, and verifies the source chooser exposes the expected Local and C64U options.

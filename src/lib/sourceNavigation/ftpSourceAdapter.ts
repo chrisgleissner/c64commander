@@ -170,10 +170,10 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
   }
 };
 
-export const createUltimateSourceLocation = (): SourceLocation => ({
+export const createUltimateSourceLocation = (options?: { name?: string }): SourceLocation => ({
   id: "ultimate",
   type: "ultimate",
-  name: SOURCE_LABELS.c64u,
+  name: options?.name?.trim() || SOURCE_LABELS.c64u,
   rootPath: "/",
   isAvailable: true,
   listEntries,

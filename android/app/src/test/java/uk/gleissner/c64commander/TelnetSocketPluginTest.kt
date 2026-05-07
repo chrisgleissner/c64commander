@@ -278,6 +278,42 @@ class TelnetSocketPluginTest {
   }
 
   @Test
+  fun readCoalescesSplitPayloadWithinRequestedTimeout() {
+    val socket =
+            FakeSocket(
+                    input =
+                            SequencedInputStream(
+                                    listOf(
+                                            "ULTIMATE ".toByteArray(),
+                                            "64\r\n".toByteArray(),
+                                            null,
+                                    ),
+                            ),
+            )
+    plugin.socketFactory = { socket }
+
+    val connectCall = mock(PluginCall::class.java)
+    `when`(connectCall.getString("host")).thenReturn("c64u")
+    plugin.connect(connectCall)
+
+    val readCall = mock(PluginCall::class.java)
+    `when`(readCall.getInt("timeoutMs")).thenReturn(250)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(readCall)
+            .resolve(any())
+
+    plugin.read(readCall)
+
+    val decoded = String(Base64.decode(resolved?.getString("data"), Base64.DEFAULT))
+    assertEquals("ULTIMATE 64\r\n", decoded)
+    assertEquals(250, socket.soTimeoutValue)
+  }
+
+  @Test
   fun readReturnsEmptyPayloadOnSocketTimeout() {
     val socket =
             FakeSocket(
@@ -445,4 +481,30 @@ private class TrackingOutputStream(
   }
 
   fun writtenBytes(): ByteArray = buffer.toByteArray()
+}
+
+private class SequencedInputStream(
+        private val chunks: List<ByteArray?>,
+        private val closeFailure: Exception? = null,
+) : InputStream() {
+  private var index = 0
+
+  override fun read(): Int {
+    throw UnsupportedOperationException("Single-byte reads are not used in this test")
+  }
+
+  override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+    if (index >= chunks.size) {
+      throw SocketTimeoutException("timed out")
+    }
+
+    val chunk = chunks[index++] ?: throw SocketTimeoutException("timed out")
+    val bytesToCopy = minOf(length, chunk.size)
+    chunk.copyInto(buffer, destinationOffset = offset, startIndex = 0, endIndex = bytesToCopy)
+    return bytesToCopy
+  }
+
+  override fun close() {
+    closeFailure?.let { throw it }
+  }
 }

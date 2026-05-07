@@ -38,4 +38,20 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  // Telnet and diagnostics paths must use structured addLog/addErrorLog,
+  // never raw console.log. console.log lands as a JNI-bridged
+  // "Msg: undefined" line in Android logcat when the first arg is undefined,
+  // which the responsiveness research flagged as overhead during Telnet
+  // activity.
+  {
+    files: ["src/lib/telnet/**/*.{ts,tsx}", "src/lib/diagnostics/**/*.{ts,tsx}"],
+    rules: {
+      "no-console": [
+        "error",
+        {
+          allow: ["warn", "error", "info", "debug"],
+        },
+      ],
+    },
+  },
 );

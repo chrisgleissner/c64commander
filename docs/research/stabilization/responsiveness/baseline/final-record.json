@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-05-07T00:07:41Z",
+  "package": "uk.gleissner.c64commander",
+  "coldStart": {
+    "totalTimeMs": 706,
+    "launchState": "COLD"
+  },
+  "logcatNoise": {
+    "mimeMapLongMonitorContentionMaxMs": 305,
+    "mimeMapLongMonitorContentionEvents": 2,
+    "enoentSmokeJson": 0,
+    "capacitorHttpHandlingLines": 1,
+    "capacitorCookiesGettingLines": 1,
+    "msgUndefinedLines": 0
+  }
+}
+{
+  "timestamp": "2026-05-07T00:07:50Z",
+  "package": "uk.gleissner.c64commander",
+  "coldStart": {
+    "totalTimeMs": 650,
+    "launchState": "COLD"
+  },
+  "logcatNoise": {
+    "mimeMapLongMonitorContentionMaxMs": 402,
+    "mimeMapLongMonitorContentionEvents": 5,
+    "enoentSmokeJson": 0,
+    "capacitorHttpHandlingLines": 2,
+    "capacitorCookiesGettingLines": 2,
+    "msgUndefinedLines": 0
+  }
+}
+{
+  "timestamp": "2026-05-07T00:07:59Z",
+  "package": "uk.gleissner.c64commander",
+  "coldStart": {
+    "totalTimeMs": 725,
+    "launchState": "COLD"
+  },
+  "logcatNoise": {
+    "mimeMapLongMonitorContentionMaxMs": 402,
+    "mimeMapLongMonitorContentionEvents": 7,
+    "enoentSmokeJson": 0,
+    "capacitorHttpHandlingLines": 3,
+    "capacitorCookiesGettingLines": 3,
+    "msgUndefinedLines": 0
+  }
+}
+{
+  "timestamp": "2026-05-07T00:08:08Z",
+  "package": "uk.gleissner.c64commander",
+  "coldStart": {
+    "totalTimeMs": 661,
+    "launchState": "COLD"
+  },
+  "logcatNoise": {
+    "mimeMapLongMonitorContentionMaxMs": 402,
+    "mimeMapLongMonitorContentionEvents": 8,
+    "enoentSmokeJson": 0,
+    "capacitorHttpHandlingLines": 5,
+    "capacitorCookiesGettingLines": 5,
+    "msgUndefinedLines": 0
+  }
+}
+{
+  "timestamp": "2026-05-07T00:08:17Z",
+  "package": "uk.gleissner.c64commander",
+  "coldStart": {
+    "totalTimeMs": 700,
+    "launchState": "COLD"
+  },
+  "logcatNoise": {
+    "mimeMapLongMonitorContentionMaxMs": 402,
+    "mimeMapLongMonitorContentionEvents": 10,
+    "enoentSmokeJson": 0,
+    "capacitorHttpHandlingLines": 7,
+    "capacitorCookiesGettingLines": 7,
+    "msgUndefinedLines": 0
+  }
+}

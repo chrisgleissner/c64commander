@@ -20,6 +20,8 @@ const READ_CHUNK_SIZE_BYTES = 0x1000;
 const WRITE_CHUNK_SIZE_BYTES = 0x1000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
+const CIA2_VOLATILE_START = 0xdd02;
+const CIA2_VOLATILE_END_EXCLUSIVE = 0xde00;
 
 type RamRange = {
   start: number;
@@ -353,11 +355,11 @@ export const clearRamAndReboot = async (api: C64API) => {
     await writeRanges(api, zeroBlock, CLEAR_RAM_RANGES);
     await withRetry("Reboot machine", () => api.machineReboot());
     await delay(800);
-    await ensureLiveness(api, "Reboot (Clear RAM)");
+    await ensureLiveness(api, "Reboot (Clr Mem)");
     rebooted = true;
     paused = false;
   } catch (error) {
-    operationError = asError(error, "Reboot (Clear RAM) failed");
+    operationError = asError(error, "Reboot (Clr Mem) failed");
   } finally {
     if (paused && !rebooted) {
       try {
@@ -373,13 +375,13 @@ export const clearRamAndReboot = async (api: C64API) => {
   }
 
   if (operationError && resumeFailure) {
-    throw new Error(`Reboot (Clear RAM) failed: ${operationError.message}; resume failed: ${resumeFailure.message}`);
+    throw new Error(`Reboot (Clr Mem) failed: ${operationError.message}; resume failed: ${resumeFailure.message}`);
   }
   if (operationError) {
-    throw new Error(`Reboot (Clear RAM) failed: ${operationError.message}`);
+    throw new Error(`Reboot (Clr Mem) failed: ${operationError.message}`);
   }
   if (resumeFailure) {
-    throw new Error(`Reboot (Clear RAM) failed while resuming: ${resumeFailure.message}`);
+    throw new Error(`Reboot (Clr Mem) failed while resuming: ${resumeFailure.message}`);
   }
 };
 
@@ -404,7 +406,18 @@ export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: numbe
   await runPaused(api, "Load RAM Snapshot", async () => {
     const image = await readRanges(api, FULL_RAM_RANGE, onRetry);
     for (const { start, bytes } of ranges) {
-      image.set(bytes, start);
+      let sourceOffset = 0;
+      while (sourceOffset < bytes.length) {
+        const absoluteStart = start + sourceOffset;
+        if (absoluteStart >= CIA2_VOLATILE_START && absoluteStart < CIA2_VOLATILE_END_EXCLUSIVE) {
+          sourceOffset = Math.min(bytes.length, CIA2_VOLATILE_END_EXCLUSIVE - start);
+          continue;
+        }
+        const nextVolatileStart =
+          absoluteStart < CIA2_VOLATILE_START ? Math.min(bytes.length, CIA2_VOLATILE_START - start) : bytes.length;
+        image.set(bytes.subarray(sourceOffset, nextVolatileStart), absoluteStart);
+        sourceOffset = nextVolatileStart;
+      }
     }
     await writeFullImage(api, image, onRetry);
   });

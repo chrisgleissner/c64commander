@@ -192,8 +192,12 @@ describe("C64API getConfigItems", () => {
       errors: [],
     });
     expect(getConfigItem).toHaveBeenCalledTimes(2);
-    expect(getConfigItem).toHaveBeenNthCalledWith(1, "LED Strip Settings", "LedStrip Mode", {});
-    expect(getConfigItem).toHaveBeenNthCalledWith(2, "LED Strip Settings", "Fixed Color", {});
+    expect(getConfigItem).toHaveBeenNthCalledWith(1, "LED Strip Settings", "LedStrip Mode", {
+      __c64uExpectedMissing: true,
+    });
+    expect(getConfigItem).toHaveBeenNthCalledWith(2, "LED Strip Settings", "Fixed Color", {
+      __c64uExpectedMissing: true,
+    });
   });
 
   it("enriches scalar audio mixer items so Home SID sliders receive real ranges and positions", async () => {
@@ -257,8 +261,29 @@ describe("C64API getConfigItems", () => {
       errors: [],
     });
     expect(getConfigItem).toHaveBeenCalledTimes(2);
-    expect(getConfigItem).toHaveBeenNthCalledWith(1, "Audio Mixer", "Vol Socket 1", {});
-    expect(getConfigItem).toHaveBeenNthCalledWith(2, "Audio Mixer", "Pan Socket 1", {});
+    expect(getConfigItem).toHaveBeenNthCalledWith(1, "Audio Mixer", "Vol Socket 1", {
+      __c64uExpectedMissing: true,
+    });
+    expect(getConfigItem).toHaveBeenNthCalledWith(2, "Audio Mixer", "Pan Socket 1", {
+      __c64uExpectedMissing: true,
+    });
+  });
+
+  it("treats a missing category as unavailable without probing every requested item", async () => {
+    const api = new C64API("http://127.0.0.1");
+
+    vi.spyOn(api, "getCategory").mockRejectedValue(new Error("HTTP 404"));
+    const getConfigItem = vi.spyOn(api, "getConfigItem");
+
+    const response = await api.getConfigItems("Optional Category", ["A", "B", "C"]);
+
+    expect(response).toEqual({
+      "Optional Category": {
+        items: {},
+      },
+      errors: [],
+    });
+    expect(getConfigItem).not.toHaveBeenCalled();
   });
 });
 
@@ -311,6 +336,32 @@ describe("C64API request identity", () => {
   });
 
   it("does not dedupe repeated writes even when their path is identical", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/v1/configs/Audio%20Mixer")) {
+          return new Response(
+            JSON.stringify({
+              "Audio Mixer": {
+                items: {
+                  "Vol Socket 1": {
+                    selected: "0 dB",
+                    options: ["0 dB"],
+                  },
+                },
+              },
+              errors: [],
+            } satisfies ConfigResponse),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
     const api = new C64API("http://127.0.0.1");
 
     await Promise.all([
@@ -318,7 +369,10 @@ describe("C64API request identity", () => {
       api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }, { immediate: true }),
     ]);
 
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(2);
+    const writeCalls = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.filter(([input, init]) => String(input).endsWith("/v1/configs") && init?.method === "POST");
+    expect(writeCalls).toHaveLength(2);
   });
 
   it("does not dedupe GET bursts when query parameters differ by address", async () => {

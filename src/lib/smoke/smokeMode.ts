@@ -186,24 +186,38 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
   let config = readSmokeConfigFromStorage();
 
   if (!config && shouldReadSmokeConfigFromFilesystem()) {
+    // Probe via Filesystem.stat first so a missing optional file does not
+    // throw a FileNotFoundException through the JNI bridge into ERROR
+    // logcat on every cold launch.
+    let smokeFileExists = false;
     try {
-      const result = await Filesystem.readFile({
+      await Filesystem.stat({
         path: SMOKE_CONFIG_FILENAME,
         directory: Directory.Data,
-        encoding: Encoding.UTF8,
       });
-      config = parseSmokeConfig(JSON.parse(result.data));
+      smokeFileExists = true;
     } catch (error) {
-      if (isMissingFileError(error)) {
-        addLog("debug", "Smoke config file not found; skipping native bootstrap", {
-          path: SMOKE_CONFIG_FILENAME,
-        });
-      } else {
-        addLog("warn", "Failed to read smoke config from filesystem", {
+      if (!isMissingFileError(error)) {
+        addLog("warn", "Failed to stat smoke config from filesystem", {
           error: (error as Error).message,
         });
       }
-      config = null;
+    }
+
+    if (smokeFileExists) {
+      try {
+        const result = await Filesystem.readFile({
+          path: SMOKE_CONFIG_FILENAME,
+          directory: Directory.Data,
+          encoding: Encoding.UTF8,
+        });
+        config = parseSmokeConfig(JSON.parse(result.data));
+      } catch (error) {
+        addLog("warn", "Failed to read smoke config from filesystem", {
+          error: (error as Error).message,
+        });
+        config = null;
+      }
     }
   }
 

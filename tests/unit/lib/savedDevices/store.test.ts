@@ -20,12 +20,14 @@ const seedLegacyStorage = () => {
 describe("savedDevices store", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.unstubAllEnvs();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-09T12:00:00.000Z"));
     localStorage.clear();
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.useRealTimers();
   });
 
@@ -83,6 +85,62 @@ describe("savedDevices store", () => {
       host: "c64u",
       telnetPort: 23,
     });
+  });
+
+  it("uses the debug bootstrap devices for a fresh install when configured", async () => {
+    vi.stubEnv(
+      "VITE_DEBUG_SAVED_DEVICES_JSON",
+      JSON.stringify([
+        {
+          id: "debug-u64",
+          name: "u64",
+          nameSource: "USER",
+          host: "192.168.1.13",
+          httpPort: 80,
+          ftpPort: 21,
+          telnetPort: 23,
+          hasPassword: false,
+        },
+        {
+          id: "debug-c64u",
+          name: "c64u",
+          nameSource: "USER",
+          host: "192.168.1.167",
+          httpPort: 80,
+          ftpPort: 21,
+          telnetPort: 23,
+          hasPassword: false,
+        },
+      ]),
+    );
+
+    const store = await loadStore();
+    const initialSnapshot = store.getSavedDevicesSnapshot();
+
+    expect(initialSnapshot.selectedDeviceId).toBe("debug-u64");
+    expect(initialSnapshot.hasEverHadMultipleDevices).toBe(true);
+    expect(initialSnapshot.devices).toMatchObject([
+      {
+        id: "debug-u64",
+        name: "u64",
+        nameSource: "USER",
+        host: "192.168.1.13",
+        httpPort: 80,
+        ftpPort: 21,
+        telnetPort: 23,
+        hasPassword: false,
+      },
+      {
+        id: "debug-c64u",
+        name: "c64u",
+        nameSource: "USER",
+        host: "192.168.1.167",
+        httpPort: 80,
+        ftpPort: 21,
+        telnetPort: 23,
+        hasPassword: false,
+      },
+    ]);
   });
 
   it("derives product-based auto names and enforces unique final labels", async () => {

@@ -7,7 +7,7 @@
  */
 
 import type { TelnetSessionApi, TelnetScreen, MenuPath, NavigatorState, ParsedMenu } from "@/lib/telnet/telnetTypes";
-import { TelnetError } from "@/lib/telnet/telnetTypes";
+import { getFallbackTelnetMenuKey, TelnetError } from "@/lib/telnet/telnetTypes";
 import { addLog } from "@/lib/logging";
 
 const LOG_TAG = "TelnetMenuNavigator";
@@ -20,6 +20,9 @@ const STEP_READ_TIMEOUT_MS = 500;
 
 /** Extra reads to tolerate transient blank redraws between keypresses */
 const MAX_TRANSIENT_READS = 3;
+
+/** Extra reads to tolerate delayed action-menu redraws after the open-menu key */
+const MAX_OPEN_MENU_READS = 3;
 
 /** Maximum ESCAPE presses to recover from desync */
 const MAX_ESCAPE_RECOVERY = 5;
@@ -140,19 +143,47 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
 
   /** Open the action menu with the correct F-key, with retry */
   async function openActionMenu(menuKey: "F5" | "F1", checkTimeout: () => void): Promise<TelnetScreen> {
+    const readUntilMenuVisible = async () => {
+      let lastScreen: TelnetScreen | null = null;
+      for (let attempt = 0; attempt < MAX_OPEN_MENU_READS; attempt += 1) {
+        lastScreen = await session.readScreen(STEP_READ_TIMEOUT_MS);
+        checkTimeout();
+        if (lastScreen && findTopMenu(lastScreen)) {
+          return lastScreen;
+        }
+      }
+      return lastScreen;
+    };
+
     await session.sendKey(menuKey);
-    let screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
-    checkTimeout();
+    let screen = await readUntilMenuVisible();
 
     if (!findTopMenu(screen)) {
       // Retry once
       addLog("warn", `${LOG_TAG}: menu not visible after ${menuKey}, retrying`);
       await session.sendKey(menuKey);
-      screen = await session.readScreen(STEP_READ_TIMEOUT_MS);
-      checkTimeout();
+      screen = await readUntilMenuVisible();
 
       if (!findTopMenu(screen)) {
-        throw new TelnetError(`Action menu not visible after ${menuKey} (tried twice)`, "MENU_NOT_FOUND", { menuKey });
+        const fallbackMenuKey = getFallbackTelnetMenuKey(menuKey);
+        addLog("warn", `${LOG_TAG}: menu not visible after ${menuKey}, trying alternate key`, {
+          fallbackMenuKey,
+          menuKey,
+        });
+        await session.sendKey(fallbackMenuKey);
+        screen = await readUntilMenuVisible();
+
+        if (!findTopMenu(screen)) {
+          await session.sendKey(fallbackMenuKey);
+          screen = await readUntilMenuVisible();
+        }
+
+        if (!findTopMenu(screen)) {
+          throw new TelnetError(`Action menu not visible after ${menuKey} or ${fallbackMenuKey}`, "MENU_NOT_FOUND", {
+            fallbackMenuKey,
+            menuKey,
+          });
+        }
       }
     }
 

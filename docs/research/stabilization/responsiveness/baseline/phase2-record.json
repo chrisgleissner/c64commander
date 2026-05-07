@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-05-06T23:29:15Z",
+  "package": "uk.gleissner.c64commander",
+  "coldStart": {
+    "totalTimeMs": 698,
+    "launchState": "COLD"
+  },
+  "logcatNoise": {
+    "mimeMapLongMonitorContentionMaxMs": 310,
+    "mimeMapLongMonitorContentionEvents": 2,
+    "enoentSmokeJson": 0,
+    "capacitorHttpHandlingLines": 1,
+    "capacitorCookiesGettingLines": 1,
+    "msgUndefinedLines": 0
+  }
+}

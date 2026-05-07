@@ -24,8 +24,13 @@ EXTRACT_DIR="$SRC_ROOT/7zip"
 
 mkdir -p "$CACHE_DIR" "$SRC_ROOT" "$OUTPUT_DIR"
 
-# Skip everything if all compiled outputs already exist for this source version.
-OUTPUT_STAMP="$OUTPUT_DIR/.upstream-7zip-sha256"
+BUILD_DIR="$EXTRACT_DIR/CPP/7zip/Bundles/Alone2"
+COMMON_WARN_FLAGS="-Wno-sign-conversion -Wno-implicit-int-conversion -Wno-shorten-64-to-32"
+ANDROID_PAGE_SIZE_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
+BUILD_CONFIG_STAMP_CONTENT=$(printf '%s\n%s\n%s\n%s\n' "$SOURCE_SHA256" "$API_LEVEL" "$COMMON_WARN_FLAGS" "$ANDROID_PAGE_SIZE_LDFLAGS" | sha256sum | awk '{print $1}')
+
+# Skip everything if all compiled outputs already exist for the current build config.
+OUTPUT_STAMP="$OUTPUT_DIR/.upstream-7zip-build-config-sha256"
 all_outputs_exist=true
 for ABI in "${ABIS[@]}"; do
   if [[ ! -f "$OUTPUT_DIR/$ABI/lib7zz.so" ]]; then
@@ -33,8 +38,8 @@ for ABI in "${ABIS[@]}"; do
     break
   fi
 done
-if [[ "$all_outputs_exist" == "true" && -f "$OUTPUT_STAMP" && "$(cat "$OUTPUT_STAMP")" == "$SOURCE_SHA256" ]]; then
-  echo "All upstream 7-Zip outputs already exist for $SOURCE_SHA256, skipping build."
+if [[ "$all_outputs_exist" == "true" && -f "$OUTPUT_STAMP" && "$(cat "$OUTPUT_STAMP")" == "$BUILD_CONFIG_STAMP_CONTENT" ]]; then
+  echo "All upstream 7-Zip outputs already exist for current build config, skipping build."
   exit 0
 fi
 
@@ -72,9 +77,6 @@ resolve_compiler_prefix() {
   esac
 }
 
-BUILD_DIR="$EXTRACT_DIR/CPP/7zip/Bundles/Alone2"
-COMMON_WARN_FLAGS="-Wno-sign-conversion -Wno-implicit-int-conversion -Wno-shorten-64-to-32"
-
 for ABI in "${ABIS[@]}"; do
   PREFIX="$(resolve_compiler_prefix "$ABI")"
   CC="$TOOLCHAIN/${PREFIX}-clang"
@@ -84,8 +86,8 @@ for ABI in "${ABIS[@]}"; do
   mkdir -p "$BUILD_DIR/$OUT_DIR"
   make -C "$BUILD_DIR" \
     O="$OUT_DIR" \
-    CC="$CC -fPIC -D_GNU_SOURCE $COMMON_WARN_FLAGS" \
-    CXX="$CXX -fPIC -D_GNU_SOURCE -static-libstdc++ $COMMON_WARN_FLAGS" \
+    CC="$CC -fPIC -D_GNU_SOURCE $COMMON_WARN_FLAGS $ANDROID_PAGE_SIZE_LDFLAGS" \
+    CXX="$CXX -fPIC -D_GNU_SOURCE -static-libstdc++ $COMMON_WARN_FLAGS $ANDROID_PAGE_SIZE_LDFLAGS" \
     LIB2="-ldl" \
     DISABLE_RAR=1 \
     --file ../../cmpl_clang.mak \
@@ -96,4 +98,4 @@ for ABI in "${ABIS[@]}"; do
   chmod 755 "$OUTPUT_DIR/$ABI/lib7zz.so"
 done
 
-printf '%s' "$SOURCE_SHA256" > "$OUTPUT_STAMP"
+printf '%s' "$BUILD_CONFIG_STAMP_CONTENT" > "$OUTPUT_STAMP"

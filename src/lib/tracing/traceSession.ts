@@ -433,6 +433,7 @@ export const recordRestResponse = (
     durationMs: number;
     error: Error | null;
     errorMessage?: string | null;
+    expectedFailure?: boolean;
   },
 ) => {
   const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
@@ -453,6 +454,7 @@ export const recordRestResponse = (
     payloadPreview: sanitizePayloadPreview(payload.payloadPreview ?? null, payload.body ?? null),
     durationMs: payload.durationMs,
     error: errorMessage ? redactErrorMessage(errorMessage) : null,
+    expectedFailure: payload.expectedFailure === true,
   });
   if (location.normalizedPath && Number.isFinite(payload.durationMs)) {
     recordLatencySample("REST", location.normalizedPath, payload.durationMs);

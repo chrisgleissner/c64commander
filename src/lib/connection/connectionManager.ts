@@ -31,6 +31,8 @@ import { addLog } from "@/lib/logging";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
+import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
+import { normalizeTransportError } from "@/lib/c64api/transportErrors";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -95,10 +97,46 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
+const mdnsResolutionCache = new Map<string, { ip: string; expiresAtMs: number }>();
+
+const resolveDeviceHostForProbe = async (deviceHost: string): Promise<string> => {
+  if (!isMdnsAvailable()) return deviceHost;
+  if (!isBareHostname(deviceHost)) return deviceHost;
+
+  const cached = mdnsResolutionCache.get(deviceHost);
+  if (cached && cached.expiresAtMs > Date.now()) {
+    return cached.ip;
+  }
+
+  try {
+    const resolved = await resolveMdnsHost(deviceHost, { timeoutMs: 1500 });
+    mdnsResolutionCache.set(deviceHost, {
+      ip: resolved.ip,
+      expiresAtMs: Date.now() + Math.max(1000, resolved.ttlMs),
+    });
+    addLog("info", "Resolved bare hostname via mDNS", {
+      host: deviceHost,
+      resolvedHost: resolved.resolvedHost,
+      ip: resolved.ip,
+    });
+    return resolved.ip;
+  } catch (error) {
+    const failure = normalizeTransportError(error, { host: deviceHost });
+    addLog("warn", "mDNS resolution failed; falling back to system DNS", {
+      host: deviceHost,
+      class: failure.class,
+      message: failure.userMessage,
+      raw: failure.rawMessage,
+    });
+    return deviceHost;
+  }
+};
+
 const loadPersistedConnectionConfig = async () => {
   const password = await loadStoredPassword();
   const deviceHost = resolveDeviceHostFromStorage();
-  const baseUrl = buildBaseUrlFromDeviceHost(deviceHost);
+  const probeHost = await resolveDeviceHostForProbe(deviceHost);
+  const baseUrl = buildBaseUrlFromDeviceHost(probeHost === deviceHost ? deviceHost : probeHost);
   return { baseUrl, password: password ?? undefined, deviceHost };
 };
 
@@ -166,10 +204,24 @@ const probeWithFetch = async (
     if (!response.ok) return false;
     return isProbePayloadHealthy(payload);
   } catch (error) {
-    addLog("debug", "Discovery probe request failed", {
+    const host = (() => {
+      try {
+        return new URL(baseUrl).hostname;
+      } catch {
+        return undefined;
+      }
+    })();
+    const failure = normalizeTransportError(error, { host });
+    // Surface DNS failures at info level (was: debug, which produced silent
+    // OFFLINE on Android when a bare hostname couldn't resolve). Other
+    // transport classes stay at debug — they are noisy under flaky WiFi.
+    addLog(failure.class === "dns" ? "info" : "debug", "Discovery probe request failed", {
       baseUrl,
-      error: (error as Error).message,
+      class: failure.class,
+      userMessage: failure.userMessage,
+      error: failure.rawMessage,
     });
+    setSnapshot({ lastProbeError: failure.userMessage });
     return false;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
@@ -808,6 +860,9 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   };
 
   // First probe immediately, then at fixed interval.
+  // The probe timeout is governed by loadDiscoveryProbeTimeoutMs (default
+  // 2500 ms). It must tolerate slow first-association on a cold WiFi link
+  // but should not block the OFFLINE banner past the discovery window.
   void runProbe();
   const probeTimer = globalThis.setInterval(() => {
     void runProbe();

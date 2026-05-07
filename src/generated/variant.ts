@@ -67,6 +67,36 @@ export const variantConfig = {
         enabled: false,
         visible_to_user: true,
       },
+      home_telnet_clear_ram_reboot_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
+      home_telnet_config_actions_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
+      home_telnet_drive_actions_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
+      home_telnet_power_cycle_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
+      home_telnet_printer_actions_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
+      home_telnet_reu_snapshot_enabled: {
+        developer_only: true,
+        enabled: false,
+        visible_to_user: false,
+      },
       hvsc_enabled: {
         developer_only: false,
         enabled: true,
@@ -77,10 +107,10 @@ export const variantConfig = {
         enabled: false,
         visible_to_user: false,
       },
-      reu_snapshot_enabled: {
-        developer_only: true,
+      ram_snapshots_enabled: {
+        developer_only: false,
         enabled: false,
-        visible_to_user: false,
+        visible_to_user: true,
       },
     },
     id: "c64commander",

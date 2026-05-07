@@ -325,7 +325,7 @@ export function UnifiedHealthBadge({ className }: Props) {
     byDeviceId: healthByDeviceId,
     refreshAll,
     totalProbeCount,
-  } = useSavedDeviceHealthChecks(savedDevices.devices, pickerOpen && canSwitchDevices);
+  } = useSavedDeviceHealthChecks(savedDevices.devices, canSwitchDevices);
 
   const glyph = HEALTH_GLYPHS[state];
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);

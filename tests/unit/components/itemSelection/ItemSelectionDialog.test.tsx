@@ -1,3 +1,4 @@
+import { StrictMode, useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -292,6 +293,77 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(document.activeElement).not.toBe(close);
   });
 
+  it("re-enables the Local interstitial button after the picker is cancelled", async () => {
+    localStorage.clear();
+    const onAddLocalSource = vi.fn().mockResolvedValue(null);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Mount Disk"
+          confirmLabel="Mount"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={onAddLocalSource}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const localButton = screen.getByTestId("import-option-local");
+    fireEvent.click(localButton);
+
+    await waitFor(() => {
+      expect(onAddLocalSource).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(localButton).not.toBeDisabled();
+    });
+    expect(localButton.getAttribute("aria-busy")).toBe("false");
+
+    fireEvent.click(localButton);
+    await waitFor(() => {
+      expect(onAddLocalSource).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("uses the ultimate source's name as the interstitial button label", () => {
+    localStorage.clear();
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Mount Disk"
+          confirmLabel="Mount"
+          sourceGroups={[
+            {
+              label: "Sources",
+              sources: [
+                {
+                  id: "ultimate-u64",
+                  type: "ultimate",
+                  name: "U64",
+                  rootPath: "/",
+                  isAvailable: true,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const button = screen.getByTestId("import-option-c64u");
+    expect(button).toHaveAttribute("aria-label", "Add file / folder from U64");
+    expect(button.textContent).toContain("U64");
+  });
+
   it("shows the local source label in the selection heading", async () => {
     localStorage.clear();
 
@@ -329,6 +401,63 @@ describe("ItemSelectionDialog display profiles", () => {
     await waitFor(() => {
       expect(screen.getByText("From Local")).toBeVisible();
     });
+  });
+
+  it("auto-confirms a newly added local source only once across duplicate source updates", async () => {
+    localStorage.clear();
+    const onConfirm = vi.fn(async () => {
+      await Promise.resolve();
+      return true;
+    });
+
+    const localSource = {
+      id: "local-added",
+      type: "local" as const,
+      name: "Local",
+      rootPath: "/local",
+      isAvailable: true,
+      listEntries: async () => [],
+      listFilesRecursive: async () => [],
+    };
+
+    const Harness = () => {
+      const [groups, setGroups] = useState<SourceGroup[]>(sourceGroups);
+
+      return (
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={groups}
+          autoConfirmLocalSource
+          onAddLocalSource={async () => {
+            setGroups([{ label: "Local", sources: [localSource] }]);
+            await Promise.resolve();
+            setGroups([{ label: "Local", sources: [localSource] }]);
+            return localSource.id;
+          }}
+          onConfirm={onConfirm}
+        />
+      );
+    };
+
+    render(
+      <StrictMode>
+        <DisplayProfileProvider>
+          <Harness />
+        </DisplayProfileProvider>
+      </StrictMode>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-local"));
+
+    await waitFor(() => {
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "local-added", type: "local" }), [
+      expect.objectContaining({ type: "dir", name: "Local", path: "/local" }),
+    ]);
   });
 
   it("opens directly into the requested source and keeps only one single-selection item", async () => {

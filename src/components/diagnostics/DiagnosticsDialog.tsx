@@ -142,6 +142,7 @@ type DeviceFilterOption = {
 
 const EVIDENCE_ORDER: EvidenceType[] = ["Problems", "Actions", "Logs", "Traces"];
 const DEFAULT_TYPES = new Set<EvidenceType>(["Problems", "Actions"]);
+const ACTIVITY_PAGE_SIZE = 20;
 const HEADER_TONE: Record<OverallHealthState["state"], string> = {
   Healthy: "text-success",
   Degraded: "text-amber-500",
@@ -190,6 +191,11 @@ const getActionContributor = (summary: ActionSummary): ContributorKey | null => 
   if (summary.effects.some((effect) => effect.type === "FTP")) return "FTP";
   if (summary.effects.some((effect) => effect.type === "ERROR")) return "App";
   return null;
+};
+
+const isRoutineInProgressHealthCheck = (summary: ActionSummary) => {
+  if (summary.outcome !== "in_progress" || summary.origin !== "system") return false;
+  return /health|connected to .*healthy/i.test(summary.actionName);
 };
 
 const isTraceProblem = (entry: TraceEvent) => {
@@ -775,6 +781,36 @@ const FilterEditorSurface = ({
                   className="h-7 text-xs"
                   onClick={() => {
                     onSeverityChange("All");
+                    onSelectedTypesChange(new Set(EVIDENCE_ORDER));
+                    onContributorChange("REST");
+                    onDeviceFilterChange(null);
+                  }}
+                  data-testid="quick-filter-rest"
+                >
+                  REST
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("All");
+                    onSelectedTypesChange(new Set(EVIDENCE_ORDER));
+                    onContributorChange("FTP");
+                    onDeviceFilterChange(null);
+                  }}
+                  data-testid="quick-filter-ftp"
+                >
+                  FTP
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    onSeverityChange("All");
                     onSelectedTypesChange(new Set(DEFAULT_TYPES));
                     onContributorChange("All");
                     onDeviceFilterChange(null);
@@ -973,6 +1009,7 @@ export function DiagnosticsDialog({
   const [severity, setSeverity] = useState<SeverityFilter>("All");
   const [deviceFilter, setDeviceFilter] = useState<DeviceFilter>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(ACTIVITY_PAGE_SIZE);
   const [connectionMode, setConnectionMode] = useState<"view" | "edit">("view");
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [connectionDraft, setConnectionDraft] = useState<SavedDeviceEditorDraft>(() =>
@@ -1046,6 +1083,7 @@ export function DiagnosticsDialog({
     }
 
     for (const summary of actionSummaries) {
+      if (isRoutineInProgressHealthCheck(summary)) continue;
       const device = summary.device ?? null;
       items.push({
         id: `action-${summary.correlationId}`,
@@ -1132,6 +1170,7 @@ export function DiagnosticsDialog({
     setHeatMapVariant(null);
     setOverflowOpen(false);
     setExpandedEvidenceId(null);
+    setDisplayLimit(ACTIVITY_PAGE_SIZE);
 
     const snapshot = parseConnectionSnapshot();
     setConnectionDraft(
@@ -1206,7 +1245,18 @@ export function DiagnosticsDialog({
 
   const visibleCount = filteredEntries.length;
   const totalCount = allEntries.length;
-  const displayEntries = filteredEntries.slice(0, 20);
+  const displayEntries = filteredEntries.slice(0, displayLimit);
+  const hasMoreEntries = displayEntries.length < filteredEntries.length;
+
+  useEffect(() => {
+    setDisplayLimit(ACTIVITY_PAGE_SIZE);
+    setExpandedEvidenceId(null);
+  }, [contributor, deviceFilter, selectedTypes, severity]);
+
+  const loadNextActivityPage = useCallback(() => {
+    setDisplayLimit((current) => Math.min(current + ACTIVITY_PAGE_SIZE, filteredEntries.length));
+  }, [filteredEntries.length]);
+
   const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
   const healthDetailAvailable =
     headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
@@ -1661,7 +1711,16 @@ export function DiagnosticsDialog({
               <p className="mb-2 text-[10px] text-muted-foreground" data-testid="activity-kinds-line">
                 Problems, actions, logs, and traces across App, REST, FTP, and Telnet
               </p>
-              <div className="max-h-72 space-y-1.5 overflow-y-auto" data-testid="evidence-list">
+              <div
+                className="max-h-72 space-y-1.5 overflow-y-auto"
+                data-testid="evidence-list"
+                onScroll={(event) => {
+                  const element = event.currentTarget;
+                  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 16) {
+                    loadNextActivityPage();
+                  }
+                }}
+              >
                 {displayEntries.map((entry) => (
                   <Fragment key={entry.id}>
                     <EvidenceRow
@@ -1674,6 +1733,18 @@ export function DiagnosticsDialog({
                 ))}
                 {displayEntries.length === 0 ? (
                   <p className="py-2 text-xs text-muted-foreground">No matching activity.</p>
+                ) : null}
+                {hasMoreEntries ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-full text-xs"
+                    onClick={loadNextActivityPage}
+                    data-testid="load-more-activity"
+                  >
+                    Load more
+                  </Button>
                 ) : null}
               </div>
             </section>

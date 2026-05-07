@@ -89,6 +89,11 @@ In C64 Commander:
 
 1. Open **Settings > Device > Connection**.
 2. Enter the C64 Ultimate IP address or hostname.
+   - **On Android**, the IP address is recommended. Bare hostnames such as
+     `u64` or `c64u` rely on mDNS, which is not always reliable on home
+     networks. The app will attempt mDNS resolution before falling back to
+     system DNS, and surface a clear "Cannot resolve …" error if both
+     fail.
 3. A green health indicator at the top right confirms the successful connection:
 
 ![Connected C64U badge](docs/img/app/home/02-connection-status-popover.png)

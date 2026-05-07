@@ -123,6 +123,9 @@ const setupDefaultMocks = () => {
   mockUseC64Categories.mockReturnValue({
     data: { categories: [] },
     isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
   });
   mockUseC64Category.mockReturnValue({
     data: {},
@@ -214,11 +217,34 @@ describe("ConfigBrowserPage", () => {
     mockUseC64Categories.mockReturnValue({
       data: { categories: [] },
       isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
     });
 
     renderConfigBrowserPage();
 
     expect(screen.getByText(/no categories available/i)).toBeInTheDocument();
+  });
+
+  it("shows retryable config load failure instead of no categories", () => {
+    setupDefaultMocks();
+    const refetch = vi.fn();
+    mockUseC64Categories.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("request timed out"),
+      refetch,
+    });
+
+    renderConfigBrowserPage();
+
+    expect(screen.getByTestId("config-load-error")).toHaveTextContent("Config categories could not be loaded.");
+    expect(screen.queryByText(/no categories available/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("config-retry"));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it("reports solo routing errors for audio mixer", async () => {

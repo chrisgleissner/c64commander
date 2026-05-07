@@ -1346,6 +1346,30 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
       const baseUrl = new URL(targetBaseUrl);
       const resolvedHost = baseUrl.hostname;
       const resolvedPort = Number(baseUrl.port || "80");
+      const buildPendingProbeState = () => ({
+        state: "PENDING",
+        outcome: null,
+        startedAt: null,
+        endedAt: null,
+        durationMs: null,
+        reason: null,
+      });
+      const buildIdleSavedDeviceHealthSnapshot = () => ({
+        running: false,
+        latestResult: null,
+        liveProbes: null,
+        probeStates: {
+          REST: buildPendingProbeState(),
+          FTP: buildPendingProbeState(),
+          TELNET: buildPendingProbeState(),
+          CONFIG: buildPendingProbeState(),
+          RASTER: buildPendingProbeState(),
+          JIFFY: buildPendingProbeState(),
+        },
+        lastStartedAt: null,
+        lastCompletedAt: null,
+        error: null,
+      });
 
       localStorage.setItem(
         "c64u_saved_devices:v1",
@@ -1437,6 +1461,24 @@ const installSavedDeviceScreenshotState = async (page: Page, baseUrlArg: string,
           summaryLru: ["device-c64u-primary", "device-c64u-secondary", "device-c64u-custom"],
         }),
       );
+
+      const preseededSavedDeviceHealth = {
+        cycle: {
+          running: false,
+          lastStartedAt: null,
+          lastCompletedAt: null,
+        },
+        byDeviceId: {
+          "device-c64u-primary": buildIdleSavedDeviceHealthSnapshot(),
+          "device-c64u-secondary": buildIdleSavedDeviceHealthSnapshot(),
+          "device-c64u-custom": buildIdleSavedDeviceHealthSnapshot(),
+        },
+      };
+
+      window.__c64uDiagnosticsTestBridge = {
+        ...window.__c64uDiagnosticsTestBridge,
+        getSavedDeviceHealthSnapshot: () => preseededSavedDeviceHealth,
+      };
 
       if (withDiskReference) {
         localStorage.setItem(
@@ -2474,6 +2516,7 @@ test.describe("App screenshots", () => {
         await page.goto("/");
         await applyDisplayProfileViewport(page, "medium");
         await waitForConnected(page);
+        await seedSwitchDeviceHealthSnapshot(page, "all-healthy");
         await expect(page.getByTestId("unified-health-badge")).toBeVisible();
         await page.waitForFunction(() =>
           Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
@@ -2835,6 +2878,7 @@ test.describe("App screenshots", () => {
         await page.goto("/");
         await applyDisplayProfileViewport(page, profileId);
         await waitForConnected(page);
+        await seedSwitchDeviceHealthSnapshot(page, "all-healthy");
         await expect(page.getByTestId("unified-health-badge")).toBeVisible();
         await page.waitForFunction(() =>
           Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),

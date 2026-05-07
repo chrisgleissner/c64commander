@@ -24,14 +24,12 @@ const BASIC_START = 0x0801;
 const STACK_START = 0x0100;
 /** Stack page end (inclusive). */
 const STACK_END_INCLUSIVE = 0x01ff;
-/** STREND pointer low byte address. */
-const STREND_LO = 0x002b;
-/** STREND pointer high byte address. */
-const STREND_HI = 0x002c;
 /** BASIC pointer region start. */
 const BASIC_PTR_START = 0x002b;
 /** BASIC pointer region end (inclusive). */
 const BASIC_PTR_END = 0x0038;
+/** Fixed BASIC snapshot end requested for Home quick snapshots. */
+const BASIC_SNAPSHOT_END_INCLUSIVE = 0x9fff;
 
 /** Full 16 KiB VIC bank size. */
 const VIC_BANK_SIZE = 0x4000;
@@ -43,12 +41,9 @@ const VIC_REG_END_INCLUSIVE = 0xd02e;
  *   VIC bank = (~value) & 0x03 → bank base = bank × $4000
  */
 const CIA2_PA_ADDR = 0xdd00;
-/**
- * CIA2 register block ($DD00–$DD0F). Saving Port A (bank select) and Port A DDR
- * is required to correctly restore the VIC bank configuration.
- */
+/** CIA2 Port A and DDR only. Avoid timer/interrupt registers that affect cursor timing. */
 const CIA2_REG_START = 0xdd00;
-const CIA2_REG_END_INCLUSIVE = 0xdd0f;
+const CIA2_REG_END_INCLUSIVE = 0xdd01;
 /** Colour RAM (fixed CPU address, not banked). */
 const COLOR_START = 0xd800;
 const COLOR_END_INCLUSIVE = 0xdbff;
@@ -94,28 +89,31 @@ const screenRanges = (fullImage: Uint8Array): { ranges: MemoryRange[]; displayRa
   };
 };
 
-/** Derives BASIC snapshot ranges, reading STREND from the full RAM image. */
-const basicRanges = (fullImage: Uint8Array): { ranges: MemoryRange[]; displayRanges: string[] } => {
-  const strend = fullImage[STREND_LO] | (fullImage[STREND_HI] << 8);
-  const basicLength = Math.max(0, strend - BASIC_START);
+/** Derives fixed BASIC snapshot ranges. */
+const basicRanges = (): { ranges: MemoryRange[]; displayRanges: string[] } => {
+  const basicLength = BASIC_SNAPSHOT_END_INCLUSIVE - BASIC_START + 1;
   const ptrLength = BASIC_PTR_END - BASIC_PTR_START + 1;
   const ranges: MemoryRange[] = [
-    { start: BASIC_START, length: basicLength },
     { start: BASIC_PTR_START, length: ptrLength },
+    { start: BASIC_START, length: basicLength },
   ];
   return {
     ranges,
-    displayRanges: [`${toHex(BASIC_START)}-STREND`, `${toHex(BASIC_PTR_START)}-${toHex(BASIC_PTR_END)}`],
+    displayRanges: [
+      `${toHex(BASIC_PTR_START)}-${toHex(BASIC_PTR_END)}`,
+      `${toHex(BASIC_START)}-${toHex(BASIC_SNAPSHOT_END_INCLUSIVE)}`,
+    ],
   };
 };
 
-/** Derives ranges for the program snapshot (all RAM except the stack page). */
+/** Derives ranges for the program snapshot, excluding stack and volatile CIA registers. */
 const programRanges = (): { ranges: MemoryRange[]; displayRanges: string[] } => ({
   ranges: [
     { start: 0x0000, length: STACK_START },
-    { start: STACK_END_INCLUSIVE + 1, length: 0x10000 - (STACK_END_INCLUSIVE + 1) },
+    { start: STACK_END_INCLUSIVE + 1, length: 0xdd00 - (STACK_END_INCLUSIVE + 1) },
+    { start: 0xde00, length: 0x10000 - 0xde00 },
   ],
-  displayRanges: ["$0000-$00FF", "$0200-$FFFF"],
+  displayRanges: ["$0000-$00FF", "$0200-$DCFF", "$DE00-$FFFF"],
 });
 
 /** Builds a unique snapshot ID from the current time. */
@@ -160,7 +158,7 @@ export const createSnapshot = async (
   if (type === "program") {
     ({ ranges, displayRanges } = programRanges());
   } else if (type === "basic") {
-    ({ ranges, displayRanges } = basicRanges(fullImage));
+    ({ ranges, displayRanges } = basicRanges());
   } else if (type === "screen") {
     ({ ranges, displayRanges } = screenRanges(fullImage));
   } else {

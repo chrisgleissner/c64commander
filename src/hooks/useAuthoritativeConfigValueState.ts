@@ -14,7 +14,39 @@ export type AuthoritativeConfigValueEntry = {
   value: AuthoritativeConfigValue;
 };
 
-export function useAuthoritativeConfigValueState() {
+export type AuthoritativeConfigValueEquality = (
+  pending: AuthoritativeConfigValue,
+  device: AuthoritativeConfigValue,
+) => boolean;
+
+const tryParseNumeric = (value: AuthoritativeConfigValue): number | null => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  // Single-token only — "1 2 3" must not coerce to NaN.
+  if (/\s/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * Default equality used to decide when the device echo has caught up to the
+ * pending optimistic value. Trim-aware for strings and coerces single-token
+ * numerics across number ↔ string so the override clears even when the
+ * device returns " 4" for our committed `4` (R-RT-6).
+ */
+export const isAuthoritativeConfigValueEqual: AuthoritativeConfigValueEquality = (pending, device) => {
+  if (Object.is(pending, device)) return true;
+  const pendingNumber = tryParseNumeric(pending);
+  const deviceNumber = tryParseNumeric(device);
+  if (pendingNumber !== null && deviceNumber !== null) {
+    return Object.is(pendingNumber, deviceNumber);
+  }
+  return String(pending).trim() === String(device).trim();
+};
+
+export function useAuthoritativeConfigValueState(options: { equals?: AuthoritativeConfigValueEquality } = {}) {
+  const equals = options.equals ?? isAuthoritativeConfigValueEqual;
   const [entries, setEntries] = useState<Record<string, AuthoritativeConfigValueEntry>>({});
   const entriesRef = useRef(entries);
   const queuedClearsRef = useRef<Set<string>>(new Set());
@@ -70,13 +102,13 @@ export function useAuthoritativeConfigValueState() {
       const resolvedDeviceValue = (deviceValue ?? fallback) as T;
       const entry = entries[key];
       if (!entry) return resolvedDeviceValue;
-      if (Object.is(entry.value, resolvedDeviceValue)) {
+      if (equals(entry.value, resolvedDeviceValue)) {
         scheduleClearEntry(key);
         return resolvedDeviceValue;
       }
       return entry.value as T;
     },
-    [entries, scheduleClearEntry],
+    [entries, equals, scheduleClearEntry],
   );
 
   const values = useMemo(

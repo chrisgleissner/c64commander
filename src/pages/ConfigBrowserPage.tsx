@@ -615,7 +615,7 @@ function CategorySection({
 
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
-  const { data: categoriesData, isLoading } = useC64Categories(VISIBLE_C64_QUERY_OPTIONS);
+  const { data: categoriesData, isLoading, isError, error, refetch } = useC64Categories(VISIBLE_C64_QUERY_OPTIONS);
   const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
   const markChanged = useCallback(() => {
@@ -654,6 +654,14 @@ export default function ConfigBrowserPage() {
           ) : isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : isError && !categoriesData?.categories ? (
+            <div className="space-y-3 py-8 text-center text-sm text-muted-foreground" data-testid="config-load-error">
+              <p>Config categories could not be loaded.</p>
+              <p className="text-xs">{(error as Error | null)?.message ?? "Retry the device request."}</p>
+              <Button variant="outline" size="sm" onClick={() => void refetch()} data-testid="config-retry">
+                Retry
+              </Button>
             </div>
           ) : filteredCategories.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">

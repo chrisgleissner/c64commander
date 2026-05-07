@@ -242,4 +242,44 @@ describe("registerDiagnosticsTestBridge", () => {
 
     window.removeEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlayState);
   });
+
+  it("upgrades a pre-seeded bridge in place and preserves saved-device health snapshots", () => {
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+
+    const savedSnapshot = {
+      byDeviceId: {
+        "device-c64u-primary": {
+          running: false,
+          latestResult: null,
+          liveProbes: null,
+          probeStates: {
+            REST: "idle",
+            FTP: "idle",
+            TELNET: "idle",
+            CONFIG: "idle",
+            RASTER: "idle",
+            JIFFY: "idle",
+          },
+          lastStartedAt: null,
+          lastCompletedAt: null,
+          error: null,
+        },
+      },
+      cycle: {
+        running: false,
+        lastStartedAt: null,
+        lastCompletedAt: null,
+      },
+    };
+
+    const seededBridge = {
+      getSavedDeviceHealthSnapshot: () => savedSnapshot,
+    };
+    window.__c64uDiagnosticsTestBridge = seededBridge as typeof window.__c64uDiagnosticsTestBridge;
+
+    registerDiagnosticsTestBridge();
+
+    expect(window.__c64uDiagnosticsTestBridge).toBe(seededBridge);
+    expect(window.__c64uDiagnosticsTestBridge?.getSavedDeviceHealthSnapshot()).toEqual(savedSnapshot);
+  });
 });

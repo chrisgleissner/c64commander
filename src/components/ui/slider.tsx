@@ -10,15 +10,12 @@ import * as React from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 
 import { cn } from "@/lib/utils";
-import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
 import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
 import {
   clampSliderValue,
-  createSliderAsyncQueue,
   resolveMidpointPercent,
   resolveMidpointSnap,
   shouldTriggerMidpointHaptic,
-  type SliderAsyncQueue,
 } from "@/lib/ui/sliderBehavior";
 import {
   reduceSliderPopupState,
@@ -44,9 +41,6 @@ type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> &
     haptics?: boolean;
     notch?: boolean;
   };
-  onValueChangeAsync?: (value: number) => void;
-  onValueCommitAsync?: (value: number) => void;
-  asyncThrottleMs?: number;
 };
 
 const normalizeSliderValue = (value: number, min: number, max: number) =>
@@ -68,9 +62,6 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       defaultValue,
       onValueChange,
       onValueCommit,
-      onValueChangeAsync,
-      onValueCommitAsync,
-      asyncThrottleMs,
       thumbClassName,
       trackClassName,
       rangeClassName,
@@ -100,10 +91,6 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     const popupSessionOpenRef = React.useRef(false);
     const lastValueRef = React.useRef<number | null>(null);
     const lastHapticAtRef = React.useRef<number | null>(null);
-    const asyncQueueRef = React.useRef<SliderAsyncQueue | null>(null);
-    const [defaultAsyncThrottleMs, setDefaultAsyncThrottleMs] = React.useState(() =>
-      loadVolumeSliderPreviewIntervalMs(),
-    );
 
     const normalizedMidpoint = React.useMemo(() => normalizeSliderMidpoint(midpoint, min, max), [max, midpoint, min]);
     const normalizedValue = React.useMemo(
@@ -190,36 +177,6 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       };
     }, [clearPopupCloseTimer]);
 
-    React.useEffect(() => {
-      const handler = (event: Event) => {
-        const detail = (event as CustomEvent).detail as { key?: string } | undefined;
-        if (detail?.key !== APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY) return;
-        setDefaultAsyncThrottleMs(loadVolumeSliderPreviewIntervalMs());
-      };
-
-      window.addEventListener("c64u-app-settings-updated", handler as EventListener);
-      return () => window.removeEventListener("c64u-app-settings-updated", handler as EventListener);
-    }, []);
-
-    const resolvedAsyncThrottleMs = asyncThrottleMs ?? defaultAsyncThrottleMs;
-
-    React.useEffect(() => {
-      if (!onValueChangeAsync && !onValueCommitAsync) {
-        asyncQueueRef.current?.cancel();
-        asyncQueueRef.current = null;
-        return undefined;
-      }
-      const queue = createSliderAsyncQueue({
-        onChange: onValueChangeAsync,
-        onCommit: onValueCommitAsync,
-        throttleMs: resolvedAsyncThrottleMs,
-      });
-      asyncQueueRef.current = queue;
-      return () => {
-        queue.cancel();
-      };
-    }, [onValueChangeAsync, onValueCommitAsync, resolvedAsyncThrottleMs]);
-
     const resolveValue = React.useCallback(
       (rawValue: number) => {
         const clamped = normalizeSliderValue(rawValue, min, max);
@@ -283,7 +240,6 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         }
         lastValueRef.current = nextValue;
         onValueChange?.([nextValue]);
-        asyncQueueRef.current?.schedule(nextValue);
       },
       [min, normalizedMidpoint, onValueChange, registerPopupInteraction, resolveValue],
     );
@@ -296,7 +252,6 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         registerPopupInteraction("interaction-end");
         lastValueRef.current = nextValue;
         onValueCommit?.([nextValue]);
-        asyncQueueRef.current?.commit(nextValue);
       },
       [min, onValueCommit, registerPopupInteraction, resolveValue],
     );

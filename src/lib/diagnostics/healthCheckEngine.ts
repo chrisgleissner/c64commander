@@ -23,6 +23,7 @@ import { createTelnetClient } from "@/lib/telnet/telnetClient";
 import { createTelnetSession } from "@/lib/telnet/telnetSession";
 import { buildBaseUrlFromDeviceHost, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { rollUpHealth, deriveConnectivityState } from "@/lib/diagnostics/healthModel";
+import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import type { ConnectivityState, HealthState } from "@/lib/diagnostics/healthModel";
 import {
   pushHealthHistoryEntry,
@@ -32,6 +33,7 @@ import {
 import { computeLatencyPercentiles } from "@/lib/diagnostics/latencyTracker";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import type { TelnetScreen } from "@/lib/telnet/telnetTypes";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
   { category: "LED Strip Settings", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
@@ -441,6 +443,7 @@ const probeRest = async (
         __c64uBypassCache: true,
         __c64uBypassCooldown: true,
         __c64uBypassBackoff: true,
+        __c64uBypassCircuit: true,
       }),
     );
     const hasErrors = Array.isArray(info.errors) && info.errors.length > 0;
@@ -715,11 +718,19 @@ const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> 
   }
 };
 
-const hasExpectedTelnetScreen = (titleLine: string): boolean => {
-  const normalized = titleLine.trim().toLowerCase();
-  return (
-    normalized.includes("ultimate-ii+") || normalized.includes("c64 ultimate") || normalized.includes("ultimate 64")
-  );
+const TELNET_FAILURE_MARKERS = ["incorrect", "failed", "denied", "invalid"] as const;
+
+const extractTelnetVisibleText = (screen: TelnetScreen): string => {
+  const rows = screen.cells.map((row) => row.map((cell) => cell.char).join("")).filter((row) => row.trim().length > 0);
+
+  return [screen.titleLine, screen.selectedItem ?? "", ...rows].join("\n").replace(/\s+/g, " ").trim();
+};
+
+const hasMeaningfulTelnetOutput = (value: string): boolean => /[a-z0-9]/i.test(value) || /[>#%$]$/.test(value.trim());
+
+const hasTelnetFailureMarker = (value: string): boolean => {
+  const normalized = value.trim().toLowerCase();
+  return TELNET_FAILURE_MARKERS.some((marker) => normalized.includes(marker));
 };
 
 const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
@@ -728,49 +739,64 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
   const readTimeoutMs = Math.max(150, Math.floor(PROBE_TIMEOUT_MS.TELNET / 8));
 
   try {
-    await session.connect(runtime.host, runtime.telnetPort, runtime.password);
-    if (signal.aborted) {
-      throw new DOMException("Aborted", "AbortError");
-    }
+    return await withTelnetInteraction(
+      {
+        actionId: "health-check",
+        intent: "system",
+        action: {
+          correlationId: `health-check-telnet-${startMs}`,
+          origin: "system",
+          name: "health-check.telnet",
+          componentName: "HealthCheckEngine",
+        },
+      },
+      async () => {
+        await session.connect(runtime.host, runtime.telnetPort, runtime.password);
+        if (signal.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
 
-    let lastReason = "Unexpected blank Telnet screen";
-    for (let attempt = 1; attempt <= TELNET_READ_RETRY_ATTEMPTS; attempt += 1) {
-      const screen = await session.readScreen(readTimeoutMs);
-      const titleLine = screen.titleLine.trim();
-      const elapsedMs = Date.now() - startMs;
-      addLog("debug", "Health check TELNET probe banner", {
-        host: runtime.host,
-        port: runtime.telnetPort,
-        attempt,
-        elapsedMs,
-        titleLine: titleLine.slice(0, 120),
-        screenType: screen.screenType,
-        readTimeoutMs,
-      });
+        let lastReason = "No telnet response";
+        for (let attempt = 1; attempt <= TELNET_READ_RETRY_ATTEMPTS; attempt += 1) {
+          const screen = await session.readScreen(readTimeoutMs);
+          const visibleText = extractTelnetVisibleText(screen);
+          const elapsedMs = Date.now() - startMs;
+          addLog("debug", "Health check TELNET probe banner", {
+            host: runtime.host,
+            port: runtime.telnetPort,
+            attempt,
+            elapsedMs,
+            visibleText: visibleText.slice(0, 120),
+            screenType: screen.screenType,
+            readTimeoutMs,
+          });
 
-      if (hasExpectedTelnetScreen(titleLine) && screen.screenType !== "unknown") {
-        addLog("debug", "Health check TELNET probe accepted screen", {
-          host: runtime.host,
-          port: runtime.telnetPort,
-          attempt,
-          elapsedMs,
-        });
-        return makeRecord("TELNET", "Success", elapsedMs, null, startMs);
-      }
+          if (hasTelnetFailureMarker(visibleText)) {
+            return makeRecord("TELNET", "Fail", elapsedMs, "telnet failure marker present", startMs);
+          }
 
-      lastReason =
-        titleLine.length > 0
-          ? screen.screenType === "unknown"
-            ? `Unrecognized Telnet screen: ${titleLine.slice(0, 80)}`
-            : `Unexpected Telnet screen: ${titleLine.slice(0, 80)}`
-          : "Unexpected blank Telnet screen";
+          if (hasMeaningfulTelnetOutput(visibleText)) {
+            addLog("debug", "Health check TELNET probe accepted screen", {
+              host: runtime.host,
+              port: runtime.telnetPort,
+              attempt,
+              elapsedMs,
+              screenType: screen.screenType,
+              acceptedBy: "visible-output",
+            });
+            return makeRecord("TELNET", "Success", elapsedMs, null, startMs);
+          }
 
-      if (attempt < TELNET_READ_RETRY_ATTEMPTS) {
-        await waitMs(TELNET_READ_RETRY_DELAY_MS, signal);
-      }
-    }
+          lastReason = "No telnet response";
 
-    return makeRecord("TELNET", "Fail", Date.now() - startMs, lastReason, startMs);
+          if (attempt < TELNET_READ_RETRY_ATTEMPTS) {
+            await waitMs(TELNET_READ_RETRY_DELAY_MS, signal);
+          }
+        }
+
+        return makeRecord("TELNET", "Fail", Date.now() - startMs, lastReason, startMs);
+      },
+    );
   } catch (error) {
     if (isAbortLike(error) || isTimeoutLike(error)) {
       throw error;
@@ -978,6 +1004,17 @@ const buildRunResult = (args: {
         args.ftp.lifecycle === "FAILED" || args.ftp.lifecycle === "TIMEOUT"
           ? ("Unhealthy" as const)
           : args.ftp.lifecycle === "SUCCESS"
+            ? ("Healthy" as const)
+            : ("Idle" as const),
+      problemCount: 0,
+      totalOperations: 0,
+      failedOperations: 0,
+    },
+    TELNET: {
+      state:
+        args.telnet.lifecycle === "FAILED" || args.telnet.lifecycle === "TIMEOUT"
+          ? ("Unhealthy" as const)
+          : args.telnet.lifecycle === "SUCCESS"
             ? ("Healthy" as const)
             : ("Idle" as const),
       problemCount: 0,

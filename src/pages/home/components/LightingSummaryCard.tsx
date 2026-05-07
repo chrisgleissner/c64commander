@@ -6,9 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  createIndexedSliderDomain,
+  createNumericSliderDomain,
+  useDeviceBoundSlider,
+} from "@/hooks/useDeviceBoundSlider";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
 import {
@@ -34,8 +39,6 @@ const formatLightingPatternLabel = (value: string) => {
   if (normalizeOptionToken(value) === "singlecolor") return "Single Color";
   return formatSelectOptionLabel(value);
 };
-
-const parseSliderValue = (value: number) => (Number.isFinite(value) ? value : null);
 
 type LightingSummaryCardProps = {
   category: string;
@@ -64,9 +67,6 @@ export function LightingSummaryCard({
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category });
   const unavailableLabel = "Not available";
 
-  const [fixedColorDraftIndex, setFixedColorDraftIndex] = useState<number | null>(null);
-  const [intensityDraft, setIntensityDraft] = useState<number | null>(null);
-
   const readOptions = (itemName: string) => readItemOptions(config, category, itemName).map((value) => String(value));
   const resolveValue = (itemName: string, fallback: string | number) =>
     String(resolveConfigValue(config, category, itemName, fallback));
@@ -90,15 +90,6 @@ export function LightingSummaryCard({
   const intensityMin = intensityDetails?.min ?? 0;
   const intensityMax = intensityDetails?.max ?? 31;
   const intensityNumber = parseNumericValue(intensityValue, intensityMin);
-  const intensityDisplayValue = intensityDraft ?? intensityNumber;
-
-  useEffect(() => {
-    setIntensityDraft(null);
-  }, [intensityValue]);
-
-  useEffect(() => {
-    setFixedColorDraftIndex(null);
-  }, [fixedColorValue]);
 
   const effectiveModeOptions = modeOptions.length ? modeOptions : [modeValue];
   const effectivePatternOptions = patternOptions.length ? patternOptions : [patternValue];
@@ -144,10 +135,11 @@ export function LightingSummaryCard({
   }, [fixedColorSliderOptions]);
   const resolveFixedColorOption = (index: number) =>
     fixedColorSliderOptions[Math.round(index)] ?? fixedColorSliderOptions[0] ?? "";
-  const fixedColorDisplayIndex = fixedColorDraftIndex ?? fixedColorSliderIndex;
+  const fixedColorDomain = createIndexedSliderDomain(fixedColorSliderOptions);
+  const intensityDomain = createNumericSliderDomain({ min: intensityMin, max: intensityMax, round: Math.round });
 
   const isPending = (itemName: string) => Boolean(configWritePending[buildConfigKey(category, itemName)]);
-  const fixedColorSliderDisabled = !isActive || isPending("Fixed Color") || fixedColorSliderMax === 0;
+  const fixedColorSliderDisabled = !isActive || fixedColorSliderMax === 0;
 
   const updateLightingConfig = (
     itemName: string,
@@ -167,45 +159,35 @@ export function LightingSummaryCard({
     );
   };
 
-  const handleFixedColorPreview = (nextValue: number) => {
-    const parsed = parseSliderValue(nextValue);
-    if (parsed === null) return;
-    const nextIndex = clampToRange(parsed, 0, fixedColorSliderMax);
-    const nextColor = resolveFixedColorOption(nextIndex);
+  const writeLightingSliderValue = (itemName: string, value: string | number) => {
     onManualLightingChange?.();
-    void interactiveWrite({ "Fixed Color": nextColor }).catch((error) => {
+    return Promise.resolve(interactiveWrite({ [itemName]: value })).catch((error) => {
       addLog(
         "warn",
-        "Lighting summary fixed color preview failed",
+        "Lighting summary slider write failed",
         buildErrorLogDetails(error as Error, {
           category,
-          itemName: "Fixed Color",
-          value: nextColor,
+          itemName,
+          value,
         }),
       );
-      setFixedColorDraftIndex(null);
+      throw error;
     });
   };
-
-  const handleIntensityPreview = (nextValue: number) => {
-    const parsed = parseSliderValue(nextValue);
-    if (parsed === null) return;
-    const clamped = clampToRange(parsed, intensityMin, intensityMax);
-    const nextIntensity = Math.round(clamped);
-    onManualLightingChange?.();
-    void interactiveWrite({ "Strip Intensity": nextIntensity }).catch((error) => {
-      addLog(
-        "warn",
-        "Lighting summary intensity preview failed",
-        buildErrorLogDetails(error as Error, {
-          category,
-          itemName: "Strip Intensity",
-          value: nextIntensity,
-        }),
-      );
-      setIntensityDraft(null);
-    });
-  };
+  const fixedColorSlider = useDeviceBoundSlider({
+    deviceValue: fixedColorValue,
+    domain: fixedColorDomain,
+    previewMode: "throttled",
+    preview: (nextColor) => writeLightingSliderValue("Fixed Color", nextColor),
+    commit: (nextColor) => writeLightingSliderValue("Fixed Color", nextColor),
+  });
+  const intensitySlider = useDeviceBoundSlider({
+    deviceValue: intensityNumber,
+    domain: intensityDomain,
+    previewMode: "throttled",
+    preview: (nextIntensity) => writeLightingSliderValue("Strip Intensity", nextIntensity),
+    commit: (nextIntensity) => writeLightingSliderValue("Strip Intensity", nextIntensity),
+  });
 
   return (
     <div
@@ -340,15 +322,12 @@ export function LightingSummaryCard({
         </div>
 
         <Slider
-          value={[fixedColorDisplayIndex]}
+          value={[fixedColorSlider.sliderValue]}
           min={0}
           max={fixedColorSliderMax}
           step={1}
-          onValueChange={(values) => {
-            const nextIndex = clampToRange(values[0] ?? 0, 0, fixedColorSliderMax);
-            setFixedColorDraftIndex(nextIndex);
-          }}
-          onValueChangeAsync={handleFixedColorPreview}
+          onValueChange={fixedColorSlider.onValueChange}
+          onValueCommit={fixedColorSlider.onValueCommit}
           disabled={fixedColorSliderDisabled}
           valueFormatter={(value) => formatSelectOptionLabel(resolveFixedColorOption(value))}
           trackClassName={fixedColorGradient ? "bg-transparent" : undefined}
@@ -360,21 +339,18 @@ export function LightingSummaryCard({
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground">Brightness</span>
           <span className="text-xs font-semibold text-foreground" data-testid={`${testIdPrefix}-intensity-value`}>
-            {Math.round(intensityDisplayValue)}
+            {Math.round(intensitySlider.displayValue)}
           </span>
         </div>
 
         <Slider
-          value={[clampToRange(intensityDisplayValue, intensityMin, intensityMax)]}
+          value={[clampToRange(intensitySlider.sliderValue, intensityMin, intensityMax)]}
           min={intensityMin}
           max={intensityMax}
           step={1}
-          onValueChange={(values) => {
-            const nextValue = clampToRange(values[0] ?? intensityMin, intensityMin, intensityMax);
-            setIntensityDraft(nextValue);
-          }}
-          onValueChangeAsync={handleIntensityPreview}
-          disabled={!isActive || isPending("Strip Intensity")}
+          onValueChange={intensitySlider.onValueChange}
+          onValueCommit={intensitySlider.onValueCommit}
+          disabled={!isActive}
           data-testid={`${testIdPrefix}-intensity-slider`}
         />
 

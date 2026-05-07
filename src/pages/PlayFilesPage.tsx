@@ -175,7 +175,7 @@ export default function PlayFilesPage() {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
-  const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
+  const { sources: localSources, addSourceFromPicker } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
   const {
     playlist,
@@ -284,8 +284,8 @@ export default function PlayFilesPage() {
     volumeSessionActiveRef,
     captureSidMuteSnapshot,
     snapshotToUpdates,
-    handleVolumeLocalChange,
-    handleVolumeAsyncChange,
+    handleVolumeDraftChange,
+    handleVolumePreview,
     handleVolumeCommit,
     handleToggleMute,
     resumingFromPauseRef,
@@ -675,14 +675,6 @@ export default function PlayFilesPage() {
     }
     return groups;
   }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources]);
-
-  const handleLocalSourceInput = useCallback(
-    (files: FileList | File[] | null) => {
-      if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
-      addSourceFromFiles(files);
-    },
-    [addSourceFromFiles],
-  );
 
   const updatePlaylistItemConfigRef = useCallback(
     (
@@ -1504,7 +1496,6 @@ export default function PlayFilesPage() {
                   <VolumeControls
                     volumeMuted={volumeMuted}
                     canControlVolume={canControlVolume}
-                    isPending={updateConfigBatch.isPending}
                     onToggleMute={() => {
                       void handleToggleMute().catch((error) => {
                         addErrorLog("Mute toggle failed", {
@@ -1520,8 +1511,8 @@ export default function PlayFilesPage() {
                     }}
                     volumeStepsCount={volumeSteps.length}
                     volumeIndex={volumeIndex}
-                    onVolumeChange={handleVolumeLocalChange}
-                    onVolumeChangeAsync={handleVolumeAsyncChange}
+                    onVolumeDraftChange={handleVolumeDraftChange}
+                    onVolumePreview={handleVolumePreview}
                     onVolumeCommit={(value) => void handleVolumeCommit(value)}
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
                     volumeLabel={volumeLabel}
@@ -1624,8 +1615,6 @@ export default function PlayFilesPage() {
             className="hidden"
             onChange={wrapUserEvent(
               (event) => {
-                const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
-                handleLocalSourceInput(selected.length ? selected : null);
                 event.currentTarget.value = "";
               },
               "upload",

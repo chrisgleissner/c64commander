@@ -16,7 +16,69 @@ type ProbeSnapshot = {
 const INFO_REFRESH_MIN_FLOOR_MS = 1_500;
 export const INFO_REFRESH_MIN_CEILING_MS = 30_000;
 export const DRIVES_POLL_INTERVAL_MS = 30_000;
+export const DRIVES_POLL_INTERVAL_IDLE_MS = 60_000;
 const BACKGROUND_REDISCOVERY_MAX_DELAY_MS = 60_000;
+
+/**
+ * Polling-pause registry.
+ *
+ * Sliders, drag-driven dialogs, and other "user is interacting now"
+ * primitives can acquire a pause that suspends interval-driven background
+ * refetches. Each acquisition returns a release function; pausing is
+ * reference-counted so multiple concurrent drags don't trip over each other.
+ *
+ * Consumers (drives polling, info refresh, etc.) ask `isPollingPaused()`
+ * before scheduling their tick.
+ */
+export type PollingPauseHandle = {
+  release(): void;
+};
+
+type PollingPauseListener = () => void;
+
+let pollingPauseCount = 0;
+const pollingPauseListeners = new Set<PollingPauseListener>();
+
+const notifyPollingPauseListeners = () => {
+  pollingPauseListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      // Listener crashes must not break the registry's invariants.
+      console.warn("pollingPauseRegistry listener threw", error);
+    }
+  });
+};
+
+export const pollingPauseRegistry = {
+  acquirePause(): PollingPauseHandle {
+    pollingPauseCount += 1;
+    if (pollingPauseCount === 1) notifyPollingPauseListeners();
+    let released = false;
+    return {
+      release() {
+        if (released) return;
+        released = true;
+        pollingPauseCount = Math.max(0, pollingPauseCount - 1);
+        if (pollingPauseCount === 0) notifyPollingPauseListeners();
+      },
+    };
+  },
+  isPollingPaused(): boolean {
+    return pollingPauseCount > 0;
+  },
+  subscribe(listener: PollingPauseListener): () => void {
+    pollingPauseListeners.add(listener);
+    return () => {
+      pollingPauseListeners.delete(listener);
+    };
+  },
+  /** Test-only: reset the registry. Do not call from production code. */
+  __resetForTest(): void {
+    pollingPauseCount = 0;
+    pollingPauseListeners.clear();
+  },
+};
 
 export const getInfoRefreshMinIntervalMs = () => {
   const safety = loadDeviceSafetyConfig();

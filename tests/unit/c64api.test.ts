@@ -11,11 +11,14 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CapacitorHttp } from "@capacitor/core";
 import {
   C64API,
+  ConfigResponse,
   getC64API,
   updateC64APIConfig,
   applyC64APIRuntimeConfig,
   C64_DEFAULTS,
   resolveDeviceHostFromStorage,
+  INTERACTIVE_CONTROL_TIMEOUT_MS,
+  BACKGROUND_REQUEST_TIMEOUT_MS,
 } from "@/lib/c64api";
 import { clearPassword as clearStoredPassword, setPassword as storePassword } from "@/lib/secureStorage";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -101,6 +104,20 @@ Object.defineProperty(globalThis, "fetch", {
 });
 
 const getFetchMock = () => fetchMock as unknown as ReturnType<typeof vi.fn>;
+
+const okJsonResponse = (body: object = { errors: [] }) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
+const categoryConfigResponse = (category: string, items: Record<string, unknown>) =>
+  okJsonResponse({
+    [category]: {
+      items,
+    },
+    errors: [],
+  } satisfies ConfigResponse);
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -218,6 +235,20 @@ const createValidCrtBlob = (version: number = 0x0100) => {
   setBE32(bytes, 68, 16);
   return new Blob([bytes], { type: "application/octet-stream" });
 };
+
+describe("c64api timeout buckets", () => {
+  it("exposes INTERACTIVE_CONTROL_TIMEOUT_MS = 1500 ms for user-tappable controls", () => {
+    expect(INTERACTIVE_CONTROL_TIMEOUT_MS).toBe(1500);
+  });
+
+  it("exposes BACKGROUND_REQUEST_TIMEOUT_MS = 3000 ms for polling and prefetch", () => {
+    expect(BACKGROUND_REQUEST_TIMEOUT_MS).toBe(3000);
+  });
+
+  it("keeps the interactive budget tighter than the background budget", () => {
+    expect(INTERACTIVE_CONTROL_TIMEOUT_MS).toBeLessThan(BACKGROUND_REQUEST_TIMEOUT_MS);
+  });
+});
 
 describe("c64api", () => {
   beforeEach(() => {
@@ -615,36 +646,128 @@ describe("c64api", () => {
     await expect(api.machineReset()).rejects.toThrow("Host unreachable");
   });
 
-  it("retries one idle GET request after a network failure", async () => {
+  it("does not retry user-triggered GET requests after a network failure", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toThrow("Host unreachable");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(addLogMock).not.toHaveBeenCalledWith(
+      "warn",
+      "C64 API retry scheduled after scheduled timeout",
+      expect.anything(),
+    );
+  });
+
+  it("applies the interactive 1500 ms timeout to machine actions", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(
-        new Response(JSON.stringify({ errors: [] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+      fetchMock.mockImplementation(
+        (_url: string, options?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => {
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }),
       );
-      deviceStateSnapshotMock.mockReturnValue({
-        state: "READY",
-        connectionState: "REAL_CONNECTED",
-        busyCount: 0,
-        lastUpdatedAtMs: Date.now() - 15000,
-        lastErrorMessage: null,
-        lastSuccessAtMs: Date.now() - 15000,
-        circuitOpenUntilMs: null,
-      });
 
       const api = new C64API("http://c64u");
-      const pending = api.getInfo();
-      await vi.advanceTimersByTimeAsync(200);
-      await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(addLogMock).toHaveBeenCalledWith(
-        "warn",
-        "C64 API retry scheduled after idle failure",
-        expect.objectContaining({ wasIdle: true }),
+      const pending = api.machineReset();
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(1499);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not apply the scheduled 3-second timeout to user-triggered requests", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(
+        (_url: string, options?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => {
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }),
       );
+      const controller = new AbortController();
+
+      const api = new C64API("http://c64u");
+      const pending = api.getInfo({ signal: controller.signal, __c64uBypassCache: true });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      controller.abort();
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries scheduled requests at most twice after 3-second timeouts", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+
+      const api = new C64API("http://c64u");
+      const pending = api.getInfo({ __c64uIntent: "background", __c64uBypassCache: true });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      await vi.advanceTimersByTimeAsync(3000);
+
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not start a scheduled retry when elapsed time already exceeds the retry guard", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+
+      const api = new C64API("http://c64u");
+      const pending = api.getInfo({
+        __c64uIntent: "background",
+        __c64uBypassCache: true,
+        timeoutMs: 6001,
+      });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(6001);
+
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -801,25 +924,20 @@ describe("c64api", () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock
-        .mockResolvedValueOnce(
-          new Response(JSON.stringify({ errors: [] }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-        )
-        .mockResolvedValueOnce(
-          new Response(JSON.stringify({ errors: [] }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-        )
-        .mockResolvedValueOnce(
-          new Response(JSON.stringify({ errors: [] }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-        );
+      fetchMock.mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/v1/configs/Audio%20Mixer")) {
+          return Promise.resolve(
+            categoryConfigResponse("Audio Mixer", {
+              "Vol UltiSid 1": {
+                selected: "0 dB",
+                options: ["0 dB", "+6 dB"],
+              },
+            }),
+          );
+        }
+        return Promise.resolve(okJsonResponse());
+      });
 
       const api = new C64API("http://c64u");
       await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
@@ -828,7 +946,7 @@ describe("c64api", () => {
       );
       await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
 
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
     } finally {
       vi.useRealTimers();
     }
@@ -859,12 +977,30 @@ describe("c64api", () => {
 
   it("builds request urls for config writes and machine actions", async () => {
     const fetchMock = getFetchMock();
-    const okResponse = () =>
-      new Response(JSON.stringify({ errors: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    fetchMock.mockImplementation(() => Promise.resolve(okResponse()));
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/configs/Audio%20Mixer")) {
+        return Promise.resolve(
+          categoryConfigResponse("Audio Mixer", {
+            "Vol UltiSid 1": {
+              selected: "0 dB",
+              options: ["0 dB", "+6 dB"],
+            },
+          }),
+        );
+      }
+      if (url.endsWith("/v1/configs/Audio")) {
+        return Promise.resolve(
+          categoryConfigResponse("Audio", {
+            Volume: {
+              selected: "0 dB",
+              options: ["0 dB"],
+            },
+          }),
+        );
+      }
+      return Promise.resolve(okJsonResponse());
+    });
 
     const api = new C64API("http://c64u");
     await api.setConfigValue("Audio Mixer", "Vol UltiSid 1", "+6 dB");
@@ -887,22 +1023,128 @@ describe("c64api", () => {
 
   it("encodes joystick swap config writes with the expected category and item", async () => {
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ errors: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/configs/U64%20Specific%20Settings")) {
+        return Promise.resolve(
+          categoryConfigResponse("U64 Specific Settings", {
+            "Joystick Swapper": {
+              selected: "Normal",
+              options: ["Normal", "Swapped"],
+            },
+          }),
+        );
+      }
+      return Promise.resolve(okJsonResponse());
+    });
 
     const api = new C64API("http://c64u");
     await api.setConfigValue("U64 Specific Settings", "Joystick Swapper", "Swapped");
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock.mock.calls).toContainEqual([
       "http://c64u/v1/configs/U64%20Specific%20Settings/Joystick%20Swapper?value=Swapped",
       expect.objectContaining({
         method: "PUT",
       }),
+    ]);
+  });
+
+  it("throws when firmware returns errors for single config writes", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock
+      .mockResolvedValueOnce(
+        categoryConfigResponse("Audio Mixer", {
+          "Vol UltiSid 1": {
+            selected: "0 dB",
+            options: ["0 dB", "+6 dB"],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(okJsonResponse({ errors: ["Firmware refused value"] }));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.setConfigValue("Audio Mixer", "Vol UltiSid 1", "+6 dB")).rejects.toMatchObject({
+      name: "FirmwareConfigWriteError",
+      code: "FIRMWARE_WRITE_REJECTED",
+      category: "Audio Mixer",
+      item: "Vol UltiSid 1",
+      value: "+6 dB",
+      firmwareErrors: ["Firmware refused value"],
+    });
+  });
+
+  it("throws when firmware returns errors for batch config writes", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock
+      .mockResolvedValueOnce(
+        categoryConfigResponse("Audio", {
+          Volume: {
+            selected: "0 dB",
+            options: ["0 dB", "+6 dB"],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(okJsonResponse({ errors: ["Value rejected"] }));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.updateConfigBatch({ Audio: { Volume: "+6 dB" } }, { immediate: true })).rejects.toMatchObject({
+      name: "FirmwareConfigWriteError",
+      code: "FIRMWARE_WRITE_REJECTED",
+      firmwareErrors: ["Value rejected"],
+    });
+  });
+
+  it("rejects invalid enum writes before sending the config PUT", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValueOnce(
+      categoryConfigResponse("U64 Specific Settings", {
+        "CPU Speed": {
+          selected: " 1",
+          options: [" 1", " 2", " 4"],
+        },
+      }),
     );
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.setConfigValue("U64 Specific Settings", "CPU Speed", "4")).rejects.toMatchObject({
+      name: "ConfigWriteValidationError",
+      code: "INVALID_ENUM_VALUE",
+      category: "U64 Specific Settings",
+      item: "CPU Speed",
+      value: "4",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v1/configs/U64%20Specific%20Settings");
+  });
+
+  it("rejects out-of-range numeric batch writes before sending the config POST", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValueOnce(
+      categoryConfigResponse("LED Strip Settings", {
+        "Strip Intensity": {
+          selected: 6,
+          min: 0,
+          max: 31,
+        },
+      }),
+    );
+
+    const api = new C64API("http://c64u");
+
+    await expect(
+      api.updateConfigBatch({ "LED Strip Settings": { "Strip Intensity": 40 } }, { immediate: true }),
+    ).rejects.toMatchObject({
+      name: "ConfigWriteValidationError",
+      code: "OUT_OF_RANGE",
+      category: "LED Strip Settings",
+      item: "Strip Intensity",
+      value: 40,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v1/configs/LED%20Strip%20Settings");
   });
 
   it("covers reads, writes, and drive endpoints", async () => {

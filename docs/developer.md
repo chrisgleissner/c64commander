@@ -302,6 +302,7 @@ Screenshot runs now prune pixel-identical PNG changes automatically (metadata-on
 
 ```bash
 ./build --emulator       # Launch Android emulator
+./build --skip-tests --install-apk  # Fast local debug APK build/install for one attached device
 ./build --install-apk        # Build and install debug APK to connected device
 ./build --install-apk --apk-variant release  # Build and install release APK
 ./build --device-id R5C... --install-apk  # Install to specific device
@@ -315,6 +316,7 @@ Notes:
 
 - `./build --test-maestro-*` auto-starts the Android emulator if none is running and uses it unless `--test-device-id` is provided.
 - `./build --install-apk` defaults to the debug APK. Use `--apk-variant release` to install the release APK instead. Release builds require the Android signing config to be present.
+- `./build --skip-tests --install-apk` is the fast local deploy path: it skips repository formatting, skips `npm install` when lockfiles are already current, syncs Capacitor to Android only, and auto-selects the sole attached real device or sole `9B0*` device.
 
 Read `docs/testing/maestro.md` before writing or editing Maestro flows.
 

@@ -1,6 +1,10 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+const ANDROID_MIN_ARM64_PAGE_ALIGNMENT = 0x4000;
 
 export class ReleaseArtifactValidationError extends Error {
     constructor(message, summary) {
@@ -135,6 +139,40 @@ export const listZipEntries = (artifactPath, { execFile = execFileSync, ensureCo
         .filter(Boolean);
 };
 
+export const parseElfLoadAlignments = (readelfOutput) =>
+    readelfOutput
+        .split(/\r?\n/)
+        .map((line) => line.match(/\bLOAD\b.*\s(0x[0-9a-fA-F]+)\s*$/))
+        .filter(Boolean)
+        .map((match) => Number.parseInt(match[1], 16));
+
+export const validateAndroidNativeAlignmentReports = (
+    reports,
+    minimumAlignment = ANDROID_MIN_ARM64_PAGE_ALIGNMENT,
+) => {
+    const checks = reports.map((report) => {
+        const smallestAlignment = report.alignments.length > 0 ? Math.min(...report.alignments) : 0;
+        return {
+            ...report,
+            minimumAlignment,
+            smallestAlignment,
+            ok: report.alignments.length > 0 && smallestAlignment >= minimumAlignment,
+        };
+    });
+
+    return {
+        minimumAlignment,
+        checks,
+        failures: checks
+            .filter((check) => !check.ok)
+            .map((check) => ({
+                entry: check.entry,
+                smallestAlignment: check.smallestAlignment,
+                minimumAlignment: check.minimumAlignment,
+            })),
+    };
+};
+
 const summarizeTopLevelDirs = (entries) =>
     Array.from(
         new Set(
@@ -178,10 +216,82 @@ export const validateArtifactEntries = (platform, entries, artifactPath = null) 
     return summary;
 };
 
+export const inspectAndroidArtifactNativeAlignment = (
+    artifactPath,
+    entries,
+    {
+        execFile = execFileSync,
+        ensureCommand = ensureCommandAvailable,
+        minimumAlignment = ANDROID_MIN_ARM64_PAGE_ALIGNMENT,
+    } = {},
+) => {
+    const arm64NativeEntries = entries.filter((entry) => /^lib\/arm64-v8a\/.*\.so$/.test(entry));
+    if (arm64NativeEntries.length === 0) {
+        return {
+            minimumAlignment,
+            checks: [],
+            failures: [],
+        };
+    }
+
+    ensureCommand('unzip');
+    ensureCommand('readelf');
+
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'android-artifact-native-'));
+    try {
+        const reports = arm64NativeEntries.map((entry) => {
+            const binary = execFile('unzip', ['-p', artifactPath, entry], {
+                encoding: null,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                maxBuffer: 16 * 1024 * 1024,
+            });
+            const tempFile = path.join(tempDir, path.basename(entry));
+            writeFileSync(tempFile, binary);
+            const readelfOutput = execFile('readelf', ['-lW', tempFile], {
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            return {
+                entry,
+                alignments: parseElfLoadAlignments(readelfOutput),
+            };
+        });
+
+        return validateAndroidNativeAlignmentReports(reports, minimumAlignment);
+    } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+    }
+};
+
 export const validateArtifactFile = (artifactPath, explicitPlatform = null) => {
     const platform = explicitPlatform ?? detectPlatform(artifactPath);
     const entries = listZipEntries(artifactPath);
-    return validateArtifactEntries(platform, entries, artifactPath);
+    const summary = validateArtifactEntries(platform, entries, artifactPath);
+
+    if (platform !== 'android') {
+        return summary;
+    }
+
+    const nativeAlignment = inspectAndroidArtifactNativeAlignment(artifactPath, entries);
+    const result = {
+        ...summary,
+        nativeAlignment,
+    };
+
+    if (nativeAlignment.failures.length > 0) {
+        const details = nativeAlignment.failures
+            .map(
+                (failure) =>
+                    `${failure.entry} (smallest LOAD alignment 0x${failure.smallestAlignment.toString(16)}, expected >= 0x${failure.minimumAlignment.toString(16)})`,
+            )
+            .join(', ');
+        throw new ReleaseArtifactValidationError(
+            `Android native libraries are not 16 KB page-size compatible: ${details}`,
+            result,
+        );
+    }
+
+    return result;
 };
 
 export const isDirectExecution = (argvPath, moduleUrl) => Boolean(argvPath) && moduleUrl === pathToFileURL(argvPath).href;
@@ -224,13 +334,25 @@ const parseArgs = (argv) => {
 
 const formatSummary = (summary) => {
     const passedChecks = summary.checks.filter((check) => check.ok).map((check) => check.id).join(', ');
-    return [
+    const lines = [
         `artifact: ${summary.artifactPath}`,
         `platform: ${summary.platform}`,
         `fileCount: ${summary.fileCount}`,
         `topLevelDirs: ${summary.topLevelDirs.join(', ')}`,
         `checks: ${passedChecks}`,
-    ].join('\n');
+    ];
+
+    if (summary.nativeAlignment) {
+        const nativeChecks = summary.nativeAlignment.checks
+            .map(
+                (check) =>
+                    `${check.entry}=0x${check.smallestAlignment.toString(16)}${check.ok ? '' : ' (FAIL)'}`,
+            )
+            .join(', ');
+        lines.push(`nativeAlignment: ${nativeChecks || 'n/a'}`);
+    }
+
+    return lines.join('\n');
 };
 
 const directExecution = isDirectExecution(process.argv[1], import.meta.url);

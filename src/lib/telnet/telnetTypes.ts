@@ -127,6 +127,8 @@ export interface TelnetSessionApi {
 }
 
 export type TelnetMenuKey = "F5" | "F1";
+
+export const getFallbackTelnetMenuKey = (menuKey: TelnetMenuKey): TelnetMenuKey => (menuKey === "F1" ? "F5" : "F1");
 export type TelnetSubsystem = "C64" | "Drive" | "IEC" | "Printer" | "Config" | "Developer";
 export type TelnetActionId =
   | "powerCycle"
@@ -177,6 +179,7 @@ export const TELNET_ACTIONS: Record<TelnetActionId, TelnetAction> = {
     shortLabel: "Reboot (Clr Mem)",
     menuPath: ["Power & Reset", "Reboot (Clr Mem)"],
     categoryHints: ["C64 Machine"],
+    actionHints: ["Reboot (Clr RAM)", "Reboot (Clear RAM)"],
     subsystem: "C64",
     homePlacement: "overflow",
   },

@@ -9,18 +9,18 @@
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { createNumericSliderDomain, useDeviceBoundSlider } from "@/hooks/useDeviceBoundSlider";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 export type VolumeControlsProps = {
   volumeMuted: boolean;
   canControlVolume: boolean;
-  isPending: boolean;
   onToggleMute: () => void;
   volumeStepsCount: number;
   volumeIndex: number;
-  onVolumeChange: (value: number[]) => void;
-  onVolumeChangeAsync: (value: number) => void;
-  onVolumeCommit: (value: number) => void;
+  onVolumeDraftChange: (value: number) => void;
+  onVolumePreview: (value: number) => Promise<void> | void;
+  onVolumeCommit: (value: number) => Promise<void> | void;
   previewIntervalMs: number;
   volumeLabel: string;
   volumeValueFormatter?: (value: number) => string;
@@ -29,18 +29,26 @@ export type VolumeControlsProps = {
 export const VolumeControls = ({
   volumeMuted,
   canControlVolume,
-  isPending,
   onToggleMute,
   volumeStepsCount,
   volumeIndex,
-  onVolumeChange,
-  onVolumeChangeAsync,
+  onVolumeDraftChange,
+  onVolumePreview,
   onVolumeCommit,
   previewIntervalMs,
   volumeLabel,
   volumeValueFormatter,
 }: VolumeControlsProps) => {
   const { profile } = useDisplayProfile();
+  const volumeSlider = useDeviceBoundSlider({
+    deviceValue: volumeIndex,
+    domain: createNumericSliderDomain({ min: 0, max: Math.max(0, volumeStepsCount - 1), round: Math.round }),
+    previewMode: "throttled",
+    preview: onVolumePreview,
+    commit: onVolumeCommit,
+    previewThrottleMs: previewIntervalMs,
+    onDraftChange: onVolumeDraftChange,
+  });
 
   return (
     <div className={profile === "compact" ? "flex flex-col items-stretch gap-3" : "flex flex-wrap items-center gap-3"}>
@@ -71,11 +79,9 @@ export const VolumeControls = ({
             min={0}
             max={Math.max(0, volumeStepsCount - 1)}
             step={1}
-            value={[volumeIndex]}
-            onValueChange={onVolumeChange}
-            onValueChangeAsync={onVolumeChangeAsync}
-            onValueCommitAsync={onVolumeCommit}
-            asyncThrottleMs={previewIntervalMs}
+            value={[volumeSlider.sliderValue]}
+            onValueChange={volumeSlider.onValueChange}
+            onValueCommit={volumeSlider.onValueCommit}
             valueFormatter={volumeValueFormatter}
             disabled={!canControlVolume}
             data-testid="volume-slider"

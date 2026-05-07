@@ -20,10 +20,13 @@ vi.mock("@/lib/logging", () => ({
 
 const blankCell = (): ScreenCell => ({ char: " ", reverse: false, color: 7 });
 
+const createCellGrid = (width = 60, height = 24): ScreenCell[][] =>
+  Array.from({ length: height }, () => Array.from({ length: width }, () => blankCell()));
+
 const createScreen = (overrides: Partial<TelnetScreen>): TelnetScreen => ({
   width: 60,
   height: 24,
-  cells: Array.from({ length: 24 }, () => Array.from({ length: 60 }, () => blankCell())),
+  cells: createCellGrid(),
   menus: [],
   form: null,
   selectedItem: null,
@@ -94,7 +97,7 @@ const createOverlaySubmenuScreen = (rootLabels: string[], rootIndex: number, row
 const createRunner = (sessionScreens: TelnetScreen[][]): TelnetSessionRunner => {
   const queue = [...sessionScreens];
   return {
-    withSession: async (callback) => {
+    withSession: async <T>(callback: (session: TelnetSessionApi) => Promise<T>) => {
       const screens = queue.shift();
       if (!screens) {
         throw new Error("No queued session screens available");
@@ -307,11 +310,142 @@ describe("discoverTelnetCapabilities", () => {
         actionLabel: "Reboot (Clr Mem)",
       },
     });
+
     expect(snapshot.actionSupport.saveConfigToFile).toMatchObject({
       status: "supported",
       target: {
         categoryLabel: "Configuration",
         actionLabel: "Save to File",
+      },
+    });
+  });
+
+  it("waits through delayed redraw frames before the action menu becomes visible", async () => {
+    const rootLabels = ["Configuration"];
+    const blankScreen = createScreen({ menus: [] });
+    const runner = createRunner([
+      [blankScreen, blankScreen, createRootScreen(rootLabels)],
+      [blankScreen, createRootScreen(rootLabels), blankScreen, createSubmenuScreen(rootLabels, 0, ["Save to File"])],
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "u64-delayed-open|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-delayed-open",
+      },
+      menuKey: "F5",
+      runner,
+    });
+
+    expect(snapshot.actionSupport.saveConfigToFile).toMatchObject({
+      status: "supported",
+      target: {
+        categoryLabel: "Configuration",
+        actionLabel: "Save to File",
+      },
+    });
+  });
+
+  it("falls back to the alternate menu key when the preferred key never opens the action menu", async () => {
+    const rootLabels = ["Power & Reset"];
+    const blankScreen = createScreen({ menus: [] });
+    const sendKeySpy = vi.fn();
+    const sessionScreens = [
+      [blankScreen, blankScreen, blankScreen, blankScreen, blankScreen, blankScreen, createRootScreen(rootLabels)],
+      [
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        createRootScreen(rootLabels),
+        createSubmenuScreen(rootLabels, 0, ["Reset C64", "Power Cycle"]),
+      ],
+    ];
+    const runner: TelnetSessionRunner = {
+      withSession: async <T>(callback: (session: TelnetSessionApi) => Promise<T>) => {
+        const screens = sessionScreens.shift();
+        if (!screens) {
+          throw new Error("No queued session screens available");
+        }
+        return await callback({
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+          sendKey: sendKeySpy,
+          sendRaw: vi.fn(),
+          readScreen: vi.fn().mockImplementation(async () => {
+            const next = screens.shift();
+            if (!next) {
+              throw new Error("No queued screen available");
+            }
+            return next;
+          }),
+          isConnected: vi.fn().mockReturnValue(true),
+        });
+      },
+    };
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "c64u-fallback-key|F1",
+      deviceInfo: {
+        product: "C64 Ultimate",
+        firmware_version: "1.1.0",
+        hostname: "c64u",
+        unique_id: "c64u-fallback-key",
+      },
+      menuKey: "F1",
+      runner,
+    });
+
+    expect(sendKeySpy.mock.calls.some(([key]) => key === "F5")).toBe(true);
+    expect(snapshot.actionSupport.powerCycle).toMatchObject({
+      status: "supported",
+      target: {
+        categoryLabel: "Power & Reset",
+        actionLabel: "Power Cycle",
+      },
+    });
+  });
+
+  it("keeps reboot clear memory supported for older firmware labels", async () => {
+    const rootLabels = ["Assembly 64", "C64 Machine", "Configuration"];
+    const runner = createRunner([
+      [createRootScreen(rootLabels)],
+      [createRootScreen(rootLabels), createDirectEntryScreen(rootLabels, 0, "Assembly 64 Query Form")],
+      [
+        createRootScreen(rootLabels),
+        createRootScreen(rootLabels, 1),
+        createSubmenuScreen(rootLabels, 1, ["Reset C64", "Reboot C64", "Reboot (Clr Mem)"]),
+      ],
+      [
+        createRootScreen(rootLabels),
+        createRootScreen(rootLabels, 1),
+        createRootScreen(rootLabels, 2),
+        createSubmenuScreen(rootLabels, 2, ["Save to File"]),
+      ],
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "u64-legacy|F5",
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.13",
+        hostname: "u64",
+        unique_id: "u64-legacy",
+      },
+      menuKey: "F5",
+      runner,
+    });
+
+    expect(snapshot.actionSupport.rebootClearMemory).toMatchObject({
+      status: "supported",
+      target: {
+        categoryLabel: "C64 Machine",
+        actionLabel: "Reboot (Clr Mem)",
       },
     });
   });
@@ -414,7 +548,24 @@ describe("discoverTelnetCapabilities", () => {
   });
 
   it("fails discovery when the action menu never becomes visible", async () => {
-    const runner = createRunner([[createScreen({ menus: [] }), createScreen({ menus: [] })]]);
+    const blankScreen = createScreen({ menus: [] });
+    const runner = createRunner([
+      [
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+        blankScreen,
+      ],
+    ]);
 
     await expect(
       discoverTelnetCapabilities({
@@ -430,7 +581,7 @@ describe("discoverTelnetCapabilities", () => {
       }),
     ).rejects.toMatchObject({
       code: "MENU_NOT_FOUND",
-      message: "Action menu not visible after F5",
+      message: "Action menu not visible after F5 or F1",
     });
   });
 

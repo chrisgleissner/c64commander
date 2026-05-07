@@ -8,25 +8,21 @@
 
 import { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw } from "lucide-react";
+import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw, LucideIcon } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
 
-type MachineOverflowAction = {
+type MachineExtraAction = {
   id: string;
   label: string;
-  onSelect: () => void;
+  icon?: LucideIcon;
+  onSelect: () => void | Promise<void>;
   disabled?: boolean;
   loading?: boolean;
   reason?: string | null;
+  variant?: "default" | "danger" | "success";
+  className?: string;
 };
 
 export interface MachineControlsProps {
@@ -45,6 +41,7 @@ export interface MachineControlsProps {
   onPauseResume: () => void;
   onSaveRam: () => void;
   onLoadRam: () => void;
+  ramActionsVisible?: boolean;
   onPowerOff: () => void;
   onReboot: () => void;
   onToggleMenu: () => void;
@@ -54,7 +51,7 @@ export interface MachineControlsProps {
   rebootLoading?: boolean;
   menuLoading?: boolean;
   powerCycleLoading?: boolean;
-  overflowActions?: MachineOverflowAction[];
+  extraActions?: MachineExtraAction[];
   onAction: (fn: () => Promise<void>, label: string) => void;
   telnetBusy?: boolean;
   footer?: ReactNode;
@@ -71,6 +68,7 @@ export function MachineControls({
   onPauseResume,
   onSaveRam,
   onLoadRam,
+  ramActionsVisible = false,
   onPowerOff,
   onReboot,
   onToggleMenu,
@@ -80,7 +78,7 @@ export function MachineControls({
   rebootLoading = false,
   menuLoading = false,
   powerCycleLoading = false,
-  overflowActions = [],
+  extraActions = [],
   onAction,
   telnetBusy = false,
   footer,
@@ -90,19 +88,13 @@ export function MachineControls({
   const showPowerCycle = powerCycleVisible ?? canRunPowerCycle;
   const powerCycleDisabled =
     !status.isConnected || effectiveBusy || Boolean(powerCycleDisabledReason) || !canRunPowerCycle;
-  const hasOverflowActions = overflowActions.length > 0;
-  const disabledCapabilityNotes = [
-    ...(showPowerCycle && powerCycleDisabledReason
-      ? [{ id: "powerCycle", label: "Power Cycle", reason: powerCycleDisabledReason }]
-      : []),
-    ...overflowActions
-      .filter((action) => action.disabled && action.reason)
-      .map((action) => ({
-        id: action.id,
-        label: action.label,
-        reason: action.reason as string,
-      })),
-  ];
+  const disabledCapabilityNotes = extraActions
+    .filter((action) => action.disabled && action.reason)
+    .map((action) => ({
+      id: action.id,
+      label: action.label,
+      reason: action.reason as string,
+    }));
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -111,39 +103,7 @@ export function MachineControls({
       className="space-y-2"
       data-section-label="Quick Actions"
     >
-      <SectionHeader
-        title="Quick Actions"
-        actions={
-          hasOverflowActions ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  data-testid="home-machine-overflow-trigger"
-                >
-                  ...
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" data-testid="home-machine-overflow-menu">
-                {overflowActions.map((action) => (
-                  <DropdownMenuItem
-                    key={action.id}
-                    disabled={action.disabled || action.loading}
-                    onSelect={() => action.onSelect()}
-                    data-testid={`home-machine-overflow-${action.id}`}
-                    title={action.reason ?? undefined}
-                  >
-                    {action.loading ? `${action.label}…` : action.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null
-        }
-      >
+      <SectionHeader title="Quick Actions">
         {effectiveBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
       </SectionHeader>
       <div className="space-y-2">
@@ -192,22 +152,26 @@ export function MachineControls({
             disabled={!status.isConnected || effectiveBusy}
             loading={menuLoading}
           />
-          <QuickActionCard
-            icon={Download}
-            label="Save RAM"
-            dataTestId="home-save-ram"
-            onClick={() => void onSaveRam()}
-            disabled={!status.isConnected || effectiveBusy}
-            loading={machineTaskId === "save-ram"}
-          />
-          <QuickActionCard
-            icon={Upload}
-            label="Load RAM"
-            dataTestId="home-load-ram"
-            onClick={() => void onLoadRam()}
-            disabled={!status.isConnected || effectiveBusy}
-            loading={machineTaskId === "load-ram"}
-          />
+          {ramActionsVisible ? (
+            <>
+              <QuickActionCard
+                icon={Download}
+                label="Save RAM"
+                dataTestId="home-save-ram"
+                onClick={() => void onSaveRam()}
+                disabled={!status.isConnected || effectiveBusy}
+                loading={machineTaskId === "save-ram"}
+              />
+              <QuickActionCard
+                icon={Upload}
+                label="Load RAM"
+                dataTestId="home-load-ram"
+                onClick={() => void onLoadRam()}
+                disabled={!status.isConnected || effectiveBusy}
+                loading={machineTaskId === "load-ram"}
+              />
+            </>
+          ) : null}
           {showPowerCycle ? (
             <QuickActionCard
               icon={RefreshCw}
@@ -220,6 +184,22 @@ export function MachineControls({
               loading={powerCycleLoading}
             />
           ) : null}
+          {extraActions.map((action) => {
+            const Icon = action.icon ?? RefreshCw;
+            return (
+              <QuickActionCard
+                key={action.id}
+                icon={Icon}
+                label={action.loading ? `${action.label}…` : action.label}
+                dataTestId={`home-machine-inline-${action.id}`}
+                onClick={() => void action.onSelect()}
+                disabled={action.disabled}
+                loading={action.loading}
+                variant={action.variant}
+                className={action.className}
+              />
+            );
+          })}
           <QuickActionCard
             icon={PowerOff}
             label="Power Off"

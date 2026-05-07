@@ -1,8 +1,25 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { toastSpy, reportUserErrorSpy, c64ApiMockRef, queryClientMockRef, updateConfigValueSpy, resolveConfigValueSpy } =
-  vi.hoisted(() => ({
+const {
+  toastSpy,
+  reportUserErrorSpy,
+  c64ApiMockRef,
+  queryClientMockRef,
+  updateConfigValueSpy,
+  resolveConfigValueSpy,
+  useC64ConnectionMock,
+  useLocalSourcesMock,
+  defaultLocalSourcesValue,
+} = vi.hoisted(() => {
+  const defaultLocalSourcesValue = {
+    sources: [] as any[],
+    addSourceFromPicker: vi.fn().mockResolvedValue(null),
+    addSourceFromFiles: vi.fn(),
+    removeSource: vi.fn(),
+    replaceSources: vi.fn(),
+  };
+  return {
     toastSpy: vi.fn(),
     reportUserErrorSpy: vi.fn(),
     c64ApiMockRef: {
@@ -22,7 +39,13 @@ const { toastSpy, reportUserErrorSpy, c64ApiMockRef, queryClientMockRef, updateC
     resolveConfigValueSpy: vi.fn(
       (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
     ),
-  }));
+    useC64ConnectionMock: vi.fn(() => ({
+      status: { deviceInfo: { product: "Ultimate 64" } },
+    })),
+    useLocalSourcesMock: vi.fn(() => defaultLocalSourcesValue),
+    defaultLocalSourcesValue,
+  };
+});
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
@@ -55,6 +78,11 @@ vi.mock("@/hooks/useC64Connection", () => ({
     data: { drives: [] },
     refetch: vi.fn().mockResolvedValue(undefined),
   }),
+  useC64Connection: useC64ConnectionMock,
+}));
+
+vi.mock("@/hooks/useLocalSources", () => ({
+  useLocalSources: useLocalSourcesMock,
 }));
 
 vi.mock("@/hooks/useDiagnosticsActivity", () => ({
@@ -156,11 +184,29 @@ vi.mock("@/components/SectionHeader", () => ({
 // Mock ItemSelectionDialog
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: (props: any) => (
-    <div data-testid="item-selection-dialog" data-open={props.open}>
+    <div
+      data-testid="item-selection-dialog"
+      data-open={props.open}
+      data-source-groups={JSON.stringify(
+        (props.sourceGroups ?? []).map((group: any) => ({
+          label: group.label,
+          sourceTypes: group.sources.map((s: any) => s.type),
+          sourceNames: group.sources.map((s: any) => s.name),
+        })),
+      )}
+    >
       {props.open && (
-        <button data-testid="confirm-mount" onClick={() => props.onConfirm?.(null, [{ path: "/USB0/games/test.d64" }])}>
-          Confirm
-        </button>
+        <>
+          <button
+            data-testid="confirm-mount"
+            onClick={() => props.onConfirm?.(null, [{ path: "/USB0/games/test.d64" }])}
+          >
+            Confirm
+          </button>
+          <button data-testid="invoke-add-local" onClick={() => void props.onAddLocalSource?.()}>
+            AddLocal
+          </button>
+        </>
       )}
     </div>
   ),
@@ -180,11 +226,24 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 
 vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", () => ({
-  createUltimateSourceLocation: () => ({ type: "ultimate", label: "C64U" }),
+  createUltimateSourceLocation: (options?: { name?: string }) => ({
+    id: "ultimate",
+    type: "ultimate",
+    name: options?.name ?? "C64U",
+  }),
 }));
 
 vi.mock("@/lib/sourceNavigation/sourceTerms", () => ({
-  SOURCE_LABELS: { c64u: "C64 Ultimate" },
+  SOURCE_LABELS: { c64u: "C64 Ultimate", local: "Local" },
+}));
+
+vi.mock("@/lib/sourceNavigation/localSourceAdapter", () => ({
+  createLocalSourceLocation: (source: any) => ({
+    id: source.id,
+    type: "local",
+    name: source.name,
+  }),
+  resolveLocalRuntimeFile: vi.fn(() => null),
 }));
 
 import { DriveManager } from "@/pages/home/components/DriveManager";
@@ -203,6 +262,10 @@ const getTelnetActionSupport = (actionId: string) => ({
 describe("DriveManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useC64ConnectionMock.mockReturnValue({
+      status: { deviceInfo: { product: "Ultimate 64" } },
+    } as any);
+    useLocalSourcesMock.mockReturnValue(defaultLocalSourcesValue);
   });
 
   const defaultProps = {
@@ -460,6 +523,73 @@ describe("DriveManager", () => {
       await vi.waitFor(() => {
         expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith("b", "/USB0/games/test.d64");
       });
+    });
+  });
+
+  describe("mount dialog source labelling", () => {
+    it("uses the connected device type label for the ultimate source", async () => {
+      useC64ConnectionMock.mockReturnValue({
+        status: { deviceInfo: { product: "Ultimate 64" } },
+      } as any);
+
+      render(<DriveManager {...defaultProps} />);
+      const mountBtns = screen.getAllByTestId("drive-mount-click");
+      fireEvent.click(mountBtns[0]); // Drive A
+      const dialog = await screen.findByTestId("item-selection-dialog");
+      const groups = JSON.parse(dialog.getAttribute("data-source-groups") ?? "[]");
+      const ultimateGroup = groups.find((g: any) => g.sourceTypes.includes("ultimate"));
+      expect(ultimateGroup?.sourceNames).toContain("U64");
+      expect(ultimateGroup?.label).toBe("U64");
+    });
+
+    it("falls back to the default C64U label when no device product is reported", async () => {
+      useC64ConnectionMock.mockReturnValue({
+        status: { deviceInfo: null },
+      } as any);
+
+      render(<DriveManager {...defaultProps} />);
+      const mountBtns = screen.getAllByTestId("drive-mount-click");
+      fireEvent.click(mountBtns[0]);
+      const dialog = await screen.findByTestId("item-selection-dialog");
+      const groups = JSON.parse(dialog.getAttribute("data-source-groups") ?? "[]");
+      const ultimateGroup = groups.find((g: any) => g.sourceTypes.includes("ultimate"));
+      expect(ultimateGroup?.sourceNames).toContain("C64 Ultimate");
+    });
+
+    it("invokes the local source picker for physical drives instead of hanging", async () => {
+      const addSourceFromPickerSpy = vi.fn().mockResolvedValue(null);
+      useLocalSourcesMock.mockReturnValue({
+        sources: [],
+        addSourceFromPicker: addSourceFromPickerSpy,
+        addSourceFromFiles: vi.fn(),
+        removeSource: vi.fn(),
+        replaceSources: vi.fn(),
+      } as any);
+
+      render(<DriveManager {...defaultProps} />);
+      const mountBtns = screen.getAllByTestId("drive-mount-click");
+      fireEvent.click(mountBtns[0]); // Drive A
+      fireEvent.click(await screen.findByTestId("invoke-add-local"));
+      await vi.waitFor(() => {
+        expect(addSourceFromPickerSpy).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("does not invoke the local picker for the Soft IEC mount path dialog", async () => {
+      const addSourceFromPickerSpy = vi.fn().mockResolvedValue(null);
+      useLocalSourcesMock.mockReturnValue({
+        sources: [],
+        addSourceFromPicker: addSourceFromPickerSpy,
+        addSourceFromFiles: vi.fn(),
+        removeSource: vi.fn(),
+        replaceSources: vi.fn(),
+      } as any);
+
+      render(<DriveManager {...defaultProps} />);
+      const mountBtns = screen.getAllByTestId("drive-mount-click");
+      fireEvent.click(mountBtns[2]); // Soft IEC
+      fireEvent.click(await screen.findByTestId("invoke-add-local"));
+      expect(addSourceFromPickerSpy).not.toHaveBeenCalled();
     });
   });
 

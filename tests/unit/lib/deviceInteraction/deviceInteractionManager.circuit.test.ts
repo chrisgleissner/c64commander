@@ -144,4 +144,36 @@ describe("deviceInteractionManager circuit cooldown", () => {
     expect(recoveredHandler).toHaveBeenCalledTimes(1);
     expect(setCircuitOpenUntil).toHaveBeenCalledWith(null);
   });
+
+  it("allows diagnostic REST probes to bypass an open circuit and reset it on success", async () => {
+    const { resetInteractionState, withRestInteraction } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-circuit-health"),
+      method: "GET",
+      path: "/v1/info",
+      normalizedUrl: "http://device/v1/info",
+      intent: "system" as const,
+      baseUrl: "http://device",
+      bypassBackoff: true,
+    };
+
+    const failingHandler = vi.fn().mockRejectedValue(new Error("Network error"));
+    await expect(withRestInteraction(meta, failingHandler)).rejects.toThrow("Network error");
+    await expect(withRestInteraction(meta, failingHandler)).rejects.toThrow("Network error");
+
+    const bypassHandler = vi.fn().mockResolvedValue({ product: "C64 Ultimate" });
+    await expect(withRestInteraction({ ...meta, bypassCircuit: true }, bypassHandler)).resolves.toEqual({
+      product: "C64 Ultimate",
+    });
+
+    expect(bypassHandler).toHaveBeenCalledTimes(1);
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      meta.action,
+      expect.objectContaining({ decision: "override", reason: "circuit-open" }),
+    );
+    expect(setCircuitOpenUntil).toHaveBeenCalledWith(null);
+  });
 });

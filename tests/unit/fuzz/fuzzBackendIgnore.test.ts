@@ -38,7 +38,7 @@ describe("isAlwaysExpectedFuzzBehavior", () => {
     "DiagnosticsBridge unavailable; native diagnostics mirroring disabled",
     "Category config fetch failed; falling back to item fetches",
     "API device host changed",
-    "C64 API retry scheduled after idle failure",
+    "C64 API retry scheduled after scheduled timeout",
     "Songlengths unavailable",
     "HVSC filesystem: Filesystem read directory failed",
     "HVSC paged folder listing failed; falling back to runtime",

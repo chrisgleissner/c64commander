@@ -42,6 +42,7 @@ type RestRequestMeta = {
   bypassCache?: boolean;
   bypassCooldown?: boolean;
   bypassBackoff?: boolean;
+  bypassCircuit?: boolean;
 };
 
 type FtpRequestMeta = {
@@ -482,13 +483,20 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const now = Date.now();
-  if (restCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
+  if (restCircuitUntilMs > now && !meta.bypassCircuit && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
     recordDeviceGuard(meta.action, {
       decision: "block",
       reason: "circuit-open",
       untilMs: restCircuitUntilMs,
     });
     throw new Error("Device circuit open");
+  }
+  if (restCircuitUntilMs > now && meta.bypassCircuit) {
+    recordDeviceGuard(meta.action, {
+      decision: "override",
+      reason: "circuit-open",
+      untilMs: restCircuitUntilMs,
+    });
   }
   if (restCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
     recordDeviceGuard(meta.action, {

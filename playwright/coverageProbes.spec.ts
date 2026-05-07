@@ -37,6 +37,15 @@ test.describe("Coverage probes", () => {
   test("exercises internal helpers for coverage", async ({ page }: { page: Page }) => {
     await page.goto("/__coverage__");
     const status = page.getByTestId("coverage-probe-status");
+    await expect
+      .poll(async () => {
+        const value = await status.textContent();
+        return value?.trim() ?? "";
+      })
+      .toMatch(/^(done|error)$/);
+    if ((await status.textContent())?.trim() === "error") {
+      console.log("Coverage probe errors:", await page.locator("li").allTextContents());
+    }
     await expect(status).toHaveText("done", { timeout: 30000 });
     await expect(page.locator('[data-testid="coverage-probe-page"]')).toBeVisible();
     await expect(page.getByText("Errors")).toHaveCount(0);

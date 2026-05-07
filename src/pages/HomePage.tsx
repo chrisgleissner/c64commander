@@ -6,22 +6,22 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
+import { RotateCcw, Save, RefreshCw, Power, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
 import { variant } from "@/generated/variant";
 import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { AppBar } from "@/components/AppBar";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 
 import { SystemInfo } from "./home/components/SystemInfo";
 import { MachineControls } from "./home/components/MachineControls";
 import { AudioMixer } from "./home/components/AudioMixer";
 import { StreamStatus } from "./home/components/StreamStatus";
 import { DriveManager } from "./home/components/DriveManager";
+import { HomeCpuSpeedSlider } from "./home/components/HomeCpuSpeedSlider";
 import { PrinterManager } from "./home/components/PrinterManager";
 import { LightingSummaryCard } from "./home/components/LightingSummaryCard";
 import { UserInterfaceSummaryCard } from "./home/components/UserInterfaceSummaryCard";
@@ -32,7 +32,6 @@ import { LoadConfigDialog } from "./home/dialogs/LoadConfigDialog";
 import { ManageConfigDialog } from "./home/dialogs/ManageConfigDialog";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { addErrorLog } from "@/lib/logging";
 import { useAppConfigState } from "@/hooks/useAppConfigState";
 import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
@@ -81,13 +80,12 @@ import {
 } from "./home/constants";
 
 import { normalizeOptionToken } from "./home/utils/uiLogic";
-import { buildConfigKey, readItemOptions, resolveTurboControlValue } from "./home/utils/HomeConfigUtils";
+import { buildConfigKey, readItemOptions } from "./home/utils/HomeConfigUtils";
 
 import { SectionHeader } from "@/components/SectionHeader";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
-import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
@@ -98,6 +96,7 @@ import {
   type DeviceControlOperation,
   type DeviceControlResult,
 } from "@/lib/deviceControl/deviceControl";
+import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
 
 export default function HomePage() {
   return (
@@ -190,10 +189,8 @@ function HomePageContent() {
   const [restoreTarget, setRestoreTarget] = useState<RestorableSnapshotEntry | null>(null);
   const [reuProgress, setReuProgress] = useState<ReuProgressState | null>(null);
   const [reuTaskPending, setReuTaskPending] = useState(false);
-  const [cpuSpeedOptimisticValue, setCpuSpeedOptimisticValue] = useState<string | null>(null);
   const [deviceControlActionId, setDeviceControlActionId] = useState<DeviceControlOperation | null>(null);
   const [configFileTaskPending, setConfigFileTaskPending] = useState<"save" | "load" | null>(null);
-  const cpuSpeedDraggingRef = useRef(false);
   const { snapshots } = useSnapshotStore();
   const { snapshots: reuSnapshots } = useReuSnapshotStore();
 
@@ -211,10 +208,13 @@ function HomePageContent() {
     isActiveProfileModified,
   } = useLightingStudio();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
-  const { value: reuSnapshotEnabled } = useFeatureFlag("reu_snapshot_enabled");
-  const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
-  const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
-
+  const { value: reuSnapshotEnabled } = useFeatureFlag("home_telnet_reu_snapshot_enabled");
+  const { value: ramSnapshotsEnabled } = useFeatureFlag("ram_snapshots_enabled");
+  const { value: homeTelnetConfigActionsEnabled } = useFeatureFlag("home_telnet_config_actions_enabled");
+  const { value: homeTelnetDriveActionsEnabled } = useFeatureFlag("home_telnet_drive_actions_enabled");
+  const { value: homeTelnetPrinterActionsEnabled } = useFeatureFlag("home_telnet_printer_actions_enabled");
+  const { value: homeTelnetPowerCycleEnabled } = useFeatureFlag("home_telnet_power_cycle_enabled");
+  const { value: homeTelnetClearRamRebootEnabled } = useFeatureFlag("home_telnet_clear_ram_reboot_enabled");
   const deviceControlBusy = deviceControlActionId !== null;
   const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
   const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...(reuSnapshotEnabled ? reuSnapshots : [])].sort(
@@ -234,7 +234,15 @@ function HomePageContent() {
     }
     return support.target;
   };
-  const powerCycleDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("powerCycle") : null;
+  const deviceCode = inferConnectedDeviceCode(status.deviceInfo?.product);
+  const powerCycleSupportedByProduct = deviceCode === "c64u" || deviceCode === "u64e2";
+  const powerCycleSupport = telnet.isAvailable ? getTelnetSupport("powerCycle") : null;
+  const powerCycleVisible =
+    homeTelnetPowerCycleEnabled &&
+    powerCycleSupportedByProduct &&
+    telnet.isAvailable &&
+    powerCycleSupport?.status === "supported";
+  const powerCycleDisabledReason = null;
   const saveReuDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveReuMemory") : null;
   const saveConfigDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveConfigToFile") : null;
   const clearFlashDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("clearFlashConfig") : null;
@@ -512,27 +520,8 @@ function HomePageContent() {
 
   const handleRebootClearMemory = async () => {
     if (!status.isConnected || machineTaskBusy || telnet.isBusy) return;
-    if (telnet.isAvailable) {
-      try {
-        await telnet.executeAction("rebootClearMemory");
-        toast({ title: "Machine rebooting" });
-        setMachineExecutionState("running");
-        return;
-      } catch (error) {
-        const resolvedError = error as Error;
-        addErrorLog("Reboot clear memory telnet failed; falling back to REST", {
-          error: {
-            name: resolvedError.name,
-            message: resolvedError.message,
-            stack: resolvedError.stack,
-          },
-        });
-      }
-    }
-
-    await executeDeviceControl({
-      actionId: "rebootFull",
-      run: () => deviceControl.rebootFull(),
+    await executeTelnetAction({
+      actionId: "rebootClearMemory",
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
       failureTitle: "Reboot failed",
@@ -594,20 +583,31 @@ function HomePageContent() {
     );
   };
 
-  const machineOverflowActions = [
-    {
-      id: "rebootClearMemory",
-      label: "Reboot (Clear RAM)",
-      onSelect: () => void handleRebootClearMemory(),
-      disabled: !isActive || machineTaskBusy || telnet.isBusy,
-      loading: telnet.activeActionId === "rebootClearMemory" || deviceControlActionId === "rebootFull",
-    },
+  const clearRamRebootSupport = telnet.isAvailable ? getTelnetSupport("rebootClearMemory") : null;
+  const clearRamRebootVisible =
+    homeTelnetClearRamRebootEnabled && telnet.isAvailable && clearRamRebootSupport?.status === "supported";
+  const machineExtraActions = [
+    ...(clearRamRebootVisible
+      ? [
+          {
+            id: "rebootClearMemory",
+            label: "Reboot (Clr Mem)",
+            icon: Power,
+            variant: "danger" as const,
+            className: "border-destructive/40 bg-destructive/[0.04]",
+            onSelect: handleRebootClearMemory,
+            disabled: !isActive || machineTaskBusy || telnet.isBusy,
+            loading: telnet.activeActionId === "rebootClearMemory",
+          },
+        ]
+      : []),
     ...(reuSnapshotEnabled
       ? [
           {
             id: "saveReuMemory",
             label: TELNET_ACTIONS.saveReuMemory.label,
-            onSelect: () => void handleSaveReu(),
+            icon: Save,
+            onSelect: handleSaveReu,
             disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
             loading: telnet.activeActionId === "saveReuMemory",
             reason: saveReuDisabledReason,
@@ -721,55 +721,6 @@ function HomePageContent() {
     resolveConfigValue(u64Category, "U64 Specific Settings", "UserPort Power Enable", unavailableLabel),
   );
 
-  const handleTurboControlAutoAdjust = useCallback(
-    async (cpuSpeedVal: string) => {
-      if (turboControlOptions.length === 0) return;
-      const desiredTurbo = resolveTurboControlValue(cpuSpeedVal, turboControlOptions);
-      if (normalizeOptionToken(desiredTurbo) === normalizeOptionToken(turboControlValue)) return;
-      await updateConfigValue(
-        "U64 Specific Settings",
-        "Turbo Control",
-        desiredTurbo,
-        "HOME_TURBO_CONTROL",
-        "Turbo control updated",
-        { suppressToast: true },
-      );
-    },
-    [turboControlOptions, turboControlValue, updateConfigValue],
-  );
-
-  const handleCpuSpeedChange = trace(async function handleCpuSpeedChange(
-    nextValue: string,
-    options?: { suppressToast?: boolean },
-  ) {
-    await updateConfigValue("U64 Specific Settings", "CPU Speed", nextValue, "HOME_CPU_SPEED", "CPU speed updated", {
-      suppressToast: options?.suppressToast,
-    });
-    await handleTurboControlAutoAdjust(nextValue);
-  });
-
-  const handleCpuSpeedPreviewChange = useCallback(
-    (nextValue: string) => {
-      // Interactive write bypasses the queue for instant hardware feedback.
-      void interactiveWriteU64({ "CPU Speed": nextValue }).catch(() => undefined);
-    },
-    [interactiveWriteU64],
-  );
-
-  const handleCpuSpeedCommitChange = useCallback(
-    (nextValue: string) => {
-      // Commit via interactive write for the slider value, then trigger the
-      // Turbo Control auto-adjustment as a one-shot deliberate write without
-      // re-writing CPU Speed through the global queue.
-      void interactiveWriteU64({ "CPU Speed": nextValue })
-        .then(() => handleTurboControlAutoAdjust(nextValue))
-        .catch(() => {
-          setCpuSpeedOptimisticValue(cpuSpeedValue);
-        });
-    },
-    [cpuSpeedValue, interactiveWriteU64, handleTurboControlAutoAdjust],
-  );
-
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {
     try {
       await saveCurrentConfig(name);
@@ -808,6 +759,7 @@ function HomePageContent() {
   });
 
   const localConfigFileActionsAvailable = telnet.isAvailable && isNativePlatform();
+  const advancedHomeConfigActionsVisible = homeTelnetConfigActionsEnabled;
 
   const handleSaveToFile = trace(async function handleSaveToFile() {
     setConfigFileTaskPending("save");
@@ -856,7 +808,6 @@ function HomePageContent() {
   const effectiveCartridgePreferenceOptions = cartridgePreferenceOptions.length
     ? cartridgePreferenceOptions
     : [cartridgePreferenceValue];
-  const cpuSpeedPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "CPU Speed")]);
   const turboControlPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Turbo Control")]);
   const badlineTimingPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Badline Timing")]);
   const superCpuDetectPending = Boolean(
@@ -871,23 +822,6 @@ function HomePageContent() {
     configWritePending[buildConfigKey("U64 Specific Settings", "Digital Video Mode")],
   );
   const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
-  const cpuSpeedSliderOptions = effectiveCpuSpeedOptions;
-  const cpuSpeedSliderIndex = Math.max(
-    0,
-    cpuSpeedSliderOptions.findIndex((option) => option === cpuSpeedValue),
-  );
-  const cpuSpeedDisplayValue = cpuSpeedOptimisticValue ?? cpuSpeedValue;
-  const cpuSpeedDisplayIndex = Math.max(
-    0,
-    cpuSpeedSliderOptions.findIndex((option) => option === cpuSpeedDisplayValue),
-  );
-  const resolveCpuSpeedOption = (index: number) =>
-    cpuSpeedSliderOptions[Math.round(index)] ?? cpuSpeedSliderOptions[0] ?? "1";
-
-  useEffect(() => {
-    if (cpuSpeedDraggingRef.current || cpuSpeedPending) return;
-    setCpuSpeedOptimisticValue(cpuSpeedValue);
-  }, [cpuSpeedPending, cpuSpeedValue]);
   const effectiveTurboControlOptions = turboControlOptions.length ? turboControlOptions : [turboControlValue];
   const effectiveBadlineTimingOptions = badlineTimingOptions.length ? badlineTimingOptions : [badlineTimingValue];
   const effectiveSuperCpuDetectOptions = superCpuDetectOptions.length ? superCpuDetectOptions : [superCpuDetectValue];
@@ -994,19 +928,20 @@ function HomePageContent() {
             onPauseResume={handlePauseResume}
             onSaveRam={() => setSaveRamDialogOpen(true)}
             onLoadRam={() => setSnapshotManagerOpen(true)}
+            ramActionsVisible={ramSnapshotsEnabled}
             onPowerOff={handlePowerOff}
             onReboot={() => void handleReboot()}
             onToggleMenu={() => void handleMenuToggle()}
-            powerCycleVisible={telnet.isAvailable}
+            powerCycleVisible={powerCycleVisible}
             onPowerCycle={powerCycleDisabledReason === null ? () => void handlePowerCycle() : undefined}
             powerCycleDisabledReason={powerCycleDisabledReason}
             rebootLoading={deviceControlActionId === "rebootKeepRam"}
             menuLoading={deviceControlActionId === "toggleMenu"}
             powerCycleLoading={telnet.activeActionId === "powerCycle"}
-            overflowActions={machineOverflowActions}
+            extraActions={machineExtraActions}
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
-            footer={ramDumpFolderCard}
+            footer={ramSnapshotsEnabled ? ramDumpFolderCard : null}
           />
 
           <motion.div
@@ -1038,39 +973,13 @@ function HomePageContent() {
                       )
                     }
                   />
-                  <div className="space-y-2 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground">CPU Speed</span>
-                      <span className="text-xs font-semibold text-foreground" data-testid="home-cpu-speed-value">
-                        {resolveCpuSpeedOption(cpuSpeedDisplayIndex)}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[cpuSpeedDisplayIndex]}
-                      min={0}
-                      max={Math.max(cpuSpeedSliderOptions.length - 1, 0)}
-                      step={1}
-                      disabled={!isActive || cpuSpeedPending || cpuSpeedSliderOptions.length <= 1}
-                      onValueChange={(values) => {
-                        const nextValue = resolveCpuSpeedOption(values[0] ?? 0);
-                        cpuSpeedDraggingRef.current = true;
-                        setCpuSpeedOptimisticValue(nextValue);
-                      }}
-                      onValueCommit={() => {
-                        cpuSpeedDraggingRef.current = false;
-                      }}
-                      onValueChangeAsync={(nextIndex) => {
-                        handleCpuSpeedPreviewChange(String(resolveCpuSpeedOption(nextIndex)));
-                      }}
-                      onValueCommitAsync={(nextIndex) => {
-                        const nextValue = String(resolveCpuSpeedOption(nextIndex));
-                        setCpuSpeedOptimisticValue(nextValue);
-                        handleCpuSpeedCommitChange(nextValue);
-                      }}
-                      valueFormatter={(index) => resolveCpuSpeedOption(index)}
-                      data-testid="home-cpu-speed-slider"
-                    />
-                  </div>
+                  <HomeCpuSpeedSlider
+                    isActive={isActive}
+                    cpuSpeedOptions={effectiveCpuSpeedOptions}
+                    cpuSpeedValue={cpuSpeedValue}
+                    turboControlOptions={effectiveTurboControlOptions}
+                    turboControlValue={turboControlValue}
+                  />
                   <SummaryConfigControlRow
                     disabled={!isActive || badlineTimingPending}
                     label="Badline Timing"
@@ -1412,7 +1321,7 @@ function HomePageContent() {
               machineTaskBusy={machineTaskBusy}
               machineTaskId={machineTaskId}
               onResetDrives={handleResetDrives}
-              telnetAvailable={telnet.isAvailable}
+              telnetAvailable={homeTelnetDriveActionsEnabled && telnet.isAvailable}
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
               getTelnetActionSupport={telnet.getActionSupport}
@@ -1448,7 +1357,7 @@ function HomePageContent() {
               machineTaskBusy={machineTaskBusy}
               machineTaskId={machineTaskId}
               onResetPrinter={handleResetPrinter}
-              telnetAvailable={telnet.isAvailable}
+              telnetAvailable={homeTelnetPrinterActionsEnabled && telnet.isAvailable}
               telnetBusy={telnet.isBusy}
               telnetActiveActionId={telnet.activeActionId}
               getTelnetActionSupport={telnet.getActionSupport}
@@ -1547,7 +1456,7 @@ function HomePageContent() {
                 onClick={() => setManageDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
               />
-              {localConfigFileActionsAvailable && (
+              {advancedHomeConfigActionsVisible && localConfigFileActionsAvailable && (
                 <QuickActionCard
                   icon={Download}
                   label="Save"
@@ -1558,7 +1467,7 @@ function HomePageContent() {
                   loading={configFileTaskPending === "save"}
                 />
               )}
-              {localConfigFileActionsAvailable && (
+              {advancedHomeConfigActionsVisible && localConfigFileActionsAvailable && (
                 <QuickActionCard
                   icon={Download}
                   label="Load"
@@ -1569,7 +1478,7 @@ function HomePageContent() {
                   loading={configFileTaskPending === "load"}
                 />
               )}
-              {telnet.isAvailable && (
+              {advancedHomeConfigActionsVisible && telnet.isAvailable && (
                 <QuickActionCard
                   icon={Trash2}
                   label="Clear Flash"

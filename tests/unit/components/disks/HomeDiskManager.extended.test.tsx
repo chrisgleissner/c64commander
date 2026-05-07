@@ -636,9 +636,8 @@ describe("HomeDiskManager Extended", () => {
     });
   });
 
-  it("handles hidden file input upload", async () => {
+  it("ignores hidden file input changes outside picker flow", async () => {
     const { container } = render(<HomeDiskManager />);
-    // Hidden input
     const input = container.querySelector('input[type="file"]');
     expect(input).toBeInTheDocument();
 
@@ -646,71 +645,48 @@ describe("HomeDiskManager Extended", () => {
       type: "application/octet-stream",
       lastModified: 12345,
     });
-    Object.defineProperty(file, "webkitRelativePath", { value: "" }); // standard file upload
-
-    mockAddSourceFromFiles.mockReturnValue({
-      id: "upload-source",
-      type: "local",
-    });
-
-    fireEvent.change(input!, { target: { files: [file] } });
-
-    await waitFor(() => {
-      expect(mockAddSourceFromFiles).toHaveBeenCalled();
-      expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
-        expect.arrayContaining([expect.objectContaining({ path: "upload.d64" })]),
-        expect.anything(),
-      );
-    });
-  });
-
-  it("reports a warning when uploaded files do not contain disk images", async () => {
-    const { reportUserError } = await import("@/lib/uiErrors");
-    const { container } = render(<HomeDiskManager />);
-    const input = container.querySelector('input[type="file"]');
-    expect(input).toBeInTheDocument();
-
-    const file = new File(["notes"], "notes.txt", {
-      type: "text/plain",
-      lastModified: 12345,
-    });
     Object.defineProperty(file, "webkitRelativePath", { value: "" });
 
-    mockAddSourceFromFiles.mockReturnValue({
-      id: "upload-source",
-      type: "local",
-    });
-
     fireEvent.change(input!, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "No disks found",
-        }),
-      );
+      expect(input).toHaveValue("");
     });
+    expect(mockAddSourceFromFiles).not.toHaveBeenCalled();
+    expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalled();
   });
 
-  it("stops hidden file upload when no local source could be created", async () => {
+  it("does not double-process picker file changes during add-source import", async () => {
     const { container } = render(<HomeDiskManager />);
-    const input = container.querySelector('input[type="file"]');
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
     expect(input).toBeInTheDocument();
 
     const file = new File(["disk"], "upload.d64", {
       type: "application/octet-stream",
       lastModified: 12345,
     });
-    Object.defineProperty(file, "webkitRelativePath", { value: "" });
+    Object.defineProperty(file, "webkitRelativePath", { value: "Picker/upload.d64" });
 
-    mockAddSourceFromFiles.mockReturnValue(null);
+    mockAddSourceFromPicker.mockImplementationOnce(async (pickerInput: HTMLInputElement | null) => {
+      expect(pickerInput).toBe(input);
+      fireEvent.change(pickerInput!, { target: { files: [file] } });
+      return {
+        id: "picker-source",
+        name: "Picker",
+        rootName: "Picker",
+        rootPath: "/Picker/",
+        createdAt: "2026-05-07T12:00:00.000Z",
+        entries: [{ name: "upload.d64", relativePath: "/Picker/upload.d64", sizeBytes: file.size }],
+      };
+    });
 
-    fireEvent.change(input!, { target: { files: [file] } });
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(within(screen.getByTestId("item-selection-dialog")).getByText("Add Source"));
 
     await waitFor(() => {
-      expect(mockAddSourceFromFiles).toHaveBeenCalled();
+      expect(mockAddSourceFromPicker).toHaveBeenCalled();
     });
-    expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalled();
+    expect(mockAddSourceFromFiles).not.toHaveBeenCalled();
   });
 
   it("handles add-source picker cancellation", async () => {

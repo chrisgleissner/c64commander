@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useMemo } from "react";
+import { useRef, useState, useMemo } from "react";
 import { getC64API } from "@/lib/c64api";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
@@ -16,7 +16,15 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { useC64Connection } from "@/hooks/useC64Connection";
+import { useLocalSources } from "@/hooks/useLocalSources";
+import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
+import { buildDiskMountType, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
+import { createDiskEntry } from "@/lib/disks/diskTypes";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import type { SourceLocation } from "@/lib/sourceNavigation/types";
 import { DRIVE_CONTROL_SPECS, DriveControlSpec } from "../constants";
 import { formatDiskDosStatus, type DiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -99,8 +107,16 @@ export function DriveManager({
   const api = getC64API();
   const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
+  const { status: connectionStatus } = useC64Connection();
+  const { sources: localSources, addSourceFromPicker } = useLocalSources();
+  const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const showTelnetDriveControls =
     telnetAvailable && typeof onTelnetAction === "function" && typeof getTelnetActionSupport === "function";
+
+  const ultimateSourceName = useMemo(() => {
+    const product = connectionStatus.deviceInfo?.product;
+    return inferConnectedDeviceLabel(product) ?? SOURCE_LABELS.c64u;
+  }, [connectionStatus.deviceInfo?.product]);
 
   const {
     refetchDrives,
@@ -122,23 +138,55 @@ export function DriveManager({
 
   const sourceGroups = useMemo(() => {
     const groups: SourceGroup[] = [];
+    if (localSources.length) {
+      groups.push({
+        label: SOURCE_LABELS.local,
+        sources: localSources.map((source) => createLocalSourceLocation(source)),
+      });
+    }
     if (isConnected) {
       groups.push({
-        label: SOURCE_LABELS.c64u,
-        sources: [createUltimateSourceLocation()],
+        label: ultimateSourceName,
+        sources: [createUltimateSourceLocation({ name: ultimateSourceName })],
       });
     }
     return groups;
-  }, [isConnected]);
+  }, [isConnected, localSources, ultimateSourceName]);
 
   const handleMountClick = (spec: DriveControlSpec, currentPath?: string) => {
     setMountTarget({ spec, currentPath });
   };
 
-  const handleMountSelection = async (source: unknown, selections: { path: string }[]) => {
+  const handleAddLocalSource = async () => {
+    const source = await addSourceFromPicker(localSourceInputRef.current);
+    return source?.id ?? null;
+  };
+
+  const mountLocalImageOnPhysicalDrive = async (
+    driveId: "a" | "b",
+    source: SourceLocation,
+    selectedPath: string,
+    selectedName: string,
+  ) => {
+    const mountType = buildDiskMountType(selectedPath);
+    if (!mountType) {
+      throw new Error("Unsupported disk image type.");
+    }
+    const runtimeFile = resolveLocalRuntimeFile(source.id, selectedPath);
+    const diskEntry = createDiskEntry({
+      path: selectedPath,
+      location: "local",
+      sourceId: source.id,
+    });
+    const blob = runtimeFile ?? (await resolveLocalDiskBlob(diskEntry));
+    await api.mountDriveUpload(driveId, blob, mountType, "readwrite", { filename: selectedName });
+  };
+
+  const handleMountSelection = async (source: unknown, selections: { path: string; name?: string }[]) => {
     if (!mountTarget || selections.length === 0) return false;
     const selected = selections[0];
     const { spec } = mountTarget;
+    const sourceLocation = source as SourceLocation | null;
 
     if (spec.class === "SOFT_IEC_DRIVE") {
       await updateConfigValue(
@@ -150,10 +198,18 @@ export function DriveManager({
       );
     } else if (spec.class === "PHYSICAL_DRIVE_A" || spec.class === "PHYSICAL_DRIVE_B") {
       const driveId = spec.class === "PHYSICAL_DRIVE_A" ? "a" : "b";
-      await handleAction(async () => {
-        await api.mountDrive(driveId, selected.path);
-        await refetchDrives();
-      }, `Mounted to Drive ${driveId.toUpperCase()}`);
+      const description = `Mounted to Drive ${driveId.toUpperCase()}`;
+      if (sourceLocation?.type === "local") {
+        await handleAction(async () => {
+          await mountLocalImageOnPhysicalDrive(driveId, sourceLocation, selected.path, selected.name ?? selected.path);
+          await refetchDrives();
+        }, description);
+      } else {
+        await handleAction(async () => {
+          await api.mountDrive(driveId, selected.path);
+          await refetchDrives();
+        }, description);
+      }
     }
     setMountTarget(null);
     return true;
@@ -378,6 +434,22 @@ export function DriveManager({
         })}
       </div>
 
+      <input
+        ref={localSourceInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={wrapUserEvent(
+          (event) => {
+            event.currentTarget.value = "";
+          },
+          "upload",
+          "DriveManager",
+          { type: "file" },
+          "FileInput",
+        )}
+      />
+
       <ItemSelectionDialog
         open={mountTarget !== null}
         onOpenChange={(open) => !open && setMountTarget(null)}
@@ -389,7 +461,7 @@ export function DriveManager({
             : sourceGroups
         }
         onConfirm={handleMountSelection}
-        onAddLocalSource={async () => null}
+        onAddLocalSource={mountTarget?.spec.class === "SOFT_IEC_DRIVE" ? async () => null : handleAddLocalSource}
         allowFolderSelection={mountTarget?.spec.class === "SOFT_IEC_DRIVE"}
       />
 

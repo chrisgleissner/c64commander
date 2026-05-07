@@ -1,0 +1,112 @@
+appId: uk.gleissner.c64commander
+tags:
+  - edge
+  - slow
+  - device
+  - cpu-slider
+  - real-network
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+# edge-home-cpu-speed-latency: repeatedly sweep the Home CPU Speed slider,
+# verify the local value sticks, confirm the authoritative device value matches
+# after a refetch, and capture exact REST timing evidence via the CPU slider probe
+# plus logcat entries emitted as C64U_HOME_CPU_SPEED_SLIDER_*.
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    text: "Close"
+    optional: true
+- extendedWaitUntil:
+    notVisible: "Diagnostics"
+    timeout: ${TIMEOUT}
+- repeat:
+    while:
+      notVisible: "CPU Speed"
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 86%
+          duration: 250
+- extendedWaitUntil:
+    visible:
+      id: "home-cpu-speed-probe"
+    timeout: ${TIMEOUT}
+- copyTextFrom:
+    id: "home-cpu-speed-probe"
+- evalScript: ${output.initialProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
+
+- swipe:
+    start: 10%, 63%
+    end: 92%, 63%
+    duration: 350
+- waitForAnimationToEnd
+- copyTextFrom:
+    id: "home-cpu-speed-probe"
+- evalScript: ${output.firstProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
+- assertTrue: ${output.firstProbe.phase == "success"}
+- assertTrue: ${output.firstProbe.durationMs < 1000}
+- assertTrue: ${output.firstProbe.displayValue != output.initialProbe.displayValue}
+
+- tapOn:
+    id: "tab-play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "tab-home"
+- repeat:
+    while:
+      notVisible: "CPU Speed"
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 86%
+          duration: 250
+- extendedWaitUntil:
+    visible: "CPU Speed"
+    timeout: ${TIMEOUT}
+- copyTextFrom:
+    id: "home-cpu-speed-probe"
+- evalScript: ${output.firstRefetchedProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
+- assertTrue: ${output.firstRefetchedProbe.authoritativeValue == output.firstProbe.targetValue}
+- assertTrue: ${output.firstRefetchedProbe.displayValue == output.firstProbe.targetValue}
+
+- swipe:
+    start: 92%, 63%
+    end: 10%, 63%
+    duration: 350
+- waitForAnimationToEnd
+- copyTextFrom:
+    id: "home-cpu-speed-probe"
+- evalScript: ${output.secondProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
+- assertTrue: ${output.secondProbe.phase == "success"}
+- assertTrue: ${output.secondProbe.durationMs < 1000}
+- assertTrue: ${output.secondProbe.displayValue != output.firstProbe.displayValue}
+
+- tapOn:
+    id: "tab-play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "tab-home"
+- repeat:
+    while:
+      notVisible: "CPU Speed"
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 86%
+          duration: 250
+- extendedWaitUntil:
+    visible: "CPU Speed"
+    timeout: ${TIMEOUT}
+- copyTextFrom:
+    id: "home-cpu-speed-probe"
+- evalScript: ${output.secondRefetchedProbe = JSON.parse(maestro.copiedText.replace("CPU slider probe ", "").replace(/\s+/g, ""))}
+- assertTrue: ${output.secondRefetchedProbe.authoritativeValue == output.secondProbe.targetValue}
+- assertTrue: ${output.secondRefetchedProbe.displayValue == output.secondProbe.targetValue}
+
+- takeScreenshot: edge-home-cpu-speed-latency-final

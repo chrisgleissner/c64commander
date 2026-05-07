@@ -260,6 +260,15 @@ npm run build
 - For changes under `agents/`, also run `npm run test:agents` and keep branch coverage at **≥90%** there.
 - Do not add low-value tests merely to inflate coverage. Add meaningful tests that lock behavior.
 
+## Fast local Android deploy exception
+
+- If the user prompt explicitly contains `FAST_ANDROID_DEPLOY`, `fast deploy`, `quick deploy`, `device loop`, or `no-coverage deploy`, treat the task as a local Android debug/deploy loop.
+- In that mode, do **not** run lint, unit tests, E2E tests, coverage, screenshot flows, or CI-style validation unless the user explicitly asks.
+- Prefer `./build --skip-tests --install-apk` for that loop.
+- Do not pass `--device-id` unless multiple physical devices are attached or the user explicitly requests a specific target.
+- This exception is only for local iteration speed.
+- `.github/prompts/pr-converge.prompt.md` overrides this exception and restores the full validation and coverage requirements.
+
 ## Android (local)
 
 ```bash

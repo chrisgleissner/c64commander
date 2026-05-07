@@ -20,6 +20,12 @@ import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
+import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
+import {
+  getConfigCategoryItems,
+  validateConfigBatchWrite,
+  validateConfigWrite,
+} from "@/lib/config/validateConfigWrite";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -55,7 +61,19 @@ import {
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
-const CONTROL_REQUEST_TIMEOUT_MS = 3000;
+// Two timeout budgets for non-upload, non-playback requests:
+// - INTERACTIVE: user-tappable controls and config writes the user is
+//   staring at. Tighter than the firmware p99 (~600 ms) so a stuck
+//   request surfaces feedback within ~1.5 s instead of the prior 3 s.
+// - BACKGROUND: polling, prefetch, health checks. Tolerates slow
+//   firmware paths under load.
+export const INTERACTIVE_CONTROL_TIMEOUT_MS = 1500;
+export const BACKGROUND_REQUEST_TIMEOUT_MS = 3000;
+// Backwards-compatible aliases (kept until all call sites are migrated).
+const CONTROL_REQUEST_TIMEOUT_MS = INTERACTIVE_CONTROL_TIMEOUT_MS;
+const SCHEDULED_REQUEST_TIMEOUT_MS = BACKGROUND_REQUEST_TIMEOUT_MS;
+const SCHEDULED_REQUEST_MAX_ATTEMPTS = 3;
+const SCHEDULED_REQUEST_RETRY_GUARD_MS = 6000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
@@ -63,7 +81,6 @@ const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
 const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);
-const RETRYABLE_IDLE_RECOVERY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const DEDUPEABLE_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const READ_REQUEST_BUDGET_WINDOW_MS = 500;
 const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
@@ -283,6 +300,8 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassCache?: boolean;
   __c64uBypassCooldown?: boolean;
   __c64uBypassBackoff?: boolean;
+  __c64uBypassCircuit?: boolean;
+  __c64uExpectedMissing?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -333,6 +352,7 @@ export class C64API {
   private apiBaseUrl: string;
   private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
   private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
+  private readonly configCategoryItemsCache = new Map<string, Record<string, unknown>>();
 
   constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
     this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
@@ -487,6 +507,95 @@ export class C64API {
   private resetRequestReadState() {
     this.inFlightReadRequests.clear();
     this.readRequestBudget.clear();
+    this.configCategoryItemsCache.clear();
+  }
+
+  private rememberConfigCategoryItems(category: string, payload: unknown) {
+    const nextItems = getConfigCategoryItems(payload, category);
+    if (!Object.keys(nextItems).length) {
+      return;
+    }
+    const previousItems = this.configCategoryItemsCache.get(category) ?? {};
+    this.configCategoryItemsCache.set(category, {
+      ...previousItems,
+      ...nextItems,
+    });
+  }
+
+  private setCachedConfigValue(category: string, item: string, value: string | number) {
+    const previousItems = this.configCategoryItemsCache.get(category);
+    if (!previousItems || previousItems[item] === undefined) {
+      return;
+    }
+    const previousConfig = previousItems[item];
+    if (typeof previousConfig !== "object" || previousConfig === null || Array.isArray(previousConfig)) {
+      this.configCategoryItemsCache.set(category, {
+        ...previousItems,
+        [item]: value,
+      });
+      return;
+    }
+    this.configCategoryItemsCache.set(category, {
+      ...previousItems,
+      [item]: {
+        ...(previousConfig as Record<string, unknown>),
+        selected: value,
+      },
+    });
+  }
+
+  private async ensureConfigCategoryItems(category: string, itemNames: string[]) {
+    const cachedItems = this.configCategoryItemsCache.get(category) ?? {};
+    const missingItems = itemNames.filter((item) => cachedItems[item] === undefined);
+    if (missingItems.length === 0) {
+      return cachedItems;
+    }
+
+    const categoryPayload = await this.getCategory(category, { __c64uIntent: "user" });
+    this.rememberConfigCategoryItems(category, categoryPayload);
+
+    let resolvedItems = this.configCategoryItemsCache.get(category) ?? {};
+    const remainingItems = itemNames.filter((item) => resolvedItems[item] === undefined);
+    if (remainingItems.length === 0) {
+      return resolvedItems;
+    }
+
+    await Promise.all(
+      remainingItems.map(async (item) => {
+        const itemPayload = await this.getConfigItem(category, item, { __c64uIntent: "user" });
+        this.rememberConfigCategoryItems(category, itemPayload);
+      }),
+    );
+    resolvedItems = this.configCategoryItemsCache.get(category) ?? {};
+    return resolvedItems;
+  }
+
+  private assertConfigWriteAccepted(
+    response: { errors?: string[] },
+    context: {
+      category?: string;
+      item?: string;
+      value?: string | number;
+      payload?: Record<string, Record<string, string | number>>;
+    },
+  ) {
+    const firmwareErrors = Array.isArray(response.errors)
+      ? response.errors.filter((entry) => entry.trim().length > 0)
+      : [];
+    if (firmwareErrors.length === 0) {
+      return;
+    }
+
+    const target =
+      context.item && context.category
+        ? `${context.category}/${context.item}`
+        : context.category
+          ? context.category
+          : "config write";
+    throw new FirmwareConfigWriteError(`Firmware rejected ${target}: ${firmwareErrors.join("; ")}`, {
+      ...context,
+      firmwareErrors,
+    });
   }
 
   private getReadRequestBudgetValue<T>(key: string, nowMs: number): T | null {
@@ -548,6 +657,8 @@ export class C64API {
     const bypassCache = Boolean(options.__c64uBypassCache);
     const bypassCooldown = Boolean(options.__c64uBypassCooldown);
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
+    const bypassCircuit = Boolean(options.__c64uBypassCircuit);
+    const expectedMissing = Boolean(options.__c64uExpectedMissing);
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -555,6 +666,8 @@ export class C64API {
     delete (requestOptions as { __c64uBypassCache?: boolean }).__c64uBypassCache;
     delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
+    delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
+    delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -600,14 +713,17 @@ export class C64API {
             bypassCache,
             bypassCooldown,
             bypassBackoff,
+            bypassCircuit,
           },
           async () => {
             const requestId = buildRequestId();
             const idleContext = getIdleContext();
-            const canRetryAfterIdle = RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
-            const maxAttempts = canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
+            const scheduledRequest = intent === "background";
+            const requestTimeoutMs = timeoutMs ?? (scheduledRequest ? SCHEDULED_REQUEST_TIMEOUT_MS : undefined);
+            const maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1;
             const requestTrace = await inspectRequestPayload(requestOptions.body);
             let lastError: unknown = null;
+            const firstAttemptStartedAt = Date.now();
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
               const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -658,7 +774,7 @@ export class C64API {
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
                 const outerSignal = requestSignal;
-                const controller = timeoutMs ? new AbortController() : null;
+                const controller = requestTimeoutMs ? new AbortController() : null;
                 const abortFromOuter = () => controller?.abort();
                 if (outerSignal && controller) {
                   if (outerSignal.aborted) {
@@ -669,7 +785,7 @@ export class C64API {
                     });
                   }
                 }
-                const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+                const timeoutId = requestTimeoutMs ? setTimeout(() => controller?.abort(), requestTimeoutMs) : null;
                 const signal = controller ? controller.signal : outerSignal;
                 const responsePromise = fetch(url, {
                   ...requestOptions,
@@ -678,9 +794,9 @@ export class C64API {
                   ...(signal ? { signal } : {}),
                 });
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
-                const timeoutPromise = timeoutMs
+                const timeoutPromise = requestTimeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), requestTimeoutMs);
                     })
                   : null;
                 let response: Response;
@@ -705,6 +821,7 @@ export class C64API {
                 if (!response.ok) {
                   const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
                   const failure = classifyError(err, "integration");
+                  const expectedFailure = expectedMissing && method === "GET" && response.status === 404;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -715,8 +832,11 @@ export class C64API {
                     payloadPreview: responseTrace.payloadPreview,
                     durationMs,
                     error: err,
+                    expectedFailure,
                   });
-                  recordTraceError(action, err, failure);
+                  if (!expectedFailure) {
+                    recordTraceError(action, err, failure);
+                  }
                   responseRecorded = true;
                   throw err;
                 }
@@ -813,16 +933,24 @@ export class C64API {
                   );
                 }
 
-                const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
+                const elapsedSinceFirstAttemptMs = Date.now() - firstAttemptStartedAt;
+                const shouldRetry =
+                  scheduledRequest &&
+                  !callerAborted &&
+                  attempt < maxAttempts &&
+                  isAbort &&
+                  elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
                 if (shouldRetry) {
-                  const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
-                  addLog("warn", "C64 API retry scheduled after idle failure", {
+                  const retryDelayMs = 0;
+                  addLog("warn", "C64 API retry scheduled after scheduled timeout", {
                     requestId,
                     method,
                     path,
                     attempt,
                     maxAttempts,
                     retryDelayMs,
+                    elapsedSinceFirstAttemptMs,
+                    retryTrigger: "scheduled_timeout_abort",
                     idleMs: idleContext.idleMs,
                     wasIdle: idleContext.wasIdle,
                   });
@@ -835,9 +963,12 @@ export class C64API {
                       attempt,
                       maxAttempts,
                       retryDelayMs,
+                      elapsedSinceFirstAttemptMs,
                     }),
                   );
-                  await waitWithAbortSignal(retryDelayMs, requestSignal);
+                  if (retryDelayMs > 0) {
+                    await waitWithAbortSignal(retryDelayMs, requestSignal);
+                  }
                   continue;
                 }
 
@@ -1053,13 +1184,17 @@ export class C64API {
 
   async getCategory(category: string, options: C64ReadRequestOptions = {}): Promise<ConfigResponse> {
     const encoded = encodeURIComponent(category);
-    return this.request(`/v1/configs/${encoded}`, options);
+    const response = await this.request<ConfigResponse>(`/v1/configs/${encoded}`, options);
+    this.rememberConfigCategoryItems(category, response);
+    return response;
   }
 
   async getConfigItem(category: string, item: string, options: C64ReadRequestOptions = {}): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
-    return this.request(`/v1/configs/${catEncoded}/${itemEncoded}`, options);
+    const response = await this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}`, options);
+    this.rememberConfigCategoryItems(category, response);
+    return response;
   }
 
   async getConfigItems(
@@ -1096,9 +1231,23 @@ export class C64API {
         });
       }
     } catch (error) {
+      const categoryErrorMessage = error instanceof Error ? error.message : String(error ?? "");
+      if (parseHttpStatusFromErrorMessage(categoryErrorMessage) === 404) {
+        addLog("debug", "Category config fetch returned 404; treating category as unavailable", {
+          category,
+          error: categoryErrorMessage,
+        });
+        return {
+          [category]: {
+            items: {},
+          },
+          errors: [],
+        } as ConfigResponse;
+      }
+
       addLog("warn", "Category config fetch failed; falling back to item fetches", {
         category,
-        error: (error as Error).message,
+        error: categoryErrorMessage,
       });
     }
 
@@ -1107,7 +1256,12 @@ export class C64API {
     );
     if (missingItems.length > 0) {
       const responses = await Promise.allSettled(
-        missingItems.map((item) => this.getConfigItem(category, item, options)),
+        missingItems.map((item) =>
+          this.getConfigItem(category, item, {
+            ...options,
+            __c64uExpectedMissing: true,
+          }),
+        ),
       );
       responses.forEach((result) => {
         if (result.status !== "fulfilled") return;
@@ -1139,12 +1293,26 @@ export class C64API {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
     const valEncoded = encodeURIComponent(String(value));
-    return scheduleConfigWrite(() =>
-      this.request(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
+    const categoryPayload = {
+      [category]: {
+        items: await this.ensureConfigCategoryItems(category, [item]),
+      },
+    };
+    validateConfigWrite({
+      category,
+      item,
+      value,
+      categoryPayload,
+    });
+    const response = await scheduleConfigWrite(() =>
+      this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
         method: "PUT",
         ...options,
       }),
     );
+    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value });
+    this.setCachedConfigValue(category, item, value);
+    return response;
   }
 
   async saveConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
@@ -1163,15 +1331,34 @@ export class C64API {
     payload: Record<string, Record<string, string | number>>,
     options: { immediate?: boolean } = {},
   ): Promise<{ errors: string[] }> {
+    const categories = Object.entries(payload);
+    await Promise.all(
+      categories.map(async ([category, updates]) => {
+        const categoryPayload = {
+          [category]: {
+            items: await this.ensureConfigCategoryItems(category, Object.keys(updates)),
+          },
+        };
+        validateConfigBatchWrite({
+          category,
+          updates,
+          categoryPayload,
+        });
+      }),
+    );
     const run = (): Promise<{ errors: string[] }> =>
       this.request("/v1/configs", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-    if (options.immediate) {
-      return run();
-    }
-    return scheduleConfigWrite(run);
+    const response = options.immediate ? await run() : await scheduleConfigWrite(run);
+    this.assertConfigWriteAccepted(response, { payload });
+    categories.forEach(([category, updates]) => {
+      Object.entries(updates).forEach(([item, value]) => {
+        this.setCachedConfigValue(category, item, value);
+      });
+    });
+    return response;
   }
 
   // Machine control endpoints

@@ -141,23 +141,40 @@ export default defineConfig(() => ({
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
+        // Explicit per-domain vendor split. Caps any single chunk at ~250 KB
+        // gzipped so the WebView's V8 doesn't spend ~150 ms of cold start
+        // parsing one giant blob, and the MimeMap monitor contention from
+        // concurrent asset reads is reduced. Enforced by
+        // scripts/check-bundle-budgets.mjs.
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
-          if (
-            id.includes("/react/") ||
-            id.includes("/react-dom/") ||
-            id.includes("/react-router-dom/") ||
-            id.includes("/scheduler/")
-          ) {
+          if (id.includes("/react-dom/") || id.includes("/scheduler/") || id.includes("/react/")) {
             return "vendor-react";
           }
-          if (id.includes("/@radix-ui/") || id.includes("/framer-motion/") || id.includes("/lucide-react/")) {
-            return "vendor-ui";
+          if (id.includes("/react-router-dom/") || id.includes("/react-router/") || id.includes("/@remix-run/")) {
+            return "vendor-router";
+          }
+          if (id.includes("/@tanstack/")) {
+            return "vendor-query";
+          }
+          if (id.includes("/@radix-ui/")) {
+            return "vendor-radix";
+          }
+          if (id.includes("/framer-motion/") || id.includes("/motion-")) {
+            return "vendor-motion";
+          }
+          if (id.includes("/lucide-react/")) {
+            return "vendor-icons";
           }
           if (id.includes("/7z-wasm/") || id.includes("/fflate/")) {
             return "vendor-hvsc";
           }
-          return "vendor";
+          // Catch-all UI primitives that aren't in their own bucket but are
+          // closely tied to the design system.
+          if (id.includes("/class-variance-authority/") || id.includes("/clsx/") || id.includes("/tailwind-merge/")) {
+            return "vendor-ui";
+          }
+          return "vendor-misc";
         },
       },
     },

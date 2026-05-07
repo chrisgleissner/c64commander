@@ -197,9 +197,13 @@ export const registerDiagnosticsTestBridge = () => {
     delete window.__c64uDiagnosticsTestBridge;
     return;
   }
-  if (window.__c64uDiagnosticsTestBridge) return;
+  const existingBridge = window.__c64uDiagnosticsTestBridge;
+  if (existingBridge?.getSavedDeviceHealthSnapshot) {
+    savedDeviceHealthState = existingBridge.getSavedDeviceHealthSnapshot();
+  }
 
-  window.__c64uDiagnosticsTestBridge = {
+  const bridge = existingBridge ?? ({} as DiagnosticsTestBridge);
+  Object.assign(bridge, {
     seedAnalytics,
     clearAnalytics,
     seedOverlayState,
@@ -213,5 +217,7 @@ export const registerDiagnosticsTestBridge = () => {
     }),
     getOverlayStateSnapshot: () => overlayState,
     getSavedDeviceHealthSnapshot: () => savedDeviceHealthState,
-  };
+  });
+
+  window.__c64uDiagnosticsTestBridge = bridge;
 };

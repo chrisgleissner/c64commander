@@ -35,7 +35,7 @@ vi.mock("@/lib/snapshot/snapshotStore", () => ({
 // Fixtures
 // ---------------------------------------------------------------------------
 
-/** Build a 64 KB RAM image with STREND set at $1000. */
+/** Build a 64 KB RAM image with STREND-compatible pointer bytes populated. */
 const buildRam = (strend = 0x1000): Uint8Array => {
   const ram = new Uint8Array(65536);
   ram[0x002b] = strend & 0xff; // STREND low byte
@@ -61,12 +61,17 @@ describe("createSnapshot – program", () => {
     expect(result.displayTimestamp).toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
-  it("calls saveSnapshotToStore with program type and stack-safe ranges", async () => {
+  it("calls saveSnapshotToStore with program type and excludes volatile CIA2 state", async () => {
     await createSnapshot(mockApi, { type: "program" });
     expect(saveSnapshotToStoreMock).toHaveBeenCalledOnce();
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
     expect(saved.snapshotType).toBe("program");
-    expect(saved.metadata.display_ranges).toEqual(["$0000-$00FF", "$0200-$FFFF"]);
+    expect(saved.metadata.display_ranges).toEqual(["$0000-$00FF", "$0200-$DCFF", "$DE00-$FFFF"]);
+    expect(decodeSnapshot(saved.bytes).ranges).toEqual([
+      { start: 0x0000, length: 0x0100 },
+      { start: 0x0200, length: 0xdb00 },
+      { start: 0xde00, length: 0x2200 },
+    ]);
   });
 
   it("includes app_version from build info", async () => {
@@ -106,21 +111,24 @@ describe("createSnapshot – basic", () => {
     expect(result.displayTimestamp).toBeDefined();
   });
 
-  it("uses STREND from RAM image to determine BASIC end", async () => {
+  it("uses the fixed BASIC snapshot range plus BASIC pointer bytes", async () => {
     dumpFullRamImageMock.mockResolvedValue(buildRam(0x1234));
     await createSnapshot(mockApi, { type: "basic" });
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
     expect(saved.snapshotType).toBe("basic");
-    // display_ranges[0] covers $0801 to STREND
-    expect(saved.metadata.display_ranges[0]).toContain("$0801");
+    expect(saved.metadata.display_ranges).toEqual(["$002B-$0038", "$0801-$9FFF"]);
+    expect(decodeSnapshot(saved.bytes).ranges).toEqual([
+      { start: 0x002b, length: 0x000e },
+      { start: 0x0801, length: 0x97ff },
+    ]);
   });
 
   it("handles STREND equal to BASIC_START (zero-length program)", async () => {
-    // STREND at $0801 => basicLength = 0
     dumpFullRamImageMock.mockResolvedValue(buildRam(0x0801));
     await createSnapshot(mockApi, { type: "basic" });
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
     expect(saved.snapshotType).toBe("basic");
+    expect(saved.metadata.display_ranges).toEqual(["$002B-$0038", "$0801-$9FFF"]);
   });
 });
 
@@ -144,7 +152,7 @@ describe("createSnapshot – screen", () => {
     expect(result.displayTimestamp).toBeDefined();
   });
 
-  it("saves four ranges: VICBANK, VIC registers, colour RAM, and CIA2", async () => {
+  it("saves four ranges: VICBANK, VIC registers, colour RAM, and non-volatile CIA2 bank registers", async () => {
     await createSnapshot(mockApi, { type: "screen" });
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
     expect(saved.snapshotType).toBe("screen");
@@ -152,7 +160,7 @@ describe("createSnapshot – screen", () => {
     expect(saved.metadata.display_ranges[0]).toBe("VICBANK");
     expect(saved.metadata.display_ranges[1]).toMatch(/\$D000/);
     expect(saved.metadata.display_ranges[2]).toMatch(/\$D800/);
-    expect(saved.metadata.display_ranges[3]).toMatch(/\$DD00/);
+    expect(saved.metadata.display_ranges[3]).toBe("$DD00-$DD01");
   });
 
   it("encodes VICBANK range as full 16 KiB starting at bank base", async () => {

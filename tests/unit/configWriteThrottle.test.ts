@@ -68,4 +68,36 @@ describe("configWriteThrottle", () => {
       expect.objectContaining({ error: "write failed" }),
     );
   });
+
+  it("spaces a sustained checkbox-style burst and preserves the final intended state", async () => {
+    saveConfigWriteIntervalMs(100);
+    const intendedStates = Array.from({ length: 12 }, (_, index) => (index % 2 === 0 ? "Enabled" : "Disabled"));
+    const startedAt: number[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let finalState = "Unknown";
+
+    const writes = intendedStates.map((state) =>
+      scheduleConfigWrite(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        startedAt.push(Date.now());
+        finalState = state;
+        await Promise.resolve();
+        inFlight -= 1;
+        return state;
+      }),
+    );
+
+    await vi.advanceTimersByTimeAsync(100 * intendedStates.length);
+    await expect(Promise.all(writes)).resolves.toEqual(intendedStates);
+
+    expect(maxInFlight).toBe(1);
+    expect(finalState).toBe(intendedStates.at(-1));
+    expect(startedAt).toHaveLength(intendedStates.length);
+    expect(startedAt[0]).toBe(1000);
+    startedAt.slice(1).forEach((timestamp, index) => {
+      expect(timestamp - startedAt[index]).toBeGreaterThanOrEqual(100);
+    });
+  });
 });

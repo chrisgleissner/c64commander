@@ -34,17 +34,6 @@ vi.mock("@/components/QuickActionCard", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: any) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
-  DropdownMenuContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  DropdownMenuItem: ({ children, onSelect, ...props }: any) => (
-    <button type="button" onClick={onSelect} {...props}>
-      {children}
-    </button>
-  ),
-}));
-
 const defaultProps = {
   status: { isConnected: true, isConnecting: false },
   machineTaskBusy: false,
@@ -81,11 +70,21 @@ describe("MachineControls", () => {
       "Reboot",
       "Pause",
       "Menu",
-      "Save RAM",
-      "Load RAM",
       "Power Off",
     ]);
     expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "4");
+  });
+
+  it("renders experimental RAM actions only when requested", () => {
+    const { rerender } = render(<MachineControls {...defaultProps} />);
+
+    expect(screen.queryByTestId("home-save-ram")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("home-load-ram")).not.toBeInTheDocument();
+
+    rerender(<MachineControls {...defaultProps} ramActionsVisible={true} />);
+
+    expect(screen.getByTestId("home-save-ram")).toHaveTextContent("Save RAM");
+    expect(screen.getByTestId("home-load-ram")).toHaveTextContent("Load RAM");
   });
 
   it("keeps the primary reboot action enabled without telnet and executes the REST reboot mutation", () => {
@@ -119,8 +118,6 @@ describe("MachineControls", () => {
       "Reboot",
       "Pause",
       "Menu",
-      "Save RAM",
-      "Load RAM",
       "Power Cycle",
       "Power Off",
     ]);
@@ -128,58 +125,59 @@ describe("MachineControls", () => {
     expect(onPowerCycle).toHaveBeenCalledTimes(1);
   });
 
-  it("renders Power Cycle as disabled with an inline reason when the device does not support it", () => {
+  it("hides Power Cycle when product capability says it is unavailable", () => {
     render(
       <MachineControls
         {...defaultProps}
-        powerCycleVisible={true}
+        powerCycleVisible={false}
+        onPowerCycle={vi.fn()}
         powerCycleDisabledReason="Power Cycle is not available on Ultimate 64 Elite 3.14e."
       />,
     );
 
-    expect(screen.getByTestId("home-power-cycle")).toBeDisabled();
-    expect(screen.getByTestId("home-machine-note-powerCycle")).toHaveTextContent(
-      "Power Cycle: Power Cycle is not available on Ultimate 64 Elite 3.14e.",
-    );
+    expect(screen.queryByTestId("home-power-cycle")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("home-machine-note-powerCycle")).not.toBeInTheDocument();
   });
 
-  it("renders overflow actions in the section header menu", () => {
+  it("renders all extra quick actions inline alongside the standard actions", () => {
     const rebootClearMemory = vi.fn();
     const saveReu = vi.fn();
 
     render(
       <MachineControls
         {...defaultProps}
-        overflowActions={[
-          { id: "rebootClearMemory", label: "Reboot (Clear RAM)", onSelect: rebootClearMemory },
+        ramActionsVisible={true}
+        onPowerCycle={vi.fn()}
+        extraActions={[
+          { id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: rebootClearMemory },
           { id: "saveReuMemory", label: "Save REU", onSelect: saveReu },
         ]}
       />,
     );
 
-    fireEvent.click(screen.getByTestId("home-machine-overflow-rebootClearMemory"));
-    fireEvent.click(screen.getByTestId("home-machine-overflow-saveReuMemory"));
+    fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
 
     expect(rebootClearMemory).toHaveBeenCalledTimes(1);
     expect(saveReu).toHaveBeenCalledTimes(1);
   });
 
-  it("renders loading overflow actions with an ellipsis label", () => {
+  it("renders loading extra actions with an ellipsis label", () => {
     render(
       <MachineControls
         {...defaultProps}
-        overflowActions={[{ id: "rebootClearMemory", label: "Reboot (Clear RAM)", onSelect: vi.fn(), loading: true }]}
+        extraActions={[{ id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn(), loading: true }]}
       />,
     );
 
-    expect(screen.getByTestId("home-machine-overflow-rebootClearMemory")).toHaveTextContent("Reboot (Clear RAM)…");
+    expect(screen.getByTestId("home-machine-inline-rebootClearMemory")).toHaveTextContent("Reboot (Clr Mem)…");
   });
 
-  it("renders inline notes for disabled overflow actions", () => {
+  it("renders inline notes for disabled extra actions", () => {
     render(
       <MachineControls
         {...defaultProps}
-        overflowActions={[
+        extraActions={[
           {
             id: "saveReuMemory",
             label: "Save REU",

@@ -52,6 +52,17 @@ const getAllTraces = async (page: Page) => {
   });
 };
 
+const enableFeatureFlags = async (
+  page: Page,
+  flagIds: Array<"home_telnet_clear_ram_reboot_enabled" | "home_telnet_power_cycle_enabled">,
+) => {
+  await page.addInitScript((seededFlagIds: string[]) => {
+    seededFlagIds.forEach((flagId) => {
+      localStorage.setItem(`c64u_feature_flag:${flagId}`, "1");
+    });
+  }, flagIds);
+};
+
 const applyCompactDisplayProfile = async (page: Page) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.evaluate(() => {
@@ -202,7 +213,8 @@ test.describe("Home interactions", () => {
       .toBe(true);
   });
 
-  test("overflow reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
+  test("reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
+    await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
     await page.goto("/");
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
@@ -214,8 +226,9 @@ test.describe("Home interactions", () => {
       (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot"),
     ).length;
 
-    await page.getByTestId("home-machine-overflow-trigger").click();
-    await page.getByTestId("home-machine-overflow-rebootClearMemory").click();
+    const rebootClearMemory = page.getByTestId("home-machine-inline-rebootClearMemory");
+    await expect(rebootClearMemory).toBeEnabled();
+    await rebootClearMemory.click();
 
     await expect
       .poll(() =>
@@ -236,6 +249,7 @@ test.describe("Home interactions", () => {
   });
 
   test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
+    await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
     await page.goto("/");
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
@@ -281,6 +295,7 @@ test.describe("Home interactions", () => {
           localStorage.setItem("c64u_startup_discovery_window_ms", "600");
           localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
           localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
+          localStorage.setItem("c64u_feature_flag:home_telnet_power_cycle_enabled", "1");
           localStorage.setItem("c64u_device_host", "127.0.0.1:65534");
           localStorage.removeItem("c64u_password");
           localStorage.removeItem("c64u_has_password");
