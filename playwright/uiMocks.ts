@@ -106,7 +106,11 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       };
 
       try {
-        delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
+        Object.defineProperty(window, "showDirectoryPicker", {
+          configurable: true,
+          writable: true,
+          value: undefined,
+        });
       } catch (error) {
         console.warn("Unable to clear showDirectoryPicker", error);
       }

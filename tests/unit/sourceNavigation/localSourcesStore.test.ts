@@ -181,7 +181,31 @@ describe("localSourcesStore", () => {
     );
   });
 
-  it("falls back to input click when directory picker is unavailable", async () => {
+  it("falls back to input click and waits for file selection when directory picker is unavailable", async () => {
+    const input = document.createElement("input");
+    const clickSpy = vi.spyOn(input, "click");
+    const selectedFile = createFile("demo.sid", "SID");
+    (
+      window as Window & {
+        showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
+      }
+    ).showDirectoryPicker = undefined;
+
+    clickSpy.mockImplementation(() => {
+      Object.defineProperty(input, "files", {
+        configurable: true,
+        value: [selectedFile],
+      });
+      input.dispatchEvent(new Event("change"));
+    });
+
+    const result = await createLocalSourceFromPicker(input);
+    expect(clickSpy).toHaveBeenCalled();
+    expect(result?.source.name).toBe("Folder");
+    expect(result?.source.entries).toHaveLength(1);
+  });
+
+  it("returns null when the fallback file input is cancelled", async () => {
     const input = document.createElement("input");
     const clickSpy = vi.spyOn(input, "click");
     (
@@ -190,9 +214,17 @@ describe("localSourcesStore", () => {
       }
     ).showDirectoryPicker = undefined;
 
+    clickSpy.mockImplementation(() => {
+      Object.defineProperty(input, "files", {
+        configurable: true,
+        value: [],
+      });
+      window.dispatchEvent(new Event("focus"));
+    });
+
     const result = await createLocalSourceFromPicker(input);
-    expect(result).toBeNull();
     expect(clickSpy).toHaveBeenCalled();
+    expect(result).toBeNull();
   });
 
   it("walks directory picker entries on web", async () => {
