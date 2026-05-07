@@ -6,14 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type TransportErrorClass =
-  | "dns"
-  | "no-route"
-  | "refused"
-  | "reset"
-  | "timeout"
-  | "cors"
-  | "unknown";
+export type TransportErrorClass = "dns" | "no-route" | "refused" | "reset" | "timeout" | "cors" | "unknown";
 
 export type TransportFailure = {
   class: TransportErrorClass;
@@ -43,17 +36,12 @@ const getMessage = (error: unknown): string => {
  * - the diagnostics ring buffer transport entries
  * - Add-Device dialog error rows
  */
-export const normalizeTransportError = (
-  error: unknown,
-  context: { host?: string } = {},
-): TransportFailure => {
+export const normalizeTransportError = (error: unknown, context: { host?: string } = {}): TransportFailure => {
   const raw = getMessage(error);
   const lower = raw.toLowerCase();
   const hostLabel = context.host ? `'${context.host}'` : "device";
 
-  if (
-    /(unknown host|enotfound|ename_not_found|getaddrinfo|dns lookup|cannot resolve)/i.test(lower)
-  ) {
+  if (/(unknown host|enotfound|ename_not_found|getaddrinfo|dns lookup|cannot resolve)/i.test(lower)) {
     return {
       class: "dns",
       userMessage: `Cannot resolve ${hostLabel}. On Android, prefer the device IP address.`,

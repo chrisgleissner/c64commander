@@ -226,3 +226,62 @@ Use:
 - `BLOCKED BY UNIMPLEMENTED RELEASE-BLOCKER TESTS`: release-blocking scenarios are not yet implemented.
 
 Do not mark `READY` based only on Playwright web, emulator, demo mode, screenshots, toasts, or absence of crashes.
+
+## Android Responsiveness Regression Scenarios
+
+Introduced by the
+[responsiveness stabilization plan](../research/stabilization/responsiveness/plan.md).
+
+### Phase 1 — HTTP transport
+
+- `tests/unit/capacitorConfig.test.ts` — CI guard against
+  `CapacitorHttp.enabled = true` without a `CAPACITOR_HTTP_EXEMPTION`
+  comment in `capacitor.config.ts`. Also asserts `androidScheme: "http"`.
+- `tests/unit/c64api.test.ts` — asserts the interactive 1500 ms timeout
+  fires on `machineReset` and that `INTERACTIVE_CONTROL_TIMEOUT_MS = 1500`,
+  `BACKGROUND_REQUEST_TIMEOUT_MS = 3000` are exported.
+
+### Phase 2 — Runtime correctness
+
+- `tests/unit/c64api/transportErrors.test.ts` — the `normalizeTransportError`
+  taxonomy: DNS, no-route, refused, reset/EPIPE, timeout, CORS, unknown.
+- `tests/unit/native/mdnsResolver.test.ts` — `isBareHostname`,
+  `isMdnsAvailable`, and the web-stub error path.
+- `tests/unit/smoke/smokeMode.test.ts` — stat-then-read for the optional
+  `c64u-smoke.json` cold-launch probe (no readFile call when stat fails;
+  no warn log for the expected ENOENT case).
+- `android/app/src/test/java/uk/gleissner/c64commander/MainActivityAssetPathTest.kt`
+  — recoverable / unrecoverable branches of `ensureCapacitorPluginAssetPath`
+  via Robolectric + a temp filesDir.
+- ESLint rule (`eslint.config.js`) bans `console.log` under
+  `src/lib/telnet/**` and `src/lib/diagnostics/**`.
+
+### Phase 3 — Bundle composition
+
+- `tests/unit/bundleBudgets.test.ts` — invokes
+  `scripts/check-bundle-budgets.mjs` against a temp `dist/assets/` to
+  verify the pass / fail / skip-if-missing exit codes.
+
+### Phase 5 — Background polling and reconciliation
+
+- `tests/unit/lib/query/pollingPauseRegistry.test.ts` — reference-counted
+  `acquirePause()` / `release()`, edge-only listener notification, and
+  listener-crash isolation.
+- `tests/unit/hooks/useAuthoritativeConfigValueState.test.ts` — trim/coerce
+  equality for `" 4"` vs `4`, multi-token rejection, and NaN handling.
+- `tests/unit/hooks/useDeviceBoundSlider.test.ts` — slider primitive
+  unchanged in behaviour after polling-pause integration; existing 8 tests
+  remain green.
+
+### Frame-stat scenarios (live, deferred)
+
+- 12-stroke CPU Speed slider drag with concurrent Telnet activity
+- 5-tab navigation Home → Play → Disks → Config → Settings → Home
+- 16-stroke isolated CPU Speed slider drag (no Telnet)
+
+These are run via `dumpsys gfxinfo uk.gleissner.c64commander reset` then
+manual scripted device interaction. Re-measurement is deferred until the
+Phase 4 file splits land — the polling-pause registry only takes effect
+once consumers (drives polling, info refresh) read `isPollingPaused()`,
+which depends on the Phase 4 split of `useC64Connection.ts` and
+`telnetSession.ts`.

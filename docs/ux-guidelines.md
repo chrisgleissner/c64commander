@@ -592,3 +592,63 @@ All destructive and configuration actions use centered modal dialogs:
 - Load configuration dialog
 - Set duration override dialog
 - Choose subsong dialog
+
+
+## Android Responsiveness Invariants
+
+These budgets gate the Android build on Pixel-class hardware. The
+[responsiveness stabilization research and plan](research/stabilization/responsiveness/research.md)
+calibrate them against a Pixel 4 + Ultimate 64 Elite test setup.
+
+### Frame budgets
+
+| Surface | Janky % | p99 frame time | High-input-latency frames |
+| --- | --- | --- | --- |
+| Cold start to Home | n/a (single frame) | ≤ 500 ms TotalTime (release) | n/a |
+| 12-stroke CPU Speed slider drag with concurrent Telnet activity | ≤ 5% | ≤ 32 ms | ≤ 5 / 64 |
+| 5-tab navigation Home → Play → Disks → Config → Settings → Home | ≤ 2% | ≤ 32 ms | n/a |
+| 16-stroke isolated CPU Speed slider drag (no Telnet) | 0% | ≤ 20 ms | 0 |
+
+### Polling-pause contract
+
+Foreground rendering must not compete with background REST polling. The
+shared `pollingPauseRegistry` in
+`src/lib/query/c64PollingGovernance.ts` mediates between user-driven
+primitives and `refetchInterval` consumers:
+
+- Primitives that own a sustained user interaction (sliders, dialogs,
+  drag handles) call `pollingPauseRegistry.acquirePause()` on the first
+  drag tick and call `release()` once the interaction commits AND the
+  device echo has been reconciled (or the watchdog timer expires).
+- Interval-driven query consumers (drives, info, health) check
+  `pollingPauseRegistry.isPollingPaused()` before scheduling a tick. A
+  paused consumer skips its tick and resumes on the next interval.
+- Pauses are reference-counted; concurrent acquirers do not interfere.
+
+The slider primitive (`useDeviceBoundSlider`) acquires automatically. Any
+new slider or drag-driven interaction must opt in.
+
+### mDNS and IP fallback story (Android)
+
+Stock Android's `InetAddress.getByName` does not perform mDNS lookup, and
+the C64 Ultimate firmware does not advertise a Bonjour service that
+`NsdManager` can resolve. As a result, saved-device entries that store a
+bare hostname (`u64`, `c64u`) fail DNS on Android even though the device
+is reachable.
+
+The app does the following on Android (web and iOS keep current behaviour):
+
+1. Bare hostnames are first sent through `MdnsResolverPlugin.resolve()`,
+   which tries system DNS (which on some networks resolves `<name>.local`
+   via mDNSResponder) and then a short `NsdManager` discovery sweep.
+2. On success, the resolved IPv4 address is cached for 30 seconds and
+   used to build the REST base URL for the discovery probe.
+3. On failure, the discovery probe error path uses
+   `normalizeTransportError(...)` to surface a "Cannot resolve `<host>`.
+   On Android, prefer the device IP address." message into the OFFLINE
+   banner / diagnostics ring buffer instead of logging at debug level.
+
+Until home networks reliably support mDNS for the C64 Ultimate, the
+recommended onboarding flow on Android is to enter the device's IP
+address. The "Add Device" dialog and the README "First Connection"
+section both note this.

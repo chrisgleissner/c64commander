@@ -171,11 +171,7 @@ export default defineConfig(() => ({
           }
           // Catch-all UI primitives that aren't in their own bucket but are
           // closely tied to the design system.
-          if (
-            id.includes("/class-variance-authority/") ||
-            id.includes("/clsx/") ||
-            id.includes("/tailwind-merge/")
-          ) {
+          if (id.includes("/class-variance-authority/") || id.includes("/clsx/") || id.includes("/tailwind-merge/")) {
             return "vendor-ui";
           }
           return "vendor-misc";

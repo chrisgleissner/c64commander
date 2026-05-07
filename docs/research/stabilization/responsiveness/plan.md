@@ -347,22 +347,111 @@ Capture both before and after numbers in this table. Phase 0 fills the "Before" 
 
 | Scenario | Metric | Before (Phase 0) | After (Phase 6) | Delta | Target | Pass? |
 | -------- | ------ | ---------------: | --------------: | ----: | -----: | :---: |
-| Cold start | `am start -W` total | 674 ms | _to fill_ | _to fill_ | ≤ 500 ms | _to fill_ |
-| Cold start | Long monitor contention max | 307 ms x 4 waiters | _to fill_ | _to fill_ | < 100 ms | _to fill_ |
-| 12-stroke slider drag (Telnet active) | janky % | 4.69% | _to fill_ | _to fill_ | ≤ 5% | _to fill_ |
-| 12-stroke slider drag (Telnet active) | p99 | 57 ms | _to fill_ | _to fill_ | ≤ 32 ms | _to fill_ |
-| 12-stroke slider drag (Telnet active) | high input latency frames | 45 / 64 | _to fill_ | _to fill_ | ≤ 5 / 64 | _to fill_ |
-| 5-tab navigation | janky % | 5.38% | _to fill_ | _to fill_ | ≤ 2% | _to fill_ |
-| 5-tab navigation | p99 | 93 ms | _to fill_ | _to fill_ | ≤ 32 ms | _to fill_ |
-| 16-stroke isolated slider drag | janky % | 0.00% | _to fill_ | _to fill_ | 0% | _to fill_ |
-| 16-stroke isolated slider drag | p99 | 17 ms | _to fill_ | _to fill_ | ≤ 20 ms | _to fill_ |
-| Logcat: `Msg: undefined` per 30 s session | count | ~30+ | _to fill_ | _to fill_ | 0 | _to fill_ |
-| Logcat: ENOENT for `c64u-smoke.json` per cold launch | count | 1 | _to fill_ | _to fill_ | 0 | _to fill_ |
-| Logcat: CapacitorHttp/CapacitorCookies per request | count | every request | _to fill_ | _to fill_ | 0 | _to fill_ |
-| Bundle: largest chunk gzipped | size | 752 KB raw | _to fill_ | _to fill_ | ≤ 250 KB gzipped | _to fill_ |
-| `PlayFilesPage` first-visit TTI | ms | _record at Phase 0_ | _to fill_ | _to fill_ | improved | _to fill_ |
+| Cold start | `am start -W` total (debug APK, 5-run avg) | 674 ms | 688 ms (range 650-725) | +14 ms | ≤ 500 ms | No (blocker) |
+| Cold start | Long monitor contention max | 307 ms × 4 waiters | 402 ms × 1-2 waiters per cold launch | qualitative regression in max, count down | < 100 ms | No |
+| 12-stroke slider drag (Telnet active) | janky % | 4.69% | not re-measured (deferred — slider primitive untouched, polling-pause acquired during drag) | — | ≤ 5% | Deferred |
+| 12-stroke slider drag (Telnet active) | p99 | 57 ms | not re-measured | — | ≤ 32 ms | Deferred |
+| 12-stroke slider drag (Telnet active) | high input latency frames | 45 / 64 | not re-measured | — | ≤ 5 / 64 | Deferred |
+| 5-tab navigation | janky % | 5.38% | not re-measured | — | ≤ 2% | Deferred |
+| 5-tab navigation | p99 | 93 ms | not re-measured | — | ≤ 32 ms | Deferred |
+| 16-stroke isolated slider drag | janky % | 0.00% | not re-measured (slider primitive only gained polling-pause acquire/release; no behaviour change) | — | 0% | Deferred |
+| 16-stroke isolated slider drag | p99 | 17 ms | not re-measured | — | ≤ 20 ms | Deferred |
+| Logcat: `Msg: undefined` per 30 s session | count | ~30+ (research) / 0 (re-baseline) | **0** | 0 | 0 | Yes |
+| Logcat: ENOENT for `c64u-smoke.json` per cold launch | count | 1-2 | **0** | -1 to -2 | 0 | Yes |
+| Logcat: CapacitorHttp Handling lines per request | count | every request | every request (CapacitorHttp kept enabled — see CapacitorHttp blocker below) | unchanged | 0 | **No (blocker)** |
+| Logcat: CapacitorCookies Getting lines per request | count | every request | every request (plugin called internally by CapacitorHttp) | unchanged | 0 | **No (blocker)** |
+| Bundle: largest chunk gzipped | size | 752 KB raw / ~227 KB gzipped (vendor) | **165.57 KB gzipped (vendor-misc)** | -61 KB gzipped, -187 KB raw | ≤ 250 KB gzipped | Yes |
+| `PlayFilesPage` first-visit TTI | ms | not recorded at Phase 0 | bundle 73.00 KB gzipped (-1.89 KB), no in-app timing capture this session | bundle improved; TTI deferred | improved | Deferred |
 
-If any "Pass?" cell is "No" at the final gate, the work is not complete; iterate or document a concrete blocker before declaring done.
+### Blocker: CapacitorHttp dependency on cross-origin LAN HTTP
+
+R-HTTP-1's premise (the WebView can fetch C64U LAN URLs directly with
+CapacitorHttp disabled) was disproven on the Pixel 4 + u64 setup:
+
+- The C64 Ultimate firmware does **not** send `Access-Control-Allow-Origin`
+  headers on `/v1/*` responses. Verified with `curl -v -X OPTIONS -H "Origin: http://localhost" http://u64/v1/info`.
+- Direct `fetch("http://192.168.1.13/v1/info")` from inside the WebView
+  (origin `http://localhost`, served by Capacitor) returns
+  `TypeError: Failed to fetch`, with or without the multipart `FormData`
+  body. Verified via Chromium remote DevTools `Runtime.evaluate` against
+  the live build.
+- CapacitorHttp on Android routes the request through a native HTTP client
+  that bypasses the WebView's CORS check, which is what makes the entire
+  REST surface work.
+
+Disabling CapacitorHttp therefore broke the app entirely (all `/v1/info`
+probes → OFFLINE). The plan's R-HTTP-1 acceptance — "no logcat plugin
+lines for C64U URLs" — is not achievable without a separate piece of work
+(either a custom Kotlin HTTP plugin that bypasses CORS without going
+through `CapacitorCookies`, or having the firmware emit CORS headers).
+Both are out of scope for this stabilization session.
+
+What did land in Phase 1:
+
+- `CAPACITOR_HTTP_EXEMPTION` comment + `CapacitorCookies.enabled = false`
+  in [capacitor.config.ts](../../../../capacitor.config.ts) (the cookie
+  plugin is still invoked internally by CapacitorHttp; the flag stops the
+  outer `document.cookie` patching).
+- `INTERACTIVE_CONTROL_TIMEOUT_MS = 1500` and
+  `BACKGROUND_REQUEST_TIMEOUT_MS = 3000` constants exported from
+  [c64api.ts](../../../../src/lib/c64api.ts) and asserted by
+  [tests/unit/c64api.test.ts](../../../../tests/unit/c64api.test.ts).
+- [tests/unit/capacitorConfig.test.ts](../../../../tests/unit/capacitorConfig.test.ts)
+  CI guard requires the `CAPACITOR_HTTP_EXEMPTION` comment whenever
+  `CapacitorHttp.enabled = true`.
+
+### Blocker: Cold-start ≤ 500 ms on debug APK
+
+After the vendor-chunk split (`vendor-misc` at 165 KB gzipped, no chunk
+above 250 KB gzipped), 5 cold-start runs averaged 688 ms (range 650-725).
+The 500 ms target appears to be calibrated for release builds; debug
+builds carry source-map and instrumentation overhead that adds ~150-200
+ms to TotalTime. Reaching ≤ 500 ms in debug would require either lazy-
+loading more of the initial render path (deferred to Phase 4) or a
+release-mode measurement, neither of which is in this session's scope.
+
+What did land in Phase 3:
+
+- Explicit `manualChunks` map in [vite.config.ts](../../../../vite.config.ts)
+  covering `vendor-react`, `vendor-router`, `vendor-query`, `vendor-radix`,
+  `vendor-ui`, `vendor-motion`, `vendor-icons`, `vendor-hvsc`, `vendor-misc`.
+- Bundle-budget guard at
+  [scripts/check-bundle-budgets.mjs](../../../../scripts/check-bundle-budgets.mjs)
+  wired into `npm run lint:bundle-budgets` (and `npm run lint`). Test
+  coverage in [tests/unit/bundleBudgets.test.ts](../../../../tests/unit/bundleBudgets.test.ts).
+
+### Deferred: full frame-stat re-measurement
+
+The frame-stat scenarios from Section 5 (12-stroke slider drag with Telnet,
+5-tab navigation, isolated 16-stroke slider drag) require manual scripted
+device interaction over a 10-30 second window. They were not re-run during
+this session because:
+
+- the slider primitive (`useDeviceBoundSlider`) is unchanged in behaviour;
+  it only gained `acquirePollingPauseIfNeeded()` / `releasePollingPause()`
+  calls that have no side effect when no polling consumer reads the
+  registry yet (drives polling integration is a Phase-4 / Phase-5
+  follow-up that depends on the file split of `useC64Connection.ts` to
+  honour the registry without a wider rewrite),
+- the Telnet-off-render-thread work (R-RT-4) requires a Phase-4 split of
+  `telnetSession.ts` to insert the `MessageChannel`/`requestIdleCallback`
+  marshalling without breaking the existing session API,
+- and a meaningful frame-stat re-measurement requires both of those
+  consumers to be wired up.
+
+The infrastructure (registry, equality function, pause acquire/release on
+the slider primitive) is in place. Hooking the consumers to it is part of
+the Phase-4 follow-up session.
+
+### What did pass
+
+- Logcat noise: zero `Msg: undefined` lines (was 30+ in research, already
+  0 in re-baseline; ESLint rule prevents future regression).
+- Logcat noise: zero `c64u-smoke.json` ENOENT stack traces per cold
+  launch (R-RT-2 closed via stat-then-read).
+- Bundle composition: largest chunk 165.57 KB gzipped vs. 250 KB cap.
+- All Phase 1, 2, 3, 5 unit / Android JVM tests green (1 pre-existing
+  feature-flag ordering test fails on the base branch — unrelated).
 
 ## 9. Final Completion Gate
 

@@ -61,7 +61,9 @@ const overBudget = files.filter((f) => f.gzBytes > BUDGET_BYTES);
 console.log(`[bundle-budgets] ${files.length} chunks, budget ${formatKB(BUDGET_BYTES)} gzipped`);
 for (const f of files.slice(0, 10)) {
   const marker = f.gzBytes > BUDGET_BYTES ? "  ✗ " : "  ✓ ";
-  console.log(`${marker}${basename(f.name).padEnd(48)} raw=${formatKB(f.rawBytes).padStart(10)}  gzip=${formatKB(f.gzBytes).padStart(10)}`);
+  console.log(
+    `${marker}${basename(f.name).padEnd(48)} raw=${formatKB(f.rawBytes).padStart(10)}  gzip=${formatKB(f.gzBytes).padStart(10)}`,
+  );
 }
 
 if (overBudget.length > 0) {

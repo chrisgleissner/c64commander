@@ -45,9 +45,7 @@ export const isAuthoritativeConfigValueEqual: AuthoritativeConfigValueEquality =
   return String(pending).trim() === String(device).trim();
 };
 
-export function useAuthoritativeConfigValueState(
-  options: { equals?: AuthoritativeConfigValueEquality } = {},
-) {
+export function useAuthoritativeConfigValueState(options: { equals?: AuthoritativeConfigValueEquality } = {}) {
   const equals = options.equals ?? isAuthoritativeConfigValueEqual;
   const [entries, setEntries] = useState<Record<string, AuthoritativeConfigValueEntry>>({});
   const entriesRef = useRef(entries);
