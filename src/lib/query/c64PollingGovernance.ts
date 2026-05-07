@@ -45,7 +45,6 @@ const notifyPollingPauseListeners = () => {
       listener();
     } catch (error) {
       // Listener crashes must not break the registry's invariants.
-      // eslint-disable-next-line no-console
       console.warn("pollingPauseRegistry listener threw", error);
     }
   });
