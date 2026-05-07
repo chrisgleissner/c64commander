@@ -197,7 +197,10 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
     >
       {props.open && (
         <>
-          <button data-testid="confirm-mount" onClick={() => props.onConfirm?.(null, [{ path: "/USB0/games/test.d64" }])}>
+          <button
+            data-testid="confirm-mount"
+            onClick={() => props.onConfirm?.(null, [{ path: "/USB0/games/test.d64" }])}
+          >
             Confirm
           </button>
           <button data-testid="invoke-add-local" onClick={() => void props.onAddLocalSource?.()}>
