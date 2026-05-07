@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
+import { pollingPauseRegistry, type PollingPauseHandle } from "@/lib/query/c64PollingGovernance";
 import { clampSliderValue } from "@/lib/ui/sliderBehavior";
 
 type SliderDomainValue = string | number;
@@ -117,6 +118,21 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   const pendingPreviewSliderValueRef = useRef<number | null>(null);
   const lastPreviewSentAtRef = useRef<number | null>(null);
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Drives/info polling pauses while the user is dragging or while we are
+  // waiting for the device to echo back the committed value. Pause is
+  // released on commit + reconciliation settle (or on watchdog expiry, or
+  // on commit error).
+  const pollingPauseHandleRef = useRef<PollingPauseHandle | null>(null);
+
+  const acquirePollingPauseIfNeeded = useCallback(() => {
+    if (pollingPauseHandleRef.current) return;
+    pollingPauseHandleRef.current = pollingPauseRegistry.acquirePause();
+  }, []);
+
+  const releasePollingPause = useCallback(() => {
+    pollingPauseHandleRef.current?.release();
+    pollingPauseHandleRef.current = null;
+  }, []);
 
   const equals = domain.equals ?? areDeviceBoundSliderValuesEqual;
   const deviceSliderValue = useMemo(
@@ -198,8 +214,9 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       setDraftSliderValue(null);
       setPendingIntent(null);
       clearWatchdogTimer();
+      releasePollingPause();
     }, watchdogMs);
-  }, [clearWatchdogTimer, watchdogMs]);
+  }, [clearWatchdogTimer, releasePollingPause, watchdogMs]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -216,15 +233,17 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     if (pendingIntent && equals(deviceValue, pendingIntent.value)) {
       setPendingIntent(null);
       clearWatchdogTimer();
+      releasePollingPause();
     }
-  }, [clearWatchdogTimer, deviceValue, equals, pendingIntent]);
+  }, [clearWatchdogTimer, deviceValue, equals, pendingIntent, releasePollingPause]);
 
   useEffect(() => {
     return () => {
       clearPreviewTimer();
       clearWatchdogTimer();
+      releasePollingPause();
     };
-  }, [clearPreviewTimer, clearWatchdogTimer]);
+  }, [clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
 
   const onValueChange = useCallback(
     (values: number[]) => {
@@ -233,12 +252,17 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       }
       const nextSliderValue = domain.clampSliderValue(values[0] ?? deviceSliderValue);
       const nextValue = domain.fromSliderValue(nextSliderValue);
+      // First drag tick: pause drives/info polling so the round-trip noise
+      // does not steal frames from the slider preview.
+      if (!isDraggingRef.current) {
+        acquirePollingPauseIfNeeded();
+      }
       isDraggingRef.current = true;
       setDraftSliderValue(nextSliderValue);
       onDraftChange?.(nextValue);
       schedulePreview(nextSliderValue);
     },
-    [deviceSliderValue, domain, onDraftChange, schedulePreview],
+    [acquirePollingPauseIfNeeded, deviceSliderValue, domain, onDraftChange, schedulePreview],
   );
 
   const onValueCommit = useCallback(
@@ -256,6 +280,8 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       if (equals(deviceValue, nextValue)) {
         clearWatchdogTimer();
         setPendingIntent(null);
+        // Commit was a no-op — drag is over, drop the polling pause.
+        releasePollingPause();
         return;
       }
       setPendingIntent({
@@ -267,6 +293,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         clearWatchdogTimer();
         setDraftSliderValue(null);
         setPendingIntent(null);
+        releasePollingPause();
         onError?.(error, {
           phase: "commit",
           value: nextValue,
@@ -283,6 +310,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       domain,
       equals,
       onError,
+      releasePollingPause,
     ],
   );
 

@@ -61,8 +61,17 @@ import {
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
-const CONTROL_REQUEST_TIMEOUT_MS = 3000;
-const SCHEDULED_REQUEST_TIMEOUT_MS = 3000;
+// Two timeout budgets for non-upload, non-playback requests:
+// - INTERACTIVE: user-tappable controls and config writes the user is
+//   staring at. Tighter than the firmware p99 (~600 ms) so a stuck
+//   request surfaces feedback within ~1.5 s instead of the prior 3 s.
+// - BACKGROUND: polling, prefetch, health checks. Tolerates slow
+//   firmware paths under load.
+export const INTERACTIVE_CONTROL_TIMEOUT_MS = 1500;
+export const BACKGROUND_REQUEST_TIMEOUT_MS = 3000;
+// Backwards-compatible aliases (kept until all call sites are migrated).
+const CONTROL_REQUEST_TIMEOUT_MS = INTERACTIVE_CONTROL_TIMEOUT_MS;
+const SCHEDULED_REQUEST_TIMEOUT_MS = BACKGROUND_REQUEST_TIMEOUT_MS;
 const SCHEDULED_REQUEST_MAX_ATTEMPTS = 3;
 const SCHEDULED_REQUEST_RETRY_GUARD_MS = 6000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;

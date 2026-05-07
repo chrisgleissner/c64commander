@@ -47,6 +47,7 @@ vi.mock("@capacitor/filesystem", () => ({
   Filesystem: {
     readFile: vi.fn(),
     writeFile: vi.fn(),
+    stat: vi.fn(),
   },
 }));
 
@@ -113,6 +114,16 @@ describe("smokeMode", () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(Filesystem.readFile).mockReset();
     vi.mocked(Filesystem.writeFile).mockReset();
+    vi.mocked(Filesystem.stat).mockReset();
+    // Default: stat resolves so existing tests that mock readFile observe the
+    // expected call. Tests for the ENOENT path override stat to reject.
+    vi.mocked(Filesystem.stat).mockResolvedValue({
+      type: "file",
+      size: 0,
+      ctime: 0,
+      mtime: 0,
+      uri: "file:///mock",
+    });
     sessionStorage.clear();
   });
 
@@ -417,20 +428,33 @@ describe("smokeMode", () => {
     expect(addLog).toHaveBeenCalledWith("warn", expect.stringContaining("smoke status"), expect.any(Object));
   });
 
-  it("handles filesystem read error for missing file", async () => {
+  it("uses stat-then-read so a missing optional file does not call readFile", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
-    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("File does not exist"));
+    vi.mocked(Filesystem.stat).mockRejectedValue(new Error("File does not exist"));
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    expect(addLog).toHaveBeenCalledWith("debug", expect.stringContaining("not found"), expect.any(Object));
+    expect(Filesystem.readFile).not.toHaveBeenCalled();
+    // ENOENT must be silent — no debug or warn for the expected absence.
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringContaining("smoke"), expect.any(Object));
   });
 
-  it("handles filesystem read error for generic error", async () => {
+  it("logs a warning when stat fails for a non-missing reason", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
-    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("Permission denied"));
+    vi.mocked(Filesystem.stat).mockRejectedValue(new Error("Permission denied"));
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    expect(Filesystem.readFile).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith("warn", expect.stringContaining("stat"), expect.any(Object));
+  });
+
+  it("logs a warning when readFile fails after a successful stat", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("Read failure"));
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
@@ -464,56 +488,46 @@ describe("smokeMode", () => {
     expect(config?.host).toBeUndefined();
   });
 
-  it("handles filesystem read error thrown as plain string", async () => {
+  it("treats a string ENOENT rejection from stat as a silent missing file", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
-    // Use a plain string rejection — exercises typeof error === 'string' in getErrorMessage
-    vi.mocked(Filesystem.readFile).mockRejectedValue("File does not exist");
+    vi.mocked(Filesystem.stat).mockRejectedValue("File does not exist");
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    // String 'File does not exist' matches isMissingFileError → debug log
-    expect(addLog).toHaveBeenCalledWith("debug", expect.stringContaining("not found"), expect.any(Object));
+    expect(Filesystem.readFile).not.toHaveBeenCalled();
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringContaining("smoke"), expect.any(Object));
   });
 
-  it("handles filesystem read error as object with nested error string", async () => {
+  it("treats a nested {error: '...not found...'} rejection from stat as silent", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
-    // Object without .message but with .error — exercises the 'error' in error branch
-    vi.mocked(Filesystem.readFile).mockRejectedValue({
-      error: "File not found",
-    });
+    vi.mocked(Filesystem.stat).mockRejectedValue({ error: "File not found" });
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    // 'not found' matches isMissingFileError → debug log
-    expect(addLog).toHaveBeenCalledWith("debug", expect.stringContaining("not found"), expect.any(Object));
+    expect(Filesystem.readFile).not.toHaveBeenCalled();
   });
 
-  it("handles filesystem read error as object with nested error.message", async () => {
+  it("treats a nested {error: {message}} rejection from stat as silent when it is a missing-file message", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
-    // Object with nested {error: {message: '...'}} — exercises the innermost message extraction
-    vi.mocked(Filesystem.readFile).mockRejectedValue({
-      error: { message: "no such file" },
-    });
+    vi.mocked(Filesystem.stat).mockRejectedValue({ error: { message: "no such file" } });
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    expect(addLog).toHaveBeenCalledWith("debug", expect.stringContaining("not found"), expect.any(Object));
+    expect(Filesystem.readFile).not.toHaveBeenCalled();
   });
 
-  it("handles filesystem read error using string fallback conversion", async () => {
+  it("warns when stat rejects with an opaque non-string value", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
-    vi.mocked(Filesystem.readFile).mockRejectedValue(42);
+    vi.mocked(Filesystem.stat).mockRejectedValue(42);
 
     const config = await initializeSmokeMode();
 
     expect(config).toBeNull();
-    expect(addLog).toHaveBeenCalledWith("warn", "Failed to read smoke config from filesystem", {
-      error: undefined,
-    });
+    expect(addLog).toHaveBeenCalledWith("warn", expect.stringContaining("stat"), expect.any(Object));
   });
 
   describe("snapshot write throttle", () => {

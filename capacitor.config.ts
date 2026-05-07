@@ -17,8 +17,26 @@ const config: CapacitorConfig = {
     androidScheme: "http",
   },
   plugins: {
+    // CAPACITOR_HTTP_EXEMPTION
+    //
+    // Verified on Pixel 4 against u64 (2026-05-07): the C64U firmware does
+    // not send Access-Control-Allow-Origin headers, so direct WebView fetch
+    // from http://localhost (Capacitor) to http://<device-ip> is blocked
+    // by CORS with "TypeError: Failed to fetch". CapacitorHttp routes the
+    // request through a native HTTP client that bypasses CORS, which is
+    // load-bearing for every REST call to the device.
+    //
+    // Until the firmware exposes CORS headers (out of scope) or a custom
+    // native HTTP plugin replaces this path, CapacitorHttp must stay on.
+    // The cookie-plugin overhead (R-HTTP-2) is mitigated below.
     CapacitorHttp: {
       enabled: true,
+    },
+    // The C64U has no cookie state. Disabling the CapacitorCookies plugin
+    // removes a per-request "Getting cookies at: ..." JNI hop that the
+    // research flagged as overhead.
+    CapacitorCookies: {
+      enabled: false,
     },
   },
 };

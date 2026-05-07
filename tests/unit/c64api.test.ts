@@ -17,6 +17,8 @@ import {
   applyC64APIRuntimeConfig,
   C64_DEFAULTS,
   resolveDeviceHostFromStorage,
+  INTERACTIVE_CONTROL_TIMEOUT_MS,
+  BACKGROUND_REQUEST_TIMEOUT_MS,
 } from "@/lib/c64api";
 import { clearPassword as clearStoredPassword, setPassword as storePassword } from "@/lib/secureStorage";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -233,6 +235,20 @@ const createValidCrtBlob = (version: number = 0x0100) => {
   setBE32(bytes, 68, 16);
   return new Blob([bytes], { type: "application/octet-stream" });
 };
+
+describe("c64api timeout buckets", () => {
+  it("exposes INTERACTIVE_CONTROL_TIMEOUT_MS = 1500 ms for user-tappable controls", () => {
+    expect(INTERACTIVE_CONTROL_TIMEOUT_MS).toBe(1500);
+  });
+
+  it("exposes BACKGROUND_REQUEST_TIMEOUT_MS = 3000 ms for polling and prefetch", () => {
+    expect(BACKGROUND_REQUEST_TIMEOUT_MS).toBe(3000);
+  });
+
+  it("keeps the interactive budget tighter than the background budget", () => {
+    expect(INTERACTIVE_CONTROL_TIMEOUT_MS).toBeLessThan(BACKGROUND_REQUEST_TIMEOUT_MS);
+  });
+});
 
 describe("c64api", () => {
   beforeEach(() => {
@@ -645,7 +661,7 @@ describe("c64api", () => {
     );
   });
 
-  it("applies the bounded control timeout to machine actions", async () => {
+  it("applies the interactive 1500 ms timeout to machine actions", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
@@ -666,7 +682,7 @@ describe("c64api", () => {
       const pending = api.machineReset();
       void pending.catch(() => {});
 
-      await vi.advanceTimersByTimeAsync(2999);
+      await vi.advanceTimersByTimeAsync(1499);
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(1);

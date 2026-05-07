@@ -16,43 +16,49 @@ import com.getcapacitor.BridgeActivity
 import java.io.File
 
 class MainActivity : BridgeActivity() {
-  private fun ensureCapacitorPluginAssetPath() {
-    val pluginsPath = File(filesDir, "public/plugins")
+  internal fun ensureCapacitorPluginAssetPath(filesDirectory: File = filesDir) {
+    val pluginsPath = File(filesDirectory, "public/plugins")
+    // Recoverable: file already exists in the expected shape. Bridge will read it.
     if (pluginsPath.isFile) return
     try {
       if (pluginsPath.isDirectory && !pluginsPath.deleteRecursively()) {
-        AppLogger.warn(
-                this,
-                "MainActivity",
-                "Failed to reset Capacitor plugin asset path",
-                "MainActivity",
-                IllegalStateException(
-                        "deleteRecursively returned false for ${pluginsPath.absolutePath}"
-                ),
+        // Unrecoverable: directory exists where a file is required and we
+        // cannot replace it. Continuing would leave the bridge in a broken
+        // state where plugin invocations behave unpredictably.
+        throw IllegalStateException(
+                "Capacitor plugin asset path is a directory and cannot be removed: ${pluginsPath.absolutePath}",
         )
-        return
       }
 
       val parent = pluginsPath.parentFile
       if (parent != null && !parent.exists() && !parent.mkdirs()) {
-        AppLogger.warn(
-                this,
-                "MainActivity",
-                "Failed to create Capacitor plugin asset parent directory",
-                "MainActivity",
-                IllegalStateException("mkdirs returned false for ${parent.absolutePath}"),
+        throw IllegalStateException(
+                "Failed to create Capacitor plugin asset parent directory: ${parent.absolutePath}",
         )
-        return
       }
 
       if (!pluginsPath.exists()) {
         pluginsPath.writeText("[]")
       }
-    } catch (error: Exception) {
+    } catch (error: IllegalStateException) {
+      // Surface unrecoverable failures so the launch fails fast instead of
+      // limping along with a broken plugin path.
       AppLogger.warn(
               this,
               "MainActivity",
-              "Failed to prepare Capacitor plugin asset path",
+              "Unrecoverable Capacitor plugin asset path failure",
+              "MainActivity",
+              error,
+      )
+      throw error
+    } catch (error: Exception) {
+      // Recoverable I/O hiccup (e.g. transient permission denial during a
+      // backup restore). Log with context and let onCreate continue —
+      // Capacitor will recreate the file on first plugin call.
+      AppLogger.warn(
+              this,
+              "MainActivity",
+              "Recoverable Capacitor plugin asset path warning",
               "MainActivity",
               error,
       )
@@ -68,6 +74,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(FeatureFlagsPlugin::class.java)
     registerPlugin(FtpClientPlugin::class.java)
     registerPlugin(HvscIngestionPlugin::class.java)
+    registerPlugin(MdnsResolverPlugin::class.java)
     registerPlugin(SafeAreaPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)
