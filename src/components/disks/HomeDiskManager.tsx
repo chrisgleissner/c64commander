@@ -195,7 +195,7 @@ export const HomeDiskManager = () => {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [selectedDiskIds, setSelectedDiskIds] = useState<Set<string>>(new Set());
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
-  const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
+  const { sources: localSources, addSourceFromPicker } = useLocalSources();
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
 
@@ -1158,109 +1158,6 @@ export const HomeDiskManager = () => {
     ],
   );
 
-  const handleLocalSourceInput = trace(async (files: FileList | File[] | null) => {
-    if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
-    const source = addSourceFromFiles(files);
-    if (!source) return;
-    const fileList = Array.isArray(files) ? files : Array.from(files);
-    let success = false;
-    try {
-      setIsAddingItems(true);
-      setAddItemsProgress({
-        status: "scanning",
-        count: 0,
-        elapsedMs: 0,
-        total: null,
-        message: "Scanning…",
-      });
-      const normalizedFiles = fileList.map((file) => {
-        const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-        const relativePath = relative.replace(/^\/+/, "");
-        return {
-          path: normalizeSourcePath(relativePath),
-          name: file.name,
-          sizeBytes: file.size ?? null,
-          modifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
-        };
-      });
-      const diskCandidates = normalizedFiles.filter((entry) => isDiskImagePath(entry.path));
-      if (!diskCandidates.length) {
-        setAddItemsProgress((prev) => ({
-          ...prev,
-          status: "error",
-          message: "No disk files found.",
-        }));
-        showNoDiskWarning();
-      } else {
-        const groupMap = assignDiskGroupsByPrefix(
-          diskCandidates.map((entry) => ({
-            path: normalizeDiskPath(entry.path),
-            name: entry.name,
-          })),
-        );
-        const runtimeFiles: Record<string, File> = {};
-        const sourceLocation = createLocalSourceLocation(source);
-        const disks = await Promise.all(
-          diskCandidates.map(async (entry, index) => {
-            const normalized = normalizeDiskPath(entry.path);
-            const autoGroup = groupMap.get(normalized);
-            const fallbackGroup = getLeafFolderName(normalized);
-            const groupName = autoGroup ?? fallbackGroup ?? null;
-            const playbackConfig = await discoverDiskPlaybackConfig(sourceLocation, {
-              path: normalized,
-              name: entry.name,
-            });
-            const diskEntry = createDiskEntry({
-              path: normalized,
-              location: "local",
-              group: groupName,
-              sourceId: source.id,
-              sizeBytes: entry.sizeBytes ?? null,
-              modifiedAt: entry.modifiedAt ?? null,
-              importOrder: index,
-              configRef: playbackConfig.configRef,
-              configOrigin: playbackConfig.configOrigin,
-              configOverrides: playbackConfig.configOverrides,
-              configCandidates: playbackConfig.configCandidates,
-            });
-            const runtime = resolveLocalRuntimeFile(source.id, normalized);
-            if (runtime) runtimeFiles[diskEntry.id] = runtime;
-            return diskEntry;
-          }),
-        );
-        diskLibrary.addDisks(disks, runtimeFiles);
-        setAddItemsProgress((prev) => ({
-          ...prev,
-          status: "done",
-          message: "Added to library",
-        }));
-        toast({
-          title: "Items added",
-          description: `${disks.length} disk(s) added to library.`,
-        });
-        success = true;
-      }
-    } catch (error) {
-      setAddItemsProgress((prev) => ({
-        ...prev,
-        status: "error",
-        message: "Add items failed",
-      }));
-      reportUserError({
-        operation: "DISK_IMPORT",
-        title: "Add items failed",
-        description: (error as Error).message,
-        error: error as Error,
-      });
-    } finally {
-      setIsAddingItems(false);
-    }
-    if (success && browserOpen) {
-      await yieldToRenderer();
-      setBrowserOpen(false);
-    }
-  });
-
   const handleAddLocalSourceFromPicker = useCallback(
     trace(async () => {
       const source = await addSourceFromPicker(localSourceInputRef.current);
@@ -1940,8 +1837,6 @@ export const HomeDiskManager = () => {
         className="hidden"
         onChange={wrapUserEvent(
           (event) => {
-            const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
-            void handleLocalSourceInput(selected.length ? selected : null);
             event.currentTarget.value = "";
           },
           "upload",
