@@ -1,3 +1,40 @@
+# PLANS - Saved-Device Health Regression Fix (2026-05-10)
+
+## Classification
+
+- Classification: `CODE_CHANGE`.
+- Scope: saved-device switcher health handoff and closed-switcher passive polling only.
+
+## Verified Findings
+
+- `src/hooks/useSavedDeviceHealthChecks.ts` still calls `runHealthCheckForTarget(..., { mode: "full" })` for always-on multi-device polling.
+- `src/lib/diagnostics/healthCheckEngine.ts` already supports `mode: "passive"` and skips the CONFIG pulse without calling `setConfigValue` in that mode.
+- `src/hooks/useSavedDeviceSwitching.ts` calls `selectSavedDevice(deviceId)` before verification resolves.
+- `src/components/UnifiedHealthBadge.tsx` derives switcher row selection directly from `savedDevices.selectedDeviceId`, so an in-flight switch immediately reclassifies the tapped row as selected while verification is still pending.
+- `src/hooks/useHealthState.ts` still reads an unkeyed global `healthCheckState.latestResult`; only touch this if the narrower switcher-row fix proves insufficient.
+
+## Working Fix Direction
+
+1. Change automatic saved-device polling to passive mode so closed-switcher checks stay read-only.
+2. Keep the switcher row rendering anchored to the pre-switch selected device until the in-flight switch settles, so pending verification does not collapse row state into `Offline` during the handoff.
+3. Add focused regressions for passive polling, retained last-known row state during reruns/superseded cycles, and the open-switcher selection handoff.
+
+## Implemented Changes
+
+- Updated `src/hooks/useSavedDeviceHealthChecks.ts` to call `runHealthCheckForTarget(..., { mode: "passive" })` and documented why the always-on poller must stay read-only.
+- Updated `src/components/UnifiedHealthBadge.tsx` to keep switcher row selection anchored to the pre-switch device while a switch is still in flight, and to force the tapped target row into `Verifying` instead of letting runtime status collapse it to `Offline` mid-handoff.
+- Updated focused regressions in `tests/unit/hooks/useSavedDeviceHealthChecks.test.tsx`, `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`, and `tests/unit/components/UnifiedHealthBadge.test.tsx`.
+
+## Focused Validation Status
+
+- Passed: targeted unit tests for `useSavedDeviceHealthChecks`, `healthCheckEngine`, and `UnifiedHealthBadge`.
+
+## Validation Target
+
+- Focused unit tests for `useSavedDeviceHealthChecks`, `healthCheckEngine`, and `UnifiedHealthBadge` immediately after the first edit.
+- Then run: `npm run lint`, `npm run test`, `npm run test:coverage`, and `npm run build`.
+- Attempt latest APK deploy to the attached Pixel 4 before completion, or record the concrete blocker.
+
 # PLANS - Diagnostics And Coverage Fixes (2026-05-10)
 
 ## Classification

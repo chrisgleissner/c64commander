@@ -300,6 +300,11 @@ type Props = {
   className?: string;
 };
 
+type PendingSwitchState = {
+  fromDeviceId: string;
+  toDeviceId: string;
+};
+
 /**
  * Unified header badge (§8).
  *
@@ -316,6 +321,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   const { profile } = useDisplayProfile();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [expandedDeviceIds, setExpandedDeviceIds] = useState<string[]>([]);
+  const [pendingSwitch, setPendingSwitch] = useState<PendingSwitchState | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -346,6 +352,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   useEffect(() => {
     if (!pickerOpen) {
       setExpandedDeviceIds([]);
+      setPendingSwitch(null);
     }
   }, [pickerOpen]);
 
@@ -422,10 +429,14 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   const handleSwitchDevice = useCallback(
     async (deviceId: string) => {
-      if (deviceId === savedDevices.selectedDeviceId) {
+      const fromDeviceId = pendingSwitch?.fromDeviceId ?? savedDevices.selectedDeviceId;
+
+      if (deviceId === fromDeviceId) {
         setPickerOpen(false);
         return;
       }
+
+      setPendingSwitch({ fromDeviceId, toDeviceId: deviceId });
 
       try {
         await switchSavedDevice(deviceId);
@@ -435,9 +446,11 @@ export function UnifiedHealthBadge({ className }: Props) {
           deviceId,
           error: (error as Error).message,
         });
+      } finally {
+        setPendingSwitch(null);
       }
     },
-    [savedDevices.selectedDeviceId, switchSavedDevice],
+    [pendingSwitch?.fromDeviceId, savedDevices.selectedDeviceId, switchSavedDevice],
   );
 
   return (
@@ -537,8 +550,13 @@ export function UnifiedHealthBadge({ className }: Props) {
           <AppSheetBody className="space-y-3 px-4 py-4 sm:px-5">
             {savedDevices.devices.map((device) => {
               const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
-              const isSelected = device.id === savedDevices.selectedDeviceId;
-              const status = isSelected ? getSavedDeviceSwitchStatus(device.id) : "last-known";
+              const isSelected = device.id === (pendingSwitch?.fromDeviceId ?? savedDevices.selectedDeviceId);
+              const isPendingTarget = pendingSwitch?.toDeviceId === device.id;
+              const status = isPendingTarget
+                ? "verifying"
+                : isSelected
+                  ? getSavedDeviceSwitchStatus(device.id)
+                  : "last-known";
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
               const healthSnapshot = healthByDeviceId[device.id];
               const isExpanded = expandedDeviceIdSet.has(device.id);

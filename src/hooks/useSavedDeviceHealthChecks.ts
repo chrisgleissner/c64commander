@@ -107,7 +107,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
       window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
   }, []);
 
-  const noopRefreshAll = useCallback(() => { }, []);
+  const noopRefreshAll = useCallback(() => {}, []);
 
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
     if (!seededState) return null;
@@ -195,7 +195,9 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
                 password,
               },
               {
-                mode: "full",
+                // This poller also runs on cold boot while the switcher is closed,
+                // so it must stay passive and never emit a visible CONFIG pulse.
+                mode: "passive",
                 signal: controller.signal,
                 onProgress: ({ liveProbes, probeStates }) => {
                   if (cycleTokenRef.current !== cycleToken || controller.signal.aborted) {

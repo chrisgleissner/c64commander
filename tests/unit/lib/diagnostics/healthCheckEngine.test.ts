@@ -405,7 +405,7 @@ describe("runHealthCheckForTarget", () => {
     expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323);
   });
 
-  it("skips the config pulse in passive mode", async () => {
+  it("skips the config pulse in passive mode so closed-switcher checks stay read-only", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
