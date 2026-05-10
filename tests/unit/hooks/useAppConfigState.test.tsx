@@ -170,26 +170,65 @@ describe("useAppConfigState", () => {
     loadInitialSnapshot.mockReturnValue(null);
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
+    let revertResult;
     await act(async () => {
-      await result.current.revertToInitial();
+      revertResult = await result.current.revertToInitial();
     });
 
+    expect(revertResult).toEqual({ status: "missing-snapshot" });
     expect(updateConfigBatch).not.toHaveBeenCalled();
   });
 
-  it("revertToInitial applies snapshot data when initialSnapshot exists", async () => {
+  it("revertToInitial applies snapshot data and verifies the restored values", async () => {
+    sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",
       data: { Audio: { items: { Vol: { value: "7" } } } },
     });
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory.mockResolvedValue({ items: { Vol: { selected: "7" } } });
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
+    let revertResult;
     await act(async () => {
-      await result.current.revertToInitial();
+      revertResult = await result.current.revertToInitial();
     });
 
+    expect(revertResult).toEqual({ status: "reverted" });
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
     expect(updateHasChanges).toHaveBeenCalledWith(expect.any(String), false);
+  });
+
+  it("revertToInitial reports verification mismatches after applying the snapshot", async () => {
+    sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: { Audio: { items: { Vol: { value: "7" } } } },
+    });
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory.mockResolvedValue({ items: { Vol: { selected: "5" } } });
+
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    let revertResult;
+    await act(async () => {
+      revertResult = await result.current.revertToInitial();
+    });
+
+    expect(revertResult).toMatchObject({
+      status: "verification-failed",
+      mismatchCount: 1,
+      message: expect.stringContaining("1 setting"),
+      mismatches: [
+        expect.objectContaining({
+          category: "Audio",
+          item: "Vol",
+          expected: "7",
+          actual: "5",
+        }),
+      ],
+    });
+    expect(updateHasChanges).not.toHaveBeenCalledWith(expect.any(String), false);
   });
 
   it("sets fetchError state when initial snapshot capture always fails", async () => {
@@ -403,7 +442,7 @@ describe("useAppConfigState", () => {
     status.isConnected = false;
     renderHook(() => useAppConfigState(), { wrapper });
     // Allow React to process effects
-    await act(async () => {});
+    await act(async () => { });
     // When disconnected, effect returns early before fetching
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
     status.isConnected = true;
@@ -412,7 +451,7 @@ describe("useAppConfigState", () => {
   it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
     sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
     renderHook(() => useAppConfigState(), { wrapper });
-    await act(async () => {});
+    await act(async () => { });
     expect(getCategories).not.toHaveBeenCalled();
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
   });

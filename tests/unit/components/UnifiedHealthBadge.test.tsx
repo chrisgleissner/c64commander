@@ -6,11 +6,21 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
+
+const createDeferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
 
 const mockState = vi.hoisted(() => ({
   healthState: {
@@ -76,6 +86,10 @@ const mockState = vi.hoisted(() => ({
     switchSummaryByDeviceId: {},
     summaryOrder: [],
   },
+  switchStatuses: {
+    "device-office": "connected",
+    "device-backup": "last-known",
+  } as Record<string, "connected" | "verifying" | "offline" | "mismatch" | "last-known">,
   switchSavedDevice: vi.fn(),
   requestDiagnosticsOpen: vi.fn(),
   savedDeviceHealthChecks: {
@@ -192,6 +206,13 @@ vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
   useSavedDeviceSwitching: () => mockState.switchSavedDevice,
 }));
 
+vi.mock("@/lib/savedDevices/store", () => ({
+  buildSavedDevicePrimaryLabel: (device: { name: string }) => device.name,
+  getSavedDeviceSwitchStatus: (deviceId: string) =>
+    mockState.switchStatuses[deviceId] ??
+    (deviceId === mockState.savedDevices.selectedDeviceId ? "connected" : "last-known"),
+}));
+
 vi.mock("@/hooks/useSavedDeviceHealthChecks", () => ({
   useSavedDeviceHealthChecks: (...args: unknown[]) => {
     mockUseSavedDeviceHealthChecks(...args);
@@ -213,6 +234,10 @@ describe("UnifiedHealthBadge", () => {
     mockState.connectionStatus.state = "REAL_CONNECTED";
     mockState.connectionStatus.deviceInfo = { product: "C64 Ultimate", errors: [] };
     mockState.savedDevices.selectedDeviceId = "device-office";
+    mockState.switchStatuses = {
+      "device-office": "connected",
+      "device-backup": "last-known",
+    };
     mockState.switchSavedDevice.mockReset();
     mockState.requestDiagnosticsOpen.mockReset();
     mockState.savedDeviceHealthChecks.refreshAll.mockReset();
@@ -479,6 +504,40 @@ describe("UnifiedHealthBadge", () => {
     vi.useRealTimers();
     await waitFor(() => {
       expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+    });
+  });
+
+  it("keeps switcher rows out of Offline while a newly tapped device is still verifying", async () => {
+    vi.useFakeTimers();
+    const switchDeferred = createDeferred<void>();
+    mockState.switchSavedDevice.mockImplementationOnce(async (deviceId: string) => {
+      mockState.savedDevices.selectedDeviceId = deviceId;
+      mockState.switchStatuses[deviceId] = "offline";
+      await switchDeferred.promise;
+    });
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Selected");
+    expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Last check");
+    expect(screen.getByTestId("switch-device-row-device-office").textContent).not.toContain("Offline");
+    expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Healthy");
+    expect(screen.getByTestId("switch-device-row-device-backup").textContent).toContain("Verifying");
+    expect(screen.getByTestId("switch-device-row-device-backup").textContent).not.toContain("Offline");
+    expect(screen.getByTestId("switch-device-status-device-backup").textContent).toContain("Checking");
+
+    await act(async () => {
+      switchDeferred.resolve();
+      await Promise.resolve();
     });
   });
 

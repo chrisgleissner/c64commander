@@ -1,3 +1,115 @@
+# PLANS - Saved-Device Health Regression Fix (2026-05-10)
+
+## Classification
+
+- Classification: `CODE_CHANGE`.
+- Scope: saved-device switcher health handoff and closed-switcher passive polling only.
+
+## Verified Findings
+
+- `src/hooks/useSavedDeviceHealthChecks.ts` still calls `runHealthCheckForTarget(..., { mode: "full" })` for always-on multi-device polling.
+- `src/lib/diagnostics/healthCheckEngine.ts` already supports `mode: "passive"` and skips the CONFIG pulse without calling `setConfigValue` in that mode.
+- `src/hooks/useSavedDeviceSwitching.ts` calls `selectSavedDevice(deviceId)` before verification resolves.
+- `src/components/UnifiedHealthBadge.tsx` derives switcher row selection directly from `savedDevices.selectedDeviceId`, so an in-flight switch immediately reclassifies the tapped row as selected while verification is still pending.
+- `src/hooks/useHealthState.ts` still reads an unkeyed global `healthCheckState.latestResult`; only touch this if the narrower switcher-row fix proves insufficient.
+
+## Working Fix Direction
+
+1. Change automatic saved-device polling to passive mode so closed-switcher checks stay read-only.
+2. Keep the switcher row rendering anchored to the pre-switch selected device until the in-flight switch settles, so pending verification does not collapse row state into `Offline` during the handoff.
+3. Add focused regressions for passive polling, retained last-known row state during reruns/superseded cycles, and the open-switcher selection handoff.
+
+## Implemented Changes
+
+- Updated `src/hooks/useSavedDeviceHealthChecks.ts` to call `runHealthCheckForTarget(..., { mode: "passive" })` and documented why the always-on poller must stay read-only.
+- Updated `src/components/UnifiedHealthBadge.tsx` to keep switcher row selection anchored to the pre-switch device while a switch is still in flight, and to force the tapped target row into `Verifying` instead of letting runtime status collapse it to `Offline` mid-handoff.
+- Updated focused regressions in `tests/unit/hooks/useSavedDeviceHealthChecks.test.tsx`, `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`, and `tests/unit/components/UnifiedHealthBadge.test.tsx`.
+
+## Focused Validation Status
+
+- Passed: targeted unit tests for `useSavedDeviceHealthChecks`, `healthCheckEngine`, and `UnifiedHealthBadge`.
+
+## Repository Validation Status
+
+- `npm run lint`: failed for unrelated pre-existing formatting drift in `src/hooks/useAppConfigState.ts`, `src/lib/diagnostics/healthCheckEngine.ts`, `src/pages/HomePage.tsx`, `tests/unit/hooks/useAppConfigState.test.tsx`, and `tests/unit/pages/HomePage.test.tsx`.
+- `npm run test`: passed.
+- `npm run test:coverage`: passed. Coverage summary: statements `94.22%`, branches `91.84%`, functions `90.50%`, lines `94.22%`.
+- `npm run build`: passed.
+
+## Android Deploy Status
+
+- `npm run cap:build && npm run android:apk`: passed.
+- Installed `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` to Pixel 4 `9B081FFAZ001WX` with `adb install -r`: passed.
+- Relaunched `uk.gleissner.c64commander` and confirmed `topResumedActivity=uk.gleissner.c64commander/.MainActivity`.
+- On-device evidence captured under `.tmp/android-check/`:
+  - `pixel4-unlocked.png`: app foregrounded on Home.
+  - `pixel4-switcher-attempt.png`: switcher opens from a long press on the top-right badge.
+  - `pixel4-switch-tap-1.png` / `pixel4-switch-tap-2.png` / `pixel4-switch-tap-3.png`: tap on the non-selected device keeps the old row marked `Selected` while the tapped row shows `Verifying`.
+- Hardware blocker for a stronger device-side proof: both saved devices were already in an offline last-known state, and direct probes to `http://u64/v1/info` and `http://c64u/v1/info` both failed with `Recv failure: Connection reset by peer`. That prevents a discriminating live healthy-vs-offline handoff proof on this hardware state.
+
+## Validation Target
+
+- Focused unit tests for `useSavedDeviceHealthChecks`, `healthCheckEngine`, and `UnifiedHealthBadge` immediately after the first edit.
+- Then run: `npm run lint`, `npm run test`, `npm run test:coverage`, and `npm run build`.
+- Attempt latest APK deploy to the attached Pixel 4 before completion, or record the concrete blocker.
+
+# PLANS - Diagnostics And Coverage Fixes (2026-05-10)
+
+## Classification
+
+- Classification: `CODE_CHANGE`.
+- Scope: targeted fixes only for Telnet health checks, saved-device editing, switch-device passive polling, inline-warning deduplication, Home config revert result reporting, and Android JaCoCo coverage generation.
+
+## Execution Order
+
+1. Reproduce and map the current code paths for each reported bug.
+2. Inspect `vivipi/scripts/u64_connection_test.py` and `vivipi/scripts/u64_telnet.py` to derive the exact Telnet probe semantics.
+3. Inspect `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-10-1802-27Z` and record only verified findings.
+4. Update the Telnet health-check path to match ViViPi semantics without changing interactive Telnet behavior.
+5. Separate saved-device name fallback display logic from editable draft state.
+6. Ensure switch-device bottom-sheet polling includes the config check and does not emit duplicate inline warnings.
+7. Improve Home config revert result classification and post-reset verification messaging.
+8. Repair Android Tests + Coverage so JaCoCo XML exists at the Codecov upload path.
+9. Add focused regression tests for each fixed slice.
+10. Run targeted validation, then repository-required coverage validation, then Android coverage generation verification.
+11. Attempt APK deploy to the attached Pixel 4 unless blocked by environment/hardware.
+
+## Initial Verified Findings
+
+- The raw diagnostics bundle exists and contains `actions`, `error-logs`, `logs`, `supplemental`, and `traces` JSON exports.
+- `vivipi/scripts/u64_connection_test.py` delegates Telnet probing to `vivipi/scripts/u64_telnet.py`.
+- `vivipi/scripts/u64_telnet.py` uses a direct TCP connect via `socket.create_connection((host, port), timeout=2)`, sets a short idle read timeout, optionally authenticates only when a password prompt is observed, and otherwise treats connection/open-session behavior as the probe basis.
+- Likely C64 Commander anchors are:
+  - Telnet health-check engine: `src/lib/diagnostics/healthCheckEngine.ts`
+  - Native Android Telnet boundary: `android/app/src/main/java/uk/gleissner/c64commander/TelnetSocketPlugin.kt`
+  - Saved-device editor state: `src/lib/savedDevices/deviceEditor.ts`
+  - Saved-device display fallback: `src/lib/savedDevices/store.ts`
+  - Switch-device polling hooks: `src/hooks/useSavedDeviceHealthChecks.tsx`, `src/hooks/useSavedDeviceSwitching.tsx`
+  - Home revert flow: `src/pages/HomePage.tsx`, `src/lib/config/configWriteThrottle.ts`
+  - Android coverage workflow/config: `.github/workflows/android.yaml`, `android/app/build.gradle`, `scripts/verify-coverage-artifacts.mjs`
+
+## Working Hypotheses
+
+- Telnet health-check failures are caused by C64 Commander using a stricter health-check action than ViViPi, likely waiting for a full Telnet interaction or using a mismatched timeout path rather than a successful TCP open / minimal prompt probe.
+- The edit-connection name field bug is caused by the editable input being derived from a persisted display fallback instead of a raw draft state.
+- Switch-device passive polling is reusing a passive health-check mode intended for low-impact background checks, and that mode is suppressing config checks while also surfacing duplicate warnings from both parent and child sources.
+- Home revert currently treats `Connection reset` as a generic failure, even when the device may apply the config and reset the socket before acknowledgment; verification needs to classify that outcome explicitly.
+- Android coverage CI is failing because the expected JaCoCo XML is not being generated at, or verified before upload from, `android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml`.
+
+## Focused Validation Plan
+
+- After the first substantive Telnet edit, run the narrowest Telnet probe unit tests before widening scope.
+- After each additional slice, run the nearest tests for that slice before moving on.
+- Final validation must include TypeScript checks, relevant Vitest slices, `npm run test:coverage`, Android unit/coverage generation, and an existence check for the JaCoCo XML report.
+
+## Completion Conditions
+
+- All five reported bugs are fixed with focused regression coverage.
+- `PLANS.md` and `WORKLOG.md` accurately reflect the work.
+- The diagnostics findings used for decisions are explicitly recorded.
+- The Android coverage XML is generated where Codecov expects it, or the workflow is updated to the real generated path with local proof.
+- Any hardware-dependent behavior not verified locally is explicitly called out.
+
 # PLANS - Production-Readiness Test Architecture
 
 ## Current Objective

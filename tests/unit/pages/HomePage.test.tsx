@@ -606,9 +606,9 @@ vi.mock("@/lib/deviceControl/deviceControl", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => {},
+  subscribeDiagnosticsOverlay: () => () => { },
   shouldSuppressDiagnosticsSideEffects: () => false,
-  subscribeDiagnosticsSuppression: () => () => {},
+  subscribeDiagnosticsSuppression: () => () => { },
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
@@ -710,7 +710,7 @@ beforeEach(() => {
     hasChanges: false,
     isApplying: false,
     isSaving: false,
-    revertToInitial: vi.fn().mockResolvedValue(undefined),
+    revertToInitial: vi.fn().mockResolvedValue({ status: "reverted" }),
     saveCurrentConfig: vi.fn().mockResolvedValue(undefined),
     loadAppConfig: vi.fn().mockResolvedValue(undefined),
     renameAppConfig: vi.fn(),
@@ -1226,7 +1226,10 @@ describe("HomePage SID status", () => {
 
     fireEvent.click(screen.getByTestId("home-config-revert-changes"));
     await waitFor(() => expect(appConfigStatePayloadRef.current.revertToInitial).toHaveBeenCalled());
-    expect(toastSpy).toHaveBeenCalledWith({ title: "Config reverted" });
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Config reverted",
+      description: "Verified against the initial snapshot.",
+    });
 
     fireEvent.click(screen.getByTestId("home-config-save-app"));
     const saveDialog = screen.getByRole("dialog");
@@ -1298,6 +1301,37 @@ describe("HomePage SID status", () => {
     );
     expect(appConfigStatePayloadRef.current.deleteAppConfig).toHaveBeenCalledWith("config-a");
   }, 30000);
+
+  it("reports revert verification failures with targeted error details", async () => {
+    appConfigStatePayloadRef.current = {
+      ...appConfigStatePayloadRef.current,
+      hasChanges: true,
+      revertToInitial: vi.fn().mockResolvedValue({
+        status: "verification-failed",
+        message: "Revert applied, but 2 settings did not match the initial snapshot.",
+        mismatchCount: 2,
+        mismatches: [
+          { category: "Audio", item: "Vol", expected: "7", actual: "5" },
+          { category: "Video", item: "Mode", expected: "PAL", actual: "NTSC" },
+        ],
+      }),
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-config-revert-changes"));
+
+    await waitFor(() =>
+      expect(reportUserErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "Config revert",
+          title: "Config revert verification failed",
+          description: "Revert applied, but 2 settings did not match the initial snapshot.",
+          context: expect.objectContaining({ mismatchCount: 2 }),
+        }),
+      ),
+    );
+  });
 
   it("renders CPU, Ports, and Video cards with the expected controls in page order", async () => {
     u64SettingsPayloadRef.current = buildU64SettingsPayload();
@@ -1435,7 +1469,7 @@ describe("HomePage SID status", () => {
   });
 
   it("shows a pending RAM dump folder label while folder selection is in flight", async () => {
-    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => {}));
+    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => { }));
 
     renderHomePage();
     fireEvent.click(screen.getByTestId("ram-dump-folder-trigger"));
@@ -1552,7 +1586,7 @@ describe("HomePage SID status", () => {
     expect(machineSection?.contains(ramFolderRow)).toBe(true);
     expect(
       screen.getByTestId("home-machine-controls").compareDocumentPosition(screen.getByTestId("home-machine-footer")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
 
     const cardColumn = screen.getByTestId("home-secondary-cards");

@@ -4,6 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
 
+const createDeferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
+const createAbortError = () => Object.assign(new Error("Aborted"), { name: "AbortError" });
+
+const createAbortablePendingRun = () => {
+  return (_target: unknown, options?: { signal?: AbortSignal }) =>
+    new Promise((_, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(createAbortError()), {
+        once: true,
+      });
+    });
+};
+
 const { mockRunHealthCheckForTarget, mockGetPasswordForDevice } = vi.hoisted(() => ({
   mockRunHealthCheckForTarget: vi.fn(),
   mockGetPasswordForDevice: vi.fn(),
@@ -61,7 +82,7 @@ const makeResult = (label: string) => ({
     REST: { probe: "REST" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 1 },
     FTP: { probe: "FTP" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 2 },
     TELNET: { probe: "TELNET" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 3 },
-    CONFIG: { probe: "CONFIG" as const, outcome: "Skipped" as const, durationMs: null, reason: "Passive", startMs: 4 },
+    CONFIG: { probe: "CONFIG" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 4 },
     RASTER: { probe: "RASTER" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 5 },
     JIFFY: { probe: "JIFFY" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 6 },
   },
@@ -101,12 +122,12 @@ const makeProbeStates = () => ({
     reason: null,
   },
   CONFIG: {
-    state: "CANCELLED" as const,
-    outcome: "Skipped" as const,
+    state: "SUCCESS" as const,
+    outcome: "Success" as const,
     startedAt: "2026-01-01T12:00:00.301Z",
-    endedAt: "2026-01-01T12:00:00.301Z",
-    durationMs: null,
-    reason: "Skipped: passive mode disables CONFIG pulse",
+    endedAt: "2026-01-01T12:00:00.401Z",
+    durationMs: 100,
+    reason: null,
   },
   RASTER: {
     state: "SUCCESS" as const,
@@ -181,6 +202,79 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
   });
 
+  it("keeps the previous latest result visible while a rerun is still in progress", async () => {
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    const previousOfficeResult = result.current.byDeviceId["device-office"]?.latestResult;
+    const officeDeferred = createDeferred<ReturnType<typeof makeResult>>();
+    const backupDeferred = createDeferred<ReturnType<typeof makeResult>>();
+
+    mockRunHealthCheckForTarget
+      .mockImplementationOnce(async () => officeDeferred.promise)
+      .mockImplementationOnce(async () => backupDeferred.promise);
+
+    await act(async () => {
+      result.current.refreshAll();
+    });
+
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
+    expect(result.current.byDeviceId["device-office"]?.latestResult).toBe(previousOfficeResult);
+    expect(result.current.byDeviceId["device-office"]?.error).toBeNull();
+
+    await act(async () => {
+      officeDeferred.resolve(makeResult("office"));
+      backupDeferred.resolve(makeResult("backup"));
+    });
+
+    await flushAsyncWork();
+  });
+
+  it("keeps the last known result when a superseded cycle is aborted", async () => {
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    const previousOfficeResult = result.current.byDeviceId["device-office"]?.latestResult;
+
+    mockRunHealthCheckForTarget
+      .mockImplementationOnce(createAbortablePendingRun())
+      .mockImplementationOnce(createAbortablePendingRun())
+      .mockImplementationOnce(async (target: { deviceHost: string }) =>
+        target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
+      )
+      .mockImplementationOnce(async (target: { deviceHost: string }) =>
+        target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
+      );
+
+    await act(async () => {
+      result.current.refreshAll();
+    });
+
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
+    expect(result.current.byDeviceId["device-office"]?.latestResult).toBe(previousOfficeResult);
+
+    await act(async () => {
+      result.current.refreshAll();
+    });
+
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.error).toBeNull();
+    expect(result.current.byDeviceId["device-office"]?.latestResult).not.toBeNull();
+    expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).toBe(
+      previousOfficeResult?.overallHealth ?? "Healthy",
+    );
+    expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).not.toBe("Unavailable");
+  });
+
   it("manual refresh forces a new all-device cycle before the next interval", async () => {
     const savedDevices = buildSavedDevices();
     const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
@@ -206,7 +300,7 @@ describe("useSavedDeviceHealthChecks", () => {
           REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 1 },
           FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 2 },
           TELNET: { probe: "TELNET", outcome: "Success", durationMs: 100, reason: null, startMs: 3 },
-          CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+          CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 4 },
           RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 5 },
           JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 6 },
         },
@@ -224,7 +318,7 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId["device-office"]?.running).toBe(false);
     expect(result.current.byDeviceId["device-office"]?.probeStates).toEqual(finalProbeStates);
     expect(result.current.byDeviceId["device-office"]?.probeStates.REST.state).toBe("SUCCESS");
-    expect(result.current.byDeviceId["device-office"]?.probeStates.CONFIG.state).toBe("CANCELLED");
+    expect(result.current.byDeviceId["device-office"]?.probeStates.CONFIG.state).toBe("SUCCESS");
   });
 
   it("prefers seeded saved-device health state from the diagnostics test bridge", async () => {

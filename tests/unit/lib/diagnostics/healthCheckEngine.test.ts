@@ -17,8 +17,10 @@ const {
   mockSetConfigValue,
   mockLoadConfig,
   mockListFtpDirectory,
+  mockCreateTelnetClient,
   mockTelnetConnect,
-  mockTelnetReadScreen,
+  mockTelnetRead,
+  mockTelnetSend,
   mockTelnetDisconnect,
   mockWithTelnetInteraction,
 } = vi.hoisted(() => ({
@@ -28,8 +30,10 @@ const {
   mockSetConfigValue: vi.fn(),
   mockLoadConfig: vi.fn(),
   mockListFtpDirectory: vi.fn(),
+  mockCreateTelnetClient: vi.fn(),
   mockTelnetConnect: vi.fn(),
-  mockTelnetReadScreen: vi.fn(),
+  mockTelnetRead: vi.fn(),
+  mockTelnetSend: vi.fn(),
   mockTelnetDisconnect: vi.fn(),
   mockWithTelnetInteraction: vi.fn(),
 }));
@@ -78,14 +82,12 @@ vi.mock("@/lib/ftp/ftpClient", () => ({
 }));
 
 vi.mock("@/lib/telnet/telnetClient", () => ({
-  createTelnetClient: vi.fn(() => ({ mocked: true })),
-}));
-
-vi.mock("@/lib/telnet/telnetSession", () => ({
-  createTelnetSession: vi.fn(() => ({
+  createTelnetClient: mockCreateTelnetClient.mockImplementation(() => ({
     connect: mockTelnetConnect,
-    readScreen: mockTelnetReadScreen,
+    read: mockTelnetRead,
+    send: mockTelnetSend,
     disconnect: mockTelnetDisconnect,
+    isConnected: vi.fn(() => true),
   })),
 }));
 
@@ -129,7 +131,6 @@ import {
 } from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
-import type { ScreenCell } from "@/lib/telnet/telnetTypes";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -146,28 +147,17 @@ const jiffyBytes = new Uint8Array([0x00, 0x3c, 0x00]);
 
 const ledResp = { "LED Strip Settings": { "Strip Intensity": { selected: 5 } } };
 const ledReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: 21 } } };
-const telnetScreen = {
-  width: 60,
-  height: 24,
-  cells: [],
-  menus: [],
-  form: null,
-  selectedItem: null,
-  titleLine: "Ultimate-II+ V3.11 - C64 Ultimate",
-  screenType: "file_browser" as const,
+const encodeTelnetText = (value: string) => new TextEncoder().encode(value);
+
+const queueTelnetReads = (...chunks: Array<string | Uint8Array>) => {
+  mockTelnetRead.mockReset();
+  chunks.forEach((chunk) => {
+    mockTelnetRead.mockResolvedValueOnce(typeof chunk === "string" ? encodeTelnetText(chunk) : chunk);
+  });
+  mockTelnetRead.mockResolvedValue(new Uint8Array(0));
 };
 
-const createTelnetCells = (text: string, row = 0, width = 60, height = 24): ScreenCell[][] => {
-  const cells = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ char: " ", reverse: false, color: 7 })),
-  );
-  text.split("").forEach((char, index) => {
-    if (index < width) {
-      cells[row]![index] = { char, reverse: false, color: 7 };
-    }
-  });
-  return cells;
-};
+const telnetBanner = "Ultimate-II+ V3.11 - C64 Ultimate";
 
 const setupAllProbesSuccess = () => {
   mockGetInfo.mockResolvedValue(successfulInfo);
@@ -183,7 +173,8 @@ const setupAllProbesSuccess = () => {
   mockSetConfigValue.mockResolvedValue(undefined);
   mockListFtpDirectory.mockResolvedValue([]);
   mockTelnetConnect.mockResolvedValue(undefined);
-  mockTelnetReadScreen.mockResolvedValue(telnetScreen);
+  mockTelnetSend.mockResolvedValue(undefined);
+  queueTelnetReads(telnetBanner, new Uint8Array(0));
   mockTelnetDisconnect.mockResolvedValue(undefined);
 };
 
@@ -194,11 +185,20 @@ beforeEach(() => {
   mockSetConfigValue.mockReset();
   mockLoadConfig.mockReset();
   mockListFtpDirectory.mockReset();
+  mockCreateTelnetClient.mockReset();
   mockTelnetConnect.mockReset();
-  mockTelnetReadScreen.mockReset();
+  mockTelnetRead.mockReset();
+  mockTelnetSend.mockReset();
   mockTelnetDisconnect.mockReset();
   mockWithTelnetInteraction.mockReset();
   mockWithTelnetInteraction.mockImplementation((_meta: unknown, handler: () => Promise<unknown>) => handler());
+  mockCreateTelnetClient.mockImplementation(() => ({
+    connect: mockTelnetConnect,
+    read: mockTelnetRead,
+    send: mockTelnetSend,
+    disconnect: mockTelnetDisconnect,
+    isConnected: vi.fn(() => true),
+  }));
   vi.clearAllMocks();
   clearHealthHistory();
   resetHealthCheckStateSnapshot();
@@ -402,10 +402,10 @@ describe("runHealthCheckForTarget", () => {
     expect(mockListFtpDirectory).toHaveBeenCalledWith(
       expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
     );
-    expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323, "secret");
+    expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323);
   });
 
-  it("skips the config pulse in passive mode", async () => {
+  it("skips the config pulse in passive mode so closed-switcher checks stay read-only", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -464,7 +464,8 @@ describe("runHealthCheck — REST probe failure", () => {
     mockGetInfo.mockRejectedValue(new Error("Host unreachable"));
     mockListFtpDirectory.mockReset();
     mockTelnetConnect.mockReset();
-    mockTelnetReadScreen.mockReset();
+    mockTelnetRead.mockReset();
+    mockTelnetSend.mockReset();
     mockTelnetDisconnect.mockReset();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "backup-u64.local" });
 
@@ -977,79 +978,72 @@ describe("runHealthCheck — FTP probe", () => {
 });
 
 describe("runHealthCheck — TELNET probe", () => {
-  it("accepts TELNET when the session shows visible text even without an Ultimate banner", async () => {
+  it("accepts TELNET when the probe reads visible text even without an Ultimate banner", async () => {
     setupAllProbesSuccess();
-    mockTelnetReadScreen.mockResolvedValue({
-      ...telnetScreen,
-      titleLine: "Storage Browser",
-    });
+    queueTelnetReads("Storage Browser", new Uint8Array(0));
 
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
   });
 
-  it("fails TELNET when the session returns no visible output", async () => {
+  it("fails TELNET when the probe returns no visible output", async () => {
     setupAllProbesSuccess();
-    mockTelnetReadScreen.mockResolvedValue({
-      ...telnetScreen,
-      titleLine: "   ",
-      screenType: "unknown",
-    });
+    queueTelnetReads(new Uint8Array(0));
 
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Fail");
     expect(result!.probes.TELNET.reason).toBe("No telnet response");
-    expect(mockTelnetReadScreen).toHaveBeenCalledTimes(5);
+    expect(mockTelnetRead).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts TELNET when the title is blank but the screen still contains visible text", async () => {
+  it("accepts TELNET when the probe receives visible text after telnet negotiation bytes", async () => {
     setupAllProbesSuccess();
-    mockTelnetReadScreen.mockResolvedValue({
-      ...telnetScreen,
-      titleLine: "   ",
-      cells: createTelnetCells("Directory /USB1"),
-      screenType: "unknown",
+    queueTelnetReads(Uint8Array.from([255, 251, 1]), "Directory /USB1", new Uint8Array(0));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Success");
+    expect(mockTelnetSend).toHaveBeenCalledWith(Uint8Array.from([255, 254, 1]));
+  });
+
+  it("authenticates only when a password prompt is observed", async () => {
+    setupAllProbesSuccess();
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
+      deviceHost: "10.0.0.2:6400",
+      password: "secret",
     });
+    queueTelnetReads("Password:", new Uint8Array(0), new Uint8Array(0), "Storage Browser", new Uint8Array(0));
 
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
-    expect(mockTelnetReadScreen).toHaveBeenCalledTimes(1);
+    expect(mockTelnetSend).toHaveBeenNthCalledWith(1, encodeTelnetText("secret\r\n"));
+    expect(mockTelnetSend).toHaveBeenNthCalledWith(2, encodeTelnetText("\r\n"));
   });
 
-  it("accepts a later valid TELNET screen after blank initial reads", async () => {
+  it("does not authenticate when no password prompt is observed", async () => {
     setupAllProbesSuccess();
-    mockTelnetReadScreen
-      .mockResolvedValueOnce({
-        ...telnetScreen,
-        titleLine: "   ",
-        screenType: "unknown",
-      })
-      .mockResolvedValueOnce({
-        ...telnetScreen,
-        titleLine: "",
-        screenType: "unknown",
-      })
-      .mockResolvedValueOnce(telnetScreen);
-
-    const result = await runHealthCheck();
-
-    expect(result!.probes.TELNET.outcome).toBe("Success");
-    expect(mockTelnetReadScreen).toHaveBeenCalledTimes(3);
-  });
-
-  it("fails TELNET when the banner matches but the parsed screen type is unknown", async () => {
-    setupAllProbesSuccess();
-    mockTelnetReadScreen.mockResolvedValue({
-      ...telnetScreen,
-      screenType: "unknown",
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
+      deviceHost: "10.0.0.2:6400",
+      password: "secret",
     });
+    queueTelnetReads(
+      "Storage Browser",
+      new Uint8Array(0),
+      new Uint8Array(0),
+      new Uint8Array(0),
+      new Uint8Array(0),
+      "Storage Browser",
+      new Uint8Array(0),
+    );
 
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
+    expect(mockTelnetSend).toHaveBeenCalledTimes(2);
+    expect(mockTelnetSend).toHaveBeenCalledWith(encodeTelnetText("\r\n"));
   });
 
   it("runs TELNET through the shared Telnet interaction scheduler", async () => {
@@ -1066,7 +1060,7 @@ describe("runHealthCheck — TELNET probe", () => {
     );
   });
 
-  it("fails TELNET when the session connect step throws", async () => {
+  it("fails TELNET when the transport connect step throws", async () => {
     setupAllProbesSuccess();
     mockTelnetConnect.mockRejectedValue(new Error("Telnet connection refused"));
 
@@ -1077,7 +1071,7 @@ describe("runHealthCheck — TELNET probe", () => {
     expect(mockTelnetDisconnect).toHaveBeenCalled();
   });
 
-  it("connects TELNET with the normalized host and configured password", async () => {
+  it("connects TELNET with the normalized host and the ViViPi-compatible connect timeout", async () => {
     setupAllProbesSuccess();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
       deviceHost: "10.0.0.2:6400",
@@ -1086,15 +1080,16 @@ describe("runHealthCheck — TELNET probe", () => {
 
     await runHealthCheck();
 
-    expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23, "secret");
+    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 2000 });
+    expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23);
   });
 
-  it("uses a shorter screen-read timeout so the probe fits inside the global telnet budget", async () => {
+  it("elicits banner data with a plain CRLF after connecting", async () => {
     setupAllProbesSuccess();
 
     await runHealthCheck();
 
-    expect(mockTelnetReadScreen).toHaveBeenCalledWith(375);
+    expect(mockTelnetSend).toHaveBeenCalledWith(encodeTelnetText("\r\n"));
   });
 });
 

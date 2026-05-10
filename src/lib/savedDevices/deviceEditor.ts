@@ -76,7 +76,7 @@ export const applySavedDeviceDraftNameInput = (
   if (!name) {
     return {
       ...draft,
-      name: buildInferredSavedDeviceName(draft.host),
+      name: "",
       nameSource: "INFERRED",
     };
   }

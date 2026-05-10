@@ -890,6 +890,45 @@ function HomePageContent() {
   const reuSizeVisible = isActive && ramExpansionAvailable && ramExpansionModeToken === normalizeOptionToken("Enabled");
   const pageShellClassName = usePrimaryPageShellClassName();
 
+  const handleRevertInitialConfig = async () => {
+    try {
+      const result = await revertToInitial();
+
+      if (result.status === "missing-snapshot") {
+        toast({
+          title: "Initial snapshot unavailable",
+          description: "Reconnect and wait for the initial config snapshot before reverting.",
+        });
+        return;
+      }
+
+      if (result.status === "verification-failed") {
+        reportUserError({
+          operation: "Config revert",
+          title: "Config revert verification failed",
+          description: result.message,
+          context: {
+            mismatchCount: result.mismatchCount,
+            mismatches: result.mismatches.slice(0, 5),
+          },
+        });
+        return;
+      }
+
+      toast({
+        title: "Config reverted",
+        description: "Verified against the initial snapshot.",
+      });
+    } catch (error) {
+      reportUserError({
+        operation: "Config revert",
+        title: "Config revert failed",
+        description: "Unable to restore the initial config snapshot.",
+        error,
+      });
+    }
+  };
+
   return (
     <div className={pageShellClassName}>
       <AppBar
@@ -1444,7 +1483,7 @@ function HomePageContent() {
                 label="Revert"
                 description="Changes"
                 dataTestId="home-config-revert-changes"
-                onClick={() => handleAction(() => revertToInitial(), "Config reverted")}
+                onClick={() => void handleRevertInitialConfig()}
                 disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
                 loading={isApplying}
               />
