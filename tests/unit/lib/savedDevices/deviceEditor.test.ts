@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applySavedDeviceDraftHostInput, buildSavedDeviceEditorDraft } from "@/lib/savedDevices/deviceEditor";
+import {
+  applySavedDeviceDraftHostInput,
+  applySavedDeviceDraftNameInput,
+  buildSavedDeviceEditorDraft,
+} from "@/lib/savedDevices/deviceEditor";
 
 describe("deviceEditor", () => {
   it("builds inferred names from normalized hosts without the http port", () => {
@@ -42,6 +46,28 @@ describe("deviceEditor", () => {
       nameSource: "INFERRED",
       type: "",
       typeSource: "INFERRED",
+    });
+  });
+
+  it("keeps the draft name empty when the inferred label is cleared", () => {
+    expect(
+      applySavedDeviceDraftNameInput(
+        {
+          name: "c64u",
+          nameSource: "INFERRED",
+          host: "c64u",
+          type: "",
+          typeSource: "INFERRED",
+          httpPort: "80",
+          ftpPort: "21",
+          telnetPort: "64",
+        },
+        "   ",
+      ),
+    ).toMatchObject({
+      name: "",
+      nameSource: "INFERRED",
+      host: "c64u",
     });
   });
 });

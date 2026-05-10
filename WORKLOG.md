@@ -1,3 +1,27 @@
+# Diagnostics And Coverage Fix Worklog
+
+## [2026-05-10 18:10Z] Task setup and verified evidence
+
+- Classified the task as `CODE_CHANGE`.
+- Confirmed the raw diagnostics export exists at `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-10-1802-27Z` with the expected five JSON files: `actions`, `error-logs`, `logs`, `supplemental`, and `traces`.
+- Checked the repository worktree state before editing with `get_changed_files`; no existing unstaged or staged changes were reported.
+- Read `vivipi/scripts/u64_connection_test.py` and confirmed that Telnet probe behavior is delegated to `vivipi/scripts/u64_telnet.py`.
+- Read the ViViPi Telnet probe implementation and verified these baseline semantics for follow-up comparison:
+  - uses `socket.create_connection((host, telnet_port), timeout=2)`;
+  - sets short socket read idle timeouts after connect;
+  - only attempts authentication when a password prompt is actually observed;
+  - treats the open connection and minimal readable output as meaningful probe state;
+  - closes the socket during cleanup and maintains runner-local session state for richer modes.
+- Located the likely owning code for the requested fixes:
+  - Telnet health check: `src/lib/diagnostics/healthCheckEngine.ts`
+  - Native Android Telnet socket layer: `android/app/src/main/java/uk/gleissner/c64commander/TelnetSocketPlugin.kt`
+  - Saved-device edit state: `src/lib/savedDevices/deviceEditor.ts`
+  - Saved-device display fallback: `src/lib/savedDevices/store.ts`
+  - Switch-device polling: `src/hooks/useSavedDeviceHealthChecks.tsx`, `src/hooks/useSavedDeviceSwitching.tsx`
+  - Home revert/config queue: `src/pages/HomePage.tsx`, `src/lib/config/configWriteThrottle.ts`
+  - Android coverage CI: `.github/workflows/android.yaml`, `android/app/build.gradle`, `scripts/verify-coverage-artifacts.mjs`
+- Next step: inspect the concrete probe function in ViViPi, parse the raw diagnostics for Telnet/config-reset evidence, then read the direct C64 Commander owners and make the first localized code change.
+
 # Slider Responsiveness Research Worklog
 
 Investigation only. No source-code changes, no commits.

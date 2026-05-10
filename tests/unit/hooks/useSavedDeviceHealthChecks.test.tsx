@@ -61,7 +61,7 @@ const makeResult = (label: string) => ({
     REST: { probe: "REST" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 1 },
     FTP: { probe: "FTP" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 2 },
     TELNET: { probe: "TELNET" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 3 },
-    CONFIG: { probe: "CONFIG" as const, outcome: "Skipped" as const, durationMs: null, reason: "Passive", startMs: 4 },
+    CONFIG: { probe: "CONFIG" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 4 },
     RASTER: { probe: "RASTER" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 5 },
     JIFFY: { probe: "JIFFY" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 6 },
   },
@@ -101,12 +101,12 @@ const makeProbeStates = () => ({
     reason: null,
   },
   CONFIG: {
-    state: "CANCELLED" as const,
-    outcome: "Skipped" as const,
+    state: "SUCCESS" as const,
+    outcome: "Success" as const,
     startedAt: "2026-01-01T12:00:00.301Z",
-    endedAt: "2026-01-01T12:00:00.301Z",
-    durationMs: null,
-    reason: "Skipped: passive mode disables CONFIG pulse",
+    endedAt: "2026-01-01T12:00:00.401Z",
+    durationMs: 100,
+    reason: null,
   },
   RASTER: {
     state: "SUCCESS" as const,
@@ -151,7 +151,7 @@ describe("useSavedDeviceHealthChecks", () => {
     });
   };
 
-  it("runs concurrent passive checks for all devices and reruns every 10 seconds while enabled", async () => {
+  it("runs concurrent full checks for all devices and reruns every 10 seconds while enabled", async () => {
     const savedDevices = buildSavedDevices();
     const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
 
@@ -162,12 +162,12 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ deviceHost: "office-u64", ftpPort: 21, telnetPort: 64, password: null }),
-      expect.objectContaining({ mode: "passive" }),
+      expect.objectContaining({ mode: "full" }),
     );
     expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ deviceHost: "backup-u64:8080", ftpPort: 2021, telnetPort: 2323, password: "secret" }),
-      expect.objectContaining({ mode: "passive" }),
+      expect.objectContaining({ mode: "full" }),
     );
     expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).toBe("Healthy");
     expect(result.current.byDeviceId["device-backup"]?.latestResult?.overallHealth).toBe("Degraded");
@@ -206,7 +206,7 @@ describe("useSavedDeviceHealthChecks", () => {
           REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 1 },
           FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 2 },
           TELNET: { probe: "TELNET", outcome: "Success", durationMs: 100, reason: null, startMs: 3 },
-          CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+          CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 4 },
           RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 5 },
           JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 6 },
         },
@@ -224,7 +224,7 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId["device-office"]?.running).toBe(false);
     expect(result.current.byDeviceId["device-office"]?.probeStates).toEqual(finalProbeStates);
     expect(result.current.byDeviceId["device-office"]?.probeStates.REST.state).toBe("SUCCESS");
-    expect(result.current.byDeviceId["device-office"]?.probeStates.CONFIG.state).toBe("CANCELLED");
+    expect(result.current.byDeviceId["device-office"]?.probeStates.CONFIG.state).toBe("SUCCESS");
   });
 
   it("prefers seeded saved-device health state from the diagnostics test bridge", async () => {

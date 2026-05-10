@@ -55,6 +55,40 @@ describe("SavedDeviceEditorFields", () => {
     expect(screen.getByLabelText(/device name/i)).toHaveAttribute("maxLength", "10");
   });
 
+  it("lets the device name input stay empty so the host can drive the inferred label", () => {
+    const onChange = vi.fn();
+
+    render(
+      <SavedDeviceEditorFields
+        draft={{
+          name: "c64u",
+          nameSource: "INFERRED",
+          host: "c64u",
+          type: "",
+          typeSource: "INFERRED",
+          httpPort: "80",
+          ftpPort: "21",
+          telnetPort: "64",
+        }}
+        onChange={onChange}
+        idPrefix="saved-device"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/device name/i), { target: { value: "" } });
+
+    expect(onChange).toHaveBeenCalledWith({
+      name: "",
+      nameSource: "INFERRED",
+      host: "c64u",
+      type: "",
+      typeSource: "INFERRED",
+      httpPort: "80",
+      ftpPort: "21",
+      telnetPort: "64",
+    });
+  });
+
   it("shows a subtle auto badge while the name is inferred from the host", () => {
     render(
       <SavedDeviceEditorFields

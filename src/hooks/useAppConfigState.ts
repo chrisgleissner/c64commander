@@ -27,6 +27,25 @@ import { extractConfigValue } from "@/lib/config/configValueExtractor";
 
 const FULL_CONFIG_BACKGROUND_CONCURRENCY = 4;
 
+type WritableConfigPayload = Record<string, Record<string, string | number>>;
+
+type ConfigRevertMismatch = {
+  category: string;
+  item: string;
+  expected: string | number;
+  actual: string | number | null;
+};
+
+export type ConfigRevertResult =
+  | { status: "missing-snapshot" }
+  | { status: "reverted" }
+  | {
+    status: "verification-failed";
+    message: string;
+    mismatchCount: number;
+    mismatches: ConfigRevertMismatch[];
+  };
+
 const isReadOnlyItem = (name: string) => name.startsWith("SID Detected Socket");
 
 const extractItems = (categoryName: string, response: ConfigResponse) => {
@@ -39,6 +58,54 @@ const extractItems = (categoryName: string, response: ConfigResponse) => {
   return Object.entries(itemsBlock)
     .filter(([key]) => key !== "errors")
     .map(([name, config]) => ({ name, value: extractConfigValue(config) }));
+};
+
+const buildWritableConfigPayload = (data: Record<string, ConfigResponse>): WritableConfigPayload => {
+  const payload: WritableConfigPayload = {};
+
+  for (const [categoryName, response] of Object.entries(data)) {
+    const items = extractItems(categoryName, response);
+    if (!items.length) continue;
+
+    const categoryPayload: Record<string, string | number> = {};
+    for (const item of items) {
+      if (isReadOnlyItem(item.name)) continue;
+      categoryPayload[item.name] = item.value;
+    }
+
+    if (Object.keys(categoryPayload).length > 0) {
+      payload[categoryName] = categoryPayload;
+    }
+  }
+
+  return payload;
+};
+
+const valuesMatch = (expected: string | number, actual: string | number | null) =>
+  actual !== null && (expected === actual || String(expected) === String(actual));
+
+const collectConfigRevertMismatches = (
+  expected: WritableConfigPayload,
+  actual: WritableConfigPayload,
+): ConfigRevertMismatch[] => {
+  const mismatches: ConfigRevertMismatch[] = [];
+
+  for (const [category, expectedItems] of Object.entries(expected)) {
+    const actualItems = actual[category] ?? {};
+    for (const [item, expectedValue] of Object.entries(expectedItems)) {
+      const actualValue = Object.prototype.hasOwnProperty.call(actualItems, item) ? (actualItems[item] ?? null) : null;
+      if (!valuesMatch(expectedValue, actualValue)) {
+        mismatches.push({
+          category,
+          item,
+          expected: expectedValue,
+          actual: actualValue,
+        });
+      }
+    }
+  }
+
+  return mismatches;
 };
 
 const fetchAllConfig = async () => {
@@ -188,22 +255,7 @@ export function useAppConfigState() {
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {
       const api = getC64API();
-      const payload: Record<string, Record<string, string | number>> = {};
-
-      for (const [categoryName, response] of Object.entries(data)) {
-        const items = extractItems(categoryName, response);
-        if (!items.length) continue;
-        const categoryPayload: Record<string, string | number> = {};
-
-        for (const item of items) {
-          if (isReadOnlyItem(item.name)) continue;
-          categoryPayload[item.name] = item.value;
-        }
-
-        if (Object.keys(categoryPayload).length > 0) {
-          payload[categoryName] = categoryPayload;
-        }
-      }
+      const payload = buildWritableConfigPayload(data);
 
       await api.updateConfigBatch(payload);
 
@@ -213,12 +265,38 @@ export function useAppConfigState() {
     [queryClient],
   );
 
-  const revertToInitial = useCallback(async () => {
-    if (!initialSnapshot) return;
+  const revertToInitial = useCallback(async (): Promise<ConfigRevertResult> => {
+    if (!initialSnapshot) {
+      return { status: "missing-snapshot" };
+    }
+
     setIsApplying(true);
     try {
       await applyConfigData(initialSnapshot.data);
+      const expectedPayload = buildWritableConfigPayload(initialSnapshot.data);
+      const currentConfig = await fetchAllConfig();
+      const mismatches = collectConfigRevertMismatches(expectedPayload, buildWritableConfigPayload(currentConfig));
+
+      if (mismatches.length > 0) {
+        addLog("warn", "Config revert verification failed", {
+          baseUrl: resolvedBaseUrl,
+          mismatchCount: mismatches.length,
+          mismatches: mismatches.slice(0, 5),
+        });
+
+        return {
+          status: "verification-failed",
+          message:
+            mismatches.length === 1
+              ? "Revert applied, but 1 setting did not match the initial snapshot."
+              : `Revert applied, but ${mismatches.length} settings did not match the initial snapshot.`,
+          mismatchCount: mismatches.length,
+          mismatches,
+        };
+      }
+
       updateHasChanges(resolvedBaseUrl, false);
+      return { status: "reverted" };
     } finally {
       setIsApplying(false);
     }

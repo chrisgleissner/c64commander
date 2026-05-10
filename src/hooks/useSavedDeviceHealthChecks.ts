@@ -107,7 +107,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
       window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
   }, []);
 
-  const noopRefreshAll = useCallback(() => {}, []);
+  const noopRefreshAll = useCallback(() => { }, []);
 
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
     if (!seededState) return null;
@@ -195,7 +195,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
                 password,
               },
               {
-                mode: "passive",
+                mode: "full",
                 signal: controller.signal,
                 onProgress: ({ liveProbes, probeStates }) => {
                   if (cycleTokenRef.current !== cycleToken || controller.signal.aborted) {

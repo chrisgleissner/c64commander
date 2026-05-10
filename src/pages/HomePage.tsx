@@ -494,12 +494,12 @@ function HomePageContent() {
         error,
         context: isDeviceControlError(error)
           ? {
-              deviceControlOperation: error.operation,
-              transport: error.transport,
-              endpoint: error.endpoint,
-              request: error.request,
-              response: error.response,
-            }
+            deviceControlOperation: error.operation,
+            transport: error.transport,
+            endpoint: error.endpoint,
+            request: error.request,
+            response: error.response,
+          }
           : undefined,
       });
     } finally {
@@ -589,30 +589,30 @@ function HomePageContent() {
   const machineExtraActions = [
     ...(clearRamRebootVisible
       ? [
-          {
-            id: "rebootClearMemory",
-            label: "Reboot (Clr Mem)",
-            icon: Power,
-            variant: "danger" as const,
-            className: "border-destructive/40 bg-destructive/[0.04]",
-            onSelect: handleRebootClearMemory,
-            disabled: !isActive || machineTaskBusy || telnet.isBusy,
-            loading: telnet.activeActionId === "rebootClearMemory",
-          },
-        ]
+        {
+          id: "rebootClearMemory",
+          label: "Reboot (Clr Mem)",
+          icon: Power,
+          variant: "danger" as const,
+          className: "border-destructive/40 bg-destructive/[0.04]",
+          onSelect: handleRebootClearMemory,
+          disabled: !isActive || machineTaskBusy || telnet.isBusy,
+          loading: telnet.activeActionId === "rebootClearMemory",
+        },
+      ]
       : []),
     ...(reuSnapshotEnabled
       ? [
-          {
-            id: "saveReuMemory",
-            label: TELNET_ACTIONS.saveReuMemory.label,
-            icon: Save,
-            onSelect: handleSaveReu,
-            disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
-            loading: telnet.activeActionId === "saveReuMemory",
-            reason: saveReuDisabledReason,
-          },
-        ]
+        {
+          id: "saveReuMemory",
+          label: TELNET_ACTIONS.saveReuMemory.label,
+          icon: Save,
+          onSelect: handleSaveReu,
+          disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
+          loading: telnet.activeActionId === "saveReuMemory",
+          reason: saveReuDisabledReason,
+        },
+      ]
       : []),
   ];
 
@@ -889,6 +889,45 @@ function HomePageContent() {
     ramExpansionOptions.length > 0 && ramExpansionModeToken !== normalizeOptionToken(unavailableLabel);
   const reuSizeVisible = isActive && ramExpansionAvailable && ramExpansionModeToken === normalizeOptionToken("Enabled");
   const pageShellClassName = usePrimaryPageShellClassName();
+
+  const handleRevertInitialConfig = async () => {
+    try {
+      const result = await revertToInitial();
+
+      if (result.status === "missing-snapshot") {
+        toast({
+          title: "Initial snapshot unavailable",
+          description: "Reconnect and wait for the initial config snapshot before reverting.",
+        });
+        return;
+      }
+
+      if (result.status === "verification-failed") {
+        reportUserError({
+          operation: "Config revert",
+          title: "Config revert verification failed",
+          description: result.message,
+          context: {
+            mismatchCount: result.mismatchCount,
+            mismatches: result.mismatches.slice(0, 5),
+          },
+        });
+        return;
+      }
+
+      toast({
+        title: "Config reverted",
+        description: "Verified against the initial snapshot.",
+      });
+    } catch (error) {
+      reportUserError({
+        operation: "Config revert",
+        title: "Config revert failed",
+        description: "Unable to restore the initial config snapshot.",
+        error,
+      });
+    }
+  };
 
   return (
     <div className={pageShellClassName}>
@@ -1444,7 +1483,7 @@ function HomePageContent() {
                 label="Revert"
                 description="Changes"
                 dataTestId="home-config-revert-changes"
-                onClick={() => handleAction(() => revertToInitial(), "Config reverted")}
+                onClick={() => void handleRevertInitialConfig()}
                 disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
                 loading={isApplying}
               />
