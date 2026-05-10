@@ -29,6 +29,24 @@
 
 - Passed: targeted unit tests for `useSavedDeviceHealthChecks`, `healthCheckEngine`, and `UnifiedHealthBadge`.
 
+## Repository Validation Status
+
+- `npm run lint`: failed for unrelated pre-existing formatting drift in `src/hooks/useAppConfigState.ts`, `src/lib/diagnostics/healthCheckEngine.ts`, `src/pages/HomePage.tsx`, `tests/unit/hooks/useAppConfigState.test.tsx`, and `tests/unit/pages/HomePage.test.tsx`.
+- `npm run test`: passed.
+- `npm run test:coverage`: passed. Coverage summary: statements `94.22%`, branches `91.84%`, functions `90.50%`, lines `94.22%`.
+- `npm run build`: passed.
+
+## Android Deploy Status
+
+- `npm run cap:build && npm run android:apk`: passed.
+- Installed `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` to Pixel 4 `9B081FFAZ001WX` with `adb install -r`: passed.
+- Relaunched `uk.gleissner.c64commander` and confirmed `topResumedActivity=uk.gleissner.c64commander/.MainActivity`.
+- On-device evidence captured under `.tmp/android-check/`:
+  - `pixel4-unlocked.png`: app foregrounded on Home.
+  - `pixel4-switcher-attempt.png`: switcher opens from a long press on the top-right badge.
+  - `pixel4-switch-tap-1.png` / `pixel4-switch-tap-2.png` / `pixel4-switch-tap-3.png`: tap on the non-selected device keeps the old row marked `Selected` while the tapped row shows `Verifying`.
+- Hardware blocker for a stronger device-side proof: both saved devices were already in an offline last-known state, and direct probes to `http://u64/v1/info` and `http://c64u/v1/info` both failed with `Recv failure: Connection reset by peer`. That prevents a discriminating live healthy-vs-offline handoff proof on this hardware state.
+
 ## Validation Target
 
 - Focused unit tests for `useSavedDeviceHealthChecks`, `healthCheckEngine`, and `UnifiedHealthBadge` immediately after the first edit.
