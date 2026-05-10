@@ -40,11 +40,11 @@ export type ConfigRevertResult =
   | { status: "missing-snapshot" }
   | { status: "reverted" }
   | {
-    status: "verification-failed";
-    message: string;
-    mismatchCount: number;
-    mismatches: ConfigRevertMismatch[];
-  };
+      status: "verification-failed";
+      message: string;
+      mismatchCount: number;
+      mismatches: ConfigRevertMismatch[];
+    };
 
 const isReadOnlyItem = (name: string) => name.startsWith("SID Detected Socket");
 
