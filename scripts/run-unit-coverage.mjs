@@ -232,6 +232,54 @@ function ensureFileExists(filePath, label) {
   }
 }
 
+function getCoverageLabel(runConfig) {
+  return `${runConfig.projectName}${typeof runConfig.chunkIndex === "number" ? ` chunk ${runConfig.chunkIndex + 1}/${runConfig.chunkCount}` : ""} coverage`;
+}
+
+export function runCoverageShard(rootDir, runConfig, plan, options = {}) {
+  const { executeRun = runOrThrow, warn = console.warn } = options;
+  const { reportKey } = runConfig;
+  const reportsDirectory = plan.projectReports[reportKey];
+  const coverageLabel = getCoverageLabel(runConfig);
+  const coverageJson = path.join(reportsDirectory, "coverage-final.json");
+
+  for (let attempt = 1; attempt <= coverageRunMaxAttempts; attempt += 1) {
+    ensureReportsDirectory(reportsDirectory);
+
+    try {
+      executeRun(process.execPath, getVitestCoverageArgs(rootDir, runConfig, reportsDirectory), coverageLabel, rootDir, {
+        maxAttempts: 1,
+        keepaliveDirectory: path.join(reportsDirectory, ".tmp"),
+      });
+    } catch (error) {
+      if (attempt < coverageRunMaxAttempts) {
+        const exitDetail = typeof error?.exitCode === "number" ? ` with exit code ${error.exitCode}` : "";
+        warn(`${coverageLabel} failed${exitDetail} on attempt ${attempt}; retrying once.`);
+        rmSync(reportsDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+        continue;
+      }
+
+      throw error;
+    }
+
+    if (existsSync(coverageJson)) {
+      cpSync(coverageJson, path.join(plan.rawDir, `${reportKey}.json`));
+      return;
+    }
+
+    if (attempt < coverageRunMaxAttempts) {
+      warn(`${coverageLabel} completed without coverage JSON on attempt ${attempt}; retrying once.`);
+      rmSync(reportsDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+      continue;
+    }
+
+    ensureFileExists(
+      coverageJson,
+      `${runConfig.projectName}${typeof runConfig.chunkIndex === "number" ? ` chunk ${runConfig.chunkIndex + 1}/${runConfig.chunkCount}` : ""} coverage JSON`,
+    );
+  }
+}
+
 export function runUnitCoverage(rootDir = process.cwd()) {
   const plan = createCoveragePlan(rootDir);
 
@@ -243,26 +291,7 @@ export function runUnitCoverage(rootDir = process.cwd()) {
   mkdirSync(plan.mergedDir, { recursive: true });
 
   for (const runConfig of unitCoverageRuns) {
-    const { projectName, reportKey } = runConfig;
-    const reportsDirectory = plan.projectReports[reportKey];
-    const coverageLabel = `${projectName}${typeof runConfig.chunkIndex === "number" ? ` chunk ${runConfig.chunkIndex + 1}/${runConfig.chunkCount}` : ""} coverage`;
-    ensureReportsDirectory(reportsDirectory);
-    runOrThrow(process.execPath, getVitestCoverageArgs(rootDir, runConfig, reportsDirectory), coverageLabel, rootDir, {
-      maxAttempts: coverageRunMaxAttempts,
-      keepaliveDirectory: path.join(reportsDirectory, ".tmp"),
-      onRetry: ({ attempt, status }) => {
-        console.warn(`${coverageLabel} failed with exit code ${status} on attempt ${attempt}; retrying once.`);
-        rmSync(reportsDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
-        ensureReportsDirectory(reportsDirectory);
-      },
-    });
-
-    const coverageJson = path.join(reportsDirectory, "coverage-final.json");
-    ensureFileExists(
-      coverageJson,
-      `${projectName}${typeof runConfig.chunkIndex === "number" ? ` chunk ${runConfig.chunkIndex + 1}/${runConfig.chunkCount}` : ""} coverage JSON`,
-    );
-    cpSync(coverageJson, path.join(plan.rawDir, `${reportKey}.json`));
+    runCoverageShard(rootDir, runConfig, plan);
   }
 
   runOrThrow("npx", getNycMergeArgs(plan.rawDir, plan.mergedCoverageFile), "coverage merge", rootDir);

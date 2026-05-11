@@ -1,5 +1,5 @@
 import path from "node:path";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,6 +15,7 @@ import {
   getVitestCoverageArgs,
   coverageRunMaxAttempts,
   jsdomChunkCount,
+  runCoverageShard,
   runOrThrow,
   splitFilesIntoChunks,
   unitCoverageRuns,
@@ -185,6 +186,41 @@ describe("run-unit-coverage", () => {
 
     expect(spawn).toHaveBeenCalledTimes(2);
     expect(onRetry).toHaveBeenCalledWith({ attempt: 1, status: 1 });
+  });
+
+  it("retries a clean coverage shard once when coverage-final.json is missing", () => {
+    const tempRoot = mkdtempSync(path.join(os.tmpdir(), "run-unit-coverage-"));
+    const runConfig = unitCoverageRuns[0];
+    const plan = createCoveragePlan(tempRoot);
+    const warn = vi.fn();
+    const executeRun = vi
+      .fn()
+      .mockImplementationOnce(() => {})
+      .mockImplementationOnce((_command, args) => {
+        const reportsDirectoryArg = args.find((arg) => arg.startsWith("--coverage.reportsDirectory="));
+
+        if (!reportsDirectoryArg) {
+          throw new Error("Expected coverage reports directory argument");
+        }
+
+        const reportsDirectory = reportsDirectoryArg.slice("--coverage.reportsDirectory=".length);
+        writeFileSync(path.join(reportsDirectory, "coverage-final.json"), '{"result":"ok"}');
+      });
+
+    try {
+      mkdirSync(plan.rawDir, { recursive: true });
+
+      runCoverageShard(tempRoot, runConfig, plan, { executeRun, warn });
+
+      expect(executeRun).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenCalledWith(
+        "unit-jsdom coverage completed without coverage JSON on attempt 1; retrying once.",
+      );
+      expect(existsSync(path.join(plan.rawDir, `${runConfig.reportKey}.json`))).toBe(true);
+      expect(readFileSync(path.join(plan.rawDir, `${runConfig.reportKey}.json`), "utf8")).toBe('{"result":"ok"}');
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("wraps a coverage command with a keepalive loop for the reports temp directory", () => {
