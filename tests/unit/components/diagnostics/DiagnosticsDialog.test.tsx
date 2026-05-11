@@ -790,6 +790,73 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("evidence-detail-action-action-1")).toBeNull();
   });
 
+  it("shows TELNET request and response detail in expanded action rows", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Actions"]),
+      logs: [],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [
+        {
+          correlationId: "telnet-action-detail",
+          actionName: "Save Debug Log",
+          origin: "user" as const,
+          originalOrigin: "user" as const,
+          startTimestamp: new Date(Date.now() - 3_500).toISOString(),
+          endTimestamp: new Date(Date.now() - 3_200).toISOString(),
+          durationMs: 300,
+          outcome: "success" as const,
+          startRelativeMs: 0,
+          effects: [
+            {
+              type: "TELNET" as const,
+              label: "Save Debug Log",
+              actionId: "saveDebugLog",
+              actionLabel: "Save Debug Log",
+              menuPath: ["Developer", "Save Debug Log"],
+              hostname: "u64",
+              port: 23,
+              target: "real-device" as const,
+              result: "success",
+              durationMs: 120,
+              requestPayload: {
+                steps: [{ type: "send-key", key: "F5", sequence: "\u001b[15~" }],
+              },
+              requestPayloadPreview: {
+                byteCount: 16,
+                previewByteCount: 16,
+                hex: "7b 7d",
+                ascii: '{"key":"F5"}',
+                truncated: false,
+              },
+              responsePayload: {
+                steps: [{ type: "visible-text", text: "Developer menu visible" }],
+              },
+              responsePayloadPreview: {
+                byteCount: 28,
+                previewByteCount: 28,
+                hex: "7b 7d",
+                ascii: '{"text":"Developer menu visible"}',
+                truncated: false,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const row = screen.getByTestId("evidence-row-action-telnet-action-detail");
+    fireEvent.click(row);
+
+    const detail = screen.getByTestId("evidence-detail-action-telnet-action-detail");
+    expect(detail).toHaveTextContent("endpoint: u64:23");
+    expect(detail).toHaveTextContent("Request payload");
+    expect(detail).toHaveTextContent("Response payload");
+    expect(detail).toHaveTextContent("Developer menu visible");
+  });
+
   it("hides activity expand affordance when no additional detail exists", () => {
     setViewportWidth(600);
 
@@ -1057,7 +1124,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("FTP list");
   });
 
-  it("finds TELNET traces through the contributor filter", () => {
+  it("filters REST, FTP, and TELNET traces by contributor and shows their transport detail", () => {
     setViewportWidth(600);
     const now = Date.now();
 
@@ -1068,9 +1135,32 @@ describe("DiagnosticsDialog", () => {
       actionSummaries: [],
       traceEvents: [
         {
+          id: "trace-rest-info",
+          timestamp: new Date(now + 500).toISOString(),
+          relativeMs: 0,
+          type: "rest-response",
+          origin: "system",
+          correlationId: "health-check-rest",
+          data: {
+            lifecycleState: "foreground",
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            method: "GET",
+            hostname: "u64",
+            port: 80,
+            path: "/v1/info",
+            query: "?detail=full",
+            status: 200,
+            durationMs: 42,
+            body: { product: "Ultimate 64" },
+          },
+        },
+        {
           id: "trace-telnet-health",
           timestamp: new Date(now).toISOString(),
-          relativeMs: 0,
+          relativeMs: 1,
           type: "telnet-operation",
           origin: "system",
           correlationId: "health-check-telnet",
@@ -1083,6 +1173,14 @@ describe("DiagnosticsDialog", () => {
             actionId: "health-check",
             actionLabel: "Health check TELNET probe",
             menuPath: ["Diagnostics", "Health check"],
+            hostname: "u64",
+            port: 23,
+            requestPayload: {
+              steps: [{ type: "connect", host: "u64", port: 23 }],
+            },
+            responsePayload: {
+              steps: [{ type: "visible-text", text: "No telnet response" }],
+            },
             durationMs: 180,
             result: "failure",
             error: "No telnet response",
@@ -1091,7 +1189,7 @@ describe("DiagnosticsDialog", () => {
         {
           id: "trace-ftp-list",
           timestamp: new Date(now - 1000).toISOString(),
-          relativeMs: 1,
+          relativeMs: 2,
           type: "ftp-operation",
           origin: "system",
           correlationId: "health-check-ftp",
@@ -1106,6 +1204,8 @@ describe("DiagnosticsDialog", () => {
             hostname: "c64u",
             port: 21,
             path: "/",
+            requestPayload: { path: "/" },
+            responsePayload: { entries: [] },
             durationMs: 90,
             result: "success",
             error: null,
@@ -1115,10 +1215,42 @@ describe("DiagnosticsDialog", () => {
     });
 
     fireEvent.click(screen.getByTestId("open-filters-editor"));
-    fireEvent.click(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "TELNET" }));
+    const contributorSection = within(screen.getByTestId("filters-editor-surface"))
+      .getByText("Contributor")
+      .closest("section");
+    if (!contributorSection) {
+      throw new Error("Contributor section not found");
+    }
+
+    fireEvent.click(within(contributorSection).getByRole("button", { name: "REST" }));
+
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("Response 200 (42ms)");
+    expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("Health check TELNET probe");
+    expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("FTP LIST /");
+
+    fireEvent.click(screen.getByTestId("evidence-row-trace-trace-rest-info"));
+    expect(screen.getByTestId("evidence-detail-trace-trace-rest-info")).toHaveTextContent('"hostname": "u64"');
+    expect(screen.getByTestId("evidence-detail-trace-trace-rest-info")).toHaveTextContent('"query": "?detail=full"');
+
+    fireEvent.click(within(contributorSection).getByRole("button", { name: "FTP" }));
+
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("FTP LIST /");
+    expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("Health check TELNET probe");
+    expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("Response 200 (42ms)");
+
+    fireEvent.click(screen.getByTestId("evidence-row-trace-trace-ftp-list"));
+    expect(screen.getByTestId("evidence-detail-trace-trace-ftp-list")).toHaveTextContent('"requestPayload"');
+    expect(screen.getByTestId("evidence-detail-trace-trace-ftp-list")).toHaveTextContent('"responsePayload"');
+
+    fireEvent.click(within(contributorSection).getByRole("button", { name: "TELNET" }));
 
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("Health check TELNET probe");
     expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("FTP LIST /");
+
+    fireEvent.click(screen.getByTestId("evidence-row-trace-trace-telnet-health"));
+    expect(screen.getByTestId("evidence-detail-trace-trace-telnet-health")).toHaveTextContent('"hostname": "u64"');
+    expect(screen.getByTestId("evidence-detail-trace-trace-telnet-health")).toHaveTextContent('"requestPayload"');
+    expect(screen.getByTestId("evidence-detail-trace-trace-telnet-health")).toHaveTextContent('"No telnet response"');
   });
 
   it("suppresses routine system health checks that remain in progress", () => {

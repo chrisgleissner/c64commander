@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { strFromU8, unzipSync } from "fflate";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/tracing/traceSession", () => ({
@@ -41,7 +42,7 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 import { buildTraceZipBlob, downloadTraceZip, shareTraceZip } from "@/lib/tracing/traceExport";
-import { exportTraceZip } from "@/lib/tracing/traceSession";
+import { exportTraceZip, getTraceEvents } from "@/lib/tracing/traceSession";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
@@ -62,6 +63,42 @@ describe("traceExport", () => {
   it("builds a redacted zip blob", () => {
     const blob = buildTraceZipBlob({ redacted: true });
     expect(blob.type).toBe("application/zip");
+  });
+
+  it("keeps TELNET transport request and response fields in redacted trace exports", async () => {
+    vi.mocked(getTraceEvents).mockReturnValue([
+      {
+        id: "trace-telnet-1",
+        type: "telnet-operation",
+        origin: "user",
+        correlationId: "cor-1",
+        timestamp: "2026-05-11T12:00:00.000Z",
+        relativeMs: 42,
+        data: {
+          lifecycleState: "foreground",
+          sourceKind: null,
+          localAccessMode: null,
+          trackInstanceId: null,
+          playlistItemId: null,
+          actionId: "saveDebugLog",
+          actionLabel: "Save Debug Log",
+          menuPath: ["Developer", "Save Debug Log"],
+          hostname: "u64",
+          port: 23,
+          requestPayload: { steps: [{ type: "connect", host: "u64", port: 23 }] },
+          responsePayload: { steps: [{ type: "visible-text", text: "Developer menu visible" }] },
+          result: "success",
+          durationMs: 120,
+          error: null,
+          target: "real-device",
+        },
+      },
+    ] as any);
+
+    const blob = buildTraceZipBlob({ redacted: true });
+    expect(blob.size).toBeGreaterThan(0);
+    expect(getTraceEvents).toHaveBeenCalled();
+    expect(exportTraceZip).not.toHaveBeenCalled();
   });
 
   it("downloads and revokes trace zip URL", () => {

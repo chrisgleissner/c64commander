@@ -120,6 +120,33 @@ describe("createTelnetSession", () => {
       expect(screen.width).toBe(60);
       expect(screen.titleLine).toContain("C64 Ultimate");
     });
+
+    it("captures request and response transcript details for diagnostics tracing", async () => {
+      const mock = new TelnetMock();
+      const session = createTelnetSession(mock);
+      await session.connect("localhost", 23);
+      await session.sendKey("F5");
+      await session.readScreen(500);
+
+      expect(session.getTraceSnapshot?.()).toEqual(
+        expect.objectContaining({
+          hostname: "localhost",
+          port: 23,
+          requestPayload: {
+            steps: expect.arrayContaining([
+              { type: "connect", host: "localhost", port: 23 },
+              { type: "send-key", key: "F5", sequence: "\u001b[15~" },
+            ]),
+          },
+          responsePayload: {
+            steps: expect.arrayContaining([
+              expect.objectContaining({ type: "visible-text" }),
+              expect.objectContaining({ type: "screen", screenType: expect.any(String) }),
+            ]),
+          },
+        }),
+      );
+    });
   });
 
   describe("sendRaw", () => {

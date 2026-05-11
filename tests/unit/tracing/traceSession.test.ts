@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { strFromU8, unzipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const getTraceContextSnapshotMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -498,9 +499,48 @@ describe("traceSession", () => {
   });
 
   it("exports trace zips on demand", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    recordTelnetOperation(action, {
+      actionId: "saveDebugLog",
+      actionLabel: "Save Debug Log",
+      menuPath: ["Developer", "Save Debug Log"],
+      hostname: "u64",
+      port: 23,
+      durationMs: 120,
+      result: "success",
+      error: null,
+      requestPayload: {
+        steps: [{ type: "connect", host: "u64", port: 23 }],
+      },
+      responsePayload: {
+        steps: [{ type: "visible-text", text: "Developer menu visible" }],
+      },
+    });
+
     const zip = exportTraceZip();
+    const contents = unzipSync(zip);
+    const trace = JSON.parse(strFromU8(contents["trace.json"]));
+
     expect(zip).toBeInstanceOf(Uint8Array);
     expect(getLastTraceExport()?.reason).toBe("manual");
+    expect(trace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "telnet-operation",
+          data: expect.objectContaining({
+            hostname: "u64",
+            port: 23,
+            requestPayload: { steps: [{ type: "connect", host: "u64", port: 23 }] },
+            responsePayload: { steps: [{ type: "visible-text", text: "Developer menu visible" }] },
+          }),
+        }),
+      ]),
+    );
   });
 
   it("persists and restores traces from sessionStorage", () => {
@@ -1108,16 +1148,43 @@ describe("traceSession", () => {
       actionId: "action-mount",
       actionLabel: "Mount disk",
       menuPath: ["F5", "Mount"],
+      hostname: "u64",
+      port: 23,
       durationMs: 120,
       result: "success",
       error: null,
+      requestPayload: {
+        steps: [
+          { type: "connect", host: "u64", port: 23 },
+          { type: "send-key", key: "F5", sequence: "\u001b[15~" },
+        ],
+      },
+      responsePayload: {
+        steps: [{ type: "visible-text", text: "Action menu visible" }],
+      },
     });
     const events = getTraceEvents();
-    expect(
-      events.some(
-        (e) => e.type === "telnet-operation" && (e.data as Record<string, unknown>).actionId === "action-mount",
-      ),
-    ).toBe(true);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "telnet-operation",
+        data: expect.objectContaining({
+          actionId: "action-mount",
+          hostname: "u64",
+          port: 23,
+          requestPayload: {
+            steps: [
+              { type: "connect", host: "u64", port: 23 },
+              { type: "send-key", key: "F5", sequence: "\u001b[15~" },
+            ],
+          },
+          responsePayload: {
+            steps: [{ type: "visible-text", text: "Action menu visible" }],
+          },
+          requestPayloadPreview: expect.objectContaining({ ascii: expect.stringContaining('"send-key"') }),
+          responsePayloadPreview: expect.objectContaining({ ascii: expect.stringContaining("Action menu visible") }),
+        }),
+      }),
+    );
   });
 
   it("suppresses user-cancellation error when diagnostics suppression is active", () => {

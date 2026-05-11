@@ -244,9 +244,31 @@ describe("actionSummaries", () => {
         actionId: "rebootClearMemory",
         actionLabel: "Reboot",
         menuPath: ["Machine", "Reboot (Clr Mem)"],
+        hostname: "u64",
+        port: 23,
         target: "real-device",
         result: "success",
         durationMs: 321,
+        requestPayload: {
+          steps: [{ type: "connect", host: "u64", port: 23 }],
+        },
+        requestPayloadPreview: {
+          byteCount: 12,
+          previewByteCount: 12,
+          hex: "7b 7d",
+          ascii: '{"steps":[]}',
+          truncated: false,
+        },
+        responsePayload: {
+          steps: [{ type: "visible-text", text: "Action menu visible" }],
+        },
+        responsePayloadPreview: {
+          byteCount: 24,
+          previewByteCount: 24,
+          hex: "7b 7d",
+          ascii: '{"text":"Action menu visible"}',
+          truncated: false,
+        },
       }),
       makeEvent("3", "action-end", "telnet", 13, { status: "success" }),
     ];
@@ -265,8 +287,18 @@ describe("actionSummaries", () => {
           actionId: "rebootClearMemory",
           actionLabel: "Reboot",
           menuPath: ["Machine", "Reboot (Clr Mem)"],
+          hostname: "u64",
+          port: 23,
           result: "success",
           durationMs: 321,
+          requestPayload: {
+            steps: [{ type: "connect", host: "u64", port: 23 }],
+          },
+          requestPayloadPreview: expect.objectContaining({ ascii: '{"steps":[]}' }),
+          responsePayload: {
+            steps: [{ type: "visible-text", text: "Action menu visible" }],
+          },
+          responsePayloadPreview: expect.objectContaining({ ascii: '{"text":"Action menu visible"}' }),
         }),
       ]),
     );

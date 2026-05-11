@@ -11,6 +11,7 @@ import {
   type TelnetKeyName,
   type TelnetSessionApi,
   type TelnetScreen,
+  type TelnetTraceSnapshot,
   TELNET_KEYS,
   TELNET_DEFAULT_PORT,
   TelnetError,
@@ -50,6 +51,67 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
   let authenticated = false;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let screenBuffer = new Uint8Array(0);
+  let requestSteps: TelnetTraceSnapshot["requestPayload"]["steps"] = [];
+  let responseSteps: TelnetTraceSnapshot["responsePayload"]["steps"] = [];
+
+  const resetTraceSnapshot = () => {
+    requestSteps = [];
+    responseSteps = [];
+  };
+
+  const sanitizeTraceText = (value: string) => value.replace(/[^\x09\x0a\x0d\x20-\x7e]/g, "").trim();
+
+  const appendResponseText = (value: string) => {
+    const text = sanitizeTraceText(value);
+    if (!text) return;
+    const previous = responseSteps[responseSteps.length - 1];
+    if (previous?.type === "visible-text" && previous.text === text) {
+      return;
+    }
+    responseSteps.push({
+      type: "visible-text",
+      text,
+    });
+  };
+
+  const appendScreenSnapshot = (screen: TelnetScreen) => {
+    responseSteps.push({
+      type: "screen",
+      screenType: screen.screenType,
+      titleLine: screen.titleLine,
+      selectedItem: screen.selectedItem ?? null,
+      menus: screen.menus.map((menu) => ({
+        level: menu.level,
+        selectedIndex: menu.selectedIndex,
+        items: menu.items.map((item) => ({
+          label: item.label,
+          selected: item.selected,
+          enabled: item.enabled,
+        })),
+      })),
+    });
+  };
+
+  const getTraceSnapshot = (): TelnetTraceSnapshot => ({
+    hostname: host || null,
+    port: Number.isFinite(port) ? port : null,
+    requestPayload: {
+      steps: requestSteps.map((step) => ({ ...step })),
+    },
+    responsePayload: {
+      steps: responseSteps.map((step) =>
+        step.type === "screen"
+          ? {
+              ...step,
+              menus: step.menus.map((menu) => ({
+                ...menu,
+                items: menu.items.map((item) => ({ ...item })),
+              })),
+            }
+          : { ...step },
+      ),
+    },
+  });
 
   const resetIdleTimer = () => {
     if (idleTimer) clearTimeout(idleTimer);
@@ -75,22 +137,27 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     password = targetPassword;
     authenticated = false;
 
+    requestSteps.push({ type: "connect", host, port });
+
     await transport.connect(host, port);
 
     // Read initial data (Telnet WILL ECHO / DONT LINEMODE + RIS)
     const initData = await transport.read(2000);
     const initText = textDecoder.decode(initData);
+    appendResponseText(initText);
 
     // Check for password prompt
     if (initText.includes("Password:")) {
       if (!password) {
         throw new TelnetError("Device requires password but none provided", "AUTH_FAILED");
       }
+      requestSteps.push({ type: "authenticate", passwordSent: true });
       await transport.send(textEncoder.encode(password + "\r"));
 
       // Read auth response
       const authData = await transport.read(2000);
       const authText = textDecoder.decode(authData);
+      appendResponseText(authText);
 
       if (authText.includes("Password:") || authText.includes("incorrect") || authText.includes("denied")) {
         await transport.disconnect();
@@ -143,12 +210,14 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     await ensureConnected();
     resetIdleTimer();
     const sequence = TELNET_KEYS[key];
+    requestSteps.push({ type: "send-key", key, sequence });
     await transport.send(textEncoder.encode(sequence));
   }
 
   async function sendRaw(data: string): Promise<void> {
     await ensureConnected();
     resetIdleTimer();
+    requestSteps.push({ type: "send-raw", data });
     await transport.send(textEncoder.encode(data));
   }
 
@@ -187,7 +256,14 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
       offset += chunk.length;
     }
 
-    return parseTelnetScreen(combined);
+    const screen = parseTelnetScreen(combined);
+    appendScreenSnapshot(screen);
+    return screen;
+  }
+
+  async function connect(targetHost: string, targetPort: number, targetPassword?: string): Promise<void> {
+    resetTraceSnapshot();
+    await connectAndAuth(targetHost, targetPort, targetPassword);
   }
 
   async function disconnect(): Promise<void> {
@@ -211,11 +287,12 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
   }
 
   return {
-    connect: connectAndAuth,
+    connect,
     sendKey,
     sendRaw,
     readScreen,
     disconnect,
     isConnected,
+    getTraceSnapshot,
   };
 }

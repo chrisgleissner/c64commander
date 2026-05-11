@@ -28,6 +28,59 @@ export type PayloadPreview = {
   truncated: boolean;
 };
 
+export type TelnetTraceRequestStep =
+  | {
+      type: "connect";
+      host: string;
+      port: number;
+    }
+  | {
+      type: "authenticate";
+      passwordSent: true;
+    }
+  | {
+      type: "send-key";
+      key: string;
+      sequence: string;
+    }
+  | {
+      type: "send-raw";
+      data: string;
+    };
+
+export type TelnetTraceMenuItemSnapshot = {
+  label: string;
+  selected: boolean;
+  enabled: boolean;
+};
+
+export type TelnetTraceMenuSnapshot = {
+  level: number;
+  selectedIndex: number;
+  items: TelnetTraceMenuItemSnapshot[];
+};
+
+export type TelnetTraceResponseStep =
+  | {
+      type: "visible-text";
+      text: string;
+    }
+  | {
+      type: "screen";
+      screenType: string;
+      titleLine: string;
+      selectedItem: string | null;
+      menus: TelnetTraceMenuSnapshot[];
+    };
+
+export type TelnetTraceRequestPayload = {
+  steps: TelnetTraceRequestStep[];
+};
+
+export type TelnetTraceResponsePayload = {
+  steps: TelnetTraceResponseStep[];
+};
+
 export type TraceEventType =
   | "action-start"
   | "action-end"

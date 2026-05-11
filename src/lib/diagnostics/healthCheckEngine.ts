@@ -132,6 +132,12 @@ type ProbeRuntime = {
   password?: string;
 };
 
+type TelnetAuthenticationResult = {
+  visibleText: string;
+  passwordPromptSeen: boolean;
+  passwordSent: boolean;
+};
+
 let activeRun: ActiveRun | null = null;
 let runSequence = 0;
 
@@ -889,9 +895,13 @@ const authenticateTelnetIfNeeded = async (
   transport: TelnetTransport,
   signal: AbortSignal,
   password?: string,
-): Promise<string> => {
+): Promise<TelnetAuthenticationResult> => {
   if (!password) {
-    return "";
+    return {
+      visibleText: "",
+      passwordPromptSeen: false,
+      passwordSent: false,
+    };
   }
 
   let prompt = await readTelnetVisibleText(transport, signal, { maxEmptyReads: 2 });
@@ -899,7 +909,11 @@ const authenticateTelnetIfNeeded = async (
     await transport.send(textEncoder.encode(TELNET_AUTH_ENTER));
     prompt = await readTelnetVisibleText(transport, signal, { maxEmptyReads: 2 });
     if (!prompt.toLowerCase().includes(TELNET_PASSWORD_PROMPT)) {
-      return "";
+      return {
+        visibleText: "",
+        passwordPromptSeen: false,
+        passwordSent: false,
+      };
     }
   }
 
@@ -918,11 +932,19 @@ const authenticateTelnetIfNeeded = async (
       throw new Error(`Authentication failed for ${response.slice(0, 120) || "telnet login"}`);
     }
     if (response && !looksLikePasswordEcho(response)) {
-      return response;
+      return {
+        visibleText: response,
+        passwordPromptSeen: true,
+        passwordSent: true,
+      };
     }
   }
 
-  return response;
+  return {
+    visibleText: response,
+    passwordPromptSeen: true,
+    passwordSent: true,
+  };
 };
 
 const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
@@ -934,6 +956,12 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
     name: "health-check.telnet",
     componentName: "HealthCheckEngine",
   };
+  let authResult: TelnetAuthenticationResult = {
+    visibleText: "",
+    passwordPromptSeen: false,
+    passwordSent: false,
+  };
+  let finalVisibleText = "";
 
   try {
     return await withTelnetInteraction(
@@ -945,14 +973,14 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       async () => {
         try {
           await transport.connect(runtime.host, runtime.telnetPort);
-          const prefetchedText = await authenticateTelnetIfNeeded(transport, signal, runtime.password);
+          authResult = await authenticateTelnetIfNeeded(transport, signal, runtime.password);
           if (signal.aborted) {
             throw createAbortError();
           }
 
           await transport.send(textEncoder.encode(TELNET_AUTH_ENTER));
-          const visibleText = mergeVisibleTelnetText(
-            prefetchedText,
+          finalVisibleText = mergeVisibleTelnetText(
+            authResult.visibleText,
             await readTelnetVisibleText(transport, signal, {
               maxEmptyReads: TELNET_MAX_EMPTY_READS,
               initialTimeoutMs: TELNET_IDLE_TIMEOUT_MS,
@@ -964,13 +992,13 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             host: runtime.host,
             port: runtime.telnetPort,
             elapsedMs,
-            visibleText: visibleText.slice(0, 120),
+            visibleText: finalVisibleText.slice(0, 120),
             connectTimeoutMs: TELNET_HEALTH_CONNECT_TIMEOUT_MS,
           });
 
-          const result = hasTelnetFailureMarker(visibleText)
+          const result = hasTelnetFailureMarker(finalVisibleText)
             ? makeRecord("TELNET", "Fail", elapsedMs, "telnet failure marker present", startMs)
-            : hasMeaningfulTelnetOutput(visibleText)
+            : hasMeaningfulTelnetOutput(finalVisibleText)
               ? makeRecord("TELNET", "Success", elapsedMs, null, startMs)
               : makeRecord("TELNET", "Fail", elapsedMs, "No telnet response", startMs);
 
@@ -978,9 +1006,26 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             actionId: "health-check",
             actionLabel: "Health check TELNET probe",
             menuPath: ["Diagnostics", "Health check"],
+            hostname: runtime.host,
+            port: runtime.telnetPort,
             durationMs: elapsedMs,
             result: result.outcome === "Success" ? "success" : "failure",
             error: result.reason ? new Error(result.reason) : null,
+            requestPayload: {
+              steps: [
+                { type: "connect", host: runtime.host, port: runtime.telnetPort },
+                ...(authResult.passwordSent ? [{ type: "authenticate", passwordSent: true } as const] : []),
+                { type: "send-raw", data: TELNET_AUTH_ENTER },
+              ],
+            },
+            responsePayload: {
+              steps: [
+                ...(authResult.visibleText ? [{ type: "visible-text", text: authResult.visibleText } as const] : []),
+                ...(finalVisibleText && finalVisibleText !== authResult.visibleText
+                  ? [{ type: "visible-text", text: finalVisibleText } as const]
+                  : []),
+              ],
+            },
           });
 
           return result;
@@ -989,9 +1034,26 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             actionId: "health-check",
             actionLabel: "Health check TELNET probe",
             menuPath: ["Diagnostics", "Health check"],
+            hostname: runtime.host,
+            port: runtime.telnetPort,
             durationMs: Date.now() - startMs,
             result: "failure",
             error: error as Error,
+            requestPayload: {
+              steps: [
+                { type: "connect", host: runtime.host, port: runtime.telnetPort },
+                ...(authResult.passwordSent ? [{ type: "authenticate", passwordSent: true } as const] : []),
+                { type: "send-raw", data: TELNET_AUTH_ENTER },
+              ],
+            },
+            responsePayload: {
+              steps: [
+                ...(authResult.visibleText ? [{ type: "visible-text", text: authResult.visibleText } as const] : []),
+                ...(finalVisibleText && finalVisibleText !== authResult.visibleText
+                  ? [{ type: "visible-text", text: finalVisibleText } as const]
+                  : []),
+              ],
+            },
           });
           throw error;
         }

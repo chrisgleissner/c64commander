@@ -11,9 +11,62 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getLogs = vi.fn(() => [{ id: "2", timestamp: "2025-01-02T00:00:00Z", message: "log" }]);
 const getErrorLogs = vi.fn(() => [{ id: "1", timestamp: "2025-01-01T00:00:00Z", message: "err" }]);
 const addErrorLog = vi.fn();
-const buildActionSummaries = vi.fn(() => [{ id: "a1" }]);
+const buildActionSummaries = vi.fn(() => [
+  {
+    correlationId: "a1",
+    actionName: "Save Debug Log",
+    origin: "user",
+    startTimestamp: "2025-01-01T00:00:00Z",
+    endTimestamp: "2025-01-01T00:00:01Z",
+    durationMs: 1000,
+    outcome: "success",
+    startRelativeMs: 0,
+    effects: [
+      {
+        type: "TELNET",
+        label: "Save Debug Log",
+        actionId: "saveDebugLog",
+        actionLabel: "Save Debug Log",
+        menuPath: ["Developer", "Save Debug Log"],
+        hostname: "u64",
+        port: 23,
+        target: "real-device",
+        result: "success",
+        requestPayload: { steps: [{ type: "connect", host: "u64", port: 23 }] },
+        responsePayload: { steps: [{ type: "visible-text", text: "Developer menu visible" }] },
+      },
+    ],
+  },
+]);
 const buildNetworkSnapshot = vi.fn(() => ({ status: "ok" }));
-const getTraceEvents = vi.fn(() => [{ id: "t1", timestamp: "2025-01-01T00:00:00Z" }]);
+const getTraceEvents = vi.fn(() => [
+  {
+    id: "t1",
+    type: "telnet-operation",
+    origin: "user",
+    correlationId: "a1",
+    timestamp: "2025-01-01T00:00:00Z",
+    relativeMs: 0,
+    data: {
+      lifecycleState: "foreground",
+      sourceKind: null,
+      localAccessMode: null,
+      trackInstanceId: null,
+      playlistItemId: null,
+      actionId: "saveDebugLog",
+      actionLabel: "Save Debug Log",
+      menuPath: ["Developer", "Save Debug Log"],
+      hostname: "u64",
+      port: 23,
+      requestPayload: { steps: [{ type: "connect", host: "u64", port: 23 }] },
+      responsePayload: { steps: [{ type: "visible-text", text: "Developer menu visible" }] },
+      result: "success",
+      durationMs: 120,
+      error: null,
+      target: "real-device",
+    },
+  },
+]);
 const getPlatform = vi.fn(() => "ios");
 const pushNativeDebugSnapshots = vi.fn(async () => undefined);
 
@@ -56,6 +109,12 @@ describe("nativeDebugSnapshots", () => {
     const stop = startNativeDebugSnapshotPublisher();
     await vi.runAllTimersAsync();
     expect(pushNativeDebugSnapshots).toHaveBeenCalledTimes(1);
+    expect(pushNativeDebugSnapshots).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trace: expect.stringContaining('"requestPayload"'),
+        actions: expect.stringContaining('"hostname": "u64"'),
+      }),
+    );
 
     window.dispatchEvent(new Event("c64u-traces-updated"));
     window.dispatchEvent(new Event("c64u-logs-updated"));

@@ -1112,14 +1112,30 @@ describe("runHealthCheck — TELNET probe", () => {
 
     await runHealthCheck();
 
-    expect(
-      getTraceEvents().some(
-        (event) =>
-          event.type === "telnet-operation" &&
-          event.data.actionId === "health-check" &&
-          event.data.actionLabel === "Health check TELNET probe",
-      ),
-    ).toBe(true);
+    expect(getTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "telnet-operation",
+          data: expect.objectContaining({
+            actionId: "health-check",
+            actionLabel: "Health check TELNET probe",
+            hostname: "c64u.local",
+            port: 23,
+            requestPayload: expect.objectContaining({
+              steps: expect.arrayContaining([
+                expect.objectContaining({ type: "connect", host: "c64u.local", port: 23 }),
+                expect.objectContaining({ type: "send-raw", data: "\r\n" }),
+              ]),
+            }),
+            responsePayload: expect.objectContaining({
+              steps: expect.arrayContaining([
+                expect.objectContaining({ type: "visible-text", text: expect.stringContaining("Ultimate-II+") }),
+              ]),
+            }),
+          }),
+        }),
+      ]),
+    );
   });
 
   it("elicits banner data with a plain CRLF after connecting", async () => {
