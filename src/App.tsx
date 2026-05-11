@@ -11,7 +11,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import React, { Suspense, lazy, useEffect } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
@@ -59,8 +59,12 @@ export const shouldBundleCoverageProbeModules = () =>
 const coverageProbeModulesAvailable = shouldBundleCoverageProbeModules();
 
 const CoverageProbePage = coverageProbeModulesAvailable ? lazy(() => import("./pages/CoverageProbePage")) : null;
+const DeviceSwitchLabPage = coverageProbeModulesAvailable ? lazy(() => import("./pages/DeviceSwitchLabPage")) : null;
 const TestHeartbeat = coverageProbeModulesAvailable
   ? lazy(async () => ({ default: (await import("@/components/TestHeartbeat")).TestHeartbeat }))
+  : null;
+const DeviceSwitchLabLauncher = coverageProbeModulesAvailable
+  ? lazy(async () => ({ default: (await import("@/components/DeviceSwitchLabLauncher")).DeviceSwitchLabLauncher }))
   : null;
 
 const queryClient = new QueryClient({
@@ -106,6 +110,11 @@ export const shouldEnableCoverageProbe = () => {
   return false;
 };
 
+export const shouldAutoLaunchDeviceSwitchLab = () => {
+  const rawPlan = import.meta.env.VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON;
+  return Boolean(rawPlan?.trim());
+};
+
 const RouteLoadingFallback = () => (
   <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
     {t("app.loadingScreen", "Loading screen...")}
@@ -122,12 +131,36 @@ export const NotFoundForUnknownPaths = () => {
   return <NotFound />;
 };
 
+const DeviceSwitchLabAutoLauncher = ({ enabled }: { enabled: boolean }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const hasNavigatedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!enabled || hasNavigatedRef.current) {
+      return;
+    }
+    if (!shouldAutoLaunchDeviceSwitchLab()) {
+      return;
+    }
+    if (location.pathname === "/__device-switch__") {
+      hasNavigatedRef.current = true;
+      return;
+    }
+    hasNavigatedRef.current = true;
+    navigate("/__device-switch__", { replace: true });
+  }, [enabled, location.pathname, navigate]);
+
+  return null;
+};
+
 const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
   return (
     <BrowserRouter>
       <LightingStudioProvider>
         <InterstitialStateProvider>
+          <DeviceSwitchLabAutoLauncher enabled={coverageProbeEnabled} />
           <GlobalErrorListener />
           <GlobalButtonInteractionModel />
           <GlobalNavigationBlocker />
@@ -144,11 +177,19 @@ const AppRoutes = () => {
               <TestHeartbeat />
             </Suspense>
           ) : null}
+          {coverageProbeEnabled && DeviceSwitchLabLauncher ? (
+            <Suspense fallback={null}>
+              <DeviceSwitchLabLauncher />
+            </Suspense>
+          ) : null}
           <Suspense fallback={<RouteLoadingFallback />}>
             <SwipeNavigationLayer />
             <Routes>
               {coverageProbeEnabled && CoverageProbePage ? (
                 <Route path="/__coverage__" element={<CoverageProbePage />} />
+              ) : null}
+              {coverageProbeEnabled && DeviceSwitchLabPage ? (
+                <Route path="/__device-switch__" element={<DeviceSwitchLabPage />} />
               ) : null}
               <Route path="*" element={<NotFoundForUnknownPaths />} />
             </Routes>

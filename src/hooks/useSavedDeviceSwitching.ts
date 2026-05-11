@@ -18,9 +18,16 @@ import { addLog } from "@/lib/logging";
 import { invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
 import { getPasswordForDevice } from "@/lib/secureStorage";
 import {
+  beginSavedDeviceSwitchAttempt,
+  completeSavedDeviceSwitchAttempt,
+  markSavedDeviceSwitchSelectionApplied,
+  markSavedDeviceSwitchVerificationStarted,
+} from "@/lib/savedDevices/savedDeviceSwitchMetrics";
+import {
   completeSavedDeviceVerification,
   failSavedDeviceVerification,
   getSavedDeviceById,
+  getSavedDevicesSnapshot,
   selectSavedDevice,
   startSavedDeviceVerification,
 } from "@/lib/savedDevices/store";
@@ -42,12 +49,20 @@ export function useSavedDeviceSwitching() {
 
   return useCallback(
     async (deviceId: string) => {
+      const fromDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
       const device = getSavedDeviceById(deviceId);
       if (!device) {
         throw new Error(`Unknown saved device: ${deviceId}`);
       }
 
+      const attemptId = beginSavedDeviceSwitchAttempt({
+        fromDeviceId,
+        toDeviceId: deviceId,
+        routePath: location.pathname,
+      });
+
       selectSavedDevice(deviceId);
+      markSavedDeviceSwitchSelectionApplied(attemptId);
       setStoredFtpPort(device.ftpPort);
       setStoredTelnetPort(device.telnetPort);
       startSavedDeviceVerification(deviceId);
@@ -69,14 +84,32 @@ export function useSavedDeviceSwitching() {
         reason: "saved-device-switch",
       });
 
-      const verification = await verifyCurrentConnectionTarget();
-      if (verification.ok && verification.deviceInfo) {
-        completeSavedDeviceVerification(deviceId, verification.deviceInfo);
-        invalidateForSavedDeviceSwitch(queryClient, location.pathname);
-      } else {
-        failSavedDeviceVerification(deviceId);
+      markSavedDeviceSwitchVerificationStarted(attemptId);
+
+      try {
+        const verification = await verifyCurrentConnectionTarget();
+        if (verification.ok && verification.deviceInfo) {
+          completeSavedDeviceVerification(deviceId, verification.deviceInfo);
+          invalidateForSavedDeviceSwitch(queryClient, location.pathname);
+          completeSavedDeviceSwitchAttempt(attemptId, {
+            outcome: "success",
+            verification,
+          });
+        } else {
+          failSavedDeviceVerification(deviceId);
+          completeSavedDeviceSwitchAttempt(attemptId, {
+            outcome: "offline",
+            verification,
+          });
+        }
+        return verification;
+      } catch (error) {
+        completeSavedDeviceSwitchAttempt(attemptId, {
+          outcome: "error",
+          errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown switch failure"),
+        });
+        throw error;
       }
-      return verification;
     },
     [location.pathname, queryClient],
   );

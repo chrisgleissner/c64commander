@@ -61,6 +61,7 @@
     "test:perf:assert:android": "node scripts/hvsc/assert-android-perf-budgets.mjs",
     "test:bench": "vitest bench tests/benchmarks/hvscHotPaths.bench.ts --project unit-node --run",
     "test:e2e": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep-invert \"@screenshots|@web-platform\"",
+    "test:device-switch-soak": "node scripts/run-device-switch-soak.mjs --target=mock",
     "test:e2e:native": "npm run maestro:gating",
     "screenshots": "node scripts/run-screenshots-with-prune.mjs",
     "screenshots:raw": "TRACE_ASSERTIONS_DEFAULT=1 PLAYWRIGHT_TRACE_MODE=off PLAYWRIGHT_VIDEO_MODE=off playwright test --grep @screenshots --workers 1",

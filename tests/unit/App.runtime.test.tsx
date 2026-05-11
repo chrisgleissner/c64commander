@@ -215,8 +215,16 @@ vi.mock("@/pages/NotFound", () => ({ default: () => <div>Not Found</div> }));
 vi.mock("@/pages/PlayFilesPage", () => ({ default: () => <div>Play Files Page</div> }));
 vi.mock("@/pages/DisksPage", () => ({ default: () => <div>Disks Page</div> }));
 vi.mock("@/pages/CoverageProbePage", () => ({ default: () => <div>Coverage Probe Page</div> }));
+vi.mock("@/pages/DeviceSwitchLabPage", () => ({ default: () => <div>Device Switch Lab Page</div> }));
+vi.mock("@/components/DeviceSwitchLabLauncher", () => ({
+  DeviceSwitchLabLauncher: () => <div data-testid="switch-lab-launcher">Switch Lab Launcher</div>,
+}));
 
-import App, { shouldBundleCoverageProbeModules, shouldEnableCoverageProbe } from "@/App";
+import App, {
+  shouldAutoLaunchDeviceSwitchLab,
+  shouldBundleCoverageProbeModules,
+  shouldEnableCoverageProbe,
+} from "@/App";
 
 describe("App runtime wiring", () => {
   beforeEach(() => {
@@ -318,6 +326,28 @@ describe("App runtime wiring", () => {
       expect(shouldEnableCoverageProbe()).toBe(true);
     } finally {
       import.meta.env.VITE_ENABLE_TEST_PROBES = originalProbeFlag;
+    }
+  });
+
+  it("auto-launches the device switch lab when a soak plan is baked into the build", async () => {
+    const originalProbeFlag = import.meta.env.VITE_ENABLE_TEST_PROBES;
+    const originalSoakPlan = import.meta.env.VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON;
+    import.meta.env.VITE_ENABLE_TEST_PROBES = "1";
+    import.meta.env.VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON = '{"autorun":true}';
+    Object.defineProperty(window, "__c64uTestProbeEnabled", {
+      configurable: true,
+      value: true,
+      writable: true,
+    });
+    window.history.pushState({}, "", "/");
+
+    try {
+      expect(shouldAutoLaunchDeviceSwitchLab()).toBe(true);
+      render(<App />);
+      expect(await screen.findByText("Device Switch Lab Page")).toBeInTheDocument();
+    } finally {
+      import.meta.env.VITE_ENABLE_TEST_PROBES = originalProbeFlag;
+      import.meta.env.VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON = originalSoakPlan;
     }
   });
 
