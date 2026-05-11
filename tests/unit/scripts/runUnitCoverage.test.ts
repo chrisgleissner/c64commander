@@ -195,7 +195,7 @@ describe("run-unit-coverage", () => {
     const warn = vi.fn();
     const executeRun = vi
       .fn()
-      .mockImplementationOnce(() => {})
+      .mockImplementationOnce(() => { })
       .mockImplementationOnce((_command, args) => {
         const reportsDirectoryArg = args.find((arg) => arg.startsWith("--coverage.reportsDirectory="));
 
