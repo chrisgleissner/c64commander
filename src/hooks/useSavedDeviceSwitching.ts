@@ -15,7 +15,7 @@ import { verifyCurrentConnectionTarget } from "@/lib/connection/connectionManage
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
-import { invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
+import { getSavedDeviceSwitchPrefixes, invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
 import { getPasswordForDevice } from "@/lib/secureStorage";
 import {
   beginSavedDeviceSwitchAttempt,
@@ -32,16 +32,6 @@ import {
   startSavedDeviceVerification,
 } from "@/lib/savedDevices/store";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
-
-const C64_QUERY_PREFIXES = new Set([
-  "c64-info",
-  "c64-drives",
-  "c64-categories",
-  "c64-category",
-  "c64-config-item",
-  "c64-config-items",
-  "c64-all-config",
-]);
 
 export function useSavedDeviceSwitching() {
   const queryClient = useQueryClient();
@@ -67,9 +57,10 @@ export function useSavedDeviceSwitching() {
       setStoredTelnetPort(device.telnetPort);
       startSavedDeviceVerification(deviceId);
       resetInteractionState("saved-device-switch");
+      const savedDeviceSwitchPrefixes = new Set(getSavedDeviceSwitchPrefixes(location.pathname));
       void queryClient
         .cancelQueries({
-          predicate: (query) => C64_QUERY_PREFIXES.has(String(query.queryKey[0] ?? "")),
+          predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
         })
         .catch((error) => {
           addLog("warn", "Failed to cancel old-device C64 queries during saved-device switch", {

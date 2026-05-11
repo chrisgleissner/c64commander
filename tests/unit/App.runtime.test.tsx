@@ -351,6 +351,26 @@ describe("App runtime wiring", () => {
     }
   });
 
+  it("does not render the device switch lab launcher when probes are enabled without a soak plan", async () => {
+    const originalProbeFlag = import.meta.env.VITE_ENABLE_TEST_PROBES;
+    const originalSoakPlan = import.meta.env.VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON;
+    import.meta.env.VITE_ENABLE_TEST_PROBES = "1";
+    import.meta.env.VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON = "";
+    Object.defineProperty(window, "__c64uTestProbeEnabled", {
+      configurable: true,
+      value: true,
+      writable: true,
+    });
+
+    try {
+      render(<App />);
+      await waitFor(() => expect(screen.queryByTestId("switch-lab-launcher")).not.toBeInTheDocument());
+    } finally {
+      import.meta.env.VITE_ENABLE_TEST_PROBES = originalProbeFlag;
+      import.meta.env.VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON = originalSoakPlan;
+    }
+  });
+
   it("disables coverage probe modules for production bundles unless the build flag is enabled", () => {
     const env = import.meta.env as ImportMetaEnv & { PROD: boolean; VITE_ENABLE_TEST_PROBES?: string };
     const originalProbeFlag = import.meta.env.VITE_ENABLE_TEST_PROBES;

@@ -286,7 +286,7 @@ All five open questions resolved. The implementation plan is upgraded from a sma
 - Read mandatory repo instructions: `README.md`, `.github/copilot-instructions.md`, `docs/ux-guidelines.md`, plus existing `PLANS.md` and `WORKLOG.md`.
 - Classification: `DOC_PLUS_CODE` and `UI_CHANGE`.
 - `git status --short` initially returned clean.
-- Diagnostics archive present: `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-11-1028-15Z.zip`.
+- Diagnostics archive captured locally outside the repository.
 - Archive listing confirms five files: actions, error logs, logs, supplemental, and traces JSON.
 
 ## Concrete Observations

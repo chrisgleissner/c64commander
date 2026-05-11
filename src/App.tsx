@@ -115,6 +115,25 @@ export const shouldAutoLaunchDeviceSwitchLab = () => {
   return Boolean(rawPlan?.trim());
 };
 
+const DeviceSwitchLabLauncherGate = ({ enabled }: { enabled: boolean }) => {
+  const location = useLocation();
+
+  if (!enabled || !DeviceSwitchLabLauncher) {
+    return null;
+  }
+
+  const shouldShowLauncher = shouldAutoLaunchDeviceSwitchLab() || location.pathname === "/__device-switch__";
+  if (!shouldShowLauncher) {
+    return null;
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <DeviceSwitchLabLauncher />
+    </Suspense>
+  );
+};
+
 const RouteLoadingFallback = () => (
   <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
     {t("app.loadingScreen", "Loading screen...")}
@@ -177,11 +196,7 @@ const AppRoutes = () => {
               <TestHeartbeat />
             </Suspense>
           ) : null}
-          {coverageProbeEnabled && DeviceSwitchLabLauncher ? (
-            <Suspense fallback={null}>
-              <DeviceSwitchLabLauncher />
-            </Suspense>
-          ) : null}
+          <DeviceSwitchLabLauncherGate enabled={coverageProbeEnabled} />
           <Suspense fallback={<RouteLoadingFallback />}>
             <SwipeNavigationLayer />
             <Routes>
