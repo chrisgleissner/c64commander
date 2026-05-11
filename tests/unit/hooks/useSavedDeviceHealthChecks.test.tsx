@@ -4,6 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { HEALTH_CHECK_CONTEXTS } from "@/lib/diagnostics/healthCheckEngine";
 import { DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
+import {
+  beginSavedDeviceSwitchAttempt,
+  clearSavedDeviceSwitchMetrics,
+  completeSavedDeviceSwitchAttempt,
+} from "@/lib/savedDevices/savedDeviceSwitchMetrics";
 
 const createDeferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -162,6 +167,7 @@ describe("useSavedDeviceHealthChecks", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    clearSavedDeviceSwitchMetrics();
     mockGetPasswordForDevice.mockResolvedValue("secret");
     mockRunHealthCheckForTarget.mockImplementation(async (target: { deviceHost: string }) =>
       target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
@@ -320,6 +326,72 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+  });
+
+  it("defers background refresh work while a foreground saved-device switch is active", async () => {
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+
+    const attemptId = beginSavedDeviceSwitchAttempt({
+      fromDeviceId: "device-office",
+      toDeviceId: "device-backup",
+      routePath: "/play",
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+    });
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(false);
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+
+    completeSavedDeviceSwitchAttempt(attemptId, {
+      outcome: "success",
+      verification: { ok: true, deviceInfo: null, error: null },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+    });
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+  });
+
+  it("cancels an in-flight background cycle when a foreground saved-device switch starts", async () => {
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    const previousOfficeResult = result.current.byDeviceId["device-office"]?.latestResult;
+
+    mockRunHealthCheckForTarget
+      .mockImplementationOnce(createAbortablePendingRun())
+      .mockImplementationOnce(createAbortablePendingRun());
+
+    await act(async () => {
+      result.current.refreshAll();
+    });
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
+
+    beginSavedDeviceSwitchAttempt({
+      fromDeviceId: "device-office",
+      toDeviceId: "device-backup",
+      routePath: "/play",
+    });
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(false);
+    expect(result.current.byDeviceId["device-office"]?.latestResult).toBe(previousOfficeResult);
+    expect(result.current.byDeviceId["device-office"]?.error).toBeNull();
   });
 
   it("preserves terminal probe states after an automatic cycle completes", async () => {

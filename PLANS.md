@@ -1,3 +1,120 @@
+# PLANS - Android Real-Device Performance Stabilization (2026-05-11)
+
+## Current Phase
+
+- Phase 2: real-device measurement complete, bottlenecks ranked, and a conservative implementation plan is ready.
+
+## Classification
+
+- Classification: `DOC_ONLY` unless narrow measurement-only instrumentation becomes necessary.
+- Scope: investigation, real-device measurement attempts, analysis, and a conservative implementation plan for UX responsiveness with Android as the primary target.
+
+## Concrete TODO List
+
+- [completed] Map concrete code paths for diagnostics, device switching, health checks, config I/O, Telnet, and request scheduling.
+- [completed] Inventory existing timing, tracing, logging, and metrics surfaces that can support measurement without invasive code changes.
+- [completed] Define a measurement strategy covering immediate UI response, remote request timing, reconciliation timing, and failure timing.
+- [completed] Attempt Android real-device measurements against `c64u` and `u64`, recording availability and instability.
+- [completed] Analyze Diagnostics dialog open cost, device switch latency, Telnet instability boundaries, and queue/backpressure behavior.
+- [completed] Produce a staged implementation plan with acceptance criteria, rollback strategy, and verification commands.
+- [completed] Produce a concrete regression and verification plan with metric thresholds.
+
+## Investigation Findings
+
+- The main diagnostics control surface is not a standalone route; it is centered on `GlobalDiagnosticsOverlay` plus `DiagnosticsDialog`, backed by `healthCheckEngine`, trace-session storage, and latency tracking.
+- Existing measurement-capable surfaces already present in the repo include:
+  - rolling request latency tracking in `src/lib/diagnostics/latencyTracker.ts`
+  - trace events with device/platform/lifecycle context in `src/lib/tracing/traceSession.ts`
+  - saved-device switch timing metrics in `src/lib/savedDevices/savedDeviceSwitchMetrics.ts`
+  - health-check probe timing and progress in `src/lib/diagnostics/healthCheckEngine.ts`
+- Device switching is orchestrated in `src/hooks/useSavedDeviceSwitching.ts`, including selection timing, runtime host update, query cancellation, verification, and post-switch invalidation.
+- Saved-device parallel health polling is implemented in `src/hooks/useSavedDeviceHealthChecks.ts` on a 10 s interval and can run in visible or background contexts.
+- Request pressure and concurrency are actively controlled in `src/lib/deviceInteraction/deviceInteractionManager.ts` via separate REST/FTP/Telnet schedulers, cooldowns, backoff, and circuit-breaker state.
+- Real Android measurement separated two different failure classes that had previously been conflated:
+  - Android bare-hostname resolution causes multi-second switch verification stalls.
+  - `c64u` is currently REST-unhealthy in this lab state even when the network path itself is reachable.
+- Direct Pixel 4 transport probes show that `u64` network latency is already low on the target device:
+  - REST `/v1/info`: 27-33 ms over 10 samples.
+  - Config read `/v1/configs/U64 Specific Settings/CPU Speed`: 31-36 ms over 10 samples.
+  - Telnet port connect: 14-24 ms over 5 samples.
+- `c64u` currently accepts Telnet TCP connects in 15-22 ms but resets REST `/v1/info` in 17-161 ms, which makes it a device-service availability problem rather than a generic Android network problem.
+- Diagnostics open latency could not be measured directly without adding new executable instrumentation. The current evidence is a code-path proxy:
+  - `GlobalDiagnosticsOverlay` eagerly rebuilds logs, errors, traces, action summaries, export payloads, and health-history snapshots.
+  - `DiagnosticsDialog` eagerly assembles, sorts, filters, and paginates a unified evidence list from logs, traces, and action summaries.
+  - `runDiagnosticsReconciler` and `runPlaybackReconciler` are triggered when the overlay opens.
+
+## Measurement Approach
+
+- Prefer existing in-app timing sources over new instrumentation:
+  - saved-device switch attempt metrics for selection and verification latency
+  - trace-session timestamps for REST/FTP/Telnet request start and completion
+  - health-check probe durations for Diagnostics and background maintenance
+  - Android `adb logcat` and on-device interaction timing only where app-native traces are insufficient
+- Use real Android hardware as primary execution target.
+- Probe `http://u64/v1/info` first, then `http://c64u/v1/info`, and continue with `u64` if `c64u` is unavailable or unstable.
+- Capture measurements per operation with explicit device hostname attribution and success/failure state.
+
+## Measurement Results
+
+- Saved-device switch soak on the Pixel 4 with bare hostnames (`docs/plans/performance/iteration1/switch-soak-real-android.json`):
+  - 10/10 transitions failed.
+  - `p50 = 14317 ms`, `p90 = 14397 ms`, `max = 14445 ms`.
+  - The slow legs were predominantly `c64u -> u64`, matching Android hostname-resolution failure around `u64`.
+- Saved-device switch soak on the Pixel 4 with IP-based saved devices (`docs/plans/performance/iteration1/switch-soak-real-android-ip.json`):
+  - `u64` legs recovered to fast-path timings with `p50 = 140 ms`, `p90 = 176 ms`, `max = 226 ms`.
+  - The remaining 5 failures were all `u64 -> c64u` offline outcomes, which isolates `c64u` REST unavailability from switch orchestration cost.
+- Android-shell transport probes from the same Pixel 4:
+  - `u64` REST `/v1/info`: 27-33 ms.
+  - `u64` config read: 31-36 ms.
+  - `u64` Telnet connect: 14-24 ms.
+  - `c64u` REST `/v1/info`: failed with curl exit 56 in 17-161 ms.
+  - `c64u` Telnet connect: 15-22 ms.
+- Startup baseline artifact (`docs/plans/performance/iteration1/startup-baseline/startup-baseline.json`) reported `TTFSC p50 = 615 ms`, `p95 = 703 ms`, but it was collected from a probe build that auto-launched the device-switch lab. It is useful only as a lower-bound startup sanity check, not as a production baseline.
+
+## Risks
+
+- `c64u` may become unavailable mid-session, especially for REST-backed scenarios, which can obscure app regressions if measurements are not attributed per device and per transport.
+- Existing diagnostics timing surfaces are stronger for network and switch timing than for immediate local UI response, so any direct Diagnostics-open timing should be introduced only as a single narrow marker, not as broad new tracing.
+- The startup artifact gathered in this session is contaminated by the probe build and must not be used as the post-fix acceptance baseline.
+
+## Candidate Fix Directions
+
+- Ranked bottlenecks:
+  1. Android bare-hostname resolution in saved-device switching and verification.
+  2. Foreground switch/diagnostics work competing with background saved-device health polling and reconciliation.
+  3. Diagnostics overlay eager data assembly/render work.
+  4. `c64u` REST instability in the lab environment.
+  5. Telnet transport itself is not currently a measured bottleneck.
+- Stage 1: eliminate Android hostname stalls without redesign.
+  - Prefer a verified IP or last-known-good resolved host for Android saved-device verification before retrying the raw bare hostname.
+  - Surface a narrow Android-only warning when a saved device uses a bare hostname and no verified IP is available.
+  - Acceptance target: on real Android, healthy-device switch verification `p50 < 250 ms`, `p95 < 500 ms`, and no 14 s hostname stalls.
+- Stage 2: reduce foreground/background interference.
+  - Suspend or defer background saved-device health cycles while a foreground device switch verification is active.
+  - Avoid starting extra reconciliation work on Diagnostics open until the initial visible surface is mounted.
+  - Acceptance target: no overlapping health cycle should extend a measured switch leg beyond the direct transport envelope by more than a small constant factor.
+- Stage 3: make Diagnostics pay for work only when the user asks for it.
+  - Snapshot logs/traces/history on open.
+  - Lazily derive action summaries and evidence lists only while the overlay is open.
+  - Keep the initial visible activity page small and defer deeper derivation to explicit expansion or pagination.
+  - Acceptance target: after adding one narrow open-to-first-visible marker, Diagnostics open `p50 < 250 ms`, `p95 < 400 ms` on the Pixel 4 with representative trace volume.
+- Stage 4: treat `c64u` hardware instability as a separate validation axis.
+  - Do not broaden transport or scheduler refactors until the app still misses targets against a healthy `u64` after Stages 1-3.
+
+## Explicit Non-Goals
+
+- No broad refactors.
+- No architectural redesign.
+- No speculative cleanup or abstraction changes.
+- No change that increases request pressure on real hardware.
+- No change that weakens diagnostics fidelity or swallows errors.
+
+## Open Questions
+
+- Which minimal persisted host-resolution hint is least invasive for Android saved devices: last-known-good IP, last-resolved IP, or Android-only canonical host replacement.
+- Whether background saved-device health polling should pause only during switch verification or also while Diagnostics is open.
+- Whether Diagnostics needs a one-line timing marker in production code, or whether Playwright/adb observation is sufficient after lazy derivation lands.
+
 # PLANS - Device Switch Health, Config Pulse, Warning Dedup, README Coverage (2026-05-11)
 
 ## Classification

@@ -16,6 +16,7 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
+import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { getPassword as loadStoredPassword } from "@/lib/secureStorage";
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
@@ -41,6 +42,7 @@ export type ProbeInfoResult = {
   ok: boolean;
   deviceInfo: DeviceInfo | null;
   error: string | null;
+  resolvedAddress?: string | null;
 };
 
 export type ConnectionSnapshot = Readonly<{
@@ -138,6 +140,125 @@ const loadPersistedConnectionConfig = async () => {
   const probeHost = await resolveDeviceHostForProbe(deviceHost);
   const baseUrl = buildBaseUrlFromDeviceHost(probeHost === deviceHost ? deviceHost : probeHost);
   return { baseUrl, password: password ?? undefined, deviceHost };
+};
+
+const loadSwitchConnectionConfig = async (options: {
+  deviceHost: string;
+  password?: string | null;
+  preferResolvedAddress?: string | null;
+}) => {
+  const password = options.password ?? undefined;
+  const rawDeviceHost = options.deviceHost;
+  const rawHost = stripPortFromDeviceHost(rawDeviceHost);
+  const httpPort = getDeviceHostHttpPort(rawDeviceHost);
+  const resolvedAddress = options.preferResolvedAddress?.trim() || null;
+  const probeDeviceHost = resolvedAddress
+    ? buildDeviceHostWithHttpPort(resolvedAddress, httpPort)
+    : await resolveDeviceHostForProbe(rawHost).then((resolvedHost) =>
+      buildDeviceHostWithHttpPort(stripPortFromDeviceHost(resolvedHost), httpPort),
+    );
+
+  return {
+    baseUrl: buildBaseUrlFromDeviceHost(probeDeviceHost),
+    password,
+    deviceHost: rawDeviceHost,
+    probeDeviceHost,
+    resolvedAddress:
+      stripPortFromDeviceHost(probeDeviceHost) !== rawHost ? stripPortFromDeviceHost(probeDeviceHost) : null,
+  };
+};
+
+const probeInfoWithConnectionConfig = async (
+  config: Awaited<ReturnType<typeof loadSwitchConnectionConfig>>,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<ProbeInfoResult> => {
+  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
+  const outerSignal = options.signal;
+  const isTestEnv =
+    typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+
+  const probeWithFetchForInfo = async (): Promise<ProbeInfoResult> => {
+    const payloadResult = await (async () => {
+      const controller = timeoutMs ? new AbortController() : null;
+      const abortFromOuter = () => controller?.abort();
+      if (outerSignal && controller) {
+        if (outerSignal.aborted) {
+          controller.abort();
+        } else {
+          outerSignal.addEventListener("abort", abortFromOuter, { once: true });
+        }
+      }
+      const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+      try {
+        const response = await fetch(`${config.baseUrl}/v1/info`, {
+          ...(controller ? { signal: controller.signal } : outerSignal ? { signal: outerSignal } : {}),
+        });
+        const payload = await parseProbePayload(response);
+        if (!response.ok) {
+          return {
+            ok: false,
+            deviceInfo: toDeviceInfo(payload),
+            error: `HTTP ${response.status}`,
+            resolvedAddress: config.resolvedAddress,
+          } satisfies ProbeInfoResult;
+        }
+        return {
+          ok: isProbePayloadHealthy(payload),
+          deviceInfo: toDeviceInfo(payload),
+          error: isProbePayloadHealthy(payload) ? null : "Probe payload missing required identity",
+          resolvedAddress: config.resolvedAddress,
+        } satisfies ProbeInfoResult;
+      } catch (error) {
+        return {
+          ok: false,
+          deviceInfo: null,
+          error: (error as Error).message,
+          resolvedAddress: config.resolvedAddress,
+        } satisfies ProbeInfoResult;
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (outerSignal && controller) {
+          outerSignal.removeEventListener("abort", abortFromOuter);
+        }
+      }
+    })();
+    return payloadResult;
+  };
+
+  if (isTestEnv) {
+    return probeWithFetchForInfo();
+  }
+
+  try {
+    const api = new C64API(config.baseUrl, config.password, config.probeDeviceHost);
+    const response = await api.getInfo({
+      timeoutMs,
+      signal: outerSignal,
+      __c64uIntent: "system",
+      __c64uAllowDuringDiscovery: true,
+      __c64uBypassCache: true,
+      __c64uBypassCooldown: true,
+      __c64uBypassBackoff: true,
+    });
+    return {
+      ok: isProbePayloadHealthy(response),
+      deviceInfo: response,
+      error: isProbePayloadHealthy(response) ? null : "Probe payload missing required identity",
+      resolvedAddress: config.resolvedAddress,
+    };
+  } catch (error) {
+    const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
+    if (/^HTTP\s+\d+/.test(message)) {
+      return {
+        ok: false,
+        deviceInfo: null,
+        error: message,
+        resolvedAddress: config.resolvedAddress,
+      };
+    }
+    const fallbackResult = await probeWithFetchForInfo();
+    return fallbackResult.ok ? fallbackResult : { ...fallbackResult, error: fallbackResult.error ?? message };
+  }
 };
 
 const isProbePayloadHealthy = (payload: unknown) => {
@@ -362,7 +483,11 @@ export async function probeInfoOnce(
   }
 }
 
-export async function verifyCurrentConnectionTarget(): Promise<ProbeInfoResult> {
+export async function verifyCurrentConnectionTarget(options?: {
+  deviceHost?: string;
+  password?: string | null;
+  preferResolvedAddress?: string | null;
+}): Promise<ProbeInfoResult> {
   clearPinnedDemoMode();
   const discoveryRun = beginDiscoveryRun("switch");
   cancelActiveDiscovery();
@@ -372,13 +497,34 @@ export async function verifyCurrentConnectionTarget(): Promise<ProbeInfoResult> 
     lastProbeAtMs: Date.now(),
     lastProbeError: null,
   });
-  const result = await probeInfoOnce({ timeoutMs: Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000 });
+  const switchConfig =
+    typeof options?.deviceHost === "string"
+      ? await loadSwitchConnectionConfig({
+        deviceHost: options.deviceHost,
+        password: options.password,
+        preferResolvedAddress: options.preferResolvedAddress,
+      })
+      : null;
+  const result = switchConfig
+    ? await probeInfoWithConnectionConfig(switchConfig, {
+      timeoutMs: Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000,
+    })
+    : await probeInfoOnce({ timeoutMs: Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000 });
   if (!discoveryRun.isCurrent()) {
     return result;
   }
   if (result.ok) {
     setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
-    await transitionToRealConnected("switch");
+    await transitionToRealConnected(
+      "switch",
+      switchConfig
+        ? {
+          baseUrl: switchConfig.baseUrl,
+          deviceHost: switchConfig.probeDeviceHost,
+          password: switchConfig.password,
+        }
+        : undefined,
+    );
     return result;
   }
   setSnapshot({
@@ -530,7 +676,10 @@ const logDiscoveryDecision = (
   }
 };
 
-const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
+const transitionToRealConnected = async (
+  trigger: DiscoveryTrigger,
+  runtimeConfig?: { baseUrl: string; deviceHost: string; password?: string },
+) => {
   clearPinnedDemoMode();
   cancelActiveDiscovery();
   dismissDemoInterstitial();
@@ -538,7 +687,11 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   transitionTo("REAL_CONNECTED", trigger);
   logDiscoveryDecision("REAL_CONNECTED", trigger, { mode: "real" });
   await stopDemoServer();
-  await applyC64APIConfigFromStorage();
+  if (runtimeConfig) {
+    applyC64APIRuntimeConfig(runtimeConfig.baseUrl, runtimeConfig.password, runtimeConfig.deviceHost);
+  } else {
+    await applyC64APIConfigFromStorage();
+  }
   const runtimeBaseUrl = normalizeUrl(getC64APIConfigSnapshot().baseUrl);
   const activeMockUrl = normalizeUrl(getActiveMockBaseUrl());
   if (!activeMockUrl && runtimeBaseUrl && !isRuntimeUsingTestTarget(runtimeBaseUrl)) {

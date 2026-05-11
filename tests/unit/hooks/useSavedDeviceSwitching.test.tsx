@@ -19,6 +19,8 @@ const {
   mockInvalidateForSavedDeviceSwitch,
   mockGetPasswordForDevice,
   mockResetInteractionState,
+  mockIsMdnsAvailable,
+  mockIsBareHostname,
 } = vi.hoisted(() => ({
   mockVerifyCurrentConnectionTarget: vi.fn(),
   mockSetStoredFtpPort: vi.fn(),
@@ -26,6 +28,8 @@ const {
   mockInvalidateForSavedDeviceSwitch: vi.fn(),
   mockGetPasswordForDevice: vi.fn(),
   mockResetInteractionState: vi.fn(),
+  mockIsMdnsAvailable: vi.fn(() => false),
+  mockIsBareHostname: vi.fn((host: string) => !host.includes(".") && !host.includes(":")),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -46,6 +50,12 @@ vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
+}));
+
+vi.mock("@/lib/native/mdnsResolver", () => ({
+  isMdnsAvailable: mockIsMdnsAvailable,
+  isBareHostname: mockIsBareHostname,
+  resolveMdnsHost: vi.fn(),
 }));
 
 vi.mock("@/lib/query/c64QueryInvalidation", async () => {
@@ -96,6 +106,7 @@ describe("useSavedDeviceSwitching", () => {
     vi.resetModules();
     localStorage.clear();
     vi.clearAllMocks();
+    mockIsMdnsAvailable.mockReturnValue(false);
   });
 
   it("updates local selection immediately, then persists verified identity and route invalidation on success", async () => {
@@ -172,6 +183,7 @@ describe("useSavedDeviceSwitching", () => {
       hostname: "backup-lab",
       uniqueId: "UID-BACKUP",
     });
+    expect(store.getSavedDevicesSnapshot().summaries["device-backup"]?.lastResolvedAddress).toBeNull();
     expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/play");
 
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
@@ -180,6 +192,121 @@ describe("useSavedDeviceSwitching", () => {
       routePath: "/play",
       outcome: "success",
       verificationOk: true,
+    });
+  });
+
+  it("prefers a saved resolved address on Android before retrying the raw bare hostname", async () => {
+    mockIsMdnsAvailable.mockReturnValue(true);
+
+    const store = await import("@/lib/savedDevices/store");
+    const c64api = await import("@/lib/c64api");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "u64",
+      httpPort: 80,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+      hasPassword: false,
+    });
+    store.completeSavedDeviceVerification(
+      "device-backup",
+      {
+        product: "U64E",
+        hostname: "backup-lab",
+        unique_id: "UID-BACKUP",
+      },
+      "192.168.1.13",
+    );
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: {
+        product: "U64E",
+        hostname: "backup-lab",
+        unique_id: "UID-BACKUP",
+      },
+      resolvedAddress: "192.168.1.13",
+    });
+
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockVerifyCurrentConnectionTarget).toHaveBeenCalledWith({
+      deviceHost: "u64",
+      password: null,
+      preferResolvedAddress: "192.168.1.13",
+    });
+    expect(c64api.getC64APIConfigSnapshot()).toMatchObject({
+      baseUrl: "http://192.168.1.13",
+      deviceHost: "192.168.1.13",
+    });
+  });
+
+  it("falls back to the raw bare hostname when no resolved address has been verified yet", async () => {
+    mockIsMdnsAvailable.mockReturnValue(true);
+
+    const store = await import("@/lib/savedDevices/store");
+    const c64api = await import("@/lib/c64api");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "u64",
+      httpPort: 80,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({ ok: false, deviceInfo: null, resolvedAddress: null });
+
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockVerifyCurrentConnectionTarget).toHaveBeenCalledWith({
+      deviceHost: "u64",
+      password: null,
+      preferResolvedAddress: null,
+    });
+    expect(c64api.getC64APIConfigSnapshot()).toMatchObject({
+      baseUrl: "http://u64",
+      deviceHost: "u64",
     });
   });
 

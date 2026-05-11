@@ -18,7 +18,7 @@ import {
   useHealthCheckState,
 } from "@/lib/diagnostics/healthCheckState";
 import { reportUserError } from "@/lib/uiErrors";
-import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
+import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
 import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
@@ -43,7 +43,7 @@ import type { ConnectionActionsCallbacks } from "@/components/diagnostics/Connec
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
 import { buildBaseUrlFromDeviceHost, normalizeDeviceHost } from "@/lib/c64api";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
-import { recordRestResponse } from "@/lib/tracing/traceSession";
+import { recordActionEnd, recordActionStart, recordRestResponse } from "@/lib/tracing/traceSession";
 import { getRecoveryEvidence, clearRecoveryEvidence, recordRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
 import {
   DIAGNOSTICS_TEST_ANALYTICS_EVENT,
@@ -105,16 +105,32 @@ export const GlobalDiagnosticsOverlay = () => {
   const [, setAnalyticsRevision] = useState(0);
   const [requestedPanel, setRequestedPanel] = useState<DiagnosticsPanelKey | null>(null);
   const [repairRunning, setRepairRunning] = useState(false);
+  const [overlayFirstVisible, setOverlayFirstVisible] = useState(false);
   const healthState = useHealthState();
   const healthCheckState = useHealthCheckState();
   const routePanel = resolveDiagnosticsPanelFromPath(location.pathname);
+  const diagnosticsOpenActionRef = useRef<ReturnType<typeof createActionContext> | null>(null);
 
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
-  const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
+  const actionSummaries = useMemo(
+    () => (overlayOpen ? buildActionSummaries(traceEvents) : []),
+    [overlayOpen, traceEvents],
+  );
 
   const setDialogOpen = useCallback((open: boolean) => {
+    if (open) {
+      setOverlayFirstVisible(false);
+      if (!diagnosticsOpenActionRef.current) {
+        const action = createActionContext("diagnostics.open", "user", "GlobalDiagnosticsOverlay");
+        diagnosticsOpenActionRef.current = action;
+        recordActionStart(action);
+      }
+    } else {
+      diagnosticsOpenActionRef.current = null;
+      setOverlayFirstVisible(false);
+    }
     setDiagnosticsOverlayActive(open);
     setOverlayOpen(open);
   }, []);
@@ -176,10 +192,23 @@ export const GlobalDiagnosticsOverlay = () => {
   }, [routePanel, setDialogOpen]);
 
   useEffect(() => {
-    if (!overlayOpen) return;
+    if (!overlayOpen || !overlayFirstVisible) return;
     void runDiagnosticsReconciler("Diagnostics overlay opened");
     void runPlaybackReconciler("Diagnostics overlay opened");
-  }, [overlayOpen]);
+  }, [overlayFirstVisible, overlayOpen]);
+
+  const handleDiagnosticsFirstVisible = useCallback(() => {
+    setOverlayFirstVisible(true);
+    const action = diagnosticsOpenActionRef.current;
+    if (!action) {
+      return;
+    }
+    diagnosticsOpenActionRef.current = null;
+    recordActionEnd(action);
+    addLog("info", "Diagnostics first visible", {
+      action: action.name,
+    });
+  }, []);
 
   useEffect(() => {
     if (overlayOpen) {
@@ -234,7 +263,7 @@ export const GlobalDiagnosticsOverlay = () => {
     return () => window.removeEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed as EventListener);
   }, []);
 
-  const diagnosticsExportData = useMemo(
+  const buildDiagnosticsExportData = useCallback(
     () => ({
       "error-logs": errorLogs,
       logs,
@@ -254,7 +283,7 @@ export const GlobalDiagnosticsOverlay = () => {
 
   const handleShareAll = trace(async function handleShareAll() {
     try {
-      await shareAllDiagnosticsZip(diagnosticsExportData);
+      await shareAllDiagnosticsZip(buildDiagnosticsExportData());
     } catch (error) {
       reportUserError({
         operation: "DIAGNOSTICS_EXPORT",
@@ -472,6 +501,7 @@ export const GlobalDiagnosticsOverlay = () => {
     <DiagnosticsDialog
       open={overlayOpen}
       onOpenChange={handleOpenChange}
+      onFirstVisible={handleDiagnosticsFirstVisible}
       healthState={healthState}
       logs={logs}
       errorLogs={errorLogs}
@@ -486,7 +516,7 @@ export const GlobalDiagnosticsOverlay = () => {
       healthCheckRunning={healthCheckState.running}
       lastHealthCheckResult={healthCheckState.latestResult}
       liveHealthCheckProbes={healthCheckState.liveProbes}
-      healthHistory={getHealthHistorySnapshot()}
+      healthHistory={overlayOpen ? getHealthHistorySnapshot() : []}
       requestedPanel={requestedPanel}
       repairRunning={repairRunning}
       onRepair={handleRepair}

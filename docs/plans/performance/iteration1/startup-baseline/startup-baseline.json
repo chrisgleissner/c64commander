@@ -1,0 +1,200 @@
+{
+  "appId": "uk.gleissner.c64commander",
+  "activity": "uk.gleissner.c64commander/.MainActivity",
+  "loops": 10,
+  "generatedAt": "2026-05-11T21:23:23.329Z",
+  "metrics": {
+    "TTFSC": {
+      "samples": [631, 588, 632, 631, 634, 589, 615, 592, 601, 703],
+      "p50": 615,
+      "p95": 703
+    },
+    "StartupRequestCount": {
+      "samples": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "p50": 0,
+      "p95": 0
+    },
+    "StartupConfigCalls": {
+      "samples": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "p50": 0,
+      "p95": 0
+    },
+    "DuplicateStartupConfigKeyRequests": {
+      "samples": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "p50": 0,
+      "p95": 0
+    },
+    "StartupBacklogDepth": {
+      "samples": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "p50": 0,
+      "p95": 0
+    },
+    "UserTriggeredCommandLatencyMs": {
+      "samples": [],
+      "p50": null,
+      "p95": null
+    },
+    "NullStringWarningCount": {
+      "samples": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "p50": 0,
+      "p95": 0
+    },
+    "HvscStartupDownloads": {
+      "samples": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "p50": 0,
+      "p95": 0
+    }
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "ttfscMs": 631,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 2,
+      "ttfscMs": 588,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 3,
+      "ttfscMs": 632,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 4,
+      "ttfscMs": 631,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 5,
+      "ttfscMs": 634,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 6,
+      "ttfscMs": 589,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 7,
+      "ttfscMs": 615,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 8,
+      "ttfscMs": 592,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 9,
+      "ttfscMs": 601,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    },
+    {
+      "iteration": 10,
+      "ttfscMs": 703,
+      "StartupRequestCount": 0,
+      "StartupConfigCalls": 0,
+      "DuplicateStartupConfigKeyRequests": 0,
+      "StartupBacklogDepth": 0,
+      "NullStringWarningCount": 0,
+      "HvscStartupDownloads": 0,
+      "UserTriggeredCommandLatencyMs": {
+        "samples": [],
+        "p50": null,
+        "p95": null
+      }
+    }
+  ]
+}
