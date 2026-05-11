@@ -696,6 +696,29 @@ describe("deviceInteractionManager", () => {
     expect(result).toEqual({ product: "test" });
   });
 
+  it("allows user intent during DISCOVERING so a saved-device switch does not block Home quick actions", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    deviceStateValue = "DISCOVERING";
+
+    const action = makeAction("rest-discovering-user");
+    const meta = {
+      action,
+      method: "PUT",
+      path: "/v1/machine:pause",
+      normalizedUrl: "http://device/v1/machine:pause",
+      intent: "user" as const,
+      baseUrl: "http://device",
+    };
+
+    const handler = vi.fn().mockResolvedValue({ errors: [] });
+    const result = await withRestInteraction(meta, handler);
+    expect(result).toEqual({ errors: [] });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it("allows user intent to override ERROR state when configured", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

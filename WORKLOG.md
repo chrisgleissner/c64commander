@@ -1,3 +1,20 @@
+## [2026-05-11] Telnet diagnostics preservation and `c64u` probe hardening
+
+- Steering follow-up implemented for the active device-switch/diagnostics plan: appended the plan TODO for intermittent `c64u` TELNET probe failures and missing transport-preserved Diagnostics evidence.
+- Updated [src/lib/diagnostics/healthCheckEngine.ts](/home/chris/dev/c64/c64commander/src/lib/diagnostics/healthCheckEngine.ts) so the TELNET health probe now records structured `telnet-operation` diagnostics traces on both success and failure, instead of only writing generic app logs. This makes failed TELNET calls visible under the Diagnostics contributor filter the same way REST and FTP calls already were.
+- Reduced TELNET probe brittleness against `c64u` by aligning the connect budget with the probe timeout and making the visible-text drain less aggressive after connect: post-data idle wait increased from `20 ms` to `100 ms`, and the empty-read budget increased from `1` to `2`.
+- Updated [src/lib/tracing/traceFormatter.ts](/home/chris/dev/c64/c64commander/src/lib/tracing/traceFormatter.ts) so FTP and TELNET trace rows render transport-specific titles instead of generic `*-operation` placeholders.
+- Added regression coverage in [tests/unit/lib/diagnostics/healthCheckEngine.test.ts](/home/chris/dev/c64/c64commander/tests/unit/lib/diagnostics/healthCheckEngine.test.ts) for TELNET health-probe trace emission and the revised probe timing budget, and in [tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx](/home/chris/dev/c64/c64commander/tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx) for finding TELNET traces through the Diagnostics contributor filter.
+- Validation:
+  - `runTests` passed for `tests/unit/lib/diagnostics/healthCheckEngine.test.ts` and `tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx`.
+  - `get_errors` reported no TypeScript diagnostics in the touched source and test files.
+  - `npm run lint` passed.
+  - `npm run build` passed.
+  - `env -u VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON npm run test:coverage` passed with global branch coverage `91.84%`. The first coverage attempt inherited a stale soak env and falsely routed `App.runtime` into the switch lab; rerunning with that env cleared restored the normal suite.
+  - `npm run cap:build` passed.
+  - `npm run android:apk` passed.
+  - Reinstalled `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` to Pixel 4 `9B081FFAZ001WX`, relaunched `uk.gleissner.c64commander/.MainActivity`, and captured the live Home screen after waking the device from doze.
+
 # Slider Responsiveness Research Worklog
 
 Investigation only. No source-code changes, no commits.
@@ -261,3 +278,143 @@ By code inspection of `LightingSummaryCard.tsx`, the preview path uses `interact
 ### Outcome
 
 All five open questions resolved. The implementation plan is upgraded from a small targeted fix to a tightly-scoped consolidation; see research.md "Consolidated Implementation Plan" and "UX-First Slider Behaviour Model".
+
+# Device Switch Health / README Coverage Worklog (2026-05-11)
+
+## Initial Setup
+
+- Read mandatory repo instructions: `README.md`, `.github/copilot-instructions.md`, `docs/ux-guidelines.md`, plus existing `PLANS.md` and `WORKLOG.md`.
+- Classification: `DOC_PLUS_CODE` and `UI_CHANGE`.
+- `git status --short` initially returned clean.
+- Diagnostics archive captured locally outside the repository.
+- Archive listing confirms five files: actions, error logs, logs, supplemental, and traces JSON.
+
+## Concrete Observations
+
+- README Home references:
+  - `docs/img/app/home/00-overview-light.png` with alt `Home overview (Light)`, but image inspection shows it is the C64 Commander intro/logo.
+  - `docs/img/app/home/01-overview-dark.png` is a dark top Home screenshot.
+  - `docs/img/app/home/sections/01-system-info-to-cpu-ram.png` is the missing light top Home screenshot.
+  - Existing section screenshots `01` through `05` cover the Home page from system info through config.
+- Switch Device bottom sheet:
+  - Implemented in `src/components/UnifiedHealthBadge.tsx`.
+  - Opens by long press/context menu and calls `refreshAll()` once when opened.
+  - `useSavedDeviceHealthChecks(savedDevices.devices, canSwitchDevices)` means saved-device polling also runs while the sheet is closed.
+- Health checks:
+  - `src/hooks/useSavedDeviceHealthChecks.ts` currently passes `{ mode: "passive" }` for every saved-device poll.
+  - `src/lib/diagnostics/healthCheckEngine.ts` has `HealthCheckTargetRunMode = "full" | "passive"`.
+  - Passive target mode skips CONFIG with reason `Skipped: passive mode disables CONFIG pulse`.
+  - The CONFIG probe performs the visible pulse by writing a temporary config value and reverting it.
+- Readiness/request guard:
+  - `src/lib/deviceInteraction/deviceInteractionManager.ts` emits `"Device not ready for requests"` when global device state is `UNKNOWN`, `DISCOVERING`, or `ERROR` and the request is not allowed through.
+  - `src/lib/deviceInteraction/deviceStateStore.ts` maintains a global selected-device readiness model rather than a per-host model.
+- Config fallback:
+  - `C64API.getConfigItems` logs `"Category config fetch failed; falling back to item fetches"` for most category fetch failures and then fans out per-item requests.
+  - This is unsafe/noisy when the root cause is the readiness gate because every item request will deterministically fail the same way.
+
+## Active Plan
+
+- Update `PLANS.md` with the May 11 task section and use it as the authoritative plan.
+- Implement explicit health-check context/pulse policy.
+- Pass switch-device-open context to saved-device checks.
+- Close Switch Device promptly on target selection and defer heavy invalidation until verification completes.
+- Reset stale interaction state when switching target devices.
+- Suppress deterministic config-item fallback after readiness-gate category failure.
+- Update README Home screenshot references and add deterministic README screenshot coverage test.
+
+## Implemented Changes
+
+- `README.md` Home screenshot table now explicitly covers the intro image, light top Home row, dark top Home row, and existing full Home-page section coverage.
+- `tests/unit/readmeScreenshotCoverage.test.ts` validates the required README screenshot references and file existence.
+- `src/lib/diagnostics/healthCheckEngine.ts` now accepts explicit health-check run contexts:
+  - `switch-device-dialog` with `visible-config-pulse-allowed`.
+  - `manual-diagnostics` with `visible-config-pulse-allowed`.
+  - `background-maintenance` with `read-only`.
+- `src/hooks/useSavedDeviceHealthChecks.ts` receives the context from callers; closed/background saved-device checks stay read-only while the open Switch Device sheet can run the CONFIG pulse.
+- `src/components/UnifiedHealthBadge.tsx` passes the switch-dialog context only while the sheet is open, changes the sheet title to `Switch Device`, and closes the sheet immediately when a target row is tapped while verification continues.
+- `src/hooks/useSavedDeviceSwitching.ts` resets stale interaction guard state on saved-device switch and cancels old C64 query families asynchronously so previous-device work does not block the new target.
+- `src/lib/deviceInteraction/deviceInteractionManager.ts` allows user-intent requests through `DISCOVERING`, keeping Home quick actions usable during the switch handoff.
+- `src/lib/c64api.ts` skips item fallback fan-out when category fetch fails with `"Device not ready for requests"`; other category failures still use the item fallback path.
+- `src/lib/diagnostics/healthModel.ts` classifies abort/cancel/superseded events as expected cancellation noise so stale switch cancellations are not promoted as current primary health problems.
+
+## Automated Validation
+
+- Focused regression slice passed:
+
+  ```bash
+  npx vitest run tests/unit/readmeScreenshotCoverage.test.ts tests/unit/hooks/useSavedDeviceHealthChecks.test.tsx tests/unit/components/UnifiedHealthBadge.test.tsx tests/unit/lib/diagnostics/healthCheckEngine.test.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts tests/unit/hooks/useSavedDeviceSwitching.test.tsx tests/unit/c64api.branches.test.ts tests/unit/lib/diagnostics/healthModel.test.ts
+  ```
+
+  Result: 8 files, 309 tests passed.
+
+- `npm run lint` initially failed on Prettier drift in `tests/unit/hooks/useAppConfigState.test.tsx` and `tests/unit/pages/HomePage.test.tsx`; ran Prettier on those two test files only, then `npm run lint` passed.
+- `npm run test:coverage` passed with branch coverage `91.86%` globally.
+- `npm run build` passed. Existing Vite warnings remained: Node `url` browser externalization, circular chunk warning, and dynamic/static import warning.
+- Targeted screenshot refresh passed:
+
+  ```bash
+  npx playwright test playwright/screenshots.spec.ts -g "capture switch-device screenshots"
+  ```
+
+  Result: 1 test passed. Refreshed only the Switch Device screenshots because the visible title changed.
+
+- `npm run cap:build` passed; iOS sync was skipped by the Linux host as expected.
+- `npm run android:apk` passed and produced `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`.
+
+## Screenshot Updates
+
+- Updated Switch Device screenshots under:
+  - `docs/img/app/diagnostics/switch-device/profiles/compact/`
+  - `docs/img/app/diagnostics/switch-device/profiles/medium/`
+  - `docs/img/app/diagnostics/switch-device/profiles/expanded/`
+- Files refreshed in each profile: `01-picker.png` through `06-picker-one-unhealthy-expanded.png`.
+- No full README screenshot corpus refresh was needed; README coverage uses existing Home screenshot assets and is enforced by `tests/unit/readmeScreenshotCoverage.test.ts`.
+
+## Android Deploy And HIL Evidence
+
+- Attached Pixel 4 detected as `9B081FFAZ001WX`.
+- Initial install failed with Android version downgrade protection:
+
+  ```text
+  INSTALL_FAILED_VERSION_DOWNGRADE: Downgrade detected: Update version code 1968 is older than current 2843
+  ```
+
+- Per repository instructions, uninstalled `uk.gleissner.c64commander` and retried the newest APK. Install succeeded:
+
+  ```bash
+  adb -s 9B081FFAZ001WX uninstall uk.gleissner.c64commander
+  adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk
+  ```
+
+- Launched the app with:
+
+  ```bash
+  adb -s 9B081FFAZ001WX shell monkey -p uk.gleissner.c64commander 1
+  ```
+
+- Foreground proof:
+  - `topResumedActivity=uk.gleissner.c64commander/.MainActivity`
+  - installed package metadata: `versionCode=1968`, `versionName=0.7.9-rc1`
+  - screenshot: `.tmp/android-check/device-switch-fix-launch.png`
+
+- Hardware reachability from the workstation:
+  - `http://u64/v1/info` returned `Ultimate 64 Elite`, firmware `3.14e`, unique id `38C1BA`.
+  - `http://c64u/v1/info` connected to `192.168.1.167:80` but reset the HTTP connection; ICMP ping to `c64u` succeeded.
+- Hardware reachability from the Pixel 4:
+  - `adb shell ping -c 2 -W 2 u64` succeeded.
+  - `adb shell ping -c 2 -W 2 c64u` succeeded.
+
+- Because uninstalling for the version downgrade cleared app data, seeded two saved devices through WebView CDP localStorage for HIL:
+  - `hil-c64u` host `c64u`, selected first.
+  - `hil-u64` host `u64`.
+- Opened Switch Device via WebView CDP, waited for a switch-dialog health poll, and captured `.tmp/android-check/switch-device-sheet-after-poll.png`.
+- Measured switch handoff timings on the Pixel 4:
+  - `c64u -> u64`: sheet closed in `1147 ms`, `selectedDeviceId=hil-u64`, current host `u64`, Home title present, quick-action Reset/Reboot buttons were not disabled. Screenshot: `.tmp/android-check/after-switch-u64.png`.
+  - `u64 -> c64u`: sheet closed in `1314 ms`, `selectedDeviceId=hil-c64u`, current host `c64u`, Home title present, quick-action Reset/Reboot buttons were not disabled. Screenshot: `.tmp/android-check/after-switch-c64u.png`.
+- During the reverse switch sheet state, rows were not both collapsed to offline: `c64u` showed `Checking ... Healthy` while `u64` was selected and `Checking ... Unhealthy`.
+
+## Remaining HIL Limits / Risks
+
+- Full acceptance HIL with two healthy REST devices was blocked by the local `c64u` HTTP service resetting `/v1/info` despite ICMP reachability.
+- Visible LED/config pulse verification requires human observation of the physical C64 device. Automated tests prove the app calls CONFIG only for `switch-device-dialog`/manual contexts and skips it for background read-only context; this run could not physically confirm the visible light pulse.
+- A fresh post-run diagnostics ZIP was not exported from the device during this automated session. WebView-local logs were inspected through CDP and still contained expected warnings from the partially unhealthy hardware state, especially `c64u` HTTP failures; this is not a clean signal for duplicate-warning acceptance because the run was performed after app-data reseeding and against a failing `c64u` REST endpoint.

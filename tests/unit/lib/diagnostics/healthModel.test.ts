@@ -15,6 +15,7 @@ import {
   getContributorSupportingPhrase,
   HEALTH_GLYPHS,
   rollUpHealth,
+  selectPreferredBadgeHealth,
   type ContributorHealth,
   type ContributorKey,
 } from "@/lib/diagnostics/healthModel";
@@ -174,6 +175,20 @@ describe("deriveRestContributorHealth", () => {
     });
   });
 
+  it("ignores expected cancellation REST responses from device-switch aborts", () => {
+    const events = [
+      makeEvent("rest-response", 50_000, { status: null, error: "signal is aborted without reason" }),
+      makeEvent("rest-response", 40_000, { status: null, error: "The operation was aborted" }),
+      makeEvent("rest-response", 30_000, { status: 200 }),
+    ];
+    expect(deriveRestContributorHealth(events)).toMatchObject({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    });
+  });
+
   it("treats event with non-numeric status as success (status becomes null)", () => {
     // status is not a number → status = null → not counted as failed
     const events = [makeEvent("rest-response", 30_000, { status: "200" })];
@@ -234,6 +249,11 @@ describe("deriveAppContributorHealth", () => {
 
   it("does not count pre-connection request gating errors as app health failures", () => {
     const events = [makeEvent("error", 30_000, { message: "Device not ready for requests" })];
+    expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle", problemCount: 0 });
+  });
+
+  it("does not count expected device-switch cancellation as an app health failure", () => {
+    const events = [makeEvent("error", 30_000, { message: "Cancelled by saved-device switch" })];
     expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle", problemCount: 0 });
   });
 
@@ -332,6 +352,90 @@ describe("rollUpHealth", () => {
       TELNET: withState("Unhealthy"),
     };
     expect(rollUpHealth(contributors, "Online")).toBe("Unhealthy");
+  });
+});
+
+describe("selectPreferredBadgeHealth", () => {
+  it("prefers current selected-device healthy evidence over stale degraded badge state", () => {
+    expect(
+      selectPreferredBadgeHealth(
+        {
+          state: "Degraded",
+          connectivity: "Online",
+          problemCount: 3,
+        },
+        {
+          running: false,
+          latestResult: {
+            overallHealth: "Healthy",
+            connectivity: "Online",
+            probes: {
+              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
+              FTP: { probe: "FTP", outcome: "Success", durationMs: 10, reason: null, startMs: 2 },
+              TELNET: { probe: "TELNET", outcome: "Success", durationMs: 10, reason: null, startMs: 3 },
+              CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+              RASTER: { probe: "RASTER", outcome: "Success", durationMs: 10, reason: null, startMs: 5 },
+              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 10, reason: null, startMs: 6 },
+            },
+          },
+        },
+      ),
+    ).toEqual({
+      state: "Healthy",
+      connectivity: "Online",
+      problemCount: 0,
+    });
+  });
+
+  it("keeps the selected device healthy while a fresh saved-device cycle is still running", () => {
+    expect(
+      selectPreferredBadgeHealth(
+        {
+          state: "Unhealthy",
+          connectivity: "Online",
+          problemCount: 4,
+        },
+        {
+          running: true,
+          latestResult: {
+            overallHealth: "Healthy",
+            connectivity: "Online",
+            probes: {
+              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
+              FTP: { probe: "FTP", outcome: "Success", durationMs: 10, reason: null, startMs: 2 },
+              TELNET: { probe: "TELNET", outcome: "Success", durationMs: 10, reason: null, startMs: 3 },
+              CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+              RASTER: { probe: "RASTER", outcome: "Success", durationMs: 10, reason: null, startMs: 5 },
+              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 10, reason: null, startMs: 6 },
+            },
+          },
+        },
+      ),
+    ).toEqual({
+      state: "Healthy",
+      connectivity: "Checking",
+      problemCount: 0,
+    });
+  });
+
+  it("preserves the base badge state when the selected device has no current evidence", () => {
+    expect(
+      selectPreferredBadgeHealth(
+        {
+          state: "Degraded",
+          connectivity: "Online",
+          problemCount: 2,
+        },
+        {
+          running: true,
+          latestResult: null,
+        },
+      ),
+    ).toEqual({
+      state: "Degraded",
+      connectivity: "Online",
+      problemCount: 2,
+    });
   });
 });
 
@@ -535,6 +639,12 @@ describe("derivePrimaryProblem", () => {
     expect(result?.contributor).toBe("REST");
     expect(result?.title).toContain("REST");
     expect(result?.causeHint).toBe("Network error");
+  });
+
+  it("does not promote expected switch cancellation REST responses to primary problem", () => {
+    const events = [makeEvent("rest-response", 5_000, { error: "signal is aborted without reason" })];
+    const result = derivePrimaryProblem(events, allIdle());
+    expect(result).toBeNull();
   });
 
   it("returns Telnet failure as a problem with TELNET contributor", () => {

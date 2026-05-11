@@ -106,23 +106,26 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
 
 <table>
   <tr>
-    <td><img src="docs/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="360"/></td>
-    <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/02-quick-config-to-keyboard-light.png" alt="Home sections from quick config through keyboard light" width="360"/></td>
+    <td><img src="docs/img/app/home/00-overview-light.png" alt="C64 Commander intro" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/01-system-info-to-cpu-ram.png" alt="Home top row and quick actions (Light)" width="360"/></td>
+    <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home top row and quick actions (Dark)" width="360"/></td>
   </tr>
   <tr>
+    <td><img src="docs/img/app/home/sections/02-quick-config-to-keyboard-light.png" alt="Home sections from quick config through keyboard light" width="360"/></td>
     <td><img src="docs/img/app/home/sections/03-quick-config-to-printers.png" alt="Home sections from quick config through printers" width="360"/></td>
     <td><img src="docs/img/app/home/sections/04-printers-to-sid.png" alt="Home sections from printers through SID" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
   </tr>
   <tr>
+    <td><img src="docs/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
-    <td><img src="docs/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
   </tr>
   <tr>
+    <td><img src="docs/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/02-save-ram-custom-range.png" alt="Save RAM custom ranges" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/03-snapshot-manager.png" alt="Load RAM snapshot manager" width="360"/></td>
+  </tr>
+  <tr>
     <td><img src="docs/img/app/home/dialogs/04-restore-confirmation.png" alt="Load RAM restore confirmation" width="360"/></td>
   </tr>
 </table>

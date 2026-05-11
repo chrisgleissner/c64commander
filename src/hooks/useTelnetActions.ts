@@ -16,6 +16,7 @@ import { createTelnetClient, shouldUseMockTelnetTransport } from "@/lib/telnet/t
 import {
   buildTelnetCapabilityCacheKey,
   discoverTelnetCapabilities,
+  getCachedTelnetCapabilities,
   type TelnetActionSupport,
   type TelnetCapabilitySnapshot,
 } from "@/lib/telnet/telnetCapabilityDiscovery";
@@ -25,6 +26,7 @@ import {
   TELNET_ACTIONS,
   TELNET_ACTION_IDS,
   type TelnetMenuKey,
+  type TelnetTraceSnapshot,
   TelnetError,
 } from "@/lib/telnet/telnetTypes";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
@@ -41,6 +43,50 @@ const LOG_TAG = "useTelnetActions";
 type TelnetCapabilityDecision = {
   isAvailable: boolean;
   menuKey: TelnetMenuKey | null;
+};
+
+type TelnetCapabilityLoadResult = {
+  snapshot: TelnetCapabilitySnapshot;
+  trace: TelnetTraceSnapshot | null;
+};
+
+const buildEmptyTelnetTraceSnapshot = (hostname: string, port: number): TelnetTraceSnapshot => ({
+  hostname,
+  port,
+  requestPayload: { steps: [] },
+  responsePayload: { steps: [] },
+});
+
+const mergeTelnetTraceSnapshots = (
+  ...snapshots: Array<TelnetTraceSnapshot | null | undefined>
+): TelnetTraceSnapshot | null => {
+  const valid = snapshots.filter(
+    (snapshot): snapshot is TelnetTraceSnapshot => snapshot !== null && snapshot !== undefined,
+  );
+  if (valid.length === 0) return null;
+
+  return {
+    hostname: valid.find((snapshot) => snapshot.hostname)?.hostname ?? null,
+    port: valid.find((snapshot) => typeof snapshot.port === "number")?.port ?? null,
+    requestPayload: {
+      steps: valid.flatMap((snapshot) => snapshot.requestPayload.steps.map((step) => ({ ...step }))),
+    },
+    responsePayload: {
+      steps: valid.flatMap((snapshot) =>
+        snapshot.responsePayload.steps.map((step) =>
+          step.type === "screen"
+            ? {
+                ...step,
+                menus: step.menus.map((menu) => ({
+                  ...menu,
+                  items: menu.items.map((item) => ({ ...item })),
+                })),
+              }
+            : { ...step },
+        ),
+      ),
+    },
+  };
 };
 
 const resolveTelnetCapability = ({
@@ -149,14 +195,23 @@ export function useTelnetActions(): TelnetActionsState {
       )
     : null;
 
-  const loadCapabilities = useCallback(async () => {
+  const loadCapabilities = useCallback(async (): Promise<TelnetCapabilityLoadResult> => {
     if (!capability.isAvailable || capability.menuKey === null) {
       throw new TelnetError("Telnet is unavailable for the current device", "UNSUPPORTED_ACTION");
     }
     const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
     const port = getStoredTelnetPort();
     const cacheKey = buildTelnetCapabilityCacheKey(status.deviceInfo, capability.menuKey, host);
-    return await discoverTelnetCapabilities({
+    const cachedSnapshot = getCachedTelnetCapabilities(cacheKey);
+    if (cachedSnapshot) {
+      return {
+        snapshot: cachedSnapshot,
+        trace: null,
+      };
+    }
+
+    let discoveryTrace = buildEmptyTelnetTraceSnapshot(host, port);
+    const snapshot = await discoverTelnetCapabilities({
       cacheKey,
       deviceInfo: status.deviceInfo,
       menuKey: capability.menuKey,
@@ -169,11 +224,17 @@ export function useTelnetActions(): TelnetActionsState {
             await session.connect(host, port, password ?? undefined);
             return await callback(session);
           } finally {
+            discoveryTrace = mergeTelnetTraceSnapshots(discoveryTrace, session.getTraceSnapshot?.()) ?? discoveryTrace;
             await session.disconnect();
           }
         },
       },
     });
+
+    return {
+      snapshot,
+      trace: discoveryTrace,
+    };
   }, [capability.isAvailable, capability.menuKey, status.deviceInfo]);
 
   const fallbackSupport = !status.isConnected
@@ -212,7 +273,7 @@ export function useTelnetActions(): TelnetActionsState {
     setDiscoveryError(null);
 
     void loadCapabilities()
-      .then((snapshot) => {
+      .then(({ snapshot }) => {
         if (cancelled) return;
         setCapabilities(snapshot);
         setDiscoveryState("ready");
@@ -244,18 +305,13 @@ export function useTelnetActions(): TelnetActionsState {
       if (!capability.isAvailable || capability.menuKey === null) {
         throw new Error("Telnet is unavailable for the current device");
       }
-      const discoveredCapabilities = await loadCapabilities();
-      const support =
-        discoveredCapabilities.actionSupport[actionId as keyof typeof discoveredCapabilities.actionSupport];
-      if (!support || support.status !== "supported" || !support.target) {
-        throw new TelnetError(
-          support?.reason ?? `Unable to resolve Telnet action ${actionId}`,
-          support?.status === "unknown" ? "DISCOVERY_FAILED" : "UNSUPPORTED_ACTION",
-          { actionId },
-        );
-      }
-
+      const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+      const port = getStoredTelnetPort();
       const traceAction = createActionContext(`Telnet ${action.label}`, "user", LOG_TAG);
+      const fallbackTrace = buildEmptyTelnetTraceSnapshot(host, port);
+      let discoveryTrace: TelnetTraceSnapshot | null = null;
+      let executionTrace: TelnetTraceSnapshot | null = null;
+      let resolvedMenuPath = action.menuPath;
       inflightRef.current = actionId;
       setActiveActionId(actionId);
       incrementTelnetInFlight();
@@ -264,6 +320,19 @@ export function useTelnetActions(): TelnetActionsState {
         await runWithActionTrace(traceAction, async () => {
           const startedAt = Date.now();
           try {
+            const capabilityLoad = await loadCapabilities();
+            discoveryTrace = capabilityLoad.trace;
+            const support =
+              capabilityLoad.snapshot.actionSupport[actionId as keyof typeof capabilityLoad.snapshot.actionSupport];
+            if (!support || support.status !== "supported" || !support.target) {
+              throw new TelnetError(
+                support?.reason ?? `Unable to resolve Telnet action ${actionId}`,
+                support?.status === "unknown" ? "DISCOVERY_FAILED" : "UNSUPPORTED_ACTION",
+                { actionId },
+              );
+            }
+            resolvedMenuPath = [support.target.categoryLabel, support.target.actionLabel];
+
             await withTelnetInteraction(
               {
                 action: traceAction,
@@ -271,8 +340,6 @@ export function useTelnetActions(): TelnetActionsState {
                 intent: "user",
               },
               async () => {
-                const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
-                const port = getStoredTelnetPort();
                 const password = await getPassword();
                 const transport = createTelnetClient();
                 const session = createTelnetSession(transport);
@@ -285,28 +352,39 @@ export function useTelnetActions(): TelnetActionsState {
                   });
                   await executor.execute(actionId);
                 } finally {
+                  executionTrace = session.getTraceSnapshot?.() ?? fallbackTrace;
                   await session.disconnect();
                 }
               },
             );
 
+            const traceSnapshot = mergeTelnetTraceSnapshots(discoveryTrace, executionTrace) ?? fallbackTrace;
             recordTelnetOperation(traceAction, {
               actionId: action.id,
               actionLabel: action.label,
-              menuPath: [support.target.categoryLabel, support.target.actionLabel],
+              menuPath: resolvedMenuPath,
+              hostname: host,
+              port,
               durationMs: Date.now() - startedAt,
               result: "success",
               error: null,
+              requestPayload: traceSnapshot.requestPayload,
+              responsePayload: traceSnapshot.responsePayload,
             });
           } catch (error) {
             const resolvedError = error as Error;
+            const traceSnapshot = mergeTelnetTraceSnapshots(discoveryTrace, executionTrace) ?? fallbackTrace;
             recordTelnetOperation(traceAction, {
               actionId: action.id,
               actionLabel: action.label,
-              menuPath: support.target ? [support.target.categoryLabel, support.target.actionLabel] : action.menuPath,
+              menuPath: resolvedMenuPath,
+              hostname: host,
+              port,
               durationMs: Date.now() - startedAt,
               result: "failure",
               error: resolvedError,
+              requestPayload: traceSnapshot.requestPayload,
+              responsePayload: traceSnapshot.responsePayload,
             });
             throw resolvedError;
           }

@@ -71,9 +71,15 @@ export type TelnetEffect = {
   actionId: string;
   actionLabel: string;
   menuPath: [string, string] | null;
+  hostname: string | null;
+  port: number | null;
   target: BackendTarget | null;
   result: string | null;
   durationMs?: number | null;
+  requestPayload?: unknown;
+  responsePayload?: unknown;
+  requestPayloadPreview?: PayloadPreview | null;
+  responsePayloadPreview?: PayloadPreview | null;
   error?: string;
 };
 
@@ -415,9 +421,19 @@ const resolveTelnetEffects = (events: TraceEvent[]): TelnetEffect[] => {
         actionId: readString(data.actionId) ?? "unknown",
         actionLabel: readString(data.actionLabel) ?? "Telnet action",
         menuPath,
+        hostname: readString(data.hostname),
+        port: readNumber(data.port),
         target: (readString(data.target) as BackendTarget | null) ?? null,
         result: readString(data.result),
         durationMs: readNumber(data.durationMs),
+        ...("requestPayload" in data ? { requestPayload: data.requestPayload ?? null } : {}),
+        ...("responsePayload" in data ? { responsePayload: data.responsePayload ?? null } : {}),
+        ...(readPayloadPreview(data.requestPayloadPreview)
+          ? { requestPayloadPreview: readPayloadPreview(data.requestPayloadPreview) }
+          : {}),
+        ...(readPayloadPreview(data.responsePayloadPreview)
+          ? { responsePayloadPreview: readPayloadPreview(data.responsePayloadPreview) }
+          : {}),
         ...(readString(data.error) ? { error: readString(data.error) ?? undefined } : {}),
       };
     });

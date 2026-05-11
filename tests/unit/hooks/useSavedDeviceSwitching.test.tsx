@@ -18,12 +18,14 @@ const {
   mockSetStoredTelnetPort,
   mockInvalidateForSavedDeviceSwitch,
   mockGetPasswordForDevice,
+  mockResetInteractionState,
 } = vi.hoisted(() => ({
   mockVerifyCurrentConnectionTarget: vi.fn(),
   mockSetStoredFtpPort: vi.fn(),
   mockSetStoredTelnetPort: vi.fn(),
   mockInvalidateForSavedDeviceSwitch: vi.fn(),
   mockGetPasswordForDevice: vi.fn(),
+  mockResetInteractionState: vi.fn(),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -36,6 +38,14 @@ vi.mock("@/lib/ftp/ftpConfig", () => ({
 
 vi.mock("@/lib/telnet/telnetConfig", () => ({
   setStoredTelnetPort: mockSetStoredTelnetPort,
+}));
+
+vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
+  resetInteractionState: mockResetInteractionState,
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
 }));
 
 vi.mock("@/lib/query/c64QueryInvalidation", async () => {
@@ -90,6 +100,8 @@ describe("useSavedDeviceSwitching", () => {
 
   it("updates local selection immediately, then persists verified identity and route invalidation on success", async () => {
     const store = await import("@/lib/savedDevices/store");
+    const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
+    metrics.clearSavedDeviceSwitchMetrics();
     const c64api = await import("@/lib/c64api");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
     store.updateSavedDevice(initialDeviceId, {
@@ -134,6 +146,7 @@ describe("useSavedDeviceSwitching", () => {
     expect(store.getSavedDeviceSwitchStatus("device-backup")).toBe("verifying");
     expect(mockSetStoredFtpPort).toHaveBeenCalledWith(2021);
     expect(mockSetStoredTelnetPort).toHaveBeenCalledWith(2323);
+    expect(mockResetInteractionState).toHaveBeenCalledWith("saved-device-switch");
     expect(mockGetPasswordForDevice).toHaveBeenCalledWith("device-backup");
     expect(c64api.getC64APIConfigSnapshot()).toMatchObject({
       baseUrl: "http://backup-c64:8080",
@@ -160,10 +173,20 @@ describe("useSavedDeviceSwitching", () => {
       uniqueId: "UID-BACKUP",
     });
     expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/play");
+
+    expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
+      fromDeviceId: initialDeviceId,
+      toDeviceId: "device-backup",
+      routePath: "/play",
+      outcome: "success",
+      verificationOk: true,
+    });
   });
 
   it("keeps the selected device and records offline state when verification fails", async () => {
     const store = await import("@/lib/savedDevices/store");
+    const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
+    metrics.clearSavedDeviceSwitchMetrics();
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
     store.updateSavedDevice(initialDeviceId, {
       name: "Office U64",
@@ -200,5 +223,62 @@ describe("useSavedDeviceSwitching", () => {
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-backup");
     expect(store.getSavedDeviceSwitchStatus("device-backup")).toBe("offline");
     expect(mockInvalidateForSavedDeviceSwitch).not.toHaveBeenCalled();
+
+    expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
+      fromDeviceId: initialDeviceId,
+      toDeviceId: "device-backup",
+      routePath: "/config",
+      outcome: "offline",
+      verificationOk: false,
+    });
+  });
+
+  it("captures thrown verification failures as error attempts", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
+    metrics.clearSavedDeviceSwitchMetrics();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+      hasPassword: false,
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    mockVerifyCurrentConnectionTarget.mockRejectedValueOnce(new Error("Verification exploded"));
+
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/settings"),
+    });
+
+    await expect(
+      act(async () => {
+        await result.current("device-backup");
+      }),
+    ).rejects.toThrow("Verification exploded");
+
+    expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
+      fromDeviceId: initialDeviceId,
+      toDeviceId: "device-backup",
+      routePath: "/settings",
+      outcome: "error",
+      verificationOk: false,
+      errorMessage: "Verification exploded",
+    });
   });
 });

@@ -14,6 +14,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
+import com.getcapacitor.PluginCall
+import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 
 @CapacitorPlugin(name = "DiagnosticsBridge")
@@ -81,6 +83,50 @@ open class DiagnosticsBridgePlugin : Plugin() {
 
   internal open fun registerPluginReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
     BroadcastReceiverCompat.registerNotExported(context, receiver, filter)
+  }
+
+  @PluginMethod
+  fun emitLog(call: PluginCall) {
+    val message = call.getString("message")
+    if (message.isNullOrBlank()) {
+      call.reject("message is required")
+      return
+    }
+
+    val level = call.getString("level") ?: "info"
+    val component = call.getString("component") ?: "js"
+    val trace =
+            AppLogger.TraceFields(
+                    correlationId = call.getString("correlationId"),
+                    trackInstanceId = call.getString("trackInstanceId"),
+                    playlistItemId = call.getString("playlistItemId"),
+                    sourceKind = call.getString("sourceKind"),
+                    localAccessMode = call.getString("localAccessMode"),
+                    lifecycleState = call.getString("lifecycleState"),
+            )
+
+    val errorMessage = call.getString("errorMessage")
+    val errorName = call.getString("errorName")
+    val errorStack = call.getString("errorStack")
+    val throwable =
+            if (
+                    errorMessage.isNullOrBlank() &&
+                            errorName.isNullOrBlank() &&
+                            errorStack.isNullOrBlank()
+            ) {
+              null
+            } else {
+              RuntimeException(errorMessage ?: errorName ?: message)
+            }
+
+    when (level) {
+      "debug" -> AppLogger.debug(context, logTag, message, component, trace)
+      "warn" -> AppLogger.warn(context, logTag, message, component, throwable, trace)
+      "error" -> AppLogger.error(context, logTag, message, component, throwable, trace)
+      else -> AppLogger.info(context, logTag, message, component, trace)
+    }
+
+    call.resolve()
   }
 
   override fun handleOnDestroy() {

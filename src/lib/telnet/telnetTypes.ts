@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { TelnetTraceRequestPayload, TelnetTraceResponsePayload } from "@/lib/tracing/types";
 import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
 
 /** 60×24 Telnet screen dimensions matching firmware Screen_VT100 */
@@ -117,6 +118,13 @@ export interface TelnetTransport {
 }
 
 /** Session-level Telnet interface */
+export type TelnetTraceSnapshot = {
+  hostname: string | null;
+  port: number | null;
+  requestPayload: TelnetTraceRequestPayload;
+  responsePayload: TelnetTraceResponsePayload;
+};
+
 export interface TelnetSessionApi {
   connect(host: string, port: number, password?: string): Promise<void>;
   sendKey(key: TelnetKeyName): Promise<void>;
@@ -124,6 +132,7 @@ export interface TelnetSessionApi {
   readScreen(timeoutMs?: number): Promise<TelnetScreen>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
+  getTraceSnapshot?(): TelnetTraceSnapshot;
 }
 
 export type TelnetMenuKey = "F5" | "F1";

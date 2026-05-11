@@ -963,6 +963,23 @@ describe("c64api branches", () => {
     );
   });
 
+  it("does not fan out item fetches when category fetch is blocked by the readiness gate", async () => {
+    const api = new C64API("http://c64u");
+    vi.spyOn(api, "getCategory").mockRejectedValue(new Error("Device not ready for requests"));
+    const getConfigItem = vi.spyOn(api, "getConfigItem").mockResolvedValue({ errors: [] } as never);
+
+    await expect(api.getConfigItems("Audio Mixer", ["Vol UltiSid 1", "Vol Socket 1"])).rejects.toThrow(
+      "Device not ready for requests",
+    );
+
+    expect(getConfigItem).not.toHaveBeenCalled();
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Category config fetch skipped item fallback because device is not ready",
+      expect.objectContaining({ category: "Audio Mixer", itemCount: 2 }),
+    );
+  });
+
   // #31: updateConfigBatch immediate mode
   it("runs updateConfigBatch immediately when immediate option is true", async () => {
     const fetchMock = getFetchMock();

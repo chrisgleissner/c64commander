@@ -9,6 +9,21 @@
 import { registerPlugin } from "@capacitor/core";
 import { logger } from "@/lib/diagnostics/logger";
 
+type NativeDiagnosticsLogPayload = {
+  level?: "debug" | "info" | "warn" | "error";
+  message: string;
+  component?: string;
+  correlationId?: string | null;
+  trackInstanceId?: string | null;
+  playlistItemId?: string | null;
+  sourceKind?: string | null;
+  localAccessMode?: string | null;
+  lifecycleState?: string | null;
+  errorName?: string | null;
+  errorMessage?: string | null;
+  errorStack?: string | null;
+};
+
 type NativeDiagnosticsLogEvent = {
   level: "debug" | "info" | "warn" | "error";
   message: string;
@@ -27,6 +42,7 @@ type DiagnosticsBridgePlugin = {
     errorLog: string;
     network: string;
   }) => Promise<void>;
+  emitLog: (payload: NativeDiagnosticsLogPayload) => Promise<void>;
 };
 
 const DiagnosticsBridge = registerPlugin<DiagnosticsBridgePlugin>("DiagnosticsBridge");
@@ -109,4 +125,22 @@ export const pushNativeDebugSnapshots = async (payload: {
   network: string;
 }) => {
   await DiagnosticsBridge.updateDebugSnapshots(payload);
+};
+
+export const emitNativeDiagnosticsLog = async (payload: NativeDiagnosticsLogPayload) => {
+  try {
+    await DiagnosticsBridge.emitLog(payload);
+    return true;
+  } catch (error) {
+    logger.warn("DiagnosticsBridge native log emission failed", {
+      details: {
+        origin: "native",
+        payload,
+        error: error instanceof Error ? error.message : String(error ?? "Unknown native log failure"),
+      },
+      component: "native",
+      includeConsole: false,
+    });
+    return false;
+  }
 };

@@ -30,6 +30,11 @@ import type {
   HealthCheckRunResult,
 } from "@/lib/diagnostics/healthCheckEngine";
 import type { HealthCheckProbeExecutionState } from "@/lib/diagnostics/healthCheckState";
+import {
+  clearSavedDeviceSwitchMetrics,
+  getSavedDeviceSwitchMetricsSnapshot,
+  type SavedDeviceSwitchMetricsSnapshot,
+} from "@/lib/savedDevices/savedDeviceSwitchMetrics";
 
 export type SeedableLatencySample = LatencySample & { path: string };
 
@@ -80,6 +85,8 @@ export type DiagnosticsTestBridge = {
   };
   getOverlayStateSnapshot: () => DiagnosticsOverlaySeedState;
   getSavedDeviceHealthSnapshot: () => SavedDeviceHealthSeedState | null;
+  getSavedDeviceSwitchMetricsSnapshot: () => SavedDeviceSwitchMetricsSnapshot;
+  clearSavedDeviceSwitchMetrics: () => void;
 };
 
 let overlayState: DiagnosticsOverlaySeedState = {
@@ -217,6 +224,8 @@ export const registerDiagnosticsTestBridge = () => {
     }),
     getOverlayStateSnapshot: () => overlayState,
     getSavedDeviceHealthSnapshot: () => savedDeviceHealthState,
+    getSavedDeviceSwitchMetricsSnapshot,
+    clearSavedDeviceSwitchMetrics,
   });
 
   window.__c64uDiagnosticsTestBridge = bridge;

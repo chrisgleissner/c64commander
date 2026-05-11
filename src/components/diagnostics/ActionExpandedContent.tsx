@@ -58,6 +58,12 @@ const HeaderBlock = ({ label, headers }: { label: string; headers?: TraceHeaders
   return <JsonBlock label={label} value={headers} />;
 };
 
+const formatEndpoint = (hostname: string | null | undefined, port: number | null | undefined) => {
+  if (!hostname) return null;
+  if (typeof port === "number") return `${hostname}:${port}`;
+  return hostname;
+};
+
 export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) => {
   const effects = summary.effects ?? [];
   const restEffects = effects.filter((e): e is RestEffect => e.type === "REST");
@@ -159,8 +165,11 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
             >
               <p className="font-medium">{effect.actionLabel}</p>
               <p className="text-muted-foreground">
-                target: {formatActionEffectTarget(effect.target, inferredProduct)} · result:{" "}
-                {effect.result ?? "unknown"}
+                target: {formatActionEffectTarget(effect.target, inferredProduct)}
+                {formatEndpoint(effect.hostname, effect.port)
+                  ? ` · endpoint: ${formatEndpoint(effect.hostname, effect.port)}`
+                  : ""}
+                {` · result: ${effect.result ?? "unknown"}`}
                 {effect.durationMs !== null && effect.durationMs !== undefined ? ` · ${effect.durationMs}ms` : ""}
               </p>
               <p className="text-muted-foreground break-words">
@@ -168,6 +177,12 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
                 {effect.menuPath ? ` · menu: ${effect.menuPath[0]} → ${effect.menuPath[1]}` : ""}
               </p>
               {effect.error ? <p className="text-diagnostics-error">error: {effect.error}</p> : null}
+              <div className="mt-2 space-y-2">
+                <JsonBlock label="Request payload" value={effect.requestPayload} />
+                <PayloadPreviewBlock label="Request preview" preview={effect.requestPayloadPreview} />
+                <JsonBlock label="Response payload" value={effect.responsePayload} />
+                <PayloadPreviewBlock label="Response preview" preview={effect.responsePayloadPreview} />
+              </div>
             </div>
           ))}
         </div>

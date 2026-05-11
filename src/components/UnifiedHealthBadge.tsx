@@ -25,10 +25,12 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
+import { HEALTH_CHECK_CONTEXTS } from "@/lib/diagnostics/healthCheckEngine";
 import {
   HEALTH_GLYPHS,
   getBadgeAriaLabel,
   getBadgeTextContract,
+  selectPreferredBadgeHealth,
   type HealthState,
 } from "@/lib/diagnostics/healthModel";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -312,7 +314,7 @@ type PendingSwitchState = {
  * Tapping opens the diagnostics overlay (§8.9).
  */
 export function UnifiedHealthBadge({ className }: Props) {
-  const { state, connectivity, problemCount, connectedDeviceLabel } = useHealthState();
+  const healthState = useHealthState();
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
   const {
@@ -331,7 +333,34 @@ export function UnifiedHealthBadge({ className }: Props) {
     byDeviceId: healthByDeviceId,
     refreshAll,
     totalProbeCount,
-  } = useSavedDeviceHealthChecks(savedDevices.devices, canSwitchDevices);
+  } = useSavedDeviceHealthChecks(
+    savedDevices.devices,
+    canSwitchDevices,
+    pickerOpen ? HEALTH_CHECK_CONTEXTS.switchDeviceDialog : HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
+  );
+
+  const shouldPreferSelectedDeviceEvidence = pickerOpen || pendingSwitch !== null;
+  const selectedDeviceHealthSnapshot = shouldPreferSelectedDeviceEvidence
+    ? ((savedDevices.selectedDeviceId ? healthByDeviceId[savedDevices.selectedDeviceId] : null) ?? null)
+    : null;
+  const { state, connectivity, problemCount } = useMemo(
+    () =>
+      selectPreferredBadgeHealth(
+        {
+          state: healthState.state,
+          connectivity: healthState.connectivity,
+          problemCount: healthState.problemCount,
+        },
+        selectedDeviceHealthSnapshot
+          ? {
+              running: selectedDeviceHealthSnapshot.running,
+              latestResult: selectedDeviceHealthSnapshot.latestResult,
+            }
+          : null,
+      ),
+    [healthState.connectivity, healthState.problemCount, healthState.state, selectedDeviceHealthSnapshot],
+  );
+  const { connectedDeviceLabel } = healthState;
 
   const glyph = HEALTH_GLYPHS[state];
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
@@ -437,18 +466,18 @@ export function UnifiedHealthBadge({ className }: Props) {
       }
 
       setPendingSwitch({ fromDeviceId, toDeviceId: deviceId });
+      setPickerOpen(false);
 
-      try {
-        await switchSavedDevice(deviceId);
-        setPickerOpen(false);
-      } catch (error) {
-        addErrorLog("Saved device switch failed", {
-          deviceId,
-          error: (error as Error).message,
+      void switchSavedDevice(deviceId)
+        .catch((error) => {
+          addErrorLog("Saved device switch failed", {
+            deviceId,
+            error: (error as Error).message,
+          });
+        })
+        .finally(() => {
+          setPendingSwitch(null);
         });
-      } finally {
-        setPendingSwitch(null);
-      }
     },
     [pendingSwitch?.fromDeviceId, savedDevices.selectedDeviceId, switchSavedDevice],
   );
@@ -542,7 +571,7 @@ export function UnifiedHealthBadge({ className }: Props) {
       <AppSheet open={pickerOpen} onOpenChange={handlePickerOpenChange}>
         <AppSheetContent className="overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]" data-testid="switch-device-sheet">
           <AppSheetHeader>
-            <AppSheetTitle>Switch device</AppSheetTitle>
+            <AppSheetTitle>Switch Device</AppSheetTitle>
             <AppSheetDescription>
               Choose a saved device. Checks refresh automatically every 10s while open.
             </AppSheetDescription>

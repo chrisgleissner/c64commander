@@ -44,6 +44,7 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 vi.mock("@/lib/diagnostics/latencyTracker", () => ({
   computeLatencyPercentiles: vi.fn(() => ({ p50: 10, p90: 20, p99: 30 })),
+  recordLatencySample: vi.fn(),
 }));
 
 vi.mock("@/lib/diagnostics/healthHistory", async (importOriginal) => {
@@ -112,6 +113,7 @@ vi.mock("@/lib/telnet/telnetConfig", () => ({
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: vi.fn(() => ({ state: "REAL_CONNECTED" })),
+  isRealDeviceStickyLockEnabled: vi.fn(() => false),
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
@@ -128,9 +130,11 @@ import {
   recoverStaleHealthCheckRun,
   runHealthCheck,
   runHealthCheckForTarget,
+  HEALTH_CHECK_CONTEXTS,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
+import { getTraceEvents, resetTraceSession } from "@/lib/tracing/traceSession";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -202,12 +206,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   clearHealthHistory();
   resetHealthCheckStateSnapshot();
+  resetTraceSession();
   vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "c64u.local" });
 });
 
 afterEach(() => {
   cancelHealthCheck("Test cleanup");
   resetHealthCheckStateSnapshot();
+  resetTraceSession();
   vi.clearAllMocks();
 });
 
@@ -377,7 +383,7 @@ describe("runHealthCheck — all-success path", () => {
 });
 
 describe("runHealthCheckForTarget", () => {
-  it("runs a per-device check with config pulse enabled and uses target ports and password", async () => {
+  it("allows the switch-device dialog context to run the visible config pulse and uses target ports and password", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -387,7 +393,7 @@ describe("runHealthCheckForTarget", () => {
         telnetPort: 2323,
         password: "secret",
       },
-      { mode: "full" },
+      { context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog },
     );
 
     expect(result.connectivity).toBe("Online");
@@ -405,7 +411,25 @@ describe("runHealthCheckForTarget", () => {
     expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323);
   });
 
-  it("skips the config pulse in passive mode so closed-switcher checks stay read-only", async () => {
+  it("keeps background-maintenance checks read-only by skipping the config pulse", async () => {
+    setupAllProbesSuccess();
+
+    const result = await runHealthCheckForTarget(
+      {
+        deviceHost: "backup-u64:8080",
+        ftpPort: 2021,
+        telnetPort: 2323,
+        password: "secret",
+      },
+      { context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance },
+    );
+
+    expect(result.probes.CONFIG.outcome).toBe("Skipped");
+    expect(result.probes.CONFIG.reason).toContain("background-maintenance");
+    expect(mockSetConfigValue).not.toHaveBeenCalled();
+  });
+
+  it("keeps passive mode backward compatible with the read-only background context", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -419,7 +443,6 @@ describe("runHealthCheckForTarget", () => {
     );
 
     expect(result.probes.CONFIG.outcome).toBe("Skipped");
-    expect(result.probes.CONFIG.reason).toContain("passive mode");
     expect(mockSetConfigValue).not.toHaveBeenCalled();
   });
 
@@ -438,7 +461,7 @@ describe("runHealthCheckForTarget", () => {
         telnetPort: 2323,
         password: "target-secret",
       },
-      { mode: "full" },
+      { context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog },
     );
 
     expect(result.connectivity).toBe("Offline");
@@ -995,7 +1018,7 @@ describe("runHealthCheck — TELNET probe", () => {
 
     expect(result!.probes.TELNET.outcome).toBe("Fail");
     expect(result!.probes.TELNET.reason).toBe("No telnet response");
-    expect(mockTelnetRead).toHaveBeenCalledTimes(1);
+    expect(mockTelnetRead).toHaveBeenCalledTimes(2);
   });
 
   it("accepts TELNET when the probe receives visible text after telnet negotiation bytes", async () => {
@@ -1080,8 +1103,39 @@ describe("runHealthCheck — TELNET probe", () => {
 
     await runHealthCheck();
 
-    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 2000 });
+    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 3000 });
     expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23);
+  });
+
+  it("records the TELNET health probe as TELNET diagnostics trace evidence", async () => {
+    setupAllProbesSuccess();
+
+    await runHealthCheck();
+
+    expect(getTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "telnet-operation",
+          data: expect.objectContaining({
+            actionId: "health-check",
+            actionLabel: "Health check TELNET probe",
+            hostname: "c64u.local",
+            port: 23,
+            requestPayload: expect.objectContaining({
+              steps: expect.arrayContaining([
+                expect.objectContaining({ type: "connect", host: "c64u.local", port: 23 }),
+                expect.objectContaining({ type: "send-raw", data: "\r\n" }),
+              ]),
+            }),
+            responsePayload: expect.objectContaining({
+              steps: expect.arrayContaining([
+                expect.objectContaining({ type: "visible-text", text: expect.stringContaining("Ultimate-II+") }),
+              ]),
+            }),
+          }),
+        }),
+      ]),
+    );
   });
 
   it("elicits banner data with a plain CRLF after connecting", async () => {

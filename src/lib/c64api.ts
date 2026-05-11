@@ -98,6 +98,7 @@ const isNetworkFailureMessage = (message: string) =>
   /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
 const resolveHostErrorMessage = (message: string) =>
   isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
+const isDeviceNotReadyRequestGate = (message: string) => /device not ready for requests/i.test(message);
 
 const parseHttpStatusFromErrorMessage = (message: string) => {
   const match = /http\s+(\d{3})/i.exec(message);
@@ -1243,6 +1244,15 @@ export class C64API {
           },
           errors: [],
         } as ConfigResponse;
+      }
+
+      if (isDeviceNotReadyRequestGate(categoryErrorMessage)) {
+        addLog("warn", "Category config fetch skipped item fallback because device is not ready", {
+          category,
+          error: categoryErrorMessage,
+          itemCount: uniqueItems.length,
+        });
+        throw error;
       }
 
       addLog("warn", "Category config fetch failed; falling back to item fetches", {

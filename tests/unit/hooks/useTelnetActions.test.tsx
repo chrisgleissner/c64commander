@@ -54,6 +54,19 @@ vi.mock("@/lib/native/platform", () => ({
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockDisconnect = vi.fn().mockResolvedValue(undefined);
 const mockConnect = vi.fn().mockResolvedValue(undefined);
+const buildSessionTraceSnapshot = () => ({
+  hostname: "u64",
+  port: 23,
+  requestPayload: {
+    steps: [
+      { type: "connect" as const, host: "u64", port: 23 },
+      { type: "send-key" as const, key: "F5", sequence: "\u001b[15~" },
+    ],
+  },
+  responsePayload: {
+    steps: [{ type: "visible-text" as const, text: "Ultimate 64 action menu" }],
+  },
+});
 
 vi.mock("@/lib/telnet/telnetClient", () => ({
   createTelnetClient: () => ({}),
@@ -64,6 +77,7 @@ vi.mock("@/lib/telnet/telnetSession", () => ({
   createTelnetSession: () => ({
     connect: mockConnect,
     disconnect: mockDisconnect,
+    getTraceSnapshot: vi.fn(() => buildSessionTraceSnapshot()),
   }),
 }));
 
@@ -383,7 +397,18 @@ describe("useTelnetActions", () => {
         actionId: "powerCycle",
         actionLabel: "Power Cycle",
         menuPath: ["Power & Reset", "Power Cycle"],
+        hostname: "u64",
+        port: 23,
         result: "success",
+        requestPayload: expect.objectContaining({
+          steps: expect.arrayContaining([
+            expect.objectContaining({ type: "connect", host: "u64", port: 23 }),
+            expect.objectContaining({ type: "send-key", key: "F5" }),
+          ]),
+        }),
+        responsePayload: expect.objectContaining({
+          steps: expect.arrayContaining([expect.objectContaining({ type: "visible-text" })]),
+        }),
       }),
     );
     expect(incrementTelnetInFlightSpy).toHaveBeenCalledTimes(1);
@@ -412,6 +437,17 @@ describe("useTelnetActions", () => {
       message: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
     });
     expect(mockExecute).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(recordTelnetOperationSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({
+          actionId: "powerCycle",
+          result: "failure",
+          hostname: "u64",
+          port: 23,
+        }),
+      );
+    });
   });
 
   it("throws for unknown telnet action ids", async () => {
@@ -465,8 +501,13 @@ describe("useTelnetActions", () => {
       expect.any(Object),
       expect.objectContaining({
         actionId: "powerCycle",
+        hostname: "u64",
+        port: 23,
         result: "failure",
         error: expect.objectContaining({ message: "boom" }),
+        requestPayload: expect.objectContaining({
+          steps: expect.arrayContaining([expect.objectContaining({ type: "connect", host: "u64", port: 23 })]),
+        }),
       }),
     );
     expect(addLog).toHaveBeenCalledWith("error", 'useTelnetActions: action "powerCycle" failed', {

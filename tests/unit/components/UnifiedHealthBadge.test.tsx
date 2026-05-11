@@ -224,6 +224,8 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
   requestDiagnosticsOpen: mockState.requestDiagnosticsOpen,
 }));
 
+const defaultSavedDeviceHealthByDeviceId = structuredClone(mockState.savedDeviceHealthChecks.byDeviceId);
+
 describe("UnifiedHealthBadge", () => {
   beforeEach(() => {
     mockState.currentProfile = "compact";
@@ -241,6 +243,7 @@ describe("UnifiedHealthBadge", () => {
     mockState.switchSavedDevice.mockReset();
     mockState.requestDiagnosticsOpen.mockReset();
     mockState.savedDeviceHealthChecks.refreshAll.mockReset();
+    mockState.savedDeviceHealthChecks.byDeviceId = structuredClone(defaultSavedDeviceHealthByDeviceId);
     mockUseSavedDeviceHealthChecks.mockReset();
   });
 
@@ -405,10 +408,115 @@ describe("UnifiedHealthBadge", () => {
     expect(mockState.requestDiagnosticsOpen).toHaveBeenCalledWith("header");
   });
 
+  it("adopts the selected saved-device healthy result instead of stale degraded top-level state", () => {
+    mockState.currentProfile = "medium";
+    (mockState.healthState as { state: string }).state = "Degraded";
+    mockState.healthState.problemCount = 3;
+
+    render(<UnifiedHealthBadge />);
+
+    fireEvent.contextMenu(screen.getByTestId("unified-health-badge"));
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge).toHaveAttribute("data-health-state", "Healthy");
+    expect(badge).toHaveAttribute("data-connectivity-state", "Online");
+    expect(badge.textContent).toContain("Healthy");
+  });
+
+  it("keeps selected healthy evidence visible while a new saved-device cycle is checking", () => {
+    mockState.currentProfile = "medium";
+    (mockState.healthState as { state: string }).state = "Unhealthy";
+    mockState.healthState.problemCount = 4;
+    mockState.savedDeviceHealthChecks.byDeviceId["device-office"] = {
+      ...mockState.savedDeviceHealthChecks.byDeviceId["device-office"],
+      running: true,
+    };
+
+    render(<UnifiedHealthBadge />);
+
+    fireEvent.contextMenu(screen.getByTestId("unified-health-badge"));
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge).toHaveAttribute("data-health-state", "Healthy");
+    expect(badge).toHaveAttribute("data-connectivity-state", "Checking");
+    expect(badge.textContent).toContain("Healthy");
+  });
+
+  it("lets the selected saved-device failure downgrade a stale healthy top-level badge", () => {
+    mockState.currentProfile = "medium";
+    (mockState.healthState as { state: string }).state = "Healthy";
+    mockState.healthState.problemCount = 0;
+    const healthyReference = mockState.savedDeviceHealthChecks.byDeviceId["device-office"].latestResult;
+    mockState.savedDeviceHealthChecks.byDeviceId["device-office"] = {
+      ...mockState.savedDeviceHealthChecks.byDeviceId["device-office"],
+      running: false,
+      latestResult: {
+        ...healthyReference,
+        runId: "hcr-office-failure",
+        overallHealth: "Unhealthy",
+        connectivity: "Offline",
+        probes: {
+          ...healthyReference.probes,
+          REST: {
+            ...healthyReference.probes.REST,
+            outcome: "Fail",
+            reason: "REST timeout",
+          },
+        },
+      },
+    };
+
+    render(<UnifiedHealthBadge />);
+
+    fireEvent.contextMenu(screen.getByTestId("unified-health-badge"));
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge).toHaveAttribute("data-health-state", "Unhealthy");
+    expect(badge).toHaveAttribute("data-connectivity-state", "Offline");
+  });
+
+  it("ignores healthy evidence from a non-selected saved device", () => {
+    mockState.currentProfile = "medium";
+    (mockState.healthState as { state: string }).state = "Degraded";
+    mockState.healthState.problemCount = 2;
+    mockState.savedDevices.selectedDeviceId = "device-office";
+    const healthyReference = mockState.savedDeviceHealthChecks.byDeviceId["device-office"].latestResult;
+    mockState.savedDeviceHealthChecks.byDeviceId["device-office"] = {
+      ...mockState.savedDeviceHealthChecks.byDeviceId["device-office"],
+      latestResult: null,
+      running: false,
+    };
+    mockState.savedDeviceHealthChecks.byDeviceId["device-backup"] = {
+      ...mockState.savedDeviceHealthChecks.byDeviceId["device-backup"],
+      running: false,
+      latestResult: {
+        ...healthyReference,
+        runId: "hcr-backup-healthy",
+        overallHealth: "Healthy",
+        connectivity: "Online",
+      },
+    };
+
+    render(<UnifiedHealthBadge />);
+
+    fireEvent.contextMenu(screen.getByTestId("unified-health-badge"));
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge).toHaveAttribute("data-health-state", "Degraded");
+    expect(badge).toHaveAttribute("data-connectivity-state", "Online");
+  });
+
   it("enables saved-device health polling on cold boot without opening the switcher", () => {
     render(<UnifiedHealthBadge />);
 
-    expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(mockState.savedDevices.devices, true);
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(
+      mockState.savedDevices.devices,
+      true,
+      expect.objectContaining({
+        context: "background-maintenance",
+        configPulsePolicy: "read-only",
+      }),
+    );
     expect(mockState.savedDeviceHealthChecks.refreshAll).not.toHaveBeenCalled();
     expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
   });
@@ -507,7 +615,7 @@ describe("UnifiedHealthBadge", () => {
     });
   });
 
-  it("keeps switcher rows out of Offline while a newly tapped device is still verifying", async () => {
+  it("closes the switcher promptly while a newly tapped device continues verifying", async () => {
     vi.useFakeTimers();
     const switchDeferred = createDeferred<void>();
     mockState.switchSavedDevice.mockImplementationOnce(async (deviceId: string) => {
@@ -527,13 +635,8 @@ describe("UnifiedHealthBadge", () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Selected");
-    expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Last check");
-    expect(screen.getByTestId("switch-device-row-device-office").textContent).not.toContain("Offline");
-    expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Healthy");
-    expect(screen.getByTestId("switch-device-row-device-backup").textContent).toContain("Verifying");
-    expect(screen.getByTestId("switch-device-row-device-backup").textContent).not.toContain("Offline");
-    expect(screen.getByTestId("switch-device-status-device-backup").textContent).toContain("Checking");
+    expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+    expect(mockState.switchSavedDevice).toHaveBeenCalledWith("device-backup");
 
     await act(async () => {
       switchDeferred.resolve();
@@ -605,6 +708,14 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.queryByText("Checking all saved devices")).toBeNull();
     expect(screen.queryByText("Saved-device health")).toBeNull();
     expect(mockState.savedDeviceHealthChecks.refreshAll).toHaveBeenCalledTimes(1);
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenLastCalledWith(
+      mockState.savedDevices.devices,
+      true,
+      expect.objectContaining({
+        context: "switch-device-dialog",
+        configPulsePolicy: "visible-config-pulse-allowed",
+      }),
+    );
     expect(screen.queryByTestId("switch-device-refresh-all")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Online");

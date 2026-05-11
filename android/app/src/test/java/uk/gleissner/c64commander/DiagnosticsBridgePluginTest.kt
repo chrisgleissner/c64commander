@@ -16,6 +16,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
+import com.getcapacitor.PluginCall
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -24,6 +25,7 @@ import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 
 /** Test-only subclass that captures notifyListeners calls for verification. */
 private open class TestableDiagnosticsBridgePlugin : DiagnosticsBridgePlugin() {
@@ -225,5 +227,30 @@ class DiagnosticsBridgePluginTest {
         val method = Plugin::class.java.getDeclaredMethod("handleOnDestroy")
         method.isAccessible = true
         method.invoke(target)
+    }
+
+    @Test
+    fun emitLogWritesSwitchResultToLogcatAndBroadcastsDiagnosticsIntent() {
+        ShadowLog.clear()
+        val call = mock(PluginCall::class.java)
+        `when`(call.getString("level")).thenReturn("info")
+        `when`(call.getString("message"))
+                .thenReturn("C64_SWITCH_LAB_RESULT {\"status\":\"completed\"}")
+        `when`(call.getString("component")).thenReturn("switch-lab")
+
+        plugin.emitLog(call)
+
+        verify(call).resolve()
+        val logs = ShadowLog.getLogsForTag("DiagnosticsBridgePlugin")
+        assertTrue(logs.any { it.msg.contains("C64_SWITCH_LAB_RESULT") })
+
+        val broadcasts = Shadows.shadowOf(context as android.app.Application).broadcastIntents
+        val diagnostics = broadcasts.filter { it.action == AppLogger.ACTION_DIAGNOSTICS_LOG }
+        assertTrue(diagnostics.isNotEmpty())
+        assertEquals(
+                "C64_SWITCH_LAB_RESULT {\"status\":\"completed\"}",
+                diagnostics.last().getStringExtra(AppLogger.EXTRA_MESSAGE),
+        )
+        assertEquals("switch-lab", diagnostics.last().getStringExtra(AppLogger.EXTRA_COMPONENT))
     }
 }

@@ -30,6 +30,7 @@ RUN_VIDEO=false
 RUN_FUZZ=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
+RUN_TEST_DEVICE_SWITCH_SOAK=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
 RUN_DUMP_C64_TELNET_SCREENS=false
@@ -89,6 +90,10 @@ CONTRACT_SID_PATH=""
 CONTRACT_SID_SONGNR=""
 CONTRACT_PRG_PATH=""
 CONTRACT_PRG_ACTION="run"
+SWITCH_SOAK_ITERATIONS="8"
+SWITCH_SOAK_DELAY_MS="150"
+SWITCH_SOAK_TIMEOUT_MS="180000"
+SECONDARY_C64U_HOST="c64u"
 PRIMARY_ACTION=""
 PRIMARY_ACTION_SOURCE=""
 BUILD_FLAGS=()
@@ -126,6 +131,7 @@ Primary actions (exactly one; default build when omitted):
   --test-contract-replay
   --test-contract-parity
   --test-smoke
+  --test-device-switch-soak
   --docker-build
   --docker-start
   --screenshots
@@ -197,6 +203,14 @@ Smoke test modifiers (require --test-smoke):
   --c64u-target mock|real   mock=emulator only, real=emulator + real target
   --c64u-host <hostname>    Hostname/IP for real target (default: C64U)
 
+Device switch soak modifiers (require --test-device-switch-soak):
+  --c64u-target mock|real       mock=Playwright mock servers, real=Android HIL against saved devices
+  --c64u-host <hostname>        Primary real-device hostname (default: u64)
+  --secondary-c64u-host <host>  Secondary real-device hostname (default: c64u)
+  --switch-iterations <count>   Ping-pong iterations per run (default: 8)
+  --switch-delay-ms <ms>        Delay between switches (default: 150)
+  --switch-timeout-ms <ms>      Max wait for Android soak result (default: 180000)
+
   -h, --help               Show this help
 
 Examples:
@@ -222,6 +236,8 @@ Examples:
   ./build --test-contract-replay --c64u-target real --c64u-host c64u --contract-config tests/contract/config.stress.matrix.spike.json --contract-manifest test-results/contract/runs/RUN_ID/replay/manifest.json
   ./build --test-contract-parity --c64u-target real --c64u-host c64u --contract-auth on --contract-password changeme
   ./build --test-smoke --c64u-target real --c64u-host C64U
+  ./build --test-device-switch-soak --c64u-target mock
+  ./build --test-device-switch-soak --c64u-target real --c64u-host u64 --secondary-c64u-host c64u
 
 Notes:
   --screenshots       Runs full build/tests by default, then captures screenshots.
@@ -261,7 +277,7 @@ set_primary_action() {
 
 is_test_action() {
   case "$PRIMARY_ACTION" in
-    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-contract-replay|test-contract-parity|test-smoke)
+    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-contract-replay|test-contract-parity|test-smoke|test-device-switch-soak)
       return 0
       ;;
     test-maestro-docker)
@@ -808,6 +824,49 @@ build_docker_web_image() {
   (cd "$ROOT_DIR" && docker build -f web/Dockerfile -t "$DOCKER_IMAGE_TAG" .)
 }
 
+build_switch_soak_saved_devices_json() {
+  local primary_host="$1"
+  local secondary_host="$2"
+  node --input-type=module - "$primary_host" "$secondary_host" <<'NODE'
+const [primaryHost, secondaryHost] = process.argv.slice(2);
+const buildDevice = (id, name, host) => ({
+  id,
+  name,
+  nameSource: 'USER',
+  host,
+  httpPort: 80,
+  ftpPort: 21,
+  telnetPort: 23,
+  hasPassword: false,
+});
+process.stdout.write(
+  JSON.stringify([
+    buildDevice('debug-u64', 'u64', primaryHost),
+    buildDevice('debug-c64u', 'c64u', secondaryHost),
+  ]),
+);
+NODE
+}
+
+build_switch_soak_plan_json() {
+  local iterations="$1"
+  local delay_ms="$2"
+  node --input-type=module - "$iterations" "$delay_ms" <<'NODE'
+const [iterationsRaw, delayRaw] = process.argv.slice(2);
+const iterations = Number(iterationsRaw);
+const delayMs = Number(delayRaw);
+process.stdout.write(
+  JSON.stringify({
+    fromDeviceId: 'debug-u64',
+    toDeviceId: 'debug-c64u',
+    iterations: Number.isFinite(iterations) && iterations > 0 ? iterations : 8,
+    interSwitchDelayMs: Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 150,
+    autorun: true,
+  }),
+);
+NODE
+}
+
 start_docker_web_container() {
   require_cmd docker
   require_cmd curl
@@ -884,6 +943,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --test-smoke)
       set_primary_action "test-smoke" "$1"
+      shift
+      ;;
+    --test-device-switch-soak)
+      set_primary_action "test-device-switch-soak" "$1"
       shift
       ;;
     --screenshots)
@@ -1202,6 +1265,30 @@ while [[ $# -gt 0 ]]; do
       C64U_HOST_SET=true
       shift 2
       ;;
+    --secondary-c64u-host)
+      record_flag TARGET_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      SECONDARY_C64U_HOST="$2"
+      shift 2
+      ;;
+    --switch-iterations)
+      record_flag TEST_MODIFIERS "$1"
+      require_value "$1" "${2:-}"
+      SWITCH_SOAK_ITERATIONS="$2"
+      shift 2
+      ;;
+    --switch-delay-ms)
+      record_flag TEST_MODIFIERS "$1"
+      require_value "$1" "${2:-}"
+      SWITCH_SOAK_DELAY_MS="$2"
+      shift 2
+      ;;
+    --switch-timeout-ms)
+      record_flag TEST_MODIFIERS "$1"
+      require_value "$1" "${2:-}"
+      SWITCH_SOAK_TIMEOUT_MS="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -1261,7 +1348,7 @@ fi
 
 if [[ ${#TARGET_FLAGS[@]} -gt 0 ]]; then
   case "$PRIMARY_ACTION" in
-    test-contract|test-contract-replay|test-contract-parity|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
+    test-contract|test-contract-replay|test-contract-parity|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz|test-device-switch-soak)
       ;;
     *)
       echo "--c64u-target/--c64u-host are only valid with contract, Maestro, or smoke tests" >&2
@@ -1434,6 +1521,23 @@ case "$PRIMARY_ACTION" in
     RUN_SMOKE_ANDROID_REAL=false
     if [[ "$C64U_TARGET" == "real" ]]; then
       RUN_SMOKE_ANDROID_REAL=true
+    fi
+    ;;
+  test-device-switch-soak)
+    RUN_TEST=false
+    RUN_APK=false
+    RUN_INSTALL_APK=false
+    RUN_TEST_DEVICE_SWITCH_SOAK=true
+    if [[ "$C64U_TARGET" == "real" ]]; then
+      RUN_BUILD=true
+      RUN_APK=true
+      RUN_INSTALL_APK=true
+      if [[ "$C64U_HOST_SET" != "true" ]]; then
+        C64U_HOST="u64"
+      fi
+    else
+      RUN_BUILD=false
+      RUN_INSTALL=false
     fi
     ;;
   screenshots)
@@ -1613,6 +1717,12 @@ if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then
 fi
 
 if [[ "$RUN_BUILD" == "true" ]]; then
+  if [[ "$RUN_TEST_DEVICE_SWITCH_SOAK" == "true" && "$C64U_TARGET" == "real" ]]; then
+    export VITE_ENABLE_TEST_PROBES=1
+    export VITE_DEBUG_SAVED_DEVICES_JSON="$(build_switch_soak_saved_devices_json "$C64U_HOST" "$SECONDARY_C64U_HOST")"
+    export VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON="$(build_switch_soak_plan_json "$SWITCH_SOAK_ITERATIONS" "$SWITCH_SOAK_DELAY_MS")"
+  fi
+
   if [[ -z "${VITE_DEBUG_SAVED_DEVICES_JSON:-}" && "$APK_VARIANT" == "debug" ]]; then
     export VITE_DEBUG_SAVED_DEVICES_JSON="$(build_debug_saved_devices_bootstrap_json)"
   fi
@@ -1823,6 +1933,23 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
 
   log "Launching app"
   adb -s "$DEVICE_ID" shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
+fi
+
+if [[ "$RUN_TEST_DEVICE_SWITCH_SOAK" == "true" ]]; then
+  if [[ "$C64U_TARGET" == "real" ]]; then
+    log "Running Android device switch soak"
+    DEVICE_ID="$(resolve_adb_device_id "${DEVICE_ID:-}")"
+    (cd "$ROOT_DIR" && node scripts/run-device-switch-soak.mjs \
+      --target=real \
+      --serial="$DEVICE_ID" \
+      --timeoutMs="$SWITCH_SOAK_TIMEOUT_MS")
+  else
+    log "Running mock device switch soak"
+    (cd "$ROOT_DIR" && \
+      VITE_ENABLE_TEST_PROBES=1 \
+      VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON="$(build_switch_soak_plan_json "$SWITCH_SOAK_ITERATIONS" "$SWITCH_SOAK_DELAY_MS")" \
+      npm run test:device-switch-soak)
+  fi
 fi
 
 log "Done"

@@ -20,6 +20,8 @@ import type {
   BackendDecisionReason,
   TraceEventContextFields,
   PayloadPreview,
+  TelnetTraceRequestPayload,
+  TelnetTraceResponsePayload,
   TraceHeaders,
 } from "@/lib/tracing/types";
 import { classifyError, type FailureClassification } from "@/lib/tracing/failureTaxonomy";
@@ -514,19 +516,37 @@ export const recordTelnetOperation = (
     actionId: string;
     actionLabel: string;
     menuPath: [string, string];
+    hostname?: string | null;
+    port?: number | null;
     durationMs?: number | null;
     result: "success" | "failure";
     error: Error | null;
+    requestPayload?: TelnetTraceRequestPayload | null;
+    responsePayload?: TelnetTraceResponsePayload | null;
   },
 ) => {
   const { target, reason } = resolveBackendTarget(null);
   emitBackendDecision(action.origin, action.correlationId, target, reason);
+  const redactedRequestPayload = redactPayload(payload.requestPayload ?? null) as TelnetTraceRequestPayload | null;
+  const redactedResponsePayload = redactPayload(payload.responsePayload ?? null) as TelnetTraceResponsePayload | null;
+  const requestPayloadPreview = redactedRequestPayload
+    ? sanitizePayloadPreview(buildPayloadPreviewFromJson(redactedRequestPayload), payload.requestPayload ?? null)
+    : null;
+  const responsePayloadPreview = redactedResponsePayload
+    ? sanitizePayloadPreview(buildPayloadPreviewFromJson(redactedResponsePayload), payload.responsePayload ?? null)
+    : null;
   appendEvent("telnet-operation", action.origin, action.correlationId, {
     actionId: payload.actionId,
     actionLabel: payload.actionLabel,
     menuPath: payload.menuPath,
+    hostname: payload.hostname ?? null,
+    port: payload.port ?? null,
     durationMs: payload.durationMs ?? null,
     result: payload.result,
+    requestPayload: redactedRequestPayload,
+    requestPayloadPreview,
+    responsePayload: redactedResponsePayload,
+    responsePayloadPreview,
     error: payload.error ? redactErrorMessage(payload.error.message) : null,
     target,
   });

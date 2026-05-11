@@ -23,5 +23,13 @@ export const getTraceTitle = (event: TraceEvent): string => {
     return `Response ${data.status} (${data.durationMs}ms)`;
   }
 
+  if (event.type === "ftp-operation") {
+    return `FTP ${data.command ?? data.operation ?? "operation"} ${data.path ?? ""}`.trim();
+  }
+
+  if (event.type === "telnet-operation") {
+    return `TELNET ${data.actionLabel ?? data.actionId ?? "operation"}`.trim();
+  }
+
   return `${event.type} · ${event.origin}`;
 };
