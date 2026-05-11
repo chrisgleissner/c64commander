@@ -304,3 +304,100 @@ All five open questions resolved. The implementation plan is upgraded from a sma
 - Reset stale interaction state when switching target devices.
 - Suppress deterministic config-item fallback after readiness-gate category failure.
 - Update README Home screenshot references and add deterministic README screenshot coverage test.
+
+## Implemented Changes
+
+- `README.md` Home screenshot table now explicitly covers the intro image, light top Home row, dark top Home row, and existing full Home-page section coverage.
+- `tests/unit/readmeScreenshotCoverage.test.ts` validates the required README screenshot references and file existence.
+- `src/lib/diagnostics/healthCheckEngine.ts` now accepts explicit health-check run contexts:
+  - `switch-device-dialog` with `visible-config-pulse-allowed`.
+  - `manual-diagnostics` with `visible-config-pulse-allowed`.
+  - `background-maintenance` with `read-only`.
+- `src/hooks/useSavedDeviceHealthChecks.ts` receives the context from callers; closed/background saved-device checks stay read-only while the open Switch Device sheet can run the CONFIG pulse.
+- `src/components/UnifiedHealthBadge.tsx` passes the switch-dialog context only while the sheet is open, changes the sheet title to `Switch Device`, and closes the sheet immediately when a target row is tapped while verification continues.
+- `src/hooks/useSavedDeviceSwitching.ts` resets stale interaction guard state on saved-device switch and cancels old C64 query families asynchronously so previous-device work does not block the new target.
+- `src/lib/deviceInteraction/deviceInteractionManager.ts` allows user-intent requests through `DISCOVERING`, keeping Home quick actions usable during the switch handoff.
+- `src/lib/c64api.ts` skips item fallback fan-out when category fetch fails with `"Device not ready for requests"`; other category failures still use the item fallback path.
+- `src/lib/diagnostics/healthModel.ts` classifies abort/cancel/superseded events as expected cancellation noise so stale switch cancellations are not promoted as current primary health problems.
+
+## Automated Validation
+
+- Focused regression slice passed:
+
+  ```bash
+  npx vitest run tests/unit/readmeScreenshotCoverage.test.ts tests/unit/hooks/useSavedDeviceHealthChecks.test.tsx tests/unit/components/UnifiedHealthBadge.test.tsx tests/unit/lib/diagnostics/healthCheckEngine.test.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts tests/unit/hooks/useSavedDeviceSwitching.test.tsx tests/unit/c64api.branches.test.ts tests/unit/lib/diagnostics/healthModel.test.ts
+  ```
+
+  Result: 8 files, 309 tests passed.
+
+- `npm run lint` initially failed on Prettier drift in `tests/unit/hooks/useAppConfigState.test.tsx` and `tests/unit/pages/HomePage.test.tsx`; ran Prettier on those two test files only, then `npm run lint` passed.
+- `npm run test:coverage` passed with branch coverage `91.86%` globally.
+- `npm run build` passed. Existing Vite warnings remained: Node `url` browser externalization, circular chunk warning, and dynamic/static import warning.
+- Targeted screenshot refresh passed:
+
+  ```bash
+  npx playwright test playwright/screenshots.spec.ts -g "capture switch-device screenshots"
+  ```
+
+  Result: 1 test passed. Refreshed only the Switch Device screenshots because the visible title changed.
+
+- `npm run cap:build` passed; iOS sync was skipped by the Linux host as expected.
+- `npm run android:apk` passed and produced `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`.
+
+## Screenshot Updates
+
+- Updated Switch Device screenshots under:
+  - `docs/img/app/diagnostics/switch-device/profiles/compact/`
+  - `docs/img/app/diagnostics/switch-device/profiles/medium/`
+  - `docs/img/app/diagnostics/switch-device/profiles/expanded/`
+- Files refreshed in each profile: `01-picker.png` through `06-picker-one-unhealthy-expanded.png`.
+- No full README screenshot corpus refresh was needed; README coverage uses existing Home screenshot assets and is enforced by `tests/unit/readmeScreenshotCoverage.test.ts`.
+
+## Android Deploy And HIL Evidence
+
+- Attached Pixel 4 detected as `9B081FFAZ001WX`.
+- Initial install failed with Android version downgrade protection:
+
+  ```text
+  INSTALL_FAILED_VERSION_DOWNGRADE: Downgrade detected: Update version code 1968 is older than current 2843
+  ```
+
+- Per repository instructions, uninstalled `uk.gleissner.c64commander` and retried the newest APK. Install succeeded:
+
+  ```bash
+  adb -s 9B081FFAZ001WX uninstall uk.gleissner.c64commander
+  adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk
+  ```
+
+- Launched the app with:
+
+  ```bash
+  adb -s 9B081FFAZ001WX shell monkey -p uk.gleissner.c64commander 1
+  ```
+
+- Foreground proof:
+  - `topResumedActivity=uk.gleissner.c64commander/.MainActivity`
+  - installed package metadata: `versionCode=1968`, `versionName=0.7.9-rc1`
+  - screenshot: `.tmp/android-check/device-switch-fix-launch.png`
+
+- Hardware reachability from the workstation:
+  - `http://u64/v1/info` returned `Ultimate 64 Elite`, firmware `3.14e`, unique id `38C1BA`.
+  - `http://c64u/v1/info` connected to `192.168.1.167:80` but reset the HTTP connection; ICMP ping to `c64u` succeeded.
+- Hardware reachability from the Pixel 4:
+  - `adb shell ping -c 2 -W 2 u64` succeeded.
+  - `adb shell ping -c 2 -W 2 c64u` succeeded.
+
+- Because uninstalling for the version downgrade cleared app data, seeded two saved devices through WebView CDP localStorage for HIL:
+  - `hil-c64u` host `c64u`, selected first.
+  - `hil-u64` host `u64`.
+- Opened Switch Device via WebView CDP, waited for a switch-dialog health poll, and captured `.tmp/android-check/switch-device-sheet-after-poll.png`.
+- Measured switch handoff timings on the Pixel 4:
+  - `c64u -> u64`: sheet closed in `1147 ms`, `selectedDeviceId=hil-u64`, current host `u64`, Home title present, quick-action Reset/Reboot buttons were not disabled. Screenshot: `.tmp/android-check/after-switch-u64.png`.
+  - `u64 -> c64u`: sheet closed in `1314 ms`, `selectedDeviceId=hil-c64u`, current host `c64u`, Home title present, quick-action Reset/Reboot buttons were not disabled. Screenshot: `.tmp/android-check/after-switch-c64u.png`.
+- During the reverse switch sheet state, rows were not both collapsed to offline: `c64u` showed `Checking ... Healthy` while `u64` was selected and `Checking ... Unhealthy`.
+
+## Remaining HIL Limits / Risks
+
+- Full acceptance HIL with two healthy REST devices was blocked by the local `c64u` HTTP service resetting `/v1/info` despite ICMP reachability.
+- Visible LED/config pulse verification requires human observation of the physical C64 device. Automated tests prove the app calls CONFIG only for `switch-device-dialog`/manual contexts and skips it for background read-only context; this run could not physically confirm the visible light pulse.
+- A fresh post-run diagnostics ZIP was not exported from the device during this automated session. WebView-local logs were inspected through CDP and still contained expected warnings from the partially unhealthy hardware state, especially `c64u` HTTP failures; this is not a clean signal for duplicate-warning acceptance because the run was performed after app-data reseeding and against a failing `c64u` REST endpoint.

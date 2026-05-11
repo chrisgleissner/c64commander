@@ -56,6 +56,25 @@
 - Config fallback does not create a burst of deterministic `"Device not ready for requests"` item failures.
 - Focused regression tests pass, coverage remains >= 91% branch, and HIL/deploy evidence is recorded in `WORKLOG.md`.
 
+## Completion Status
+
+- Implemented README screenshot coverage, explicit health-check contexts, switch-dialog pulse policy, background read-only health checks, switch handoff responsiveness changes, readiness-gated config fallback suppression, and expected-cancellation health-model filtering.
+- Added focused regression coverage for README references, switch-dialog/background CONFIG pulse policy, warning/cancellation handling, device-switch handoff, readiness guard behavior, saved-device query cancellation, config fallback suppression, and health-model cancellation classification.
+- Validation completed:
+  - focused Vitest regression slice passed.
+  - `npm run lint` passed after Prettier-only cleanup of two test files.
+  - `npm run test:coverage` passed with global branch coverage `91.86%`.
+  - `npm run build` passed.
+  - targeted Switch Device screenshot refresh passed.
+  - `npm run cap:build` passed.
+  - `npm run android:apk` passed.
+- Pixel 4 deploy completed after uninstalling the newer installed package that blocked the debug APK as a version downgrade.
+- Pixel 4 HIL switch timing evidence:
+  - `c64u -> u64` sheet closed in `1147 ms`.
+  - `u64 -> c64u` sheet closed in `1314 ms`.
+  - Home route remained visible and Reset/Reboot quick actions were not disabled after each switch.
+- Residual HIL blocker: the local `c64u` host pings but resets `/v1/info`, so a clean two-healthy-device REST proof and physical visible-pulse observation were not completed in this session. Details are recorded in `WORKLOG.md`.
+
 # PLANS - Saved-Device Health Regression Fix (2026-05-10)
 
 ## Classification
