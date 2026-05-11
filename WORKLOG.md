@@ -1,3 +1,20 @@
+## [2026-05-11] Telnet diagnostics preservation and `c64u` probe hardening
+
+- Steering follow-up implemented for the active device-switch/diagnostics plan: appended the plan TODO for intermittent `c64u` TELNET probe failures and missing transport-preserved Diagnostics evidence.
+- Updated [src/lib/diagnostics/healthCheckEngine.ts](/home/chris/dev/c64/c64commander/src/lib/diagnostics/healthCheckEngine.ts) so the TELNET health probe now records structured `telnet-operation` diagnostics traces on both success and failure, instead of only writing generic app logs. This makes failed TELNET calls visible under the Diagnostics contributor filter the same way REST and FTP calls already were.
+- Reduced TELNET probe brittleness against `c64u` by aligning the connect budget with the probe timeout and making the visible-text drain less aggressive after connect: post-data idle wait increased from `20 ms` to `100 ms`, and the empty-read budget increased from `1` to `2`.
+- Updated [src/lib/tracing/traceFormatter.ts](/home/chris/dev/c64/c64commander/src/lib/tracing/traceFormatter.ts) so FTP and TELNET trace rows render transport-specific titles instead of generic `*-operation` placeholders.
+- Added regression coverage in [tests/unit/lib/diagnostics/healthCheckEngine.test.ts](/home/chris/dev/c64/c64commander/tests/unit/lib/diagnostics/healthCheckEngine.test.ts) for TELNET health-probe trace emission and the revised probe timing budget, and in [tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx](/home/chris/dev/c64/c64commander/tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx) for finding TELNET traces through the Diagnostics contributor filter.
+- Validation:
+  - `runTests` passed for `tests/unit/lib/diagnostics/healthCheckEngine.test.ts` and `tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx`.
+  - `get_errors` reported no TypeScript diagnostics in the touched source and test files.
+  - `npm run lint` passed.
+  - `npm run build` passed.
+  - `env -u VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON npm run test:coverage` passed with global branch coverage `91.84%`. The first coverage attempt inherited a stale soak env and falsely routed `App.runtime` into the switch lab; rerunning with that env cleared restored the normal suite.
+  - `npm run cap:build` passed.
+  - `npm run android:apk` passed.
+  - Reinstalled `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` to Pixel 4 `9B081FFAZ001WX`, relaunched `uk.gleissner.c64commander/.MainActivity`, and captured the live Home screen after waking the device from doze.
+
 # Slider Responsiveness Research Worklog
 
 Investigation only. No source-code changes, no commits.

@@ -44,6 +44,7 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 vi.mock("@/lib/diagnostics/latencyTracker", () => ({
   computeLatencyPercentiles: vi.fn(() => ({ p50: 10, p90: 20, p99: 30 })),
+  recordLatencySample: vi.fn(),
 }));
 
 vi.mock("@/lib/diagnostics/healthHistory", async (importOriginal) => {
@@ -112,6 +113,7 @@ vi.mock("@/lib/telnet/telnetConfig", () => ({
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: vi.fn(() => ({ state: "REAL_CONNECTED" })),
+  isRealDeviceStickyLockEnabled: vi.fn(() => false),
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
@@ -132,6 +134,7 @@ import {
 } from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
+import { getTraceEvents, resetTraceSession } from "@/lib/tracing/traceSession";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -203,12 +206,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   clearHealthHistory();
   resetHealthCheckStateSnapshot();
+  resetTraceSession();
   vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "c64u.local" });
 });
 
 afterEach(() => {
   cancelHealthCheck("Test cleanup");
   resetHealthCheckStateSnapshot();
+  resetTraceSession();
   vi.clearAllMocks();
 });
 
@@ -1013,7 +1018,7 @@ describe("runHealthCheck — TELNET probe", () => {
 
     expect(result!.probes.TELNET.outcome).toBe("Fail");
     expect(result!.probes.TELNET.reason).toBe("No telnet response");
-    expect(mockTelnetRead).toHaveBeenCalledTimes(1);
+    expect(mockTelnetRead).toHaveBeenCalledTimes(2);
   });
 
   it("accepts TELNET when the probe receives visible text after telnet negotiation bytes", async () => {
@@ -1098,8 +1103,23 @@ describe("runHealthCheck — TELNET probe", () => {
 
     await runHealthCheck();
 
-    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 2000 });
+    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 3000 });
     expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23);
+  });
+
+  it("records the TELNET health probe as TELNET diagnostics trace evidence", async () => {
+    setupAllProbesSuccess();
+
+    await runHealthCheck();
+
+    expect(
+      getTraceEvents().some(
+        (event) =>
+          event.type === "telnet-operation" &&
+          event.data.actionId === "health-check" &&
+          event.data.actionLabel === "Health check TELNET probe",
+      ),
+    ).toBe(true);
   });
 
   it("elicits banner data with a plain CRLF after connecting", async () => {

@@ -1057,6 +1057,70 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("FTP list");
   });
 
+  it("finds TELNET traces through the contributor filter", () => {
+    setViewportWidth(600);
+    const now = Date.now();
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Traces"]),
+      errorLogs: [],
+      logs: [],
+      actionSummaries: [],
+      traceEvents: [
+        {
+          id: "trace-telnet-health",
+          timestamp: new Date(now).toISOString(),
+          relativeMs: 0,
+          type: "telnet-operation",
+          origin: "system",
+          correlationId: "health-check-telnet",
+          data: {
+            lifecycleState: "foreground",
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            actionId: "health-check",
+            actionLabel: "Health check TELNET probe",
+            menuPath: ["Diagnostics", "Health check"],
+            durationMs: 180,
+            result: "failure",
+            error: "No telnet response",
+          },
+        },
+        {
+          id: "trace-ftp-list",
+          timestamp: new Date(now - 1000).toISOString(),
+          relativeMs: 1,
+          type: "ftp-operation",
+          origin: "system",
+          correlationId: "health-check-ftp",
+          data: {
+            lifecycleState: "foreground",
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            operation: "list",
+            command: "LIST",
+            hostname: "c64u",
+            port: 21,
+            path: "/",
+            durationMs: 90,
+            result: "success",
+            error: null,
+          },
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    fireEvent.click(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "TELNET" }));
+
+    expect(screen.getByTestId("evidence-list")).toHaveTextContent("Health check TELNET probe");
+    expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("FTP LIST /");
+  });
+
   it("suppresses routine system health checks that remain in progress", () => {
     setViewportWidth(600);
     const now = Date.now();

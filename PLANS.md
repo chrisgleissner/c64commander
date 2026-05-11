@@ -60,11 +60,18 @@
 
 - Implemented README screenshot coverage, explicit health-check contexts, switch-dialog pulse policy, background read-only health checks, switch handoff responsiveness changes, readiness-gated config fallback suppression, and expected-cancellation health-model filtering.
 - Added focused regression coverage for README references, switch-dialog/background CONFIG pulse policy, warning/cancellation handling, device-switch handoff, readiness guard behavior, saved-device query cancellation, config fallback suppression, and health-model cancellation classification.
+- TODO: stabilize the `c64u` TELNET health probe against intermittent empty-read/banner timing, and preserve TELNET/FTP/REST transport calls as contributor-filterable Diagnostics evidence so failed calls remain visible in the Diagnostics filter.
+- Steering follow-up completed: the TELNET health probe now emits `telnet-operation` Diagnostics traces on success/failure, TELNET trace titles are transport-specific, contributor filtering finds TELNET traces in Diagnostics, and the probe now tolerates the slower `c64u` empty-read/banner timing budget.
 - Validation completed:
   - focused Vitest regression slice passed.
+  - focused TELNET diagnostics regressions passed.
   - `npm run lint` passed after Prettier-only cleanup of two test files.
   - `npm run test:coverage` passed with global branch coverage `91.86%`.
   - `npm run build` passed.
+  - current steering pass: `npm run lint` passed.
+  - current steering pass: `env -u VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON npm run test:coverage` passed with global branch coverage `91.84%` after clearing a stale soak env that incorrectly auto-routed `App` into the switch lab.
+  - current steering pass: `npm run build` passed.
+  - current steering pass: `npm run cap:build` and `npm run android:apk` passed, then Pixel 4 `9B081FFAZ001WX` was reinstalled with `c64commander-0.7.9-rc1-debug.apk` and relaunched to the Home screen.
   - targeted Switch Device screenshot refresh passed.
   - `npm run cap:build` passed.
   - `npm run android:apk` passed.

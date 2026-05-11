@@ -33,6 +33,7 @@ import { computeLatencyPercentiles } from "@/lib/diagnostics/latencyTracker";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
+import { recordTelnetOperation } from "@/lib/tracing/traceSession";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
   { category: "LED Strip Settings", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
@@ -54,12 +55,12 @@ const GLOBAL_RUN_TIMEOUT_MS = 12_000;
 const STALE_RUN_GRACE_MS = 1500;
 const PRESENTATION_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"];
 const CONFIG_PULSE_DELAY_MS = 80;
-const TELNET_HEALTH_CONNECT_TIMEOUT_MS = 2_000;
+const TELNET_HEALTH_CONNECT_TIMEOUT_MS = PROBE_TIMEOUT_MS.TELNET;
 const TELNET_IDLE_TIMEOUT_MS = 120;
-const TELNET_POST_DATA_IDLE_TIMEOUT_MS = 20;
+const TELNET_POST_DATA_IDLE_TIMEOUT_MS = 100;
 const TELNET_LOGIN_INITIAL_TIMEOUT_MS = 1_000;
 const TELNET_LOGIN_QUIET_TIMEOUT_MS = 200;
-const TELNET_MAX_EMPTY_READS = 1;
+const TELNET_MAX_EMPTY_READS = 2;
 const TELNET_LOGIN_MAX_EMPTY_READS = 4;
 
 export type HealthCheckProbeType = "REST" | "JIFFY" | "RASTER" | "CONFIG" | "FTP" | "TELNET";
@@ -927,53 +928,73 @@ const authenticateTelnetIfNeeded = async (
 const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   const transport = createTelnetClient({ connectTimeoutMs: TELNET_HEALTH_CONNECT_TIMEOUT_MS });
+  const traceAction = {
+    correlationId: `health-check-telnet-${startMs}`,
+    origin: "system" as const,
+    name: "health-check.telnet",
+    componentName: "HealthCheckEngine",
+  };
 
   try {
     return await withTelnetInteraction(
       {
         actionId: "health-check",
         intent: "system",
-        action: {
-          correlationId: `health-check-telnet-${startMs}`,
-          origin: "system",
-          name: "health-check.telnet",
-          componentName: "HealthCheckEngine",
-        },
+        action: traceAction,
       },
       async () => {
-        await transport.connect(runtime.host, runtime.telnetPort);
-        const prefetchedText = await authenticateTelnetIfNeeded(transport, signal, runtime.password);
-        if (signal.aborted) {
-          throw createAbortError();
+        try {
+          await transport.connect(runtime.host, runtime.telnetPort);
+          const prefetchedText = await authenticateTelnetIfNeeded(transport, signal, runtime.password);
+          if (signal.aborted) {
+            throw createAbortError();
+          }
+
+          await transport.send(textEncoder.encode(TELNET_AUTH_ENTER));
+          const visibleText = mergeVisibleTelnetText(
+            prefetchedText,
+            await readTelnetVisibleText(transport, signal, {
+              maxEmptyReads: TELNET_MAX_EMPTY_READS,
+              initialTimeoutMs: TELNET_IDLE_TIMEOUT_MS,
+              quietTimeoutMs: TELNET_POST_DATA_IDLE_TIMEOUT_MS,
+            }),
+          );
+          const elapsedMs = Date.now() - startMs;
+          addLog("debug", "Health check TELNET probe banner", {
+            host: runtime.host,
+            port: runtime.telnetPort,
+            elapsedMs,
+            visibleText: visibleText.slice(0, 120),
+            connectTimeoutMs: TELNET_HEALTH_CONNECT_TIMEOUT_MS,
+          });
+
+          const result = hasTelnetFailureMarker(visibleText)
+            ? makeRecord("TELNET", "Fail", elapsedMs, "telnet failure marker present", startMs)
+            : hasMeaningfulTelnetOutput(visibleText)
+              ? makeRecord("TELNET", "Success", elapsedMs, null, startMs)
+              : makeRecord("TELNET", "Fail", elapsedMs, "No telnet response", startMs);
+
+          recordTelnetOperation(traceAction, {
+            actionId: "health-check",
+            actionLabel: "Health check TELNET probe",
+            menuPath: ["Diagnostics", "Health check"],
+            durationMs: elapsedMs,
+            result: result.outcome === "Success" ? "success" : "failure",
+            error: result.reason ? new Error(result.reason) : null,
+          });
+
+          return result;
+        } catch (error) {
+          recordTelnetOperation(traceAction, {
+            actionId: "health-check",
+            actionLabel: "Health check TELNET probe",
+            menuPath: ["Diagnostics", "Health check"],
+            durationMs: Date.now() - startMs,
+            result: "failure",
+            error: error as Error,
+          });
+          throw error;
         }
-
-        await transport.send(textEncoder.encode(TELNET_AUTH_ENTER));
-        const visibleText = mergeVisibleTelnetText(
-          prefetchedText,
-          await readTelnetVisibleText(transport, signal, {
-            maxEmptyReads: TELNET_MAX_EMPTY_READS,
-            initialTimeoutMs: TELNET_IDLE_TIMEOUT_MS,
-            quietTimeoutMs: TELNET_POST_DATA_IDLE_TIMEOUT_MS,
-          }),
-        );
-        const elapsedMs = Date.now() - startMs;
-        addLog("debug", "Health check TELNET probe banner", {
-          host: runtime.host,
-          port: runtime.telnetPort,
-          elapsedMs,
-          visibleText: visibleText.slice(0, 120),
-          connectTimeoutMs: TELNET_HEALTH_CONNECT_TIMEOUT_MS,
-        });
-
-        if (hasTelnetFailureMarker(visibleText)) {
-          return makeRecord("TELNET", "Fail", elapsedMs, "telnet failure marker present", startMs);
-        }
-
-        if (hasMeaningfulTelnetOutput(visibleText)) {
-          return makeRecord("TELNET", "Success", elapsedMs, null, startMs);
-        }
-
-        return makeRecord("TELNET", "Fail", elapsedMs, "No telnet response", startMs);
       },
     );
   } catch (error) {
