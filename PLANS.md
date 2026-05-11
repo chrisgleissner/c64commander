@@ -1,3 +1,61 @@
+# PLANS - Device Switch Health, Config Pulse, Warning Dedup, README Coverage (2026-05-11)
+
+## Classification
+
+- Classification: `DOC_PLUS_CODE` and `UI_CHANGE`.
+- Scope: switch-device health polling/pulse policy, warning noise from health/config fallback/readiness gates, device-switch handoff responsiveness/readiness isolation, README Home screenshot references, and focused regression tests.
+- Validation target: focused Vitest slices first, then `npm run lint`, `npm run test:coverage`, `npm run build`, Android APK build/deploy to Pixel 4, and hardware/HIL evidence where reachable.
+
+## Initial Investigation Checklist
+
+- [x] Read `README.md`, `.github/copilot-instructions.md`, and `docs/ux-guidelines.md`.
+- [x] Inspect existing `PLANS.md` and `WORKLOG.md` before editing.
+- [x] Inspect README Home screenshot references and `docs/img/app/home/**`.
+- [x] Inspect Switch Device bottom sheet in `src/components/UnifiedHealthBadge.tsx`.
+- [x] Inspect saved-device health polling lifecycle in `src/hooks/useSavedDeviceHealthChecks.ts`.
+- [x] Inspect health-check service/API in `src/lib/diagnostics/healthCheckEngine.ts`.
+- [x] Locate `"Skipped: passive mode disables CONFIG pulse"` source in health-check target mode handling.
+- [x] Locate `"Device not ready for requests"` guard in `src/lib/deviceInteraction/deviceInteractionManager.ts`.
+- [x] Inspect device readiness model in `src/lib/deviceInteraction/deviceStateStore.ts`.
+- [x] Inspect device-switch cancellation/query invalidation in `src/hooks/useSavedDeviceSwitching.ts` and `src/lib/query/c64QueryInvalidation.ts`.
+- [x] Inspect category/config fallback fan-out in `src/lib/c64api.ts`.
+- [x] Inspect existing tests for saved-device health, switching, health checks, c64api config fallback, and README screenshot layout.
+
+## Verified Findings
+
+- README Home currently references `docs/img/app/home/00-overview-light.png` as `Home overview (Light)`, but that file is the C64 Commander intro/logo screen.
+- The actual light top Home screenshot already exists at `docs/img/app/home/sections/01-system-info-to-cpu-ram.png`; dark top is `docs/img/app/home/01-overview-dark.png`.
+- Switch Device UI lives in `src/components/UnifiedHealthBadge.tsx`; it opens on long press/context menu and calls `refreshAll()` once when opened.
+- `useSavedDeviceHealthChecks` also runs when the picker is closed because `UnifiedHealthBadge` passes `enabled=canSwitchDevices`; it currently always calls `runHealthCheckForTarget(..., { mode: "passive" })`.
+- `runHealthCheckForTarget` supports only `mode: "full" | "passive"`, and passive mode skips CONFIG with reason `Skipped: passive mode disables CONFIG pulse`.
+- The CONFIG pulse is the only health subprobe that writes via `setConfigValue`; REST/JIFFY/RASTER/FTP/TELNET are read/connect probes.
+- The readiness guard is `shouldBlockForState` in `deviceInteractionManager.ts`; it blocks non-allowed REST calls while state is `UNKNOWN`, `DISCOVERING`, or `ERROR` with message `"Device not ready for requests"`.
+- `deviceStateStore.ts` uses one global selected-device readiness model; switching hosts can leave state in `DISCOVERING`/`BUSY` until connection/request transitions settle.
+- `useSavedDeviceSwitching` selects the target immediately, updates runtime host, waits for `verifyCurrentConnectionTarget`, then invalidates and refetches active route queries; heavy config reads can therefore start during the handoff.
+- `C64API.getConfigItems` logs `"Category config fetch failed; falling back to item fetches"` and fans out per-item fetches for every requested item after most category failures, including deterministic readiness gate failures.
+
+## Working Fix Direction
+
+1. Replace/augment fragile health-check `mode` with explicit health-check context:
+   - `switch-device-dialog`: visible CONFIG pulse allowed.
+   - `background-maintenance`: read-only only.
+   - `manual-diagnostics`: visible CONFIG pulse allowed for the existing diagnostics health check behavior.
+2. Pass picker-open context into `useSavedDeviceHealthChecks`; closed/cold polling stays read-only, open picker polling uses switch-device dialog context.
+3. Keep last-known per-device health result visible while a new cycle is pending; do not collapse pending/cancelled checks to offline.
+4. Make switch selection close the sheet promptly after the target runtime host is applied; defer route query invalidation/refetch until verification settles so Home can become interactive quickly.
+5. Reset interaction guard state on saved-device switch so stale backoff/circuit/busy state does not poison the target generation.
+6. Stop deterministic item-fallback fan-out when category fetch failed with `"Device not ready for requests"`; keep fallback for HTTP/server/partial category failures where item reads can still succeed.
+7. Add README screenshot validation coverage for intro, light top, dark top, and full Home page section coverage.
+
+## Termination Criteria
+
+- README Home table references intro, light top, dark top, and sections `01` through `05`, and all referenced files exist.
+- Switch-device dialog health checks can run CONFIG pulse; closed/background saved-device checks cannot.
+- Duplicate passive/config-pulse warnings are not emitted for one device/cycle, and expected switch cancellation is not promoted to warning spam.
+- Device switch handoff is generation-safe enough for the UI to close promptly and leave quick actions enabled from last-known/active connection state while verification continues.
+- Config fallback does not create a burst of deterministic `"Device not ready for requests"` item failures.
+- Focused regression tests pass, coverage remains >= 91% branch, and HIL/deploy evidence is recorded in `WORKLOG.md`.
+
 # PLANS - Saved-Device Health Regression Fix (2026-05-10)
 
 ## Classification

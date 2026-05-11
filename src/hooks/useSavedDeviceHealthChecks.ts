@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  HEALTH_CHECK_CONTEXTS,
   runHealthCheckForTarget,
+  type HealthCheckRunContext,
   type HealthCheckProbeRecord,
   type HealthCheckProbeType,
   type HealthCheckRunResult,
@@ -75,7 +77,11 @@ const readSeededSavedDeviceHealthState = (): SavedDeviceHealthSeedState | null =
   return window.__c64uDiagnosticsTestBridge?.getSavedDeviceHealthSnapshot?.() ?? null;
 };
 
-export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: boolean): UseSavedDeviceHealthChecksResult {
+export function useSavedDeviceHealthChecks(
+  devices: SavedDevice[],
+  enabled: boolean,
+  context: HealthCheckRunContext = HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
+): UseSavedDeviceHealthChecksResult {
   const [byDeviceId, setByDeviceId] = useState<Record<string, SavedDeviceHealthSnapshot>>(() =>
     mergeDeviceState({}, devices),
   );
@@ -107,7 +113,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
       window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
   }, []);
 
-  const noopRefreshAll = useCallback(() => { }, []);
+  const noopRefreshAll = useCallback(() => {}, []);
 
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
     if (!seededState) return null;
@@ -195,9 +201,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
                 password,
               },
               {
-                // This poller also runs on cold boot while the switcher is closed,
-                // so it must stay passive and never emit a visible CONFIG pulse.
-                mode: "passive",
+                context,
                 signal: controller.signal,
                 onProgress: ({ liveProbes, probeStates }) => {
                   if (cycleTokenRef.current !== cycleToken || controller.signal.aborted) {
@@ -266,7 +270,7 @@ export function useSavedDeviceHealthChecks(devices: SavedDevice[], enabled: bool
         lastCompletedAt: new Date().toISOString(),
       }));
     },
-    [cancelAll, devices, enabled, updateDevice],
+    [cancelAll, context, devices, enabled, updateDevice],
   );
 
   const refreshAll = useCallback(() => {

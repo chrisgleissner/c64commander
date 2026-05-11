@@ -128,6 +128,7 @@ import {
   recoverStaleHealthCheckRun,
   runHealthCheck,
   runHealthCheckForTarget,
+  HEALTH_CHECK_CONTEXTS,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -377,7 +378,7 @@ describe("runHealthCheck — all-success path", () => {
 });
 
 describe("runHealthCheckForTarget", () => {
-  it("runs a per-device check with config pulse enabled and uses target ports and password", async () => {
+  it("allows the switch-device dialog context to run the visible config pulse and uses target ports and password", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -387,7 +388,7 @@ describe("runHealthCheckForTarget", () => {
         telnetPort: 2323,
         password: "secret",
       },
-      { mode: "full" },
+      { context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog },
     );
 
     expect(result.connectivity).toBe("Online");
@@ -405,7 +406,25 @@ describe("runHealthCheckForTarget", () => {
     expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323);
   });
 
-  it("skips the config pulse in passive mode so closed-switcher checks stay read-only", async () => {
+  it("keeps background-maintenance checks read-only by skipping the config pulse", async () => {
+    setupAllProbesSuccess();
+
+    const result = await runHealthCheckForTarget(
+      {
+        deviceHost: "backup-u64:8080",
+        ftpPort: 2021,
+        telnetPort: 2323,
+        password: "secret",
+      },
+      { context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance },
+    );
+
+    expect(result.probes.CONFIG.outcome).toBe("Skipped");
+    expect(result.probes.CONFIG.reason).toContain("background-maintenance");
+    expect(mockSetConfigValue).not.toHaveBeenCalled();
+  });
+
+  it("keeps passive mode backward compatible with the read-only background context", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -419,7 +438,6 @@ describe("runHealthCheckForTarget", () => {
     );
 
     expect(result.probes.CONFIG.outcome).toBe("Skipped");
-    expect(result.probes.CONFIG.reason).toContain("passive mode");
     expect(mockSetConfigValue).not.toHaveBeenCalled();
   });
 
@@ -438,7 +456,7 @@ describe("runHealthCheckForTarget", () => {
         telnetPort: 2323,
         password: "target-secret",
       },
-      { mode: "full" },
+      { context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog },
     );
 
     expect(result.connectivity).toBe("Offline");

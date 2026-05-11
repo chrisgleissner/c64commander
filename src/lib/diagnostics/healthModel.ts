@@ -225,6 +225,22 @@ const healthFromRatio = (failed: number, total: number): HealthState => {
 
 const isExpectedTraceFailure = (event: TraceEvent): boolean => event.data.expectedFailure === true;
 
+const isExpectedCancellationFailure = (event: TraceEvent): boolean => {
+  const values = [event.data.error, event.data.message, event.data.reason]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.toLowerCase());
+  return values.some(
+    (value) =>
+      value.includes("abort") ||
+      value.includes("cancelled") ||
+      value.includes("canceled") ||
+      value.includes("superseded by a new"),
+  );
+};
+
+const isExpectedNonDiagnosticFailure = (event: TraceEvent): boolean =>
+  isExpectedTraceFailure(event) || isExpectedCancellationFailure(event);
+
 const isSuccessfulRestResponse = (event: TraceEvent): boolean => {
   const status = typeof event.data.status === "number" ? event.data.status : null;
   const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
@@ -245,12 +261,12 @@ export const deriveRestContributorHealth = (events: TraceEvent[]): ContributorHe
   const windowEvents = restHealthWindowEvents(events);
   let failed = 0;
   for (const e of windowEvents) {
-    if (isExpectedTraceFailure(e)) continue;
+    if (isExpectedNonDiagnosticFailure(e)) continue;
     const status = typeof e.data.status === "number" ? e.data.status : null;
     const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
     if ((status !== null && status >= 400) || hasError) failed += 1;
   }
-  const total = windowEvents.filter((event) => !isExpectedTraceFailure(event)).length;
+  const total = windowEvents.filter((event) => !isExpectedNonDiagnosticFailure(event)).length;
   return {
     state: healthFromRatio(failed, total),
     problemCount: failed,
@@ -298,7 +314,12 @@ export const deriveTelnetContributorHealth = (events: TraceEvent[]): Contributor
 // §6.3 — App contributor health from error trace events in 5-minute window
 export const deriveAppContributorHealth = (events: TraceEvent[]): ContributorHealth => {
   const windowEvents = events.filter(
-    (e) => e.type === "error" && isInCurrentWindow(e) && e.data.isExpected !== true && !isPreConnectionGatingError(e),
+    (e) =>
+      e.type === "error" &&
+      isInCurrentWindow(e) &&
+      e.data.isExpected !== true &&
+      !isExpectedCancellationFailure(e) &&
+      !isPreConnectionGatingError(e),
   );
   const total = windowEvents.length;
   const state: HealthState = total === 0 ? "Idle" : total >= 5 ? "Unhealthy" : "Degraded";
@@ -374,7 +395,7 @@ export const derivePrimaryProblem = (
   for (const e of events) {
     if (e.type === "rest-response") {
       if (!restHealthEvents.has(e)) continue;
-      if (isExpectedTraceFailure(e)) continue;
+      if (isExpectedNonDiagnosticFailure(e)) continue;
       const status = typeof e.data.status === "number" ? e.data.status : null;
       const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
       if ((status !== null && status >= 400) || hasError) {
@@ -420,7 +441,7 @@ export const derivePrimaryProblem = (
         });
       }
     } else if (e.type === "error") {
-      if (isPreConnectionGatingError(e) || e.data.isExpected === true) continue;
+      if (isPreConnectionGatingError(e) || e.data.isExpected === true || isExpectedCancellationFailure(e)) continue;
       const message = typeof e.data.message === "string" ? e.data.message : "Application error";
       problems.push({
         id: e.id,

@@ -408,7 +408,14 @@ describe("UnifiedHealthBadge", () => {
   it("enables saved-device health polling on cold boot without opening the switcher", () => {
     render(<UnifiedHealthBadge />);
 
-    expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(mockState.savedDevices.devices, true);
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(
+      mockState.savedDevices.devices,
+      true,
+      expect.objectContaining({
+        context: "background-maintenance",
+        configPulsePolicy: "read-only",
+      }),
+    );
     expect(mockState.savedDeviceHealthChecks.refreshAll).not.toHaveBeenCalled();
     expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
   });
@@ -507,7 +514,7 @@ describe("UnifiedHealthBadge", () => {
     });
   });
 
-  it("keeps switcher rows out of Offline while a newly tapped device is still verifying", async () => {
+  it("closes the switcher promptly while a newly tapped device continues verifying", async () => {
     vi.useFakeTimers();
     const switchDeferred = createDeferred<void>();
     mockState.switchSavedDevice.mockImplementationOnce(async (deviceId: string) => {
@@ -527,13 +534,8 @@ describe("UnifiedHealthBadge", () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Selected");
-    expect(screen.getByTestId("switch-device-row-device-office").textContent).toContain("Last check");
-    expect(screen.getByTestId("switch-device-row-device-office").textContent).not.toContain("Offline");
-    expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Healthy");
-    expect(screen.getByTestId("switch-device-row-device-backup").textContent).toContain("Verifying");
-    expect(screen.getByTestId("switch-device-row-device-backup").textContent).not.toContain("Offline");
-    expect(screen.getByTestId("switch-device-status-device-backup").textContent).toContain("Checking");
+    expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+    expect(mockState.switchSavedDevice).toHaveBeenCalledWith("device-backup");
 
     await act(async () => {
       switchDeferred.resolve();
@@ -605,6 +607,14 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.queryByText("Checking all saved devices")).toBeNull();
     expect(screen.queryByText("Saved-device health")).toBeNull();
     expect(mockState.savedDeviceHealthChecks.refreshAll).toHaveBeenCalledTimes(1);
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenLastCalledWith(
+      mockState.savedDevices.devices,
+      true,
+      expect.objectContaining({
+        context: "switch-device-dialog",
+        configPulsePolicy: "visible-config-pulse-allowed",
+      }),
+    );
     expect(screen.queryByTestId("switch-device-refresh-all")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(screen.getByTestId("switch-device-status-device-office").textContent).toContain("Online");

@@ -12,7 +12,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
 import { verifyCurrentConnectionTarget } from "@/lib/connection/connectionManager";
+import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { addLog } from "@/lib/logging";
 import { invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
 import { getPasswordForDevice } from "@/lib/secureStorage";
 import {
@@ -23,6 +25,16 @@ import {
   startSavedDeviceVerification,
 } from "@/lib/savedDevices/store";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+
+const C64_QUERY_PREFIXES = new Set([
+  "c64-info",
+  "c64-drives",
+  "c64-categories",
+  "c64-category",
+  "c64-config-item",
+  "c64-config-items",
+  "c64-all-config",
+]);
 
 export function useSavedDeviceSwitching() {
   const queryClient = useQueryClient();
@@ -39,6 +51,17 @@ export function useSavedDeviceSwitching() {
       setStoredFtpPort(device.ftpPort);
       setStoredTelnetPort(device.telnetPort);
       startSavedDeviceVerification(deviceId);
+      resetInteractionState("saved-device-switch");
+      void queryClient
+        .cancelQueries({
+          predicate: (query) => C64_QUERY_PREFIXES.has(String(query.queryKey[0] ?? "")),
+        })
+        .catch((error) => {
+          addLog("warn", "Failed to cancel old-device C64 queries during saved-device switch", {
+            deviceId,
+            error: error instanceof Error ? error.message : String(error ?? "Unknown query cancellation failure"),
+          });
+        });
 
       const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
       const nextDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);

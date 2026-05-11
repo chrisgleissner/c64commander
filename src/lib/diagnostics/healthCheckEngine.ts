@@ -95,6 +95,13 @@ export type HealthCheckTarget = {
 };
 
 export type HealthCheckTargetRunMode = "full" | "passive";
+export type HealthCheckContext = "manual-diagnostics" | "switch-device-dialog" | "background-maintenance";
+export type HealthCheckConfigPulsePolicy = "visible-config-pulse-allowed" | "read-only";
+
+export type HealthCheckRunContext = {
+  context: HealthCheckContext;
+  configPulsePolicy: HealthCheckConfigPulsePolicy;
+};
 
 export type HealthCheckProgressSnapshot = {
   liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>>;
@@ -126,6 +133,30 @@ type ProbeRuntime = {
 
 let activeRun: ActiveRun | null = null;
 let runSequence = 0;
+
+export const HEALTH_CHECK_CONTEXTS = {
+  manualDiagnostics: {
+    context: "manual-diagnostics",
+    configPulsePolicy: "visible-config-pulse-allowed",
+  },
+  switchDeviceDialog: {
+    context: "switch-device-dialog",
+    configPulsePolicy: "visible-config-pulse-allowed",
+  },
+  backgroundMaintenance: {
+    context: "background-maintenance",
+    configPulsePolicy: "read-only",
+  },
+} as const satisfies Record<string, HealthCheckRunContext>;
+
+const normalizeHealthCheckRunContext = (options: {
+  context?: HealthCheckRunContext;
+  mode?: HealthCheckTargetRunMode;
+}): HealthCheckRunContext => {
+  if (options.context) return options.context;
+  if (options.mode === "passive") return HEALTH_CHECK_CONTEXTS.backgroundMaintenance;
+  return HEALTH_CHECK_CONTEXTS.manualDiagnostics;
+};
 
 const timedProbe = async <T>(fn: () => Promise<T>): Promise<{ result: T; durationMs: number }> => {
   const start = Date.now();
@@ -1201,6 +1232,7 @@ export const runHealthCheckForTarget = async (
   options: {
     signal?: AbortSignal;
     mode?: HealthCheckTargetRunMode;
+    context?: HealthCheckRunContext;
     onProgress?: (snapshot: HealthCheckProgressSnapshot) => void;
   } = {},
 ): Promise<HealthCheckRunResult> => {
@@ -1208,7 +1240,7 @@ export const runHealthCheckForTarget = async (
   const startTimestamp = new Date().toISOString();
   const startedAtMs = Date.now();
   const deadlineMs = startedAtMs + GLOBAL_RUN_TIMEOUT_MS;
-  const mode = options.mode ?? "full";
+  const runContext = normalizeHealthCheckRunContext(options);
   const runtime = buildProbeRuntime(target);
   const controller = new AbortController();
   const probeStates = buildLocalProbeStates();
@@ -1367,8 +1399,8 @@ export const runHealthCheckForTarget = async (
 
     const config = restFailed
       ? setLocalSkippedProbe("CONFIG", "Skipped: REST probe failed")
-      : mode === "passive"
-        ? setLocalSkippedProbe("CONFIG", "Skipped: passive mode disables CONFIG pulse")
+      : runContext.configPulsePolicy === "read-only"
+        ? setLocalSkippedProbe("CONFIG", `Skipped: ${runContext.context} health check is read-only`)
         : await runLocalProbe(
             "CONFIG",
             (signal) => probeConfig(signal, runtime),

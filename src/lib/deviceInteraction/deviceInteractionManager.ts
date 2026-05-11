@@ -376,6 +376,7 @@ const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: b
   if (isTestEnv()) return false;
   const state = getDeviceStateSnapshot().state;
   if (state === "UNKNOWN" || state === "DISCOVERING") {
+    if (state === "DISCOVERING" && intent === "user") return false;
     return !(allowDuringDiscovery && intent === "system");
   }
   if (state === "ERROR") {

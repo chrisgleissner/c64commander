@@ -261,3 +261,46 @@ By code inspection of `LightingSummaryCard.tsx`, the preview path uses `interact
 ### Outcome
 
 All five open questions resolved. The implementation plan is upgraded from a small targeted fix to a tightly-scoped consolidation; see research.md "Consolidated Implementation Plan" and "UX-First Slider Behaviour Model".
+
+# Device Switch Health / README Coverage Worklog (2026-05-11)
+
+## Initial Setup
+
+- Read mandatory repo instructions: `README.md`, `.github/copilot-instructions.md`, `docs/ux-guidelines.md`, plus existing `PLANS.md` and `WORKLOG.md`.
+- Classification: `DOC_PLUS_CODE` and `UI_CHANGE`.
+- `git status --short` initially returned clean.
+- Diagnostics archive present: `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-11-1028-15Z.zip`.
+- Archive listing confirms five files: actions, error logs, logs, supplemental, and traces JSON.
+
+## Concrete Observations
+
+- README Home references:
+  - `docs/img/app/home/00-overview-light.png` with alt `Home overview (Light)`, but image inspection shows it is the C64 Commander intro/logo.
+  - `docs/img/app/home/01-overview-dark.png` is a dark top Home screenshot.
+  - `docs/img/app/home/sections/01-system-info-to-cpu-ram.png` is the missing light top Home screenshot.
+  - Existing section screenshots `01` through `05` cover the Home page from system info through config.
+- Switch Device bottom sheet:
+  - Implemented in `src/components/UnifiedHealthBadge.tsx`.
+  - Opens by long press/context menu and calls `refreshAll()` once when opened.
+  - `useSavedDeviceHealthChecks(savedDevices.devices, canSwitchDevices)` means saved-device polling also runs while the sheet is closed.
+- Health checks:
+  - `src/hooks/useSavedDeviceHealthChecks.ts` currently passes `{ mode: "passive" }` for every saved-device poll.
+  - `src/lib/diagnostics/healthCheckEngine.ts` has `HealthCheckTargetRunMode = "full" | "passive"`.
+  - Passive target mode skips CONFIG with reason `Skipped: passive mode disables CONFIG pulse`.
+  - The CONFIG probe performs the visible pulse by writing a temporary config value and reverting it.
+- Readiness/request guard:
+  - `src/lib/deviceInteraction/deviceInteractionManager.ts` emits `"Device not ready for requests"` when global device state is `UNKNOWN`, `DISCOVERING`, or `ERROR` and the request is not allowed through.
+  - `src/lib/deviceInteraction/deviceStateStore.ts` maintains a global selected-device readiness model rather than a per-host model.
+- Config fallback:
+  - `C64API.getConfigItems` logs `"Category config fetch failed; falling back to item fetches"` for most category fetch failures and then fans out per-item requests.
+  - This is unsafe/noisy when the root cause is the readiness gate because every item request will deterministically fail the same way.
+
+## Active Plan
+
+- Update `PLANS.md` with the May 11 task section and use it as the authoritative plan.
+- Implement explicit health-check context/pulse policy.
+- Pass switch-device-open context to saved-device checks.
+- Close Switch Device promptly on target selection and defer heavy invalidation until verification completes.
+- Reset stale interaction state when switching target devices.
+- Suppress deterministic config-item fallback after readiness-gate category failure.
+- Update README Home screenshot references and add deterministic README screenshot coverage test.

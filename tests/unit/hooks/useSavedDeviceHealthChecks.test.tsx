@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
+import { HEALTH_CHECK_CONTEXTS } from "@/lib/diagnostics/healthCheckEngine";
 import { DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
 
 const createDeferred = <T,>() => {
@@ -31,6 +32,16 @@ const { mockRunHealthCheckForTarget, mockGetPasswordForDevice } = vi.hoisted(() 
 }));
 
 vi.mock("@/lib/diagnostics/healthCheckEngine", () => ({
+  HEALTH_CHECK_CONTEXTS: {
+    backgroundMaintenance: {
+      context: "background-maintenance",
+      configPulsePolicy: "read-only",
+    },
+    switchDeviceDialog: {
+      context: "switch-device-dialog",
+      configPulsePolicy: "visible-config-pulse-allowed",
+    },
+  },
   runHealthCheckForTarget: mockRunHealthCheckForTarget,
 }));
 
@@ -172,7 +183,7 @@ describe("useSavedDeviceHealthChecks", () => {
     });
   };
 
-  it("runs concurrent passive checks for all devices and reruns every 10 seconds while enabled", async () => {
+  it("runs concurrent background-maintenance checks for all devices and reruns every 10 seconds while enabled", async () => {
     const savedDevices = buildSavedDevices();
     const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
 
@@ -183,12 +194,12 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ deviceHost: "office-u64", ftpPort: 21, telnetPort: 64, password: null }),
-      expect.objectContaining({ mode: "passive" }),
+      expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance }),
     );
     expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ deviceHost: "backup-u64:8080", ftpPort: 2021, telnetPort: 2323, password: "secret" }),
-      expect.objectContaining({ mode: "passive" }),
+      expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance }),
     );
     expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).toBe("Healthy");
     expect(result.current.byDeviceId["device-backup"]?.latestResult?.overallHealth).toBe("Degraded");
@@ -200,6 +211,25 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+  });
+
+  it("allows switch-device dialog checks to use the explicit visible config pulse context", async () => {
+    const savedDevices = buildSavedDevices();
+    renderHook(() => useSavedDeviceHealthChecks(savedDevices, true, HEALTH_CHECK_CONTEXTS.switchDeviceDialog));
+
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ deviceHost: "office-u64" }),
+      expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog }),
+    );
+    expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ deviceHost: "backup-u64:8080" }),
+      expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog }),
+    );
   });
 
   it("keeps the previous latest result visible while a rerun is still in progress", async () => {

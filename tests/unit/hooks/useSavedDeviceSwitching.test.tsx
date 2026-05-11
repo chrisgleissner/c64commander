@@ -18,12 +18,14 @@ const {
   mockSetStoredTelnetPort,
   mockInvalidateForSavedDeviceSwitch,
   mockGetPasswordForDevice,
+  mockResetInteractionState,
 } = vi.hoisted(() => ({
   mockVerifyCurrentConnectionTarget: vi.fn(),
   mockSetStoredFtpPort: vi.fn(),
   mockSetStoredTelnetPort: vi.fn(),
   mockInvalidateForSavedDeviceSwitch: vi.fn(),
   mockGetPasswordForDevice: vi.fn(),
+  mockResetInteractionState: vi.fn(),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -36,6 +38,14 @@ vi.mock("@/lib/ftp/ftpConfig", () => ({
 
 vi.mock("@/lib/telnet/telnetConfig", () => ({
   setStoredTelnetPort: mockSetStoredTelnetPort,
+}));
+
+vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
+  resetInteractionState: mockResetInteractionState,
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
 }));
 
 vi.mock("@/lib/query/c64QueryInvalidation", async () => {
@@ -134,6 +144,7 @@ describe("useSavedDeviceSwitching", () => {
     expect(store.getSavedDeviceSwitchStatus("device-backup")).toBe("verifying");
     expect(mockSetStoredFtpPort).toHaveBeenCalledWith(2021);
     expect(mockSetStoredTelnetPort).toHaveBeenCalledWith(2323);
+    expect(mockResetInteractionState).toHaveBeenCalledWith("saved-device-switch");
     expect(mockGetPasswordForDevice).toHaveBeenCalledWith("device-backup");
     expect(c64api.getC64APIConfigSnapshot()).toMatchObject({
       baseUrl: "http://backup-c64:8080",
