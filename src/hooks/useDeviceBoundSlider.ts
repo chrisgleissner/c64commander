@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
 import { pollingPauseRegistry, type PollingPauseHandle } from "@/lib/query/c64PollingGovernance";
 import { clampSliderValue } from "@/lib/ui/sliderBehavior";
@@ -110,6 +111,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   watchdogMs = DEFAULT_WATCHDOG_MS,
   onError,
 }: UseDeviceBoundSliderOptions<T>) {
+  const { selectedDeviceId } = useSavedDevices();
   const [draftSliderValue, setDraftSliderValue] = useState<number | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent<T> | null>(null);
   const [defaultPreviewThrottleMs, setDefaultPreviewThrottleMs] = useState(() => loadVolumeSliderPreviewIntervalMs());
@@ -211,12 +213,21 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   const armWatchdog = useCallback(() => {
     clearWatchdogTimer();
     watchdogTimerRef.current = setTimeout(() => {
-      setDraftSliderValue(null);
-      setPendingIntent(null);
       clearWatchdogTimer();
       releasePollingPause();
     }, watchdogMs);
   }, [clearWatchdogTimer, releasePollingPause, watchdogMs]);
+
+  const clearLatchedState = useCallback(() => {
+    isDraggingRef.current = false;
+    setDraftSliderValue(null);
+    setPendingIntent(null);
+    clearPreviewTimer();
+    clearWatchdogTimer();
+    pendingPreviewSliderValueRef.current = null;
+    lastPreviewSentAtRef.current = null;
+    releasePollingPause();
+  }, [clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -237,10 +248,38 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     }
   }, [clearWatchdogTimer, deviceValue, equals, pendingIntent, releasePollingPause]);
 
+  const didMountResetBoundaryRef = useRef(false);
+
+  useEffect(() => {
+    if (!didMountResetBoundaryRef.current) {
+      didMountResetBoundaryRef.current = true;
+      return;
+    }
+
+    clearLatchedState();
+  }, [clearLatchedState, selectedDeviceId]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        clearLatchedState();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", clearLatchedState);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", clearLatchedState);
+    };
+  }, [clearLatchedState]);
+
   useEffect(() => {
     return () => {
       clearPreviewTimer();
       clearWatchdogTimer();
+      pendingPreviewSliderValueRef.current = null;
+      lastPreviewSentAtRef.current = null;
       releasePollingPause();
     };
   }, [clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
@@ -278,10 +317,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       lastPreviewSentAtRef.current = null;
       setDraftSliderValue(null);
       if (equals(deviceValue, nextValue)) {
-        clearWatchdogTimer();
-        setPendingIntent(null);
-        // Commit was a no-op — drag is over, drop the polling pause.
-        releasePollingPause();
+        clearLatchedState();
         return;
       }
       setPendingIntent({
@@ -290,10 +326,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       });
       armWatchdog();
       void Promise.resolve(commit(nextValue)).catch((error) => {
-        clearWatchdogTimer();
-        setDraftSliderValue(null);
-        setPendingIntent(null);
-        releasePollingPause();
+        clearLatchedState();
         onError?.(error, {
           phase: "commit",
           value: nextValue,
@@ -302,15 +335,14 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     },
     [
       armWatchdog,
+      clearLatchedState,
       clearPreviewTimer,
-      clearWatchdogTimer,
       commit,
       deviceSliderValue,
       deviceValue,
       domain,
       equals,
       onError,
-      releasePollingPause,
     ],
   );
 

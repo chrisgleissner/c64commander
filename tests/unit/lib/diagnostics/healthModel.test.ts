@@ -15,6 +15,7 @@ import {
   getContributorSupportingPhrase,
   HEALTH_GLYPHS,
   rollUpHealth,
+  selectPreferredBadgeHealth,
   type ContributorHealth,
   type ContributorKey,
 } from "@/lib/diagnostics/healthModel";
@@ -351,6 +352,90 @@ describe("rollUpHealth", () => {
       TELNET: withState("Unhealthy"),
     };
     expect(rollUpHealth(contributors, "Online")).toBe("Unhealthy");
+  });
+});
+
+describe("selectPreferredBadgeHealth", () => {
+  it("prefers current selected-device healthy evidence over stale degraded badge state", () => {
+    expect(
+      selectPreferredBadgeHealth(
+        {
+          state: "Degraded",
+          connectivity: "Online",
+          problemCount: 3,
+        },
+        {
+          running: false,
+          latestResult: {
+            overallHealth: "Healthy",
+            connectivity: "Online",
+            probes: {
+              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
+              FTP: { probe: "FTP", outcome: "Success", durationMs: 10, reason: null, startMs: 2 },
+              TELNET: { probe: "TELNET", outcome: "Success", durationMs: 10, reason: null, startMs: 3 },
+              CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+              RASTER: { probe: "RASTER", outcome: "Success", durationMs: 10, reason: null, startMs: 5 },
+              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 10, reason: null, startMs: 6 },
+            },
+          },
+        },
+      ),
+    ).toEqual({
+      state: "Healthy",
+      connectivity: "Online",
+      problemCount: 0,
+    });
+  });
+
+  it("keeps the selected device healthy while a fresh saved-device cycle is still running", () => {
+    expect(
+      selectPreferredBadgeHealth(
+        {
+          state: "Unhealthy",
+          connectivity: "Online",
+          problemCount: 4,
+        },
+        {
+          running: true,
+          latestResult: {
+            overallHealth: "Healthy",
+            connectivity: "Online",
+            probes: {
+              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
+              FTP: { probe: "FTP", outcome: "Success", durationMs: 10, reason: null, startMs: 2 },
+              TELNET: { probe: "TELNET", outcome: "Success", durationMs: 10, reason: null, startMs: 3 },
+              CONFIG: { probe: "CONFIG", outcome: "Skipped", durationMs: null, reason: "Passive", startMs: 4 },
+              RASTER: { probe: "RASTER", outcome: "Success", durationMs: 10, reason: null, startMs: 5 },
+              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 10, reason: null, startMs: 6 },
+            },
+          },
+        },
+      ),
+    ).toEqual({
+      state: "Healthy",
+      connectivity: "Checking",
+      problemCount: 0,
+    });
+  });
+
+  it("preserves the base badge state when the selected device has no current evidence", () => {
+    expect(
+      selectPreferredBadgeHealth(
+        {
+          state: "Degraded",
+          connectivity: "Online",
+          problemCount: 2,
+        },
+        {
+          running: true,
+          latestResult: null,
+        },
+      ),
+    ).toEqual({
+      state: "Degraded",
+      connectivity: "Online",
+      problemCount: 2,
+    });
   });
 });
 

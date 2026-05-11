@@ -6,9 +6,20 @@ import {
   useDeviceBoundSlider,
 } from "@/hooks/useDeviceBoundSlider";
 
+const mockSliderContext = vi.hoisted(() => ({
+  selectedDeviceId: "device-a",
+}));
+
+vi.mock("@/hooks/useSavedDevices", () => ({
+  useSavedDevices: () => ({
+    selectedDeviceId: mockSliderContext.selectedDeviceId,
+  }),
+}));
+
 describe("useDeviceBoundSlider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    mockSliderContext.selectedDeviceId = "device-a";
   });
 
   afterEach(() => {
@@ -187,16 +198,20 @@ describe("useDeviceBoundSlider", () => {
     expect(preview).toHaveBeenCalledTimes(1);
   });
 
-  it("recovers from stalled reconciliation when the watchdog expires", () => {
+  it("keeps the desired value latched after the pause watchdog expires until the device catches up", () => {
     const commit = vi.fn();
-    const { result } = renderHook(() =>
-      useDeviceBoundSlider({
-        deviceValue: 1,
-        domain: createNumericSliderDomain({ min: 0, max: 31, round: Math.round }),
-        previewMode: "commitOnly",
-        commit,
-        watchdogMs: 500,
-      }),
+    const { result, rerender } = renderHook(
+      ({ deviceValue }) =>
+        useDeviceBoundSlider({
+          deviceValue,
+          domain: createNumericSliderDomain({ min: 0, max: 31, round: Math.round }),
+          previewMode: "commitOnly",
+          commit,
+          watchdogMs: 500,
+        }),
+      {
+        initialProps: { deviceValue: 1 },
+      },
     );
 
     act(() => {
@@ -208,8 +223,140 @@ describe("useDeviceBoundSlider", () => {
     act(() => {
       vi.advanceTimersByTime(500);
     });
+
+    rerender({ deviceValue: 1 });
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+    expect(result.current.sliderValue).toBe(8);
+  });
+
+  it("treats stale remote echoes as non-authoritative until the current target is confirmed", () => {
+    const commit = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ deviceValue }) =>
+        useDeviceBoundSlider({
+          deviceValue,
+          domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+          previewMode: "commitOnly",
+          commit,
+        }),
+      {
+        initialProps: { deviceValue: 10 },
+      },
+    );
+
+    act(() => {
+      result.current.onValueCommit([80]);
+    });
+    expect(result.current.sliderValue).toBe(80);
+
+    rerender({ deviceValue: 10 });
+    expect(result.current.sliderValue).toBe(80);
+    expect(result.current.displayValue).toBe(80);
+
+    rerender({ deviceValue: 80 });
     expect(result.current.isAwaitingReconciliation).toBe(false);
-    expect(result.current.sliderValue).toBe(1);
+    expect(result.current.sliderValue).toBe(80);
+  });
+
+  it("keeps a newer target latched when an older write result arrives late", () => {
+    const commit = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ deviceValue }) =>
+        useDeviceBoundSlider({
+          deviceValue,
+          domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+          previewMode: "commitOnly",
+          commit,
+        }),
+      {
+        initialProps: { deviceValue: 10 },
+      },
+    );
+
+    act(() => {
+      result.current.onValueCommit([60]);
+    });
+    expect(result.current.sliderValue).toBe(60);
+
+    act(() => {
+      result.current.onValueCommit([85]);
+    });
+    expect(result.current.sliderValue).toBe(85);
+
+    rerender({ deviceValue: 60 });
+    expect(result.current.sliderValue).toBe(85);
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+
+    rerender({ deviceValue: 85 });
+    expect(result.current.sliderValue).toBe(85);
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+  });
+
+  it("clears the desired value when the selected device changes", () => {
+    const commit = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ deviceValue }) =>
+        useDeviceBoundSlider({
+          deviceValue,
+          domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+          previewMode: "commitOnly",
+          commit,
+        }),
+      {
+        initialProps: { deviceValue: 10 },
+      },
+    );
+
+    act(() => {
+      result.current.onValueCommit([80]);
+    });
+    expect(result.current.sliderValue).toBe(80);
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+
+    act(() => {
+      mockSliderContext.selectedDeviceId = "device-b";
+    });
+
+    rerender({ deviceValue: 10 });
+
+    expect(result.current.sliderValue).toBe(10);
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+  });
+
+  it("clears the desired value when the document is hidden", () => {
+    const commit = vi.fn();
+    const originalVisibilityState = document.visibilityState;
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 10,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "commitOnly",
+        commit,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueCommit([80]);
+    });
+    expect(result.current.sliderValue).toBe(80);
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(result.current.sliderValue).toBe(10);
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: originalVisibilityState,
+    });
   });
 
   it("treats type-drifted authoritative values as reconciled when the semantic value matches", () => {

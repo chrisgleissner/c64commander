@@ -30,6 +30,7 @@ import {
   HEALTH_GLYPHS,
   getBadgeAriaLabel,
   getBadgeTextContract,
+  selectPreferredBadgeHealth,
   type HealthState,
 } from "@/lib/diagnostics/healthModel";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -313,7 +314,7 @@ type PendingSwitchState = {
  * Tapping opens the diagnostics overlay (§8.9).
  */
 export function UnifiedHealthBadge({ className }: Props) {
-  const { state, connectivity, problemCount, connectedDeviceLabel } = useHealthState();
+  const healthState = useHealthState();
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
   const {
@@ -337,6 +338,29 @@ export function UnifiedHealthBadge({ className }: Props) {
     canSwitchDevices,
     pickerOpen ? HEALTH_CHECK_CONTEXTS.switchDeviceDialog : HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
   );
+
+  const shouldPreferSelectedDeviceEvidence = pickerOpen || pendingSwitch !== null;
+  const selectedDeviceHealthSnapshot = shouldPreferSelectedDeviceEvidence
+    ? ((savedDevices.selectedDeviceId ? healthByDeviceId[savedDevices.selectedDeviceId] : null) ?? null)
+    : null;
+  const { state, connectivity, problemCount } = useMemo(
+    () =>
+      selectPreferredBadgeHealth(
+        {
+          state: healthState.state,
+          connectivity: healthState.connectivity,
+          problemCount: healthState.problemCount,
+        },
+        selectedDeviceHealthSnapshot
+          ? {
+            running: selectedDeviceHealthSnapshot.running,
+            latestResult: selectedDeviceHealthSnapshot.latestResult,
+          }
+          : null,
+      ),
+    [healthState.connectivity, healthState.problemCount, healthState.state, selectedDeviceHealthSnapshot],
+  );
+  const { connectedDeviceLabel } = healthState;
 
   const glyph = HEALTH_GLYPHS[state];
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);

@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 
@@ -187,6 +188,29 @@ export type OverallHealthState = {
   lastFtpActivity: LastActivity | null;
   lastTelnetActivity: LastActivity | null;
   primaryProblem: Problem | null;
+};
+
+export type BadgeHealthSelection = Pick<OverallHealthState, "state" | "connectivity" | "problemCount">;
+
+export type SelectedDeviceBadgeEvidence = {
+  running: boolean;
+  latestResult: Pick<HealthCheckRunResult, "overallHealth" | "connectivity" | "probes"> | null;
+};
+
+export const selectPreferredBadgeHealth = (
+  base: BadgeHealthSelection,
+  selectedEvidence: SelectedDeviceBadgeEvidence | null | undefined,
+): BadgeHealthSelection => {
+  const latestResult = selectedEvidence?.latestResult;
+  if (!latestResult) {
+    return base;
+  }
+
+  return {
+    state: latestResult.overallHealth,
+    connectivity: selectedEvidence?.running ? "Checking" : latestResult.connectivity,
+    problemCount: Object.values(latestResult.probes).filter((probe) => probe.outcome === "Fail").length,
+  };
 };
 
 // §7.2 — Map ConnectionState → ConnectivityState
