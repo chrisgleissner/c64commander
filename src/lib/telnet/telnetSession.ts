@@ -59,7 +59,14 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     responseSteps = [];
   };
 
-  const sanitizeTraceText = (value: string) => value.replace(/[^\x09\x0a\x0d\x20-\x7e]/g, "").trim();
+  const sanitizeTraceText = (value: string) =>
+    Array.from(value)
+      .filter((character) => {
+        const code = character.charCodeAt(0);
+        return code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126);
+      })
+      .join("")
+      .trim();
 
   const appendResponseText = (value: string) => {
     const text = sanitizeTraceText(value);
