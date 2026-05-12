@@ -4,7 +4,21 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 
-const consumeDiagnosticsOpenRequestMock = vi.fn();
+const {
+  consumeDiagnosticsOpenRequestMock,
+  runDiagnosticsReconcilerMock,
+  runPlaybackReconcilerMock,
+  diagnosticsDialogState,
+  recordActionEndMock,
+} = vi.hoisted(() => ({
+  consumeDiagnosticsOpenRequestMock: vi.fn(),
+  runDiagnosticsReconcilerMock: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
+  runPlaybackReconcilerMock: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
+  diagnosticsDialogState: {
+    firstVisibleCallback: null as (() => void) | null,
+  },
+  recordActionEndMock: vi.fn(),
+}));
 
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
@@ -36,6 +50,7 @@ vi.mock("@/hooks/useHealthState", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
   addErrorLog: vi.fn(),
   clearLogs: vi.fn(),
   getErrorLogs: vi.fn(() => []),
@@ -45,6 +60,8 @@ vi.mock("@/lib/logging", () => ({
 vi.mock("@/lib/tracing/traceSession", () => ({
   clearTraceEvents: vi.fn(),
   getTraceEvents: vi.fn(() => []),
+  recordActionEnd: recordActionEndMock,
+  recordActionStart: vi.fn(),
   recordRestResponse: vi.fn(),
 }));
 
@@ -62,8 +79,8 @@ vi.mock("@/lib/diagnostics/diagnosticsActivity", () => ({
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsReconciler", () => ({
-  runDiagnosticsReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
-  runPlaybackReconciler: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
+  runDiagnosticsReconciler: runDiagnosticsReconcilerMock,
+  runPlaybackReconciler: runPlaybackReconcilerMock,
   runRepair: vi.fn(async () => undefined),
 }));
 
@@ -143,20 +160,24 @@ vi.mock("@/components/diagnostics/DiagnosticsDialog", () => ({
   DiagnosticsDialog: ({
     open,
     onOpenChange,
+    onFirstVisible,
     requestedPanel,
   }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onFirstVisible?: () => void;
     requestedPanel?: string | null;
-  }) =>
-    open ? (
+  }) => {
+    diagnosticsDialogState.firstVisibleCallback = onFirstVisible ?? null;
+    return open ? (
       <div role="dialog">
         <div data-testid="requested-panel">{requestedPanel}</div>
         <button type="button" onClick={() => onOpenChange(false)}>
           Close overlay
         </button>
       </div>
-    ) : null,
+    ) : null;
+  },
 }));
 
 const LocationProbe = () => {
@@ -195,6 +216,56 @@ describe("GlobalDiagnosticsOverlay route close", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+    diagnosticsDialogState.firstVisibleCallback = null;
+  });
+
+  it("defers diagnostics reconciliation until the dialog reports first visible paint", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
+
+    renderOverlay("/");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(runDiagnosticsReconcilerMock).not.toHaveBeenCalled();
+    expect(runPlaybackReconcilerMock).not.toHaveBeenCalled();
+
+    diagnosticsDialogState.firstVisibleCallback?.();
+
+    await waitFor(() => {
+      expect(runDiagnosticsReconcilerMock).toHaveBeenCalledWith("Diagnostics overlay opened");
+      expect(runPlaybackReconcilerMock).toHaveBeenCalledWith("Diagnostics overlay opened");
+    });
+  });
+
+  it("ends the pending diagnostics action when the overlay closes before first visible paint", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
+
+    renderOverlay("/");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close overlay" }));
+
+    await waitFor(() => {
+      expect(recordActionEndMock).toHaveBeenCalledWith(
+        expect.objectContaining({ correlationId: "COR-1" }),
+        expect.objectContaining({ message: "Diagnostics overlay closed before first visible paint" }),
+      );
+    });
+  });
+
+  it("ends the pending diagnostics action when the overlay unmounts before first visible paint", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
+
+    const view = renderOverlay("/");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    view.unmount();
+
+    expect(recordActionEndMock).toHaveBeenCalledWith(
+      expect.objectContaining({ correlationId: "COR-1" }),
+      expect.objectContaining({ message: "Diagnostics overlay unmounted before first visible paint" }),
+    );
   });
 
   it.each([

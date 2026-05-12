@@ -19,6 +19,21 @@ import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
 import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
+const { mockGetTraceTitle } = vi.hoisted(() => ({
+  mockGetTraceTitle: vi.fn(),
+}));
+
+vi.mock("@/lib/tracing/traceFormatter", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/tracing/traceFormatter")>("@/lib/tracing/traceFormatter");
+  return {
+    ...actual,
+    getTraceTitle: (entry: Parameters<typeof actual.getTraceTitle>[0]) => {
+      mockGetTraceTitle(entry);
+      return actual.getTraceTitle(entry);
+    },
+  };
+});
+
 type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
@@ -109,6 +124,7 @@ const unhealthyHealthState: OverallHealthState = {
 const defaultProps: DiagnosticsDialogProps = {
   open: true,
   onOpenChange: vi.fn(),
+  onFirstVisible: vi.fn(),
   healthState: healthyHealthState,
   logs: [
     {
@@ -252,9 +268,62 @@ describe("DiagnosticsDialog", () => {
     store.selectSavedDevice(primaryDevice.id);
 
     vi.clearAllMocks();
+    mockGetTraceTitle.mockClear();
     updateC64APIConfig(buildBaseUrlFromDeviceHost("c64u:80"), undefined, "c64u:80");
     setStoredFtpPort(21);
     setStoredTelnetPort(23);
+  });
+
+  it("reports the first visible paint once per open cycle", async () => {
+    const onFirstVisible = vi.fn();
+    const view = renderDialog({ onFirstVisible });
+
+    await waitFor(() => {
+      expect(onFirstVisible).toHaveBeenCalledTimes(1);
+    });
+
+    view.rerender(
+      <MemoryRouter>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <DisplayProfileProvider>
+            <DiagnosticsDialog {...defaultProps} onFirstVisible={onFirstVisible} />
+          </DisplayProfileProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(onFirstVisible).toHaveBeenCalledTimes(1);
+    });
+
+    view.rerender(
+      <MemoryRouter>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <DisplayProfileProvider>
+            <DiagnosticsDialog {...defaultProps} open={false} onFirstVisible={onFirstVisible} />
+          </DisplayProfileProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    view.rerender(
+      <MemoryRouter>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <DisplayProfileProvider>
+            <DiagnosticsDialog {...defaultProps} onFirstVisible={onFirstVisible} />
+          </DisplayProfileProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(onFirstVisible).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("does not build the unified evidence list while closed", () => {
+    renderDialog({ open: false });
+
+    expect(mockGetTraceTitle).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

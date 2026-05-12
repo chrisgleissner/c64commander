@@ -353,6 +353,77 @@ describe("savedDevices store", () => {
     });
   });
 
+  it("clears verification summary state when editing a device host", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64",
+      name: "u64",
+      nameSource: "INFERRED",
+      type: "U64E",
+      typeSource: "INFERRED",
+    });
+    store.completeSavedDeviceVerification(
+      initialDeviceId,
+      {
+        product: "Ultimate 64 Elite",
+        hostname: "u64",
+        unique_id: "UID-U64",
+      },
+      "192.168.1.13",
+    );
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "c64u",
+    });
+
+    expect(store.getSavedDeviceSwitchSummary(initialDeviceId)).toMatchObject({
+      verifiedAt: null,
+      lastHealthState: null,
+      lastConnectivityState: null,
+      lastVerifiedHostname: null,
+      lastVerifiedUniqueId: null,
+      lastResolvedAddress: null,
+    });
+  });
+
+  it("clears verification summary state when the selected connection host changes", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64",
+      name: "u64",
+      nameSource: "INFERRED",
+      type: "U64E",
+      typeSource: "INFERRED",
+    });
+    store.completeSavedDeviceVerification(
+      initialDeviceId,
+      {
+        product: "Ultimate 64 Elite",
+        hostname: "u64",
+        unique_id: "UID-U64",
+      },
+      "192.168.1.13",
+    );
+
+    store.updateSelectedSavedDeviceConnection({
+      deviceHost: "c64u",
+      passwordPresent: false,
+    });
+
+    expect(store.getSavedDeviceSwitchSummary(initialDeviceId)).toMatchObject({
+      verifiedAt: null,
+      lastHealthState: null,
+      lastConnectivityState: null,
+      lastVerifiedHostname: null,
+      lastVerifiedUniqueId: null,
+      lastResolvedAddress: null,
+    });
+  });
+
   it("reclassifies legacy inferred types from the verified product instead of stale pre-update fields", async () => {
     const store = await loadStore();
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;

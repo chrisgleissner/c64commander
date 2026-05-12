@@ -100,6 +100,7 @@ type DeviceFilter = string | null;
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onFirstVisible?: () => void;
   healthState: OverallHealthState;
   logs: LogEntry[];
   errorLogs: LogEntry[];
@@ -980,6 +981,7 @@ const DecisionStateSurface = ({
 export function DiagnosticsDialog({
   open,
   onOpenChange,
+  onFirstVisible,
   healthState,
   logs,
   errorLogs,
@@ -1026,6 +1028,7 @@ export function DiagnosticsDialog({
   const [overflowOpen, setOverflowOpen] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
+  const firstVisibleNotifiedRef = useRef(false);
   const selectedSavedDevice =
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
@@ -1034,6 +1037,9 @@ export function DiagnosticsDialog({
   const showDeviceUi = shouldShowDiagnosticsDeviceUi(savedDevices);
 
   const allEntries = useMemo(() => {
+    if (!open) {
+      return [];
+    }
     const items: EvidenceEntry[] = [];
     const resolveEntryDeviceLabel = (device: DiagnosticsDeviceAttribution | null) => {
       if (!device) return null;
@@ -1132,7 +1138,7 @@ export function DiagnosticsDialog({
     }
 
     return items.sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
-  }, [actionSummaries, errorLogs, logs, savedDevices, traceEvents]);
+  }, [actionSummaries, errorLogs, logs, open, savedDevices, traceEvents]);
 
   const deviceFilterOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -1197,6 +1203,7 @@ export function DiagnosticsDialog({
 
   useEffect(() => {
     if (!open) {
+      firstVisibleNotifiedRef.current = false;
       setFiltersOpen(false);
       setConnectionOpen(false);
       setLatencyOpen(false);
@@ -1207,6 +1214,20 @@ export function DiagnosticsDialog({
       setOverflowOpen(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || firstVisibleNotifiedRef.current) {
+      return;
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      if (firstVisibleNotifiedRef.current) {
+        return;
+      }
+      firstVisibleNotifiedRef.current = true;
+      onFirstVisible?.();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [onFirstVisible, open]);
 
   useEffect(() => {
     if (healthCheckRunning) {

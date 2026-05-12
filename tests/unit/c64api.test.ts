@@ -297,11 +297,11 @@ describe("c64api", () => {
         const socketInfo =
           type === "Socket"
             ? {
-                localAddress: handle.localAddress,
-                localPort: handle.localPort,
-                remoteAddress: handle.remoteAddress,
-                remotePort: handle.remotePort,
-              }
+              localAddress: handle.localAddress,
+              localPort: handle.localPort,
+              remoteAddress: handle.remoteAddress,
+              remotePort: handle.remotePort,
+            }
             : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
@@ -471,6 +471,25 @@ describe("c64api", () => {
     expect(localStorage.getItem("c64u_password")).toBeNull();
     expect(localStorage.getItem(HAS_PASSWORD_KEY)).toBe("1");
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("saved-host");
+  });
+
+  it("includes an optional reason in runtime connection-change events", () => {
+    const handler = vi.fn();
+    window.addEventListener("c64u-connection-change", handler as EventListener);
+
+    applyC64APIRuntimeConfig("http://runtime", "runtime-pass", "runtime-host", {
+      reason: "saved-device-switch",
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          reason: "saved-device-switch",
+        }),
+      }),
+    );
+
+    window.removeEventListener("c64u-connection-change", handler as EventListener);
   });
 
   it("migrates legacy base url into device host storage", () => {
@@ -680,7 +699,7 @@ describe("c64api", () => {
 
       const api = new C64API("http://c64u");
       const pending = api.machineReset();
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await vi.advanceTimersByTimeAsync(1499);
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -713,7 +732,7 @@ describe("c64api", () => {
 
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ signal: controller.signal, __c64uBypassCache: true });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await vi.advanceTimersByTimeAsync(3100);
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -729,11 +748,11 @@ describe("c64api", () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+      fetchMock.mockImplementation(() => new Promise<Response>(() => { }));
 
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ __c64uIntent: "background", __c64uBypassCache: true });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await vi.advanceTimersByTimeAsync(2999);
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -754,7 +773,7 @@ describe("c64api", () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+      fetchMock.mockImplementation(() => new Promise<Response>(() => { }));
 
       const api = new C64API("http://c64u");
       const pending = api.getInfo({
@@ -762,7 +781,7 @@ describe("c64api", () => {
         __c64uBypassCache: true,
         timeoutMs: 6001,
       });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await vi.advanceTimersByTimeAsync(6001);
 
@@ -796,7 +815,7 @@ describe("c64api", () => {
       const api = new C64API("http://c64u");
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await Promise.resolve();
       controller.abort();

@@ -208,6 +208,7 @@ vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
 
 vi.mock("@/lib/savedDevices/store", () => ({
   buildSavedDevicePrimaryLabel: (device: { name: string }) => device.name,
+  getSavedDeviceSwitchSummary: (deviceId: string) => mockState.savedDevices.switchSummaryByDeviceId[deviceId] ?? null,
   getSavedDeviceSwitchStatus: (deviceId: string) =>
     mockState.switchStatuses[deviceId] ??
     (deviceId === mockState.savedDevices.selectedDeviceId ? "connected" : "last-known"),

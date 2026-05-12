@@ -25,7 +25,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
-import { HEALTH_CHECK_CONTEXTS } from "@/lib/diagnostics/healthCheckEngine";
+import { HEALTH_CHECK_CONTEXTS, type HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import {
   HEALTH_GLYPHS,
   getBadgeAriaLabel,
@@ -37,9 +37,11 @@ import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { addErrorLog } from "@/lib/logging";
 import {
   buildSavedDevicePrimaryLabel,
+  getSavedDeviceSwitchSummary,
   getSavedDeviceSwitchStatus,
   type DeviceSwitchStatus,
 } from "@/lib/savedDevices/store";
+import { shouldWarnAboutAndroidHostnameResolution } from "@/lib/savedDevices/resolvedTarget";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
 
@@ -589,6 +591,10 @@ export function UnifiedHealthBadge({ className }: Props) {
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
               const healthSnapshot = healthByDeviceId[device.id];
               const isExpanded = expandedDeviceIdSet.has(device.id);
+              const showAndroidHostnameWarning = shouldWarnAboutAndroidHostnameResolution(
+                device,
+                getSavedDeviceSwitchSummary(device.id),
+              );
 
               return (
                 <div
@@ -627,6 +633,12 @@ export function UnifiedHealthBadge({ className }: Props) {
                         <span className="mt-1 block text-xs text-muted-foreground">
                           {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel)}
                         </span>
+                        {showAndroidHostnameWarning ? (
+                          <span className="mt-1 block text-xs text-amber-600">
+                            Android will use the raw hostname until this device resolves once. Save an IP or reconnect
+                            on the local network to remove switch delay.
+                          </span>
+                        ) : null}
                       </span>
                       {pickerBadgeOwnLine ? (
                         <span className="flex min-w-0 max-w-full items-start">

@@ -1,3 +1,64 @@
+## [2026-05-12] PR convergence steering: implementation-focused PR summary
+
+- Appended and completed the active PLANS steering TODO to update PR metadata without changing the execution scope.
+- Amended GitHub PR #254 so the description now leads with the performance improvements that actually landed in the branch, separates those from investigation-only artifacts, and keeps the added regression coverage explicit.
+- Validation:
+  - verified the steering TODO was present in `PLANS.md` before executing the GitHub update
+  - updated the PR body with `gh pr edit 254 --body-file /tmp/c64commander-pr254-body.md`
+  - confirmed the active PR still targets `main` from `fix/improve-ux-performance` and re-read the current check rollup during the same GitHub session
+
+## [2026-05-11] Android real-device performance stabilization investigation
+
+- Opened the repository-level planning surface and started a dedicated late-stage performance investigation focused on Android against real `u64` and `c64u` hardware.
+- Mapped the first concrete implementation surfaces before any edits:
+  - `src/lib/diagnostics/healthCheckEngine.ts`
+  - `src/lib/diagnostics/latencyTracker.ts`
+  - `src/lib/tracing/traceSession.ts`
+  - `src/hooks/useSavedDeviceSwitching.ts`
+  - `src/hooks/useSavedDeviceHealthChecks.ts`
+  - `src/lib/deviceInteraction/deviceInteractionManager.ts`
+  - `src/lib/savedDevices/savedDeviceSwitchMetrics.ts`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+- Confirmed the repository already contains useful timing infrastructure for this task:
+  - rolling p50/p90/p99 latency samples for REST and FTP
+  - per-event trace timestamps plus lifecycle/device context
+  - saved-device switch attempt timings with selection and verification phases
+  - health-check probe durations and outcomes
+- Confirmed diagnostics is primarily an overlay/dialog concern rather than a route-level page, which changes how Diagnostics-open latency needs to be measured and analyzed.
+- Confirmed request scheduling is already serialized or bounded for REST and Telnet, with cooldown, backoff, and circuit-breaker state that must be included in responsiveness analysis rather than treated as incidental behavior.
+- Created dedicated iteration documents under `docs/plans/performance/iteration1/` for the execution plan, chronological worklog, and final investigation report.
+- Verified live hardware state before planning:
+  - host probes confirmed `u64` REST availability and `c64u` REST instability.
+  - resolved addresses during this session were `u64 = 192.168.1.13` and `c64u = 192.168.1.167`.
+- Ran the existing real-Android switch soak on the Pixel 4 with bare hostnames and captured `docs/plans/performance/iteration1/switch-soak-real-android.json`:
+  - 10 transitions, 10 failures.
+  - `p50 = 14317 ms`, `p90 = 14397 ms`, `max = 14445 ms`.
+  - The dominant stall pattern was `c64u -> u64`, matching Android failure to resolve bare `u64` during verification.
+- Rebuilt with IP-based saved devices and reran the same soak into `docs/plans/performance/iteration1/switch-soak-real-android-ip.json`:
+  - `u64` success path recovered to `p50 = 140 ms`, `p90 = 176 ms`, `max = 226 ms`.
+  - Remaining failures were all `u64 -> c64u` offline outcomes, which isolates `c64u` REST unavailability from switch orchestration overhead.
+- Collected Android-shell transport probes on the same Pixel 4:
+  - `u64` REST `/v1/info`: 27-33 ms over 10 samples.
+  - `u64` config read `/v1/configs/U64 Specific Settings/CPU Speed`: 31-36 ms over 10 samples.
+  - `u64` Telnet TCP connect: 14-24 ms over 5 samples.
+  - `c64u` REST `/v1/info`: curl exit 56 in 17-161 ms.
+  - `c64u` Telnet TCP connect: 15-22 ms.
+- Collected `docs/plans/performance/iteration1/startup-baseline/startup-baseline.json` with `TTFSC p50 = 615 ms`, `p95 = 703 ms`, then marked it non-representative because the probe build auto-launched the switch lab and skipped normal startup request traffic.
+- Read the current Diagnostics surfaces after measurement:
+  - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`
+  - `src/components/diagnostics/DiagnosticsDialog.tsx`
+  - `src/hooks/useSavedDeviceHealthChecks.ts`
+  - `src/lib/deviceInteraction/deviceInteractionManager.ts`
+- Concluded that Diagnostics-open latency is not directly measurable without adding executable instrumentation, but the current code already shows three likely contributors:
+  - eager action-summary and export-payload derivation in `GlobalDiagnosticsOverlay`
+  - eager unified evidence-list assembly/sort/filter work in `DiagnosticsDialog`
+  - overlap with 10 s saved-device background health polling and on-open reconciliation.
+- Restored the Pixel 4 to a normal non-probe debug APK after the measurement runs:
+  - `npm run cap:build` passed.
+  - `npm run android:apk` passed.
+  - `adb install -r /home/chris/dev/c64/c64commander/android/app/build/outputs/apk/debug/c64commander-0.8.2-debug.apk` passed.
+  - Relaunched `uk.gleissner.c64commander/.MainActivity` successfully.
+
 ## [2026-05-11] Telnet diagnostics preservation and `c64u` probe hardening
 
 - Steering follow-up implemented for the active device-switch/diagnostics plan: appended the plan TODO for intermittent `c64u` TELNET probe failures and missing transport-preserved Diagnostics evidence.

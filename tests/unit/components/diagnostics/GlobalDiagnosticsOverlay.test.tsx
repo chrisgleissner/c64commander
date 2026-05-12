@@ -8,6 +8,20 @@ import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
+const { buildActionSummariesMock } = vi.hoisted(() => ({
+  buildActionSummariesMock: vi.fn(() => [
+    {
+      correlationId: "COR-1",
+      actionName: "Inspect",
+      origin: "user",
+      originalOrigin: "user",
+      outcome: "success",
+      startTimestamp: "2024-01-01T00:00:02.000Z",
+      durationMs: 12,
+    },
+  ]),
+}));
+
 const { consumeDiagnosticsOpenRequestMock, clearDiagnosticsOpenRequestMock } = vi.hoisted(() => ({
   consumeDiagnosticsOpenRequestMock: vi.fn(),
   clearDiagnosticsOpenRequestMock: vi.fn(),
@@ -67,6 +81,8 @@ vi.mock("@/lib/tracing/traceSession", () => ({
       data: { method: "GET", url: "/v1/info" },
     },
   ]),
+  recordActionEnd: vi.fn(),
+  recordActionStart: vi.fn(),
 }));
 
 vi.mock("@/lib/tracing/traceFormatter", () => ({
@@ -74,17 +90,7 @@ vi.mock("@/lib/tracing/traceFormatter", () => ({
 }));
 
 vi.mock("@/lib/diagnostics/actionSummaries", () => ({
-  buildActionSummaries: vi.fn(() => [
-    {
-      correlationId: "COR-1",
-      actionName: "Inspect",
-      origin: "user",
-      originalOrigin: "user",
-      outcome: "success",
-      startTimestamp: "2024-01-01T00:00:02.000Z",
-      durationMs: 12,
-    },
-  ]),
+  buildActionSummaries: buildActionSummariesMock,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsExport", () => ({
@@ -180,6 +186,7 @@ const expandDiagnosticsHeader = () => {
 describe("GlobalDiagnosticsOverlay", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    buildActionSummariesMock.mockClear();
     resetHealthCheckStateSnapshot();
     consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
     delete (
@@ -277,6 +284,15 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(clearDiagnosticsOpenRequestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not build action summaries while the overlay stays closed", () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+
+    renderOverlay();
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(buildActionSummariesMock).not.toHaveBeenCalled();
   });
 
   it("applies seeded health-check overlay state from the diagnostics bridge and runtime events", async () => {

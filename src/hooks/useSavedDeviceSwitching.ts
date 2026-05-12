@@ -9,7 +9,7 @@
 import { useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
+import { applyC64APIRuntimeConfig, buildBaseUrlFromDeviceHost } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
 import { verifyCurrentConnectionTarget } from "@/lib/connection/connectionManager";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
@@ -27,10 +27,12 @@ import {
   completeSavedDeviceVerification,
   failSavedDeviceVerification,
   getSavedDeviceById,
+  getSavedDeviceSwitchSummary,
   getSavedDevicesSnapshot,
   selectSavedDevice,
   startSavedDeviceVerification,
 } from "@/lib/savedDevices/store";
+import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
 export function useSavedDeviceSwitching() {
@@ -57,7 +59,7 @@ export function useSavedDeviceSwitching() {
       setStoredTelnetPort(device.telnetPort);
       startSavedDeviceVerification(deviceId);
       resetInteractionState("saved-device-switch");
-      const savedDeviceSwitchPrefixes = new Set(getSavedDeviceSwitchPrefixes(location.pathname));
+      const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
       void queryClient
         .cancelQueries({
           predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
@@ -70,17 +72,27 @@ export function useSavedDeviceSwitching() {
         });
 
       const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
+      const deviceSummary = getSavedDeviceSwitchSummary(deviceId);
       const nextDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
-      updateC64APIConfig(buildBaseUrlFromDeviceHost(nextDeviceHost), password ?? undefined, nextDeviceHost, {
-        reason: "saved-device-switch",
-      });
+      const preferredRuntimeHost = buildSavedDevicePreferredRuntimeHost(device, deviceSummary);
+      const preferredResolvedAddress = getSavedDeviceResolvedAddress(deviceSummary);
+      applyC64APIRuntimeConfig(
+        buildBaseUrlFromDeviceHost(preferredRuntimeHost),
+        password ?? undefined,
+        preferredRuntimeHost,
+        { reason: "saved-device-switch" },
+      );
 
       markSavedDeviceSwitchVerificationStarted(attemptId);
 
       try {
-        const verification = await verifyCurrentConnectionTarget();
+        const verification = await verifyCurrentConnectionTarget({
+          deviceHost: nextDeviceHost,
+          password,
+          preferResolvedAddress: preferredResolvedAddress,
+        });
         if (verification.ok && verification.deviceInfo) {
-          completeSavedDeviceVerification(deviceId, verification.deviceInfo);
+          completeSavedDeviceVerification(deviceId, verification.deviceInfo, verification.resolvedAddress ?? null);
           invalidateForSavedDeviceSwitch(queryClient, location.pathname);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "success",

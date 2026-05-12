@@ -16,8 +16,14 @@ import {
 } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { addLog } from "@/lib/logging";
 import { getPasswordForDevice } from "@/lib/secureStorage";
-import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
+import {
+  SAVED_DEVICE_SWITCH_METRICS_EVENT,
+  getSavedDeviceSwitchMetricsSnapshot,
+  type SavedDeviceSwitchMetricsSnapshot,
+} from "@/lib/savedDevices/savedDeviceSwitchMetrics";
 import type { SavedDevice } from "@/lib/savedDevices/store";
+import { getSavedDeviceSwitchSummary } from "@/lib/savedDevices/store";
+import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
 
 const AUTO_REFRESH_MS = 10_000;
 const TOTAL_PROBE_COUNT = 6;
@@ -113,7 +119,14 @@ export function useSavedDeviceHealthChecks(
       window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
   }, []);
 
-  const noopRefreshAll = useCallback(() => {}, []);
+  const noopRefreshAll = useCallback(() => { }, []);
+
+  const shouldPauseForForegroundSwitch = useCallback(() => {
+    return (
+      context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance &&
+      getSavedDeviceSwitchMetricsSnapshot().activeAttemptId !== null
+    );
+  }, [context]);
 
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
     if (!seededState) return null;
@@ -157,6 +170,9 @@ export function useSavedDeviceHealthChecks(
       if (!enabled || devices.length === 0) {
         return;
       }
+      if (shouldPauseForForegroundSwitch()) {
+        return;
+      }
       if (cycleRunningRef.current) {
         if (!force) {
           return;
@@ -195,7 +211,7 @@ export function useSavedDeviceHealthChecks(
 
             const result = await runHealthCheckForTarget(
               {
-                deviceHost: buildDeviceHostWithHttpPort(device.host, device.httpPort),
+                deviceHost: buildSavedDevicePreferredRuntimeHost(device, getSavedDeviceSwitchSummary(device.id)),
                 ftpPort: device.ftpPort,
                 telnetPort: device.telnetPort,
                 password,
@@ -270,7 +286,7 @@ export function useSavedDeviceHealthChecks(
         lastCompletedAt: new Date().toISOString(),
       }));
     },
-    [cancelAll, context, devices, enabled, updateDevice],
+    [cancelAll, context, devices, enabled, shouldPauseForForegroundSwitch, updateDevice],
   );
 
   const refreshAll = useCallback(() => {
@@ -298,6 +314,25 @@ export function useSavedDeviceHealthChecks(
       setCycle((current) => ({ ...current, running: false }));
     };
   }, [cancelAll, devices, enabled, runCycle, seededState]);
+
+  useEffect(() => {
+    if (seededState || context !== HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {
+      return;
+    }
+
+    const handleSavedDeviceSwitchMetrics = (event: Event) => {
+      const detail = (event as CustomEvent<SavedDeviceSwitchMetricsSnapshot>).detail;
+      if (!detail?.activeAttemptId) {
+        return;
+      }
+      cancelAll("Foreground saved-device switch in progress");
+      setCycle((current) => ({ ...current, running: false }));
+    };
+
+    window.addEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics as EventListener);
+    return () =>
+      window.removeEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics as EventListener);
+  }, [cancelAll, context, seededState]);
 
   return useMemo(
     () =>

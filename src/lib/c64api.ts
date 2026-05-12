@@ -266,18 +266,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-    | {
-        selected?: string | number;
-        options?: string[];
-        details?: {
-          min?: number;
-          max?: number;
-          format?: string;
-          presets?: string[];
-        };
-      }
-    | string
-    | number;
+  | {
+    selected?: string | number;
+    options?: string[];
+    details?: {
+      min?: number;
+      max?: number;
+      format?: string;
+      presets?: string[];
+    };
+  }
+  | string
+  | number;
 }
 
 export interface ConfigResponse {
@@ -797,8 +797,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = requestTimeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), requestTimeoutMs);
-                    })
+                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), requestTimeoutMs);
+                  })
                   : null;
                 let response: Response;
                 try {
@@ -1080,8 +1080,8 @@ export class C64API {
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                })
+                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+              })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])
@@ -2103,7 +2103,12 @@ export function getC64APIConfigSnapshot(): C64ApiConfigSnapshot {
  * Update the active in-memory API configuration without persisting it.
  * This is used for session-limited modes (e.g. Demo Mode).
  */
-export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, deviceHost?: string) {
+export function applyC64APIRuntimeConfig(
+  baseUrl: string,
+  password?: string,
+  deviceHost?: string,
+  options?: { reason?: string },
+) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost, {
     preserveLocalhostBaseUrl: getSmokeConfig()?.target === "mock",
@@ -2137,6 +2142,7 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
         baseUrl: resolvedBaseUrl,
         password: password || "",
         deviceHost: resolvedDeviceHost,
+        reason: options?.reason,
       },
     }),
   );
