@@ -288,22 +288,22 @@ const parseEnvelope = (raw: string | null): PersistedSavedDevicesEnvelope | null
       summaries:
         parsed.summaries && typeof parsed.summaries === "object"
           ? Object.fromEntries(
-              Object.entries(parsed.summaries).map(([deviceId, summary]) => [
+            Object.entries(parsed.summaries).map(([deviceId, summary]) => [
+              deviceId,
+              {
                 deviceId,
-                {
-                  deviceId,
-                  verifiedAt: summary?.verifiedAt ?? null,
-                  lastHealthState: summary?.lastHealthState ?? null,
-                  lastConnectivityState: summary?.lastConnectivityState ?? null,
-                  lastProbeSucceededAt: summary?.lastProbeSucceededAt ?? null,
-                  lastProbeFailedAt: summary?.lastProbeFailedAt ?? null,
-                  lastVerifiedProduct: summary?.lastVerifiedProduct ?? null,
-                  lastVerifiedHostname: summary?.lastVerifiedHostname ?? null,
-                  lastVerifiedUniqueId: summary?.lastVerifiedUniqueId ?? null,
-                  lastResolvedAddress: summary?.lastResolvedAddress ?? null,
-                } satisfies DeviceSwitchSummary,
-              ]),
-            )
+                verifiedAt: summary?.verifiedAt ?? null,
+                lastHealthState: summary?.lastHealthState ?? null,
+                lastConnectivityState: summary?.lastConnectivityState ?? null,
+                lastProbeSucceededAt: summary?.lastProbeSucceededAt ?? null,
+                lastProbeFailedAt: summary?.lastProbeFailedAt ?? null,
+                lastVerifiedProduct: summary?.lastVerifiedProduct ?? null,
+                lastVerifiedHostname: summary?.lastVerifiedHostname ?? null,
+                lastVerifiedUniqueId: summary?.lastVerifiedUniqueId ?? null,
+                lastResolvedAddress: summary?.lastResolvedAddress ?? null,
+              } satisfies DeviceSwitchSummary,
+            ]),
+          )
           : {},
       summaryLru: Array.isArray(parsed.summaryLru)
         ? parsed.summaryLru.filter((entry): entry is string => typeof entry === "string")
@@ -569,28 +569,28 @@ export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string
   const nextName = nextNameSource === "USER" ? normalizedName : buildInferredSavedDeviceName(normalizedHost);
   const candidateDevice: SavedDevice = existingDevice
     ? {
-        ...existingDevice,
-        host: normalizedHost,
-        name: nextName,
-        nameSource: nextNameSource,
-      }
+      ...existingDevice,
+      host: normalizedHost,
+      name: nextName,
+      nameSource: nextNameSource,
+    }
     : {
-        id: deviceId,
-        name: nextName,
-        nameSource: nextNameSource,
-        host: normalizedHost,
-        type: "",
-        typeSource: "INFERRED",
-        httpPort: DEFAULT_HTTP_PORT,
-        ftpPort: DEFAULT_FTP_PORT,
-        telnetPort: DEFAULT_TELNET_PORT,
-        lastKnownProduct: null,
-        lastKnownHostname: null,
-        lastKnownUniqueId: null,
-        lastSuccessfulConnectionAt: null,
-        lastUsedAt: null,
-        hasPassword: false,
-      };
+      id: deviceId,
+      name: nextName,
+      nameSource: nextNameSource,
+      host: normalizedHost,
+      type: "",
+      typeSource: "INFERRED",
+      httpPort: DEFAULT_HTTP_PORT,
+      ftpPort: DEFAULT_FTP_PORT,
+      telnetPort: DEFAULT_TELNET_PORT,
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      lastSuccessfulConnectionAt: null,
+      lastUsedAt: null,
+      hasPassword: false,
+    };
   const nextDevices = existingDevice
     ? devices.map((device) => (device.id === deviceId ? candidateDevice : device))
     : [...devices, candidateDevice];
@@ -709,43 +709,43 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
     const nextDevices = envelope.devices.map((device) =>
       device.id === deviceId
         ? (() => {
-            const host = update.host ? normalizeSavedDeviceHostInput(update.host) : device.host;
-            const hostChanged = host !== device.host;
-            clearSummary = hostChanged && Boolean(envelope.summaries[deviceId]);
-            const nextName = resolveSavedDeviceStoredName(
-              update.name === undefined ? device.name : update.name,
-              host,
-              update.nameSource ?? device.nameSource,
-            );
-            const nextType = resolveSavedDeviceStoredType(
-              update.type === undefined ? device.type : update.type,
-              update.lastKnownProduct ?? device.lastKnownProduct ?? null,
-              update.typeSource ?? device.typeSource,
-            );
-            return {
-              ...device,
-              ...update,
-              host,
-              name: nextName.name,
-              nameSource: nextName.nameSource,
-              type: nextType.typeSource === "USER" ? nextType.type : hostChanged ? "" : nextType.type,
-              typeSource: nextType.typeSource,
-              lastKnownProduct:
-                nextType.typeSource === "USER"
-                  ? (update.lastKnownProduct ?? device.lastKnownProduct)
-                  : hostChanged
-                    ? null
-                    : (update.lastKnownProduct ?? device.lastKnownProduct),
-              lastKnownHostname:
-                hostChanged && nextType.typeSource !== "USER"
+          const host = update.host ? normalizeSavedDeviceHostInput(update.host) : device.host;
+          const hostChanged = host !== device.host;
+          clearSummary = hostChanged && Boolean(envelope.summaries[deviceId]);
+          const nextName = resolveSavedDeviceStoredName(
+            update.name === undefined ? device.name : update.name,
+            host,
+            update.nameSource ?? device.nameSource,
+          );
+          const nextType = resolveSavedDeviceStoredType(
+            update.type === undefined ? device.type : update.type,
+            update.lastKnownProduct ?? device.lastKnownProduct ?? null,
+            update.typeSource ?? device.typeSource,
+          );
+          return {
+            ...device,
+            ...update,
+            host,
+            name: nextName.name,
+            nameSource: nextName.nameSource,
+            type: nextType.typeSource === "USER" ? nextType.type : hostChanged ? "" : nextType.type,
+            typeSource: nextType.typeSource,
+            lastKnownProduct:
+              nextType.typeSource === "USER"
+                ? (update.lastKnownProduct ?? device.lastKnownProduct)
+                : hostChanged
                   ? null
-                  : (update.lastKnownHostname ?? device.lastKnownHostname),
-              lastKnownUniqueId:
-                hostChanged && nextType.typeSource !== "USER"
-                  ? null
-                  : (update.lastKnownUniqueId ?? device.lastKnownUniqueId),
-            };
-          })()
+                  : (update.lastKnownProduct ?? device.lastKnownProduct),
+            lastKnownHostname:
+              hostChanged && nextType.typeSource !== "USER"
+                ? null
+                : (update.lastKnownHostname ?? device.lastKnownHostname),
+            lastKnownUniqueId:
+              hostChanged && nextType.typeSource !== "USER"
+                ? null
+                : (update.lastKnownUniqueId ?? device.lastKnownUniqueId),
+          };
+        })()
         : device,
     );
 
@@ -754,9 +754,9 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
       devices: nextDevices,
       summaries: clearSummary
         ? {
-            ...envelope.summaries,
-            [deviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[deviceId]!),
-          }
+          ...envelope.summaries,
+          [deviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[deviceId]!),
+        }
         : envelope.summaries,
     };
   });
@@ -773,26 +773,26 @@ export const updateSelectedSavedDeviceConnection = (update: {
     const nextDevices = envelope.devices.map((device) =>
       device.id === selectedDeviceId
         ? (() => {
-            const nextHost = stripSavedDeviceHttpPort(update.deviceHost);
-            const hostChanged = nextHost !== device.host;
-            clearSummary = hostChanged && Boolean(envelope.summaries[selectedDeviceId]);
-            const nextName = resolveSavedDeviceStoredName(device.name, nextHost, device.nameSource);
-            return {
-              ...device,
-              host: nextHost,
-              name: nextName.name,
-              nameSource: nextName.nameSource,
-              type: device.typeSource === "USER" ? device.type : hostChanged ? "" : device.type,
-              lastKnownProduct:
-                device.typeSource === "USER" ? device.lastKnownProduct : hostChanged ? null : device.lastKnownProduct,
-              lastKnownHostname:
-                device.typeSource === "USER" ? device.lastKnownHostname : hostChanged ? null : device.lastKnownHostname,
-              lastKnownUniqueId:
-                device.typeSource === "USER" ? device.lastKnownUniqueId : hostChanged ? null : device.lastKnownUniqueId,
-              httpPort: update.httpPort ?? splitSavedDeviceHostAndHttpPort(update.deviceHost).httpPort,
-              hasPassword: update.passwordPresent,
-            };
-          })()
+          const nextHost = stripSavedDeviceHttpPort(update.deviceHost);
+          const hostChanged = nextHost !== device.host;
+          clearSummary = hostChanged && Boolean(envelope.summaries[selectedDeviceId]);
+          const nextName = resolveSavedDeviceStoredName(device.name, nextHost, device.nameSource);
+          return {
+            ...device,
+            host: nextHost,
+            name: nextName.name,
+            nameSource: nextName.nameSource,
+            type: device.typeSource === "USER" ? device.type : hostChanged ? "" : device.type,
+            lastKnownProduct:
+              device.typeSource === "USER" ? device.lastKnownProduct : hostChanged ? null : device.lastKnownProduct,
+            lastKnownHostname:
+              device.typeSource === "USER" ? device.lastKnownHostname : hostChanged ? null : device.lastKnownHostname,
+            lastKnownUniqueId:
+              device.typeSource === "USER" ? device.lastKnownUniqueId : hostChanged ? null : device.lastKnownUniqueId,
+            httpPort: update.httpPort ?? splitSavedDeviceHostAndHttpPort(update.deviceHost).httpPort,
+            hasPassword: update.passwordPresent,
+          };
+        })()
         : device,
     );
 
@@ -801,9 +801,9 @@ export const updateSelectedSavedDeviceConnection = (update: {
       devices: nextDevices,
       summaries: clearSummary
         ? {
-            ...envelope.summaries,
-            [selectedDeviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[selectedDeviceId]!),
-          }
+          ...envelope.summaries,
+          [selectedDeviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[selectedDeviceId]!),
+        }
         : envelope.summaries,
     };
   });
@@ -815,10 +815,10 @@ export const updateSelectedSavedDevicePorts = (update: { ftpPort?: number; telne
     devices: envelope.devices.map((device) =>
       device.id === envelope.selectedDeviceId
         ? {
-            ...device,
-            ftpPort: update.ftpPort ?? device.ftpPort,
-            telnetPort: update.telnetPort ?? device.telnetPort,
-          }
+          ...device,
+          ftpPort: update.ftpPort ?? device.ftpPort,
+          telnetPort: update.telnetPort ?? device.telnetPort,
+        }
         : device,
     ),
   }));
@@ -836,9 +836,9 @@ export const selectSavedDevice = (deviceId: string) => {
       devices: envelope.devices.map((device) =>
         device.id === deviceId
           ? {
-              ...device,
-              lastUsedAt: nowIso,
-            }
+            ...device,
+            lastUsedAt: nowIso,
+          }
           : device,
       ),
     };
