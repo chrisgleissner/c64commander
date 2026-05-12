@@ -80,6 +80,7 @@ export function useSavedDeviceSwitching() {
         buildBaseUrlFromDeviceHost(preferredRuntimeHost),
         password ?? undefined,
         preferredRuntimeHost,
+        { reason: "saved-device-switch" },
       );
 
       markSavedDeviceSwitchVerificationStarted(attemptId);

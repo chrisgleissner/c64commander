@@ -119,21 +119,32 @@ export const GlobalDiagnosticsOverlay = () => {
     [overlayOpen, traceEvents],
   );
 
-  const setDialogOpen = useCallback((open: boolean) => {
-    if (open) {
-      setOverlayFirstVisible(false);
-      if (!diagnosticsOpenActionRef.current) {
-        const action = createActionContext("diagnostics.open", "user", "GlobalDiagnosticsOverlay");
-        diagnosticsOpenActionRef.current = action;
-        recordActionStart(action);
-      }
-    } else {
-      diagnosticsOpenActionRef.current = null;
-      setOverlayFirstVisible(false);
-    }
-    setDiagnosticsOverlayActive(open);
-    setOverlayOpen(open);
+  const finishPendingDiagnosticsOpenAction = useCallback((error?: Error | null) => {
+    const action = diagnosticsOpenActionRef.current;
+    if (!action) return null;
+    diagnosticsOpenActionRef.current = null;
+    recordActionEnd(action, error);
+    return action;
   }, []);
+
+  const setDialogOpen = useCallback(
+    (open: boolean) => {
+      if (open) {
+        setOverlayFirstVisible(false);
+        if (!diagnosticsOpenActionRef.current) {
+          const action = createActionContext("diagnostics.open", "user", "GlobalDiagnosticsOverlay");
+          diagnosticsOpenActionRef.current = action;
+          recordActionStart(action);
+        }
+      } else {
+        finishPendingDiagnosticsOpenAction(new Error("Diagnostics overlay closed before first visible paint"));
+        setOverlayFirstVisible(false);
+      }
+      setDiagnosticsOverlayActive(open);
+      setOverlayOpen(open);
+    },
+    [finishPendingDiagnosticsOpenAction],
+  );
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -199,16 +210,14 @@ export const GlobalDiagnosticsOverlay = () => {
 
   const handleDiagnosticsFirstVisible = useCallback(() => {
     setOverlayFirstVisible(true);
-    const action = diagnosticsOpenActionRef.current;
+    const action = finishPendingDiagnosticsOpenAction(null);
     if (!action) {
       return;
     }
-    diagnosticsOpenActionRef.current = null;
-    recordActionEnd(action);
     addLog("info", "Diagnostics first visible", {
       action: action.name,
     });
-  }, []);
+  }, [finishPendingDiagnosticsOpenAction]);
 
   useEffect(() => {
     if (overlayOpen) {
@@ -224,8 +233,11 @@ export const GlobalDiagnosticsOverlay = () => {
   }, [overlayOpen]);
 
   useEffect(() => {
-    return () => setDiagnosticsOverlayActive(false);
-  }, []);
+    return () => {
+      finishPendingDiagnosticsOpenAction(new Error("Diagnostics overlay unmounted before first visible paint"));
+      setDiagnosticsOverlayActive(false);
+    };
+  }, [finishPendingDiagnosticsOpenAction]);
 
   useEffect(() => {
     const applyOverlaySeedState = (state: DiagnosticsOverlaySeedState | null | undefined) => {

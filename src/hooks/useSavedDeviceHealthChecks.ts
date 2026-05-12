@@ -16,7 +16,6 @@ import {
 } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { addLog } from "@/lib/logging";
 import { getPasswordForDevice } from "@/lib/secureStorage";
-import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
 import {
   SAVED_DEVICE_SWITCH_METRICS_EVENT,
   getSavedDeviceSwitchMetricsSnapshot,
@@ -120,7 +119,7 @@ export function useSavedDeviceHealthChecks(
       window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
   }, []);
 
-  const noopRefreshAll = useCallback(() => { }, []);
+  const noopRefreshAll = useCallback(() => {}, []);
 
   const shouldPauseForForegroundSwitch = useCallback(() => {
     return (

@@ -9,6 +9,7 @@ const {
   runDiagnosticsReconcilerMock,
   runPlaybackReconcilerMock,
   diagnosticsDialogState,
+  recordActionEndMock,
 } = vi.hoisted(() => ({
   consumeDiagnosticsOpenRequestMock: vi.fn(),
   runDiagnosticsReconcilerMock: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
@@ -16,6 +17,7 @@ const {
   diagnosticsDialogState: {
     firstVisibleCallback: null as (() => void) | null,
   },
+  recordActionEndMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -58,7 +60,7 @@ vi.mock("@/lib/logging", () => ({
 vi.mock("@/lib/tracing/traceSession", () => ({
   clearTraceEvents: vi.fn(),
   getTraceEvents: vi.fn(() => []),
-  recordActionEnd: vi.fn(),
+  recordActionEnd: recordActionEndMock,
   recordActionStart: vi.fn(),
   recordRestResponse: vi.fn(),
 }));
@@ -232,6 +234,38 @@ describe("GlobalDiagnosticsOverlay route close", () => {
       expect(runDiagnosticsReconcilerMock).toHaveBeenCalledWith("Diagnostics overlay opened");
       expect(runPlaybackReconcilerMock).toHaveBeenCalledWith("Diagnostics overlay opened");
     });
+  });
+
+  it("ends the pending diagnostics action when the overlay closes before first visible paint", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
+
+    renderOverlay("/");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close overlay" }));
+
+    await waitFor(() => {
+      expect(recordActionEndMock).toHaveBeenCalledWith(
+        expect.objectContaining({ correlationId: "COR-1" }),
+        expect.objectContaining({ message: "Diagnostics overlay closed before first visible paint" }),
+      );
+    });
+  });
+
+  it("ends the pending diagnostics action when the overlay unmounts before first visible paint", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
+
+    const view = renderOverlay("/");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    view.unmount();
+
+    expect(recordActionEndMock).toHaveBeenCalledWith(
+      expect.objectContaining({ correlationId: "COR-1" }),
+      expect.objectContaining({ message: "Diagnostics overlay unmounted before first visible paint" }),
+    );
   });
 
   it.each([

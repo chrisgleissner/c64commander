@@ -310,6 +310,54 @@ describe("useSavedDeviceSwitching", () => {
     });
   });
 
+  it("dispatches a saved-device-switch reason with runtime connection changes", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+      hasPassword: false,
+    });
+
+    const detailSpy = vi.fn();
+    const handler = (event: Event) => detailSpy((event as CustomEvent).detail);
+    window.addEventListener("c64u-connection-change", handler as EventListener);
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({ ok: false, deviceInfo: null, resolvedAddress: null });
+
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(detailSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "saved-device-switch",
+      }),
+    );
+
+    window.removeEventListener("c64u-connection-change", handler as EventListener);
+  });
+
   it("keeps the selected device and records offline state when verification fails", async () => {
     const store = await import("@/lib/savedDevices/store");
     const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");

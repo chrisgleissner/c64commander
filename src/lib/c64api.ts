@@ -2103,7 +2103,12 @@ export function getC64APIConfigSnapshot(): C64ApiConfigSnapshot {
  * Update the active in-memory API configuration without persisting it.
  * This is used for session-limited modes (e.g. Demo Mode).
  */
-export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, deviceHost?: string) {
+export function applyC64APIRuntimeConfig(
+  baseUrl: string,
+  password?: string,
+  deviceHost?: string,
+  options?: { reason?: string },
+) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost, {
     preserveLocalhostBaseUrl: getSmokeConfig()?.target === "mock",
@@ -2137,6 +2142,7 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
         baseUrl: resolvedBaseUrl,
         password: password || "",
         deviceHost: resolvedDeviceHost,
+        reason: options?.reason,
       },
     }),
   );

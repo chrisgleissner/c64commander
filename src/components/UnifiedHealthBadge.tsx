@@ -355,9 +355,9 @@ export function UnifiedHealthBadge({ className }: Props) {
         },
         selectedDeviceHealthSnapshot
           ? {
-            running: selectedDeviceHealthSnapshot.running,
-            latestResult: selectedDeviceHealthSnapshot.latestResult,
-          }
+              running: selectedDeviceHealthSnapshot.running,
+              latestResult: selectedDeviceHealthSnapshot.latestResult,
+            }
           : null,
       ),
     [healthState.connectivity, healthState.problemCount, healthState.state, selectedDeviceHealthSnapshot],

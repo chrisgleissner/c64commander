@@ -473,6 +473,25 @@ describe("c64api", () => {
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("saved-host");
   });
 
+  it("includes an optional reason in runtime connection-change events", () => {
+    const handler = vi.fn();
+    window.addEventListener("c64u-connection-change", handler as EventListener);
+
+    applyC64APIRuntimeConfig("http://runtime", "runtime-pass", "runtime-host", {
+      reason: "saved-device-switch",
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          reason: "saved-device-switch",
+        }),
+      }),
+    );
+
+    window.removeEventListener("c64u-connection-change", handler as EventListener);
+  });
+
   it("migrates legacy base url into device host storage", () => {
     localStorage.setItem("c64u_base_url", "http://192.168.1.55");
 
