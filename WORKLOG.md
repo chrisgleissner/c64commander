@@ -1,3 +1,12 @@
+## [2026-05-12] PR convergence steering: implementation-focused PR summary
+
+- Appended and completed the active PLANS steering TODO to update PR metadata without changing the execution scope.
+- Amended GitHub PR #254 so the description now leads with the performance improvements that actually landed in the branch, separates those from investigation-only artifacts, and keeps the added regression coverage explicit.
+- Validation:
+  - verified the steering TODO was present in `PLANS.md` before executing the GitHub update
+  - updated the PR body with `gh pr edit 254 --body-file /tmp/c64commander-pr254-body.md`
+  - confirmed the active PR still targets `main` from `fix/improve-ux-performance` and re-read the current check rollup during the same GitHub session
+
 ## [2026-05-11] Android real-device performance stabilization investigation
 
 - Opened the repository-level planning surface and started a dedicated late-stage performance investigation focused on Android against real `u64` and `c64u` hardware.

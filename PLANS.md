@@ -18,6 +18,7 @@
 - [completed] Analyze Diagnostics dialog open cost, device switch latency, Telnet instability boundaries, and queue/backpressure behavior.
 - [completed] Produce a staged implementation plan with acceptance criteria, rollback strategy, and verification commands.
 - [completed] Produce a concrete regression and verification plan with metric thresholds.
+- [completed] Amend the active PR description so it clearly summarizes the performance improvements that actually landed in this branch, separate from investigation-only artifacts.
 
 ## Investigation Findings
 
