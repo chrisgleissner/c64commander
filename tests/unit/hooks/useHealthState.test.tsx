@@ -19,7 +19,7 @@ const c64ConnectionMock = vi.hoisted(() => ({
 }));
 
 const traceEventsMock = vi.hoisted(() => ({
-  events: [] as Array<{ type: string; data: Record<string, unknown> }>,
+  events: [] as Array<{ type: string; data: Record<string, unknown>; correlationId?: string }>,
 }));
 
 const configuredHostMock = vi.hoisted(() => ({
@@ -34,7 +34,12 @@ const healthModelMocks = vi.hoisted(() => ({
   deriveLastRestActivity: vi.fn(() => null),
   deriveLastTelnetActivity: vi.fn(() => null),
   derivePrimaryProblem: vi.fn(() => null),
-  deriveRestContributorHealth: vi.fn(() => ({ state: "Unhealthy", problemCount: 1, totalOperations: 2, failedOperations: 1 })),
+  deriveRestContributorHealth: vi.fn(() => ({
+    state: "Unhealthy",
+    problemCount: 1,
+    totalOperations: 2,
+    failedOperations: 1,
+  })),
   deriveTelnetContributorHealth: vi.fn(() => idleContributor()),
   rollUpHealth: vi.fn(() => "Unhealthy"),
 }));
@@ -260,22 +265,21 @@ describe("useHealthState", () => {
   it("ignores trace failures from other hosts when deriving the selected device health", () => {
     configuredHostMock.host = "u64";
     traceEventsMock.events = [
-      { type: "rest-response", data: { status: 200, hostname: "u64" } },
-      { type: "rest-response", data: { status: 500, hostname: "c64u" } },
-      { type: "ftp-operation", data: { hostname: "c64u", result: "failure" } },
-      { type: "error", data: { message: "global warning" } },
+      { type: "rest-response", correlationId: "u64-ok", data: { status: 200, hostname: "u64" } },
+      { type: "rest-response", correlationId: "c64u-rest", data: { status: 500, hostname: "c64u" } },
+      { type: "ftp-operation", correlationId: "c64u-ftp", data: { hostname: "c64u", result: "failure" } },
+      { type: "error", correlationId: "u64-global", data: { message: "global warning" } },
+      { type: "error", correlationId: "c64u-rest", data: { message: "off-host rest failure" } },
     ];
 
     renderHook(() => useHealthState());
 
-    const filteredEvents = healthModelMocks.deriveRestContributorHealth.mock.calls.at(-1)?.[0] as Array<{
-      type: string;
-      data: Record<string, unknown>;
-    }>;
+    const lastRestContributorCall = healthModelMocks.deriveRestContributorHealth.mock.calls.slice(-1)[0];
+    if (!lastRestContributorCall) {
+      throw new Error("deriveRestContributorHealth was not called");
+    }
+    const [filteredEvents] = lastRestContributorCall;
 
-    expect(filteredEvents).toEqual([
-      traceEventsMock.events[0],
-      traceEventsMock.events[3],
-    ]);
+    expect(filteredEvents).toEqual([traceEventsMock.events[0], traceEventsMock.events[3]]);
   });
 });

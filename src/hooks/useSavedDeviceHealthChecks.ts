@@ -21,6 +21,10 @@ import {
   getSavedDeviceSwitchMetricsSnapshot,
   type SavedDeviceSwitchMetricsSnapshot,
 } from "@/lib/savedDevices/savedDeviceSwitchMetrics";
+import {
+  isDiagnosticsOverlaySuppressionArmed,
+  subscribeDiagnosticsSuppression,
+} from "@/lib/diagnostics/diagnosticsOverlayState";
 import type { SavedDevice } from "@/lib/savedDevices/store";
 import { getSavedDeviceSwitchSummary } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
@@ -128,6 +132,10 @@ export function useSavedDeviceHealthChecks(
     );
   }, [context]);
 
+  const shouldPauseForDiagnosticsSuppression = useCallback(() => {
+    return context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance && isDiagnosticsOverlaySuppressionArmed();
+  }, [context]);
+
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
     if (!seededState) return null;
     return {
@@ -171,6 +179,9 @@ export function useSavedDeviceHealthChecks(
         return;
       }
       if (shouldPauseForForegroundSwitch()) {
+        return;
+      }
+      if (shouldPauseForDiagnosticsSuppression()) {
         return;
       }
       if (cycleRunningRef.current) {
@@ -286,7 +297,15 @@ export function useSavedDeviceHealthChecks(
         lastCompletedAt: new Date().toISOString(),
       }));
     },
-    [cancelAll, context, devices, enabled, shouldPauseForForegroundSwitch, updateDevice],
+    [
+      cancelAll,
+      context,
+      devices,
+      enabled,
+      shouldPauseForDiagnosticsSuppression,
+      shouldPauseForForegroundSwitch,
+      updateDevice,
+    ],
   );
 
   const refreshAll = useCallback(() => {
@@ -332,6 +351,26 @@ export function useSavedDeviceHealthChecks(
     window.addEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics as EventListener);
     return () =>
       window.removeEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics as EventListener);
+  }, [cancelAll, context, seededState]);
+
+  useEffect(() => {
+    if (seededState || context !== HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {
+      return;
+    }
+
+    const handleDiagnosticsSuppression = (active: boolean) => {
+      if (!active) {
+        return;
+      }
+      cancelAll("Diagnostics overlay suppression armed");
+      setCycle((current) => ({ ...current, running: false }));
+    };
+
+    if (isDiagnosticsOverlaySuppressionArmed()) {
+      handleDiagnosticsSuppression(true);
+    }
+
+    return subscribeDiagnosticsSuppression(handleDiagnosticsSuppression);
   }, [cancelAll, context, seededState]);
 
   return useMemo(

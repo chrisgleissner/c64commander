@@ -36,6 +36,26 @@ const { mockRunHealthCheckForTarget, mockGetPasswordForDevice } = vi.hoisted(() 
   mockGetPasswordForDevice: vi.fn(),
 }));
 
+const diagnosticsSuppressionMock = vi.hoisted(() => {
+  let active = false;
+  const listeners = new Set<(active: boolean) => void>();
+  return {
+    isActive: () => active,
+    setActive: (next: boolean) => {
+      active = next;
+      listeners.forEach((listener) => listener(active));
+    },
+    reset: () => {
+      active = false;
+      listeners.clear();
+    },
+    subscribe: (listener: (active: boolean) => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+});
+
 vi.mock("@/lib/diagnostics/healthCheckEngine", () => ({
   HEALTH_CHECK_CONTEXTS: {
     backgroundMaintenance: {
@@ -55,6 +75,11 @@ vi.mock("@/lib/secureStorage", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
+vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
+  isDiagnosticsOverlaySuppressionArmed: () => diagnosticsSuppressionMock.isActive(),
+  subscribeDiagnosticsSuppression: (listener: (active: boolean) => void) => diagnosticsSuppressionMock.subscribe(listener),
+}));
 
 const devices = [
   {
@@ -168,6 +193,7 @@ describe("useSavedDeviceHealthChecks", () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     clearSavedDeviceSwitchMetrics();
+    diagnosticsSuppressionMock.reset();
     mockGetPasswordForDevice.mockResolvedValue("secret");
     mockRunHealthCheckForTarget.mockImplementation(async (target: { deviceHost: string }) =>
       target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
@@ -392,6 +418,27 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.cycle.running).toBe(false);
     expect(result.current.byDeviceId["device-office"]?.latestResult).toBe(previousOfficeResult);
     expect(result.current.byDeviceId["device-office"]?.error).toBeNull();
+  });
+
+  it("pauses background-maintenance polling while diagnostics suppression is armed", async () => {
+    diagnosticsSuppressionMock.setActive(true);
+
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+    expect(result.current.cycle.running).toBe(false);
+
+    diagnosticsSuppressionMock.setActive(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+    });
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
   });
 
   it("preserves terminal probe states after an automatic cycle completes", async () => {

@@ -15,6 +15,7 @@ import { getConfiguredHost } from "@/lib/connection/hostEdit";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import type { HealthCheckProbeOutcome } from "@/lib/diagnostics/healthHistory";
 import {
   type ContributorHealth,
   deriveAppContributorHealth,
@@ -33,10 +34,17 @@ import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper
 import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
 
 const contributorHealthFromProbe = (
-  outcome: "Success" | "Fail" | "Skipped",
+  outcome: HealthCheckProbeOutcome,
   problemCount: number,
 ): ContributorHealth => ({
-  state: outcome === "Success" ? "Healthy" : outcome === "Fail" ? "Unhealthy" : "Idle",
+  state:
+    outcome === "Success"
+      ? "Healthy"
+      : outcome === "Fail"
+        ? "Unhealthy"
+        : outcome === "Partial"
+          ? "Degraded"
+          : "Idle",
   problemCount,
   totalOperations: 1,
   failedOperations: problemCount,
@@ -77,10 +85,24 @@ const filterTraceEventsForConfiguredHost = (
   configuredHost: string,
 ): TraceEvent<Record<string, unknown>>[] => {
   const selectedHost = stripPortFromDeviceHost(configuredHost);
+  const correlationHosts = new Map<string, string>();
+
+  events.forEach((event) => {
+    const transportHost = resolveTraceTransportHost(event);
+    if (transportHost) {
+      correlationHosts.set(event.correlationId, transportHost);
+    }
+  });
+
   return events.filter((event) => {
     const transportHost = resolveTraceTransportHost(event);
     if (transportHost) {
       return transportHost === selectedHost;
+    }
+
+    const correlationHost = correlationHosts.get(event.correlationId) ?? null;
+    if (correlationHost) {
+      return correlationHost === selectedHost;
     }
 
     const attributedHost = resolveTraceAttributedHost(event);
@@ -148,20 +170,20 @@ export function useHealthState(): OverallHealthState {
         lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
         primaryProblem: firstFailedProbe
           ? {
-            id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
-            title: `${firstFailedProbe.probe} health check failed`,
-            contributor:
-              firstFailedProbe.probe === "REST"
-                ? "REST"
-                : firstFailedProbe.probe === "FTP"
-                  ? "FTP"
-                  : firstFailedProbe.probe === "TELNET"
-                    ? "TELNET"
-                    : "App",
-            timestampMs: Date.parse(latestHealthCheck.endTimestamp),
-            impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
-            causeHint: firstFailedProbe.reason,
-          }
+              id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
+              title: `${firstFailedProbe.probe} health check failed`,
+              contributor:
+                firstFailedProbe.probe === "REST"
+                  ? "REST"
+                  : firstFailedProbe.probe === "FTP"
+                    ? "FTP"
+                    : firstFailedProbe.probe === "TELNET"
+                      ? "TELNET"
+                      : "App",
+              timestampMs: Date.parse(latestHealthCheck.endTimestamp),
+              impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
+              causeHint: firstFailedProbe.reason,
+            }
           : null,
       };
     }
