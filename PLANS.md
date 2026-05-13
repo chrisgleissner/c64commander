@@ -13,7 +13,7 @@
 - [completed] Implement the smallest safe fixes for the confirmed root causes without broad refactors.
 - [completed] Add or update focused regression tests for status stability, foreground/background probe separation, connectivity recovery, HESC progress phases, Play volume target-state behavior, and stale-request invalidation.
 - [completed] Add a dedicated playback volume/mute latency test or harness with repeatable metrics/evidence output.
-- [in-progress] Run the smallest honest validation set for touched layers, then full required validation for the final change set, and record exact results.
+- [completed] Run the smallest honest validation set for touched layers, then full required validation for the final change set, and record exact results.
 
 ## Diagnostics Bundles Under Review
 
@@ -35,22 +35,68 @@
 - Play HVSC progress had a direct code mismatch: `database_insertion` was already treated as ingest/index state in shared preparation logic, but the Play hook still omitted it from visible phase/progress handling.
 - Play volume writes had a concrete readback-latency path: preview writes could still trigger reconciliation reads or suppress the final commit readback when a commit matched an in-flight preview.
 
-## Findings To Record As Evidence
+## Diagnostics Evidence
 
-- Pending extraction from the diagnostics bundles:
-  - timestamps
-  - device names
-  - health-check lifecycle events
-  - connectivity lifecycle events
-  - config probe activity
-  - visible LED heartbeat related events
-  - state transitions
-  - degraded / idle / healthy / offline status changes
-  - diagnostics clear events
-  - REST failures, retries, cancellations, aborts, stale requests
-  - Play page download, ingestion, indexing, playback, volume, mute, and restore-volume events
-  - evidence of app-internal connectivity degradation
-  - evidence of starvation, deadlock, cancellation poisoning, queue exhaustion, stale singleton state, or stuck networking
+### Bundle `0648` (`/home/chris/Downloads/c64commander-diagnostics-all-2026-05-13-0648-08Z`)
+
+- Device names seen: `u64`, `c64u`.
+- Final snapshot: `state=Degraded`, `connectivity=Online`, `host=192.168.1.13`, `connectedDeviceLabel=u64`.
+- Primary exported problem: `Health check TELNET probe failed`, cause hint `Aborted`.
+- Last successful transport evidence was newer than the exported degraded status:
+  - last REST activity `GET /v1/info` result `200` at `1778654878162`
+  - last FTP activity `list /` result `success` at `1778654878232`
+  - last TELNET activity `Health check TELNET probe` result `failure` at `1778654858058`
+- Connectivity lifecycle evidence:
+  - `2026-05-13T06:46:10.957Z` host change to `192.168.1.13`
+  - immediate `rest.get /v1/info` failures with `Device not ready for requests`
+  - later successful REST and FTP activity without recovery of exported contributor state
+- Config probe / LED-heartbeat evidence:
+  - early foreground probe activity hit `GET /v1/configs/LED Strip Settings` and related LED config reads
+  - no diagnostics `clear` events were exported in this bundle
+- Failure classification evidence:
+  - repeated `Device not ready for requests`
+  - repeated `Health check REST probe failed` warnings tied to readiness blocking
+  - final degraded status was still driven by aborted TELNET history rather than current successful REST/FTP evidence
+
+### Bundle `0658` (`/home/chris/Downloads/c64commander-diagnostics-all-2026-05-13-0658-27Z`)
+
+- Device name seen: `u64`.
+- Final snapshot: `state=Degraded`, `connectivity=Online`, `host=192.168.1.13`, `connectedDeviceLabel=u64`.
+- Primary exported problem remained `Health check TELNET probe failed`, cause hint `Aborted`.
+- Exported current evidence contradicted the degraded status:
+  - last REST activity `GET /v1/machine:readmem` result `200` at `1778655449749`
+  - last FTP activity `list /` result `success` at `1778655446654`
+  - last TELNET activity `Health check TELNET probe` result `success` at `1778655450969`
+- Connectivity lifecycle evidence:
+  - alternating Telnet connections to `192.168.1.13` and `192.168.1.167` during probe activity
+  - foreground UI still showed `Connected to u64, system degraded, 4 problems`
+- Play / HVSC evidence:
+  - `2026-05-13T06:57:26.065Z` `HVSC preparation state transition` `unknown -> NOT_PRESENT`
+  - cache-directory warnings were present but unrelated to device status derivation
+- Cancellation evidence:
+  - `2026-05-13T06:57:29.720Z` and `2026-05-13T06:57:29.953Z` `Telnet request failed` with `error=Aborted`, `actionId=health-check`
+- Conclusion supported by this bundle:
+  - older aborted TELNET failures continued to dominate contributor state even after newer TELNET success and healthy REST/FTP evidence existed
+
+### Bundle `0714` (`/home/chris/Downloads/c64commander-diagnostics-all-2026-05-13-0714-37Z`)
+
+- Device name seen: `u64` in the exported snapshot, but failing requests targeted `http://192.168.1.167/...`, showing stale/alternate host activity in the failing path.
+- Final snapshot: `state=Unhealthy`, `connectivity=Online`, `host=192.168.1.13`, `connectedDeviceLabel=u64`.
+- Primary exported problem: `REST health check failed`, cause `REST timed out after 3000ms`.
+- Connectivity degradation evidence:
+  - `2026-05-13T07:13:46.136Z` first exported `Failed to fetch` / `Host unreachable`
+  - repeated `C64 API request failed` entries against `http://192.168.1.167/v1/configs/LED Strip Settings/...`
+  - error traces moved through `BUSY` and `ERROR` device states while later requests continued to fail
+- This bundle matches the app-internal degradation hypothesis:
+  - healthy-device communication ceased inside the app without requiring a device-side failure export
+  - failures were consistent with shared readiness/cancellation state blocking recovery probes rather than the device being permanently offline
+
+### Cross-bundle conclusions
+
+- Missing information was repeatedly being interpreted as negative evidence.
+- Aborted/superseded TELNET probe history was sticky enough to keep devices degraded after newer success.
+- Readiness blocking (`Device not ready for requests`) and stale host activity could poison the system recovery path until app restart.
+- No exported diagnostics bundle showed a legitimate reason for `Clear All` to reset live device state, reinforcing the state-separation fix.
 
 ## Files Inspected
 
@@ -67,6 +113,11 @@
 - `src/pages/playFiles/hooks/useHvscLibrary.ts`
 - `src/lib/hvsc/hvscPreparationState.ts`
 - `src/pages/playFiles/hooks/useVolumeOverride.ts`
+- `src/pages/playFiles/hooks/usePlayFilesVolumeBindings.ts`
+- `c64scope/src/playbackVolumeLatency.ts`
+- `c64scope/src/playbackVolumeLatencyMetrics.ts`
+- `c64scope/tests/playbackVolumeLatency.test.ts`
+- `docs/testing/playback-volume-latency.md`
 - nearby unit tests for diagnostics, health checks, device interaction, HVSC progress, and Play volume
 
 ## Hypotheses In Progress
@@ -85,6 +136,11 @@
 - Propagated that recovery-lane intent through `C64API`, diagnostics REST probes, and connection-manager probe paths.
 - Mapped HVSC `database_insertion` into visible indexing progress so late-stage ingest progress no longer falls back to the wrong phase.
 - Prevented Play volume preview writes from scheduling reconciliation reads, while still forcing a single readback when the final commit matches an in-flight preview.
+- Added a dedicated `c64scope` playback-volume latency harness that:
+  - uploads and starts a SID on real hardware
+  - issues the same `Audio Mixer` REST writes used by Play volume/mute control
+  - captures UDP audio from `u64`/`c64u`
+  - measures mute latency from audio-stream evidence and falls back to direct device read-back for non-silent volume steps when the stream cannot separate them reliably
 
 ## Tests Added Or Updated
 
@@ -94,19 +150,34 @@
 - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: verifies diagnostic REST probes carry the recovery-lane flag.
 - `tests/unit/playFiles/useHvscLibrary.progress.test.tsx`: verifies `database_insertion` is surfaced as indexing progress.
 - `tests/unit/playFiles/useVolumeOverride.test.tsx`: verifies preview writes skip reconciliation reads and the final commit still triggers a single readback.
+- `c64scope/tests/playbackVolumeLatency.test.ts`: verifies request-to-effect latency extraction and summary statistics for the dedicated playback-volume harness.
 
 ## Verification Evidence
 
 - Focused diagnostics/status suites passed: `tests/unit/lib/diagnostics/healthModel.test.ts` and `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx` with `110 passed, 0 failed`.
 - Focused recovery suites passed: `tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts` and `tests/unit/lib/diagnostics/healthCheckEngine.test.ts` with `101 passed, 0 failed`.
 - Focused Play/HVSC suites passed: `tests/unit/playFiles/useHvscLibrary.progress.test.tsx`, `tests/unit/playFiles/useVolumeOverride.test.tsx`, and `tests/unit/playFiles/useVolumeOverride.transition.test.tsx` with `41 passed, 0 failed`.
-- Repository-wide validation and Android deploy/install evidence still pending.
+- Dedicated playback latency harness unit test passed: `cd c64scope && npx vitest run tests/playbackVolumeLatency.test.ts`.
+- `c64scope` build passed: `cd c64scope && npm run build`.
+- Dedicated real-device latency harness passed on `u64`: `npm run scope:hil:playback-volume-latency`.
+  - artifact: `c64scope/artifacts/playback-volume-latency/20260513T081615Z-u64/playback-volume-latency-summary.json`
+  - summary: `count=10`, `min=0ms`, `median=109ms`, `p90=115ms`, `p95=125ms`, `max=125ms`, `failures=0`, `staleWrites=0`, `cancellations=0`
+  - mute transitions were measured from audio-stream evidence (`0-2ms` in this run)
+  - non-silent volume transitions were confirmed by direct device read-back because the low-amplitude demo SID did not produce a robust enough stream delta for all steps
+- `npm run scope:test:coverage` passed after excluding the hardware-only `c64scope` runner from coverage accounting; final `c64scope` coverage summary reported `lines=96.05%`, `branches=90.70%`, `functions=99.05%`, `statements=96.05%`.
+- `npm run lint` passed. Non-blocking warnings remained in generated `c64scope/coverage/*.js` helper files.
+- `npm run build` passed.
+- Root repository `env -u VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON npm run test:coverage` passed on the clean rerun.
+  - merged JSON: `.cov-unit/merged/coverage-final.json`
+  - report outputs: `coverage/coverage-final.json`, `coverage/lcov.info`, `coverage/lcov-report/`
+  - final summary: `statements=94.09%`, `branches=91.79%`, `functions=90.61%`, `lines=94.09%`
+- `./build --skip-tests --install-apk` passed after the final code changes and installed the current debug APK to device `9B081FFAZ001WX`.
 
 ## Remaining Risks
 
 - The task spans shared request/state infrastructure plus user-facing UI behavior, so any fix that is too global risks regressions across Home, Play, Diagnostics, and saved-device switching.
 - The diagnostics exports may reveal multiple distinct defects rather than one shared root cause; changes must stay narrowly scoped per confirmed path.
-- Full repository validation, coverage confirmation, and Pixel 4 deploy/install evidence are still required before this stabilization pass can be considered complete.
+- The playback latency harness currently needs direct device read-back fallback for non-silent volume changes on the bundled demo SID; mute transitions are still measured directly from audio-stream evidence.
 
 # PLANS - Android Real-Device Performance Stabilization (2026-05-11)
 

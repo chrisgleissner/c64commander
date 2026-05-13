@@ -12,10 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useHealthState } from "@/hooks/useHealthState";
-import {
-  setHealthCheckStateSnapshot,
-  useHealthCheckState,
-} from "@/lib/diagnostics/healthCheckState";
+import { setHealthCheckStateSnapshot, useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";

@@ -22,6 +22,7 @@ export default defineConfig({
         "vitest.config.ts",
         "src/hardwareValidation.ts",
         "src/hilEvidenceRun.ts",
+        "src/playbackVolumeLatency.ts",
         "src/stream/types.ts",
         "src/validation/cases/**",
         "src/validation/index.ts",
