@@ -155,8 +155,8 @@ const loadSwitchConnectionConfig = async (options: {
   const probeDeviceHost = resolvedAddress
     ? buildDeviceHostWithHttpPort(resolvedAddress, httpPort)
     : await resolveDeviceHostForProbe(rawHost).then((resolvedHost) =>
-        buildDeviceHostWithHttpPort(stripPortFromDeviceHost(resolvedHost), httpPort),
-      );
+      buildDeviceHostWithHttpPort(stripPortFromDeviceHost(resolvedHost), httpPort),
+    );
 
   return {
     baseUrl: buildBaseUrlFromDeviceHost(probeDeviceHost),
@@ -506,15 +506,15 @@ export async function verifyCurrentConnectionTarget(options?: {
   const switchConfig =
     typeof options?.deviceHost === "string"
       ? await loadSwitchConnectionConfig({
-          deviceHost: options.deviceHost,
-          password: options.password,
-          preferResolvedAddress: options.preferResolvedAddress,
-        })
+        deviceHost: options.deviceHost,
+        password: options.password,
+        preferResolvedAddress: options.preferResolvedAddress,
+      })
       : null;
   const result = switchConfig
     ? await probeInfoWithConnectionConfig(switchConfig, {
-        timeoutMs: Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000,
-      })
+      timeoutMs: Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000,
+    })
     : await probeInfoOnce({ timeoutMs: Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000 });
   if (!discoveryRun.isCurrent()) {
     return result;
@@ -525,10 +525,10 @@ export async function verifyCurrentConnectionTarget(options?: {
       "switch",
       switchConfig
         ? {
-            baseUrl: switchConfig.baseUrl,
-            deviceHost: switchConfig.probeDeviceHost,
-            password: switchConfig.password,
-          }
+          baseUrl: switchConfig.baseUrl,
+          deviceHost: switchConfig.probeDeviceHost,
+          password: switchConfig.password,
+        }
         : undefined,
     );
     return result;
