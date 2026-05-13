@@ -269,6 +269,7 @@ describe("runHealthCheck — all-success path", () => {
 
     expect(mockGetInfo).toHaveBeenCalledWith(
       expect.objectContaining({
+        __c64uAllowDuringError: true,
         __c64uBypassBackoff: true,
         __c64uBypassCircuit: true,
       }),
@@ -587,6 +588,33 @@ describe("runHealthCheck — JIFFY probe", () => {
     const result = await runHealthCheck();
     expect(result!.probes.JIFFY.outcome).toBe("Fail");
   });
+
+  it("retries a transient JIFFY readMemory failure before marking the probe failed", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    let jiffyAttempts = 0;
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") {
+        jiffyAttempts += 1;
+        if (jiffyAttempts === 1) {
+          return Promise.reject(new Error("Host unreachable"));
+        }
+        return Promise.resolve(jiffyBytes);
+      }
+      if (addr === "D012") return Promise.resolve(new Uint8Array([0x42]));
+      return Promise.resolve(new Uint8Array(0));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.JIFFY.outcome).toBe("Success");
+    expect(jiffyAttempts).toBe(2);
+  });
 });
 
 // ─── runHealthCheck — RASTER probe (optional) ────────────────────────────────
@@ -625,6 +653,33 @@ describe("runHealthCheck — RASTER probe", () => {
 
     const result = await runHealthCheck();
     expect(result!.probes.RASTER.outcome).toBe("Skipped");
+  });
+
+  it("retries a transient RASTER readMemory failure before skipping the probe", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    let rasterAttempts = 0;
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      if (addr === "D012") {
+        rasterAttempts += 1;
+        if (rasterAttempts === 1) {
+          return Promise.reject(new Error("Host unreachable"));
+        }
+        return Promise.resolve(new Uint8Array([0x42]));
+      }
+      return Promise.resolve(new Uint8Array(0));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.RASTER.outcome).toBe("Success");
+    expect(rasterAttempts).toBe(2);
   });
 });
 

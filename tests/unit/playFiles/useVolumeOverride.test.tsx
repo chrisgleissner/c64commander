@@ -5,6 +5,9 @@ import { addErrorLog, addLog } from "@/lib/logging";
 
 const mutateAsyncMock = vi.fn();
 const getConfigItemsMock = vi.fn();
+const refetchAudioMixerCategoryMock = vi.fn().mockResolvedValue(undefined);
+const refetchSidSocketsCategoryMock = vi.fn().mockResolvedValue(undefined);
+const refetchSidAddressingCategoryMock = vi.fn().mockResolvedValue(undefined);
 
 const connectionStatusRef = {
   current: {
@@ -59,7 +62,12 @@ vi.mock("@/hooks/useC64Connection", () => ({
         : category === "SID Sockets Configuration"
           ? sidSocketsCategoryRef.current
           : sidAddressingCategoryRef.current,
-    refetch: vi.fn().mockResolvedValue(undefined),
+    refetch:
+      category === "Audio Mixer"
+        ? refetchAudioMixerCategoryMock
+        : category === "SID Sockets Configuration"
+          ? refetchSidSocketsCategoryMock
+          : refetchSidAddressingCategoryMock,
   }),
 }));
 
@@ -146,6 +154,9 @@ describe("useVolumeOverride", () => {
     sidSocketsCategoryRef.current = {};
     sidAddressingCategoryRef.current = {};
     mutateAsyncMock.mockResolvedValue(undefined);
+    refetchAudioMixerCategoryMock.mockClear();
+    refetchSidSocketsCategoryMock.mockClear();
+    refetchSidAddressingCategoryMock.mockClear();
     getConfigItemsMock.mockImplementation((category: string) => {
       if (category === "Audio Mixer") return Promise.resolve(audioMixerItemsRef.current);
       return Promise.resolve({});
@@ -293,6 +304,43 @@ describe("useVolumeOverride", () => {
     });
 
     expect(mutateAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it("skips reconciliation reads for preview writes and only refetches after commit", async () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    expect(result.current.volumeState.index).toBe(0);
+    expect(result.current.volumeState.muted).toBe(false);
+
+    await act(async () => {
+      await result.current.handleVolumeAsyncChange(1);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(refetchAudioMixerCategoryMock).not.toHaveBeenCalled();
+    expect(refetchSidSocketsCategoryMock).not.toHaveBeenCalled();
+    expect(refetchSidAddressingCategoryMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(refetchAudioMixerCategoryMock).toHaveBeenCalledTimes(1);
+    expect(refetchSidSocketsCategoryMock).toHaveBeenCalledTimes(1);
+    expect(refetchSidAddressingCategoryMock).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
   });
 
   it("mutes to -42 dB and restores the current slider target on unmute", async () => {

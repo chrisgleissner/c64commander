@@ -119,6 +119,7 @@ const HVSC_EXTRACTION_STAGES = new Set([
   "sid_enumeration",
   "songlengths",
   "sid_metadata_parsing",
+  "database_insertion",
 ]);
 
 const HVSC_READY_MESSAGE = "Ready to use: Add items -> HVSC.";
@@ -458,7 +459,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
         event.stage === "archive_validation" ||
         event.stage === "sid_enumeration" ||
         event.stage === "songlengths" ||
-        event.stage === "sid_metadata_parsing"
+        event.stage === "sid_metadata_parsing" ||
+        event.stage === "database_insertion"
       ) {
         if (shouldUpdateSummary) {
           updateHvscSummary((prev) => ({
@@ -1031,7 +1033,12 @@ export const useHvscLibrary = (): HvscLibraryState => {
         return "index";
       }
       if (hvscStage && HVSC_EXTRACTION_STAGES.has(hvscStage)) {
-        if (hvscStage === "sid_enumeration" || hvscStage === "songlengths" || hvscStage === "sid_metadata_parsing") {
+        if (
+          hvscStage === "sid_enumeration" ||
+          hvscStage === "songlengths" ||
+          hvscStage === "sid_metadata_parsing" ||
+          hvscStage === "database_insertion"
+        ) {
           return "index";
         }
         return "extract";

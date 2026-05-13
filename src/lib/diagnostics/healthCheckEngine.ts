@@ -34,6 +34,7 @@ import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { recordTelnetOperation } from "@/lib/tracing/traceSession";
+import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
   { category: "LED Strip Settings", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
@@ -222,6 +223,50 @@ const isAbortLike = (error: unknown) => {
 const isTimeoutLike = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /timed out/i.test(message);
+};
+
+const isTransientReadMemoryFailure = (error: unknown) => {
+  if (isAbortLike(error)) {
+    return false;
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    isTimeoutLike(error) || isTransientConnectivityFailure(message) || /host unreachable|failed to fetch/i.test(message)
+  );
+};
+
+const readMemoryProbeWithTransientRetry = async (
+  runtime: ProbeRuntime,
+  address: string,
+  length: number,
+  options: { signal: AbortSignal; timeoutMs: number; probe: HealthCheckProbeType },
+) => {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await runtime.api.readMemory(address, length, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs,
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isTransientReadMemoryFailure(error) || attempt >= 2 || options.signal.aborted) {
+        throw error;
+      }
+      addLog("warn", "Retrying transient health check readMemory failure", {
+        probe: options.probe,
+        host: runtime.host,
+        address,
+        length,
+        attempt,
+        maxAttempts: 2,
+        error: error instanceof Error ? error.message : String(error ?? "readMemory failed"),
+      });
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? "readMemory failed"));
 };
 
 const buildProbeStates = () => resetHealthCheckProbeStates();
@@ -482,6 +527,7 @@ const probeRest = async (
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.REST,
         __c64uIntent: "system",
+        __c64uAllowDuringError: true,
         __c64uBypassCache: true,
         __c64uBypassCooldown: true,
         __c64uBypassBackoff: true,
@@ -528,8 +574,12 @@ const probeJiffy = async (
 }> => {
   const startMs = Date.now();
   try {
-    const { result: bytes, durationMs } = await timedProbe(() =>
-      runtime.api.readMemory("00A2", 3, { signal, timeoutMs: PROBE_TIMEOUT_MS.JIFFY }),
+    const { result: bytes } = await timedProbe(() =>
+      readMemoryProbeWithTransientRetry(runtime, "00A2", 3, {
+        signal,
+        timeoutMs: PROBE_TIMEOUT_MS.JIFFY,
+        probe: "JIFFY",
+      }),
     );
     if (!bytes || bytes.length !== 3) {
       return {
@@ -545,7 +595,7 @@ const probeJiffy = async (
     }
     const jiffy = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
     return {
-      record: makeRecord("JIFFY", "Success", durationMs, null, startMs),
+      record: makeRecord("JIFFY", "Success", Date.now() - startMs, null, startMs),
       uptimeSeconds: Math.floor(jiffy / 60),
     };
   } catch (error) {
@@ -564,13 +614,17 @@ const probeJiffy = async (
 const probeRaster = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
-    const { result: bytes, durationMs } = await timedProbe(() =>
-      runtime.api.readMemory("D012", 1, { signal, timeoutMs: PROBE_TIMEOUT_MS.RASTER }),
+    const { result: bytes } = await timedProbe(() =>
+      readMemoryProbeWithTransientRetry(runtime, "D012", 1, {
+        signal,
+        timeoutMs: PROBE_TIMEOUT_MS.RASTER,
+        probe: "RASTER",
+      }),
     );
     if (!bytes || bytes.length < 1) {
       return makeRecord("RASTER", "Skipped", null, "Raster register unavailable", startMs);
     }
-    return makeRecord("RASTER", "Success", durationMs, null, startMs);
+    return makeRecord("RASTER", "Success", Date.now() - startMs, null, startMs);
   } catch (error) {
     if (isAbortLike(error) || isTimeoutLike(error)) {
       throw error;

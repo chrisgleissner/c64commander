@@ -237,6 +237,20 @@ const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): T
     }
   };
 
+  const pushFailedRestEvents = (count: number, healthLabel: "Degraded" | "Unhealthy") => {
+    for (let offset = 0; offset < count; offset += 1) {
+      events.push(
+        createSeedTraceEvent(index, "rest-response", baseTimestampMs - index, {
+          method: "GET",
+          path: `/v1/diag/failure/${offset}`,
+          status: 500,
+          error: `Seeded ${healthLabel.toLowerCase()} failure ${offset + 1}`,
+        }),
+      );
+      index += 1;
+    }
+  };
+
   if (health === "Healthy") {
     pushSuccessRestEvents(8);
     return events;
@@ -246,29 +260,12 @@ const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): T
     const failureCount = Math.max(problemCount, 1);
     const successCount = Math.max(failureCount + 1, Math.ceil(failureCount * 1.5));
     pushSuccessRestEvents(successCount);
-    for (let offset = 0; offset < failureCount; offset += 1) {
-      events.push(
-        createSeedTraceEvent(index, "rest-response", baseTimestampMs - index, {
-          method: "GET",
-          path: `/v1/diag/failure/${offset}`,
-          status: 500,
-          error: `Seeded degraded failure ${offset + 1}`,
-        }),
-      );
-      index += 1;
-    }
+    pushFailedRestEvents(failureCount, "Degraded");
     return events;
   }
 
   pushSuccessRestEvents(1);
-  for (let offset = 0; offset < problemCount; offset += 1) {
-    events.push(
-      createSeedTraceEvent(index, "error", baseTimestampMs - index, {
-        message: `Seeded unhealthy problem ${offset + 1}`,
-      }),
-    );
-    index += 1;
-  }
+  pushFailedRestEvents(Math.max(problemCount, 1), "Unhealthy");
 
   return events;
 };

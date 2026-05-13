@@ -44,6 +44,33 @@ export const resolveEffectiveDisplayProfile = (width: number, override: DisplayP
   return resolveDisplayProfile(width);
 };
 
+const normalizeDisplayMetric = (value: number): number => {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.round(value);
+};
+
+export const resolveAutomaticDisplayProfileWidth = (
+  viewportWidth: number,
+  screenWidth: number,
+  screenHeight: number,
+): number => {
+  const normalizedViewportWidth = normalizeDisplayMetric(viewportWidth);
+  const normalizedScreenWidth = normalizeDisplayMetric(screenWidth);
+  const normalizedScreenHeight = normalizeDisplayMetric(screenHeight);
+  const screenShortEdge =
+    normalizedScreenWidth > 0 && normalizedScreenHeight > 0
+      ? Math.min(normalizedScreenWidth, normalizedScreenHeight)
+      : 0;
+  return Math.max(normalizedViewportWidth, screenShortEdge);
+};
+
+export const resolveAutomaticDisplayProfile = (
+  viewportWidth: number,
+  screenWidth: number,
+  screenHeight: number,
+): DisplayProfile =>
+  resolveDisplayProfile(resolveAutomaticDisplayProfileWidth(viewportWidth, screenWidth, screenHeight));
+
 export const isDisplayProfileOverride = (value: unknown): value is DisplayProfileOverride =>
   typeof value === "string" && DISPLAY_PROFILE_OVERRIDE_SEQUENCE.includes(value as DisplayProfileOverride);
 

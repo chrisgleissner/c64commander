@@ -45,6 +45,7 @@ type PlaybackMixerWrite = {
   muted: boolean;
   updates: Record<string, string | number>;
   allowKnownDeviceSkip?: boolean;
+  reconcile?: boolean;
 };
 
 interface UseVolumeOverrideProps {
@@ -308,6 +309,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       const pending = pendingVolumeWriteRef.current;
       const pendingMatchesRequestedState = !pending || (pending.index === write.index && pending.muted === write.muted);
       if (pending && pending.index === write.index && pending.muted === write.muted) {
+        if (write.reconcile !== false) {
+          schedulePlaybackReconciliation();
+        }
         addLog("debug", "Play volume write skipped while identical write is pending", {
           context: write.context,
           index: write.index,
@@ -337,7 +341,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       markPendingVolumeWrite(write.index, write.muted);
       try {
         await playbackWriteLaneRef.current?.schedule(write);
-        schedulePlaybackReconciliation();
+        if (write.reconcile !== false) {
+          schedulePlaybackReconciliation();
+        }
         return true;
       } catch (error) {
         const activePending = pendingVolumeWriteRef.current;
@@ -519,6 +525,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           index: nextIndex,
           muted: false,
           allowKnownDeviceSkip: true,
+          reconcile: phase !== "preview",
         });
         dispatchVolume({ type: "unmute", reason: "manual", index: nextIndex });
       } catch (error) {

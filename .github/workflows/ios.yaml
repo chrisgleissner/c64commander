@@ -133,7 +133,7 @@ jobs:
         run: npm run build
 
       - name: Sync Capacitor iOS
-        run: npx cap sync ios
+        run: bash scripts/ci/cap-sync-ios-with-retry.sh
 
       - name: Upload prepared iOS workspace
         uses: actions/upload-artifact@v4
@@ -711,7 +711,7 @@ jobs:
         run: npm run build
 
       - name: Sync Capacitor iOS
-        run: npx cap sync ios
+        run: bash scripts/ci/cap-sync-ios-with-retry.sh
 
       - name: Resolve iOS variant metadata
         id: resolve_variant

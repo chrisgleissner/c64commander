@@ -9,6 +9,8 @@
 import type { C64API } from "@/lib/c64api";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
+import { addLog } from "@/lib/logging";
+import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 
 const DEFAULT_JIFFY_WAIT_MS = 50;
 const DEFAULT_RASTER_ATTEMPTS = 3;
@@ -19,6 +21,39 @@ const delay = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
+const isTransientReadMemoryFailure = (error: unknown) => {
+  const name = (error as { name?: string } | undefined)?.name;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    name !== "AbortError" &&
+    (isTransientConnectivityFailure(message) || /timed out|host unreachable|failed to fetch/i.test(message))
+  );
+};
+
+const readMemoryWithTransientRetry = async (api: C64API, address: string, length: number) => {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await api.readMemory(address, length);
+    } catch (error) {
+      lastError = error;
+      if (!isTransientReadMemoryFailure(error) || attempt >= 2) {
+        throw error;
+      }
+      addLog("warn", "Retrying transient liveness readMemory failure", {
+        address,
+        length,
+        attempt,
+        maxAttempts: 2,
+        error: error instanceof Error ? error.message : String(error ?? "readMemory failed"),
+      });
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? "readMemory failed"));
+};
+
 const toUint24 = (bytes: Uint8Array) => bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
 
 const assertByteLength = (bytes: Uint8Array, expected: number, label: string) => {
@@ -28,13 +63,13 @@ const assertByteLength = (bytes: Uint8Array, expected: number, label: string) =>
 };
 
 const readJiffyClock = async (api: C64API) => {
-  const bytes = await api.readMemory("00A2", 3);
+  const bytes = await readMemoryWithTransientRetry(api, "00A2", 3);
   assertByteLength(bytes, 3, "Jiffy clock");
   return toUint24(bytes);
 };
 
 const readRaster = async (api: C64API) => {
-  const bytes = await api.readMemory("D012", 1);
+  const bytes = await readMemoryWithTransientRetry(api, "D012", 1);
   assertByteLength(bytes, 1, "Raster");
   return bytes[0];
 };

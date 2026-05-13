@@ -13,6 +13,8 @@ import {
   type DisplayProfileOverride,
   DISPLAY_PROFILE_OVERRIDE_LABELS,
   getDisplayProfileLayoutTokens,
+  resolveAutomaticDisplayProfileWidth,
+  resolveAutomaticDisplayProfile,
   resolveDisplayProfile,
   resolveEffectiveDisplayProfile,
 } from "@/lib/displayProfiles";
@@ -21,6 +23,7 @@ import {
   setDisplayProfileOverride as persistDisplayProfileOverride,
 } from "@/lib/uiPreferences";
 import { APP_SETTINGS_KEYS, loadAutoRotationEnabled } from "@/lib/config/appSettings";
+import { isNativePlatform } from "@/lib/native/platform";
 
 type DisplayProfileContextValue = {
   viewportWidth: number;
@@ -77,6 +80,12 @@ const readViewportWidth = () => {
 const readViewportHeight = () => {
   if (typeof window === "undefined") return 0;
   return Math.max(0, Math.round(window.innerHeight || 0));
+};
+
+const readScreenDimension = (dimension: "width" | "height") => {
+  if (typeof window === "undefined") return 0;
+  const value = window.screen?.[dimension];
+  return Math.max(0, Math.round(typeof value === "number" ? value : 0));
 };
 
 const shouldRefreshOverrideFromStorage = (event: StorageEvent) => {
@@ -227,8 +236,13 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
   }, []);
 
   const value = React.useMemo<DisplayProfileContextValue>(() => {
-    const autoProfile = resolveDisplayProfile(viewportWidth);
-    const profile = resolveEffectiveDisplayProfile(viewportWidth, override);
+    const automaticProfileWidth = isNativePlatform()
+      ? resolveAutomaticDisplayProfileWidth(viewportWidth, readScreenDimension("width"), readScreenDimension("height"))
+      : viewportWidth;
+    const autoProfile = isNativePlatform()
+      ? resolveAutomaticDisplayProfile(viewportWidth, readScreenDimension("width"), readScreenDimension("height"))
+      : resolveDisplayProfile(viewportWidth);
+    const profile = resolveEffectiveDisplayProfile(automaticProfileWidth, override);
     return {
       viewportWidth,
       autoProfile,

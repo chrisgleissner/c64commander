@@ -102,6 +102,7 @@
     "scope:test:coverage": "cd c64scope && npm run test:coverage",
     "scope:check": "cd c64scope && npm run check",
     "scope:full-coverage": "cd c64scope && npm run full-coverage:execute",
+    "scope:hil:playback-volume-latency": "cd c64scope && npm run build && npm run hil:playback-volume-latency",
     "scope:mcp": "cd c64scope && npm run mcp",
     "scope:preflight": "node c64scope/dist/preflight.js",
     "scope:hil:evidence": "cd c64scope && npm run hil:evidence"

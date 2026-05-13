@@ -166,4 +166,38 @@ describe("checkC64Liveness", () => {
     const result = await checkC64Liveness(api as any);
     expect(result.decision).toBe("healthy");
   });
+
+  it("retries transient readMemory failures before declaring the machine wedged", async () => {
+    let jiffyAttempts = 0;
+    let rasterAttempts = 0;
+    const api = {
+      readMemory: async (address: string, length: number) => {
+        if (address === "00A2" && length === 3) {
+          jiffyAttempts += 1;
+          if (jiffyAttempts === 1) {
+            throw new Error("Host unreachable");
+          }
+          return jiffyAttempts === 2 ? new Uint8Array([1, 0, 0]) : new Uint8Array([2, 0, 0]);
+        }
+        if (address === "D012" && length === 1) {
+          rasterAttempts += 1;
+          if (rasterAttempts === 1) {
+            throw new Error("Host unreachable");
+          }
+          return rasterAttempts === 2 ? new Uint8Array([10]) : new Uint8Array([11]);
+        }
+        return new Uint8Array(length);
+      },
+    } satisfies MockApi;
+
+    const result = await checkC64Liveness(api as any, {
+      jiffyWaitMs: 0,
+      rasterAttempts: 1,
+      rasterDelayMs: 0,
+    });
+
+    expect(result.decision).toBe("healthy");
+    expect(jiffyAttempts).toBe(3);
+    expect(rasterAttempts).toBe(3);
+  });
 });

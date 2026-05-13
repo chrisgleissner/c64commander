@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   getDisplayProfileLayoutTokens,
+  resolveAutomaticDisplayProfile,
+  resolveAutomaticDisplayProfileWidth,
   resolveDisplayProfile,
   resolveEffectiveDisplayProfile,
 } from "@/lib/displayProfiles";
@@ -19,6 +21,13 @@ describe("displayProfiles", () => {
     expect(resolveEffectiveDisplayProfile(320, "auto")).toBe("compact");
     expect(resolveEffectiveDisplayProfile(320, "expanded")).toBe("expanded");
     expect(resolveEffectiveDisplayProfile(900, "compact")).toBe("compact");
+  });
+
+  it("uses the device short edge as a floor for automatic profile resolution", () => {
+    expect(resolveAutomaticDisplayProfileWidth(353, 393, 851)).toBe(393);
+    expect(resolveAutomaticDisplayProfile(353, 393, 851)).toBe("medium");
+    expect(resolveAutomaticDisplayProfile(320, 320, 640)).toBe("compact");
+    expect(resolveAutomaticDisplayProfile(829, 393, 829)).toBe("expanded");
   });
 
   it("returns distinct layout tokens for compact and expanded modes", () => {

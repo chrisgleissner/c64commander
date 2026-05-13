@@ -108,7 +108,7 @@ export function MachineControls({
       </SectionHeader>
       <div className="space-y-2">
         <ProfileActionGrid
-          compactColumns={4}
+          compactColumns={2}
           mediumColumns={4}
           expandedColumns={4}
           cardDensity="compact"

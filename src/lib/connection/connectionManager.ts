@@ -236,9 +236,11 @@ const probeInfoWithConnectionConfig = async (
       signal: outerSignal,
       __c64uIntent: "system",
       __c64uAllowDuringDiscovery: true,
+      __c64uAllowDuringError: true,
       __c64uBypassCache: true,
       __c64uBypassCooldown: true,
       __c64uBypassBackoff: true,
+      __c64uBypassCircuit: true,
     });
     return {
       ok: isProbePayloadHealthy(response),
@@ -370,9 +372,11 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       signal: outerSignal,
       __c64uIntent: "system",
       __c64uAllowDuringDiscovery: true,
+      __c64uAllowDuringError: true,
       __c64uBypassCache: true,
       __c64uBypassCooldown: true,
       __c64uBypassBackoff: true,
+      __c64uBypassCircuit: true,
     });
     return isProbePayloadHealthy(response);
   } catch (error) {
@@ -460,9 +464,11 @@ export async function probeInfoOnce(
       signal: outerSignal,
       __c64uIntent: "system",
       __c64uAllowDuringDiscovery: true,
+      __c64uAllowDuringError: true,
       __c64uBypassCache: true,
       __c64uBypassCooldown: true,
       __c64uBypassBackoff: true,
+      __c64uBypassCircuit: true,
     });
     return {
       ok: isProbePayloadHealthy(response),

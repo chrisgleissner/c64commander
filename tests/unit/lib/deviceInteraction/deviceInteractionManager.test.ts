@@ -742,6 +742,31 @@ describe("deviceInteractionManager", () => {
     expect(result).toEqual({ drives: [] });
   });
 
+  it("allows explicit system recovery probes to run while the device is in ERROR state", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    deviceStateValue = "ERROR";
+
+    const action = makeAction("rest-error-recovery");
+    const meta = {
+      action,
+      method: "GET",
+      path: "/v1/info",
+      normalizedUrl: "http://device/v1/info",
+      intent: "system" as const,
+      baseUrl: "http://device",
+      allowDuringError: true,
+      bypassCircuit: true,
+    };
+
+    const handler = vi.fn().mockResolvedValue({ product: "Ultimate 64 Elite" });
+    const result = await withRestInteraction(meta, handler);
+    expect(result).toEqual({ product: "Ultimate 64 Elite" });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it("bypasses cache when bypassCache is set", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

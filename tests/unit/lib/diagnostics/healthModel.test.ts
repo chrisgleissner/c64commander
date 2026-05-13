@@ -222,6 +222,21 @@ describe("deriveFtpContributorHealth", () => {
     expect(deriveFtpContributorHealth(events)).toMatchObject({ state: "Unhealthy" });
   });
 
+  it("ignores pre-success FTP failures even when events arrive out of timestamp order", () => {
+    const events = [
+      makeEvent("ftp-operation", 5_000, { result: "success" }),
+      makeEvent("ftp-operation", 60_000, { result: "failure", error: "connection reset" }),
+      makeEvent("ftp-operation", 30_000, { result: "failure", error: "timeout" }),
+    ];
+
+    expect(deriveFtpContributorHealth(events)).toMatchObject({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    });
+  });
+
   it("treats FTP event with non-string result but error string as failed", () => {
     // result is not a string (missing) → null; hasError is true → counted as failed
     const events = [makeEvent("ftp-operation", 30_000, { error: "timeout" })];
@@ -509,6 +524,14 @@ describe("deriveTelnetContributorHealth", () => {
     const events = [makeEvent("telnet-operation", 10_000, { result: "failure", error: "prompt timeout" })];
     expect(deriveTelnetContributorHealth(events)).toMatchObject({ state: "Unhealthy", problemCount: 1 });
   });
+
+  it("ignores aborted Telnet failures after a newer success refreshes confidence", () => {
+    const events = [
+      makeEvent("telnet-operation", 20_000, { result: "failure", error: "The operation was aborted" }),
+      makeEvent("telnet-operation", 5_000, { result: "success" }),
+    ];
+    expect(deriveTelnetContributorHealth(events)).toMatchObject({ state: "Healthy", problemCount: 0 });
+  });
 });
 
 describe("deriveLastTelnetActivity", () => {
@@ -666,6 +689,28 @@ describe("derivePrimaryProblem", () => {
     expect(result?.title).toContain("Save debug log failed");
     expect(result?.impactLevel).toBe(2);
     expect(result?.causeHint).toBe("menu prompt timeout");
+  });
+
+  it("does not promote aborted Telnet failures once a newer success exists", () => {
+    const contributors = {
+      App: idleContributor(),
+      REST: idleContributor(),
+      FTP: idleContributor(),
+      TELNET: idleContributor(),
+    };
+    const events = [
+      makeEvent("telnet-operation", 15_000, {
+        actionLabel: "Health check TELNET probe",
+        result: "failure",
+        error: "The operation was aborted",
+      }),
+      makeEvent("telnet-operation", 5_000, {
+        actionLabel: "Health check TELNET probe",
+        result: "success",
+      }),
+    ];
+    const result = derivePrimaryProblem(events, contributors);
+    expect(result).toBeNull();
   });
 });
 

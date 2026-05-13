@@ -2,6 +2,8 @@ import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHealthState } from "@/hooks/useHealthState";
 
+const idleContributor = () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 });
+
 const connectionStateMock = vi.hoisted(() => ({
   state: "OFFLINE_NO_DEMO",
 }));
@@ -17,7 +19,29 @@ const c64ConnectionMock = vi.hoisted(() => ({
 }));
 
 const traceEventsMock = vi.hoisted(() => ({
-  events: [] as Array<{ type: string; data: Record<string, unknown> }>,
+  events: [] as Array<{ type: string; data: Record<string, unknown>; correlationId?: string }>,
+}));
+
+const configuredHostMock = vi.hoisted(() => ({
+  host: "c64u",
+}));
+
+const healthModelMocks = vi.hoisted(() => ({
+  deriveAppContributorHealth: vi.fn(() => idleContributor()),
+  deriveConnectivityState: vi.fn(() => "Offline"),
+  deriveFtpContributorHealth: vi.fn(() => idleContributor()),
+  deriveLastFtpActivity: vi.fn(() => null),
+  deriveLastRestActivity: vi.fn(() => null),
+  deriveLastTelnetActivity: vi.fn(() => null),
+  derivePrimaryProblem: vi.fn(() => null),
+  deriveRestContributorHealth: vi.fn(() => ({
+    state: "Unhealthy",
+    problemCount: 1,
+    totalOperations: 2,
+    failedOperations: 1,
+  })),
+  deriveTelnetContributorHealth: vi.fn(() => idleContributor()),
+  rollUpHealth: vi.fn(() => "Unhealthy"),
 }));
 
 vi.mock("@/hooks/useConnectionState", () => ({
@@ -37,21 +61,10 @@ vi.mock("@/lib/tracing/traceSession", () => ({
 }));
 
 vi.mock("@/lib/connection/hostEdit", () => ({
-  getConfiguredHost: () => "c64u",
+  getConfiguredHost: () => configuredHostMock.host,
 }));
 
-vi.mock("@/lib/diagnostics/healthModel", () => ({
-  deriveAppContributorHealth: () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 }),
-  deriveConnectivityState: () => "Offline",
-  deriveFtpContributorHealth: () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 }),
-  deriveLastFtpActivity: () => null,
-  deriveLastRestActivity: () => null,
-  deriveLastTelnetActivity: () => null,
-  derivePrimaryProblem: () => null,
-  deriveRestContributorHealth: () => ({ state: "Unhealthy", problemCount: 1, totalOperations: 2, failedOperations: 1 }),
-  deriveTelnetContributorHealth: () => ({ state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 }),
-  rollUpHealth: (_contributors: unknown, _connectivity: unknown) => "Unhealthy",
-}));
+vi.mock("@/lib/diagnostics/healthModel", () => healthModelMocks);
 
 vi.mock("@/lib/diagnostics/targetDisplayMapper", () => ({
   inferConnectedDeviceLabel: vi.fn(() => "Ultimate 64"),
@@ -63,6 +76,23 @@ describe("useHealthState", () => {
     healthCheckStateMock.latestResult = null;
     c64ConnectionMock.status.deviceInfo = null;
     traceEventsMock.events = [];
+    configuredHostMock.host = "c64u";
+    healthModelMocks.deriveAppContributorHealth.mockImplementation(() => idleContributor());
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Offline");
+    healthModelMocks.deriveFtpContributorHealth.mockImplementation(() => idleContributor());
+    healthModelMocks.deriveLastFtpActivity.mockImplementation(() => null);
+    healthModelMocks.deriveLastRestActivity.mockImplementation(() => null);
+    healthModelMocks.deriveLastTelnetActivity.mockImplementation(() => null);
+    healthModelMocks.derivePrimaryProblem.mockImplementation(() => null);
+    healthModelMocks.deriveRestContributorHealth.mockImplementation(() => ({
+      state: "Unhealthy",
+      problemCount: 1,
+      totalOperations: 2,
+      failedOperations: 1,
+    }));
+    healthModelMocks.deriveTelnetContributorHealth.mockImplementation(() => idleContributor());
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Unhealthy");
+    Object.values(healthModelMocks).forEach((mock) => mock.mockClear());
   });
 
   it("prefers app probe failures over a successful JIFFY probe when a health check result exists", () => {
@@ -181,6 +211,32 @@ describe("useHealthState", () => {
     );
   });
 
+  it("maps partial probe outcomes to degraded contributor health without incrementing failures", () => {
+    healthCheckStateMock.latestResult = {
+      runId: "hc-partial",
+      overallHealth: "Degraded",
+      endTimestamp: "2024-01-01T00:00:03.500Z",
+      deviceInfo: { product: "Ultimate 64" },
+      probes: {
+        CONFIG: { probe: "CONFIG", outcome: "Success", reason: null },
+        JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
+        REST: { probe: "REST", outcome: "Success", reason: null },
+        FTP: { probe: "FTP", outcome: "Partial", reason: "intermittent listing timeout" },
+        TELNET: { probe: "TELNET", outcome: "Success", reason: null },
+      },
+    };
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.contributors.FTP).toMatchObject({
+      state: "Degraded",
+      problemCount: 0,
+      failedOperations: 0,
+      totalOperations: 1,
+    });
+    expect(result.current.problemCount).toBe(0);
+  });
+
   it("returns null primaryProblem and zero problemCount when all probes succeed", () => {
     healthCheckStateMock.latestResult = {
       runId: "hc-ok",
@@ -230,5 +286,107 @@ describe("useHealthState", () => {
     const { result } = renderHook(() => useHealthState());
 
     expect(result.current.state).toBe("Unhealthy");
+  });
+
+  it("ignores trace failures from other hosts when deriving the selected device health", () => {
+    configuredHostMock.host = "u64";
+    traceEventsMock.events = [
+      { type: "rest-response", correlationId: "u64-ok", data: { status: 200, hostname: "u64" } },
+      { type: "rest-response", correlationId: "c64u-rest", data: { status: 500, hostname: "c64u" } },
+      { type: "ftp-operation", correlationId: "c64u-ftp", data: { hostname: "c64u", result: "failure" } },
+      { type: "error", correlationId: "u64-global", data: { message: "global warning" } },
+      { type: "error", correlationId: "c64u-rest", data: { message: "off-host rest failure" } },
+    ];
+
+    renderHook(() => useHealthState());
+
+    const lastRestContributorCall = healthModelMocks.deriveRestContributorHealth.mock.calls.slice(-1)[0];
+    if (!lastRestContributorCall) {
+      throw new Error("deriveRestContributorHealth was not called");
+    }
+    const filteredEvents = (lastRestContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveRestContributorHealth did not receive events");
+    }
+
+    expect(filteredEvents).toEqual([traceEventsMock.events[0]]);
+  });
+
+  it("filters unattributed follow-up events by the host derived from URL-based trace correlation", () => {
+    configuredHostMock.host = "u64";
+    traceEventsMock.events = [
+      { type: "rest-response", correlationId: "u64-ok", data: { status: 200, url: "http://u64:8080/v1/info" } },
+      { type: "ftp-operation", correlationId: "u64-ok", data: { result: "success" } },
+      {
+        type: "rest-response",
+        correlationId: "c64u-off-host",
+        data: { status: 500, url: "http://c64u:8080/v1/info" },
+      },
+      { type: "ftp-operation", correlationId: "c64u-off-host", data: { result: "failure" } },
+    ];
+
+    renderHook(() => useHealthState());
+
+    const lastFtpContributorCall = healthModelMocks.deriveFtpContributorHealth.mock.calls.slice(-1)[0];
+    if (!lastFtpContributorCall) {
+      throw new Error("deriveFtpContributorHealth was not called");
+    }
+    const filteredEvents = (lastFtpContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveFtpContributorHealth did not receive events");
+    }
+
+    expect(filteredEvents).toEqual([traceEventsMock.events[0], traceEventsMock.events[1]]);
+  });
+
+  it("ignores standalone error events even when the global trace context points at the selected host", () => {
+    configuredHostMock.host = "u64";
+    traceEventsMock.events = [
+      { type: "rest-response", correlationId: "u64-ok", data: { status: 200, hostname: "u64" } },
+      {
+        type: "error",
+        correlationId: "background-c64u-failure",
+        data: {
+          message: "background device failed",
+          device: { host: "u64" },
+        },
+      },
+    ];
+
+    renderHook(() => useHealthState());
+
+    const lastAppContributorCall = healthModelMocks.deriveAppContributorHealth.mock.calls.slice(-1)[0];
+    if (!lastAppContributorCall) {
+      throw new Error("deriveAppContributorHealth was not called");
+    }
+    const filteredEvents = (lastAppContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveAppContributorHealth did not receive events");
+    }
+
+    expect(filteredEvents).toEqual([traceEventsMock.events[0]]);
+  });
+
+  it("keeps unattributed non-error events when URL parsing fails but still filters mismatched device attribution", () => {
+    configuredHostMock.host = "u64";
+    traceEventsMock.events = [
+      { type: "rest-response", correlationId: "u64-ok", data: { status: 200, hostname: "u64" } },
+      { type: "custom-event", correlationId: "attr-u64", data: { device: { host: "u64:23" } } },
+      { type: "custom-event", correlationId: "attr-c64u", data: { device: { host: "c64u:23" } } },
+      { type: "custom-event", correlationId: "invalid-url", data: { url: "http://%zz" } },
+    ];
+
+    renderHook(() => useHealthState());
+
+    const lastAppContributorCall = healthModelMocks.deriveAppContributorHealth.mock.calls.slice(-1)[0];
+    if (!lastAppContributorCall) {
+      throw new Error("deriveAppContributorHealth was not called");
+    }
+    const filteredEvents = (lastAppContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveAppContributorHealth did not receive events");
+    }
+
+    expect(filteredEvents).toEqual([traceEventsMock.events[0], traceEventsMock.events[1], traceEventsMock.events[3]]);
   });
 });
