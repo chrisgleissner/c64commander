@@ -286,6 +286,49 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscMetadataProgressLabel).toBe("HVSC META 12/60 running");
   });
 
+  it("treats database insertion as indexing progress instead of falling back to extract", async () => {
+    let resolveInstall: (() => void) | null = null;
+    mocks.installOrUpdateHvscMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveInstall = resolve;
+        }),
+    );
+    mocks.getHvscStatusMock
+      .mockResolvedValueOnce(createStatus())
+      .mockResolvedValueOnce(createStatus({ installedVersion: 85 }));
+
+    const { result } = renderHook(() => useHvscLibrary());
+    await waitFor(() => expect(progressListener).not.toBeNull());
+
+    act(() => {
+      void result.current.handleHvscInstall();
+    });
+
+    await waitFor(() => expect(result.current.hvscPhase).toBe("download"));
+
+    act(() => {
+      progressListener?.({
+        stage: "database_insertion",
+        percent: 82,
+        processedCount: 82,
+        totalCount: 100,
+        elapsedTimeMs: 4800,
+        message: "Building SID index",
+      });
+    });
+
+    await waitFor(() => expect(result.current.hvscPhase).toBe("index"));
+    expect(result.current.hvscExtractionPercent).toBe(82);
+
+    act(() => {
+      progressListener?.({ stage: "complete", message: "Done" });
+      resolveInstall?.();
+    });
+
+    await waitFor(() => expect(result.current.hvscPhase).toBe("ready"));
+  });
+
   it("resets to idle on cancel and ignores throttled progress that arrives afterwards", async () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useHvscLibrary());

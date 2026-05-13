@@ -8,12 +8,12 @@
 
 ## Execution Plan
 
-- [in-progress] Analyze all three exported diagnostics bundles and extract timestamps, device identities, health/connectivity lifecycles, config probe activity, LED-heartbeat evidence, state transitions, clear events, REST failures/retries/cancellations, and playback/volume events.
-- [pending] Trace the owning code paths for switch-device health checks, diagnostics clearing, status derivation, shared request infrastructure, HESC progress plumbing, and Play volume/mute control.
-- [pending] Implement the smallest safe fixes for the confirmed root causes without broad refactors.
-- [pending] Add or update focused regression tests for status stability, foreground/background probe separation, connectivity recovery, HESC progress phases, Play volume target-state behavior, and stale-request invalidation.
-- [pending] Add a dedicated playback volume/mute latency test or harness with repeatable metrics/evidence output.
-- [pending] Run the smallest honest validation set for touched layers, then full required validation for the final change set, and record exact results.
+- [completed] Analyze all three exported diagnostics bundles and extract timestamps, device identities, health/connectivity lifecycles, config probe activity, LED-heartbeat evidence, state transitions, clear events, REST failures/retries/cancellations, and playback/volume events.
+- [completed] Trace the owning code paths for switch-device health checks, diagnostics clearing, status derivation, shared request infrastructure, HESC progress plumbing, and Play volume/mute control.
+- [completed] Implement the smallest safe fixes for the confirmed root causes without broad refactors.
+- [completed] Add or update focused regression tests for status stability, foreground/background probe separation, connectivity recovery, HESC progress phases, Play volume target-state behavior, and stale-request invalidation.
+- [completed] Add a dedicated playback volume/mute latency test or harness with repeatable metrics/evidence output.
+- [in-progress] Run the smallest honest validation set for touched layers, then full required validation for the final change set, and record exact results.
 
 ## Diagnostics Bundles Under Review
 
@@ -26,6 +26,14 @@
 - Each diagnostics bundle contains `actions`, `error-logs`, `logs`, `supplemental`, and `traces` JSON exports.
 - `package.json` already provides the required validation surfaces for this task: `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, Playwright suites, and Android build helpers.
 - Prior repository work already touched saved-device health checks, health-check contexts, and switch-device behavior; this stabilization pass must verify whether the current regressions come from remaining shared-state/request-lifecycle defects rather than reintroducing those earlier fixes.
+
+## Diagnostics Conclusions
+
+- Bundle `0648` ended `Degraded` despite recent successful REST and FTP activity because historical TELNET probe failures remained in the contributor window after newer success.
+- Bundle `0658` confirmed the same contributor-health defect more clearly: older aborted TELNET failures still dominated exported status even after the last TELNET probe succeeded.
+- Bundle `0714` showed the harder app-internal recovery defect: healthy-device probes were failing inside the app with `Device not ready for requests` and later `Failed to fetch`, consistent with system recovery traffic being blocked by the app's own `ERROR` readiness gate.
+- Play HVSC progress had a direct code mismatch: `database_insertion` was already treated as ingest/index state in shared preparation logic, but the Play hook still omitted it from visible phase/progress handling.
+- Play volume writes had a concrete readback-latency path: preview writes could still trigger reconciliation reads or suppress the final commit readback when a commit matched an in-flight preview.
 
 ## Findings To Record As Evidence
 
@@ -48,29 +56,57 @@
 
 - `PLANS.md`
 - `package.json`
-- diagnostics bundle directory listings only so far
+- diagnostics bundles under `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-13-*`
+- `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`
+- `src/lib/diagnostics/healthModel.ts`
+- `src/hooks/useHealthState.ts`
+- `src/lib/diagnostics/healthCheckEngine.ts`
+- `src/lib/deviceInteraction/deviceInteractionManager.ts`
+- `src/lib/c64api.ts`
+- `src/lib/connection/connectionManager.ts`
+- `src/pages/playFiles/hooks/useHvscLibrary.ts`
+- `src/lib/hvsc/hvscPreparationState.ts`
+- `src/pages/playFiles/hooks/useVolumeOverride.ts`
+- nearby unit tests for diagnostics, health checks, device interaction, HVSC progress, and Play volume
 
 ## Hypotheses In Progress
 
-- The most likely shared failure surface is request-lifecycle poisoning across saved-device health checks and page-local operations, likely via stale cancellation/generation state or a status model that treats missing or superseded evidence as negative evidence.
-- The Play page volume regression is likely a separate local target-state problem where remote reconciliation and restore-volume cleanup are racing normal slider writes.
+- Confirmed: FTP/TELNET contributor windows were treating expected cancellation/supersession noise as lasting degradation evidence after newer transport success.
+- Confirmed: explicit system recovery probes needed an opt-in lane through the `ERROR` readiness guard so healthy devices can self-heal without app restart.
+- Confirmed: Play HVSC progress had a local phase-mapping gap for `database_insertion`.
+- Confirmed: Play volume preview/commit handling needed to preserve the final commit readback without adding redundant preview reconciliation traffic.
 
 ## Changes Made
 
 - Created this stabilization plan section and made it the active execution record for the current task.
+- Stopped Diagnostics Clear All from resetting the shared health snapshot.
+- Trimmed FTP/TELNET contributor windows to the latest success and ignored expected cancellation/supersession failures when deriving contributor health and primary problems.
+- Added an explicit recovery-probe lane so system REST probes can bypass the poisoned `ERROR` readiness gate when intentionally healing the connection.
+- Propagated that recovery-lane intent through `C64API`, diagnostics REST probes, and connection-manager probe paths.
+- Mapped HVSC `database_insertion` into visible indexing progress so late-stage ingest progress no longer falls back to the wrong phase.
+- Prevented Play volume preview writes from scheduling reconciliation reads, while still forcing a single readback when the final commit matches an in-flight preview.
 
 ## Tests Added Or Updated
 
-- None yet.
+- `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx`: verifies Clear All preserves the last known shared health state.
+- `tests/unit/lib/diagnostics/healthModel.test.ts`: verifies aborted TELNET failures no longer keep status degraded once newer success exists.
+- `tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts`: verifies explicit system recovery probes can run while the device state is `ERROR`.
+- `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`: verifies diagnostic REST probes carry the recovery-lane flag.
+- `tests/unit/playFiles/useHvscLibrary.progress.test.tsx`: verifies `database_insertion` is surfaced as indexing progress.
+- `tests/unit/playFiles/useVolumeOverride.test.tsx`: verifies preview writes skip reconciliation reads and the final commit still triggers a single readback.
 
 ## Verification Evidence
 
-- None yet beyond diagnostics bundle discovery and validation script inventory.
+- Focused diagnostics/status suites passed: `tests/unit/lib/diagnostics/healthModel.test.ts` and `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx` with `110 passed, 0 failed`.
+- Focused recovery suites passed: `tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts` and `tests/unit/lib/diagnostics/healthCheckEngine.test.ts` with `101 passed, 0 failed`.
+- Focused Play/HVSC suites passed: `tests/unit/playFiles/useHvscLibrary.progress.test.tsx`, `tests/unit/playFiles/useVolumeOverride.test.tsx`, and `tests/unit/playFiles/useVolumeOverride.transition.test.tsx` with `41 passed, 0 failed`.
+- Repository-wide validation and Android deploy/install evidence still pending.
 
 ## Remaining Risks
 
 - The task spans shared request/state infrastructure plus user-facing UI behavior, so any fix that is too global risks regressions across Home, Play, Diagnostics, and saved-device switching.
 - The diagnostics exports may reveal multiple distinct defects rather than one shared root cause; changes must stay narrowly scoped per confirmed path.
+- Full repository validation, coverage confirmation, and Pixel 4 deploy/install evidence are still required before this stabilization pass can be considered complete.
 
 # PLANS - Android Real-Device Performance Stabilization (2026-05-11)
 
