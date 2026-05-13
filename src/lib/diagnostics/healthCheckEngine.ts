@@ -482,6 +482,7 @@ const probeRest = async (
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.REST,
         __c64uIntent: "system",
+        __c64uAllowDuringError: true,
         __c64uBypassCache: true,
         __c64uBypassCooldown: true,
         __c64uBypassBackoff: true,

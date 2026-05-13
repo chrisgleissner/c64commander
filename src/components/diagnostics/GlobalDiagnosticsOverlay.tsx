@@ -13,7 +13,6 @@ import { toast } from "@/hooks/use-toast";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useHealthState } from "@/hooks/useHealthState";
 import {
-  resetHealthCheckStateSnapshot,
   setHealthCheckStateSnapshot,
   useHealthCheckState,
 } from "@/lib/diagnostics/healthCheckState";
@@ -326,7 +325,6 @@ export const GlobalDiagnosticsOverlay = () => {
     clearLatencySamples();
     clearHealthHistory();
     clearRecoveryEvidence();
-    resetHealthCheckStateSnapshot();
     setLogs([]);
     setErrorLogs([]);
     setTraceEvents([]);

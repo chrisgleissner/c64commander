@@ -269,6 +269,7 @@ describe("runHealthCheck — all-success path", () => {
 
     expect(mockGetInfo).toHaveBeenCalledWith(
       expect.objectContaining({
+        __c64uAllowDuringError: true,
         __c64uBypassBackoff: true,
         __c64uBypassCircuit: true,
       }),

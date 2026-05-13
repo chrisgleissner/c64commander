@@ -271,10 +271,37 @@ const isSuccessfulRestResponse = (event: TraceEvent): boolean => {
   return status !== null && status < 400 && !hasError;
 };
 
+const isSuccessfulFtpOperation = (event: TraceEvent): boolean => {
+  const result = typeof event.data.result === "string" ? event.data.result : null;
+  const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
+  return result === "success" && !hasError;
+};
+
+const isSuccessfulTelnetOperation = (event: TraceEvent): boolean => {
+  const result = typeof event.data.result === "string" ? event.data.result : null;
+  const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
+  return result === "success" && !hasError;
+};
+
+const trimToLatestSuccess = (events: TraceEvent[], isSuccess: (event: TraceEvent) => boolean): TraceEvent[] => {
+  const latestSuccessIndex = events.findLastIndex(isSuccess);
+  return latestSuccessIndex >= 0 ? events.slice(latestSuccessIndex) : events;
+};
+
 const restHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
   const windowEvents = events.filter((e) => e.type === "rest-response" && isInCurrentWindow(e));
   const firstSuccessIndex = windowEvents.findIndex(isSuccessfulRestResponse);
   return firstSuccessIndex >= 0 ? windowEvents.slice(firstSuccessIndex) : windowEvents;
+};
+
+const ftpHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
+  const windowEvents = events.filter((e) => e.type === "ftp-operation" && isInCurrentWindow(e));
+  return trimToLatestSuccess(windowEvents, isSuccessfulFtpOperation);
+};
+
+const telnetHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
+  const windowEvents = events.filter((e) => e.type === "telnet-operation" && isInCurrentWindow(e));
+  return trimToLatestSuccess(windowEvents, isSuccessfulTelnetOperation);
 };
 
 const isPreConnectionGatingError = (event: TraceEvent): boolean =>
@@ -301,14 +328,15 @@ export const deriveRestContributorHealth = (events: TraceEvent[]): ContributorHe
 
 // §6.3 — FTP contributor health from trace events in 5-minute window
 export const deriveFtpContributorHealth = (events: TraceEvent[]): ContributorHealth => {
-  const windowEvents = events.filter((e) => e.type === "ftp-operation" && isInCurrentWindow(e));
+  const windowEvents = ftpHealthWindowEvents(events);
   let failed = 0;
   for (const e of windowEvents) {
+    if (isExpectedNonDiagnosticFailure(e)) continue;
     const result = typeof e.data.result === "string" ? e.data.result : null;
     const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
     if (result === "failure" || hasError) failed += 1;
   }
-  const total = windowEvents.length;
+  const total = windowEvents.filter((event) => !isExpectedNonDiagnosticFailure(event)).length;
   return {
     state: healthFromRatio(failed, total),
     problemCount: failed,
@@ -319,14 +347,15 @@ export const deriveFtpContributorHealth = (events: TraceEvent[]): ContributorHea
 
 // §6.3 — Telnet contributor health from trace events in 5-minute window
 export const deriveTelnetContributorHealth = (events: TraceEvent[]): ContributorHealth => {
-  const windowEvents = events.filter((e) => e.type === "telnet-operation" && isInCurrentWindow(e));
+  const windowEvents = telnetHealthWindowEvents(events);
   let failed = 0;
   for (const event of windowEvents) {
+    if (isExpectedNonDiagnosticFailure(event)) continue;
     const result = typeof event.data.result === "string" ? event.data.result : null;
     const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
     if (result === "failure" || hasError) failed += 1;
   }
-  const total = windowEvents.length;
+  const total = windowEvents.filter((event) => !isExpectedNonDiagnosticFailure(event)).length;
   return {
     state: healthFromRatio(failed, total),
     problemCount: failed,
@@ -414,6 +443,8 @@ export const derivePrimaryProblem = (
 ): Problem | null => {
   const problems: Problem[] = [];
   const restHealthEvents = new Set(restHealthWindowEvents(events));
+  const ftpHealthEvents = new Set(ftpHealthWindowEvents(events));
+  const telnetHealthEvents = new Set(telnetHealthWindowEvents(events));
 
   // Collect failed REST responses as Problems
   for (const e of events) {
@@ -436,6 +467,8 @@ export const derivePrimaryProblem = (
         });
       }
     } else if (e.type === "ftp-operation") {
+      if (!ftpHealthEvents.has(e)) continue;
+      if (isExpectedNonDiagnosticFailure(e)) continue;
       const result = typeof e.data.result === "string" ? e.data.result : null;
       const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
       if (result === "failure" || hasError) {
@@ -451,6 +484,8 @@ export const derivePrimaryProblem = (
         });
       }
     } else if (e.type === "telnet-operation") {
+      if (!telnetHealthEvents.has(e)) continue;
+      if (isExpectedNonDiagnosticFailure(e)) continue;
       const result = typeof e.data.result === "string" ? e.data.result : null;
       const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
       if (result === "failure" || hasError) {

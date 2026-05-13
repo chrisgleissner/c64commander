@@ -39,6 +39,7 @@ type RestRequestMeta = {
   intent: InteractionIntent;
   baseUrl: string;
   allowDuringDiscovery?: boolean;
+  allowDuringError?: boolean;
   bypassCache?: boolean;
   bypassCooldown?: boolean;
   bypassBackoff?: boolean;
@@ -372,7 +373,7 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
   return { key: null, cacheMs: 0, cooldownMs: 0 };
 };
 
-const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: boolean) => {
+const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: boolean, allowDuringError?: boolean) => {
   if (isTestEnv()) return false;
   const state = getDeviceStateSnapshot().state;
   if (state === "UNKNOWN" || state === "DISCOVERING") {
@@ -381,6 +382,7 @@ const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: b
   }
   if (state === "ERROR") {
     if (intent === "background") return true;
+    if (intent === "system" && allowDuringError) return false;
     if (intent === "user" && config.allowUserOverrideCircuit) return false;
     return true;
   }
@@ -463,7 +465,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       throw error;
     }
   }
-  if (shouldBlockForState(meta.intent, meta.allowDuringDiscovery)) {
+  if (shouldBlockForState(meta.intent, meta.allowDuringDiscovery, meta.allowDuringError)) {
     const error = new Error("Device not ready for requests");
     recordDeviceGuard(meta.action, {
       decision: "block",

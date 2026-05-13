@@ -1,3 +1,77 @@
+# PLANS - Production Stabilization: Device Health, Diagnostics, HESC Progress, Play Volume (2026-05-13)
+
+## Classification
+
+- Classification: `DOC_PLUS_CODE` and `UI_CHANGE`.
+- Scope: diagnostics export analysis, saved-device health/status stability, diagnostics clear isolation, health-check recovery, HESC progress reporting, Play volume/mute responsiveness, stale REST invalidation, and a dedicated playback latency harness.
+- Validation target: focused unit/integration coverage first, then repository validation for touched layers, then Android APK deploy/install evidence if the final code path requires device validation.
+
+## Execution Plan
+
+- [in-progress] Analyze all three exported diagnostics bundles and extract timestamps, device identities, health/connectivity lifecycles, config probe activity, LED-heartbeat evidence, state transitions, clear events, REST failures/retries/cancellations, and playback/volume events.
+- [pending] Trace the owning code paths for switch-device health checks, diagnostics clearing, status derivation, shared request infrastructure, HESC progress plumbing, and Play volume/mute control.
+- [pending] Implement the smallest safe fixes for the confirmed root causes without broad refactors.
+- [pending] Add or update focused regression tests for status stability, foreground/background probe separation, connectivity recovery, HESC progress phases, Play volume target-state behavior, and stale-request invalidation.
+- [pending] Add a dedicated playback volume/mute latency test or harness with repeatable metrics/evidence output.
+- [pending] Run the smallest honest validation set for touched layers, then full required validation for the final change set, and record exact results.
+
+## Diagnostics Bundles Under Review
+
+- `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-13-0648-08Z`
+- `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-13-0658-27Z`
+- `/home/chris/Downloads/c64commander-diagnostics-all-2026-05-13-0714-37Z`
+
+## Initial Findings
+
+- Each diagnostics bundle contains `actions`, `error-logs`, `logs`, `supplemental`, and `traces` JSON exports.
+- `package.json` already provides the required validation surfaces for this task: `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, Playwright suites, and Android build helpers.
+- Prior repository work already touched saved-device health checks, health-check contexts, and switch-device behavior; this stabilization pass must verify whether the current regressions come from remaining shared-state/request-lifecycle defects rather than reintroducing those earlier fixes.
+
+## Findings To Record As Evidence
+
+- Pending extraction from the diagnostics bundles:
+  - timestamps
+  - device names
+  - health-check lifecycle events
+  - connectivity lifecycle events
+  - config probe activity
+  - visible LED heartbeat related events
+  - state transitions
+  - degraded / idle / healthy / offline status changes
+  - diagnostics clear events
+  - REST failures, retries, cancellations, aborts, stale requests
+  - Play page download, ingestion, indexing, playback, volume, mute, and restore-volume events
+  - evidence of app-internal connectivity degradation
+  - evidence of starvation, deadlock, cancellation poisoning, queue exhaustion, stale singleton state, or stuck networking
+
+## Files Inspected
+
+- `PLANS.md`
+- `package.json`
+- diagnostics bundle directory listings only so far
+
+## Hypotheses In Progress
+
+- The most likely shared failure surface is request-lifecycle poisoning across saved-device health checks and page-local operations, likely via stale cancellation/generation state or a status model that treats missing or superseded evidence as negative evidence.
+- The Play page volume regression is likely a separate local target-state problem where remote reconciliation and restore-volume cleanup are racing normal slider writes.
+
+## Changes Made
+
+- Created this stabilization plan section and made it the active execution record for the current task.
+
+## Tests Added Or Updated
+
+- None yet.
+
+## Verification Evidence
+
+- None yet beyond diagnostics bundle discovery and validation script inventory.
+
+## Remaining Risks
+
+- The task spans shared request/state infrastructure plus user-facing UI behavior, so any fix that is too global risks regressions across Home, Play, Diagnostics, and saved-device switching.
+- The diagnostics exports may reveal multiple distinct defects rather than one shared root cause; changes must stay narrowly scoped per confirmed path.
+
 # PLANS - Android Real-Device Performance Stabilization (2026-05-11)
 
 ## Current Phase

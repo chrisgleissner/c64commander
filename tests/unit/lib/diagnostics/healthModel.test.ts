@@ -509,6 +509,14 @@ describe("deriveTelnetContributorHealth", () => {
     const events = [makeEvent("telnet-operation", 10_000, { result: "failure", error: "prompt timeout" })];
     expect(deriveTelnetContributorHealth(events)).toMatchObject({ state: "Unhealthy", problemCount: 1 });
   });
+
+  it("ignores aborted Telnet failures after a newer success refreshes confidence", () => {
+    const events = [
+      makeEvent("telnet-operation", 20_000, { result: "failure", error: "The operation was aborted" }),
+      makeEvent("telnet-operation", 5_000, { result: "success" }),
+    ];
+    expect(deriveTelnetContributorHealth(events)).toMatchObject({ state: "Healthy", problemCount: 0 });
+  });
 });
 
 describe("deriveLastTelnetActivity", () => {
@@ -666,6 +674,28 @@ describe("derivePrimaryProblem", () => {
     expect(result?.title).toContain("Save debug log failed");
     expect(result?.impactLevel).toBe(2);
     expect(result?.causeHint).toBe("menu prompt timeout");
+  });
+
+  it("does not promote aborted Telnet failures once a newer success exists", () => {
+    const contributors = {
+      App: idleContributor(),
+      REST: idleContributor(),
+      FTP: idleContributor(),
+      TELNET: idleContributor(),
+    };
+    const events = [
+      makeEvent("telnet-operation", 15_000, {
+        actionLabel: "Health check TELNET probe",
+        result: "failure",
+        error: "The operation was aborted",
+      }),
+      makeEvent("telnet-operation", 5_000, {
+        actionLabel: "Health check TELNET probe",
+        result: "success",
+      }),
+    ];
+    const result = derivePrimaryProblem(events, contributors);
+    expect(result).toBeNull();
   });
 });
 

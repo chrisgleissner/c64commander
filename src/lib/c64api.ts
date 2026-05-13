@@ -266,18 +266,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-  | {
-    selected?: string | number;
-    options?: string[];
-    details?: {
-      min?: number;
-      max?: number;
-      format?: string;
-      presets?: string[];
-    };
-  }
-  | string
-  | number;
+    | {
+        selected?: string | number;
+        options?: string[];
+        details?: {
+          min?: number;
+          max?: number;
+          format?: string;
+          presets?: string[];
+        };
+      }
+    | string
+    | number;
 }
 
 export interface ConfigResponse {
@@ -298,6 +298,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uTraceSuppressed?: boolean;
   __c64uIntent?: InteractionIntent;
   __c64uAllowDuringDiscovery?: boolean;
+  __c64uAllowDuringError?: boolean;
   __c64uBypassCache?: boolean;
   __c64uBypassCooldown?: boolean;
   __c64uBypassBackoff?: boolean;
@@ -655,6 +656,7 @@ export class C64API {
     const timeoutMs = options.timeoutMs;
     const intent = options.__c64uIntent ?? "user";
     const allowDuringDiscovery = Boolean(options.__c64uAllowDuringDiscovery);
+    const allowDuringError = Boolean(options.__c64uAllowDuringError);
     const bypassCache = Boolean(options.__c64uBypassCache);
     const bypassCooldown = Boolean(options.__c64uBypassCooldown);
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
@@ -664,6 +666,7 @@ export class C64API {
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
     delete (requestOptions as { __c64uAllowDuringDiscovery?: boolean }).__c64uAllowDuringDiscovery;
+    delete (requestOptions as { __c64uAllowDuringError?: boolean }).__c64uAllowDuringError;
     delete (requestOptions as { __c64uBypassCache?: boolean }).__c64uBypassCache;
     delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
@@ -711,6 +714,7 @@ export class C64API {
             intent,
             baseUrl,
             allowDuringDiscovery,
+            allowDuringError,
             bypassCache,
             bypassCooldown,
             bypassBackoff,
@@ -797,8 +801,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = requestTimeoutMs
                   ? new Promise<never>((_, reject) => {
-                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), requestTimeoutMs);
-                  })
+                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), requestTimeoutMs);
+                    })
                   : null;
                 let response: Response;
                 try {
@@ -1080,8 +1084,8 @@ export class C64API {
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-              })
+                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])
