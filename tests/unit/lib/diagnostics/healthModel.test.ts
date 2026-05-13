@@ -222,6 +222,21 @@ describe("deriveFtpContributorHealth", () => {
     expect(deriveFtpContributorHealth(events)).toMatchObject({ state: "Unhealthy" });
   });
 
+  it("ignores pre-success FTP failures even when events arrive out of timestamp order", () => {
+    const events = [
+      makeEvent("ftp-operation", 5_000, { result: "success" }),
+      makeEvent("ftp-operation", 60_000, { result: "failure", error: "connection reset" }),
+      makeEvent("ftp-operation", 30_000, { result: "failure", error: "timeout" }),
+    ];
+
+    expect(deriveFtpContributorHealth(events)).toMatchObject({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    });
+  });
+
   it("treats FTP event with non-string result but error string as failed", () => {
     // result is not a string (missing) → null; hasError is true → counted as failed
     const events = [makeEvent("ftp-operation", 30_000, { error: "timeout" })];

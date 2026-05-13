@@ -283,6 +283,9 @@ const isSuccessfulTelnetOperation = (event: TraceEvent): boolean => {
   return result === "success" && !hasError;
 };
 
+const sortEventsByTimestampAscending = (events: TraceEvent[]): TraceEvent[] =>
+  [...events].sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime());
+
 const trimToLatestSuccess = (events: TraceEvent[], isSuccess: (event: TraceEvent) => boolean): TraceEvent[] => {
   const latestSuccessIndex = events.findLastIndex(isSuccess);
   return latestSuccessIndex >= 0 ? events.slice(latestSuccessIndex) : events;
@@ -295,12 +298,16 @@ const restHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
 };
 
 const ftpHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
-  const windowEvents = events.filter((e) => e.type === "ftp-operation" && isInCurrentWindow(e));
+  const windowEvents = sortEventsByTimestampAscending(
+    events.filter((e) => e.type === "ftp-operation" && isInCurrentWindow(e)),
+  );
   return trimToLatestSuccess(windowEvents, isSuccessfulFtpOperation);
 };
 
 const telnetHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
-  const windowEvents = events.filter((e) => e.type === "telnet-operation" && isInCurrentWindow(e));
+  const windowEvents = sortEventsByTimestampAscending(
+    events.filter((e) => e.type === "telnet-operation" && isInCurrentWindow(e)),
+  );
   return trimToLatestSuccess(windowEvents, isSuccessfulTelnetOperation);
 };
 
