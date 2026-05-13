@@ -125,9 +125,6 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
     <td><img src="docs/img/app/home/dialogs/02-save-ram-custom-range.png" alt="Save RAM custom ranges" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/03-snapshot-manager.png" alt="Load RAM snapshot manager" width="360"/></td>
   </tr>
-  <tr>
-    <td><img src="docs/img/app/home/dialogs/04-restore-confirmation.png" alt="Load RAM restore confirmation" width="360"/></td>
-  </tr>
 </table>
 
 ### Play
