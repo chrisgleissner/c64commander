@@ -78,7 +78,8 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlaySuppressionArmed: () => diagnosticsSuppressionMock.isActive(),
-  subscribeDiagnosticsSuppression: (listener: (active: boolean) => void) => diagnosticsSuppressionMock.subscribe(listener),
+  subscribeDiagnosticsSuppression: (listener: (active: boolean) => void) =>
+    diagnosticsSuppressionMock.subscribe(listener),
 }));
 
 const devices = [

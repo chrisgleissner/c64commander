@@ -33,18 +33,9 @@ import {
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
 
-const contributorHealthFromProbe = (
-  outcome: HealthCheckProbeOutcome,
-  problemCount: number,
-): ContributorHealth => ({
+const contributorHealthFromProbe = (outcome: HealthCheckProbeOutcome, problemCount: number): ContributorHealth => ({
   state:
-    outcome === "Success"
-      ? "Healthy"
-      : outcome === "Fail"
-        ? "Unhealthy"
-        : outcome === "Partial"
-          ? "Degraded"
-          : "Idle",
+    outcome === "Success" ? "Healthy" : outcome === "Fail" ? "Unhealthy" : outcome === "Partial" ? "Degraded" : "Idle",
   problemCount,
   totalOperations: 1,
   failedOperations: problemCount,
@@ -170,20 +161,20 @@ export function useHealthState(): OverallHealthState {
         lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
         primaryProblem: firstFailedProbe
           ? {
-            id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
-            title: `${firstFailedProbe.probe} health check failed`,
-            contributor:
-              firstFailedProbe.probe === "REST"
-                ? "REST"
-                : firstFailedProbe.probe === "FTP"
-                  ? "FTP"
-                  : firstFailedProbe.probe === "TELNET"
-                    ? "TELNET"
-                    : "App",
-            timestampMs: Date.parse(latestHealthCheck.endTimestamp),
-            impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
-            causeHint: firstFailedProbe.reason,
-          }
+              id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
+              title: `${firstFailedProbe.probe} health check failed`,
+              contributor:
+                firstFailedProbe.probe === "REST"
+                  ? "REST"
+                  : firstFailedProbe.probe === "FTP"
+                    ? "FTP"
+                    : firstFailedProbe.probe === "TELNET"
+                      ? "TELNET"
+                      : "App",
+              timestampMs: Date.parse(latestHealthCheck.endTimestamp),
+              impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
+              causeHint: firstFailedProbe.reason,
+            }
           : null,
       };
     }

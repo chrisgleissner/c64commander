@@ -123,7 +123,7 @@ export function useSavedDeviceHealthChecks(
       window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
   }, []);
 
-  const noopRefreshAll = useCallback(() => { }, []);
+  const noopRefreshAll = useCallback(() => {}, []);
 
   const shouldPauseForForegroundSwitch = useCallback(() => {
     return (

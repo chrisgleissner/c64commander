@@ -34,6 +34,7 @@ import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { recordTelnetOperation } from "@/lib/tracing/traceSession";
+import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
   { category: "LED Strip Settings", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
@@ -222,6 +223,50 @@ const isAbortLike = (error: unknown) => {
 const isTimeoutLike = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /timed out/i.test(message);
+};
+
+const isTransientReadMemoryFailure = (error: unknown) => {
+  if (isAbortLike(error)) {
+    return false;
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    isTimeoutLike(error) || isTransientConnectivityFailure(message) || /host unreachable|failed to fetch/i.test(message)
+  );
+};
+
+const readMemoryProbeWithTransientRetry = async (
+  runtime: ProbeRuntime,
+  address: string,
+  length: number,
+  options: { signal: AbortSignal; timeoutMs: number; probe: HealthCheckProbeType },
+) => {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await runtime.api.readMemory(address, length, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs,
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isTransientReadMemoryFailure(error) || attempt >= 2 || options.signal.aborted) {
+        throw error;
+      }
+      addLog("warn", "Retrying transient health check readMemory failure", {
+        probe: options.probe,
+        host: runtime.host,
+        address,
+        length,
+        attempt,
+        maxAttempts: 2,
+        error: error instanceof Error ? error.message : String(error ?? "readMemory failed"),
+      });
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? "readMemory failed"));
 };
 
 const buildProbeStates = () => resetHealthCheckProbeStates();
@@ -529,8 +574,12 @@ const probeJiffy = async (
 }> => {
   const startMs = Date.now();
   try {
-    const { result: bytes, durationMs } = await timedProbe(() =>
-      runtime.api.readMemory("00A2", 3, { signal, timeoutMs: PROBE_TIMEOUT_MS.JIFFY }),
+    const { result: bytes } = await timedProbe(() =>
+      readMemoryProbeWithTransientRetry(runtime, "00A2", 3, {
+        signal,
+        timeoutMs: PROBE_TIMEOUT_MS.JIFFY,
+        probe: "JIFFY",
+      }),
     );
     if (!bytes || bytes.length !== 3) {
       return {
@@ -546,7 +595,7 @@ const probeJiffy = async (
     }
     const jiffy = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
     return {
-      record: makeRecord("JIFFY", "Success", durationMs, null, startMs),
+      record: makeRecord("JIFFY", "Success", Date.now() - startMs, null, startMs),
       uptimeSeconds: Math.floor(jiffy / 60),
     };
   } catch (error) {
@@ -565,13 +614,17 @@ const probeJiffy = async (
 const probeRaster = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
-    const { result: bytes, durationMs } = await timedProbe(() =>
-      runtime.api.readMemory("D012", 1, { signal, timeoutMs: PROBE_TIMEOUT_MS.RASTER }),
+    const { result: bytes } = await timedProbe(() =>
+      readMemoryProbeWithTransientRetry(runtime, "D012", 1, {
+        signal,
+        timeoutMs: PROBE_TIMEOUT_MS.RASTER,
+        probe: "RASTER",
+      }),
     );
     if (!bytes || bytes.length < 1) {
       return makeRecord("RASTER", "Skipped", null, "Raster register unavailable", startMs);
     }
-    return makeRecord("RASTER", "Success", durationMs, null, startMs);
+    return makeRecord("RASTER", "Success", Date.now() - startMs, null, startMs);
   } catch (error) {
     if (isAbortLike(error) || isTimeoutLike(error)) {
       throw error;
@@ -1236,15 +1289,15 @@ const buildRunResult = (args: {
     App: {
       state:
         args.jiffy.lifecycle === "FAILED" ||
-        args.config.lifecycle === "FAILED" ||
-        args.telnet.lifecycle === "FAILED" ||
-        args.jiffy.lifecycle === "TIMEOUT" ||
-        args.config.lifecycle === "TIMEOUT" ||
-        args.telnet.lifecycle === "TIMEOUT"
+          args.config.lifecycle === "FAILED" ||
+          args.telnet.lifecycle === "FAILED" ||
+          args.jiffy.lifecycle === "TIMEOUT" ||
+          args.config.lifecycle === "TIMEOUT" ||
+          args.telnet.lifecycle === "TIMEOUT"
           ? ("Degraded" as const)
           : args.jiffy.lifecycle === "CANCELLED" &&
-              args.config.lifecycle === "CANCELLED" &&
-              args.telnet.lifecycle === "CANCELLED"
+            args.config.lifecycle === "CANCELLED" &&
+            args.telnet.lifecycle === "CANCELLED"
             ? ("Idle" as const)
             : ("Healthy" as const),
       problemCount: 0,
@@ -1462,60 +1515,60 @@ export const runHealthCheckForTarget = async (
     const ftp = restFailed
       ? setLocalSkippedProbe("FTP", "Skipped: REST probe failed")
       : await runLocalProbe(
-          "FTP",
-          async () => probeFtp(runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-        );
+        "FTP",
+        async () => probeFtp(runtime),
+        (record) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+        }),
+      );
 
     const telnet = restFailed
       ? setLocalSkippedProbe("TELNET", "Skipped: REST probe failed")
       : await runLocalProbe(
-          "TELNET",
-          (signal) => probeTelnet(signal, runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-        );
+        "TELNET",
+        (signal) => probeTelnet(signal, runtime),
+        (record) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+        }),
+      );
 
     const config = restFailed
       ? setLocalSkippedProbe("CONFIG", "Skipped: REST probe failed")
       : runContext.configPulsePolicy === "read-only"
         ? setLocalSkippedProbe("CONFIG", `Skipped: ${runContext.context} health check is read-only`)
         : await runLocalProbe(
-            "CONFIG",
-            (signal) => probeConfig(signal, runtime),
-            (record) => ({
-              record,
-              lifecycle: lifecycleFromRecord(record.outcome),
-            }),
-          );
-
-    const raster = restFailed
-      ? setLocalSkippedProbe("RASTER", "Skipped: REST probe failed")
-      : await runLocalProbe(
-          "RASTER",
-          (signal) => probeRaster(signal, runtime),
+          "CONFIG",
+          (signal) => probeConfig(signal, runtime),
           (record) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
           }),
         );
 
+    const raster = restFailed
+      ? setLocalSkippedProbe("RASTER", "Skipped: REST probe failed")
+      : await runLocalProbe(
+        "RASTER",
+        (signal) => probeRaster(signal, runtime),
+        (record) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+        }),
+      );
+
     const jiffy = restFailed
       ? setLocalSkippedProbe("JIFFY", "Skipped: REST probe failed")
       : await runLocalProbe(
-          "JIFFY",
-          (signal) => probeJiffy(signal, runtime),
-          ({ record, uptimeSeconds }) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-            uptimeSeconds,
-          }),
-        );
+        "JIFFY",
+        (signal) => probeJiffy(signal, runtime),
+        ({ record, uptimeSeconds }) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+          uptimeSeconds,
+        }),
+      );
 
     const endTimestamp = new Date().toISOString();
     const result = buildRunResult({
@@ -1667,67 +1720,67 @@ export const runHealthCheck = async (
     const ftp = restFailed
       ? setSkippedProbe("FTP", "Skipped: REST probe failed")
       : await runProbe(
-          run,
-          "FTP",
-          async () => probeFtp(runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-        );
+        run,
+        "FTP",
+        async () => probeFtp(runtime),
+        (record) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+        }),
+      );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), FTP: ftp.record });
 
     const telnet = restFailed
       ? setSkippedProbe("TELNET", "Skipped: REST probe failed")
       : await runProbe(
-          run,
-          "TELNET",
-          (signal) => probeTelnet(signal, runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-        );
+        run,
+        "TELNET",
+        (signal) => probeTelnet(signal, runtime),
+        (record) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+        }),
+      );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), TELNET: telnet.record });
 
     const config = restFailed
       ? setSkippedProbe("CONFIG", "Skipped: REST probe failed")
       : await runProbe(
-          run,
-          "CONFIG",
-          (signal) => probeConfig(signal, runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-        );
+        run,
+        "CONFIG",
+        (signal) => probeConfig(signal, runtime),
+        (record) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+        }),
+      );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), CONFIG: config.record });
 
     const raster = restFailed
       ? setSkippedProbe("RASTER", "Skipped: REST probe failed")
       : await runProbe(
-          run,
-          "RASTER",
-          (signal) => probeRaster(signal, runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-        );
+        run,
+        "RASTER",
+        (signal) => probeRaster(signal, runtime),
+        (record) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+        }),
+      );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), RASTER: raster.record });
 
     const jiffy = restFailed
       ? setSkippedProbe("JIFFY", "Skipped: REST probe failed")
       : await runProbe(
-          run,
-          "JIFFY",
-          (signal) => probeJiffy(signal, runtime),
-          ({ record, uptimeSeconds }) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-            uptimeSeconds,
-          }),
-        );
+        run,
+        "JIFFY",
+        (signal) => probeJiffy(signal, runtime),
+        ({ record, uptimeSeconds }) => ({
+          record,
+          lifecycle: lifecycleFromRecord(record.outcome),
+          uptimeSeconds,
+        }),
+      );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), JIFFY: jiffy.record });
 
     if (!isCurrentRun(token)) {
