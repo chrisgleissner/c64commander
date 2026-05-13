@@ -415,27 +415,11 @@ export GITHUB_TOKEN=<your-token>
 - [Developer guide](docs/developer.md)
 - [Chaos/fuzz testing](docs/testing/chaos-fuzz.md)
 
-### HVSC performance
-
-Use `npm run test:perf` for the fast local smoke suite. It now combines the web scenario lane, the web secondary lane, and a deterministic Node data-path lane that measures HVSC browse/index plus playlist query hot paths.
-
-The `perf-nightly` workflow uses the same collectors with an explicit profile model:
-
-- `smoke` for quick manual validation
-- `nightly` for the scheduled CI run
-- `manual-extended` for deeper manual investigations
-
-Perf artifacts are written to `ci-artifacts/hvsc-performance/` as both JSON and Markdown summaries.
-
-Third-party notices: `npm run notices:generate` regenerates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). `npm run build` packages notices into distribution bundles automatically.
-
 ## Acknowledgments
 
 ### High Voltage SID Collection (HVSC)
 
 The [High Voltage SID Collection](https://hvsc.c64.org) is an archive of C64 SID music. C64 Commander integrates HVSC for browsing, searching, and playing SID tunes with metadata and song-length support.
-
-The primary HVSC entry point is now the Add items chooser. If the library is not ready yet, the app prepares it there instead of asking you to run separate manual download and ingest steps from the Play page. The Play page keeps only status, reindex, and reset controls for recovery.
 
 ### Commodore and the C64 Ultimate
 
