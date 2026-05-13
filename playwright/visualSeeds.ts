@@ -1094,6 +1094,16 @@ export const HVSC_STATUS_SUMMARY = {
   lastUpdatedAt: null,
 };
 
+export const installInstantLaunchSequence = async (page: Page) => {
+  await page.addInitScript(() => {
+    (window as Window & { __c64uLaunchSequenceTimings?: object }).__c64uLaunchSequenceTimings = {
+      fadeInMs: 0,
+      holdMs: 0,
+      fadeOutMs: 0,
+    };
+  });
+};
+
 export const installFixedClock = async (page: Page) => {
   await page.addInitScript(
     ({ nowMs }) => {

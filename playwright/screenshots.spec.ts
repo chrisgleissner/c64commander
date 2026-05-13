@@ -45,6 +45,7 @@ import {
 } from "../scripts/screenshotMetadataDedupe.js";
 import {
   installFixedClock,
+  installInstantLaunchSequence,
   installListPreviewLimit,
   seedBadgeHealthTraceState,
   installStableStorage,
@@ -1597,6 +1598,7 @@ test.describe("App screenshots", () => {
     await startStrictUiMonitoring(page, testInfo);
     allowVisualOverflow(testInfo, "Swipe runway keeps adjacent pages mounted outside the active viewport.");
     await installFixedClock(page);
+    await installInstantLaunchSequence(page);
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,
@@ -1619,10 +1621,22 @@ test.describe("App screenshots", () => {
   });
 
   test("capture home screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    // Override the zero timings from beforeEach so the launch sequence runs at normal speed.
+    // addInitScript scripts run in registration order on each goto, so this second registration wins.
+    await page.addInitScript(() => {
+      (window as Window & { __c64uLaunchSequenceTimings?: object }).__c64uLaunchSequenceTimings = {
+        fadeInMs: 300,
+        holdMs: 1700,
+        fadeOutMs: 250,
+      };
+    });
     await page.goto("/");
+    // Capture boot logo screenshot immediately — launch sequence is still running at this point.
+    await captureScreenshot(page, testInfo, "home/00-overview-light.png");
+    // Wait for the launch sequence overlay to detach before proceeding with remaining screenshots.
+    await page.getByTestId("startup-launch-sequence").waitFor({ state: "detached", timeout: 10000 });
     await waitForConnected(page);
     await expect(page.getByRole("button", { name: "Disks", exact: true })).toBeVisible();
-    await captureScreenshot(page, testInfo, "home/00-overview-light.png");
     await page.emulateMedia({
       colorScheme: "dark",
       reducedMotion: "reduce",

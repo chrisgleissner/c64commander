@@ -1,8 +1,5 @@
 {
-  "disks": [
-    "drives",
-    "disks"
-  ],
+  "disks": ["drives", "disks"],
   "config": [
     "audio-mixer",
     "sid-sockets-configuration",

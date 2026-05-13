@@ -4,6 +4,7 @@ This folder is the canonical location for durable repository documentation.
 
 ## Core repository references
 
+- [advanced.md](advanced.md) - network security, web server configuration, authentication, and Linux auto-update
 - [architecture.md](architecture.md) - runtime architecture, subsystem boundaries, and external integrations
 - [developer.md](developer.md) - contributor workflow, tooling, conventions, and current engineering hotspots
 - [features-by-page.md](features-by-page.md) - implemented user-facing feature surface
