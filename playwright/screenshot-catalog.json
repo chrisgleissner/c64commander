@@ -1,5 +1,8 @@
 {
-  "disks": ["drives", "disks"],
+  "disks": [
+    "drives",
+    "disks"
+  ],
   "config": [
     "audio-mixer",
     "sid-sockets-configuration",
@@ -62,7 +65,9 @@
     "hvsc",
     "notifications",
     "external-resources",
-    "online-archive"
+    "online-archive",
+    "stable-features",
+    "experimental-features"
   ],
   "docs": [
     "getting-started",

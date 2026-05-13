@@ -304,7 +304,10 @@ describe("useHealthState", () => {
     if (!lastRestContributorCall) {
       throw new Error("deriveRestContributorHealth was not called");
     }
-    const [filteredEvents] = lastRestContributorCall;
+    const filteredEvents = (lastRestContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveRestContributorHealth did not receive events");
+    }
 
     expect(filteredEvents).toEqual([traceEventsMock.events[0]]);
   });
@@ -328,7 +331,10 @@ describe("useHealthState", () => {
     if (!lastFtpContributorCall) {
       throw new Error("deriveFtpContributorHealth was not called");
     }
-    const [filteredEvents] = lastFtpContributorCall;
+    const filteredEvents = (lastFtpContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveFtpContributorHealth did not receive events");
+    }
 
     expect(filteredEvents).toEqual([traceEventsMock.events[0], traceEventsMock.events[1]]);
   });
@@ -353,7 +359,10 @@ describe("useHealthState", () => {
     if (!lastAppContributorCall) {
       throw new Error("deriveAppContributorHealth was not called");
     }
-    const [filteredEvents] = lastAppContributorCall;
+    const filteredEvents = (lastAppContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveAppContributorHealth did not receive events");
+    }
 
     expect(filteredEvents).toEqual([traceEventsMock.events[0]]);
   });
@@ -373,7 +382,10 @@ describe("useHealthState", () => {
     if (!lastAppContributorCall) {
       throw new Error("deriveAppContributorHealth was not called");
     }
-    const [filteredEvents] = lastAppContributorCall;
+    const filteredEvents = (lastAppContributorCall as unknown[]).at(0);
+    if (!filteredEvents) {
+      throw new Error("deriveAppContributorHealth did not receive events");
+    }
 
     expect(filteredEvents).toEqual([traceEventsMock.events[0], traceEventsMock.events[1], traceEventsMock.events[3]]);
   });
