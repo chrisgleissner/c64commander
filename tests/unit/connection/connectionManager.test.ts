@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as logging from "../../../src/lib/logging";
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from "../../../src/lib/fuzz/fuzzMode";
 import {
@@ -134,6 +134,10 @@ describe("connectionManager", () => {
     stopMockServer.mockClear();
     getActiveMockBaseUrl.mockClear();
     getActiveMockFtpPort.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("shows demo interstitial at most once per session (manual/startup), never for background", async () => {
@@ -1243,6 +1247,107 @@ describe("connectionManager", () => {
     // null body → no content-type header → parseProbePayload returns null → isProbePayloadHealthy(null) = false
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
     await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it("probeOnce uses the C64API system probe flags outside the fetch-only Vitest path", async () => {
+    vi.stubEnv("VITEST", "false");
+    vi.stubEnv("NODE_ENV", "production");
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const { C64API } = await import("../../../src/lib/c64api");
+    const getInfoSpy = vi.spyOn(C64API.prototype, "getInfo").mockResolvedValue({
+      product: "C64 Ultimate",
+      errors: [],
+    } as any);
+
+    const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
+
+    await expect(probeOnce({ timeoutMs: 1234 })).resolves.toBe(true);
+    expect(getInfoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeoutMs: 1234,
+        __c64uIntent: "system",
+        __c64uAllowDuringDiscovery: true,
+        __c64uAllowDuringError: true,
+        __c64uBypassCircuit: true,
+      }),
+    );
+
+    getInfoSpy.mockRestore();
+  });
+
+  it("probeInfoOnce uses the C64API system probe flags outside the fetch-only Vitest path", async () => {
+    vi.stubEnv("VITEST", "false");
+    vi.stubEnv("NODE_ENV", "production");
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const { C64API } = await import("../../../src/lib/c64api");
+    const getInfoSpy = vi.spyOn(C64API.prototype, "getInfo").mockResolvedValue({
+      product: "C64 Ultimate",
+      errors: [],
+    } as any);
+
+    const { probeInfoOnce } = await import("../../../src/lib/connection/connectionManager");
+
+    await expect(probeInfoOnce({ timeoutMs: 2345 })).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        error: null,
+      }),
+    );
+    expect(getInfoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeoutMs: 2345,
+        __c64uIntent: "system",
+        __c64uAllowDuringDiscovery: true,
+        __c64uAllowDuringError: true,
+        __c64uBypassCircuit: true,
+      }),
+    );
+
+    getInfoSpy.mockRestore();
+  });
+
+  it("verifyCurrentConnectionTarget uses switch probe flags for explicit device targets outside the fetch-only Vitest path", async () => {
+    vi.stubEnv("VITEST", "false");
+    vi.stubEnv("NODE_ENV", "production");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    const { C64API } = await import("../../../src/lib/c64api");
+    const getInfoSpy = vi.spyOn(C64API.prototype, "getInfo").mockResolvedValue({
+      product: "Ultimate 64",
+      errors: [],
+    } as any);
+
+    const { getConnectionSnapshot, initializeConnectionManager, verifyCurrentConnectionTarget } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    const result = await verifyCurrentConnectionTarget({
+      deviceHost: "u64",
+      preferResolvedAddress: "192.168.1.13",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        resolvedAddress: "192.168.1.13",
+      }),
+    );
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getInfoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        __c64uIntent: "system",
+        __c64uAllowDuringDiscovery: true,
+        __c64uAllowDuringError: true,
+        __c64uBypassCircuit: true,
+      }),
+    );
+
+    getInfoSpy.mockRestore();
   });
 
   it("initializeConnectionManager logs warning when stopDemoServer throws", async () => {

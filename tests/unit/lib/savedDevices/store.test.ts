@@ -143,6 +143,70 @@ describe("savedDevices store", () => {
     ]);
   });
 
+  it("hydrates persisted device summaries and keeps resolved addresses on reload", async () => {
+    const store = await loadStore();
+    localStorage.setItem(
+      store.getSavedDevicesStorageKey(),
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "device-u64",
+        devices: [
+          {
+            id: "device-u64",
+            name: "u64",
+            nameSource: "INFERRED",
+            host: "u64",
+            type: "U64E",
+            typeSource: "INFERRED",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: "U64E",
+            lastKnownHostname: "u64",
+            lastKnownUniqueId: "UID-U64",
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+        ],
+        summaries: {
+          "device-u64": {
+            verifiedAt: "2026-04-09T12:00:00.000Z",
+            lastHealthState: "Healthy",
+            lastConnectivityState: "Online",
+            lastProbeSucceededAt: "2026-04-09T12:00:01.000Z",
+            lastProbeFailedAt: null,
+            lastVerifiedProduct: "U64E",
+            lastVerifiedHostname: "u64",
+            lastVerifiedUniqueId: "UID-U64",
+            lastResolvedAddress: "192.168.1.13",
+          },
+        },
+        summaryLru: ["device-u64"],
+        hasEverHadMultipleDevices: false,
+      }),
+    );
+
+    vi.resetModules();
+
+    const reloadedStore = await loadStore();
+    const reloadedSnapshot = reloadedStore.getSavedDevicesSnapshot();
+
+    expect(reloadedSnapshot.summaries["device-u64"]).toEqual({
+      deviceId: "device-u64",
+      verifiedAt: "2026-04-09T12:00:00.000Z",
+      lastHealthState: "Healthy",
+      lastConnectivityState: "Online",
+      lastProbeSucceededAt: "2026-04-09T12:00:01.000Z",
+      lastProbeFailedAt: null,
+      lastVerifiedProduct: "U64E",
+      lastVerifiedHostname: "u64",
+      lastVerifiedUniqueId: "UID-U64",
+      lastResolvedAddress: "192.168.1.13",
+    });
+    expect(reloadedSnapshot.summaryLru).toEqual(["device-u64"]);
+  });
+
   it("derives product-based auto names and enforces unique final labels", async () => {
     const store = await loadStore();
     const officeDevice = {
@@ -234,6 +298,19 @@ describe("savedDevices store", () => {
         backupDevice.host,
       ),
     ).toBe("Device name must be unique.");
+  });
+
+  it("accepts a unique label when validating a brand-new device draft", async () => {
+    const store = await loadStore();
+
+    expect(
+      store.validateSavedDeviceName(
+        store.getSavedDevicesSnapshot().devices,
+        "device-lab",
+        "Lab U64",
+        "lab-u64.local:8080",
+      ),
+    ).toBeNull();
   });
 
   it("keeps inferred names pinned to the host when the user clears the field", async () => {
