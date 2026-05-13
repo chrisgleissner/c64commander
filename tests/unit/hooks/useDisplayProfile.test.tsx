@@ -33,6 +33,19 @@ const setScreenSize = (width: number, height: number) => {
   });
 };
 
+const setNativePlatform = (platform: string | null) => {
+  Object.defineProperty(window, "__c64uTestProbeEnabled", {
+    configurable: true,
+    writable: true,
+    value: platform !== null,
+  });
+  Object.defineProperty(window, "__c64uPlatformOverride", {
+    configurable: true,
+    writable: true,
+    value: platform,
+  });
+};
+
 const Consumer = () => {
   const { profile, autoProfile, override } = useDisplayProfile();
   const { setOverride } = useDisplayProfilePreference();
@@ -54,12 +67,14 @@ describe("DisplayProfileProvider", () => {
     // Default is off; tests that exercise resize-tracking must opt in explicitly.
     saveAutoRotationEnabled(false);
     setScreenSize(320, 640);
+    setNativePlatform(null);
   });
 
   it("treats a Pixel-class screen as standard even when the viewport is temporarily narrower", () => {
     setViewportWidth(353);
     setViewportHeight(745);
     setScreenSize(393, 851);
+    setNativePlatform("android");
 
     render(
       <DisplayProfileProvider>
@@ -69,6 +84,21 @@ describe("DisplayProfileProvider", () => {
 
     expect(screen.getByTestId("auto-profile")).toHaveTextContent("medium");
     expect(screen.getByTestId("profile")).toHaveTextContent("medium");
+  });
+
+  it("keeps narrow desktop browser windows compact even on a large monitor", () => {
+    setViewportWidth(353);
+    setViewportHeight(745);
+    setScreenSize(1440, 900);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("auto-profile")).toHaveTextContent("compact");
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
   });
 
   it("tracks automatic viewport changes and persists manual overrides when auto-rotation is enabled", () => {

@@ -15,6 +15,7 @@ import {
   getDisplayProfileLayoutTokens,
   resolveAutomaticDisplayProfileWidth,
   resolveAutomaticDisplayProfile,
+  resolveDisplayProfile,
   resolveEffectiveDisplayProfile,
 } from "@/lib/displayProfiles";
 import {
@@ -22,6 +23,7 @@ import {
   setDisplayProfileOverride as persistDisplayProfileOverride,
 } from "@/lib/uiPreferences";
 import { APP_SETTINGS_KEYS, loadAutoRotationEnabled } from "@/lib/config/appSettings";
+import { isNativePlatform } from "@/lib/native/platform";
 
 type DisplayProfileContextValue = {
   viewportWidth: number;
@@ -234,16 +236,12 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
   }, []);
 
   const value = React.useMemo<DisplayProfileContextValue>(() => {
-    const automaticProfileWidth = resolveAutomaticDisplayProfileWidth(
-      viewportWidth,
-      readScreenDimension("width"),
-      readScreenDimension("height"),
-    );
-    const autoProfile = resolveAutomaticDisplayProfile(
-      viewportWidth,
-      readScreenDimension("width"),
-      readScreenDimension("height"),
-    );
+    const automaticProfileWidth = isNativePlatform()
+      ? resolveAutomaticDisplayProfileWidth(viewportWidth, readScreenDimension("width"), readScreenDimension("height"))
+      : viewportWidth;
+    const autoProfile = isNativePlatform()
+      ? resolveAutomaticDisplayProfile(viewportWidth, readScreenDimension("width"), readScreenDimension("height"))
+      : resolveDisplayProfile(viewportWidth);
     const profile = resolveEffectiveDisplayProfile(automaticProfileWidth, override);
     return {
       viewportWidth,
