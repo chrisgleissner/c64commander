@@ -144,9 +144,9 @@ describe("savedDevices store", () => {
   });
 
   it("hydrates persisted device summaries and keeps resolved addresses on reload", async () => {
-    const store = await loadStore();
+    vi.resetModules();
     localStorage.setItem(
-      store.getSavedDevicesStorageKey(),
+      "c64u_saved_devices:v1",
       JSON.stringify({
         version: 1,
         selectedDeviceId: "device-u64",
@@ -186,8 +186,6 @@ describe("savedDevices store", () => {
         hasEverHadMultipleDevices: false,
       }),
     );
-
-    vi.resetModules();
 
     const reloadedStore = await loadStore();
     const reloadedSnapshot = reloadedStore.getSavedDevicesSnapshot();
@@ -402,6 +400,38 @@ describe("savedDevices store", () => {
     });
   });
 
+  it("preserves user-authored type metadata when editing a device host", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64",
+      name: "Workbench",
+      nameSource: "USER",
+      type: "Lab Ultimate",
+      typeSource: "USER",
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "u64",
+      lastKnownUniqueId: "UID-U64",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+    });
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64-elite",
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      host: "u64-elite",
+      type: "Lab Ultimate",
+      typeSource: "USER",
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "u64",
+      lastKnownUniqueId: "UID-U64",
+    });
+  });
+
   it("updates inferred type from successful verification after a host change", async () => {
     const store = await loadStore();
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
@@ -498,6 +528,92 @@ describe("savedDevices store", () => {
       lastVerifiedHostname: null,
       lastVerifiedUniqueId: null,
       lastResolvedAddress: null,
+    });
+  });
+
+  it("preserves user-authored type metadata when updating the selected connection host", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "u64",
+      name: "Workbench",
+      nameSource: "USER",
+      type: "Lab Ultimate",
+      typeSource: "USER",
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "u64",
+      lastKnownUniqueId: "UID-U64",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+    });
+    store.completeSavedDeviceVerification(
+      initialDeviceId,
+      {
+        product: "Ultimate 64 Elite",
+        hostname: "u64",
+        unique_id: "UID-U64",
+      },
+      "192.168.1.13",
+    );
+
+    store.updateSelectedSavedDeviceConnection({
+      deviceHost: "c64u:8080",
+      httpPort: 8080,
+      passwordPresent: true,
+    });
+
+    expect(store.getSelectedSavedDevice()).toMatchObject({
+      host: "c64u",
+      httpPort: 8080,
+      hasPassword: true,
+      type: "Lab Ultimate",
+      typeSource: "USER",
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "u64",
+      lastKnownUniqueId: "UID-U64",
+    });
+    expect(store.getSavedDeviceSwitchSummary(initialDeviceId)).toMatchObject({
+      verifiedAt: null,
+      lastHealthState: null,
+      lastConnectivityState: null,
+      lastVerifiedHostname: null,
+      lastVerifiedUniqueId: null,
+      lastResolvedAddress: null,
+    });
+  });
+
+  it("updates only the selected device service ports", async () => {
+    const store = await loadStore();
+    const initialSnapshot = store.getSavedDevicesSnapshot();
+    const initialDeviceId = initialSnapshot.selectedDeviceId;
+
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "backup-lab",
+      lastKnownUniqueId: "UID-BACKUP",
+      hasPassword: false,
+    });
+
+    store.updateSelectedSavedDevicePorts({
+      ftpPort: 2121,
+      telnetPort: 2424,
+    });
+
+    expect(store.getSavedDeviceById(initialDeviceId)).toMatchObject({
+      ftpPort: 2121,
+      telnetPort: 2424,
+    });
+    expect(store.getSavedDeviceById("device-backup")).toMatchObject({
+      ftpPort: 2021,
+      telnetPort: 2323,
     });
   });
 
