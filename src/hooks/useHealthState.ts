@@ -96,6 +96,10 @@ const filterTraceEventsForConfiguredHost = (
       return correlationHost === selectedHost;
     }
 
+    if (event.type === "error") {
+      return false;
+    }
+
     const attributedHost = resolveTraceAttributedHost(event);
     if (attributedHost) {
       return attributedHost === selectedHost;

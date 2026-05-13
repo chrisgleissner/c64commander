@@ -280,6 +280,31 @@ describe("useHealthState", () => {
     }
     const [filteredEvents] = lastRestContributorCall;
 
-    expect(filteredEvents).toEqual([traceEventsMock.events[0], traceEventsMock.events[3]]);
+    expect(filteredEvents).toEqual([traceEventsMock.events[0]]);
+  });
+
+  it("ignores standalone error events even when the global trace context points at the selected host", () => {
+    configuredHostMock.host = "u64";
+    traceEventsMock.events = [
+      { type: "rest-response", correlationId: "u64-ok", data: { status: 200, hostname: "u64" } },
+      {
+        type: "error",
+        correlationId: "background-c64u-failure",
+        data: {
+          message: "background device failed",
+          device: { host: "u64" },
+        },
+      },
+    ];
+
+    renderHook(() => useHealthState());
+
+    const lastAppContributorCall = healthModelMocks.deriveAppContributorHealth.mock.calls.slice(-1)[0];
+    if (!lastAppContributorCall) {
+      throw new Error("deriveAppContributorHealth was not called");
+    }
+    const [filteredEvents] = lastAppContributorCall;
+
+    expect(filteredEvents).toEqual([traceEventsMock.events[0]]);
   });
 });
