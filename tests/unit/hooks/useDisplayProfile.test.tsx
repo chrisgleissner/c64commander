@@ -22,6 +22,17 @@ const setViewportHeight = (height: number) => {
   });
 };
 
+const setScreenSize = (width: number, height: number) => {
+  Object.defineProperty(window.screen, "width", {
+    configurable: true,
+    value: width,
+  });
+  Object.defineProperty(window.screen, "height", {
+    configurable: true,
+    value: height,
+  });
+};
+
 const Consumer = () => {
   const { profile, autoProfile, override } = useDisplayProfile();
   const { setOverride } = useDisplayProfilePreference();
@@ -42,6 +53,22 @@ describe("DisplayProfileProvider", () => {
     localStorage.clear();
     // Default is off; tests that exercise resize-tracking must opt in explicitly.
     saveAutoRotationEnabled(false);
+    setScreenSize(320, 640);
+  });
+
+  it("treats a Pixel-class screen as standard even when the viewport is temporarily narrower", () => {
+    setViewportWidth(353);
+    setViewportHeight(745);
+    setScreenSize(393, 851);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("auto-profile")).toHaveTextContent("medium");
+    expect(screen.getByTestId("profile")).toHaveTextContent("medium");
   });
 
   it("tracks automatic viewport changes and persists manual overrides when auto-rotation is enabled", () => {

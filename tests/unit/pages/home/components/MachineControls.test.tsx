@@ -61,7 +61,7 @@ describe("MachineControls", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the canonical primary quick actions without telnet-only controls by default", () => {
+  it("keeps the canonical primary quick actions in a two-column compact grid", () => {
     render(<MachineControls {...defaultProps} />);
 
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
@@ -72,7 +72,7 @@ describe("MachineControls", () => {
       "Menu",
       "Power Off",
     ]);
-    expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "4");
+    expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "2");
   });
 
   it("renders experimental RAM actions only when requested", () => {
@@ -160,6 +160,35 @@ describe("MachineControls", () => {
 
     expect(rebootClearMemory).toHaveBeenCalledTimes(1);
     expect(saveReu).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders every enabled quick action even in the two-column compact grid", () => {
+    render(
+      <MachineControls
+        {...defaultProps}
+        ramActionsVisible={true}
+        onPowerCycle={vi.fn()}
+        extraActions={[
+          { id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn() },
+          { id: "saveReuMemory", label: "Save REU", onSelect: vi.fn() },
+        ]}
+      />,
+    );
+
+    const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
+    expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
+      "Reset",
+      "Reboot",
+      "Pause",
+      "Menu",
+      "Save RAM",
+      "Load RAM",
+      "Power Cycle",
+      "Reboot (Clr Mem)",
+      "Save REU",
+      "Power Off",
+    ]);
+    expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "2");
   });
 
   it("renders loading extra actions with an ellipsis label", () => {
