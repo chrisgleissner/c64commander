@@ -10,9 +10,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { getTraceEvents } from "@/lib/tracing/traceSession";
+import type { TraceEvent } from "@/lib/tracing/types";
 import { getConfiguredHost } from "@/lib/connection/hostEdit";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import {
   type ContributorHealth,
   deriveAppContributorHealth,
@@ -40,6 +42,56 @@ const contributorHealthFromProbe = (
   failedOperations: problemCount,
 });
 
+const TRACE_URL_FALLBACK_BASE = "http://localhost";
+
+const resolveTraceTransportHost = (event: TraceEvent<Record<string, unknown>>) => {
+  const transportHostname = typeof event.data.hostname === "string" ? event.data.hostname : null;
+  if (transportHostname) {
+    return stripPortFromDeviceHost(transportHostname);
+  }
+
+  const url = typeof event.data.url === "string" ? event.data.url : null;
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : TRACE_URL_FALLBACK_BASE;
+    return stripPortFromDeviceHost(new URL(url, base).host);
+  } catch {
+    return null;
+  }
+};
+
+const resolveTraceAttributedHost = (event: TraceEvent<Record<string, unknown>>) => {
+  const device = event.data.device;
+  if (!device || typeof device !== "object") {
+    return null;
+  }
+  const host = "host" in device && typeof device.host === "string" ? device.host : null;
+  return host ? stripPortFromDeviceHost(host) : null;
+};
+
+const filterTraceEventsForConfiguredHost = (
+  events: TraceEvent<Record<string, unknown>>[],
+  configuredHost: string,
+): TraceEvent<Record<string, unknown>>[] => {
+  const selectedHost = stripPortFromDeviceHost(configuredHost);
+  return events.filter((event) => {
+    const transportHost = resolveTraceTransportHost(event);
+    if (transportHost) {
+      return transportHost === selectedHost;
+    }
+
+    const attributedHost = resolveTraceAttributedHost(event);
+    if (attributedHost) {
+      return attributedHost === selectedHost;
+    }
+
+    return true;
+  });
+};
+
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
   const healthCheckState = useHealthCheckState();
@@ -58,6 +110,7 @@ export function useHealthState(): OverallHealthState {
   return useMemo(() => {
     const connectivity = deriveConnectivityState(connectionSnapshot.state);
     const host = getConfiguredHost();
+    const hostScopedTraceEvents = filterTraceEventsForConfiguredHost(traceEvents, host);
     const latestHealthCheck = healthCheckState.latestResult;
     const selectedSavedDevice =
       savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
@@ -90,9 +143,9 @@ export function useHealthState(): OverallHealthState {
         connectedDeviceLabel,
         problemCount,
         contributors,
-        lastRestActivity: deriveLastRestActivity(traceEvents),
-        lastFtpActivity: deriveLastFtpActivity(traceEvents),
-        lastTelnetActivity: deriveLastTelnetActivity(traceEvents),
+        lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
+        lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
+        lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
         primaryProblem: firstFailedProbe
           ? {
               id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
@@ -116,7 +169,7 @@ export function useHealthState(): OverallHealthState {
     // Gate trace-derived health on having seen at least one successful REST response.
     // Before the first clean response, the badge stays Idle (connecting) rather than
     // flipping to Unhealthy from early probe failures or connection-retry noise.
-    const hasFirstRestSuccess = traceEvents.some(
+    const hasFirstRestSuccess = hostScopedTraceEvents.some(
       (e) => e.type === "rest-response" && typeof e.data.status === "number" && e.data.status < 400,
     );
 
@@ -135,18 +188,18 @@ export function useHealthState(): OverallHealthState {
         connectedDeviceLabel,
         problemCount: 0,
         contributors: idleContributors,
-        lastRestActivity: deriveLastRestActivity(traceEvents),
-        lastFtpActivity: deriveLastFtpActivity(traceEvents),
-        lastTelnetActivity: deriveLastTelnetActivity(traceEvents),
+        lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
+        lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
+        lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
         primaryProblem: null,
       };
     }
 
     const contributors = {
-      App: deriveAppContributorHealth(traceEvents),
-      REST: deriveRestContributorHealth(traceEvents),
-      FTP: deriveFtpContributorHealth(traceEvents),
-      TELNET: deriveTelnetContributorHealth(traceEvents),
+      App: deriveAppContributorHealth(hostScopedTraceEvents),
+      REST: deriveRestContributorHealth(hostScopedTraceEvents),
+      FTP: deriveFtpContributorHealth(hostScopedTraceEvents),
+      TELNET: deriveTelnetContributorHealth(hostScopedTraceEvents),
     } as const;
 
     const state = rollUpHealth(contributors, connectivity);
@@ -163,10 +216,10 @@ export function useHealthState(): OverallHealthState {
       connectedDeviceLabel,
       problemCount: totalProblems,
       contributors,
-      lastRestActivity: deriveLastRestActivity(traceEvents),
-      lastFtpActivity: deriveLastFtpActivity(traceEvents),
-      lastTelnetActivity: deriveLastTelnetActivity(traceEvents),
-      primaryProblem: derivePrimaryProblem(traceEvents, contributors),
+      lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
+      lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
+      lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
+      primaryProblem: derivePrimaryProblem(hostScopedTraceEvents, contributors),
     };
   }, [connectionSnapshot.state, deviceInfo?.product, healthCheckState.latestResult, savedDevices, traceEvents]);
 }
