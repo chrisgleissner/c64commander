@@ -10,6 +10,7 @@ const {
   runPlaybackReconcilerMock,
   diagnosticsDialogState,
   recordActionEndMock,
+  connectionSnapshotMock,
 } = vi.hoisted(() => ({
   consumeDiagnosticsOpenRequestMock: vi.fn(),
   runDiagnosticsReconcilerMock: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
@@ -18,6 +19,17 @@ const {
     firstVisibleCallback: null as (() => void) | null,
   },
   recordActionEndMock: vi.fn(),
+  connectionSnapshotMock: {
+    state: "OFFLINE_NO_DEMO",
+    lastDiscoveryTrigger: null,
+    lastTransitionAtMs: 0,
+    lastProbeAtMs: null,
+    lastProbeSucceededAtMs: null,
+    lastProbeFailedAtMs: null,
+    lastProbeError: null,
+    deviceInfo: null,
+    demoInterstitialVisible: false,
+  },
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -109,6 +121,8 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   discoverConnection: vi.fn(),
+  getConnectionSnapshot: vi.fn(() => connectionSnapshotMock),
+  subscribeConnection: vi.fn(() => () => undefined),
 }));
 
 vi.mock("@/lib/connection/hostEdit", () => ({

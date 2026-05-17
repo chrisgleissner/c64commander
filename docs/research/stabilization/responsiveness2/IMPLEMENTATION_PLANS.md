@@ -19,26 +19,30 @@ This document is the live execution log for Stage 2. Read `STABILIZATION_PROMPT.
 
 | ID | Finding | Status | Notes / Evidence |
 |---|---|---|---|
-| F-DIAG-1 | Saved-device cross-contamination of contributor windows | DONE (code+tests) | `DeviceScope` + `eventMatchesDeviceScope` added in `healthModel.ts`; contributors accept optional scope; `useHealthState` passes `{ deviceId, host }`; `useSavedDeviceHealthChecks` background interval raised to 60 s. Fixed broken `resolveTraceAttributedHost` to use actual `savedDeviceHostSnapshot`/`verifiedHostname` fields. Evidence: `npx vitest run tests/unit/lib/diagnostics/healthModel.test.ts tests/unit/hooks/useHealthState.test.tsx tests/unit/hooks/useSavedDeviceHealthChecks.test.tsx` passed 129 tests on 2026-05-17. |
+| F-DIAG-1 | Saved-device cross-contamination of contributor windows | DONE | `DeviceScope` + `eventMatchesDeviceScope` added in `healthModel.ts`; contributors accept optional scope; `useHealthState` passes `{ deviceId, host }`; `useSavedDeviceHealthChecks` background interval raised to 60 s. Fixed broken `resolveTraceAttributedHost` to use actual `savedDeviceHostSnapshot`/`verifiedHostname` fields. Pixel soak exposed an active-device Telnet race, so `useTelnetActions` capability discovery now also uses `withTelnetInteraction` (`capability-discovery`) to avoid racing the health-check TELNET probe. Evidence: targeted Vitest passed 148 tests on 2026-05-17; Pixel 4 u64 Home 60 s soak passed after scheduler fix. |
 | F-DIAG-2 | REST window trim asymmetry | DONE (code+tests) | `restHealthWindowEvents` now sorts ascending + `trimToLatestSuccess` (matches FTP/TELNET). New regression tests added. Existing tests updated where the new trim invalidated old assertions. Evidence: targeted diagnostics/hook Vitest run passed on 2026-05-17. |
 | F-DIAG-3 | App contributor over-sensitivity | DONE (code+tests) | Recency rule: severity from errors in last 60 s. 0 recent → Idle (even with old errors), 1–4 recent → Degraded, ≥5 recent → Unhealthy. Evidence: targeted diagnostics/hook Vitest run passed on 2026-05-17. |
 
 Phase 1 gate:
 - [x] Unit tests for new device-scoped + recency behaviour pass (104 healthModel + 14 useHealthState + 11 useSavedDeviceHealthChecks all green)
+- [x] Telnet capability discovery scheduling regression passes (`useTelnetActions`: 19 tests; targeted set: 148 tests)
 - [x] `npm run lint` passes after Prettier formatting of touched TS files (2026-05-17; 3 existing warnings under `c64scope/coverage`)
 - [x] `npm run test:coverage` passes: 965 tests, 91.78 % branch coverage (2026-05-17)
-- [ ] Pixel 4 60 s Home soak with u64 active + c64u saved+powered: badge remains HEALTHY (TODO — requires Pixel 4 + powered devices, deferred to Phase 6 hardware sweep)
+- [x] Pixel 4 60 s Home soak with u64 active: badge remains HEALTHY. Evidence: `evidence/phase1-F-DIAG-1-u64-home-60s-after-telnet-scheduler.png`; logcat: `evidence/phase1-F-DIAG-1-u64-logcat-after-telnet-scheduler.txt`.
+- [ ] c64u secondary validation blocked: `curl --max-time 5 http://c64u/v1/info` returns `Recv failure: Connection reset by peer` on 2026-05-17.
 
 ## Phase 2 — Connection state truthfulness
 
 | ID | Finding | Status | Notes / Evidence |
 |---|---|---|---|
-| F-CONN-1 | OFFLINE badge while REST succeeding | TODO | `noteReachable` opportunistic promotion. |
-| F-CONN-2 | Home Device/Firmware row stuck on warm restart | TODO | Invalidate `c64-info` on REAL_CONNECTED. |
-| F-CONN-3 | Diagnostics dialog header `u64 · Unknown` | TODO | Fall back to live `/v1/info` cache. |
+| F-CONN-1 | OFFLINE badge while REST succeeding | DONE (code+tests) | Added `noteReachable(host, source, deviceInfo?)` in `connectionManager`; successful 2xx REST responses call it from `c64api`. Active-host reachability promotes `OFFLINE_NO_DEMO`/`DISCOVERING` to `REAL_CONNECTED`. Regression: `connectionManager` promotes offline active host when REST reports reachable. |
+| F-CONN-2 | Home Device/Firmware row stuck on warm restart | DONE (code+tests) | `useC64Connection` invalidates `c64-info` when connection state transitions to `REAL_CONNECTED`, enabling Home `SystemInfo` to refresh after opportunistic promotion. Regression added in `useC64Connection.test.ts`. |
+| F-CONN-3 | Diagnostics dialog header `u64 · Unknown` | DONE (code+tests) | Connection snapshot now carries live `/v1/info` `deviceInfo`; diagnostics maps it to `DeviceDetailInfo` and falls back to `deviceInfo.product` when saved-device product is empty. Regression added in `DiagnosticsDialog.test.tsx`. |
 
 Phase 2 gate:
-- [ ] Unit + integration tests pass
+- [x] Targeted unit/integration tests pass: `npx vitest run tests/unit/connection/connectionManager.test.ts tests/unit/hooks/useC64Connection.test.ts tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx tests/unit/hooks/useTelnetActions.test.tsx` (152 tests, 2026-05-17)
+- [x] `npm run lint` passes (2026-05-17; 3 existing warnings under `c64scope/coverage`)
+- [x] `npm run test:coverage` passes: 965 tests, 91.76 % branch coverage (2026-05-17)
 - [ ] Pixel 4 cold-launch at +3s: badge non-OFFLINE; Device/Firmware populated at +5s; same on warm restart
 
 ## Phase 3 — Transport overhead and log noise
@@ -95,10 +99,11 @@ Run order:
 
 | When | APK | TotalTime | Notes |
 |---|---|---|---|
-| (TBD) | | | |
+| 2026-05-17 22:23 | `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` | 583 ms | Initial Phase 1 soak failed: Home badge `U64 · 1 UNHEALTHY`; diagnostics showed active-device `useTelnetActions` capability discovery `Read failed: Not connected`. Failure evidence retained under `evidence/phase1-F-DIAG-1-u64-*failed*` and initial `home-60s.png`/`logcat.txt`. |
+| 2026-05-17 22:44 | `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` | 614 ms | Rebuilt after Telnet scheduler fix; 60 s u64 Home soak passed with `U64 · HEALTHY`. Known Phase 3 `Msg: undefined` spam remains in logcat. |
 
 ## u64 + c64u real-device validation log
 
 | Finding | u64 result | c64u result | Evidence |
 |---|---|---|---|
-| (per phase) | | | |
+| F-DIAG-1/F-DIAG-2/F-DIAG-3 | PASS: `u64` reachable (`Ultimate 64 Elite`, fw `3.14e`), Pixel 4 Home soak remains `U64 · HEALTHY` after 60 s. | BLOCKED: `/v1/info` on `c64u` resets connection. | `evidence/phase1-F-DIAG-1-u64-home-60s-after-telnet-scheduler.png`, `evidence/phase1-F-DIAG-1-u64-logcat-after-telnet-scheduler.txt` |

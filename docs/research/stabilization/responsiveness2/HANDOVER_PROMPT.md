@@ -1,141 +1,248 @@
-# HANDOVER_PROMPT — C64 Commander Stage-2 (continuation)
+# HANDOVER_PROMPT — C64 Commander Stage-2 Stabilization
 
-Written 2026-05-17 by the agent partway through Phase 1. The agent ran out of context. Resume from here.
+Written 2026-05-17 23:27 BST. Resume from this file if context is compacted or the agent is restarted.
 
-## How to use this file
+## Operating principle
 
-1. Read `STABILIZATION_PROMPT.md` end-to-end. That is the binding spec.
-2. Read `IMPLEMENTATION_PLANS.md` for the live status table. Update it as you go.
-3. Read this file for what is in flight, what already landed, and what to do next.
-4. Continue execution — do NOT redo investigation.
+The user explicitly wants latency and UI stability work to keep moving. Do not spend time on broad or ceremonial verification while iterating. Use targeted tests for each code change, one lint/build gate when needed, and defer full coverage or broad validation until a phase is ready to close or the repo policy makes it unavoidable.
 
-## What is in flight (Phase 1)
+Do not mark code complete without the required gates, but avoid repeatedly running long gates after every small local observation. If a long gate is already running, let it finish; otherwise prefer the narrowest useful command.
 
-Phase 1 (F-DIAG-1 + F-DIAG-2 + F-DIAG-3) has been implemented in source but **NOT yet validated** by tests or build. The changes:
+## Binding context
 
-- `src/lib/diagnostics/healthModel.ts`:
-  - Added `DeviceScope` type + `eventMatchesDeviceScope` helper + `scopeEvents` helper.
-  - `deriveRestContributorHealth`, `deriveFtpContributorHealth`, `deriveTelnetContributorHealth`, `deriveAppContributorHealth` now accept optional `scope?: DeviceScope | null`.
-  - `derivePrimaryProblem` now accepts optional `scope?: DeviceScope | null`.
-  - REST window trim now mirrors FTP/TELNET: sort ascending + `trimToLatestSuccess` (F-DIAG-2).
-  - App contributor uses recency-aware rule: severity from errors in last 60 s; 0 recent → Idle, 1–4 recent → Degraded, ≥5 recent → Unhealthy (F-DIAG-3).
-  - Constants: `RECENT_APP_ERROR_WINDOW_MS = 60_000`, `APP_ERROR_UNHEALTHY_RECENT_THRESHOLD = 5`.
+1. Read `STABILIZATION_PROMPT.md` for the full spec.
+2. Read `IMPLEMENTATION_PLANS.md` for the live status table and update it as you go.
+3. Do not redo completed investigation. Continue from the state below.
+4. Keep evidence under `docs/research/stabilization/responsiveness2/evidence/`.
 
-- `src/hooks/useHealthState.ts`:
-  - Imports `DeviceScope`.
-  - Passes `{ deviceId: selectedSavedDevice?.id ?? null, host }` to all contributor + primaryProblem calls (defence in depth on top of the existing host-scoped event prefilter).
-  - Fixed broken `resolveTraceAttributedHost` which previously looked for non-existent `device.host`; now uses `savedDeviceHostSnapshot` / `verifiedHostname`.
+## Current classification
 
-- `src/hooks/useSavedDeviceHealthChecks.ts`:
-  - Replaced `AUTO_REFRESH_MS = 10_000` with `AUTO_REFRESH_MS_FOREGROUND = 10_000` (picker open) and `AUTO_REFRESH_MS_BACKGROUND = 60_000` (picker closed).
-  - The `setInterval` now picks an interval based on `context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance`.
+`DOC_PLUS_CODE`. The current work affects app behavior and docs/evidence. It is not a visible UI design/layout change, so do not regenerate screenshot docs unless the spec evidence requires a device screenshot.
 
-- `tests/unit/lib/diagnostics/healthModel.test.ts`:
-  - Updated existing test "ignores pre-connection REST failures once a later REST response succeeds" to expect `totalOperations: 1` (was 2) because of the new trim semantic.
-  - Updated `deriveAppContributorHealth` tests: renamed to "Degraded for 1–4 RECENT" and added new test "returns Idle when the only error is outside the recent 60 s window".
-  - Updated the Unhealthy test to use offsets within the 60 s recent window (was using `(i+1)*10_000` which would not be considered recent enough under the new rule).
-  - Added a new `describe("device-scoped contributor health (F-DIAG-1)")` block covering REST/FTP/Telnet/error cross-device contamination prevention.
-  - Added new tests "recovers to Healthy after a transient failure when the latest event is a success" and "returns Unhealthy when consecutive failures occur after the latest success".
+## Hardware state
 
-## NEXT IMMEDIATE STEPS
+- Pixel 4 serial: `9B081FFAZ001WX`.
+- Primary hardware target: `u64`.
+- `u64` probe succeeds: `curl --max-time 5 -sS http://u64/v1/info` returns product `Ultimate 64 Elite`, firmware `3.14e`, hostname `u64`.
+- `c64u` remains blocked: `curl --max-time 5 -sS http://c64u/v1/info` returns `Recv failure: Connection reset by peer`. Record this blocker instead of repeatedly probing it.
+- Before screenshots, wake/unlock the Pixel. A failed Phase 2 capture was black because the device was dozing and `NotificationShade` was focused, not because the app failed.
 
-1. **Run unit tests** for the diagnostics health model:
+Wake command used successfully:
+
+```bash
+adb -s 9B081FFAZ001WX shell input keyevent KEYCODE_WAKEUP
+sleep 1
+adb -s 9B081FFAZ001WX shell wm dismiss-keyguard
+adb -s 9B081FFAZ001WX shell input keyevent KEYCODE_MENU
+adb -s 9B081FFAZ001WX shell input swipe 500 1600 500 300 300
+```
+
+## Phase 1 status
+
+Phase 1 is implemented and validated.
+
+What landed:
+
+- Device-scoped diagnostics contributor filtering in `src/lib/diagnostics/healthModel.ts`.
+- `useHealthState` passes selected saved-device scope and fixed host attribution fallback.
+- Saved-device background health interval is 60 s while switch picker is closed.
+- REST health window trim now matches FTP/TELNET.
+- App contributor errors are recency-scoped to the last 60 s.
+- `useTelnetActions` capability discovery is scheduled through `withTelnetInteraction` to avoid racing the native Telnet health probe.
+
+Evidence already captured:
+
+- Targeted Vitest set passed 148 tests.
+- `npm run lint` passed with only existing `c64scope/coverage` warnings.
+- `npm run test:coverage` passed earlier: 965 tests, 91.78% branch.
+- Pixel 4 `u64` 60 s soak passed after the Telnet scheduler fix:
+  - `evidence/phase1-F-DIAG-1-u64-home-60s-after-telnet-scheduler.png`
+  - `evidence/phase1-F-DIAG-1-u64-logcat-after-telnet-scheduler.txt`
+
+## Phase 2 status
+
+Phase 2 code is implemented but final Pixel evidence needs to be redone after the latest Home metadata fallback fix.
+
+Files touched for Phase 2:
+
+```text
+src/lib/connection/connectionManager.ts
+src/lib/c64api.ts
+src/hooks/useC64Connection.ts
+src/components/diagnostics/GlobalDiagnosticsOverlay.tsx
+src/components/diagnostics/DiagnosticsDialog.tsx
+tests/unit/connection/connectionManager.test.ts
+tests/unit/hooks/useC64Connection.test.ts
+tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx
+tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx
+docs/research/stabilization/responsiveness2/IMPLEMENTATION_PLANS.md
+```
+
+Implemented behavior:
+
+- `ConnectionSnapshot` carries `deviceInfo: DeviceInfo | null`.
+- `connectionManager.noteReachable(host, source, deviceInfo?)` promotes active-host `OFFLINE_NO_DEMO`/`DISCOVERING` to `REAL_CONNECTED` after successful REST reachability.
+- `/v1/info` success stores live `DeviceInfo` in the connection snapshot.
+- Successful REST responses in `src/lib/c64api.ts` call `noteReachable`.
+- `useC64Connection` invalidates `c64-info` when connection state transitions into `REAL_CONNECTED`.
+- `GlobalDiagnosticsOverlay` maps connection snapshot `deviceInfo` to diagnostics fallback info.
+- `DiagnosticsDialog` falls back to live `deviceInfo.product` when saved-device product is empty.
+- Latest fix: `useC64Connection` now exposes `connection.deviceInfo` as a fallback when the `c64-info` query has no displayable identity yet, and uses `refetchOnMount: "always"` for the info query. This was needed because the Pixel showed `U64 · HEALTHY` but Home still displayed `Device Not available` and `Firmware Not available`.
+
+Phase 2 tests already run:
+
+```bash
+npx vitest run tests/unit/connection/connectionManager.test.ts tests/unit/hooks/useC64Connection.test.ts tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx tests/unit/hooks/useTelnetActions.test.tsx
+```
+
+Passed: 152 tests.
+
+After the latest `useC64Connection` fallback fix, this targeted set passed:
+
+```bash
+npx vitest run tests/unit/hooks/useC64Connection.test.ts tests/unit/pages/home/components/SystemInfo.test.tsx tests/unit/connection/connectionManager.test.ts tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx
+```
+
+Passed: 142 tests.
+
+`npm run lint` passed after the latest fix with only existing warnings in:
+
+```text
+c64scope/coverage/block-navigation.js
+c64scope/coverage/prettify.js
+c64scope/coverage/sorter.js
+```
+
+Coverage note:
+
+- Full coverage passed before the latest `useC64Connection` fallback fix: 965 tests, 91.76% branch.
+- A second `npm run test:coverage` was started after that fix and was green through many shards, but the shell session was lost/interrupted before the final merged summary was captured. Do not treat it as evidence.
+- To avoid wasting time, do not immediately rerun full coverage unless you are closing Phase 2 or making no further Phase 3/4 code changes. Use targeted tests while iterating.
+
+Phase 2 device evidence state:
+
+- APK was built and installed successfully before the latest fallback fix:
+
+```bash
+npm run cap:build && npm run android:apk
+adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk
+```
+
+- Black screenshots were caused by the device dozing:
+  - `evidence/phase2-F-CONN-1-u64-cold-3s.png`
+  - `evidence/phase2-F-CONN-2-u64-cold-5s.png`
+- Awake check showed badge was fixed but Home metadata still failed before the latest code fix:
+  - `evidence/phase2-F-CONN-1-u64-awake-check.png`
+  - UI showed `U64 · HEALTHY`, but `Device` and `Firmware` were still `Not available`.
+- Rebuild/reinstall is required before taking final Phase 2 Pixel evidence.
+
+Fast next Phase 2 path:
+
+1. Run only the targeted Phase 2 tests if code has changed since this handover:
+
    ```bash
-   npx vitest run tests/unit/lib/diagnostics/healthModel.test.ts
-   ```
-   If failures appear, fix them — the most likely victims are:
-   - Other tests in `tests/unit/lib/diagnostics/` that consume `deriveRestContributorHealth` and expect the old `firstSuccessIndex` trim semantic (search for usages).
-   - Snapshot or component tests in `tests/unit/hooks/useHealthState*.test.*` that observe contributor counts.
-   - Tests that exercise the App contributor at boundaries 1-error / 5-errors with offsets exceeding 60 s.
-
-2. **Run the lint** (do not change source to silence it; fix root cause):
-   ```bash
-   npm run lint
+   npx vitest run tests/unit/hooks/useC64Connection.test.ts tests/unit/pages/home/components/SystemInfo.test.tsx tests/unit/connection/connectionManager.test.ts tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx
    ```
 
-3. **Mark Phase 1 tasks as complete** in the TaskList only after tests are green:
-   - Task #2 F-DIAG-1, #3 F-DIAG-2, #4 F-DIAG-3.
+2. If those are still green, build and install:
 
-4. **Update `IMPLEMENTATION_PLANS.md`** Phase 1 statuses to DONE with evidence file references.
-
-5. **Pixel 4 60 s soak gate (Phase 1 hardware gate)** — build APK, install, soak:
    ```bash
    npm run cap:build && npm run android:apk
-   adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-*-debug.apk
+   adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk
+   ```
+
+3. Wake the Pixel, clear logcat, cold-launch, and capture +3s/+5s:
+
+   ```bash
+   adb -s 9B081FFAZ001WX shell input keyevent KEYCODE_WAKEUP
+   adb -s 9B081FFAZ001WX shell wm dismiss-keyguard
+   adb -s 9B081FFAZ001WX logcat -c
    adb -s 9B081FFAZ001WX shell am force-stop uk.gleissner.c64commander
    adb -s 9B081FFAZ001WX shell am start -W -n uk.gleissner.c64commander/.MainActivity
-   sleep 60
-   adb -s 9B081FFAZ001WX shell screencap /sdcard/x.png
-   adb -s 9B081FFAZ001WX pull /sdcard/x.png docs/research/stabilization/responsiveness2/evidence/phase1-F-DIAG-1-u64-home-60s.png
-   adb -s 9B081FFAZ001WX logcat -d -t 5000 > docs/research/stabilization/responsiveness2/evidence/phase1-F-DIAG-1-u64-logcat.txt
+   sleep 3
+   adb -s 9B081FFAZ001WX shell screencap /sdcard/phase2-cold-3s.png
+   adb -s 9B081FFAZ001WX pull /sdcard/phase2-cold-3s.png docs/research/stabilization/responsiveness2/evidence/phase2-F-CONN-1-u64-cold-3s-after-info-fallback.png
+   sleep 2
+   adb -s 9B081FFAZ001WX shell screencap /sdcard/phase2-cold-5s.png
+   adb -s 9B081FFAZ001WX pull /sdcard/phase2-cold-5s.png docs/research/stabilization/responsiveness2/evidence/phase2-F-CONN-2-u64-cold-5s-after-info-fallback.png
+   adb -s 9B081FFAZ001WX logcat -d -t 5000 > docs/research/stabilization/responsiveness2/evidence/phase2-F-CONN-1-u64-cold-logcat-after-info-fallback.txt
    ```
-   Pixel 4 adb serial: `9B081FFAZ001WX`.
 
-## REMAINING PHASES (untouched as of handover)
+4. Validate visually:
+   - Badge is not OFFLINE, ideally `U64 · HEALTHY`.
+   - Home `Device` is `u64` or `Ultimate 64 Elite`.
+   - Home `Firmware` is `3.14e`.
 
-Each is fully spec'd in `STABILIZATION_PROMPT.md`. Below is the executive shortlist with hints.
+5. Do one warm restart evidence capture only if cold launch passes.
 
-### Phase 2 — Connection state truthfulness (F-CONN-1, F-CONN-2, F-CONN-3)
-- **F-CONN-1**: Add `noteReachable(host, source)` in `src/lib/connection/connectionManager.ts`. Promote `OFFLINE_NO_DEMO`/`DISCOVERING` → `REAL_CONNECTED` when the active host responds 2xx. Wire it from REST success path in `src/lib/c64api/requestRuntime.ts` (or `src/lib/c64api.ts`). Existing `/v1/info` probe stays the authoritative `DeviceInfo` source.
-- **F-CONN-2**: Inspect `src/pages/HomePage.tsx` for the Device/Firmware meta row; ensure it consumes `connectionManager.getSnapshot().deviceInfo` or the React Query `c64-info` cache. On `REAL_CONNECTED` transition, fire `queryClient.invalidateQueries({ queryKey: ["c64-info"] })`.
-- **F-CONN-3**: `src/components/diagnostics/DiagnosticsDialog.tsx` header — fall back to live `connectionManager.getSnapshot().deviceInfo.product` (or the `c64-info` query cache) when the per-device saved snapshot lacks `product`.
+6. Update `IMPLEMENTATION_PLANS.md` Phase 2 gate with the evidence filenames. Keep `c64u` as blocked unless its REST endpoint recovers.
 
-### Phase 3 — Transport overhead + log noise (F-HTTP-1, F-HTTP-2, F-LOG-1, F-LOG-2)
-- **F-HTTP-1**: Check `npm run cap:build` actually writes `"CapacitorCookies": { "enabled": false }` into `android/app/src/main/assets/capacitor.config.json`. If the disable is not honored, remove `@capacitor/cookies` from the Android plugin registration (grep `CapacitorCookies` usage in `src/` first — should be unused). Add a Vitest that parses the generated `capacitor.config.json` and asserts the field.
-- **F-HTTP-2**: Audit `src/components/.../LightingSummaryCard.tsx`, `src/pages/HomePage.tsx` for per-item LED Strip Settings reads; use `getConfigItems(category, items)` in `src/lib/c64api.ts` to batch. Defer Keyboard Lighting until the relevant section opens.
-- **F-LOG-1**: Add `no-console` ESLint rule (allow warn/error) on `src/lib/telnet/**` and `src/lib/diagnostics/**`. Install production `console.log` no-op in `src/main.tsx`. Find the `Msg: undefined` source — likely `console.info(undefined, ...)` in `src/lib/telnet/telnetClient.ts` or `src/lib/telnet/telnetSession*.ts`; build with sourcemaps and grep bundled line 353.
-- **F-LOG-2**: Cold-boot `Uncaught TypeError ... triggerEvent`. Suspects: `src/lib/diagnostics/logger.ts`, `src/lib/native/*Plugin.ts`, `src/lib/diagnostics/diagnosticsOverlay.ts`. Defer behind `Capacitor.isReady` or wrap in `Promise.resolve().then(...)`.
+## Phase 3 next work
 
-### Phase 4 — Interaction-aware scheduling + MimeMap (F-RT-1, F-MIME-1)
-- **F-RT-1**: In `src/hooks/useSavedDeviceHealthChecks.ts`, before `void runCycle(false)` in the interval callback, check `pollingPauseRegistry.isPaused()` (add the getter to `src/lib/...pollingPauseRegistry.ts` if needed). Skip the tick if paused.
-- **F-MIME-1**: Add `Thread { MimeMap.getDefault().guessMimeTypeFromExtension("html") }.start()` in `MainActivity.onCreate` (`android/app/src/main/java/uk/gleissner/c64commander/MainActivity.kt` — confirm path).
+Prioritize latency/noise fixes that affect the user-visible app first.
 
-### Phase 5 — Hypothesis verification
-H-VOL-1, H-VOL-2, H-PLAY-1, H-RT-2 — see `STABILIZATION_PROMPT.md`. Each requires real-device reproduction before deciding to fix.
+Recommended order:
 
-### Phase 6 — Full validation sweep
-- `npm run lint && npm run test && npm run test:coverage` (≥ 91 % branch)
-- `npm run build && npm run cap:build && npm run android:apk`
-- Install on Pixel 4 + walk u64 and c64u validation matrix per phase.
+1. F-HTTP-2: reduce Home cold-boot config storm.
+   - Current logcat showed repeated LED Strip and Keyboard Lighting config calls during cold launch.
+   - Audit `src/pages/HomePage.tsx`, `src/pages/home/components/LightingSummaryCard.tsx`, and relevant config hooks.
+   - Batch with `getConfigItems(category, items)` where possible.
+   - Defer Keyboard Lighting until the relevant section actually opens if that preserves current UX.
 
-## KEY FILES TOUCHED (so far)
+2. F-HTTP-1: verify CapacitorCookies disable.
+   - `npm run cap:build` currently reports only `@capacitor/filesystem` and `@capacitor/share`, but logcat still showed `CapacitorCookies` lines for C64U URLs.
+   - Check generated `android/app/src/main/assets/capacitor.config.json`.
+   - Add one narrow test only if there is a stable generated/config artifact to assert.
 
+3. F-LOG-1/F-LOG-2: log noise and cold boot errors.
+   - Do not suppress diagnostics silently.
+   - Fix the source of `Msg: undefined` and `triggerEvent` errors.
+   - Use logcat grep evidence, not broad manual testing.
+
+## Phase 4 next work
+
+After Phase 3:
+
+- F-RT-1: make saved-device health checks respect the polling pause registry during active interaction.
+- F-MIME-1: prewarm `MimeMap.getDefault().guessMimeTypeFromExtension("html")` off the UI thread in `MainActivity.onCreate`.
+
+## Current working tree summary
+
+At handover time, `git status --short` showed:
+
+```text
+ M docs/research/stabilization/responsiveness2/IMPLEMENTATION_PLANS.md
+ M src/components/diagnostics/DiagnosticsDialog.tsx
+ M src/components/diagnostics/GlobalDiagnosticsOverlay.tsx
+ M src/hooks/useC64Connection.ts
+ M src/lib/c64api.ts
+ M src/lib/connection/connectionManager.ts
+ M tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx
+ M tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx
+ M tests/unit/connection/connectionManager.test.ts
+ M tests/unit/hooks/useC64Connection.test.ts
+?? docs/research/stabilization/responsiveness2/evidence/phase1-F-DIAG-1-u64-home-60s-after-telnet-scheduler.png
+?? docs/research/stabilization/responsiveness2/evidence/phase2-F-CONN-1-u64-awake-check.png
+?? docs/research/stabilization/responsiveness2/evidence/phase2-F-CONN-1-u64-cold-3s.png
+?? docs/research/stabilization/responsiveness2/evidence/phase2-F-CONN-2-u64-cold-5s.png
 ```
-src/lib/diagnostics/healthModel.ts          (M)
-src/hooks/useHealthState.ts                 (M)
-src/hooks/useSavedDeviceHealthChecks.ts     (M)
-tests/unit/lib/diagnostics/healthModel.test.ts (M)
-docs/research/stabilization/responsiveness2/IMPLEMENTATION_PLANS.md (M)
-docs/research/stabilization/responsiveness2/HANDOVER_PROMPT.md (NEW — this file)
-```
 
-No commits yet. Branch is `feat/reduce-latency-and-fix-errors`. Working tree includes the untracked `docs/research/stabilization/responsiveness2/` tree and the in-progress source edits above.
+There may be additional evidence files not listed if the next agent captures more.
 
-## CRITICAL POLICY REMINDERS
+## Validation discipline
 
-- **Do not** silence/suppress diagnostics to make badges look healthy. Fix the data flow.
-- **Do not** delete tests to make changes pass. Update tests honestly to match new semantics.
-- **Do not** use `--no-verify` or skip coverage gates without explicit user approval.
-- **Pixel 4 deploy + on-device validation is mandatory** before declaring any change complete (per `CLAUDE.md` Phase 5a). Serial is `9B081FFAZ001WX`.
-- **Both u64 and c64u** must be exercised for findings that touch per-device flows. Active device preference order: u64 → c64u.
-- Coverage gate `≥ 91 %` branch is a release blocker.
-- Update `IMPLEMENTATION_PLANS.md` continuously, not in one batch at the end.
+Use this rule to keep the work fast:
 
-## KNOWN RISKS / GOTCHAS DISCOVERED THIS SESSION
+- While editing: run targeted Vitest files only.
+- Before closing a phase: run lint and the smallest required device evidence.
+- Before declaring the overall task complete: run the full repo gates required by AGENTS.md and `STABILIZATION_PROMPT.md`.
+- Do not run full screenshot refreshes; these findings need evidence screenshots only.
+- Do not repeatedly probe `c64u` after the documented reset failure unless there is a reason to believe the device/network changed.
 
-- `filterTraceEventsForConfiguredHost` in `useHealthState.ts` previously had a broken attribution fallback (looked for `device.host` field that doesn't exist on `DiagnosticsDeviceContext`). Now fixed to use `savedDeviceHostSnapshot` / `verifiedHostname`. This may slightly tighten host scoping for events without transport hostname — watch existing tests.
-- The trace context's `device` field is GLOBAL. Saved-device probes inherit the active device's attribution because the global context is not updated per-probe. The new `eventMatchesDeviceScope` mitigates this by preferring transport hostname when present (authoritative) and only falling back to device attribution otherwise.
-- App contributor previously went Degraded on 1 error over 5 min; now Degraded only on 1+ errors within the last 60 s. This may relax some existing assertions — search `deriveAppContributorHealth` usages in tests.
-- REST contributor trim is now symmetric with FTP/TELNET. Some existing tests that depended on `firstSuccessIndex` trim need updates (one was already updated in this session: `ignores pre-connection REST failures...` now expects `totalOperations: 1`).
+## Non-negotiables
 
-## EVIDENCE DIRECTORY CONVENTION
-
-`/home/chris/dev/c64/c64commander/docs/research/stabilization/responsiveness2/evidence/phase<N>-<finding-id>-<host>-<artifact>.<ext>`
-
-Examples:
-- `phase1-F-DIAG-1-u64-diagnostics.png`
-- `phase3-F-LOG-1-u64-logcat-30s.txt`
-
-## TERMINATION CRITERIA (from spec)
-
-Stop only when all findings DONE/BLOCKED, all build+test+coverage gates green, Pixel 4 has the new APK with `am start -W` `Status: ok`, cold-boot logcat smokes pass for Phase 3 + 4, both u64 + c64u validated per-finding, and `IMPLEMENTATION_PLANS.md` lists per-finding status + evidence + validation.
+- Do not silence or hide health diagnostics to make badges look healthy.
+- Do not weaken assertions or delete tests to make failures pass.
+- Do not skip root-cause investigation for warnings/errors introduced by these changes.
+- Do not claim Pixel validation unless the installed APK was launched and the screenshot/logcat evidence was captured after the relevant code change.
+- Do not claim `c64u` validation while `/v1/info` is resetting the connection.

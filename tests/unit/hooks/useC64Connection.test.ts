@@ -37,6 +37,11 @@ const connectionSnapshot = {
   lastProbeSucceededAtMs: null as number | null,
   lastProbeFailedAtMs: null as number | null,
   lastProbeError: null as string | null,
+  deviceInfo: null as null | {
+    product?: string | null;
+    hostname?: string | null;
+    firmware_version?: string | null;
+  },
   demoInterstitialVisible: false,
 };
 
@@ -155,6 +160,8 @@ describe("useC64Connection", () => {
     hasStoredPasswordFlagMock.mockReturnValue(false);
     loadStoredPasswordMock.mockReset();
     loadStoredPasswordMock.mockResolvedValue("");
+    connectionSnapshot.state = "REAL_CONNECTED";
+    connectionSnapshot.deviceInfo = null;
     localStorage.clear();
   });
 
@@ -248,6 +255,18 @@ describe("useC64Connection", () => {
     });
 
     expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it("invalidates device info when connection transitions to REAL_CONNECTED", async () => {
+    connectionSnapshot.state = "OFFLINE_NO_DEMO" as const;
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    const { rerender } = renderHook(() => useC64Connection(), { wrapper });
+
+    connectionSnapshot.state = "REAL_CONNECTED" as const;
+    rerender();
+
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] }));
   });
 
   it("fetches categories", async () => {
@@ -586,6 +605,21 @@ describe("useC64Connection", () => {
     expect(result.current.status.deviceInfo).toBeNull();
 
     connectionSnapshot.state = "REAL_CONNECTED" as const;
+  });
+
+  it("uses connection snapshot deviceInfo when the info query has no displayable identity yet", async () => {
+    connectionSnapshot.deviceInfo = {
+      product: "Ultimate 64 Elite",
+      hostname: "u64",
+      firmware_version: "3.14e",
+    };
+    mockApi.getInfo.mockResolvedValue({ errors: [] });
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+
+    expect(result.current.status.deviceInfo).toEqual(connectionSnapshot.deviceInfo);
   });
 
   it("returns runtimeBaseUrl from config snapshot", async () => {

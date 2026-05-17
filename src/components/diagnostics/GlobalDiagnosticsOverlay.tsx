@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { useConnectionState } from "@/hooks/useConnectionState";
 import { useHealthState } from "@/hooks/useHealthState";
 import { setHealthCheckStateSnapshot, useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { reportUserError } from "@/lib/uiErrors";
@@ -103,6 +104,7 @@ export const GlobalDiagnosticsOverlay = () => {
   const [repairRunning, setRepairRunning] = useState(false);
   const [overlayFirstVisible, setOverlayFirstVisible] = useState(false);
   const healthState = useHealthState();
+  const connectionSnapshot = useConnectionState();
   const healthCheckState = useHealthCheckState();
   const routePanel = resolveDiagnosticsPanelFromPath(location.pathname);
   const diagnosticsOpenActionRef = useRef<ReturnType<typeof createActionContext> | null>(null);
@@ -498,11 +500,22 @@ export const GlobalDiagnosticsOverlay = () => {
     [handleRetryConnectionAsync, handleSwitchDevice],
   );
 
-  // §14 — Extract device info from last health check result
+  // §14 — Extract device info from last health check result or live connection state
   const deviceInfo: DeviceDetailInfo | null = useMemo(() => {
-    if (!healthCheckState.latestResult?.deviceInfo) return null;
-    return healthCheckState.latestResult.deviceInfo;
-  }, [healthCheckState.latestResult]);
+    if (healthCheckState.latestResult?.deviceInfo) {
+      return healthCheckState.latestResult.deviceInfo;
+    }
+    if (!connectionSnapshot.deviceInfo) {
+      return null;
+    }
+    return {
+      product: connectionSnapshot.deviceInfo.product ?? null,
+      firmware: connectionSnapshot.deviceInfo.firmware_version ?? null,
+      fpga: connectionSnapshot.deviceInfo.fpga_version ?? null,
+      core: connectionSnapshot.deviceInfo.core_version ?? null,
+      uptimeSeconds: null,
+    };
+  }, [connectionSnapshot.deviceInfo, healthCheckState.latestResult]);
 
   return (
     <DiagnosticsDialog

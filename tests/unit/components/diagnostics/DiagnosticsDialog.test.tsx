@@ -713,6 +713,27 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent(/^U64$/);
   });
 
+  it("uses live device info as the diagnostics product fallback when the saved snapshot is empty", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.updateSavedDevice("device-office", {
+      host: "u64-live",
+      type: "",
+      lastKnownProduct: null,
+    });
+
+    renderDialog({
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware: "3.14e",
+        fpga: null,
+        core: null,
+        uptimeSeconds: null,
+      },
+    });
+
+    expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent("Office U64 · Ultimate 64 Elite");
+  });
+
   it("keeps filter configuration separate from filter visibility", () => {
     setViewportWidth(600);
 

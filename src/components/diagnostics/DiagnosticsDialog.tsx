@@ -992,6 +992,7 @@ export function DiagnosticsDialog({
   onClearAll,
   onRetryConnection,
   defaultEvidenceTypes,
+  deviceInfo = null,
   healthCheckRunning = false,
   onRunHealthCheck,
   lastHealthCheckResult = null,
@@ -1033,7 +1034,8 @@ export function DiagnosticsDialog({
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
     null;
-  const selectedProductCode = selectedSavedDevice?.type?.trim() || selectedSavedDevice?.lastKnownProduct || "Unknown";
+  const selectedProductCode =
+    selectedSavedDevice?.type?.trim() || selectedSavedDevice?.lastKnownProduct || deviceInfo?.product || "Unknown";
   const showDeviceUi = shouldShowDiagnosticsDeviceUi(savedDevices);
 
   const allEntries = useMemo(() => {

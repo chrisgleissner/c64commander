@@ -166,6 +166,30 @@ const buildRequestId = () => {
   return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
 };
 
+let connectionManagerImport: Promise<typeof import("@/lib/connection/connectionManager")> | null = null;
+
+const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceInfo | null = null) => {
+  const host = (() => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return deviceHost;
+    }
+  })();
+  connectionManagerImport ??= import("@/lib/connection/connectionManager");
+  void connectionManagerImport
+    .then(({ noteReachable }) => {
+      noteReachable(host, "rest", deviceInfo);
+    })
+    .catch((error) => {
+      addLog("warn", "Failed to note REST reachability", {
+        host,
+        error: error instanceof Error ? error.message : String(error ?? "Unknown import failure"),
+      });
+      connectionManagerImport = null;
+    });
+};
+
 let lastDeviceHost: string | null = null;
 
 const logDeviceHostChange = (nextHost: string, context: { baseUrl: string; mode: "persisted" | "runtime" }) => {
@@ -847,6 +871,7 @@ export class C64API {
                 }
 
                 const parsedBody = await this.parseResponseJson<T>(response, path);
+                noteRestReachable(url, this.deviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
                 recordRestResponse(action, {
                   method,
                   path,
@@ -1090,6 +1115,9 @@ export class C64API {
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])
               : await responsePromise;
+            if (response.ok) {
+              noteRestReachable(url, this.deviceHost);
+            }
             const durationMs = Math.max(
               0,
               Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
