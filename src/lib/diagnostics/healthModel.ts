@@ -230,11 +230,117 @@ export const deriveConnectivityState = (connectionState: string): ConnectivitySt
 };
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
+// F-DIAG-3 — recency window for App contributor severity.
+// A single isolated error 4 minutes ago must not push the badge to Degraded;
+// only errors within the last RECENT_APP_ERROR_WINDOW_MS contribute to severity.
+const RECENT_APP_ERROR_WINDOW_MS = 60_000;
+const APP_ERROR_UNHEALTHY_RECENT_THRESHOLD = 5;
 
 // §7.3 — 5-minute current window
 const isInCurrentWindow = (event: TraceEvent): boolean => {
   const eventMs = new Date(event.timestamp).getTime();
   return Date.now() - eventMs <= FIVE_MINUTES_MS;
+};
+
+const isInRecentAppErrorWindow = (event: TraceEvent): boolean => {
+  const eventMs = new Date(event.timestamp).getTime();
+  return Date.now() - eventMs <= RECENT_APP_ERROR_WINDOW_MS;
+};
+
+// F-DIAG-1 — Device scoping for contributor windows.
+// Contributors compute per-active-device health. Saved-but-inactive devices'
+// probe traffic must not degrade the active device's badge.
+export type DeviceScope = {
+  /** Saved device id of the currently active device, if known. */
+  deviceId?: string | null;
+  /** Hostname (or host:port) of the currently active device, if known. */
+  host?: string | null;
+};
+
+const stripHostPort = (input: string): string => {
+  const normalized = input.trim();
+  if (!normalized) return normalized;
+  if (normalized.startsWith("[")) {
+    const closeBracketIndex = normalized.indexOf("]");
+    if (closeBracketIndex !== -1) {
+      return normalized.slice(0, closeBracketIndex + 1);
+    }
+  }
+  const colonCount = (normalized.match(/:/g) ?? []).length;
+  if (colonCount === 1) {
+    const [host] = normalized.split(":");
+    return host || normalized;
+  }
+  return normalized;
+};
+
+const readEventDeviceContext = (event: TraceEvent) => {
+  const ctx = (event.data as { device?: unknown }).device;
+  if (!ctx || typeof ctx !== "object") return null;
+  return ctx as {
+    savedDeviceId?: string | null;
+    savedDeviceHostSnapshot?: string | null;
+    verifiedHostname?: string | null;
+  };
+};
+
+const readEventTransportHost = (event: TraceEvent): string | null => {
+  const data = event.data as { hostname?: unknown; url?: unknown };
+  if (typeof data.hostname === "string" && data.hostname.length > 0) {
+    return stripHostPort(data.hostname);
+  }
+  if (typeof data.url === "string" && data.url.length > 0) {
+    try {
+      const parsed = new URL(data.url, "http://localhost");
+      if (parsed.host) return stripHostPort(parsed.host);
+    } catch {
+      // ignore malformed URL — fall through to device attribution
+    }
+  }
+  return null;
+};
+
+// Returns true when the event should be counted toward the given scope.
+// Transport events (REST/FTP/Telnet) match by hostname authoritatively because
+// the device context snapshot is GLOBAL — saved-device probes inherit the
+// active device's attribution even though they target a different host.
+// Events without a transport hostname (e.g. errors, lifecycle events) fall
+// back to the captured device attribution; if neither matches, the event is
+// dropped for device-scoped contributors.
+export const eventMatchesDeviceScope = (event: TraceEvent, scope: DeviceScope | null | undefined): boolean => {
+  if (!scope) return true;
+  const targetDeviceId = typeof scope.deviceId === "string" && scope.deviceId.length > 0 ? scope.deviceId : null;
+  const targetHost = typeof scope.host === "string" && scope.host.length > 0 ? stripHostPort(scope.host) : null;
+  if (!targetDeviceId && !targetHost) return true;
+
+  const transportHost = readEventTransportHost(event);
+  if (transportHost) {
+    // Transport events: hostname is authoritative.
+    return targetHost !== null && transportHost === targetHost;
+  }
+
+  const deviceCtx = readEventDeviceContext(event);
+  if (!deviceCtx) return false;
+
+  if (targetDeviceId && typeof deviceCtx.savedDeviceId === "string" && deviceCtx.savedDeviceId === targetDeviceId) {
+    return true;
+  }
+  if (targetHost) {
+    if (typeof deviceCtx.savedDeviceHostSnapshot === "string") {
+      const snapshotHost = stripHostPort(deviceCtx.savedDeviceHostSnapshot);
+      if (snapshotHost && snapshotHost === targetHost) return true;
+    }
+    if (typeof deviceCtx.verifiedHostname === "string") {
+      const verifiedHost = stripHostPort(deviceCtx.verifiedHostname);
+      if (verifiedHost && verifiedHost === targetHost) return true;
+    }
+  }
+  return false;
+};
+
+const scopeEvents = (events: TraceEvent[], scope: DeviceScope | null | undefined): TraceEvent[] => {
+  if (!scope) return events;
+  return events.filter((event) => eventMatchesDeviceScope(event, scope));
 };
 
 // Derive health state from fail ratio
@@ -291,10 +397,15 @@ const trimToLatestSuccess = (events: TraceEvent[], isSuccess: (event: TraceEvent
   return latestSuccessIndex >= 0 ? events.slice(latestSuccessIndex) : events;
 };
 
+// F-DIAG-2 — REST window trim policy mirrors FTP/TELNET (`trimToLatestSuccess`).
+// Sort events by ascending timestamp, then drop everything before the latest
+// successful response. Recovery latency must match the other contributors so
+// the user never sees "FTP green / REST red" minutes after the same outage cleared.
 const restHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
-  const windowEvents = events.filter((e) => e.type === "rest-response" && isInCurrentWindow(e));
-  const firstSuccessIndex = windowEvents.findIndex(isSuccessfulRestResponse);
-  return firstSuccessIndex >= 0 ? windowEvents.slice(firstSuccessIndex) : windowEvents;
+  const windowEvents = sortEventsByTimestampAscending(
+    events.filter((e) => e.type === "rest-response" && isInCurrentWindow(e)),
+  );
+  return trimToLatestSuccess(windowEvents, isSuccessfulRestResponse);
 };
 
 const ftpHealthWindowEvents = (events: TraceEvent[]): TraceEvent[] => {
@@ -315,8 +426,9 @@ const isPreConnectionGatingError = (event: TraceEvent): boolean =>
   typeof event.data.message === "string" && /device not ready for requests/i.test(event.data.message);
 
 // §6.3 — REST contributor health from trace events in 5-minute window
-export const deriveRestContributorHealth = (events: TraceEvent[]): ContributorHealth => {
-  const windowEvents = restHealthWindowEvents(events);
+export const deriveRestContributorHealth = (events: TraceEvent[], scope?: DeviceScope | null): ContributorHealth => {
+  const scopedEvents = scopeEvents(events, scope);
+  const windowEvents = restHealthWindowEvents(scopedEvents);
   let failed = 0;
   for (const e of windowEvents) {
     if (isExpectedNonDiagnosticFailure(e)) continue;
@@ -334,8 +446,9 @@ export const deriveRestContributorHealth = (events: TraceEvent[]): ContributorHe
 };
 
 // §6.3 — FTP contributor health from trace events in 5-minute window
-export const deriveFtpContributorHealth = (events: TraceEvent[]): ContributorHealth => {
-  const windowEvents = ftpHealthWindowEvents(events);
+export const deriveFtpContributorHealth = (events: TraceEvent[], scope?: DeviceScope | null): ContributorHealth => {
+  const scopedEvents = scopeEvents(events, scope);
+  const windowEvents = ftpHealthWindowEvents(scopedEvents);
   let failed = 0;
   for (const e of windowEvents) {
     if (isExpectedNonDiagnosticFailure(e)) continue;
@@ -353,8 +466,9 @@ export const deriveFtpContributorHealth = (events: TraceEvent[]): ContributorHea
 };
 
 // §6.3 — Telnet contributor health from trace events in 5-minute window
-export const deriveTelnetContributorHealth = (events: TraceEvent[]): ContributorHealth => {
-  const windowEvents = telnetHealthWindowEvents(events);
+export const deriveTelnetContributorHealth = (events: TraceEvent[], scope?: DeviceScope | null): ContributorHealth => {
+  const scopedEvents = scopeEvents(events, scope);
+  const windowEvents = telnetHealthWindowEvents(scopedEvents);
   let failed = 0;
   for (const event of windowEvents) {
     if (isExpectedNonDiagnosticFailure(event)) continue;
@@ -371,9 +485,13 @@ export const deriveTelnetContributorHealth = (events: TraceEvent[]): Contributor
   };
 };
 
-// §6.3 — App contributor health from error trace events in 5-minute window
-export const deriveAppContributorHealth = (events: TraceEvent[]): ContributorHealth => {
-  const windowEvents = events.filter(
+// §6.3 — App contributor health from error trace events in 5-minute window.
+// F-DIAG-3 — Severity is driven by RECENT errors (last 60 s) rather than the
+// whole 5-minute window so a single isolated error 4 minutes ago does not
+// keep the badge in Degraded.
+export const deriveAppContributorHealth = (events: TraceEvent[], scope?: DeviceScope | null): ContributorHealth => {
+  const scopedEvents = scopeEvents(events, scope);
+  const windowEvents = scopedEvents.filter(
     (e) =>
       e.type === "error" &&
       isInCurrentWindow(e) &&
@@ -382,7 +500,15 @@ export const deriveAppContributorHealth = (events: TraceEvent[]): ContributorHea
       !isPreConnectionGatingError(e),
   );
   const total = windowEvents.length;
-  const state: HealthState = total === 0 ? "Idle" : total >= 5 ? "Unhealthy" : "Degraded";
+  const recent = windowEvents.filter(isInRecentAppErrorWindow).length;
+  let state: HealthState;
+  if (recent >= APP_ERROR_UNHEALTHY_RECENT_THRESHOLD) {
+    state = "Unhealthy";
+  } else if (recent >= 1) {
+    state = "Degraded";
+  } else {
+    state = "Idle";
+  }
   return { state, problemCount: total, totalOperations: total, failedOperations: total };
 };
 
@@ -447,14 +573,16 @@ export const deriveLastTelnetActivity = (events: TraceEvent[]): LastActivity | n
 export const derivePrimaryProblem = (
   events: TraceEvent[],
   contributors: Record<ContributorKey, ContributorHealth>,
+  scope?: DeviceScope | null,
 ): Problem | null => {
+  const scopedEvents = scopeEvents(events, scope);
   const problems: Problem[] = [];
-  const restHealthEvents = new Set(restHealthWindowEvents(events));
-  const ftpHealthEvents = new Set(ftpHealthWindowEvents(events));
-  const telnetHealthEvents = new Set(telnetHealthWindowEvents(events));
+  const restHealthEvents = new Set(restHealthWindowEvents(scopedEvents));
+  const ftpHealthEvents = new Set(ftpHealthWindowEvents(scopedEvents));
+  const telnetHealthEvents = new Set(telnetHealthWindowEvents(scopedEvents));
 
   // Collect failed REST responses as Problems
-  for (const e of events) {
+  for (const e of scopedEvents) {
     if (e.type === "rest-response") {
       if (!restHealthEvents.has(e)) continue;
       if (isExpectedNonDiagnosticFailure(e)) continue;

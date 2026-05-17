@@ -237,8 +237,10 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).toBe("Healthy");
     expect(result.current.byDeviceId["device-backup"]?.latestResult?.overallHealth).toBe("Degraded");
 
+    // F-DIAG-1: background-maintenance cycles run every 60 s now (was 10 s)
+    // to reduce cross-device contamination of the active device's rollup.
     await act(async () => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(60_000);
     });
 
     await flushAsyncWork();
@@ -370,7 +372,7 @@ describe("useSavedDeviceHealthChecks", () => {
     });
 
     await act(async () => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(60_000);
     });
     await flushAsyncWork();
 
@@ -383,7 +385,7 @@ describe("useSavedDeviceHealthChecks", () => {
     });
 
     await act(async () => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(60_000);
     });
     await flushAsyncWork();
 
@@ -435,7 +437,7 @@ describe("useSavedDeviceHealthChecks", () => {
     diagnosticsSuppressionMock.setActive(false);
 
     await act(async () => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(60_000);
     });
     await flushAsyncWork();
 

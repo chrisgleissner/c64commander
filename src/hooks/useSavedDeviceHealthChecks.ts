@@ -29,7 +29,13 @@ import type { SavedDevice } from "@/lib/savedDevices/store";
 import { getSavedDeviceSwitchSummary } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
 
-const AUTO_REFRESH_MS = 10_000;
+// F-DIAG-1 — saved-device probe cycle frequency.
+// Picker open (switchDeviceDialog): every 10 s so health refreshes are visible
+// during interaction. Background maintenance (picker closed): every 60 s so
+// inactive devices do not generate enough trace traffic to interfere with
+// foreground operations or cross-contaminate the active device rollup.
+const AUTO_REFRESH_MS_FOREGROUND = 10_000;
+const AUTO_REFRESH_MS_BACKGROUND = 60_000;
 const TOTAL_PROBE_COUNT = 6;
 
 export type SavedDeviceHealthSnapshot = {
@@ -323,16 +329,18 @@ export function useSavedDeviceHealthChecks(
     }
 
     void runCycle(true);
+    const intervalMs =
+      context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance ? AUTO_REFRESH_MS_BACKGROUND : AUTO_REFRESH_MS_FOREGROUND;
     const intervalId = window.setInterval(() => {
       void runCycle(false);
-    }, AUTO_REFRESH_MS);
+    }, intervalMs);
 
     return () => {
       window.clearInterval(intervalId);
       cancelAll("Saved-device switcher closed");
       setCycle((current) => ({ ...current, running: false }));
     };
-  }, [cancelAll, devices, enabled, runCycle, seededState]);
+  }, [cancelAll, context, devices, enabled, runCycle, seededState]);
 
   useEffect(() => {
     if (seededState || context !== HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {
