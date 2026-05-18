@@ -94,6 +94,15 @@ describe("parseGitLsTreeBlobCatalog", () => {
   });
 });
 
+describe("screenshotMetadataDedupe module dependencies", () => {
+  it("uses the public pixelmatch package instead of a Playwright private path", async () => {
+    const source = await readFile(path.resolve(process.cwd(), "scripts/screenshotMetadataDedupe.js"), "utf8");
+
+    expect(source).toContain('import pixelmatch from "pixelmatch";');
+    expect(source).not.toContain("playwright-core/lib/third_party/pixelmatch.js");
+  });
+});
+
 describe("compareScreenshotBuffers", () => {
   it("treats identical pixels with different PNG bytes as identical", async () => {
     const baseline = await createTextScreenshot("C64 COMMANDER");
