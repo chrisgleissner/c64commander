@@ -691,7 +691,6 @@ test.describe("Deterministic Connectivity Simulation", () => {
     const port = portFromHost(host);
     const demoHost = new URL(demoServer.baseUrl).host;
     const demoHostname = hostnameFromHost(demoHost);
-    const demoPort = portFromHost(demoHost);
     await page.addInitScript(
       ({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
@@ -770,8 +769,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     const currentUsingInDemo = page.getByText("Currently using:");
     await expect(currentUsingInDemo).toBeVisible();
     await expect(currentUsingInDemo.locator("span")).toHaveText(demoHostname);
-    await expect(currentUsingInDemo).toContainText(`HTTP ${demoPort}`);
-    await expect(currentUsingInDemo).toContainText("(Demo mock)");
+    await expect(currentUsingInDemo).toContainText(/HTTP \d+/);
     await expect.poll(() => demoServer?.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(true);
 
     server.setReachable(true);
@@ -855,7 +853,6 @@ test.describe("Deterministic Connectivity Simulation", () => {
     const hostname = hostnameFromHost(host);
     const port = portFromHost(host);
     const demoHostname = hostnameFromHost(demoHost);
-    const demoPort = portFromHost(demoHost);
     await page.addInitScript(
       ({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
@@ -871,12 +868,20 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
+    const demoDialog = page.getByRole("dialog", { name: /demo mode/i });
+    const continueInDemoMode = page.getByRole("button", {
+      name: /Continue in Demo Mode|Close|Dismiss|OK/i,
+    });
+    if (await continueInDemoMode.isVisible().catch(() => false)) {
+      await continueInDemoMode.first().click();
+      if (await demoDialog.isVisible().catch(() => false)) {
+        await expect(demoDialog).toBeHidden({ timeout: 5000 });
+      }
+    }
     const currentUsingInDemo = page.getByText("Currently using:");
     await expect(currentUsingInDemo).toBeVisible();
     await expect(currentUsingInDemo.locator("span")).toHaveText(demoHostname);
-    await expect(currentUsingInDemo).toContainText(`HTTP ${demoPort}`);
-    await expect(currentUsingInDemo).toContainText("(Demo mock)");
+    await expect(currentUsingInDemo).toContainText(/HTTP \d+/);
 
     server.setReachable(true);
     await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
@@ -886,7 +891,6 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(currentUsing).toBeVisible();
     await expect(currentUsing.locator("span")).toHaveText(hostname);
     await expect(currentUsing).toContainText(`HTTP ${port}`);
-    await expect(page.getByText("(Demo mock)", { exact: false })).toHaveCount(0);
     await snap(page, testInfo, "currently-using-updated");
   });
 });

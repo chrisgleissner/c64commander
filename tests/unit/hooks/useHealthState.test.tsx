@@ -368,11 +368,22 @@ describe("useHealthState", () => {
   });
 
   it("keeps unattributed non-error events when URL parsing fails but still filters mismatched device attribution", () => {
+    // F-DIAG-1: resolveTraceAttributedHost now reads `savedDeviceHostSnapshot`
+    // (and `verifiedHostname`) from DiagnosticsDeviceContext, not a non-existent
+    // `host` field. Tests now use the real attribution field names.
     configuredHostMock.host = "u64";
     traceEventsMock.events = [
       { type: "rest-response", correlationId: "u64-ok", data: { status: 200, hostname: "u64" } },
-      { type: "custom-event", correlationId: "attr-u64", data: { device: { host: "u64:23" } } },
-      { type: "custom-event", correlationId: "attr-c64u", data: { device: { host: "c64u:23" } } },
+      {
+        type: "custom-event",
+        correlationId: "attr-u64",
+        data: { device: { savedDeviceHostSnapshot: "u64:23" } },
+      },
+      {
+        type: "custom-event",
+        correlationId: "attr-c64u",
+        data: { device: { savedDeviceHostSnapshot: "c64u:23" } },
+      },
       { type: "custom-event", correlationId: "invalid-url", data: { url: "http://%zz" } },
     ];
 

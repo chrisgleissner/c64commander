@@ -53,6 +53,7 @@ export type ConnectionSnapshot = Readonly<{
   lastProbeSucceededAtMs: number | null;
   lastProbeFailedAtMs: number | null;
   lastProbeError: string | null;
+  deviceInfo: DeviceInfo | null;
   demoInterstitialVisible: boolean;
 }>;
 
@@ -520,7 +521,7 @@ export async function verifyCurrentConnectionTarget(options?: {
     return result;
   }
   if (result.ok) {
-    setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+    setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null, deviceInfo: result.deviceInfo });
     await transitionToRealConnected(
       "switch",
       switchConfig
@@ -536,6 +537,7 @@ export async function verifyCurrentConnectionTarget(options?: {
   setSnapshot({
     lastProbeFailedAtMs: Date.now(),
     lastProbeError: result.error,
+    deviceInfo: null,
   });
   if (isDemoModeRequested()) {
     await transitionToDemoActive("switch");
@@ -553,6 +555,7 @@ let snapshot: ConnectionSnapshot = {
   lastProbeSucceededAtMs: null,
   lastProbeFailedAtMs: null,
   lastProbeError: null,
+  deviceInfo: null,
   demoInterstitialVisible: false,
 };
 
@@ -592,6 +595,62 @@ export function subscribeConnection(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+type ReachabilitySource = "rest" | "ftp" | "telnet";
+
+const normalizeReachabilityHost = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    return stripPortFromDeviceHost(new URL(trimmed).host).toLowerCase();
+  } catch {
+    return stripPortFromDeviceHost(trimmed.replace(/^https?:\/\//, "")).toLowerCase();
+  }
+};
+
+const getActiveReachabilityHosts = () => {
+  const config = getC64APIConfigSnapshot();
+  const hosts = [
+    normalizeReachabilityHost(config.deviceHost),
+    normalizeReachabilityHost(config.baseUrl),
+    normalizeReachabilityHost(resolveDeviceHostFromStorage()),
+  ].filter((host): host is string => host !== null);
+  return new Set(hosts);
+};
+
+export const noteReachable = (host: string, source: ReachabilitySource, deviceInfo: DeviceInfo | null = null): void => {
+  const normalizedHost = normalizeReachabilityHost(host);
+  if (!normalizedHost) return;
+
+  const activeHosts = getActiveReachabilityHosts();
+  if (!activeHosts.has(normalizedHost)) {
+    addLog("debug", "Ignoring reachable event for non-active host", {
+      host: normalizedHost,
+      source,
+      activeHosts: Array.from(activeHosts),
+    });
+    return;
+  }
+
+  setSnapshot({
+    lastProbeSucceededAtMs: Date.now(),
+    lastProbeError: null,
+    ...(deviceInfo ? { deviceInfo } : {}),
+  });
+
+  if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") {
+    return;
+  }
+
+  const trigger = snapshot.lastDiscoveryTrigger ?? "background";
+  addLog("info", "Reachable active device observed; promoting connection", {
+    host: normalizedHost,
+    source,
+    previousState: snapshot.state,
+    trigger,
+  });
+  void transitionToRealConnected(trigger);
+};
 
 export function dismissDemoInterstitial() {
   demoInterstitialShownThisSession = true;
@@ -1053,6 +1112,7 @@ export async function initializeConnectionManager() {
     lastProbeSucceededAtMs: null,
     lastProbeFailedAtMs: null,
     lastProbeError: null,
+    deviceInfo: null,
     demoInterstitialVisible: false,
   });
   updateDeviceConnectionState("UNKNOWN");

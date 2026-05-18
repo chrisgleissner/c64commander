@@ -523,7 +523,10 @@ vi.mock("@/hooks/useC64Connection", () => ({
     refetch: vi.fn().mockImplementation(() => queryClientMockRef.current.fetchQuery()),
   }),
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
-  useC64ConfigItems: (category: string) => {
+  useC64ConfigItems: (category: string, _items?: string[], enabled = true) => {
+    if (!enabled) {
+      return { data: undefined };
+    }
     if (category === "SID Sockets Configuration") {
       return { data: sidSocketsPayloadRef.current };
     }
@@ -1556,7 +1559,7 @@ describe("HomePage SID status", () => {
     );
   });
 
-  it("renders the quick actions RAM folder row and LED lighting cards in order", async () => {
+  it("renders the quick actions RAM folder row, case lighting card, and deferred keyboard card in order", async () => {
     userInterfacePayloadRef.current = buildUserInterfacePayload();
     ledStripPayloadRef.current = {
       "LED Strip Settings": buildLightingPayload(),
@@ -1576,9 +1579,12 @@ describe("HomePage SID status", () => {
     expectUserInterfaceControls("home-user-interface");
     expect(within(screen.getByTestId("home-lighting-group")).getByText("LED LIGHTING")).toBeTruthy();
     expectLightingControls("home-led", "Case Light");
-    expectLightingControls("home-keyboard-lighting", "Keyboard Light");
     expect(screen.getByTestId("home-led-pattern")).toHaveTextContent("Single Color");
-    expect(screen.getByTestId("home-keyboard-lighting-pattern")).toHaveTextContent("Single Color");
+    expect(screen.getByTestId("home-keyboard-lighting-deferred")).toHaveAttribute(
+      "data-section-label",
+      "Keyboard Light",
+    );
+    expect(screen.getByTestId("home-keyboard-lighting-load")).toBeInTheDocument();
 
     const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick Actions"]');
     const ramFolderRow = screen.getByTestId("home-ram-folder-row");
@@ -1593,7 +1599,7 @@ describe("HomePage SID status", () => {
     const userInterfaceCard = within(cardColumn).getByTestId("home-user-interface-summary");
     const lightingGroup = within(cardColumn).getByTestId("home-lighting-group");
     const caseLightingCard = within(cardColumn).getByTestId("home-led-summary");
-    const keyboardLightingCard = within(cardColumn).getByTestId("home-keyboard-lighting-summary");
+    const keyboardLightingCard = within(cardColumn).getByTestId("home-keyboard-lighting-deferred");
     expect(userInterfaceCard.getAttribute("data-section-label")).toBe("User Interface");
     expect(caseLightingCard.getAttribute("data-section-label")).toBe("Case Light");
     expect(keyboardLightingCard.getAttribute("data-section-label")).toBe("Keyboard Light");
@@ -1643,6 +1649,7 @@ describe("HomePage SID status", () => {
     };
 
     renderHomePage();
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-load"));
 
     fireEvent.click(screen.getByTestId("home-led-pattern"));
     fireEvent.click(await screen.findByRole("option", { name: /^Single Color$/i }));
@@ -1701,6 +1708,7 @@ describe("HomePage SID status", () => {
     };
 
     renderHomePage();
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-load"));
 
     fireEvent.click(screen.getByTestId("home-cpu-turbo-control"));
     fireEvent.click(await screen.findByRole("option", { name: /C64U Turbo Registers/i }));
@@ -1935,6 +1943,28 @@ describe("HomePage SID status", () => {
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("Keyboard Lighting", "Color tint", "Warm");
     });
   }, 90000);
+
+  it("defers keyboard lighting controls until requested from the Home card", async () => {
+    keyboardLightingPayloadRef.current = {
+      "Keyboard Lighting": buildLightingPayload({
+        fixedColor: "Magenta",
+        fixedColorOptions: ["Magenta", "Fuchsia", "White"],
+        intensity: "8",
+        pattern: "Single Color",
+        patternOptions: ["Single Color", "Circular"],
+      }),
+    };
+
+    renderHomePage();
+
+    expect(screen.queryByTestId("home-keyboard-lighting-summary")).toBeNull();
+    expect(screen.getByTestId("home-keyboard-lighting-deferred")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-load"));
+
+    await waitFor(() => expect(screen.getByTestId("home-keyboard-lighting-summary")).toBeInTheDocument());
+    expect(screen.getByTestId("home-keyboard-lighting-pattern")).toHaveTextContent("Single Color");
+  });
 
   it("handles save-to-app error path", async () => {
     const savedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();

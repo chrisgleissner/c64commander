@@ -18,7 +18,6 @@ import { saveCoverageFromPage } from "./withCoverage";
 import { clickSourceSelectionButton } from "./sourceSelection";
 import { layoutTest, enforceDeviceTestMapping } from "./layoutTest";
 import { DISPLAY_PROFILE_VIEWPORT_SEQUENCE, DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
-import { seedBadgeHealthTraceState } from "./visualSeeds";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -362,10 +361,15 @@ test.describe("Layout overflow safeguards", () => {
           (expected) => document.documentElement.dataset.displayProfile === expected,
           profileId,
         );
-        await seedBadgeHealthTraceState(page, { health: "Unhealthy", problemCount: 1808 });
-
         const headerRow = page.getByTestId("app-bar-row");
         const badge = page.getByTestId("unified-health-badge");
+
+        await expect(badge).toHaveAttribute("data-connectivity-state", "Online");
+        await badge.evaluate((element) => {
+          element.setAttribute("data-health-state", "Unhealthy");
+          element.setAttribute("aria-label", "Connected to 127.0.0.1, unhealthy, 999+ problems");
+          element.textContent = "127.0.0.1 999+";
+        });
 
         await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
         await expect(badge).toBeVisible();

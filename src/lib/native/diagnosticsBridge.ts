@@ -26,7 +26,7 @@ type NativeDiagnosticsLogPayload = {
 
 type NativeDiagnosticsLogEvent = {
   level: "debug" | "info" | "warn" | "error";
-  message: string;
+  message?: string | null;
   details?: Record<string, unknown>;
 };
 
@@ -49,13 +49,17 @@ const DiagnosticsBridge = registerPlugin<DiagnosticsBridgePlugin>("DiagnosticsBr
 
 let subscription: { remove: () => Promise<void> } | null = null;
 
+const normalizeNativeDiagnosticsMessage = (message: string | null | undefined) =>
+  typeof message === "string" ? message : "";
+
 export const startNativeDiagnosticsBridge = async () => {
   if (subscription) return;
   try {
     subscription = await DiagnosticsBridge.addListener("diagnosticsLog", (event) => {
       const level = event.level ?? "info";
+      const message = normalizeNativeDiagnosticsMessage(event.message);
       if (level === "warn") {
-        logger.warn(event.message, {
+        logger.warn(message, {
           details: {
             ...event.details,
             origin: event.details?.origin ?? "native",
@@ -66,7 +70,7 @@ export const startNativeDiagnosticsBridge = async () => {
         return;
       }
       if (level === "error") {
-        logger.error(event.message, {
+        logger.error(message, {
           details: {
             ...event.details,
             origin: event.details?.origin ?? "native",
@@ -77,7 +81,7 @@ export const startNativeDiagnosticsBridge = async () => {
         return;
       }
       if (level === "debug") {
-        logger.debug(event.message, {
+        logger.debug(message, {
           details: {
             ...event.details,
             origin: event.details?.origin ?? "native",
@@ -87,7 +91,7 @@ export const startNativeDiagnosticsBridge = async () => {
         });
         return;
       }
-      logger.info(event.message, {
+      logger.info(message, {
         details: {
           ...event.details,
           origin: event.details?.origin ?? "native",

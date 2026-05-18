@@ -1485,6 +1485,60 @@ describe("usePlaybackController", () => {
     expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
   });
 
+  it("allows a queued machine reset to finish without emitting a false stop failure", async () => {
+    vi.useFakeTimers();
+    try {
+      const machineReset = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 3500);
+          }),
+      );
+      const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const { result } = renderPlaybackController([createPlaylistItem()], {
+        isPlaying: true,
+        restoreVolumeOverrides,
+      });
+
+      const stopPromise = result.current.handleStop();
+      await vi.advanceTimersByTimeAsync(3500);
+      await stopPromise;
+
+      expect(vi.mocked(reportUserError)).not.toHaveBeenCalled();
+      expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("allows a queued machine reboot to finish without emitting a false stop failure", async () => {
+    vi.useFakeTimers();
+    try {
+      const machineReboot = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 3500);
+          }),
+      );
+      const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReboot } as any);
+      const { result } = renderPlaybackController([createPlaylistItem({ category: "disk" })], {
+        isPlaying: true,
+        restoreVolumeOverrides,
+      });
+
+      const stopPromise = result.current.handleStop();
+      await vi.advanceTimersByTimeAsync(3500);
+      await stopPromise;
+
+      expect(vi.mocked(reportUserError)).not.toHaveBeenCalled();
+      expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("retries resume and logs mixer restore failures when resuming paused playback", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),

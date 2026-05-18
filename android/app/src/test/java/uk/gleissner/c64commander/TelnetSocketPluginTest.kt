@@ -70,10 +70,18 @@ class TelnetSocketPluginTest {
     `when`(call.getString("host")).thenReturn("c64u")
     `when`(call.getInt("port")).thenReturn(null)
     `when`(call.getInt("timeoutMs")).thenReturn(null)
+    var connectResolved: JSObject? = null
+    doAnswer { invocation ->
+              connectResolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
 
     plugin.connect(call)
 
-    verify(call).resolve()
+    verify(call).resolve(any())
+    assertEquals(0, connectResolved?.length())
     assertEquals("c64u", socket.connectedHost)
     assertEquals(23, socket.connectedPort)
     assertEquals(5_000, socket.connectTimeoutMs)
@@ -122,9 +130,17 @@ class TelnetSocketPluginTest {
     plugin.connect(connectCall)
 
     val disconnectCall = mock(PluginCall::class.java)
+    var disconnectResolved: JSObject? = null
+    doAnswer { invocation ->
+              disconnectResolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(disconnectCall)
+            .resolve(any())
     plugin.disconnect(disconnectCall)
 
-    verify(disconnectCall).resolve()
+    verify(disconnectCall).resolve(any())
+    assertEquals(0, disconnectResolved?.length())
 
     val stateCall = mock(PluginCall::class.java)
     var resolved: JSObject? = null
@@ -158,9 +174,17 @@ class TelnetSocketPluginTest {
     plugin.connect(connectCall)
 
     val disconnectCall = mock(PluginCall::class.java)
+    var disconnectResolved: JSObject? = null
+    doAnswer { invocation ->
+              disconnectResolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(disconnectCall)
+            .resolve(any())
     plugin.disconnect(disconnectCall)
 
-    verify(disconnectCall).resolve()
+    verify(disconnectCall).resolve(any())
+    assertEquals(0, disconnectResolved?.length())
     val messages = ShadowLog.getLogsForTag("TelnetSocketPlugin").mapNotNull { it.msg }
     assertTrue(
             messages.any { it.contains("Failed to close Telnet input stream: input close failed") }
@@ -207,10 +231,18 @@ class TelnetSocketPluginTest {
     val sendCall = mock(PluginCall::class.java)
     val payload = "HELLO".toByteArray()
     `when`(sendCall.getString("data")).thenReturn(Base64.encodeToString(payload, Base64.NO_WRAP))
+    var sendResolved: JSObject? = null
+    doAnswer { invocation ->
+              sendResolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(sendCall)
+            .resolve(any())
 
     plugin.send(sendCall)
 
-    verify(sendCall).resolve()
+    verify(sendCall).resolve(any())
+    assertEquals(0, sendResolved?.length())
     assertArrayEquals(payload, output.writtenBytes())
     assertTrue(output.flushed)
   }

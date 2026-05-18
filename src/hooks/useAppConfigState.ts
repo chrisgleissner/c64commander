@@ -113,13 +113,20 @@ const fetchAllConfig = async () => {
   const cats = await api.getCategories();
   const configs: Record<string, ConfigResponse> = {};
   const failedCategories: string[] = [];
+  const readCategorySnapshot = async (category: string) => {
+    const cached = api.getCachedCategory(category);
+    if (cached) {
+      return cached;
+    }
+    return api.getCategory(category);
+  };
 
   for (let index = 0; index < cats.categories.length; index += FULL_CONFIG_BACKGROUND_CONCURRENCY) {
     const batch = cats.categories.slice(index, index + FULL_CONFIG_BACKGROUND_CONCURRENCY);
     const results = await Promise.allSettled(
       batch.map(async (category) => ({
         category,
-        response: await api.getCategory(category),
+        response: await readCategorySnapshot(category),
       })),
     );
 
@@ -140,7 +147,7 @@ const fetchAllConfig = async () => {
 
   for (const category of failedCategories) {
     try {
-      configs[category] = await api.getCategory(category);
+      configs[category] = await readCategorySnapshot(category);
     } catch (catError) {
       addLog("debug", "Config category retry failed; category omitted from snapshot", {
         category,

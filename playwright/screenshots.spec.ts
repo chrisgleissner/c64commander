@@ -1330,6 +1330,16 @@ const waitForConnected = async (page: Page) => {
   );
 };
 
+const waitForTraceSeedBridge = async (page: Page) => {
+  await page
+    .waitForFunction(
+      () => Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
+      undefined,
+      { timeout: 3000 },
+    )
+    .catch(() => null);
+};
+
 const getActiveHealthBadge = (page: Page) =>
   page.locator('[data-slot-active="true"]').getByTestId("unified-health-badge");
 
@@ -2370,6 +2380,7 @@ test.describe("App screenshots", () => {
           await applyDisplayProfileViewport(page, profileId);
           await waitForConnected(page);
           await page.evaluate(() => window.scrollTo(0, 0));
+          await waitForTraceSeedBridge(page);
           await seedBadgeHealthTraceState(page, {
             health: scenario.health,
             problemCount: scenario.problemCount,
@@ -2968,6 +2979,9 @@ test.describe("App screenshots", () => {
           localStorage.removeItem("c64u_password");
           localStorage.removeItem("c64u_has_password");
           sessionStorage.removeItem("c64u_demo_interstitial_shown");
+          delete (window as Window & { __c64uExpectedBaseUrl?: unknown }).__c64uExpectedBaseUrl;
+          delete (window as Window & { __c64uMockServerBaseUrl?: unknown }).__c64uMockServerBaseUrl;
+          delete (window as Window & { __c64uAllowedBaseUrls?: unknown }).__c64uAllowedBaseUrls;
           delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
         },
         { currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
@@ -2986,21 +3000,10 @@ test.describe("App screenshots", () => {
     "capture demo mode play screenshot",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
-      await page.route("**/*", async (route) => {
-        const url = route.request().url();
-        if (url.includes("demo.invalid")) {
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: '{"product":""}',
-          });
-          return;
-        }
-        await route.continue();
-      });
+      allowWarnings(testInfo, "Expected probe failures during offline discovery.");
 
       await page.addInitScript(
-        ({ baseUrl, currentDeviceHostKey }: { baseUrl: string; currentDeviceHostKey: string }) => {
+        ({ currentDeviceHostKey }: { currentDeviceHostKey: string }) => {
           localStorage.setItem("c64u_startup_discovery_window_ms", "600");
           localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
           localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
@@ -3010,15 +3013,13 @@ test.describe("App screenshots", () => {
           localStorage.removeItem("c64u_base_url");
           localStorage.removeItem("c64u_password");
           localStorage.removeItem("c64u_has_password");
+          sessionStorage.removeItem("c64u_demo_interstitial_shown");
           delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
-          (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = baseUrl;
-          (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = baseUrl;
-          (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [
-            baseUrl,
-            "http://demo.invalid",
-          ];
+          delete (window as Window & { __c64uMockServerBaseUrl?: unknown }).__c64uMockServerBaseUrl;
+          delete (window as Window & { __c64uExpectedBaseUrl?: unknown }).__c64uExpectedBaseUrl;
+          (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = ["http://demo.invalid"];
         },
-        { baseUrl: server.baseUrl, currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
+        { currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
       );
 
       await page.goto("/play", { waitUntil: "domcontentloaded" });

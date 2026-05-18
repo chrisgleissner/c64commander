@@ -41,6 +41,7 @@ export type C64QueryOptions = {
   intent?: InteractionIntent;
   refetchOnMount?: boolean | "always";
   staleTime?: number;
+  skipEnrichment?: boolean;
 };
 
 export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
@@ -55,6 +56,17 @@ const shouldRunScheduledHealthCheck = () => {
   if (lastSuccessAtMs === null) return true;
   return Date.now() - lastSuccessAtMs >= HEALTH_CHECK_INTERVAL_MS;
 };
+
+const hasDisplayableDeviceInfo = (value: DeviceInfo | null | undefined) =>
+  Boolean(
+    value &&
+    (value.hostname?.trim() ||
+      value.product?.trim() ||
+      value.firmware_version?.trim() ||
+      value.fpga_version?.trim() ||
+      value.core_version?.trim() ||
+      value.unique_id?.trim()),
+  );
 
 export interface ConnectionStatus {
   state: "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
@@ -81,6 +93,7 @@ export function useC64Connection() {
   });
   const queryClient = useQueryClient();
   const lastInfoRefreshAtRef = useRef<number | null>(null);
+  const previousConnectionStateRef = useRef(connection.state);
   const settingsRef = useRef({
     baseUrl,
     password,
@@ -113,7 +126,7 @@ export function useC64Connection() {
       return api.getInfo({
         timeoutMs: 3000,
         signal,
-        __c64uIntent: "background",
+        __c64uIntent: "user",
       });
     },
     enabled:
@@ -122,6 +135,7 @@ export function useC64Connection() {
       (connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE"),
     retry: false,
     staleTime: HEALTH_CHECK_INTERVAL_MS,
+    refetchOnMount: "always",
     refetchInterval:
       !screenActive || diagnosticsSuppressionActive
         ? false
@@ -144,6 +158,15 @@ export function useC64Connection() {
     if (!diagnosticsSuppressionActive) return;
     void queryClient.cancelQueries({ queryKey: ["c64-info", baseUrl] });
   }, [baseUrl, diagnosticsSuppressionActive, queryClient]);
+
+  useEffect(() => {
+    const previousState = previousConnectionStateRef.current;
+    previousConnectionStateRef.current = connection.state;
+    if (previousState === "REAL_CONNECTED" || connection.state !== "REAL_CONNECTED") {
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ["c64-info"] });
+  }, [connection.state, queryClient]);
 
   useEffect(() => {
     let isMounted = true;
@@ -220,6 +243,10 @@ export function useC64Connection() {
     [queryClient, rateLimitedInfoRefetch],
   );
 
+  const effectiveDeviceInfo = hasDisplayableDeviceInfo(deviceInfo)
+    ? deviceInfo
+    : (connection.deviceInfo ?? deviceInfo ?? null);
+
   const status: ConnectionStatus = {
     state: connection.state,
     connectionState:
@@ -229,7 +256,7 @@ export function useC64Connection() {
     deviceType: connection.state === "REAL_CONNECTED" ? "real" : connection.state === "DEMO_ACTIVE" ? "demo" : null,
     isConnecting: connection.state === "DISCOVERING",
     error: error ? (error as Error).message : null,
-    deviceInfo: deviceInfo || null,
+    deviceInfo: effectiveDeviceInfo,
   };
 
   const runtimeBaseUrl = getC64APIConfigSnapshot().baseUrl;
@@ -309,7 +336,10 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
     queryKey: ["c64-config-items", category, itemKey],
     queryFn: async () => {
       const api = getC64API();
-      return api.getConfigItems(category, items, { __c64uIntent: intent });
+      return api.getConfigItems(category, items, {
+        __c64uIntent: intent,
+        __c64uSkipItemEnrichment: options.skipEnrichment,
+      });
     },
     enabled: queryActive && enabled && !!category && items.length > 0,
     placeholderData: (previousData) => previousData ?? placeholderData,

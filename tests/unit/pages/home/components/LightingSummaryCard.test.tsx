@@ -41,6 +41,7 @@ vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
 }));
 
 vi.mock("@/lib/config/ledColors", () => ({
+  LED_FIXED_COLORS: [{ name: "Red" }, { name: "Green" }, { name: "Blue" }, { name: "White" }],
   getLedColorRgb: (value: string) => (value === "Red" ? { r: 255, g: 0, b: 0 } : null),
   rgbToCss: ({ r, g, b }: { r: number; g: number; b: number }) => `rgb(${r},${g},${b})`,
 }));
@@ -267,6 +268,25 @@ describe("LightingSummaryCard", () => {
     });
     render(<LightingSummaryCard {...defaultProps} />);
     expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("15");
+  });
+
+  it("uses built-in fallback options when summary payloads omit structured metadata", () => {
+    resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
+      if (itemName === "LedStrip Mode") return "Fixed Color";
+      if (itemName === "LedStrip Pattern") return "SingleColor";
+      if (itemName === "Fixed Color") return "Red";
+      if (itemName === "LedStrip SID Select") return "SID 1";
+      if (itemName === "Color tint") return "Pure";
+      if (itemName === "Strip Intensity") return "12";
+      return fallback;
+    });
+
+    render(<LightingSummaryCard {...defaultProps} config={{ items: { "LedStrip Mode": "Fixed Color" } }} />);
+
+    expect(screen.getByText("Rainbow")).toBeInTheDocument();
+    expect(screen.getByText("Circular")).toBeInTheDocument();
+    expect(screen.getByText("SID 2")).toBeInTheDocument();
+    expect(screen.getByText("Warm")).toBeInTheDocument();
   });
 
   it("disables selects when isActive=false", () => {

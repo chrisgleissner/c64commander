@@ -98,15 +98,18 @@ describe("deriveRestContributorHealth", () => {
     expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Healthy", problemCount: 0 });
   });
 
-  it("returns Degraded when ~20–49% of REST responses fail", () => {
-    // 1 of 4 = 25%
+  it("returns Unhealthy when at least one failure follows the latest success", () => {
+    // F-DIAG-2: REST trims from the LATEST success (mirroring FTP/TELNET).
+    // After trim, the window is [latest_success, fail, fail, ...]. With ≥1 fail,
+    // the ratio is ≥50% → Unhealthy. (Degraded ratio range is unreachable post-trim,
+    // matching the existing FTP/TELNET semantics — recovery is binary.)
     const events = [
       makeEvent("rest-response", 60_000, { status: 200 }),
       makeEvent("rest-response", 50_000, { status: 200 }),
-      makeEvent("rest-response", 40_000, { status: 500 }),
-      makeEvent("rest-response", 30_000, { status: 200 }),
+      makeEvent("rest-response", 40_000, { status: 200 }),
+      makeEvent("rest-response", 30_000, { status: 500 }),
     ];
-    expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Degraded", problemCount: 1 });
+    expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Unhealthy", problemCount: 1 });
   });
 
   it("returns Unhealthy when ≥50% of REST responses fail", () => {
@@ -161,6 +164,8 @@ describe("deriveRestContributorHealth", () => {
   });
 
   it("ignores pre-connection REST failures once a later REST response succeeds", () => {
+    // F-DIAG-2: REST now trims from the LATEST success (mirroring FTP/TELNET),
+    // so the window is reduced to just the most recent success event.
     const events = [
       makeEvent("rest-response", 90_000, { status: null, error: "Device not ready for requests" }),
       makeEvent("rest-response", 80_000, { status: null, error: "Device not ready for requests" }),
@@ -170,8 +175,44 @@ describe("deriveRestContributorHealth", () => {
     expect(deriveRestContributorHealth(events)).toMatchObject({
       state: "Healthy",
       problemCount: 0,
-      totalOperations: 2,
+      totalOperations: 1,
       failedOperations: 0,
+    });
+  });
+
+  // F-DIAG-2 — REST contributor window symmetry with FTP/TELNET.
+  it("recovers to Healthy after a transient failure when the latest event is a success", () => {
+    // [fail, fail, success, fail, success] sorted ascending — latest success is index 4;
+    // window trims to [success], so contributor is Healthy with totalOperations=1.
+    const events = [
+      makeEvent("rest-response", 90_000, { status: 500 }),
+      makeEvent("rest-response", 80_000, { status: 500 }),
+      makeEvent("rest-response", 70_000, { status: 200 }),
+      makeEvent("rest-response", 60_000, { status: 500 }),
+      makeEvent("rest-response", 50_000, { status: 200 }),
+    ];
+    expect(deriveRestContributorHealth(events)).toMatchObject({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    });
+  });
+
+  it("returns Unhealthy when consecutive failures occur after the latest success", () => {
+    // [success, fail, fail, fail] — latest success is the first event, window keeps all 4.
+    // 3 failures / 4 total = 75% → Unhealthy.
+    const events = [
+      makeEvent("rest-response", 60_000, { status: 200 }),
+      makeEvent("rest-response", 40_000, { status: 500 }),
+      makeEvent("rest-response", 30_000, { status: 500 }),
+      makeEvent("rest-response", 20_000, { status: 500 }),
+    ];
+    expect(deriveRestContributorHealth(events)).toMatchObject({
+      state: "Unhealthy",
+      problemCount: 3,
+      totalOperations: 4,
+      failedOperations: 3,
     });
   });
 
@@ -252,9 +293,17 @@ describe("deriveAppContributorHealth", () => {
     expect(deriveAppContributorHealth([])).toMatchObject({ state: "Idle", problemCount: 0 });
   });
 
-  it("returns Degraded for 1–4 error events in window", () => {
+  // F-DIAG-3 — Severity uses recent (last 60 s) errors so an isolated old
+  // error does not pin the contributor to Degraded for 5 minutes.
+  it("returns Degraded for 1–4 RECENT error events", () => {
     const events = [makeEvent("error", 30_000)];
     expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Degraded", problemCount: 1 });
+  });
+
+  it("returns Idle when the only error is outside the recent 60 s window", () => {
+    // 4 m 30 s ago — within the 5-min window but not within the recency window.
+    const events = [makeEvent("error", 4 * 60_000 + 30_000)];
+    expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle" });
   });
 
   it("does not count expected errors as app health failures", () => {
@@ -272,14 +321,88 @@ describe("deriveAppContributorHealth", () => {
     expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle", problemCount: 0 });
   });
 
-  it("returns Unhealthy for ≥5 error events in window", () => {
-    const events = Array.from({ length: 5 }, (_, i) => makeEvent("error", (i + 1) * 10_000));
+  it("returns Unhealthy for ≥5 RECENT error events", () => {
+    const events = Array.from({ length: 5 }, (_, i) => makeEvent("error", (i + 1) * 5_000));
     expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Unhealthy", problemCount: 5 });
   });
 
   it("ignores error events outside the 5-minute window", () => {
     const old = makeEvent("error", 6 * 60_000);
     expect(deriveAppContributorHealth([old])).toMatchObject({ state: "Idle" });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// F-DIAG-1 — Device scoping (cross-device contamination prevention)
+// ──────────────────────────────────────────────────────────────────────────────
+describe("device-scoped contributor health (F-DIAG-1)", () => {
+  const u64Event = (type: TraceEvent["type"], offsetMs: number, extra: Record<string, unknown> = {}) =>
+    makeEvent(type, offsetMs, {
+      hostname: "192.168.1.13",
+      ...extra,
+    });
+  const c64uEvent = (type: TraceEvent["type"], offsetMs: number, extra: Record<string, unknown> = {}) =>
+    makeEvent(type, offsetMs, {
+      hostname: "192.168.1.167",
+      ...extra,
+    });
+
+  const u64Scope = { deviceId: "u64-saved-id", host: "192.168.1.13" };
+
+  it("REST: c64u failures do not degrade u64 contributor when scoped to u64", () => {
+    const events = [
+      u64Event("rest-response", 60_000, { status: 200 }),
+      c64uEvent("rest-response", 40_000, { status: 500 }),
+      c64uEvent("rest-response", 30_000, { status: 500 }),
+      c64uEvent("rest-response", 20_000, { status: 500 }),
+    ];
+    expect(deriveRestContributorHealth(events, u64Scope)).toMatchObject({
+      state: "Healthy",
+      problemCount: 0,
+    });
+  });
+
+  it("FTP: c64u failures do not degrade u64 FTP contributor when scoped", () => {
+    const events = [
+      u64Event("ftp-operation", 30_000, { result: "success" }),
+      c64uEvent("ftp-operation", 20_000, { result: "failure", error: "connection reset" }),
+      c64uEvent("ftp-operation", 10_000, { result: "failure", error: "connection reset" }),
+    ];
+    expect(deriveFtpContributorHealth(events, u64Scope)).toMatchObject({ state: "Healthy" });
+  });
+
+  it("Telnet: c64u failures do not degrade u64 Telnet contributor when scoped", () => {
+    const events = [
+      u64Event("telnet-operation", 30_000, { result: "success" }),
+      c64uEvent("telnet-operation", 10_000, { result: "failure", error: "menu prompt timeout" }),
+    ];
+    expect(deriveTelnetContributorHealth(events, u64Scope)).toMatchObject({ state: "Healthy" });
+  });
+
+  it("with no scope, behaviour matches unscoped legacy semantics", () => {
+    const events = [
+      makeEvent("rest-response", 60_000, { hostname: "192.168.1.13", status: 200 }),
+      makeEvent("rest-response", 30_000, { hostname: "192.168.1.167", status: 500 }),
+      makeEvent("rest-response", 20_000, { hostname: "192.168.1.167", status: 500 }),
+    ];
+    // Without scope, all events count: latest success is the first event (oldest).
+    // Trim keeps full window: 2 failed of 3 → Unhealthy.
+    expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Unhealthy" });
+    expect(deriveRestContributorHealth(events, u64Scope)).toMatchObject({ state: "Healthy" });
+  });
+
+  it("eventMatchesDeviceScope: events without hostname fall back to device attribution", () => {
+    // Error events carry no hostname. They are dropped from device-scoped
+    // contributors unless device attribution matches.
+    const error = makeEvent("error", 10_000, { message: "boom" });
+    const errorWithU64Attr = makeEvent("error", 10_000, {
+      message: "boom",
+      device: { savedDeviceId: "u64-saved-id" },
+    });
+    expect(deriveAppContributorHealth([error], u64Scope)).toMatchObject({ state: "Idle" });
+    expect(deriveAppContributorHealth([errorWithU64Attr], u64Scope)).toMatchObject({
+      state: "Degraded",
+    });
   });
 });
 

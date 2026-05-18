@@ -1220,6 +1220,27 @@ describe("connectionManager", () => {
     unsubscribe();
   });
 
+  it("promotes an offline active host when REST reports it reachable", async () => {
+    localStorage.setItem(DEVICE_HOST_KEY, "u64");
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, noteReachable } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("manual");
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+
+    noteReachable("u64", "rest", {
+      product: "Ultimate 64 Elite",
+      firmware_version: "3.14e",
+      hostname: "u64",
+      unique_id: "38C1BA",
+      errors: [],
+    });
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().deviceInfo?.product).toBe("Ultimate 64 Elite");
+  });
+
   it("dismissDemoInterstitial handles sessionStorage.setItem throwing", async () => {
     const { dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");

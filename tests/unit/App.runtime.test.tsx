@@ -700,7 +700,28 @@ describe("App runtime wiring", () => {
     );
   });
 
-  it("starts deferred diagnostics bridges on first meaningful interaction and cleans them up on unmount", async () => {
+  it("does not start deferred diagnostics bridges on web after first meaningful interaction", async () => {
+    const { unmount } = render(<App />);
+    await screen.findByText("Home Page");
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-startup-milestone", { detail: { name: "first-meaningful-interaction" } }),
+      );
+    });
+
+    unmount();
+
+    expect(mocks.uninstallConsoleBridge).toHaveBeenCalledTimes(1);
+    expect(mocks.startNativeDiagnosticsBridge).not.toHaveBeenCalled();
+    expect(mocks.debugSnapshotCleanup).not.toHaveBeenCalled();
+    expect(mocks.webServerLogCleanup).not.toHaveBeenCalled();
+    expect(mocks.stopNativeDiagnosticsBridge).not.toHaveBeenCalled();
+  });
+
+  it("starts deferred diagnostics bridges on native after first meaningful interaction and cleans them up on unmount", async () => {
+    mocks.getPlatform.mockReturnValue("android");
+
     const { unmount } = render(<App />);
     await screen.findByText("Home Page");
 

@@ -20,6 +20,7 @@ const {
   incrementTelnetInFlightSpy,
   decrementTelnetInFlightSpy,
   runWithActionTraceSpy,
+  withTelnetInteractionSpy,
   discoverTelnetCapabilitiesSpy,
   createActionExecutorSpy,
 } = vi.hoisted(() => ({
@@ -42,6 +43,7 @@ const {
   incrementTelnetInFlightSpy: vi.fn(),
   decrementTelnetInFlightSpy: vi.fn(),
   runWithActionTraceSpy: vi.fn(async (_action: unknown, handler: () => Promise<void>) => await handler()),
+  withTelnetInteractionSpy: vi.fn(async (_meta: unknown, handler: () => Promise<unknown>) => await handler()),
   discoverTelnetCapabilitiesSpy: vi.fn(),
   createActionExecutorSpy: vi.fn(),
 }));
@@ -91,7 +93,7 @@ vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
-  withTelnetInteraction: (_meta: unknown, handler: () => Promise<void>) => handler(),
+  withTelnetInteraction: (...args: unknown[]) => withTelnetInteractionSpy(...args),
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
@@ -262,6 +264,9 @@ describe("useTelnetActions", () => {
     mockExecute.mockResolvedValue(undefined);
     mockConnect.mockResolvedValue(undefined);
     mockDisconnect.mockResolvedValue(undefined);
+    withTelnetInteractionSpy.mockImplementation(
+      async (_meta: unknown, handler: () => Promise<unknown>) => await handler(),
+    );
     discoverTelnetCapabilitiesSpy.mockResolvedValue(buildSnapshot());
   });
 
@@ -307,6 +312,20 @@ describe("useTelnetActions", () => {
     await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
     expect(mockConnect).toHaveBeenCalledWith("u64", 23, undefined);
     expect(mockDisconnect).toHaveBeenCalled();
+  });
+
+  it("runs capability discovery through the Telnet interaction scheduler", async () => {
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(withTelnetInteractionSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionId: "capability-discovery",
+        intent: "system",
+      }),
+      expect.any(Function),
+    );
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
   });
 
   it("returns disconnected fallback support without starting discovery", () => {

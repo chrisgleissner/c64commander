@@ -166,6 +166,30 @@ const buildRequestId = () => {
   return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
 };
 
+let connectionManagerImport: Promise<typeof import("@/lib/connection/connectionManager")> | null = null;
+
+const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceInfo | null = null) => {
+  const host = (() => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return deviceHost;
+    }
+  })();
+  connectionManagerImport ??= import("@/lib/connection/connectionManager");
+  void connectionManagerImport
+    .then(({ noteReachable }) => {
+      noteReachable(host, "rest", deviceInfo);
+    })
+    .catch((error) => {
+      addLog("warn", "Failed to note REST reachability", {
+        host,
+        error: error instanceof Error ? error.message : String(error ?? "Unknown import failure"),
+      });
+      connectionManagerImport = null;
+    });
+};
+
 let lastDeviceHost: string | null = null;
 
 const logDeviceHostChange = (nextHost: string, context: { baseUrl: string; mode: "persisted" | "runtime" }) => {
@@ -304,6 +328,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
   __c64uExpectedMissing?: boolean;
+  __c64uSkipItemEnrichment?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -544,6 +569,20 @@ export class C64API {
         selected: value,
       },
     });
+  }
+
+  getCachedCategory(category: string): ConfigResponse | null {
+    const cachedItems = this.configCategoryItemsCache.get(category);
+    if (!cachedItems || Object.keys(cachedItems).length === 0) {
+      return null;
+    }
+
+    return {
+      [category]: {
+        items: cloneBudgetValue(cachedItems),
+      },
+      errors: [],
+    } as ConfigResponse;
   }
 
   private async ensureConfigCategoryItems(category: string, itemNames: string[]) {
@@ -847,6 +886,7 @@ export class C64API {
                 }
 
                 const parsedBody = await this.parseResponseJson<T>(response, path);
+                noteRestReachable(url, this.deviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
                 recordRestResponse(action, {
                   method,
                   path,
@@ -1090,6 +1130,9 @@ export class C64API {
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])
               : await responsePromise;
+            if (response.ok) {
+              noteRestReachable(url, this.deviceHost);
+            }
             const durationMs = Math.max(
               0,
               Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
@@ -1217,6 +1260,7 @@ export class C64API {
       } as ConfigResponse;
     }
 
+    const skipItemEnrichment = options.__c64uSkipItemEnrichment === true;
     const mergedItems: Record<string, unknown> = {};
     const itemsNeedingEnrichment = new Set<string>();
     try {
@@ -1268,7 +1312,7 @@ export class C64API {
     const missingItems = uniqueItems.filter(
       (item) => !Object.prototype.hasOwnProperty.call(mergedItems, item) || itemsNeedingEnrichment.has(item),
     );
-    if (missingItems.length > 0) {
+    if (!skipItemEnrichment && missingItems.length > 0) {
       const responses = await Promise.allSettled(
         missingItems.map((item) =>
           this.getConfigItem(category, item, {

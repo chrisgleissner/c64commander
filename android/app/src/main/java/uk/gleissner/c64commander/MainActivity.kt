@@ -11,9 +11,11 @@ package uk.gleissner.c64commander
 import android.app.ActivityManager
 import android.graphics.Color
 import android.os.Bundle
+import android.webkit.MimeTypeMap
 import androidx.core.view.WindowCompat
 import com.getcapacitor.BridgeActivity
 import java.io.File
+import java.net.CookieHandler
 
 class MainActivity : BridgeActivity() {
   internal fun ensureCapacitorPluginAssetPath(filesDirectory: File = filesDir) {
@@ -65,8 +67,33 @@ class MainActivity : BridgeActivity() {
     }
   }
 
+  internal fun prewarmMimeMap(
+    launcher: (Runnable) -> Unit = { task -> Thread(task, "MimeMapPrewarm").start() },
+    lookup: (String) -> String? = { extension ->
+      MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+    },
+  ) {
+    launcher(
+      Runnable {
+        try {
+          lookup("html")
+          AppLogger.debug(null, "MainActivity", "MimeMap prewarm completed off-UI thread", "MainActivity")
+        } catch (error: Exception) {
+          AppLogger.warn(
+            null,
+            "MainActivity",
+            "MimeMap prewarm failed; continuing without prewarm",
+            "MainActivity",
+            error,
+          )
+        }
+      },
+    )
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     ensureCapacitorPluginAssetPath()
+    prewarmMimeMap()
     registerPlugin(BackgroundExecutionPlugin::class.java)
     registerPlugin(DiagnosticsBridgePlugin::class.java)
     registerPlugin(FolderPickerPlugin::class.java)
@@ -79,6 +106,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(SecureStoragePlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)
     super.onCreate(savedInstanceState)
+    installLanCookieBypassIfNeeded()
     WindowCompat.setDecorFitsSystemWindows(window, false)
     window.statusBarColor = Color.TRANSPARENT
     window.navigationBarColor = Color.TRANSPARENT
@@ -92,5 +120,19 @@ class MainActivity : BridgeActivity() {
             "Android memory class detected: memoryClass=$memoryClass, largeMemoryClass=$largeMemoryClass",
             "MainActivity",
     )
+  }
+
+  internal fun installLanCookieBypassIfNeeded() {
+    val cookiesEnabled = bridge.config.getPluginConfiguration("CapacitorCookies").getBoolean("enabled", false)
+    if (cookiesEnabled) {
+      return
+    }
+
+    val currentHandler = CookieHandler.getDefault() ?: return
+    if (currentHandler is C64LanCookieBypassHandler) {
+      return
+    }
+
+    CookieHandler.setDefault(C64LanCookieBypassHandler(currentHandler))
   }
 }

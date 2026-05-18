@@ -137,6 +137,65 @@ describe("native diagnostics bridge", () => {
     );
   });
 
+  it("normalizes undefined native messages before forwarding them to the logger", async () => {
+    let listener:
+      | ((event: {
+          level?: "debug" | "info" | "warn" | "error";
+          message?: string | null;
+          details?: Record<string, unknown>;
+        }) => void)
+      | null = null;
+    addListenerMock.mockImplementation(async (_eventName, cb) => {
+      listener = cb;
+      return { remove: removeMock };
+    });
+
+    const { startNativeDiagnosticsBridge } = await import("@/lib/native/diagnosticsBridge");
+    await startNativeDiagnosticsBridge();
+
+    listener?.({
+      level: "info",
+      message: undefined,
+      details: { code: 5 },
+    });
+
+    expect(loggerMocks.info).toHaveBeenCalledWith(
+      "",
+      expect.objectContaining({
+        details: expect.objectContaining({ origin: "native", code: 5 }),
+      }),
+    );
+  });
+
+  it("normalizes missing native message fields before forwarding them to the logger", async () => {
+    let listener:
+      | ((event: {
+          level?: "debug" | "info" | "warn" | "error";
+          message?: string | null;
+          details?: Record<string, unknown>;
+        }) => void)
+      | null = null;
+    addListenerMock.mockImplementation(async (_eventName, cb) => {
+      listener = cb;
+      return { remove: removeMock };
+    });
+
+    const { startNativeDiagnosticsBridge } = await import("@/lib/native/diagnosticsBridge");
+    await startNativeDiagnosticsBridge();
+
+    listener?.({
+      level: "info",
+      details: { code: 6 },
+    });
+
+    expect(loggerMocks.info).toHaveBeenCalledWith(
+      "",
+      expect.objectContaining({
+        details: expect.objectContaining({ origin: "native", code: 6 }),
+      }),
+    );
+  });
+
   it("does not re-subscribe when already started and cleans up on stop", async () => {
     addListenerMock.mockResolvedValue({ remove: removeMock });
     const { startNativeDiagnosticsBridge, stopNativeDiagnosticsBridge } =

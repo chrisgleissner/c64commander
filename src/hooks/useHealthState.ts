@@ -24,6 +24,7 @@ import {
   deriveLastFtpActivity,
   deriveLastRestActivity,
   deriveLastTelnetActivity,
+  type DeviceScope,
   derivePrimaryProblem,
   deriveRestContributorHealth,
   deriveTelnetContributorHealth,
@@ -62,13 +63,24 @@ const resolveTraceTransportHost = (event: TraceEvent<Record<string, unknown>>) =
   }
 };
 
+// F-DIAG-1 — Resolve the device-attribution host carried on the trace event's
+// device-context snapshot. The previous implementation looked for a `host`
+// field which DiagnosticsDeviceContext does not expose, so the fallback
+// always returned null and unattributed events fell through to `return true`.
 const resolveTraceAttributedHost = (event: TraceEvent<Record<string, unknown>>) => {
   const device = event.data.device;
   if (!device || typeof device !== "object") {
     return null;
   }
-  const host = "host" in device && typeof device.host === "string" ? device.host : null;
-  return host ? stripPortFromDeviceHost(host) : null;
+  const ctx = device as { savedDeviceHostSnapshot?: unknown; verifiedHostname?: unknown };
+  const snapshotHost =
+    typeof ctx.savedDeviceHostSnapshot === "string" && ctx.savedDeviceHostSnapshot.length > 0
+      ? ctx.savedDeviceHostSnapshot
+      : null;
+  if (snapshotHost) return stripPortFromDeviceHost(snapshotHost);
+  const verifiedHost =
+    typeof ctx.verifiedHostname === "string" && ctx.verifiedHostname.length > 0 ? ctx.verifiedHostname : null;
+  return verifiedHost ? stripPortFromDeviceHost(verifiedHost) : null;
 };
 
 const filterTraceEventsForConfiguredHost = (
@@ -212,11 +224,18 @@ export function useHealthState(): OverallHealthState {
       };
     }
 
+    // F-DIAG-1 — Defence in depth: the contributor functions also accept a
+    // device scope, so even if a non-active-device event slips past the
+    // host-name pre-filter above, it is excluded from the contributor rollup.
+    const deviceScope: DeviceScope = {
+      deviceId: selectedSavedDevice?.id ?? null,
+      host,
+    };
     const contributors = {
-      App: deriveAppContributorHealth(hostScopedTraceEvents),
-      REST: deriveRestContributorHealth(hostScopedTraceEvents),
-      FTP: deriveFtpContributorHealth(hostScopedTraceEvents),
-      TELNET: deriveTelnetContributorHealth(hostScopedTraceEvents),
+      App: deriveAppContributorHealth(hostScopedTraceEvents, deviceScope),
+      REST: deriveRestContributorHealth(hostScopedTraceEvents, deviceScope),
+      FTP: deriveFtpContributorHealth(hostScopedTraceEvents, deviceScope),
+      TELNET: deriveTelnetContributorHealth(hostScopedTraceEvents, deviceScope),
     } as const;
 
     const state = rollUpHealth(contributors, connectivity);
@@ -236,7 +255,7 @@ export function useHealthState(): OverallHealthState {
       lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
       lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
       lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
-      primaryProblem: derivePrimaryProblem(hostScopedTraceEvents, contributors),
+      primaryProblem: derivePrimaryProblem(hostScopedTraceEvents, contributors, deviceScope),
     };
   }, [connectionSnapshot.state, deviceInfo?.product, healthCheckState.latestResult, savedDevices, traceEvents]);
 }

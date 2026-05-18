@@ -16,6 +16,7 @@ import { getActiveBaseUrl, updateHasChanges } from "@/lib/config/appConfigStore"
 import { buildErrorLogDetails, addLog } from "@/lib/logging";
 import {
   LIGHTING_CATEGORY_ITEMS,
+  LIGHTING_SUMMARY_ITEMS,
   LIGHTING_CONNECTION_HOLD_MS,
   LIGHTING_SURFACE_TO_CATEGORY,
 } from "@/lib/lighting/constants";
@@ -102,6 +103,77 @@ const buildProfileId = () =>
 
 const cloneSurfaces = (surfaces: Partial<Record<LightingSurface, LightingSurfaceState>>) =>
   JSON.parse(JSON.stringify(surfaces)) as Partial<Record<LightingSurface, LightingSurfaceState>>;
+
+const applyLightingUpdatesToConfigItemsCache = (
+  cached: unknown,
+  category: string,
+  updates: Record<string, string | number>,
+) => {
+  if (!cached || typeof cached !== "object") return cached;
+  const record = cached as Record<string, unknown>;
+  const categoryEntry = record[category];
+  if (!categoryEntry || typeof categoryEntry !== "object") return cached;
+  const items = (categoryEntry as { items?: Record<string, unknown> }).items;
+  if (!items || typeof items !== "object") return cached;
+  const nextItems = { ...items };
+
+  Object.entries(updates).forEach(([itemName, value]) => {
+    const currentItem = nextItems[itemName];
+    if (currentItem && typeof currentItem === "object" && !Array.isArray(currentItem)) {
+      const entry = currentItem as Record<string, unknown>;
+      if ("selected" in entry) {
+        nextItems[itemName] = { ...entry, selected: value };
+        return;
+      }
+      if ("current" in entry) {
+        nextItems[itemName] = { ...entry, current: value };
+        return;
+      }
+    }
+    nextItems[itemName] = value;
+  });
+
+  return {
+    ...record,
+    [category]: {
+      ...(categoryEntry as Record<string, unknown>),
+      items: nextItems,
+    },
+  };
+};
+
+const applyLightingUpdatesToCategoryCache = (
+  cached: unknown,
+  category: string,
+  updates: Record<string, string | number>,
+) => {
+  if (!cached || typeof cached !== "object") return cached;
+  const record = cached as Record<string, unknown>;
+  const categoryEntry = record[category];
+  if (!categoryEntry || typeof categoryEntry !== "object") return cached;
+  const nextCategory = { ...(categoryEntry as Record<string, unknown>) };
+
+  Object.entries(updates).forEach(([itemName, value]) => {
+    const currentItem = nextCategory[itemName];
+    if (currentItem && typeof currentItem === "object" && !Array.isArray(currentItem)) {
+      const entry = currentItem as Record<string, unknown>;
+      if ("selected" in entry) {
+        nextCategory[itemName] = { ...entry, selected: value };
+        return;
+      }
+      if ("current" in entry) {
+        nextCategory[itemName] = { ...entry, current: value };
+        return;
+      }
+    }
+    nextCategory[itemName] = value;
+  });
+
+  return {
+    ...record,
+    [category]: nextCategory,
+  };
+};
 
 const isPermissionDeniedError = (error: GeolocationPositionError) =>
   error.code === error.PERMISSION_DENIED || error.code === 1;
@@ -196,17 +268,19 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
   const lastConnectionStateRef = React.useRef(connectionSnapshot.state);
   const lastAppliedSignatureRef = React.useRef<string | null>(null);
   const lastAmbientConnectionRef = React.useRef<{ state: LightingConnectionSentinelState; at: number } | null>(null);
+  const lightingQueryItems = studioOpen || contextLensOpen ? LIGHTING_CATEGORY_ITEMS : LIGHTING_SUMMARY_ITEMS;
+  const summaryQueryOptions = React.useMemo(() => ({ ...VISIBLE_C64_QUERY_OPTIONS, skipEnrichment: true }), []);
 
   const { data: caseLightingCategory } = useC64ConfigItems(
     "LED Strip Settings",
-    [...LIGHTING_CATEGORY_ITEMS],
+    [...lightingQueryItems],
     status.isConnected || status.isConnecting,
-    VISIBLE_C64_QUERY_OPTIONS,
+    studioOpen || contextLensOpen ? VISIBLE_C64_QUERY_OPTIONS : summaryQueryOptions,
   );
   const { data: keyboardLightingCategory } = useC64ConfigItems(
     "Keyboard Lighting",
-    [...LIGHTING_CATEGORY_ITEMS],
-    status.isConnected || status.isConnecting,
+    [...lightingQueryItems],
+    (status.isConnected || status.isConnecting) && (studioOpen || contextLensOpen),
     VISIBLE_C64_QUERY_OPTIONS,
   );
 
@@ -488,10 +562,14 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
       .then(() => {
         lastAppliedSignatureRef.current = resolvedSignature;
         updateHasChanges(getActiveBaseUrl(), true);
-        void queryClient.invalidateQueries({ queryKey: ["c64-config-items", "LED Strip Settings"] });
-        void queryClient.invalidateQueries({ queryKey: ["c64-config-items", "Keyboard Lighting"] });
-        void queryClient.invalidateQueries({ queryKey: ["c64-category", "LED Strip Settings"] });
-        void queryClient.invalidateQueries({ queryKey: ["c64-category", "Keyboard Lighting"] });
+        Object.entries(payload).forEach(([category, updates]) => {
+          queryClient.setQueriesData({ queryKey: ["c64-config-items", category] }, (cached) =>
+            applyLightingUpdatesToConfigItemsCache(cached, category, updates),
+          );
+          queryClient.setQueriesData({ queryKey: ["c64-category", category] }, (cached) =>
+            applyLightingUpdatesToCategoryCache(cached, category, updates),
+          );
+        });
       })
       .catch((error) => {
         addLog(

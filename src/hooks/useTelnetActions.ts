@@ -211,25 +211,35 @@ export function useTelnetActions(): TelnetActionsState {
     }
 
     let discoveryTrace = buildEmptyTelnetTraceSnapshot(host, port);
-    const snapshot = await discoverTelnetCapabilities({
-      cacheKey,
-      deviceInfo: status.deviceInfo,
-      menuKey: capability.menuKey,
-      runner: {
-        withSession: async (callback) => {
-          const password = await getPassword();
-          const transport = createTelnetClient();
-          const session = createTelnetSession(transport);
-          try {
-            await session.connect(host, port, password ?? undefined);
-            return await callback(session);
-          } finally {
-            discoveryTrace = mergeTelnetTraceSnapshots(discoveryTrace, session.getTraceSnapshot?.()) ?? discoveryTrace;
-            await session.disconnect();
-          }
-        },
+    const traceAction = createActionContext("Telnet capability discovery", "system", LOG_TAG);
+    const snapshot = await withTelnetInteraction(
+      {
+        action: traceAction,
+        actionId: "capability-discovery",
+        intent: "system",
       },
-    });
+      async () =>
+        await discoverTelnetCapabilities({
+          cacheKey,
+          deviceInfo: status.deviceInfo,
+          menuKey: capability.menuKey,
+          runner: {
+            withSession: async (callback) => {
+              const password = await getPassword();
+              const transport = createTelnetClient();
+              const session = createTelnetSession(transport);
+              try {
+                await session.connect(host, port, password ?? undefined);
+                return await callback(session);
+              } finally {
+                discoveryTrace =
+                  mergeTelnetTraceSnapshots(discoveryTrace, session.getTraceSnapshot?.()) ?? discoveryTrace;
+                await session.disconnect();
+              }
+            },
+          },
+        }),
+    );
 
     return {
       snapshot,
