@@ -24,7 +24,7 @@ Do not mark code complete without the required gates, but avoid repeatedly runni
 - Pixel 4 serial: `9B081FFAZ001WX`.
 - Primary hardware target: `u64`.
 - `u64` probe succeeds: `curl --max-time 5 -sS http://u64/v1/info` returns product `Ultimate 64 Elite`, firmware `3.14e`, hostname `u64`.
-- `c64u` remains blocked: `curl --max-time 5 -sS http://c64u/v1/info` returns `Recv failure: Connection reset by peer`. Record this blocker instead of repeatedly probing it.
+- `c64u` recovered on 2026-05-18: `curl --max-time 5 -sS http://c64u/v1/info` returns product `C64 Ultimate`, firmware `1.1.0`, hostname `c64u`. All stabilization validation phases now have captured evidence on both `u64` and `c64u`.
 - Before screenshots, wake/unlock the Pixel. A failed Phase 2 capture was black because the device was dozing and `NotificationShade` was focused, not because the app failed.
 
 Wake command used successfully:
@@ -175,7 +175,7 @@ Fast next Phase 2 path:
 
 5. Do one warm restart evidence capture only if cold launch passes.
 
-6. Update `IMPLEMENTATION_PLANS.md` Phase 2 gate with the evidence filenames. Keep `c64u` as blocked unless its REST endpoint recovers.
+6. Update `IMPLEMENTATION_PLANS.md` Phase 2 gate with the evidence filenames. The recovered `c64u` sweep now has Phase 2 and later evidence recorded there as well.
 
 ## Phase 3 next work
 

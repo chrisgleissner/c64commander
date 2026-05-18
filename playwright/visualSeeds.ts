@@ -220,7 +220,7 @@ const createSeedTraceEvent = <T extends Record<string, unknown>>(
 });
 
 const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): TraceEvent[] => {
-  const baseTimestampMs = Date.now();
+  const baseTimestampMs = FIXED_NOW_MS;
   const events: TraceEvent[] = [];
   let index = 0;
 
@@ -237,14 +237,13 @@ const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): T
     }
   };
 
-  const pushFailedRestEvents = (count: number, healthLabel: "Degraded" | "Unhealthy") => {
+  const pushErrorEvents = (count: number, healthLabel: "Degraded" | "Unhealthy", ageOffsetMs = 0) => {
     for (let offset = 0; offset < count; offset += 1) {
       events.push(
-        createSeedTraceEvent(index, "rest-response", baseTimestampMs - index, {
-          method: "GET",
-          path: `/v1/diag/failure/${offset}`,
-          status: 500,
-          error: `Seeded ${healthLabel.toLowerCase()} failure ${offset + 1}`,
+        createSeedTraceEvent(index, "error", baseTimestampMs - ageOffsetMs - index, {
+          message: `Seeded ${healthLabel.toLowerCase()} app error ${offset + 1}`,
+          error: `Seeded ${healthLabel.toLowerCase()} app error ${offset + 1}`,
+          isExpected: false,
         }),
       );
       index += 1;
@@ -257,15 +256,19 @@ const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): T
   }
 
   if (health === "Degraded") {
-    const failureCount = Math.max(problemCount, 1);
-    const successCount = Math.max(failureCount + 1, Math.ceil(failureCount * 1.5));
-    pushSuccessRestEvents(successCount);
-    pushFailedRestEvents(failureCount, "Degraded");
+    pushSuccessRestEvents(2);
+    const totalProblems = Math.max(problemCount, 1);
+    pushErrorEvents(1, "Degraded");
+    if (totalProblems > 1) {
+      // Keep only one error in the recent 60 s window so App health stays degraded
+      // while preserving the larger historical problem count for badge rendering.
+      pushErrorEvents(totalProblems - 1, "Degraded", 61_000);
+    }
     return events;
   }
 
   pushSuccessRestEvents(1);
-  pushFailedRestEvents(Math.max(problemCount, 1), "Unhealthy");
+  pushErrorEvents(Math.max(problemCount, 1), "Unhealthy");
 
   return events;
 };
@@ -1240,6 +1243,73 @@ export const seedDiagnosticsTraces = async (page: Page) => {
 export const seedBadgeHealthTraceState = async (page: Page, seed: BadgeHealthSeed) => {
   await page.evaluate((traceSeed) => {
     return new Promise<void>((resolve) => {
+      const normalizeStoredHost = (value: string | null | undefined) => {
+        if (!value) return null;
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        try {
+          return new URL(trimmed).host || null;
+        } catch {
+          return trimmed.replace(/^https?:\/\//, "").split("/")[0] || null;
+        }
+      };
+      const readActiveDeviceContext = () => {
+        let savedDeviceId: string | null = null;
+        let host: string | null = null;
+
+        try {
+          const savedDevicesRaw = localStorage.getItem("c64u_saved_devices:v1");
+          if (savedDevicesRaw) {
+            const parsed = JSON.parse(savedDevicesRaw) as {
+              selectedDeviceId?: string;
+              devices?: Array<{ id?: string; host?: string | null }>;
+            };
+            const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+            const selectedDevice =
+              devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0] ?? null;
+            savedDeviceId = selectedDevice?.id ?? parsed.selectedDeviceId ?? null;
+            host = normalizeStoredHost(selectedDevice?.host ?? null);
+          }
+        } catch {
+          // Ignore malformed saved-device state in tests.
+        }
+
+        if (!host) {
+          const variantDeviceHostKey = Object.keys(localStorage).find((key) => key.endsWith(":device_host"));
+          host =
+            normalizeStoredHost(localStorage.getItem("c64u_device_host")) ??
+            normalizeStoredHost(localStorage.getItem("c64commander:device_host")) ??
+            normalizeStoredHost((variantDeviceHostKey && localStorage.getItem(variantDeviceHostKey)) || null) ??
+            normalizeStoredHost(
+              (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl ??
+                localStorage.getItem("c64u_base_url"),
+            );
+        }
+
+        return { savedDeviceId, host };
+      };
+      const activeDevice = readActiveDeviceContext();
+      const enrichedSeed = (traceSeed as TraceEvent[]).map((event) => {
+        const data = { ...event.data } as TraceEvent["data"];
+        if (activeDevice.host) {
+          if (typeof data.hostname !== "string" || !data.hostname) {
+            data.hostname = activeDevice.host;
+          }
+          if (typeof data.url !== "string" || !data.url) {
+            const rawPath = typeof data.path === "string" && data.path ? data.path : "/v1/info";
+            const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+            data.url = `http://${activeDevice.host}${normalizedPath}`;
+          }
+        }
+        if (!data.device && (activeDevice.savedDeviceId || activeDevice.host)) {
+          data.device = {
+            savedDeviceId: activeDevice.savedDeviceId,
+            savedDeviceHostSnapshot: activeDevice.host,
+            verifiedHostname: activeDevice.host,
+          };
+        }
+        return { ...event, data };
+      });
       const handler = () => {
         window.clearTimeout(timeout);
         window.removeEventListener("c64u-traces-updated", handler);
@@ -1255,7 +1325,7 @@ export const seedBadgeHealthTraceState = async (page: Page, seed: BadgeHealthSee
           __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
         }
       ).__c64uTracing;
-      tracing?.seedTraces?.(traceSeed as TraceEvent[]);
+      tracing?.seedTraces?.(enrichedSeed);
       if (!tracing?.seedTraces) {
         window.clearTimeout(timeout);
         window.removeEventListener("c64u-traces-updated", handler);

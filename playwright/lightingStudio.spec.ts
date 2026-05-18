@@ -167,10 +167,13 @@ test.describe("Lighting Studio", () => {
     await expect(cue).toContainText("Disk look");
     await cue.getByRole("button", { name: "Studio" }).click();
 
-    await page.getByTestId("lighting-city-search").fill("tok");
-    await page.getByTestId("lighting-city-option-tokyo").click();
+    const citySearch = page.getByTestId("lighting-city-search");
+    await expect(citySearch).toHaveValue("London");
+    const cityOption = page.getByTestId("lighting-city-option-london");
+    await expect(cityOption).toBeVisible();
+    await cityOption.click();
     await page.getByTestId("lighting-apply-city").click();
-    await expect(page.getByTestId("lighting-circadian-location")).toContainText("Tokyo");
+    await expect(page.getByTestId("lighting-circadian-location")).toContainText("London");
 
     await page.getByTestId("lighting-manual-latitude").fill("123");
     await expect(page.getByTestId("lighting-manual-latitude-error")).toContainText("between -90 and 90");

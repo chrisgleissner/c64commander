@@ -521,12 +521,12 @@ test.describe("Home interactions", () => {
     const caseLightLabels = await caseLight.locator(".text-muted-foreground").allTextContents();
     expect(caseLightLabels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 
-    const keyboardLight = page.getByTestId("home-keyboard-lighting-summary");
-    const keyboardLightLabels = await keyboardLight.locator(".text-muted-foreground").allTextContents();
-    expect(keyboardLightLabels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+    await expect(page.getByTestId("home-keyboard-lighting-deferred")).toContainText(
+      "Load keyboard lighting controls on demand to keep cold start responsive.",
+    );
+    await expect(page.getByTestId("home-keyboard-lighting-summary")).toHaveCount(0);
 
     await expect(page.getByTestId("home-led-pattern")).toHaveText(/Single Color/);
-    await expect(page.getByTestId("home-keyboard-lighting-pattern")).toHaveText(/Single Color/);
   });
 
   test("lighting pattern keeps the user-facing label while sending the raw API value", async ({

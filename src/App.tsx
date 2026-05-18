@@ -344,6 +344,7 @@ const DiagnosticsRuntimeBridge = () => {
 
     const startDeferredBridges = async () => {
       if (started || disposed) return;
+      if (getPlatform() === "web") return;
       started = true;
       const [diagnosticsBridgeModule, nativeDebugSnapshotsModule, webServerLogsModule] = await Promise.all([
         import("@/lib/native/diagnosticsBridge"),
