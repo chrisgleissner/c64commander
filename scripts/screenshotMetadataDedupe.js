@@ -1,15 +1,13 @@
 import { execFile as execFileCb } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { promisify } from "node:util";
+import pixelmatch from "pixelmatch";
 import sharp from "sharp";
 
 import { shouldSkipFuzzyScreenshotPrune } from "./screenshotPrunePolicy.js";
 
 const execFile = promisify(execFileCb);
-const require = createRequire(import.meta.url);
-const pixelmatch = require(path.resolve(process.cwd(), "node_modules/playwright-core/lib/third_party/pixelmatch.js"));
 
 export const SCREENSHOT_DIFF_CONFIG = Object.freeze({
   pixelmatchThreshold: 0.02,

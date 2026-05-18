@@ -355,8 +355,6 @@ jobs:
   web-e2e:
     name: Web | E2E (sharded)
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
     defaults:
       run:
         shell: bash
@@ -388,6 +386,19 @@ jobs:
           npm ci
           end=$(date +%s)
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Install Playwright browsers
+        run: |
+          start=$(date +%s)
+          npx playwright install --with-deps
+          end=$(date +%s)
+          echo "- playwright install: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Download coverage build output
         uses: actions/download-artifact@v4

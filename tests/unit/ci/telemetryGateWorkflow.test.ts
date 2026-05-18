@@ -54,6 +54,13 @@ describe("telemetry release gate workflow rules", () => {
     );
   });
 
+  it("installs Playwright browsers in Android web e2e instead of pinning a container image", () => {
+    const workflow = readWorkflow("android.yaml");
+    expect(workflow).not.toContain("image: mcr.microsoft.com/playwright:");
+    expect(workflow).toContain("name: Cache Playwright browsers");
+    expect(workflow).toContain("npx playwright install --with-deps");
+  });
+
   it("hard-fails iOS telemetry on monitor exit code 3 for stable tag and release branch flows", () => {
     const workflow = readWorkflow("ios.yaml");
     expect(workflow).toContain('if [[ "$code" == "3" ]]; then');
