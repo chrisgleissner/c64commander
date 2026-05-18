@@ -11,6 +11,7 @@ import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { isSidVolumeName, resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
 import { AUDIO_MIXER_VOLUME_ITEMS, SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from "@/lib/config/configItems";
 import { beginPlaybackWriteBurst, waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
@@ -303,6 +304,15 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     },
     [schedulePlaybackReconciliation, updateConfigBatch, withTimeout],
   );
+
+  const withPollingPause = useCallback(async <T>(operation: () => Promise<T>) => {
+    const pauseHandle = pollingPauseRegistry.acquirePause();
+    try {
+      return await operation();
+    } finally {
+      pauseHandle.release();
+    }
+  }, []);
 
   const queuePlaybackMixerWrite = useCallback(
     async (write: PlaybackMixerWrite) => {
@@ -618,13 +628,16 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         setAtMs: Date.now(),
       };
       try {
-        await queuePlaybackMixerWrite({
-          updates: buildEnabledSidMuteUpdates(cachedItems, sidEnablement),
-          context: "Mute",
-          index: muteIndex,
-          muted: true,
-          allowKnownDeviceSkip: false,
-        });
+        await withPollingPause(
+          async () =>
+            await queuePlaybackMixerWrite({
+              updates: buildEnabledSidMuteUpdates(cachedItems, sidEnablement),
+              context: "Mute",
+              index: muteIndex,
+              muted: true,
+              allowKnownDeviceSkip: false,
+            }),
+        );
       } catch (error) {
         manualMuteIntentRef.current = false;
         dispatchVolume({ type: "unmute", reason: "manual", index: previousVolumeIndexRef.current ?? volumeIndex });
@@ -655,13 +668,16 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           muted: false,
           setAtMs: Date.now(),
         };
-        await queuePlaybackMixerWrite({
-          updates,
-          context: "Unmute",
-          index: fallbackIndex,
-          muted: false,
-          allowKnownDeviceSkip: false,
-        });
+        await withPollingPause(
+          async () =>
+            await queuePlaybackMixerWrite({
+              updates,
+              context: "Unmute",
+              index: fallbackIndex,
+              muted: false,
+              allowKnownDeviceSkip: false,
+            }),
+        );
         addLog("info", "Play volume unmute sent", {
           index: fallbackIndex,
         });
@@ -685,6 +701,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     volumeIndex,
     volumeMuted,
     volumeSteps,
+    withPollingPause,
   ]);
 
   useEffect(() => {

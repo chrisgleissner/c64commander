@@ -99,6 +99,7 @@ export function useSavedDeviceHealthChecks(
   enabled: boolean,
   context: HealthCheckRunContext = HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
 ): UseSavedDeviceHealthChecksResult {
+  const devicesRef = useRef(devices);
   const [byDeviceId, setByDeviceId] = useState<Record<string, SavedDeviceHealthSnapshot>>(() =>
     mergeDeviceState({}, devices),
   );
@@ -158,6 +159,30 @@ export function useSavedDeviceHealthChecks(
   }, [devices, noopRefreshAll, seededState]);
 
   useEffect(() => {
+    devicesRef.current = devices;
+  }, [devices]);
+
+  // Verification refreshes mutate lastKnown* metadata on saved devices; keep the
+  // scheduler keyed to connection-shaping fields so successful probes do not
+  // restart background maintenance immediately.
+  const cycleScheduleKey = useMemo(
+    () =>
+      devices
+        .map((device) =>
+          [
+            device.id,
+            device.host,
+            device.httpPort,
+            device.ftpPort,
+            device.telnetPort,
+            device.hasPassword ? "password" : "no-password",
+          ].join(":"),
+        )
+        .join("|"),
+    [devices],
+  );
+
+  useEffect(() => {
     if (seededState) {
       return;
     }
@@ -186,7 +211,8 @@ export function useSavedDeviceHealthChecks(
 
   const runCycle = useCallback(
     async (force: boolean) => {
-      if (!enabled || devices.length === 0) {
+      const currentDevices = devicesRef.current;
+      if (!enabled || currentDevices.length === 0) {
         return;
       }
       if (shouldPauseForForegroundSwitch()) {
@@ -216,7 +242,7 @@ export function useSavedDeviceHealthChecks(
       }));
 
       await Promise.allSettled(
-        devices.map(async (device) => {
+        currentDevices.map(async (device) => {
           const controller = new AbortController();
           controllersRef.current.set(device.id, controller);
           updateDevice(device.id, (current) => ({
@@ -314,7 +340,6 @@ export function useSavedDeviceHealthChecks(
     [
       cancelAll,
       context,
-      devices,
       enabled,
       shouldPauseForDiagnosticsSuppression,
       shouldPauseForForegroundSwitch,
@@ -349,7 +374,7 @@ export function useSavedDeviceHealthChecks(
       cancelAll("Saved-device switcher closed");
       setCycle((current) => ({ ...current, running: false }));
     };
-  }, [cancelAll, context, devices, enabled, runCycle, seededState]);
+  }, [cancelAll, context, cycleScheduleKey, enabled, runCycle, seededState]);
 
   useEffect(() => {
     if (seededState || context !== HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {

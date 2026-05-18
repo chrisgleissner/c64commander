@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const mutateAsyncMock = vi.fn();
 const getConfigItemsMock = vi.fn();
@@ -145,6 +146,7 @@ vi.mock("@/pages/playFiles/playFilesUtils", () => ({
 describe("useVolumeOverride", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pollingPauseRegistry.__resetForTest();
     audioMixerItemsRef.current = defaultMixerItems("0");
     connectionStatusRef.current = {
       state: "REAL_CONNECTED",
@@ -389,6 +391,37 @@ describe("useVolumeOverride", () => {
       }),
     );
     expect(addLog).toHaveBeenCalledWith("info", "Play volume unmute sent", expect.objectContaining({ index: 1 }));
+  });
+
+  it("holds the polling pause while a mute toggle write is in flight", async () => {
+    let resolveWrite: (() => void) | null = null;
+    mutateAsyncMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+    audioMixerItemsRef.current = defaultMixerItems("5");
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    const togglePromise = act(async () => {
+      const pending = result.current.handleToggleMute();
+      await Promise.resolve();
+      expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+      resolveWrite?.();
+      await pending;
+    });
+
+    await togglePromise;
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
   });
 
   it("ignores already-off SID outputs when deriving the shared playback volume target", async () => {

@@ -1,0 +1,23 @@
+Phase 1 cache switch-back summary
+================================
+
+- Timestamp: 2026-05-18 19:49 (Pixel cold-boot capture against `u64`)
+- `u64` cold boot request shape:
+  - `Handling CapacitorHttp request`: 24
+  - `TelnetSocketPlugin`: 5
+  - `per_item_enrichment`: 0
+- Evidence sources:
+  - `phase1-F3-HTTP-1-u64-cold-logcat.txt`
+  - `phase1-F3-HTTP-1-u64-cold-start.txt`
+
+Current blocker
+---------------
+
+The full `u64 → c64u → u64` switch-back proof is still pending because the live
+`c64u` REST probe is currently failing with:
+
+`curl: (56) Recv failure: Connection reset by peer`
+
+That constraint is documented here rather than treated as a passed acceptance
+gate. The persistent `u64` cold-boot capture already shows that the restored
+cache path avoids per-item enrichment requests on the selected `u64` host.

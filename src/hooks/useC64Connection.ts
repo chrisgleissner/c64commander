@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getC64API,
@@ -28,10 +28,11 @@ import {
   getInfoRefreshMinIntervalMs,
   shouldRunRateLimited,
   DRIVES_POLL_INTERVAL_MS,
+  pollingPauseRegistry,
 } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
 import { useDiagnosticsSuppressionActive } from "@/hooks/useDiagnosticsSuppressionActive";
-import { useScreenActivity } from "@/hooks/useScreenActivity";
+import { useAppVisibilityState, useScreenActivity } from "@/hooks/useScreenActivity";
 import { isDiagnosticsOverlaySuppressionArmed } from "@/lib/diagnostics/diagnosticsOverlayState";
 import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
@@ -50,6 +51,15 @@ export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
 };
 
 const HEALTH_CHECK_INTERVAL_MS = 60_000;
+const BACKGROUND_QUERY_PREFIXES = [
+  ["c64-info"],
+  ["c64-drives"],
+  ["c64-categories"],
+  ["c64-category"],
+  ["c64-config-item"],
+  ["c64-config-items"],
+  ["c64-all-config"],
+] as const;
 
 const shouldRunScheduledHealthCheck = () => {
   const lastSuccessAtMs = getDeviceStateSnapshot().lastSuccessAtMs;
@@ -68,6 +78,20 @@ const hasDisplayableDeviceInfo = (value: DeviceInfo | null | undefined) =>
       value.unique_id?.trim()),
   );
 
+const usePollingPauseState = () => {
+  const [pollingPaused, setPollingPaused] = useState(() => pollingPauseRegistry.isPollingPaused());
+
+  useEffect(
+    () =>
+      pollingPauseRegistry.subscribe(() => {
+        setPollingPaused(pollingPauseRegistry.isPollingPaused());
+      }),
+    [],
+  );
+
+  return pollingPaused;
+};
+
 export interface ConnectionStatus {
   state: "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
   connectionState: "connected" | "disconnected";
@@ -83,6 +107,8 @@ export function useC64Connection() {
   const connection = useConnectionState();
   const diagnosticsSuppressionActive = useDiagnosticsSuppressionActive();
   const screenActive = useScreenActivity();
+  const appVisible = useAppVisibilityState();
+  const pollingPaused = usePollingPauseState();
   const [baseUrl, setBaseUrl] = useState(() => {
     const resolvedDeviceHost = resolveDeviceHostFromStorage();
     return buildBaseUrlFromDeviceHost(resolvedDeviceHost);
@@ -139,11 +165,14 @@ export function useC64Connection() {
     refetchInterval:
       !screenActive || diagnosticsSuppressionActive
         ? false
-        : () => (shouldRunScheduledHealthCheck() ? HEALTH_CHECK_INTERVAL_MS : false),
+        : () => {
+            if (pollingPaused) return false;
+            return shouldRunScheduledHealthCheck() ? HEALTH_CHECK_INTERVAL_MS : false;
+          },
   });
 
   const rateLimitedInfoRefetch = useCallback(() => {
-    if (!screenActive || isDiagnosticsOverlaySuppressionArmed()) {
+    if (!screenActive || pollingPaused || isDiagnosticsOverlaySuppressionArmed()) {
       return;
     }
     const nowMs = Date.now();
@@ -152,12 +181,29 @@ export function useC64Connection() {
     }
     lastInfoRefreshAtRef.current = nowMs;
     void refetch();
-  }, [refetch, screenActive]);
+  }, [pollingPaused, refetch, screenActive]);
 
   useEffect(() => {
     if (!diagnosticsSuppressionActive) return;
     void queryClient.cancelQueries({ queryKey: ["c64-info", baseUrl] });
   }, [baseUrl, diagnosticsSuppressionActive, queryClient]);
+
+  useEffect(() => {
+    if (!pollingPaused) return;
+    void queryClient.cancelQueries({ queryKey: ["c64-info", baseUrl], type: "active" });
+  }, [baseUrl, pollingPaused, queryClient]);
+
+  useEffect(() => {
+    if (appVisible) return;
+    void Promise.all(
+      BACKGROUND_QUERY_PREFIXES.map((queryKey) =>
+        queryClient.cancelQueries({
+          queryKey: [...queryKey],
+          type: "active",
+        }),
+      ),
+    );
+  }, [appVisible, queryClient]);
 
   useEffect(() => {
     const previousState = previousConnectionStateRef.current;
@@ -247,17 +293,20 @@ export function useC64Connection() {
     ? deviceInfo
     : (connection.deviceInfo ?? deviceInfo ?? null);
 
-  const status: ConnectionStatus = {
-    state: connection.state,
-    connectionState:
-      connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE" ? "connected" : "disconnected",
-    isConnected: connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE",
-    isDemo: connection.state === "DEMO_ACTIVE",
-    deviceType: connection.state === "REAL_CONNECTED" ? "real" : connection.state === "DEMO_ACTIVE" ? "demo" : null,
-    isConnecting: connection.state === "DISCOVERING",
-    error: error ? (error as Error).message : null,
-    deviceInfo: effectiveDeviceInfo,
-  };
+  const status = useMemo<ConnectionStatus>(
+    () => ({
+      state: connection.state,
+      connectionState:
+        connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE" ? "connected" : "disconnected",
+      isConnected: connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE",
+      isDemo: connection.state === "DEMO_ACTIVE",
+      deviceType: connection.state === "REAL_CONNECTED" ? "real" : connection.state === "DEMO_ACTIVE" ? "demo" : null,
+      isConnecting: connection.state === "DISCOVERING",
+      error: error ? (error as Error).message : null,
+      deviceInfo: effectiveDeviceInfo,
+    }),
+    [connection.state, effectiveDeviceInfo, error],
+  );
 
   const runtimeBaseUrl = getC64APIConfigSnapshot().baseUrl;
 
@@ -275,7 +324,8 @@ export function useC64Connection() {
 export function useC64Categories(options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
-  const queryActive = (options.active ?? true) && screenActive;
+  const appVisible = useAppVisibilityState();
+  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   return useQuery({
     queryKey: ["c64-categories"],
     queryFn: async () => {
@@ -292,7 +342,8 @@ export function useC64Categories(options: C64QueryOptions = {}) {
 export function useC64Category(category: string, enabled = true, options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
-  const queryActive = (options.active ?? true) && screenActive;
+  const appVisible = useAppVisibilityState();
+  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   return useQuery({
     queryKey: ["c64-category", category],
     queryFn: async () => {
@@ -310,7 +361,8 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
   const itemKey = items.join("|");
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
-  const queryActive = (options.active ?? true) && screenActive;
+  const appVisible = useAppVisibilityState();
+  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
   const placeholderData = (() => {
     if (!snapshot?.data?.[category]) return undefined;
@@ -351,7 +403,8 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
 export function useC64AllConfig(options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
-  const queryActive = (options.active ?? true) && screenActive;
+  const appVisible = useAppVisibilityState();
+  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   const { data: categories } = useC64Categories(options);
 
   return useQuery({
@@ -439,7 +492,8 @@ export function useC64UpdateConfigBatch() {
 export function useC64ConfigItem(category?: string, item?: string, enabled = true, options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
-  const queryActive = (options.active ?? true) && screenActive;
+  const appVisible = useAppVisibilityState();
+  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   return useQuery({
     queryKey: ["c64-config-item", category, item],
     queryFn: async () => {
@@ -459,7 +513,15 @@ export function useC64Drives(options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
   const diagnosticsSuppressionActive = useDiagnosticsSuppressionActive();
   const screenActive = useScreenActivity();
+  const pollingPaused = usePollingPauseState();
+  const queryClient = useQueryClient();
   const queryActive = (options.active ?? true) && screenActive;
+
+  useEffect(() => {
+    if (!pollingPaused) return;
+    void queryClient.cancelQueries({ queryKey: ["c64-drives"], type: "active" });
+  }, [pollingPaused, queryClient]);
+
   return useQuery({
     queryKey: ["c64-drives"],
     queryFn: async () => {
@@ -469,7 +531,8 @@ export function useC64Drives(options: C64QueryOptions = {}) {
     enabled: queryActive,
     staleTime: options.staleTime ?? 10000,
     refetchOnMount: options.refetchOnMount,
-    refetchInterval: !queryActive || diagnosticsSuppressionActive ? false : DRIVES_POLL_INTERVAL_MS,
+    refetchInterval:
+      !queryActive || diagnosticsSuppressionActive ? false : () => (pollingPaused ? false : DRIVES_POLL_INTERVAL_MS),
   });
 }
 

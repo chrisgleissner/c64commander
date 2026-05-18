@@ -99,6 +99,7 @@ export const createNumericSliderDomain = (params: {
 };
 
 const DEFAULT_WATCHDOG_MS = 2000;
+const POLLING_PAUSE_TAIL_GRACE_MS = 250;
 
 export function useDeviceBoundSlider<T extends SliderDomainValue>({
   deviceValue,
@@ -120,6 +121,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   const pendingPreviewSliderValueRef = useRef<number | null>(null);
   const lastPreviewSentAtRef = useRef<number | null>(null);
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pauseTailGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Drives/info polling pauses while the user is dragging or while we are
   // waiting for the device to echo back the committed value. Pause is
   // released on commit + reconciliation settle (or on watchdog expiry, or
@@ -154,6 +156,13 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     if (watchdogTimerRef.current !== null) {
       clearTimeout(watchdogTimerRef.current);
       watchdogTimerRef.current = null;
+    }
+  }, []);
+
+  const clearPauseTailGraceTimer = useCallback(() => {
+    if (pauseTailGraceTimerRef.current !== null) {
+      clearTimeout(pauseTailGraceTimerRef.current);
+      pauseTailGraceTimerRef.current = null;
     }
   }, []);
 
@@ -214,9 +223,18 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     clearWatchdogTimer();
     watchdogTimerRef.current = setTimeout(() => {
       clearWatchdogTimer();
+      clearPauseTailGraceTimer();
       releasePollingPause();
     }, watchdogMs);
-  }, [clearWatchdogTimer, releasePollingPause, watchdogMs]);
+  }, [clearPauseTailGraceTimer, clearWatchdogTimer, releasePollingPause, watchdogMs]);
+
+  const schedulePollingPauseRelease = useCallback(() => {
+    clearPauseTailGraceTimer();
+    pauseTailGraceTimerRef.current = setTimeout(() => {
+      pauseTailGraceTimerRef.current = null;
+      releasePollingPause();
+    }, POLLING_PAUSE_TAIL_GRACE_MS);
+  }, [clearPauseTailGraceTimer, releasePollingPause]);
 
   const clearLatchedState = useCallback(() => {
     isDraggingRef.current = false;
@@ -224,10 +242,11 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     setPendingIntent(null);
     clearPreviewTimer();
     clearWatchdogTimer();
+    clearPauseTailGraceTimer();
     pendingPreviewSliderValueRef.current = null;
     lastPreviewSentAtRef.current = null;
     releasePollingPause();
-  }, [clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
+  }, [clearPauseTailGraceTimer, clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -244,9 +263,8 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     if (pendingIntent && equals(deviceValue, pendingIntent.value)) {
       setPendingIntent(null);
       clearWatchdogTimer();
-      releasePollingPause();
     }
-  }, [clearWatchdogTimer, deviceValue, equals, pendingIntent, releasePollingPause]);
+  }, [clearWatchdogTimer, deviceValue, equals, pendingIntent]);
 
   const didMountResetBoundaryRef = useRef(false);
 
@@ -278,11 +296,12 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     return () => {
       clearPreviewTimer();
       clearWatchdogTimer();
+      clearPauseTailGraceTimer();
       pendingPreviewSliderValueRef.current = null;
       lastPreviewSentAtRef.current = null;
       releasePollingPause();
     };
-  }, [clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
+  }, [clearPauseTailGraceTimer, clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
 
   const onValueChange = useCallback(
     (values: number[]) => {
@@ -294,6 +313,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       // First drag tick: pause drives/info polling so the round-trip noise
       // does not steal frames from the slider preview.
       if (!isDraggingRef.current) {
+        clearPauseTailGraceTimer();
         acquirePollingPauseIfNeeded();
       }
       isDraggingRef.current = true;
@@ -301,7 +321,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       onDraftChange?.(nextValue);
       schedulePreview(nextSliderValue);
     },
-    [acquirePollingPauseIfNeeded, deviceSliderValue, domain, onDraftChange, schedulePreview],
+    [acquirePollingPauseIfNeeded, clearPauseTailGraceTimer, deviceSliderValue, domain, onDraftChange, schedulePreview],
   );
 
   const onValueCommit = useCallback(
@@ -325,13 +345,17 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         value: nextValue,
       });
       armWatchdog();
-      void Promise.resolve(commit(nextValue)).catch((error) => {
-        clearLatchedState();
-        onError?.(error, {
-          phase: "commit",
-          value: nextValue,
+      void Promise.resolve(commit(nextValue))
+        .then(() => {
+          schedulePollingPauseRelease();
+        })
+        .catch((error) => {
+          clearLatchedState();
+          onError?.(error, {
+            phase: "commit",
+            value: nextValue,
+          });
         });
-      });
     },
     [
       armWatchdog,
@@ -343,6 +367,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       domain,
       equals,
       onError,
+      schedulePollingPauseRelease,
     ],
   );
 
