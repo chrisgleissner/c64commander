@@ -994,6 +994,70 @@ describe("useVolumeOverride", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
+  it("keeps the latest muted draft target even if the manual snapshot was cleared", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await result.current.handleToggleMute();
+    await waitFor(() => {
+      expect(result.current.volumeState.muted).toBe(true);
+    });
+
+    mutateAsyncMock.mockClear();
+
+    act(() => {
+      result.current.manualMuteSnapshotRef.current = null;
+      result.current.handleVolumeDraftChange(0);
+    });
+
+    await result.current.handleToggleMute();
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "0" },
+      }),
+    );
+  });
+
+  it("ignores stale device sync after rapid mute toggles until the latest manual intent settles", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await result.current.handleToggleMute();
+    await waitFor(() => {
+      expect(result.current.volumeState.muted).toBe(true);
+      expect(result.current.volumeState.reason).toBe("manual");
+    });
+
+    await result.current.handleToggleMute();
+    await waitFor(() => {
+      expect(result.current.volumeState.muted).toBe(false);
+      expect(result.current.volumeState.index).toBe(1);
+    });
+
+    await result.current.handleToggleMute();
+    await waitFor(() => {
+      expect(result.current.volumeState.muted).toBe(true);
+      expect(result.current.volumeState.reason).toBe("manual");
+    });
+
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    rerender();
+
+    expect(result.current.volumeState.muted).toBe(true);
+    expect(result.current.volumeState.reason).toBe("manual");
+  });
+
   it("keeps manual mute snapshots unchanged during local changes while unmuted", () => {
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),

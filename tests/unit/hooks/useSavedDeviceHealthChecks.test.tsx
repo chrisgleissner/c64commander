@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { HEALTH_CHECK_CONTEXTS } from "@/lib/diagnostics/healthCheckEngine";
 import { DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
   beginSavedDeviceSwitchAttempt,
   clearSavedDeviceSwitchMetrics,
@@ -195,6 +196,7 @@ describe("useSavedDeviceHealthChecks", () => {
     vi.clearAllMocks();
     clearSavedDeviceSwitchMetrics();
     diagnosticsSuppressionMock.reset();
+    pollingPauseRegistry.__resetForTest();
     mockGetPasswordForDevice.mockResolvedValue("secret");
     mockRunHealthCheckForTarget.mockImplementation(async (target: { deviceHost: string }) =>
       target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
@@ -442,6 +444,55 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+  });
+
+  it("pauses background-maintenance polling while pollingPauseRegistry is held", async () => {
+    const pauseHandle = pollingPauseRegistry.acquirePause();
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+    expect(result.current.cycle.running).toBe(false);
+
+    pauseHandle.release();
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels an in-flight background cycle when pollingPauseRegistry is acquired", async () => {
+    const savedDevices = buildSavedDevices();
+    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+
+    await flushAsyncWork();
+
+    const previousOfficeResult = result.current.byDeviceId["device-office"]?.latestResult;
+
+    mockRunHealthCheckForTarget
+      .mockImplementationOnce(createAbortablePendingRun())
+      .mockImplementationOnce(createAbortablePendingRun());
+
+    await act(async () => {
+      result.current.refreshAll();
+    });
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
+
+    const pauseHandle = pollingPauseRegistry.acquirePause();
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(false);
+    expect(result.current.byDeviceId["device-office"]?.latestResult).toBe(previousOfficeResult);
+    expect(result.current.byDeviceId["device-office"]?.error).toBeNull();
+
+    pauseHandle.release();
   });
 
   it("preserves terminal probe states after an automatic cycle completes", async () => {

@@ -14,23 +14,39 @@ import type {
   LightingSourceBucket,
   LightingSurface,
 } from "@/lib/lighting/types";
+import { LED_FIXED_COLORS } from "@/lib/config/ledColors";
 
 export const LIGHTING_SURFACE_TO_CATEGORY: Record<LightingSurface, LightingCategoryName> = {
   case: "LED Strip Settings",
   keyboard: "Keyboard Lighting",
 };
 
-export const LIGHTING_CATEGORY_ITEMS = [
+export const LIGHTING_SUMMARY_ITEMS = [
   "LedStrip Mode",
   "LedStrip Auto SID Mode",
   "LedStrip Pattern",
   "Fixed Color",
-  "Fixed Color Red",
-  "Fixed Color Green",
-  "Fixed Color Blue",
   "Strip Intensity",
   "LedStrip SID Select",
   "Color tint",
+] as const;
+
+export const LIGHTING_HOME_MODE_OPTIONS = ["Off", "Fixed Color", "SID Music", "Rainbow"] as const;
+export const LIGHTING_HOME_AUTO_SID_OPTIONS = ["Disabled", "Enabled"] as const;
+export const LIGHTING_HOME_PATTERN_OPTIONS = ["SingleColor", "Outward", "Circular"] as const;
+export const LIGHTING_HOME_FIXED_COLOR_OPTIONS = LED_FIXED_COLORS.map((color) => color.name);
+export const LIGHTING_HOME_SID_SELECT_OPTIONS = ["SID 1", "SID 2"] as const;
+export const LIGHTING_HOME_TINT_OPTIONS = ["Pure", "Warm", "Whisper", "Pastel", "Bright"] as const;
+export const LIGHTING_HOME_INTENSITY_RANGE = {
+  min: 0,
+  max: 31,
+} as const;
+
+export const LIGHTING_CATEGORY_ITEMS = [
+  ...LIGHTING_SUMMARY_ITEMS,
+  "Fixed Color Red",
+  "Fixed Color Green",
+  "Fixed Color Blue",
   "LedStrip Type",
   "LedStrip Length",
 ] as const;

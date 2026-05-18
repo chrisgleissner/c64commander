@@ -19,6 +19,7 @@ const getCategories = vi.fn(async () => ({ categories: ["Audio Mixer"] }));
 const getCategory = vi.fn(async () => ({
   items: { Volume: { selected: "5" } },
 }));
+const getCachedCategory = vi.fn(() => null);
 const updateConfigBatch = vi.fn(async () => undefined);
 
 const loadInitialSnapshot = vi.fn(() => null);
@@ -47,6 +48,7 @@ vi.mock("@/lib/c64api", () => ({
   getDefaultBaseUrl: () => "http://c64u",
   getC64API: () => ({
     getCategories,
+    getCachedCategory,
     getCategory,
     updateConfigBatch,
   }),
@@ -83,6 +85,8 @@ describe("useAppConfigState", () => {
     getCategory.mockResolvedValue({
       items: { Volume: { selected: "5" } },
     });
+    getCachedCategory.mockReset();
+    getCachedCategory.mockReturnValue(null);
     updateConfigBatch.mockReset();
     updateConfigBatch.mockResolvedValue(undefined);
     loadInitialSnapshot.mockReset();
@@ -512,5 +516,52 @@ describe("useAppConfigState", () => {
       },
       { timeout: 3000 },
     );
+  });
+
+  it("reuses cached category snapshots during initial capture before issuing another category request", async () => {
+    getCategories.mockResolvedValue({ categories: ["LED Strip Settings", "Audio Mixer"] });
+    getCachedCategory.mockImplementation((category: string) =>
+      category === "LED Strip Settings"
+        ? ({
+            "LED Strip Settings": {
+              items: {
+                "LedStrip Mode": { selected: "Fixed Color" },
+                "Fixed Color": { selected: "Royal Blue" },
+              },
+            },
+            errors: [],
+          } as const)
+        : null,
+    );
+    getCategory.mockImplementation(async (category: string) => ({
+      items: {
+        Name: { selected: category },
+      },
+    }));
+
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await waitFor(() => {
+      expect(saveInitialSnapshot).toHaveBeenCalledWith(
+        "http://c64u",
+        expect.objectContaining({
+          data: expect.objectContaining({
+            "LED Strip Settings": expect.objectContaining({
+              "LED Strip Settings": expect.objectContaining({
+                items: expect.objectContaining({
+                  "LedStrip Mode": expect.any(Object),
+                }),
+              }),
+            }),
+            "Audio Mixer": expect.any(Object),
+          }),
+        }),
+      );
+    });
+
+    expect(getCachedCategory).toHaveBeenCalledWith("LED Strip Settings");
+    expect(getCachedCategory).toHaveBeenCalledWith("Audio Mixer");
+    expect(getCategory).toHaveBeenCalledTimes(1);
+    expect(getCategory).toHaveBeenCalledWith("Audio Mixer");
   });
 });

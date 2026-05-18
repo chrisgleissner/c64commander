@@ -98,6 +98,11 @@ import {
 } from "@/lib/deviceControl/deviceControl";
 import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
 
+const HOME_LIGHTING_QUERY_OPTIONS = {
+  ...VISIBLE_C64_QUERY_OPTIONS,
+  skipEnrichment: true,
+} as const;
+
 export default function HomePage() {
   return (
     <ConfigActionsProvider>
@@ -109,6 +114,7 @@ export default function HomePage() {
 function HomePageContent() {
   const { status } = useC64Connection();
   const isActive = status.isConnected;
+  const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(false);
 
   const { data: u64SettingsCategory } = useC64ConfigItems(
     "U64 Specific Settings",
@@ -126,7 +132,7 @@ function HomePageContent() {
     "LED Strip Settings",
     [...LED_STRIP_HOME_ITEMS],
     isActive || status.isConnecting,
-    VISIBLE_C64_QUERY_OPTIONS,
+    HOME_LIGHTING_QUERY_OPTIONS,
   );
   const { data: userInterfaceCategory } = useC64ConfigItems(
     "User Interface Settings",
@@ -137,7 +143,7 @@ function HomePageContent() {
   const { data: keyboardLightingCategory } = useC64ConfigItems(
     "Keyboard Lighting",
     [...KEYBOARD_LIGHTING_HOME_ITEMS],
-    isActive || status.isConnecting,
+    (isActive || status.isConnecting) && keyboardLightingRequested,
     VISIBLE_C64_QUERY_OPTIONS,
   );
 
@@ -207,6 +213,14 @@ function HomePageContent() {
     markManualLightingChange,
     isActiveProfileModified,
   } = useLightingStudio();
+  const handleOpenStudio = () => {
+    setKeyboardLightingRequested(true);
+    openStudio();
+  };
+  const handleOpenContextLens = () => {
+    setKeyboardLightingRequested(true);
+    openContextLens();
+  };
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: reuSnapshotEnabled } = useFeatureFlag("home_telnet_reu_snapshot_enabled");
   const { value: ramSnapshotsEnabled } = useFeatureFlag("ram_snapshots_enabled");
@@ -1303,7 +1317,12 @@ function HomePageContent() {
                     </div>
                     {lightingStudioEnabled ? (
                       <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={openContextLens} data-testid="home-lighting-why">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleOpenContextLens}
+                          data-testid="home-lighting-why"
+                        >
                           Why this look?
                         </Button>
                         <Button
@@ -1314,7 +1333,7 @@ function HomePageContent() {
                         >
                           {manualLockEnabled ? "Resume auto" : "Hold look"}
                         </Button>
-                        <Button size="sm" onClick={openStudio} data-testid="home-lighting-studio">
+                        <Button size="sm" onClick={handleOpenStudio} data-testid="home-lighting-studio">
                           Studio
                         </Button>
                       </div>
@@ -1332,17 +1351,38 @@ function HomePageContent() {
                   successLabel="Case light"
                   testIdPrefix="home-led"
                 />
-                <LightingSummaryCard
-                  category="Keyboard Lighting"
-                  config={keyboardLightingConfig}
-                  isActive={isActive}
-                  onManualLightingChange={markManualLightingChange}
-                  operationPrefix="HOME_KEYBOARD_LIGHTING"
-                  sectionLabel="Keyboard Light"
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  successLabel="Keyboard light"
-                  testIdPrefix="home-keyboard-lighting"
-                />
+                {keyboardLightingRequested ? (
+                  <LightingSummaryCard
+                    category="Keyboard Lighting"
+                    config={keyboardLightingConfig}
+                    isActive={isActive}
+                    onManualLightingChange={markManualLightingChange}
+                    operationPrefix="HOME_KEYBOARD_LIGHTING"
+                    sectionLabel="Keyboard Light"
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    successLabel="Keyboard light"
+                    testIdPrefix="home-keyboard-lighting"
+                  />
+                ) : (
+                  <div
+                    className="bg-card border border-border rounded-xl p-3 space-y-2"
+                    data-section-label="Keyboard Light"
+                    data-testid="home-keyboard-lighting-deferred"
+                  >
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wider">Keyboard Light</p>
+                    <p className="text-xs text-muted-foreground">
+                      Load keyboard lighting controls on demand to keep cold start responsive.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setKeyboardLightingRequested(true)}
+                      data-testid="home-keyboard-lighting-load"
+                    >
+                      Load controls
+                    </Button>
+                  </div>
+                )}
               </div>
             </ProfileSplitSection>
           </motion.div>

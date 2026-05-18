@@ -305,6 +305,21 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(mockApi.getCategories).toHaveBeenCalledWith({ __c64uIntent: "user" }));
   });
 
+  it("uses user intent for the visible device info query", async () => {
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() =>
+      expect(mockApi.getInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          __c64uIntent: "user",
+          timeoutMs: 3000,
+        }),
+      ),
+    );
+  });
+
   it("marks config changes on mutation success", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64SetConfig(), { wrapper });

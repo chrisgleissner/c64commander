@@ -25,6 +25,7 @@ import {
   isDiagnosticsOverlaySuppressionArmed,
   subscribeDiagnosticsSuppression,
 } from "@/lib/diagnostics/diagnosticsOverlayState";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import type { SavedDevice } from "@/lib/savedDevices/store";
 import { getSavedDeviceSwitchSummary } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
@@ -142,6 +143,10 @@ export function useSavedDeviceHealthChecks(
     return context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance && isDiagnosticsOverlaySuppressionArmed();
   }, [context]);
 
+  const shouldPauseForPollingPause = useCallback(() => {
+    return context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance && pollingPauseRegistry.isPollingPaused();
+  }, [context]);
+
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
     if (!seededState) return null;
     return {
@@ -188,6 +193,9 @@ export function useSavedDeviceHealthChecks(
         return;
       }
       if (shouldPauseForDiagnosticsSuppression()) {
+        return;
+      }
+      if (shouldPauseForPollingPause()) {
         return;
       }
       if (cycleRunningRef.current) {
@@ -310,6 +318,7 @@ export function useSavedDeviceHealthChecks(
       enabled,
       shouldPauseForDiagnosticsSuppression,
       shouldPauseForForegroundSwitch,
+      shouldPauseForPollingPause,
       updateDevice,
     ],
   );
@@ -379,6 +388,26 @@ export function useSavedDeviceHealthChecks(
     }
 
     return subscribeDiagnosticsSuppression(handleDiagnosticsSuppression);
+  }, [cancelAll, context, seededState]);
+
+  useEffect(() => {
+    if (seededState || context !== HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {
+      return;
+    }
+
+    const handlePollingPause = () => {
+      if (!pollingPauseRegistry.isPollingPaused()) {
+        return;
+      }
+      cancelAll("Polling paused during active interaction");
+      setCycle((current) => ({ ...current, running: false }));
+    };
+
+    if (pollingPauseRegistry.isPollingPaused()) {
+      handlePollingPause();
+    }
+
+    return pollingPauseRegistry.subscribe(handlePollingPause);
   }, [cancelAll, context, seededState]);
 
   return useMemo(

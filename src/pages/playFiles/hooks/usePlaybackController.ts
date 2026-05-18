@@ -220,6 +220,7 @@ export function usePlaybackController({
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
   const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
   const sessionDeclinedPlaybackConfigRef = useRef(new Map<string, string>());
+  const STOP_MACHINE_TIMEOUT_MS = 6000;
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -242,6 +243,22 @@ export function usePlaybackController({
           error: (error as Error).message,
         });
         await withTimeout(api.machineResume(), 6000, "Resume");
+      }
+    },
+    [withTimeout],
+  );
+
+  const stopMachineWithGracePeriod = useCallback(
+    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean) => {
+      const endTransition = beginMachineTransition();
+      try {
+        if (shouldReboot) {
+          await withTimeout(api.machineReboot(), STOP_MACHINE_TIMEOUT_MS, "Reboot");
+        } else {
+          await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+        }
+      } finally {
+        endTransition();
       }
     },
     [withTimeout],
@@ -804,11 +821,7 @@ export function usePlaybackController({
             });
           }
         }
-        if (shouldReboot) {
-          await withTimeout(api.machineReboot(), 3000, "Reboot");
-        } else {
-          await withTimeout(api.machineReset(), 3000, "Reset");
-        }
+        await stopMachineWithGracePeriod(api, shouldReboot);
       } catch (error) {
         reportUserError({
           operation: "PLAYBACK_STOP",
@@ -842,7 +855,7 @@ export function usePlaybackController({
       playlist,
       restoreVolumeOverrides,
       resumeMachineWithRetry,
-      withTimeout,
+      stopMachineWithGracePeriod,
       trace,
       playedClockRef,
       setAutoAdvanceDueAtMs,

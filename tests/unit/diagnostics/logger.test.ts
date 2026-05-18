@@ -216,6 +216,21 @@ describe("logger", () => {
       }
     });
 
+    it("sanitizes undefined console.info messages before they reach the browser console", () => {
+      const originalInfo = console.info;
+      const forwardedInfo = vi.fn();
+      console.info = forwardedInfo;
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.info(undefined, { code: 7 });
+        expect(forwardedInfo).toHaveBeenCalledWith("", { code: 7 });
+        expect(addLog).not.toHaveBeenCalledWith("info", expect.anything(), expect.anything());
+      } finally {
+        uninstall();
+        console.info = originalInfo;
+      }
+    });
+
     it("normalizes Error argument in console.warn", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {

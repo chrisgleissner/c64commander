@@ -66,7 +66,7 @@ class TelnetSocketPlugin : Plugin() {
                         "Telnet connected to $host:$port",
                         "TelnetSocketPlugin",
                 )
-                call.resolve()
+                call.resolve(JSObject())
               } catch (error: Exception) {
                 AppLogger.error(
                         context,
@@ -93,7 +93,7 @@ class TelnetSocketPlugin : Plugin() {
                         "Telnet disconnected",
                         "TelnetSocketPlugin",
                 )
-                call.resolve()
+                call.resolve(JSObject())
               } catch (error: Exception) {
                 AppLogger.warn(
                         context,
@@ -127,7 +127,7 @@ class TelnetSocketPlugin : Plugin() {
                 val bytes = Base64.decode(dataBase64, Base64.DEFAULT)
                 stream.write(bytes)
                 stream.flush()
-                call.resolve()
+                call.resolve(JSObject())
               } catch (error: Exception) {
                 AppLogger.error(
                         context,

@@ -24,6 +24,7 @@ type ConsoleBridgeOptions = {
 
 type BridgeState = {
   installed: boolean;
+  originalInfo?: typeof console.info;
   originalWarn?: typeof console.warn;
   originalError?: typeof console.error;
 };
@@ -120,6 +121,7 @@ export const logger = {
 const normalizeConsoleMessage = (args: unknown[]) => {
   if (!args.length) return "";
   const first = args[0];
+  if (typeof first === "undefined") return "";
   if (typeof first === "string") return first;
   if (first instanceof Error) return first.message;
   if (first !== null && typeof first === "object") {
@@ -146,6 +148,11 @@ const normalizeConsoleDetails = (args: unknown[]) => {
   };
 };
 
+const normalizeConsoleForwardArgs = (args: unknown[]) => {
+  if (!args.length) return [""];
+  return [normalizeConsoleMessage(args), ...args.slice(1)];
+};
+
 export const installConsoleDiagnosticsBridge = (options: ConsoleBridgeOptions = {}) => {
   if (bridgeState.installed) {
     return () => {
@@ -161,8 +168,13 @@ export const installConsoleDiagnosticsBridge = (options: ConsoleBridgeOptions = 
   }
 
   bridgeState.installed = true;
+  bridgeState.originalInfo = console.info.bind(console);
   bridgeState.originalWarn = console.warn.bind(console);
   bridgeState.originalError = console.error.bind(console);
+
+  console.info = (...args: unknown[]) => {
+    bridgeState.originalInfo?.(...normalizeConsoleForwardArgs(args));
+  };
 
   console.warn = (...args: unknown[]) => {
     bridgeState.originalWarn?.(...args);
@@ -199,10 +211,14 @@ export const installConsoleDiagnosticsBridge = (options: ConsoleBridgeOptions = 
     if (bridgeState.originalWarn) {
       console.warn = bridgeState.originalWarn;
     }
+    if (bridgeState.originalInfo) {
+      console.info = bridgeState.originalInfo;
+    }
     if (bridgeState.originalError) {
       console.error = bridgeState.originalError;
     }
     bridgeState.installed = false;
+    bridgeState.originalInfo = undefined;
     bridgeState.originalWarn = undefined;
     bridgeState.originalError = undefined;
   };

@@ -17,5 +17,8 @@ test-results/**
 .nyc_output/**
 .tmp/**
 .claude/**
+.kilo/**
+.opencode/**
+.venv/**
 Logs/**
 tmp/**

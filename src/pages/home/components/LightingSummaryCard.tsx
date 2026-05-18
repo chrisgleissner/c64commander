@@ -34,6 +34,15 @@ import {
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { SummaryConfigControlRow } from "./SummaryConfigCard";
+import {
+  LIGHTING_HOME_AUTO_SID_OPTIONS,
+  LIGHTING_HOME_FIXED_COLOR_OPTIONS,
+  LIGHTING_HOME_INTENSITY_RANGE,
+  LIGHTING_HOME_MODE_OPTIONS,
+  LIGHTING_HOME_PATTERN_OPTIONS,
+  LIGHTING_HOME_SID_SELECT_OPTIONS,
+  LIGHTING_HOME_TINT_OPTIONS,
+} from "@/lib/lighting/constants";
 
 const formatLightingPatternLabel = (value: string) => {
   if (normalizeOptionToken(value) === "singlecolor") return "Single Color";
@@ -87,21 +96,23 @@ export function LightingSummaryCard({
   const intensityValue = resolveValue("Strip Intensity", "0");
 
   const intensityDetails = readItemDetails(config, category, "Strip Intensity");
-  const intensityMin = intensityDetails?.min ?? 0;
-  const intensityMax = intensityDetails?.max ?? 31;
+  const intensityMin = intensityDetails?.min ?? LIGHTING_HOME_INTENSITY_RANGE.min;
+  const intensityMax = intensityDetails?.max ?? LIGHTING_HOME_INTENSITY_RANGE.max;
   const intensityNumber = parseNumericValue(intensityValue, intensityMin);
 
-  const effectiveModeOptions = modeOptions.length ? modeOptions : [modeValue];
-  const effectivePatternOptions = patternOptions.length ? patternOptions : [patternValue];
-  const effectiveFixedColorOptions = fixedColorOptions.length ? fixedColorOptions : [fixedColorValue];
-  const effectiveSidSelectOptions = sidSelectOptions.length ? sidSelectOptions : [sidSelectValue];
-  const effectiveTintOptions = tintOptions.length ? tintOptions : [tintValue];
+  const effectiveModeOptions = modeOptions.length ? modeOptions : [...LIGHTING_HOME_MODE_OPTIONS];
+  const effectivePatternOptions = patternOptions.length ? patternOptions : [...LIGHTING_HOME_PATTERN_OPTIONS];
+  const effectiveFixedColorOptions = fixedColorOptions.length
+    ? fixedColorOptions
+    : [...LIGHTING_HOME_FIXED_COLOR_OPTIONS];
+  const effectiveSidSelectOptions = sidSelectOptions.length ? sidSelectOptions : [...LIGHTING_HOME_SID_SELECT_OPTIONS];
+  const effectiveTintOptions = tintOptions.length ? tintOptions : [...LIGHTING_HOME_TINT_OPTIONS];
 
   const modeSelectOptions = normalizeSelectOptions(effectiveModeOptions, modeValue);
   const patternSelectOptions = normalizeSelectOptions(effectivePatternOptions, patternValue);
   const fixedColorSelectOptions = normalizeSelectOptions(effectiveFixedColorOptions, fixedColorValue);
   const autoSidModeSelectOptions = normalizeSelectOptions(
-    autoSidModeOptions.length ? autoSidModeOptions : [autoSidModeValue],
+    autoSidModeOptions.length ? autoSidModeOptions : [...LIGHTING_HOME_AUTO_SID_OPTIONS],
     autoSidModeValue,
   );
   const sidSelectSelectOptions = normalizeSelectOptions(effectiveSidSelectOptions, sidSelectValue);

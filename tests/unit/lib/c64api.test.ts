@@ -200,6 +200,79 @@ describe("C64API getConfigItems", () => {
     });
   });
 
+  it("can skip scalar category enrichment when callers only need summary values", async () => {
+    const api = new C64API("http://127.0.0.1");
+
+    vi.spyOn(api, "getCategory").mockResolvedValue({
+      "LED Strip Settings": {
+        "LedStrip Mode": "Fixed Color",
+        "Fixed Color": "Royal Blue",
+      },
+      errors: [],
+    } as ConfigResponse);
+
+    const getConfigItem = vi.spyOn(api, "getConfigItem");
+
+    const response = await api.getConfigItems("LED Strip Settings", ["LedStrip Mode", "Fixed Color"], {
+      __c64uSkipItemEnrichment: true,
+    });
+
+    expect(response).toEqual({
+      "LED Strip Settings": {
+        items: {
+          "LedStrip Mode": "Fixed Color",
+          "Fixed Color": "Royal Blue",
+        },
+      },
+      errors: [],
+    });
+    expect(getConfigItem).not.toHaveBeenCalled();
+  });
+
+  it("rebuilds a cached category snapshot from previously seen category items", () => {
+    const api = new C64API("http://127.0.0.1");
+
+    (
+      api as unknown as { rememberConfigCategoryItems: (category: string, payload: ConfigResponse) => void }
+    ).rememberConfigCategoryItems("LED Strip Settings", {
+      "LED Strip Settings": {
+        items: {
+          "LedStrip Mode": {
+            current: "Fixed Color",
+            values: ["Off", "Fixed Color", "SID Music"],
+          },
+          "Fixed Color": {
+            current: "Royal Blue",
+            values: ["Red", "Royal Blue"],
+          },
+        },
+      },
+      errors: [],
+    } as ConfigResponse);
+
+    const firstSnapshot = api.getCachedCategory("LED Strip Settings");
+    const secondSnapshot = api.getCachedCategory("LED Strip Settings");
+
+    expect(firstSnapshot).toEqual({
+      "LED Strip Settings": {
+        items: {
+          "LedStrip Mode": {
+            current: "Fixed Color",
+            values: ["Off", "Fixed Color", "SID Music"],
+          },
+          "Fixed Color": {
+            current: "Royal Blue",
+            values: ["Red", "Royal Blue"],
+          },
+        },
+      },
+      errors: [],
+    });
+    expect(secondSnapshot).toEqual(firstSnapshot);
+    expect(secondSnapshot).not.toBe(firstSnapshot);
+    expect(api.getCachedCategory("Keyboard Lighting")).toBeNull();
+  });
+
   it("enriches scalar audio mixer items so Home SID sliders receive real ranges and positions", async () => {
     const api = new C64API("http://127.0.0.1");
 

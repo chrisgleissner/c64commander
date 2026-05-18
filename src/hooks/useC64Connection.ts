@@ -41,6 +41,7 @@ export type C64QueryOptions = {
   intent?: InteractionIntent;
   refetchOnMount?: boolean | "always";
   staleTime?: number;
+  skipEnrichment?: boolean;
 };
 
 export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
@@ -125,7 +126,7 @@ export function useC64Connection() {
       return api.getInfo({
         timeoutMs: 3000,
         signal,
-        __c64uIntent: "background",
+        __c64uIntent: "user",
       });
     },
     enabled:
@@ -335,7 +336,10 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
     queryKey: ["c64-config-items", category, itemKey],
     queryFn: async () => {
       const api = getC64API();
-      return api.getConfigItems(category, items, { __c64uIntent: intent });
+      return api.getConfigItems(category, items, {
+        __c64uIntent: intent,
+        __c64uSkipItemEnrichment: options.skipEnrichment,
+      });
     },
     enabled: queryActive && enabled && !!category && items.length > 0,
     placeholderData: (previousData) => previousData ?? placeholderData,

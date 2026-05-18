@@ -8,6 +8,7 @@
 
 import { SID_SOCKETS_ITEMS, SID_ADDRESSING_ITEMS } from "@/lib/config/configItems";
 import { DriveDeviceClass } from "@/lib/drives/driveDevices";
+import { LIGHTING_SUMMARY_ITEMS } from "@/lib/lighting/constants";
 
 export const DRIVE_A_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;
 export const DRIVE_B_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;
@@ -27,15 +28,7 @@ export const U64_HOME_ITEMS = [
 ] as const;
 export const C64_CARTRIDGE_HOME_ITEMS = ["Cartridge Preference", "RAM Expansion Unit", "REU Size"] as const;
 export const USER_INTERFACE_HOME_ITEMS = ["Interface Type", "Navigation Style", "Color Scheme"] as const;
-export const LIGHTING_HOME_ITEMS = [
-  "LedStrip Mode",
-  "LedStrip Auto SID Mode",
-  "LedStrip Pattern",
-  "Fixed Color",
-  "Strip Intensity",
-  "LedStrip SID Select",
-  "Color tint",
-] as const;
+export const LIGHTING_HOME_ITEMS = LIGHTING_SUMMARY_ITEMS;
 export const LED_STRIP_HOME_ITEMS = LIGHTING_HOME_ITEMS;
 export const KEYBOARD_LIGHTING_HOME_ITEMS = LIGHTING_HOME_ITEMS;
 export const SID_AUDIO_ITEMS = [

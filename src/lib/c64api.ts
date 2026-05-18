@@ -328,6 +328,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
   __c64uExpectedMissing?: boolean;
+  __c64uSkipItemEnrichment?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -568,6 +569,20 @@ export class C64API {
         selected: value,
       },
     });
+  }
+
+  getCachedCategory(category: string): ConfigResponse | null {
+    const cachedItems = this.configCategoryItemsCache.get(category);
+    if (!cachedItems || Object.keys(cachedItems).length === 0) {
+      return null;
+    }
+
+    return {
+      [category]: {
+        items: cloneBudgetValue(cachedItems),
+      },
+      errors: [],
+    } as ConfigResponse;
   }
 
   private async ensureConfigCategoryItems(category: string, itemNames: string[]) {
@@ -1245,6 +1260,7 @@ export class C64API {
       } as ConfigResponse;
     }
 
+    const skipItemEnrichment = options.__c64uSkipItemEnrichment === true;
     const mergedItems: Record<string, unknown> = {};
     const itemsNeedingEnrichment = new Set<string>();
     try {
@@ -1296,7 +1312,7 @@ export class C64API {
     const missingItems = uniqueItems.filter(
       (item) => !Object.prototype.hasOwnProperty.call(mergedItems, item) || itemsNeedingEnrichment.has(item),
     );
-    if (missingItems.length > 0) {
+    if (!skipItemEnrichment && missingItems.length > 0) {
       const responses = await Promise.allSettled(
         missingItems.map((item) =>
           this.getConfigItem(category, item, {

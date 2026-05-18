@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LightingStudioProvider, useLightingStudio } from "@/hooks/useLightingStudio";
+import { LIGHTING_CATEGORY_ITEMS, LIGHTING_SUMMARY_ITEMS } from "@/lib/lighting/constants";
 import * as solar from "@/lib/lighting/solar";
 
 const LIGHTING_STORAGE_KEY = "c64u_lighting_studio_state:v1";
@@ -87,6 +88,9 @@ const Consumer = () => {
       <button type="button" onClick={lighting.unlockCurrentLook}>
         unlock
       </button>
+      <button type="button" onClick={lighting.openStudio}>
+        open-studio
+      </button>
       <button type="button" onClick={lighting.requestDeviceLocation}>
         locate
       </button>
@@ -148,16 +152,18 @@ const Consumer = () => {
   );
 };
 
-const renderProvider = (route = "/") => {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
+const renderProvider = (route = "/", client?: QueryClient) => {
+  const queryClient =
+    client ??
+    new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
       },
-    },
-  });
+    });
   return render(
-    <QueryClientProvider client={client}>
+    <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[route]}>
         <LightingStudioProvider>
           <Consumer />
@@ -184,8 +190,12 @@ describe("LightingStudioProvider", () => {
       },
     });
     mocks.useConnectionState.mockReturnValue({ state: "REAL_CONNECTED" });
-    mocks.useC64ConfigItems.mockImplementation((category: string) => ({
-      data: category === "LED Strip Settings" ? modernLightingResponse : keyboardLightingResponse,
+    mocks.useC64ConfigItems.mockImplementation((category: string, _items: string[], enabled = true) => ({
+      data: !enabled
+        ? undefined
+        : category === "LED Strip Settings"
+          ? modernLightingResponse
+          : keyboardLightingResponse,
     }));
     Object.defineProperty(global.navigator, "geolocation", {
       configurable: true,
@@ -214,10 +224,37 @@ describe("LightingStudioProvider", () => {
       }),
     );
 
-    renderProvider("/disks");
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+    const ledQueryKey = ["c64-config-items", "LED Strip Settings", [...LIGHTING_SUMMARY_ITEMS].sort().join(",")];
+    client.setQueryData(ledQueryKey, modernLightingResponse);
+
+    renderProvider("/disks", client);
 
     expect(screen.getByTestId("source-cue")).toHaveTextContent("Disk look");
     await waitFor(() => expect(mocks.updateConfigBatch).toHaveBeenCalled());
+    await waitFor(() => {
+      const updates = mocks.updateConfigBatch.mock.calls[0]?.[0]?.["LED Strip Settings"];
+      expect(updates).toBeTruthy();
+      const [itemName, expectedValue] = Object.entries(updates)[0] as [string, string | number];
+      const cached = client.getQueryData(ledQueryKey) as
+        | {
+            "LED Strip Settings": {
+              items: Record<string, { selected?: string | number; current?: string | number } | string | number>;
+            };
+          }
+        | undefined;
+      expect(cached).toBeDefined();
+      const item = cached?.["LED Strip Settings"]?.items[itemName];
+      const selectedValue =
+        item && typeof item === "object" && !Array.isArray(item) ? (item.selected ?? item.current) : item;
+      expect(selectedValue).toBe(expectedValue);
+    });
   });
 
   it("falls back to idle and play source ownership on the play route", async () => {
@@ -259,9 +296,10 @@ describe("LightingStudioProvider", () => {
       },
     });
     mocks.useConnectionState.mockReturnValue({ state: "DEMO_ACTIVE" });
-    mocks.useC64ConfigItems.mockImplementation((category: string) => ({
-      data:
-        category === "LED Strip Settings"
+    mocks.useC64ConfigItems.mockImplementation((category: string, _items: string[], enabled = true) => ({
+      data: !enabled
+        ? undefined
+        : category === "LED Strip Settings"
           ? modernLightingResponse["LED Strip Settings"]
           : keyboardLightingResponse["Keyboard Lighting"],
     }));
@@ -270,6 +308,31 @@ describe("LightingStudioProvider", () => {
 
     expect(screen.getByTestId("source-cue")).toHaveTextContent("none");
     expect(screen.getByTestId("connection-sentinel")).toHaveTextContent("demo");
+  });
+
+  it("uses summary lighting items for case lighting and defers keyboard lighting until the studio opens", async () => {
+    renderProvider("/");
+
+    await waitFor(() =>
+      expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("LED Strip Settings", [...LIGHTING_SUMMARY_ITEMS], true, {
+        intent: "user",
+        skipEnrichment: true,
+      }),
+    );
+    expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("Keyboard Lighting", [...LIGHTING_SUMMARY_ITEMS], false, {
+      intent: "user",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "open-studio" }));
+
+    await waitFor(() =>
+      expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("LED Strip Settings", [...LIGHTING_CATEGORY_ITEMS], true, {
+        intent: "user",
+      }),
+    );
+    expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("Keyboard Lighting", [...LIGHTING_CATEGORY_ITEMS], true, {
+      intent: "user",
+    });
   });
 
   it("uses retrying and held ambient connection states after a real connection was already seen", async () => {
