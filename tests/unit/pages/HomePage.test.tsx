@@ -149,6 +149,7 @@ const {
       hasChanges: false,
       isApplying: false,
       isSaving: false,
+      captureInitialSnapshot: vi.fn(),
       revertToInitial: vi.fn(),
       saveCurrentConfig: vi.fn(),
       loadAppConfig: vi.fn(),

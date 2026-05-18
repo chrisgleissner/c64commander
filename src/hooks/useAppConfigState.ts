@@ -24,6 +24,7 @@ import {
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const FULL_CONFIG_BACKGROUND_CONCURRENCY = 4;
 
@@ -191,9 +192,8 @@ export function useAppConfigState() {
   const [isApplying, setIsApplying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const hasCapturedRef = useRef(false);
   const captureInFlightRef = useRef(false);
-  const sessionSnapshotKey = `c64u_initial_snapshot_session:${resolvedBaseUrl}`;
+  const idleCaptureTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setInitialSnapshot(loadInitialSnapshot(resolvedBaseUrl));
@@ -214,50 +214,80 @@ export function useAppConfigState() {
     return () => window.removeEventListener("c64u-has-changes", handler as EventListener);
   }, [resolvedBaseUrl]);
 
+  const captureInitialSnapshot = useCallback(async (): Promise<ConfigSnapshot | null> => {
+    if (!status.isConnected) {
+      return null;
+    }
+    if (initialSnapshot) {
+      return initialSnapshot;
+    }
+    if (captureInFlightRef.current) {
+      return initialSnapshot;
+    }
+
+    captureInFlightRef.current = true;
+    setSnapshotLoading(true);
+    try {
+      const data = await fetchAllConfig();
+      const snapshot = { savedAt: new Date().toISOString(), data };
+      saveInitialSnapshot(resolvedBaseUrl, snapshot);
+      setInitialSnapshot(snapshot);
+      setFetchError(null);
+      updateHasChanges(resolvedBaseUrl, false);
+      return snapshot;
+    } catch (error) {
+      const message = (error as Error).message ?? "Unknown error";
+      addErrorLog("Initial config snapshot capture failed", {
+        error: message,
+        baseUrl: resolvedBaseUrl,
+      });
+      setFetchError(message);
+      return null;
+    } finally {
+      captureInFlightRef.current = false;
+      setSnapshotLoading(false);
+    }
+  }, [initialSnapshot, resolvedBaseUrl, status.isConnected]);
+
   useEffect(() => {
     if (!status.isConnected) {
-      hasCapturedRef.current = false;
+      if (idleCaptureTimeoutRef.current !== null) {
+        clearTimeout(idleCaptureTimeoutRef.current);
+        idleCaptureTimeoutRef.current = null;
+      }
       captureInFlightRef.current = false;
       setSnapshotLoading(false);
       return;
     }
-    if (sessionStorage.getItem(sessionSnapshotKey) === "1") {
-      hasCapturedRef.current = true;
+    if (initialSnapshot || captureInFlightRef.current) {
+      return;
     }
-    if (hasCapturedRef.current || captureInFlightRef.current) return;
 
-    let isMounted = true;
-    captureInFlightRef.current = true;
-    setSnapshotLoading(true);
+    let cancelled = false;
+    const scheduleIdleCapture = () => {
+      idleCaptureTimeoutRef.current = globalThis.setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+        const api = getC64API();
+        if (api.getInFlightReadRequestCount() > 0 || pollingPauseRegistry.isPollingPaused()) {
+          scheduleIdleCapture();
+          return;
+        }
+        void captureInitialSnapshot();
+      }, 5000);
+    };
 
-    fetchAllConfig()
-      .then((data) => {
-        if (!isMounted) return;
-        const snapshot = { savedAt: new Date().toISOString(), data };
-        saveInitialSnapshot(resolvedBaseUrl, snapshot);
-        setInitialSnapshot(snapshot);
-        setFetchError(null);
-        updateHasChanges(resolvedBaseUrl, false);
-        hasCapturedRef.current = true;
-        sessionStorage.setItem(sessionSnapshotKey, "1");
-      })
-      .catch((error) => {
-        const message = (error as Error).message ?? "Unknown error";
-        addErrorLog("Initial config snapshot capture failed", {
-          error: message,
-          baseUrl: resolvedBaseUrl,
-        });
-        setFetchError(message);
-      })
-      .finally(() => {
-        captureInFlightRef.current = false;
-        if (isMounted) setSnapshotLoading(false);
-      });
+    scheduleIdleCapture();
 
     return () => {
-      isMounted = false;
+      cancelled = true;
+      if (idleCaptureTimeoutRef.current !== null) {
+        clearTimeout(idleCaptureTimeoutRef.current);
+        idleCaptureTimeoutRef.current = null;
+      }
     };
-  }, [status.isConnected, resolvedBaseUrl, sessionSnapshotKey]);
+  }, [captureInitialSnapshot, initialSnapshot, status.isConnected]);
 
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {
@@ -313,6 +343,9 @@ export function useAppConfigState() {
     async (name: string) => {
       setIsSaving(true);
       try {
+        if (!initialSnapshot) {
+          await captureInitialSnapshot();
+        }
         const data = await fetchAllConfig();
         const entry = createAppConfigEntry(resolvedBaseUrl, name, data);
         const next = [entry, ...loadAppConfigs().filter((cfg) => cfg.id !== entry.id)];
@@ -323,7 +356,7 @@ export function useAppConfigState() {
         setIsSaving(false);
       }
     },
-    [resolvedBaseUrl],
+    [captureInitialSnapshot, initialSnapshot, resolvedBaseUrl],
   );
 
   const loadAppConfig = useCallback(
@@ -372,6 +405,7 @@ export function useAppConfigState() {
     appConfigs,
     markChanged,
     clearChanges,
+    captureInitialSnapshot,
     revertToInitial,
     saveCurrentConfig,
     loadAppConfig,

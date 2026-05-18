@@ -12,6 +12,7 @@ import { useC64ConfigItems } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
+import { HOME_SUMMARY_QUERY_OPTIONS } from "../constants";
 import {
   buildStreamConfigValue,
   buildStreamEndpointLabel,
@@ -23,8 +24,6 @@ import {
   STREAM_ITEMS,
 } from "@/lib/config/homeStreams";
 import { buildConfigKey } from "@/pages/home/utils/HomeConfigUtils";
-
-const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 
 export function useStreamData(
   isConnected: boolean,
@@ -45,7 +44,7 @@ export function useStreamData(
     "Data Streams",
     STREAM_ITEMS,
     isConnected, // Use isConnected directly as status.isConnected || status.isConnecting
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const streamControlEntries = useMemo(

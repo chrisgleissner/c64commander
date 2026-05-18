@@ -180,6 +180,7 @@ export function useTelnetActions(): TelnetActionsState {
   const [discoveryState, setDiscoveryState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const inflightRef = useRef<string | null>(null);
+  const warnedCapabilityCacheMismatchRef = useRef<string | null>(null);
   const { status } = useC64Connection();
   const capability = resolveTelnetCapability({
     isConnected: status.isConnected,
@@ -196,13 +197,18 @@ export function useTelnetActions(): TelnetActionsState {
     : null;
 
   const loadCapabilities = useCallback(async (): Promise<TelnetCapabilityLoadResult> => {
-    if (!capability.isAvailable || capability.menuKey === null) {
+    if (
+      !capability.isAvailable ||
+      capability.menuKey === null ||
+      capabilityCacheKey === null ||
+      status.deviceInfo == null
+    ) {
       throw new TelnetError("Telnet is unavailable for the current device", "UNSUPPORTED_ACTION");
     }
     const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
     const port = getStoredTelnetPort();
-    const cacheKey = buildTelnetCapabilityCacheKey(status.deviceInfo, capability.menuKey, host);
-    const cachedSnapshot = getCachedTelnetCapabilities(cacheKey);
+    const cacheKey = capabilityCacheKey;
+    const cachedSnapshot = getCachedTelnetCapabilities(cacheKey, status.deviceInfo);
     if (cachedSnapshot) {
       return {
         snapshot: cachedSnapshot,
@@ -245,7 +251,7 @@ export function useTelnetActions(): TelnetActionsState {
       snapshot,
       trace: discoveryTrace,
     };
-  }, [capability.isAvailable, capability.menuKey, status.deviceInfo]);
+  }, [capability.isAvailable, capability.menuKey, capabilityCacheKey, status.deviceInfo]);
 
   const fallbackSupport = !status.isConnected
     ? buildFallbackActionSupport("unsupported", "Connect to a C64 Ultimate device to inspect Telnet actions.")
@@ -271,10 +277,17 @@ export function useTelnetActions(): TelnetActionsState {
   );
 
   useEffect(() => {
-    if (!status.isConnected || !capability.isAvailable || capability.menuKey === null || capabilityCacheKey === null) {
+    if (
+      !status.isConnected ||
+      status.deviceInfo == null ||
+      !capability.isAvailable ||
+      capability.menuKey === null ||
+      capabilityCacheKey === null
+    ) {
       setCapabilities(null);
       setDiscoveryError(null);
       setDiscoveryState("idle");
+      warnedCapabilityCacheMismatchRef.current = null;
       return;
     }
 
@@ -303,7 +316,36 @@ export function useTelnetActions(): TelnetActionsState {
     return () => {
       cancelled = true;
     };
-  }, [capability.isAvailable, capability.menuKey, capabilityCacheKey, loadCapabilities, status.isConnected]);
+  }, [
+    capability.isAvailable,
+    capability.menuKey,
+    capabilityCacheKey,
+    loadCapabilities,
+    status.deviceInfo,
+    status.isConnected,
+  ]);
+
+  useEffect(() => {
+    if (
+      !import.meta.env.DEV ||
+      !capabilities ||
+      capabilityCacheKey === null ||
+      capabilities.cacheKey === capabilityCacheKey
+    ) {
+      warnedCapabilityCacheMismatchRef.current = null;
+      return;
+    }
+
+    const warningKey = `${capabilities.cacheKey}=>${capabilityCacheKey}`;
+    if (warnedCapabilityCacheMismatchRef.current === warningKey) {
+      return;
+    }
+    warnedCapabilityCacheMismatchRef.current = warningKey;
+    addLog("warn", `${LOG_TAG}: capability cache key changed after snapshot load`, {
+      currentCacheKey: capabilityCacheKey,
+      loadedCacheKey: capabilities.cacheKey,
+    });
+  }, [capabilities, capabilityCacheKey]);
 
   const executeAction = useCallback(
     async (actionId: string) => {

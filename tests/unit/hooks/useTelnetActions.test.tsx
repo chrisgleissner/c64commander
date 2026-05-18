@@ -344,6 +344,35 @@ describe("useTelnetActions", () => {
     expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
   });
 
+  it("waits for device info before discovering capabilities and runs once after it appears", async () => {
+    statusRef.current = {
+      ...statusRef.current,
+      deviceInfo: null,
+    };
+
+    const { result, rerender } = renderHook(() => useTelnetActions());
+
+    expect(result.current.discoveryState).toBe("idle");
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+
+    statusRef.current = {
+      ...statusRef.current,
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-1",
+      },
+    };
+    rerender();
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+
+    rerender();
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("returns unavailable fallback support when telnet cannot run on the platform", () => {
     isNativePlatformMock.mockReturnValue(false);
 
