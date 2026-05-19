@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeviceInfo } from "@/lib/c64api";
+import { addLog } from "@/lib/logging";
 import type { TelnetCapabilitySnapshot } from "@/lib/telnet/telnetCapabilityDiscovery";
 import { TELNET_ACTION_IDS } from "@/lib/telnet/telnetTypes";
 import {
@@ -77,6 +78,7 @@ describe("telnetCapabilityCache", () => {
   beforeEach(() => {
     localStorage.clear();
     clearTelnetCapabilityCache();
+    vi.mocked(addLog).mockReset();
   });
 
   it("writes snapshots to localStorage and reads them back via the cache API", () => {
@@ -116,5 +118,28 @@ describe("telnetCapabilityCache", () => {
     expect(localStorage.getItem(`${STORAGE_PREFIX}${oldSnapshot.cacheKey}`)).toBeNull();
     expect(getCachedTelnetCapabilities(oldSnapshot.cacheKey, nextDeviceInfo)).toBeNull();
     expect(getCachedTelnetCapabilities(nextSnapshot.cacheKey, nextDeviceInfo)).toEqual(nextSnapshot);
+  });
+
+  it("logs and keeps the in-memory snapshot when persistence throws", () => {
+    const deviceInfo = buildDeviceInfo();
+    const snapshot = buildSnapshot("u64-1|u64|Ultimate 64 Elite|3.14e|F5");
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota exceeded");
+    });
+
+    try {
+      expect(rememberTelnetCapabilities(snapshot, deviceInfo)).toEqual(snapshot);
+      expect(getCachedTelnetCapabilities(snapshot.cacheKey, deviceInfo)).toEqual(snapshot);
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "warn",
+        "TelnetCapabilityCache: failed to persist capability snapshot",
+        expect.objectContaining({
+          cacheKey: snapshot.cacheKey,
+          error: "quota exceeded",
+        }),
+      );
+    } finally {
+      setItemSpy.mockRestore();
+    }
   });
 });

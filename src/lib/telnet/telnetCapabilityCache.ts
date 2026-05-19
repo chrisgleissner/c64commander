@@ -91,7 +91,14 @@ const persistSnapshot = (snapshot: TelnetCapabilitySnapshot, deviceInfo: DeviceI
     uniqueId: getUniqueId(deviceInfo),
     firmwareVersion: getFirmwareVersion(deviceInfo),
   };
-  localStorage.setItem(buildStorageKey(snapshot.cacheKey), JSON.stringify(persisted));
+  try {
+    localStorage.setItem(buildStorageKey(snapshot.cacheKey), JSON.stringify(persisted));
+  } catch (error) {
+    addLog("warn", `${LOG_TAG}: failed to persist capability snapshot`, {
+      cacheKey: snapshot.cacheKey,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
 export const getCachedTelnetCapabilities = (

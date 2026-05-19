@@ -990,10 +990,8 @@ function HomePageContent() {
               title: "Initial snapshot captured",
               description: "Run Revert again to restore this new baseline.",
             });
+            return;
           }
-        }
-        if (shouldCaptureSnapshot) {
-          return;
         }
         toast({
           title: "Initial snapshot unavailable",
