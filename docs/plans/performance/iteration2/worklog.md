@@ -57,3 +57,10 @@ Conventions:
   - `GlobalDiagnosticsOverlay` now records diagnostics-open completion and first-visible info logs through `withDiagnosticsTraceOverride`, so opening Diagnostics no longer leaves a stale `diagnostics.open` action stuck `in_progress` while the overlay is visible.
   - Regression coverage: `tests/unit/components/SwipeNavigationLayer.test.tsx` and `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`.
   - Validation: targeted Vitest regressions passed; `npm run test:coverage` passed at 91.62% branch coverage; `npm run build`, `npm run cap:build`, and `./build --skip-tests --install-apk` succeeded; deployed and relaunched on Pixel 4 (`9B081FFAZ001WX`).
+
+## 2026-05-19 12:35 UTC
+
+- Saved-device switch affordance now keeps the tapped target highlighted while verification is still in flight.
+  - `src/components/UnifiedHealthBadge.tsx` now treats `pendingSwitch.toDeviceId` as the selected picker row, so the quick-switch sheet no longer keeps the previous device visually selected during a real-device switch.
+  - Regression coverage: `tests/unit/components/UnifiedHealthBadge.test.tsx` locks the pending-target highlight behavior.
+  - Validation: targeted `npx vitest run tests/unit/components/UnifiedHealthBadge.test.tsx --reporter=dot`, targeted Prettier/ESLint on the changed files, `npm run test:coverage` (91.60% branch coverage), `npm run build`, `npm run cap:build`, and `./build --skip-tests --install-apk`; relaunched on Pixel 4 (`9B081FFAZ001WX`).

@@ -484,6 +484,8 @@ export function UnifiedHealthBadge({ className }: Props) {
     [pendingSwitch?.fromDeviceId, savedDevices.selectedDeviceId, switchSavedDevice],
   );
 
+  const pickerSelectedDeviceId = pendingSwitch?.toDeviceId ?? savedDevices.selectedDeviceId;
+
   return (
     <>
       <button
@@ -581,7 +583,7 @@ export function UnifiedHealthBadge({ className }: Props) {
           <AppSheetBody className="space-y-3 px-4 py-4 sm:px-5">
             {savedDevices.devices.map((device) => {
               const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
-              const isSelected = device.id === (pendingSwitch?.fromDeviceId ?? savedDevices.selectedDeviceId);
+              const isSelected = device.id === pickerSelectedDeviceId;
               const isPendingTarget = pendingSwitch?.toDeviceId === device.id;
               const status = isPendingTarget
                 ? "verifying"

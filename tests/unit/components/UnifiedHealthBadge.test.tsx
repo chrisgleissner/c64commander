@@ -650,6 +650,40 @@ describe("UnifiedHealthBadge", () => {
     });
   });
 
+  it("treats the tapped target as selected while switch verification is pending", async () => {
+    vi.useFakeTimers();
+    const switchDeferred = createDeferred<void>();
+    mockState.switchSavedDevice.mockImplementationOnce(async (deviceId: string) => {
+      mockState.savedDevices.selectedDeviceId = deviceId;
+      await switchDeferred.promise;
+    });
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+      await Promise.resolve();
+    });
+
+    fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+    await vi.advanceTimersByTimeAsync(450);
+
+    const selectedCard = screen.getByTestId("switch-device-row-device-backup").closest("[data-selected]");
+    const previousCard = screen.getByTestId("switch-device-row-device-office").closest("[data-selected]");
+
+    expect(selectedCard).toHaveAttribute("data-selected", "true");
+    expect(previousCard).toHaveAttribute("data-selected", "false");
+
+    await act(async () => {
+      switchDeferred.resolve();
+      await Promise.resolve();
+    });
+  });
+
   it("still lets users switch to an unhealthy saved device", async () => {
     vi.useFakeTimers();
     const previousSnapshot = mockState.savedDeviceHealthChecks.byDeviceId["device-backup"];
