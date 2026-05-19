@@ -33,8 +33,10 @@ const mocks = vi.hoisted(() => ({
   ingestCachedHvscMock: vi.fn(),
   installOrUpdateHvscMock: vi.fn(),
   isHvscBridgeAvailableMock: vi.fn(),
+  markHvscUpdateCheckAtMock: vi.fn(),
   resetHvscLibraryDataMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
+  shouldCheckForHvscUpdatesMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -77,6 +79,15 @@ vi.mock("@/lib/hvsc", async () => {
     isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
     resetHvscLibraryData: (...args: unknown[]) => mocks.resetHvscLibraryDataMock(...args),
     recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
+  };
+});
+
+vi.mock("@/lib/hvsc/hvscReleaseService", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/hvsc/hvscReleaseService")>("@/lib/hvsc/hvscReleaseService");
+  return {
+    ...actual,
+    markHvscUpdateCheckAt: (...args: unknown[]) => mocks.markHvscUpdateCheckAtMock(...args),
+    shouldCheckForHvscUpdates: (...args: unknown[]) => mocks.shouldCheckForHvscUpdatesMock(...args),
   };
 });
 
@@ -178,7 +189,9 @@ describe("useHvscLibrary preparation state coverage", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.markHvscUpdateCheckAtMock.mockReset();
     mocks.resetHvscLibraryDataMock.mockResolvedValue(undefined);
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(false);
   });
 
   afterEach(() => {

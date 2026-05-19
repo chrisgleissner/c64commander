@@ -71,3 +71,13 @@ Conventions:
   - Preflight passed on both hardware targets, and switching via Settings did correctly move selection from `u64` to the verified `c64u-2` / `C64U` saved-device entry.
   - Immediately after that switch, the app and host both observed the `c64u` REST endpoint reset the TCP connection for `/v1/info`; the active badge fell to `OFFLINE`, `c64u-2` stayed selected, and host curl reproducibly failed with `Recv failure: Connection reset by peer` while `u64` remained healthy.
   - Evidence: `oracles/screenshots/settings-c64u2-offline.png`, `oracles/network/c64u-v1-info.curl.log`, `oracles/network/reachability-blocker.json`, and `screen.mp4` under the run directory.
+
+## 2026-05-19 12:57 UTC
+
+- Settings / HVSC / Open Source Licenses follow-up closed out.
+  - `src/pages/SettingsPage.tsx` keeps a dedicated HVSC panel above Online Archive, exposes the HVSC base URL override to normal users, and adds a persisted automatic HVSC update-check cadence with a minimum 6-hour interval.
+  - `src/lib/hvsc/hvscReleaseService.ts` now persists the cadence and last-check timestamp, and `src/pages/playFiles/hooks/useHvscLibrary.ts` performs real automatic HVSC update checks when the installed library is ready instead of leaving the new setting decorative.
+  - `src/pages/OpenSourceLicensesPage.tsx` now uses a `100dvh` native scroll container with overflow containment and aggressive long-token wrapping so the overlay fits and scrolls on small screens.
+  - Regression coverage: `tests/unit/hvsc/hvscReleaseService.test.ts`, `tests/unit/pages/SettingsPage.test.tsx`, and the `useHvscLibrary*` focused suites now lock the new HVSC settings/cadence behavior; `tests/unit/pages/OpenSourceLicensesPage.test.tsx` locks the mobile-safe overlay layout.
+  - Validation: `npm run lint`, `npm run test:coverage` (91.60% branch coverage), `npm run build`, `npm run cap:build`, `cd android && ./gradlew assembleDebug`, and Pixel 4 (`9B081FFAZ001WX`) deployment/install all succeeded. Live Pixel WebView checks confirmed `/settings` renders the HVSC panel with both inputs present and `/settings/open-source-licenses` renders with `overflow-y:auto`, a viewport-height shell, scrollable content (`scrollTop` advanced from 0 to 400), and wrapped inline code. Device screenshots were captured to `tmp/settings-hvsc-verification.png` and `tmp/licenses-page-verification.png`.
+  - Blocker recheck after deployment: `u64` remained healthy (`/v1/info` HTTP 200), but `c64u` still reproducibly reset `/v1/info` from the host, so the Iteration 2 end-to-end soak remains externally blocked until `c64u` recovers.

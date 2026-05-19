@@ -47,6 +47,7 @@ const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 const FTP_PORT_STORAGE_KEY = "c64u_ftp_port";
 const TELNET_PORT_STORAGE_KEY = "c64u_telnet_port";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
+const HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY = "c64u_hvsc_update_check_interval_hours";
 
 vi.mock("framer-motion", () => ({
   motion: {
@@ -649,14 +650,27 @@ describe("SettingsPage", () => {
     expect(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY)).toBe(beforeDelete);
   });
 
-  it("uses icon-only saved-device actions and shows the HVSC settings card", () => {
+  it("uses icon-only saved-device actions and shows the HVSC override panel", () => {
     renderSettingsPage();
 
     expect(screen.getByTestId("settings-add-device")).toHaveAccessibleName("Add device");
     expect(screen.getByTestId("settings-delete-device")).toHaveAccessibleName("Delete device");
     expect(screen.getByRole("heading", { name: "HVSC" })).toBeInTheDocument();
+    expect(screen.getByTestId("hvsc-base-url")).toBeInTheDocument();
+    expect(screen.getByTestId("hvsc-update-check-interval")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Stable Features" })).toBeInTheDocument();
     expect(screen.getByText(/hvsc downloads/i)).toBeInTheDocument();
+  });
+
+  it("clamps the HVSC automatic update interval to the minimum cadence", () => {
+    renderSettingsPage();
+
+    const input = screen.getByTestId("hvsc-update-check-interval");
+    fireEvent.change(input, { target: { value: "1" } });
+    fireEvent.blur(input);
+
+    expect((input as HTMLInputElement).value).toBe("6");
+    expect(localStorage.getItem(HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY)).toBe("6");
   });
 
   it("renders stable feature rows before experimental ones", () => {

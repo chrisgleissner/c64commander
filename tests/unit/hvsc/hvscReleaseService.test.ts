@@ -8,15 +8,23 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_HOURS,
+  MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS,
   buildHvscBaselineUrl,
   buildHvscUpdateUrl,
   fetchLatestHvscVersions,
   getHvscBaseUrlOverride,
+  getHvscUpdateCheckIntervalHours,
+  markHvscUpdateCheckAt,
   setHvscBaseUrlOverride,
+  setHvscUpdateCheckIntervalHours,
+  shouldCheckForHvscUpdates,
 } from "@/lib/hvsc/hvscReleaseService";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
 const HVSC_BASE_URL_KEY = "c64u_hvsc_base_url";
+const HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY = "c64u_hvsc_update_check_interval_hours";
+const HVSC_LAST_UPDATE_CHECK_AT_KEY = "c64u_hvsc_last_update_check_at";
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
@@ -229,6 +237,61 @@ describe("hvscReleaseService", () => {
       vi.stubGlobal("localStorage", mockLS);
       setHvscBaseUrlOverride(undefined);
       expect(mockLS.removeItem).toHaveBeenCalledWith(HVSC_BASE_URL_KEY);
+    });
+  });
+
+  describe("HVSC automatic update check cadence", () => {
+    it("defaults to the standard automatic check interval when nothing is stored", () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(null);
+      expect(getHvscUpdateCheckIntervalHours()).toBe(DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_HOURS);
+    });
+
+    it("clamps stored intervals to the configured minimum", () => {
+      vi.mocked(localStorage.getItem).mockImplementation((key) =>
+        key === HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY ? "1" : null,
+      );
+      expect(getHvscUpdateCheckIntervalHours()).toBe(MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS);
+    });
+
+    it("stores the normalized interval when a lower value is entered", () => {
+      const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
+      vi.stubGlobal("localStorage", mockLS);
+
+      expect(setHvscUpdateCheckIntervalHours("2")).toBe(MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS);
+      expect(mockLS.setItem).toHaveBeenCalledWith(
+        HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY,
+        String(MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS),
+      );
+    });
+
+    it("runs an automatic check immediately when none has been recorded", () => {
+      vi.mocked(localStorage.getItem).mockImplementation((key) =>
+        key === HVSC_LAST_UPDATE_CHECK_AT_KEY ? null : String(DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_HOURS),
+      );
+      expect(shouldCheckForHvscUpdates(Date.UTC(2026, 0, 2, 12, 0, 0))).toBe(true);
+    });
+
+    it("defers automatic checks until the interval has elapsed", () => {
+      vi.mocked(localStorage.getItem).mockImplementation((key) => {
+        if (key === HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY) {
+          return "24";
+        }
+        if (key === HVSC_LAST_UPDATE_CHECK_AT_KEY) {
+          return "2026-01-02T00:00:00.000Z";
+        }
+        return null;
+      });
+
+      expect(shouldCheckForHvscUpdates(Date.UTC(2026, 0, 2, 12, 0, 0))).toBe(false);
+      expect(shouldCheckForHvscUpdates(Date.UTC(2026, 0, 3, 0, 0, 1))).toBe(true);
+    });
+
+    it("records the last automatic check timestamp", () => {
+      const mockLS = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
+      vi.stubGlobal("localStorage", mockLS);
+
+      markHvscUpdateCheckAt("2026-01-02T12:34:56.000Z");
+      expect(mockLS.setItem).toHaveBeenCalledWith(HVSC_LAST_UPDATE_CHECK_AT_KEY, "2026-01-02T12:34:56.000Z");
     });
   });
 });

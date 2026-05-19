@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { markHvscUpdateCheckAt, shouldCheckForHvscUpdates } from "@/lib/hvsc/hvscReleaseService";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -607,6 +608,43 @@ export const useHvscLibrary = (): HvscLibraryState => {
     void loadHvscFolder(selectedHvscFolder || "/");
   }, [hvscStatus?.installedVersion, hvscFolders.length, hvscSongs.length, loadHvscFolder, selectedHvscFolder]);
 
+  useEffect(() => {
+    if (!hvscStatus?.installedVersion) return;
+    if (hvscStatus.ingestionState !== "ready") return;
+    if (!shouldCheckForHvscUpdates()) return;
+
+    let cancelled = false;
+    markHvscUpdateCheckAt();
+
+    void checkForHvscUpdates()
+      .then((updateStatus) => {
+        if (cancelled || !updateStatus.requiredUpdates.length) return;
+
+        addLog("info", "HVSC updates available", {
+          installedVersion: updateStatus.installedVersion,
+          latestVersion: updateStatus.latestVersion,
+          requiredUpdates: updateStatus.requiredUpdates,
+        });
+        toast({
+          title: "HVSC updates available",
+          description:
+            updateStatus.requiredUpdates.length === 1
+              ? "A new HVSC update is ready to install from the Play page."
+              : `${updateStatus.requiredUpdates.length} HVSC updates are ready to install from the Play page.`,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        addErrorLog("HVSC automatic update check failed", {
+          error: (error as Error).message,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hvscStatus?.ingestionState, hvscStatus?.installedVersion]);
+
   const handleHvscInstall = useCallback(
     () =>
       runHvscAction("HvscLibrary.handleHvscInstall", async () => {
@@ -641,6 +679,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
             },
             lastUpdatedAt: startedAt,
           }));
+          markHvscUpdateCheckAt(startedAt);
           const updateStatus = await checkForHvscUpdates();
           if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
             toast({

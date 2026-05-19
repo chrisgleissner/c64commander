@@ -8,10 +8,6 @@ const mocks = vi.hoisted(() => ({
   addErrorLog: vi.fn(),
 }));
 
-vi.mock("@/components/ui/scroll-area", () => ({
-  ScrollArea: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" onClick={onClick} {...props}>
@@ -69,6 +65,24 @@ describe("OpenSourceLicensesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close licenses overlay" }));
 
     expect(await screen.findByText("Settings Destination")).toBeInTheDocument();
+  });
+
+  it("keeps the overlay scrollable and wraps long content on small screens", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      text: async () =>
+        ["# Third Party Notices", "", "Use `THIS_IS_A_VERY_LONG_LICENSE_TOKEN_WITHOUT_BREAKS`."].join("\n"),
+    } as Response);
+
+    renderPage();
+
+    await screen.findByText("Third Party Notices");
+    expect(screen.getByTestId("open-source-licenses-overlay")).toHaveClass("overflow-hidden");
+    expect(screen.getByTestId("open-source-licenses-scroll")).toHaveClass("overflow-y-auto", "overflow-x-hidden");
+    expect(screen.getByText("THIS_IS_A_VERY_LONG_LICENSE_TOKEN_WITHOUT_BREAKS")).toHaveClass(
+      "break-all",
+      "whitespace-pre-wrap",
+    );
   });
 
   it("surfaces notice load failures and records an error log", async () => {

@@ -65,7 +65,15 @@ import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
-import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
+import {
+  getHvscBaseUrl,
+  getHvscBaseUrlOverride,
+  getHvscLastUpdateCheckAt,
+  getHvscUpdateCheckIntervalHours,
+  MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS,
+  setHvscBaseUrlOverride,
+  setHvscUpdateCheckIntervalHours,
+} from "@/lib/hvsc/hvscReleaseService";
 import {
   APP_SETTINGS_KEYS,
   loadArchiveClientIdOverride,
@@ -271,6 +279,10 @@ export default function SettingsPage() {
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
+  const [hvscUpdateCheckIntervalInput, setHvscUpdateCheckIntervalInput] = useState(() =>
+    String(getHvscUpdateCheckIntervalHours()),
+  );
+  const [hvscLastUpdateCheckAt] = useState(() => getHvscLastUpdateCheckAt());
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
   const [archiveClientIdOverride, setArchiveClientIdOverride] = useState(loadArchiveClientIdOverride());
   const [archiveUserAgentOverride, setArchiveUserAgentOverride] = useState(loadArchiveUserAgentOverride());
@@ -330,7 +342,6 @@ export default function SettingsPage() {
       "active device";
     return `Effective preset: ${presetLabel} - resolved from active device (${productLabel}, verified).`;
   }, [deviceSafetyConfig.resolution, deviceSafetyMode, safetyResolutionContext.activeProduct]);
-
   const commitHvscBaseUrl = useCallback(() => {
     const trimmed = hvscBaseUrlInput.trim();
     setHvscBaseUrlOverride(trimmed || null);
@@ -338,6 +349,11 @@ export default function SettingsPage() {
     setHvscBaseUrlInput(trimmed ? resolved : "");
     setHvscBaseUrlPreview(resolved);
   }, [hvscBaseUrlInput]);
+
+  const commitHvscUpdateCheckInterval = useCallback(() => {
+    const normalized = setHvscUpdateCheckIntervalHours(hvscUpdateCheckIntervalInput);
+    setHvscUpdateCheckIntervalInput(String(normalized));
+  }, [hvscUpdateCheckIntervalInput]);
 
   useEffect(() => {
     passwordInputRef.current = password;
@@ -1456,7 +1472,6 @@ export default function SettingsPage() {
             </motion.div>
           ))}
 
-          {/* 6. HVSC */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1472,28 +1487,50 @@ export default function SettingsPage() {
 
             <div className="space-y-3 text-sm">
               <p className="text-xs text-muted-foreground">
-                HVSC visibility now follows the unified Experimental Features registry. Mirror configuration remains a
-                separate operational setting.
+                HVSC visibility follows the unified feature registry, and the archive mirror can be overridden here when
+                you need to point downloads at a different source.
               </p>
 
-              {isDeveloperModeEnabled ? (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">HVSC base URL override</Label>
-                  <Input
-                    value={hvscBaseUrlInput}
-                    onChange={(event) => setHvscBaseUrlInput(event.target.value)}
-                    onBlur={commitHvscBaseUrl}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") commitHvscBaseUrl();
-                    }}
-                    placeholder={hvscBaseUrlPreview}
-                    data-testid="hvsc-base-url"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
-                  </p>
-                </div>
-              ) : null}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">HVSC base URL override</Label>
+                <Input
+                  value={hvscBaseUrlInput}
+                  onChange={(event) => setHvscBaseUrlInput(event.target.value)}
+                  onBlur={commitHvscBaseUrl}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitHvscBaseUrl();
+                  }}
+                  placeholder={hvscBaseUrlPreview}
+                  data-testid="hvsc-base-url"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Automatic update check interval (hours)</Label>
+                <Input
+                  type="number"
+                  min={MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS}
+                  step={1}
+                  value={hvscUpdateCheckIntervalInput}
+                  onChange={(event) => setHvscUpdateCheckIntervalInput(event.target.value)}
+                  onBlur={commitHvscUpdateCheckInterval}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitHvscUpdateCheckInterval();
+                  }}
+                  data-testid="hvsc-update-check-interval"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Automatic HVSC update checks run from the Play page when HVSC is installed and ready. The minimum
+                  interval is {MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS} hours to avoid unnecessary mirror load.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Last automatic update check:{" "}
+                  {hvscLastUpdateCheckAt ? new Date(hvscLastUpdateCheckAt).toLocaleString() : "Never"}
+                </p>
+              </div>
             </div>
           </motion.div>
 

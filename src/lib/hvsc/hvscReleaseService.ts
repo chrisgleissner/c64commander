@@ -17,6 +17,11 @@ export type HvscReleaseStatus = {
 
 const DEFAULT_BASE_URL = variant.runtime.endpoints.hvsc_base_url ?? "https://hvsc.brona.dk/HVSC/";
 const HVSC_BASE_URL_KEY = "c64u_hvsc_base_url";
+const HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY = "c64u_hvsc_update_check_interval_hours";
+const HVSC_LAST_UPDATE_CHECK_AT_KEY = "c64u_hvsc_last_update_check_at";
+export const DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_HOURS = 24;
+export const MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS = 6;
+const MAX_HVSC_UPDATE_CHECK_INTERVAL_HOURS = 24 * 30;
 
 const isNativePlatform = () => {
   try {
@@ -30,6 +35,19 @@ const isNativePlatform = () => {
 };
 
 const normalizeBaseUrl = (baseUrl: string) => (baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+const clampUpdateCheckIntervalHours = (value: number) =>
+  Math.min(MAX_HVSC_UPDATE_CHECK_INTERVAL_HOURS, Math.max(MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS, Math.round(value)));
+
+const normalizeUpdateCheckIntervalHours = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === "") {
+    return DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_HOURS;
+  }
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_HOURS;
+  }
+  return clampUpdateCheckIntervalHours(numeric);
+};
 
 const resolveHvscBaseUrl = (override?: string) => {
   if (override) return normalizeBaseUrl(override);
@@ -56,6 +74,41 @@ export const setHvscBaseUrlOverride = (value?: string | null) => {
     return;
   }
   localStorage.setItem(HVSC_BASE_URL_KEY, normalizeBaseUrl(trimmed));
+};
+
+export const getHvscUpdateCheckIntervalHours = () => {
+  if (typeof localStorage === "undefined") {
+    return DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_HOURS;
+  }
+  return normalizeUpdateCheckIntervalHours(localStorage.getItem(HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY));
+};
+
+export const setHvscUpdateCheckIntervalHours = (value?: string | number | null) => {
+  const normalized = normalizeUpdateCheckIntervalHours(value);
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY, String(normalized));
+  }
+  return normalized;
+};
+
+export const getHvscLastUpdateCheckAt = () => {
+  if (typeof localStorage === "undefined") return null;
+  const stored = localStorage.getItem(HVSC_LAST_UPDATE_CHECK_AT_KEY);
+  return stored || null;
+};
+
+export const markHvscUpdateCheckAt = (timestamp = new Date().toISOString()) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(HVSC_LAST_UPDATE_CHECK_AT_KEY, timestamp);
+};
+
+export const shouldCheckForHvscUpdates = (now = Date.now()) => {
+  const lastCheckedAt = getHvscLastUpdateCheckAt();
+  if (!lastCheckedAt) return true;
+  const parsed = Date.parse(lastCheckedAt);
+  if (Number.isNaN(parsed)) return true;
+  const intervalMs = getHvscUpdateCheckIntervalHours() * 60 * 60 * 1000;
+  return now - parsed >= intervalMs;
 };
 
 const fetchHvscIndex = async (baseUrl: string) => {

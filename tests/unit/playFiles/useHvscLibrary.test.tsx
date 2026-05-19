@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   resetHvscLibraryDataMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
   recordSmokeBenchmarkSnapshotMock: vi.fn(),
+  markHvscUpdateCheckAtMock: vi.fn(),
+  shouldCheckForHvscUpdatesMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -76,6 +78,15 @@ vi.mock("@/lib/hvsc", async () => {
 vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot: (...args: unknown[]) => mocks.recordSmokeBenchmarkSnapshotMock(...args),
 }));
+
+vi.mock("@/lib/hvsc/hvscReleaseService", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/hvsc/hvscReleaseService")>("@/lib/hvsc/hvscReleaseService");
+  return {
+    ...actual,
+    markHvscUpdateCheckAt: (...args: unknown[]) => mocks.markHvscUpdateCheckAtMock(...args),
+    shouldCheckForHvscUpdates: (...args: unknown[]) => mocks.shouldCheckForHvscUpdatesMock(...args),
+  };
+});
 
 type SummaryStatus = "idle" | "in-progress" | "success" | "failure";
 
@@ -170,8 +181,10 @@ describe("useHvscLibrary", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.markHvscUpdateCheckAtMock.mockReset();
     mocks.resetHvscLibraryDataMock.mockResolvedValue(undefined);
     mocks.recordSmokeBenchmarkSnapshotMock.mockReset();
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(false);
   });
 
   it("removes a pending progress listener after unmount when registration resolves late", async () => {
@@ -258,6 +271,26 @@ describe("useHvscLibrary", () => {
     expect(result.current.hvscSongs).toHaveLength(1);
     expect(result.current.hvscLibraryAvailable).toBe(true);
     expect(result.current.hvscInstalled).toBe(true);
+  });
+
+  it("automatically checks for HVSC updates once the installed library is ready and the cadence allows it", async () => {
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(true);
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42, ingestionState: "ready" }));
+    mocks.checkForHvscUpdatesMock.mockResolvedValue({
+      latestVersion: 43,
+      installedVersion: 42,
+      requiredUpdates: [43],
+    });
+
+    renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(mocks.markHvscUpdateCheckAtMock).toHaveBeenCalledTimes(1));
+    expect(mocks.checkForHvscUpdatesMock).toHaveBeenCalledTimes(1);
+    expect(mocks.toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "HVSC updates available",
+      }),
+    );
   });
 
   it("reports folder loading failures", async () => {
