@@ -1068,6 +1068,42 @@ describe("DiagnosticsDialog", () => {
     );
   });
 
+  it("hides expected cancellation trace failures from the Problems list", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      logs: [],
+      errorLogs: [],
+      traceEvents: [
+        {
+          id: "trace-abort",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+          relativeMs: 0,
+          type: "rest-response" as const,
+          origin: "system" as const,
+          correlationId: "trace-abort-correlation",
+          data: {
+            lifecycleState: "foreground" as const,
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            method: "GET",
+            path: "/v1/info",
+            status: null,
+            error: "signal is aborted without reason",
+            expectedFailure: true,
+          },
+        },
+      ],
+      actionSummaries: [],
+    });
+
+    expect(screen.queryByTestId("evidence-row-problem-trace-trace-abort")).not.toBeInTheDocument();
+    expect(screen.queryByText("signal is aborted without reason")).not.toBeInTheDocument();
+  });
+
   it("auto-expands the health detail view when a health check starts", () => {
     setViewportWidth(600);
     const onRunHealthCheck = vi.fn();

@@ -355,7 +355,7 @@ const healthFromRatio = (failed: number, total: number): HealthState => {
 
 const isExpectedTraceFailure = (event: TraceEvent): boolean => event.data.expectedFailure === true;
 
-const isExpectedCancellationFailure = (event: TraceEvent): boolean => {
+export const isExpectedCancellationFailure = (event: TraceEvent): boolean => {
   const values = [event.data.error, event.data.message, event.data.reason]
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.toLowerCase());

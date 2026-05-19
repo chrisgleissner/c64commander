@@ -985,6 +985,7 @@ export class C64API {
                 );
                 if (!responseRecorded) {
                   const failure = classifyError(error);
+                  const expectedFailure = callerAborted;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -995,8 +996,11 @@ export class C64API {
                     payloadPreview: null,
                     durationMs,
                     error: error as Error,
+                    expectedFailure,
                   });
-                  recordTraceError(action, error as Error, failure);
+                  if (!expectedFailure) {
+                    recordTraceError(action, error as Error, failure);
+                  }
                 }
                 if (!fuzzBlocked && intent !== "system" && !callerAborted) {
                   const isTransientFailure =
@@ -1225,6 +1229,8 @@ export class C64API {
               Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
             );
             const failure = classifyError(error);
+            const callerAborted = options.signal?.aborted === true;
+            const expectedFailure = callerAborted;
             recordRestResponse(action, {
               method,
               path: normalizeUrlPath(url),
@@ -1235,8 +1241,11 @@ export class C64API {
               payloadPreview: null,
               durationMs,
               error: error as Error,
+              expectedFailure,
             });
-            recordTraceError(action, error as Error, failure);
+            if (!expectedFailure) {
+              recordTraceError(action, error as Error, failure);
+            }
             const transientUploadFailure = isAbort || isNetworkFailure || isTransientConnectivityFailure(rawMessage);
             const uploadFailureDetails = buildErrorLogDetails(error as Error, {
               url,

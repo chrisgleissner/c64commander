@@ -5,6 +5,7 @@ const recordRestResponseMock = vi.fn();
 const recordTraceErrorMock = vi.fn();
 const getActiveActionMock = vi.fn();
 const runWithImplicitActionMock = vi.fn();
+const classifyErrorMock = vi.fn();
 
 vi.mock("@/lib/tracing/actionTrace", () => ({
   getActiveAction: () => getActiveActionMock(),
@@ -22,6 +23,10 @@ vi.mock("@/lib/tracing/traceSession", () => ({
   recordTraceError: (...args: unknown[]) => recordTraceErrorMock(...args),
 }));
 
+vi.mock("@/lib/tracing/failureTaxonomy", () => ({
+  classifyError: (...args: unknown[]) => classifyErrorMock(...args),
+}));
+
 import { registerFetchTrace } from "../../../src/lib/tracing/fetchTrace";
 
 describe("fetchTrace", () => {
@@ -29,6 +34,12 @@ describe("fetchTrace", () => {
     vi.clearAllMocks();
     (window as Window & { __c64uFetchTraceInstalled?: boolean }).__c64uFetchTraceInstalled = false;
     getActiveActionMock.mockReturnValue(null);
+    classifyErrorMock.mockReturnValue({
+      failureClass: "unknown",
+      category: "unknown",
+      isExpected: false,
+      errorType: null,
+    });
     runWithImplicitActionMock.mockImplementation(
       async (
         _name: string,
@@ -109,6 +120,36 @@ describe("fetchTrace", () => {
 
     await expect(window.fetch("/api/rest/v1/info")).rejects.toThrow("network down");
     expect(recordTraceErrorMock).toHaveBeenCalled();
+  });
+
+  it("marks expected abort failures without recording trace errors", async () => {
+    const controller = new AbortController();
+    const abortError = new Error("signal is aborted without reason");
+    abortError.name = "AbortError";
+    window.fetch = vi.fn().mockImplementation(async () => {
+      controller.abort();
+      throw abortError;
+    }) as unknown as typeof window.fetch;
+    classifyErrorMock.mockReturnValue({
+      failureClass: "user-cancellation",
+      category: "cancelled",
+      isExpected: true,
+      errorType: "AbortError",
+    });
+    registerFetchTrace();
+
+    await expect(window.fetch("/api/rest/v1/info", { signal: controller.signal })).rejects.toThrow(
+      "signal is aborted without reason",
+    );
+
+    expect(recordRestResponseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        error: abortError,
+        expectedFailure: true,
+      }),
+    );
+    expect(recordTraceErrorMock).not.toHaveBeenCalled();
   });
 
   it("records thrown Response failures", async () => {

@@ -71,7 +71,12 @@ import {
   type DiagnosticsDeviceAttribution,
 } from "@/lib/diagnostics/deviceAttribution";
 import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
-import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
+import {
+  HEALTH_GLYPHS,
+  isExpectedCancellationFailure,
+  type ContributorKey,
+  type OverallHealthState,
+} from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
 import {
@@ -229,6 +234,9 @@ const isRoutineInProgressHealthCheck = (summary: ActionSummary) => {
 };
 
 const isTraceProblem = (entry: TraceEvent) => {
+  if (entry.data.expectedFailure === true || isExpectedCancellationFailure(entry)) {
+    return false;
+  }
   if (entry.type === "rest-response") {
     const status = typeof entry.data.status === "number" ? entry.data.status : null;
     const error = typeof entry.data.error === "string" ? entry.data.error.trim() : "";
