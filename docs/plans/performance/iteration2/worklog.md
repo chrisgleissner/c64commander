@@ -64,3 +64,10 @@ Conventions:
   - `src/components/UnifiedHealthBadge.tsx` now treats `pendingSwitch.toDeviceId` as the selected picker row, so the quick-switch sheet no longer keeps the previous device visually selected during a real-device switch.
   - Regression coverage: `tests/unit/components/UnifiedHealthBadge.test.tsx` locks the pending-target highlight behavior.
   - Validation: targeted `npx vitest run tests/unit/components/UnifiedHealthBadge.test.tsx --reporter=dot`, targeted Prettier/ESLint on the changed files, `npm run test:coverage` (91.60% branch coverage), `npm run build`, `npm run cap:build`, and `./build --skip-tests --install-apk`; relaunched on Pixel 4 (`9B081FFAZ001WX`).
+
+## 2026-05-19 12:52 UTC
+
+- Run `1f355b53-7cca-49e2-8542-15dc2052d01c` closed `inconclusive`; summary: `docs/plans/performance/iteration2/runs/1f355b53-7cca-49e2-8542-15dc2052d01c/summary.json`.
+  - Preflight passed on both hardware targets, and switching via Settings did correctly move selection from `u64` to the verified `c64u-2` / `C64U` saved-device entry.
+  - Immediately after that switch, the app and host both observed the `c64u` REST endpoint reset the TCP connection for `/v1/info`; the active badge fell to `OFFLINE`, `c64u-2` stayed selected, and host curl reproducibly failed with `Recv failure: Connection reset by peer` while `u64` remained healthy.
+  - Evidence: `oracles/screenshots/settings-c64u2-offline.png`, `oracles/network/c64u-v1-info.curl.log`, `oracles/network/reachability-blocker.json`, and `screen.mp4` under the run directory.
