@@ -44,6 +44,10 @@ updates:
     patterns:
       - "*"
     ignore:
+      # kotlinx-coroutines-test 1.9+ resolves Kotlin 2.2 stdlib metadata, but the
+      # Android build is still compiled with Kotlin 1.9.x. Keep this pinned until
+      # the toolchain is upgraded intentionally.
+      - dependency-name: org.jetbrains.kotlinx:kotlinx-coroutines-test
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
