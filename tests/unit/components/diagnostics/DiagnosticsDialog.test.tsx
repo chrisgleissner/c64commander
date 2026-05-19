@@ -735,10 +735,11 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent("Office U64 · Ultimate 64 Elite");
   });
 
-  it("shows the effective safety preset in the diagnostics header", () => {
+  it("keeps the diagnostics header focused on device health and timing", () => {
     renderDialog();
 
-    expect(screen.getByTestId("diagnostics-safety-line")).toHaveTextContent(/Effective preset: Balanced/i);
+    expect(screen.queryByTestId("diagnostics-safety-line")).toBeNull();
+    expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/Last check/i);
   });
 
   it("keeps filter configuration separate from filter visibility", () => {

@@ -53,7 +53,6 @@ import type {
 } from "@/lib/diagnostics/healthCheckEngine";
 import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
-import { getActiveAutoResolutionContext, loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import type { DiagnosticsPanelKey } from "@/lib/diagnostics/diagnosticsOverlay";
 import type { HealthHistoryEntry } from "@/lib/diagnostics/healthHistory";
 import {
@@ -163,34 +162,6 @@ const SEVERITY_DOT_CLASS: Record<DiagnosticsSeverity, string> = {
   warn: "bg-amber-500",
   info: "bg-blue-500",
   debug: "bg-muted-foreground",
-};
-
-const SAFETY_PRODUCT_DISPLAY_LABELS: Record<string, string> = {
-  C64U: "C64 Ultimate",
-  U64: "U64",
-  U64E: "U64 Elite",
-  U64E2: "U64 Elite II",
-};
-
-const formatSafetyPresetLabel = (value: string | null | undefined) =>
-  value ? `${value.charAt(0)}${value.slice(1).toLowerCase()}` : "Balanced";
-
-const formatDiagnosticsSafetyLine = () => {
-  const config = loadDeviceSafetyConfig();
-  const resolution = config.resolution;
-  const context = getActiveAutoResolutionContext();
-  if (config.mode !== "AUTO" || !resolution) {
-    return `Effective preset: ${formatSafetyPresetLabel(config.mode)}.`;
-  }
-
-  const presetLabel = formatSafetyPresetLabel(resolution.resolvedPreset ?? resolution.effectiveMode);
-  if (resolution.isProvisional) {
-    return `Effective preset: ${presetLabel} (provisional - no verified product yet for this device).`;
-  }
-
-  const productLabel =
-    (context.activeProduct && SAFETY_PRODUCT_DISPLAY_LABELS[context.activeProduct]) || "active device";
-  return `Effective preset: ${presetLabel} - resolved from active device (${productLabel}, verified).`;
 };
 
 const formatRelativeTime = (timestampMs: number | null) => {
@@ -1329,10 +1300,6 @@ export function DiagnosticsDialog({
       : (healthState.connectedDeviceLabel ?? "C64U"),
     selectedProductCode,
   );
-  const diagnosticsSafetyLine = useMemo(
-    () => formatDiagnosticsSafetyLine(),
-    [savedDevices.selectedDeviceId, savedDevices.devices, savedDevices.summaries],
-  );
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (severity !== "All") labels.push(severity);
@@ -1692,9 +1659,6 @@ export function DiagnosticsDialog({
                   </button>
                   <p className="text-xs text-muted-foreground" data-testid="diagnostics-last-check-line">
                     {formatRelativeTime(lastCheckTimestamp)}
-                  </p>
-                  <p className="text-xs text-muted-foreground" data-testid="diagnostics-safety-line">
-                    {diagnosticsSafetyLine}
                   </p>
                   <Button
                     type="button"

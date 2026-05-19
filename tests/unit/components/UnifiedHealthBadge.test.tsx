@@ -409,7 +409,10 @@ describe("UnifiedHealthBadge", () => {
     mockState.currentProfile = "compact";
     render(<UnifiedHealthBadge />);
 
-    fireEvent.click(screen.getByTestId("unified-health-badge"));
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge).toHaveAttribute("data-diagnostics-open-trigger", "true");
+
+    fireEvent.click(badge);
 
     expect(mockState.requestDiagnosticsOpen).toHaveBeenCalledWith("header");
   });

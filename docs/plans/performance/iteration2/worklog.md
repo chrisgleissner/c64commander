@@ -81,3 +81,21 @@ Conventions:
   - Regression coverage: `tests/unit/hvsc/hvscReleaseService.test.ts`, `tests/unit/pages/SettingsPage.test.tsx`, and the `useHvscLibrary*` focused suites now lock the new HVSC settings/cadence behavior; `tests/unit/pages/OpenSourceLicensesPage.test.tsx` locks the mobile-safe overlay layout.
   - Validation: `npm run lint`, `npm run test:coverage` (91.60% branch coverage), `npm run build`, `npm run cap:build`, `cd android && ./gradlew assembleDebug`, and Pixel 4 (`9B081FFAZ001WX`) deployment/install all succeeded. Live Pixel WebView checks confirmed `/settings` renders the HVSC panel with both inputs present and `/settings/open-source-licenses` renders with `overflow-y:auto`, a viewport-height shell, scrollable content (`scrollTop` advanced from 0 to 400), and wrapped inline code. Device screenshots were captured to `tmp/settings-hvsc-verification.png` and `tmp/licenses-page-verification.png`.
   - Blocker recheck after deployment: `u64` remained healthy (`/v1/info` HTTP 200), but `c64u` still reproducibly reset `/v1/info` from the host, so the Iteration 2 end-to-end soak remains externally blocked until `c64u` recovers.
+
+## 2026-05-19 14:24 UTC
+
+- Diagnostics abort-noise hardening is in progress after a real Pixel replay surfaced expected probe cancellations as visible errors.
+  - Reproduced on-device on Pixel 4 (`9B081FFAZ001WX`) by quick-switching `u64 -> c64u -> u64` and opening Diagnostics: the dialog showed a leaked action row `GET 192.168.1.13 /v1/info · REST 1 · ERR 1 · signal is aborted without reason`.
+  - Root cause split across both traced request paths: `src/lib/c64api.ts` and `src/lib/tracing/fetchTrace.ts` were both recording expected caller-driven aborts as trace errors and action-summary errors.
+  - The fix now marks true caller aborts as `expectedFailure`, suppresses `recordTraceError(...)` for those aborts, and strips `error` from expected-failure REST effects in `src/lib/diagnostics/actionSummaries.ts`; `DiagnosticsDialog` also defensively hides any `expectedFailure` trace rows.
+  - Regression coverage added/updated in `tests/unit/c64api.branches.test.ts`, `tests/unit/tracing/fetchTrace.test.ts`, `tests/unit/lib/diagnostics/actionSummaries.test.ts`, and `tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx`. Targeted `c64api`, `fetchTrace`, action-summary, and diagnostics-dialog suites pass; `npm run lint`, `npm run build`, and `npm run cap:build` also pass.
+  - Fresh live `u64` verification now opens Diagnostics without the old `signal is aborted without reason` action row; screenshot evidence saved to `docs/plans/performance/iteration2/runs/b20f8ead-ac6d-4ef2-81d5-082e8289af38/oracles/screenshots/abort-fix-diagnostics-no-abort-row.png`.
+  - New blocker at the same time: host-side `curl http://c64u/v1/info` repeatedly fails with `Recv failure: Connection reset by peer`, and the live switcher shows `c64u` / `c64u-2` offline while `u64` stays healthy. Final `c64u` replay legs remain blocked until that endpoint recovers.
+
+## 2026-05-19 15:03 UTC
+
+- Diagnostics header cleanup and diagnostics-open trace-noise cleanup are now closed out on the live Pixel 4 (`9B081FFAZ001WX`).
+  - Fresh on-device replay started from Home on `u64`, cleared the trace buffer, long-pressed the health badge to switch `u64 -> c64u`, then switched back `c64u -> u64`, and reopened Diagnostics on the rebuilt debug APK.
+  - Live replay results: Diagnostics activity stayed empty (`0 of 0`), the diagnostics header no longer renders the removed `Effective preset` line, and the trace snapshot returned `clickConnectedStarts: []`, `orphanSuccessEndOnly: []`, `abortNoise: 0`, and `failedFetchInfoResponses: []`.
+  - Screenshot evidence for the clean diagnostics state is saved to `docs/plans/performance/iteration2/runs/b20f8ead-ac6d-4ef2-81d5-082e8289af38/oracles/screenshots/diagnostics-empty-after-switch-replay.png`.
+  - `c64u` was healthy enough for this replay leg, so the app-level quick-switch path is unblocked again and the remaining work is now the full artifact-backed Iteration 2 soak.

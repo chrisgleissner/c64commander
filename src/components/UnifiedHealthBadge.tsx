@@ -493,6 +493,7 @@ export function UnifiedHealthBadge({ className }: Props) {
         role="button"
         aria-label={ariaLabel}
         data-testid="unified-health-badge"
+        data-diagnostics-open-trigger="true"
         data-connection-state={rawConnectionState}
         data-health-state={state}
         data-connectivity-state={connectivity}

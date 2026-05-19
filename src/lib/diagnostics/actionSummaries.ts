@@ -481,6 +481,12 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
     const telnetCount = telnetEffects.length;
     const errorCount = errorEffects.length;
     const device = resolveSummaryDevice(actionStart, ordered);
+    const isSyntheticSuccessEndOnly =
+      !actionStart && Boolean(actionEnd) && status === "success" && effects.length === 0 && errorEvents.length === 0;
+
+    if (isSyntheticSuccessEndOnly) {
+      return;
+    }
 
     const startTimestamp = actionStart?.timestamp ?? ordered[0]?.timestamp ?? null;
     const endTimestamp = actionEnd?.timestamp ?? ordered[ordered.length - 1]?.timestamp ?? null;
