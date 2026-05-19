@@ -56,6 +56,7 @@ const TRANSITION_DURATION_MS = 280;
 const TRANSITION_DURATION_COMPACT_MS = 220;
 const TRANSITION_DURATION_REDUCED_MS = 180;
 const TRANSITION_DURATION_TEST_MS = 1200;
+const TRANSITION_SETTLE_BUFFER_MS = 80;
 
 const HomeSlot = () => <HomePage />;
 const PlaySlot = () => <PlayFilesPage />;
@@ -161,6 +162,8 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   runwayRef.current = runway;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const runtimeMotionMode = readRuntimeMotionMode();
+  const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
 
   useEffect(() => {
     const handleSettingsUpdate = (event: Event) => {
@@ -217,21 +220,23 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     setRunway(buildIdleState(current.targetIndex));
   }, []);
 
-  // Fallback: force idle if transitionend never fires (e.g. headless CSS engine
-  // on CI does not always deliver the event reliably). The timeout is generous
-  // enough to cover both normal (~280ms) and test-probe (1200ms) durations.
+  // Some WebView/CSS engines miss transitionend for transform animations. Settle
+  // the runway after the configured duration plus a small buffer so navigation
+  // never stays stuck in "transitioning" for seconds on real devices.
   useEffect(() => {
     if (runway.phase !== "transitioning") return;
+    const settleAfterMs = transitionConfig.durationMs + TRANSITION_SETTLE_BUFFER_MS;
     const timer = setTimeout(() => {
       const current = runwayRef.current;
       if (current.phase !== "transitioning") return;
-      addLog("warn", "[SwipeNav] transition-end-fallback", {
+      addLog("debug", "[SwipeNav] transition-end-synthesized", {
         to: TAB_ROUTES[current.targetIndex].label,
+        settleAfterMs,
       });
       setRunway(buildIdleState(current.targetIndex));
-    }, 3000);
+    }, settleAfterMs);
     return () => clearTimeout(timer);
-  }, [runway.phase, runway.targetIndex]);
+  }, [runway.phase, runway.targetIndex, transitionConfig.durationMs]);
 
   const onProgress = useCallback(
     (dx: number, velocityX: number) => {
@@ -312,9 +317,6 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     onCommit,
     onCancel,
   });
-
-  const runtimeMotionMode = readRuntimeMotionMode();
-  const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
 
   const transform = useMemo(() => {
     if (runway.phase === "dragging") {

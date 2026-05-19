@@ -49,3 +49,11 @@ Conventions:
   - Detail, links, runId references.
   - Verdict if this entry closes a soak run.
 -->
+
+## 2026-05-19 11:59 UTC
+
+- Pre-soak hardening fix landed after live-device spot checks exposed two diagnostics/navigation regressions.
+  - `SwipeNavigationLayer` now synthesizes transition completion immediately after the configured animation duration instead of waiting 3 seconds for a fallback timeout, eliminating repeated real-device `transition-end-fallback` warnings during fast nav.
+  - `GlobalDiagnosticsOverlay` now records diagnostics-open completion and first-visible info logs through `withDiagnosticsTraceOverride`, so opening Diagnostics no longer leaves a stale `diagnostics.open` action stuck `in_progress` while the overlay is visible.
+  - Regression coverage: `tests/unit/components/SwipeNavigationLayer.test.tsx` and `tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.routeClose.test.tsx`.
+  - Validation: targeted Vitest regressions passed; `npm run test:coverage` passed at 91.62% branch coverage; `npm run build`, `npm run cap:build`, and `./build --skip-tests --install-apk` succeeded; deployed and relaunched on Pixel 4 (`9B081FFAZ001WX`).

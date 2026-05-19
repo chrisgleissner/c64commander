@@ -11,6 +11,7 @@ const {
   diagnosticsDialogState,
   recordActionEndMock,
   connectionSnapshotMock,
+  withDiagnosticsTraceOverrideMock,
 } = vi.hoisted(() => ({
   consumeDiagnosticsOpenRequestMock: vi.fn(),
   runDiagnosticsReconcilerMock: vi.fn(async () => ({ driftDetected: false, actionsTaken: [], detail: null })),
@@ -30,6 +31,7 @@ const {
     deviceInfo: null,
     demoInterstitialVisible: false,
   },
+  withDiagnosticsTraceOverrideMock: vi.fn((fn: () => unknown) => fn()),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -102,7 +104,7 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
-  withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
+  withDiagnosticsTraceOverride: withDiagnosticsTraceOverrideMock,
 }));
 
 vi.mock("@/lib/diagnostics/healthCheckState", () => ({
@@ -231,6 +233,7 @@ describe("GlobalDiagnosticsOverlay route close", () => {
     vi.clearAllMocks();
     consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
     diagnosticsDialogState.firstVisibleCallback = null;
+    withDiagnosticsTraceOverrideMock.mockClear();
   });
 
   it("defers diagnostics reconciliation until the dialog reports first visible paint", async () => {
@@ -248,6 +251,7 @@ describe("GlobalDiagnosticsOverlay route close", () => {
       expect(runDiagnosticsReconcilerMock).toHaveBeenCalledWith("Diagnostics overlay opened");
       expect(runPlaybackReconcilerMock).toHaveBeenCalledWith("Diagnostics overlay opened");
     });
+    expect(withDiagnosticsTraceOverrideMock).toHaveBeenCalled();
   });
 
   it("ends the pending diagnostics action when the overlay closes before first visible paint", async () => {
@@ -265,6 +269,7 @@ describe("GlobalDiagnosticsOverlay route close", () => {
         expect.objectContaining({ message: "Diagnostics overlay closed before first visible paint" }),
       );
     });
+    expect(withDiagnosticsTraceOverrideMock).toHaveBeenCalled();
   });
 
   it("ends the pending diagnostics action when the overlay unmounts before first visible paint", async () => {
@@ -280,6 +285,7 @@ describe("GlobalDiagnosticsOverlay route close", () => {
       expect.objectContaining({ correlationId: "COR-1" }),
       expect.objectContaining({ message: "Diagnostics overlay unmounted before first visible paint" }),
     );
+    expect(withDiagnosticsTraceOverrideMock).toHaveBeenCalled();
   });
 
   it.each([

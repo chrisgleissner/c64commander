@@ -368,7 +368,7 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
-  it("forces idle via fallback timeout when transitionend never fires", async () => {
+  it("settles via a synthesized transition end when transitionend never fires", async () => {
     // Render and find elements with real timers first so async queries work normally.
     renderLayer("/", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
@@ -382,11 +382,15 @@ describe("SwipeNavigationLayer", () => {
 
       // Do NOT fire transitionEnd — simulate the CSS engine not delivering the event.
       act(() => {
-        vi.advanceTimersByTime(3000);
+        vi.advanceTimersByTime(320);
       });
 
       expect(runway).toHaveAttribute("data-runway-phase", "idle");
-      expect(mocks.addLog).toHaveBeenCalledWith("warn", "[SwipeNav] transition-end-fallback", expect.any(Object));
+      expect(mocks.addLog).toHaveBeenCalledWith(
+        "debug",
+        "[SwipeNav] transition-end-synthesized",
+        expect.objectContaining({ settleAfterMs: 320 }),
+      );
     } finally {
       vi.useRealTimers();
     }

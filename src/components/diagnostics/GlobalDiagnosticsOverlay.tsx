@@ -122,7 +122,10 @@ export const GlobalDiagnosticsOverlay = () => {
     const action = diagnosticsOpenActionRef.current;
     if (!action) return null;
     diagnosticsOpenActionRef.current = null;
-    recordActionEnd(action, error);
+    void withDiagnosticsTraceOverride(() => {
+      recordActionEnd(action, error);
+      return null;
+    });
     return action;
   }, []);
 
@@ -213,8 +216,11 @@ export const GlobalDiagnosticsOverlay = () => {
     if (!action) {
       return;
     }
-    addLog("info", "Diagnostics first visible", {
-      action: action.name,
+    void withDiagnosticsTraceOverride(() => {
+      addLog("info", "Diagnostics first visible", {
+        action: action.name,
+      });
+      return null;
     });
   }, [finishPendingDiagnosticsOpenAction]);
 
