@@ -9,32 +9,30 @@
 import { useMemo } from "react";
 import { useC64ConfigItems, useC64Drives } from "@/hooks/useC64Connection";
 import { normalizeDriveDevices } from "@/lib/drives/driveDevices";
-import { DRIVE_A_HOME_ITEMS, DRIVE_B_HOME_ITEMS } from "../constants";
-
-const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
+import { DRIVE_A_HOME_ITEMS, DRIVE_B_HOME_ITEMS, HOME_SUMMARY_QUERY_OPTIONS } from "../constants";
 
 export function useDriveData(isConnected: boolean) {
-  const { data: drivesData, refetch: refetchDrives } = useC64Drives(visibleQueryOptions);
+  const { data: drivesData, refetch: refetchDrives } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
 
   const { data: driveASettingsCategory } = useC64ConfigItems(
     "Drive A Settings",
     [...DRIVE_A_HOME_ITEMS],
     isConnected,
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const { data: driveBSettingsCategory } = useC64ConfigItems(
     "Drive B Settings",
     [...DRIVE_B_HOME_ITEMS],
     isConnected,
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const { data: softIecConfig } = useC64ConfigItems(
     "SoftIEC Drive Settings",
     ["IEC Drive", "Soft Drive Bus ID", "Default Path"],
     isConnected,
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);

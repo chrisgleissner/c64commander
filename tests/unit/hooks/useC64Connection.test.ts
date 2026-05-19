@@ -26,7 +26,7 @@ import {
   resetDiagnosticsOverlayState,
   primeDiagnosticsOverlaySuppression,
 } from "@/lib/diagnostics/diagnosticsOverlayState";
-import { DRIVES_POLL_INTERVAL_MS } from "@/lib/query/c64PollingGovernance";
+import { DRIVES_POLL_INTERVAL_MS, pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const connectionSnapshot = {
@@ -162,11 +162,17 @@ describe("useC64Connection", () => {
     loadStoredPasswordMock.mockResolvedValue("");
     connectionSnapshot.state = "REAL_CONNECTED";
     connectionSnapshot.deviceInfo = null;
+    pollingPauseRegistry.__resetForTest();
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
     localStorage.clear();
   });
 
   afterEach(() => {
     resetDiagnosticsOverlayState();
+    pollingPauseRegistry.__resetForTest();
     mockApi.getInfo.mockReset();
     mockApi.getCategories.mockReset();
     mockApi.getCategory.mockReset();
@@ -410,6 +416,162 @@ describe("useC64Connection", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("disables drive polling while the polling pause registry is held", async () => {
+    vi.useFakeTimers();
+    try {
+      mockApi.getDrives.mockClear();
+
+      const { wrapper, client } = createWrapper();
+      const cancelSpy = vi.spyOn(client, "cancelQueries");
+      renderHook(() => useC64Drives(), { wrapper });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
+
+      let pauseHandle!: ReturnType<typeof pollingPauseRegistry.acquirePause>;
+      act(() => {
+        pauseHandle = pollingPauseRegistry.acquirePause();
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(cancelSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"], type: "active" });
+
+      await act(async () => {
+        vi.advanceTimersByTime(DRIVES_POLL_INTERVAL_MS * 2);
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        pauseHandle.release();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(DRIVES_POLL_INTERVAL_MS);
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("disables info polling while the polling pause registry is held", async () => {
+    vi.useFakeTimers();
+    try {
+      mockApi.getInfo.mockClear();
+
+      const { wrapper, client } = createWrapper();
+      const cancelSpy = vi.spyOn(client, "cancelQueries");
+      renderHook(() => useC64Connection(), { wrapper });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getInfo).toHaveBeenCalledTimes(1);
+
+      let pauseHandle!: ReturnType<typeof pollingPauseRegistry.acquirePause>;
+      act(() => {
+        pauseHandle = pollingPauseRegistry.acquirePause();
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(cancelSpy).toHaveBeenCalledWith({ queryKey: ["c64-info", "http://c64u"], type: "active" });
+
+      await act(async () => {
+        vi.advanceTimersByTime(120_000);
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getInfo).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        pauseHandle.release();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getInfo).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels active C64 queries when the document becomes hidden", async () => {
+    const { wrapper, client } = createWrapper();
+    const cancelSpy = vi.spyOn(client, "cancelQueries");
+
+    renderHook(() => useC64Connection(), { wrapper });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await waitFor(() => expect(cancelSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"], type: "active" }));
+    expect(cancelSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"], type: "active" });
+  });
+
+  it("does not refetch one-shot config item queries when app visibility bounces", async () => {
+    const { wrapper } = createWrapper();
+
+    renderHook(
+      () =>
+        useC64ConfigItems("Audio", ["Volume"], true, {
+          intent: "user",
+          refetchOnMount: "always",
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(mockApi.getConfigItems).toHaveBeenCalledTimes(1));
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockApi.getConfigItems).toHaveBeenCalledTimes(1);
   });
 
   it("disables background screen queries while the screen is inactive", async () => {

@@ -9,6 +9,78 @@
 import { SID_SOCKETS_ITEMS, SID_ADDRESSING_ITEMS } from "@/lib/config/configItems";
 import { DriveDeviceClass } from "@/lib/drives/driveDevices";
 import { LIGHTING_SUMMARY_ITEMS } from "@/lib/lighting/constants";
+import { VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
+
+// Firmware option domains mirrored from the C64U/U64 menu payloads used by the Home summary controls.
+export const HOME_CPU_SPEED_OPTIONS = [
+  "1",
+  "2",
+  "3",
+  "4",
+  "6",
+  "8",
+  "10",
+  "12",
+  "14",
+  "16",
+  "20",
+  "24",
+  "32",
+  "40",
+  "48",
+  "64",
+] as const;
+const HOME_CONFIG_OPTION_DOMAINS = new Map<string, string[]>([
+  ["U64 Specific Settings::System Mode", ["PAL", "NTSC"]],
+  ["U64 Specific Settings::Analog Video Mode", ["CVBS + SVideo", "RGB"]],
+  [
+    "U64 Specific Settings::HDMI Scan Resolution",
+    [
+      "SD (480p/576p)",
+      "HDTV 720p50",
+      "HDTV 720p60",
+      "HDTV 1080p50",
+      "HDTV 1080p60",
+      "PC 640 x 480",
+      "PC 800 x 600",
+      "PC 1024 x 768",
+      "PC 1280 x 1024",
+    ],
+  ],
+  ["U64 Specific Settings::Digital Video Mode", ["Auto", "HDMI", "DVI"]],
+  ["U64 Specific Settings::HDMI Scan lines", ["Disabled", "Enabled"]],
+  [
+    "U64 Specific Settings::Serial Bus Mode",
+    ["All Connected", "C64U <-> Internal", "Ext. <-> Int.", "C64U <-> External"],
+  ],
+  ["U64 Specific Settings::Joystick Swapper", ["Normal", "Swapped", "WASD Port 2", "WASD Port 1"]],
+  ["U64 Specific Settings::Turbo Control", ["Off", "Manual", "C64U Turbo Registers", "TurboEnable Bit"]],
+  ["U64 Specific Settings::CPU Speed", [...HOME_CPU_SPEED_OPTIONS]],
+  ["U64 Specific Settings::Badline Timing", ["Disabled", "Enabled"]],
+  ["U64 Specific Settings::SuperCPU Detect (D0BC)", ["Disabled", "Enabled"]],
+  ["U64 Specific Settings::UserPort Power Enable", ["Disabled", "Enabled"]],
+  ["C64 and Cartridge Settings::Cartridge Preference", ["Auto", "Internal", "External", "Manual"]],
+  ["C64 and Cartridge Settings::RAM Expansion Unit", ["Disabled", "Enabled", "GeoRAM Mode"]],
+  ["C64 and Cartridge Settings::REU Size", ["128 KB", "256 KB", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB", "16 MB"]],
+  ["User Interface Settings::Interface Type", ["Freeze", "Overlay on HDMI"]],
+  ["User Interface Settings::Navigation Style", ["Quick Search", "WASD Cursors"]],
+  [
+    "User Interface Settings::Color Scheme",
+    ["Commodore Blue", "Ultimate Black", "Commodore 1", "Commodore 2", "Commodore 3"],
+  ],
+]);
+
+export const resolveHomeConfigOptions = (
+  category: string,
+  itemName: string,
+  options: string[],
+  fallbackValue: string,
+) => (options.length ? options : (HOME_CONFIG_OPTION_DOMAINS.get(`${category}::${itemName}`) ?? [fallbackValue]));
+
+export const HOME_SUMMARY_QUERY_OPTIONS = {
+  ...VISIBLE_C64_QUERY_OPTIONS,
+  skipEnrichment: true,
+} as const;
 
 export const DRIVE_A_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;
 export const DRIVE_B_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;

@@ -8,19 +8,17 @@
 
 import { useMemo } from "react";
 import { useC64ConfigItems, useC64Drives } from "@/hooks/useC64Connection";
-import { PRINTER_HOME_ITEMS } from "../constants";
+import { HOME_SUMMARY_QUERY_OPTIONS, PRINTER_HOME_ITEMS } from "../constants";
 import { normalizeDriveDevices } from "@/lib/drives/driveDevices";
 
-const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
-
 export function usePrinterData(isConnected: boolean) {
-  const { data: drivesData, refetch: refetchDrives } = useC64Drives(visibleQueryOptions);
+  const { data: drivesData, refetch: refetchDrives } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
 
   const { data: printerConfig } = useC64ConfigItems(
     "Printer Settings",
     [...PRINTER_HOME_ITEMS],
     isConnected,
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);

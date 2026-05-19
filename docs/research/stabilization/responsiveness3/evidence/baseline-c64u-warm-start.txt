@@ -1,0 +1,8 @@
+Starting: Intent { cmp=uk.gleissner.c64commander/.MainActivity }
+Warning: Activity not started, intent has been delivered to currently running top-most instance.
+Status: ok
+LaunchState: UNKNOWN (0)
+Activity: uk.gleissner.c64commander/.MainActivity
+TotalTime: 0
+WaitTime: 5
+Complete

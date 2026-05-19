@@ -5,6 +5,7 @@ import {
   createNumericSliderDomain,
   useDeviceBoundSlider,
 } from "@/hooks/useDeviceBoundSlider";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const mockSliderContext = vi.hoisted(() => ({
   selectedDeviceId: "device-a",
@@ -20,9 +21,11 @@ describe("useDeviceBoundSlider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockSliderContext.selectedDeviceId = "device-a";
+    pollingPauseRegistry.__resetForTest();
   });
 
   afterEach(() => {
+    pollingPauseRegistry.__resetForTest();
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -382,5 +385,39 @@ describe("useDeviceBoundSlider", () => {
     rerender({ deviceValue: 4 });
     expect(result.current.isAwaitingReconciliation).toBe(false);
     expect(result.current.sliderValue).toBe(2);
+  });
+
+  it("holds the polling pause through the post-commit tail grace window", async () => {
+    const commit = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 1,
+        domain: createNumericSliderDomain({ min: 0, max: 31, round: Math.round }),
+        previewMode: "commitOnly",
+        commit,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([8]);
+    });
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+
+    await act(async () => {
+      result.current.onValueCommit([8]);
+      await Promise.resolve();
+    });
+
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
   });
 });

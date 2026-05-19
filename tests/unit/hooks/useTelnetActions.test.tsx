@@ -10,6 +10,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isTelnetAvailable, useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTION_IDS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const {
   getPlatformMock,
@@ -248,6 +249,7 @@ describe("isTelnetAvailable", () => {
 describe("useTelnetActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pollingPauseRegistry.__resetForTest();
     getPlatformMock.mockReturnValue("android");
     isNativePlatformMock.mockReturnValue(true);
     shouldUseMockTelnetTransportMock.mockReturnValue(false);
@@ -328,6 +330,26 @@ describe("useTelnetActions", () => {
     expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("holds the polling pause while capability discovery is running", async () => {
+    let resolveDiscovery: ((snapshot: ReturnType<typeof buildSnapshot>) => void) | null = null;
+    discoverTelnetCapabilitiesSpy.mockImplementationOnce(
+      () =>
+        new Promise<ReturnType<typeof buildSnapshot>>((resolve) => {
+          resolveDiscovery = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("loading"));
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+
+    resolveDiscovery?.(buildSnapshot());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
+  });
+
   it("returns disconnected fallback support without starting discovery", () => {
     statusRef.current = {
       ...statusRef.current,
@@ -342,6 +364,50 @@ describe("useTelnetActions", () => {
       reason: "Connect to a C64 Ultimate device to inspect Telnet actions.",
     });
     expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+  });
+
+  it("waits for device info before discovering capabilities and runs once after it appears", async () => {
+    statusRef.current = {
+      ...statusRef.current,
+      deviceInfo: null,
+    };
+
+    const { result, rerender } = renderHook(() => useTelnetActions());
+
+    expect(result.current.discoveryState).toBe("idle");
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+
+    statusRef.current = {
+      ...statusRef.current,
+      deviceInfo: {
+        product: "Ultimate 64 Elite",
+        firmware_version: "3.14e",
+        hostname: "u64",
+        unique_id: "u64-1",
+      },
+    };
+    rerender();
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+
+    rerender();
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not rediscover capabilities when identical device info is recreated on rerender", async () => {
+    const { result, rerender } = renderHook(() => useTelnetActions());
+
+    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+
+    statusRef.current = {
+      ...statusRef.current,
+      deviceInfo: statusRef.current.deviceInfo ? { ...statusRef.current.deviceInfo } : null,
+    };
+    rerender();
+
+    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
   });
 
   it("returns unavailable fallback support when telnet cannot run on the platform", () => {

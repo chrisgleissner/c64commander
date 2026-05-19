@@ -89,6 +89,8 @@ const savedDeviceSwitchRoutePrefixMap: Array<{
 ];
 
 const uniquePrefixes = (prefixes: ReadonlyArray<C64QueryPrefix>) => Array.from(new Set(prefixes));
+const VISIBILITY_RESUME_THROTTLE_MS = 30_000;
+const lastVisibilityResumeInvalidationAtMs = new Map<C64QueryPrefix, number>();
 
 const invalidateByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
   uniquePrefixes(prefixes).forEach((prefix) => {
@@ -116,8 +118,19 @@ export const invalidateForRouteChange = (queryClient: QueryClient, pathname: str
 
 export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname: string) => {
   const prefixes = getRouteInvalidationPrefixes(pathname);
-  invalidateByPrefix(queryClient, prefixes);
-  refetchActiveByPrefix(queryClient, prefixes);
+  const now = Date.now();
+  uniquePrefixes(prefixes).forEach((prefix) => {
+    const lastInvalidatedAtMs = lastVisibilityResumeInvalidationAtMs.get(prefix);
+    if (
+      prefix !== "c64-info" &&
+      lastInvalidatedAtMs !== undefined &&
+      now - lastInvalidatedAtMs < VISIBILITY_RESUME_THROTTLE_MS
+    ) {
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: [prefix] });
+    lastVisibilityResumeInvalidationAtMs.set(prefix, now);
+  });
 };
 
 export const getSavedDeviceSwitchPrefixes = (pathname: string): ReadonlyArray<C64QueryPrefix> => {
@@ -150,4 +163,8 @@ export const invalidateForConnectionStateTransition = (
   if (previousState === "REAL_CONNECTED" && nextState !== "REAL_CONNECTED") {
     invalidateByPrefix(queryClient, ["c64-info"]);
   }
+};
+
+export const resetVisibilityResumeInvalidationLedgerForTest = () => {
+  lastVisibilityResumeInvalidationAtMs.clear();
 };

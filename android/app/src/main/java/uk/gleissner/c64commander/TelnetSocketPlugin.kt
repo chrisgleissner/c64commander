@@ -102,7 +102,7 @@ class TelnetSocketPlugin : Plugin() {
                         "TelnetSocketPlugin",
                         error,
                 )
-                call.resolve()
+                call.resolve(JSObject())
               }
             }
     )

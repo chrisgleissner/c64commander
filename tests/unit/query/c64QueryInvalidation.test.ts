@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import {
   getRouteInvalidationPrefixes,
@@ -8,9 +8,15 @@ import {
   invalidateForRouteChange,
   invalidateForSavedDeviceSwitch,
   invalidateForVisibilityResume,
+  resetVisibilityResumeInvalidationLedgerForTest,
 } from "@/lib/query/c64QueryInvalidation";
 
 describe("c64QueryInvalidation", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetVisibilityResumeInvalidationLedgerForTest();
+  });
+
   it("maps config route to config-focused prefixes", () => {
     expect(getRouteInvalidationPrefixes("/config")).toEqual([
       "c64-info",
@@ -89,10 +95,9 @@ describe("c64QueryInvalidation", () => {
     });
   });
 
-  it("visibility resume invalidates and immediately refetches active queries for the route", () => {
+  it("visibility resume invalidates route prefixes without forcing active refetches", () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const refetchSpy = vi.spyOn(queryClient, "refetchQueries");
 
     invalidateForVisibilityResume(queryClient, "/disks");
 
@@ -100,11 +105,22 @@ describe("c64QueryInvalidation", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+  });
 
-    // refetch should also be called with type:'active' for the same prefixes
-    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"], type: "active" });
-    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"], type: "active" });
-    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"], type: "active" });
+  it("visibility resume throttles non-info invalidations within the resume window", () => {
+    let nowMs = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    invalidateForVisibilityResume(queryClient, "/disks");
+    invalidateSpy.mockClear();
+
+    nowMs += 1_000;
+    invalidateForVisibilityResume(queryClient, "/disks");
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] });
   });
 
   it("saved-device switch invalidates and refetches only the active-route prefixes", () => {

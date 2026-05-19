@@ -8,6 +8,11 @@
 
 import type { DeviceInfo } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import {
+  clearTelnetCapabilityCache as clearPersistedTelnetCapabilityCache,
+  getCachedTelnetCapabilities,
+  rememberTelnetCapabilities,
+} from "@/lib/telnet/telnetCapabilityCache";
 import { matchLabel } from "@/lib/telnet/telnetMenuNavigator";
 import type {
   ParsedMenu,
@@ -69,7 +74,6 @@ export interface TelnetSessionRunner {
   withSession<T>(callback: (session: TelnetSessionApi) => Promise<T>): Promise<T>;
 }
 
-const capabilityCache = new Map<string, TelnetCapabilitySnapshot>();
 const inFlightDiscovery = new Map<string, Promise<TelnetCapabilitySnapshot>>();
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
@@ -90,10 +94,10 @@ export const buildTelnetCapabilityCacheKey = (
   host: string,
 ) => `${buildDeviceIdentity(deviceInfo) || host}|${menuKey}`;
 
-export const getCachedTelnetCapabilities = (cacheKey: string) => capabilityCache.get(cacheKey) ?? null;
+export { getCachedTelnetCapabilities };
 
 export const clearTelnetCapabilityCache = () => {
-  capabilityCache.clear();
+  clearPersistedTelnetCapabilityCache();
   inFlightDiscovery.clear();
 };
 
@@ -366,7 +370,7 @@ export const discoverTelnetCapabilities = async ({
   menuKey: TelnetMenuKey;
   runner: TelnetSessionRunner;
 }): Promise<TelnetCapabilitySnapshot> => {
-  const cached = capabilityCache.get(cacheKey);
+  const cached = getCachedTelnetCapabilities(cacheKey, deviceInfo);
   if (cached) return cached;
 
   const pending = inFlightDiscovery.get(cacheKey);
@@ -388,7 +392,7 @@ export const discoverTelnetCapabilities = async ({
       initialMenu,
       actionSupport,
     };
-    capabilityCache.set(cacheKey, snapshot);
+    rememberTelnetCapabilities(snapshot, deviceInfo);
     addLog("info", `${LOG_TAG}: capability discovery completed`, {
       cacheKey,
       discoveredCategories: initialMenu.items,

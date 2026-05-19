@@ -21,6 +21,7 @@ import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/li
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
 import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
+import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import {
   getConfigCategoryItems,
   validateConfigBatchWrite,
@@ -58,6 +59,12 @@ import {
   wait,
   waitWithAbortSignal,
 } from "@/lib/c64api/requestRuntime";
+import {
+  loadConfigEnrichmentCategory,
+  loadConfigEnrichmentNamespaceForHost,
+  rememberConfigEnrichmentNamespaceForHost,
+  saveConfigEnrichmentCategory,
+} from "@/lib/c64api/configEnrichmentCache";
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
@@ -380,6 +387,7 @@ export class C64API {
   private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
   private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
   private readonly configCategoryItemsCache = new Map<string, Record<string, unknown>>();
+  private activeConfigEnrichmentNamespaceKey: string | null;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
     this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
@@ -387,6 +395,7 @@ export class C64API {
       import.meta.env.VITE_WEB_PLATFORM === "1" ? baseUrl : buildBaseUrlFromDeviceHost(this.deviceHost);
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, initialBaseUrl);
     this.password = password;
+    this.activeConfigEnrichmentNamespaceKey = loadConfigEnrichmentNamespaceForHost(this.deviceHost);
   }
 
   setBaseUrl(url: string) {
@@ -395,6 +404,7 @@ export class C64API {
     }
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, url);
     this.resetRequestReadState();
+    this.setActiveConfigEnrichmentNamespaceForCurrentHost();
   }
 
   setPassword(password?: string) {
@@ -406,6 +416,7 @@ export class C64API {
     this.deviceHost = normalizeDeviceHost(deviceHost);
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, buildBaseUrlFromDeviceHost(this.deviceHost));
     this.resetRequestReadState();
+    this.setActiveConfigEnrichmentNamespaceForCurrentHost();
   }
 
   getBaseUrl() {
@@ -534,7 +545,44 @@ export class C64API {
   private resetRequestReadState() {
     this.inFlightReadRequests.clear();
     this.readRequestBudget.clear();
+  }
+
+  private setActiveConfigEnrichmentNamespaceForCurrentHost() {
+    const nextNamespaceKey = loadConfigEnrichmentNamespaceForHost(this.deviceHost);
+    if (this.activeConfigEnrichmentNamespaceKey === nextNamespaceKey) {
+      return;
+    }
+    this.activeConfigEnrichmentNamespaceKey = nextNamespaceKey;
     this.configCategoryItemsCache.clear();
+  }
+
+  private rememberConfigEnrichmentNamespace(deviceInfo: DeviceInfo) {
+    if (!deviceInfo.unique_id || !deviceInfo.firmware_version) {
+      return;
+    }
+
+    const nextNamespaceKey = rememberConfigEnrichmentNamespaceForHost(
+      this.deviceHost,
+      deviceInfo.unique_id,
+      deviceInfo.firmware_version,
+    );
+    this.activeConfigEnrichmentNamespaceKey = nextNamespaceKey;
+    this.configCategoryItemsCache.forEach((items, category) => {
+      saveConfigEnrichmentCategory(nextNamespaceKey, category, items);
+    });
+  }
+
+  private getCachedConfigCategoryItems(category: string) {
+    const inMemoryItems = this.configCategoryItemsCache.get(category);
+    if (inMemoryItems) {
+      return inMemoryItems;
+    }
+    const persistedItems = loadConfigEnrichmentCategory(this.activeConfigEnrichmentNamespaceKey, category);
+    if (persistedItems) {
+      this.configCategoryItemsCache.set(category, persistedItems);
+      return persistedItems;
+    }
+    return undefined;
   }
 
   private rememberConfigCategoryItems(category: string, payload: unknown) {
@@ -542,37 +590,50 @@ export class C64API {
     if (!Object.keys(nextItems).length) {
       return;
     }
-    const previousItems = this.configCategoryItemsCache.get(category) ?? {};
-    this.configCategoryItemsCache.set(category, {
-      ...previousItems,
-      ...nextItems,
+    const previousItems = this.getCachedConfigCategoryItems(category) ?? {};
+    const mergedItems: Record<string, unknown> = { ...previousItems };
+    Object.entries(nextItems).forEach(([itemName, nextItem]) => {
+      const previousItem = previousItems[itemName];
+      if (hasStructuredConfigMetadata(previousItem) && !hasStructuredConfigMetadata(nextItem)) {
+        mergedItems[itemName] = {
+          ...(previousItem as Record<string, unknown>),
+          selected: extractConfigValue(nextItem),
+        };
+        return;
+      }
+      mergedItems[itemName] = nextItem;
     });
+    this.configCategoryItemsCache.set(category, mergedItems);
+    saveConfigEnrichmentCategory(this.activeConfigEnrichmentNamespaceKey, category, mergedItems);
   }
 
   private setCachedConfigValue(category: string, item: string, value: string | number) {
-    const previousItems = this.configCategoryItemsCache.get(category);
+    const previousItems = this.getCachedConfigCategoryItems(category);
     if (!previousItems || previousItems[item] === undefined) {
       return;
     }
     const previousConfig = previousItems[item];
+    let nextItems: Record<string, unknown>;
     if (typeof previousConfig !== "object" || previousConfig === null || Array.isArray(previousConfig)) {
-      this.configCategoryItemsCache.set(category, {
+      nextItems = {
         ...previousItems,
         [item]: value,
-      });
-      return;
+      };
+    } else {
+      nextItems = {
+        ...previousItems,
+        [item]: {
+          ...(previousConfig as Record<string, unknown>),
+          selected: value,
+        },
+      };
     }
-    this.configCategoryItemsCache.set(category, {
-      ...previousItems,
-      [item]: {
-        ...(previousConfig as Record<string, unknown>),
-        selected: value,
-      },
-    });
+    this.configCategoryItemsCache.set(category, nextItems);
+    saveConfigEnrichmentCategory(this.activeConfigEnrichmentNamespaceKey, category, nextItems);
   }
 
   getCachedCategory(category: string): ConfigResponse | null {
-    const cachedItems = this.configCategoryItemsCache.get(category);
+    const cachedItems = this.getCachedConfigCategoryItems(category);
     if (!cachedItems || Object.keys(cachedItems).length === 0) {
       return null;
     }
@@ -586,7 +647,7 @@ export class C64API {
   }
 
   private async ensureConfigCategoryItems(category: string, itemNames: string[]) {
-    const cachedItems = this.configCategoryItemsCache.get(category) ?? {};
+    const cachedItems = this.getCachedConfigCategoryItems(category) ?? {};
     const missingItems = itemNames.filter((item) => cachedItems[item] === undefined);
     if (missingItems.length === 0) {
       return cachedItems;
@@ -595,7 +656,7 @@ export class C64API {
     const categoryPayload = await this.getCategory(category, { __c64uIntent: "user" });
     this.rememberConfigCategoryItems(category, categoryPayload);
 
-    let resolvedItems = this.configCategoryItemsCache.get(category) ?? {};
+    let resolvedItems = this.getCachedConfigCategoryItems(category) ?? {};
     const remainingItems = itemNames.filter((item) => resolvedItems[item] === undefined);
     if (remainingItems.length === 0) {
       return resolvedItems;
@@ -607,8 +668,12 @@ export class C64API {
         this.rememberConfigCategoryItems(category, itemPayload);
       }),
     );
-    resolvedItems = this.configCategoryItemsCache.get(category) ?? {};
+    resolvedItems = this.getCachedConfigCategoryItems(category) ?? {};
     return resolvedItems;
+  }
+
+  getInFlightReadRequestCount() {
+    return this.inFlightReadRequests.size;
   }
 
   private assertConfigWriteAccepted(
@@ -1222,7 +1287,11 @@ export class C64API {
   }
 
   async getInfo(options: C64ReadRequestOptions = {}): Promise<DeviceInfo> {
-    return this.request("/v1/info", options);
+    const info = await this.request<DeviceInfo>("/v1/info", options);
+    if (info && typeof info === "object") {
+      this.rememberConfigEnrichmentNamespace(info);
+    }
+    return info;
   }
 
   // Config endpoints
@@ -1263,6 +1332,12 @@ export class C64API {
     const skipItemEnrichment = options.__c64uSkipItemEnrichment === true;
     const mergedItems: Record<string, unknown> = {};
     const itemsNeedingEnrichment = new Set<string>();
+    const cachedItems = this.getCachedConfigCategoryItems(category) ?? {};
+    uniqueItems.forEach((item) => {
+      if (cachedItems[item] !== undefined) {
+        mergedItems[item] = cloneBudgetValue(cachedItems[item]);
+      }
+    });
     try {
       const categoryPayload = await this.getCategory(category, options);
       const payload = categoryPayload as Record<string, any>;
@@ -1272,9 +1347,21 @@ export class C64API {
         uniqueItems.forEach((item) => {
           if (Object.prototype.hasOwnProperty.call(itemsBlock, item)) {
             const itemConfig = (itemsBlock as Record<string, unknown>)[item];
-            mergedItems[item] = itemConfig;
+            const cachedConfig = cachedItems[item];
+            if (hasStructuredConfigMetadata(itemConfig)) {
+              mergedItems[item] = itemConfig;
+            } else if (hasStructuredConfigMetadata(cachedConfig)) {
+              mergedItems[item] = {
+                ...(cachedConfig as Record<string, unknown>),
+                selected: extractConfigValue(itemConfig),
+              };
+            } else {
+              mergedItems[item] = itemConfig;
+            }
             if (!hasStructuredConfigMetadata(itemConfig)) {
-              itemsNeedingEnrichment.add(item);
+              if (!hasStructuredConfigMetadata(cachedConfig)) {
+                itemsNeedingEnrichment.add(item);
+              }
             }
           }
         });

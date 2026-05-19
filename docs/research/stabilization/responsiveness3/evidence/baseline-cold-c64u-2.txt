@@ -1,0 +1,7 @@
+Starting: Intent { cmp=uk.gleissner.c64commander/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: uk.gleissner.c64commander/.MainActivity
+TotalTime: 572
+WaitTime: 575
+Complete

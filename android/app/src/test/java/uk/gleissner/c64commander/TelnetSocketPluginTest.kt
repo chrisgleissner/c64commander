@@ -31,7 +31,9 @@ import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
@@ -195,6 +197,24 @@ class TelnetSocketPluginTest {
             }
     )
     assertTrue(messages.any { it.contains("Failed to close Telnet socket: socket close failed") })
+  }
+
+  @Test
+  fun disconnectEmitsEmptyObjectOnCaughtException() {
+    val disconnectCall = mock(PluginCall::class.java)
+    var disconnectResolved: JSObject? = null
+    doThrow(RuntimeException("resolve failed"))
+            .doAnswer { invocation: org.mockito.invocation.InvocationOnMock ->
+              disconnectResolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(disconnectCall)
+            .resolve(any())
+
+    plugin.disconnect(disconnectCall)
+
+    verify(disconnectCall, times(2)).resolve(any())
+    assertEquals(0, disconnectResolved?.length())
   }
 
   @Test
