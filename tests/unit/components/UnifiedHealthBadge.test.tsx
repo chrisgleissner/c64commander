@@ -212,6 +212,11 @@ vi.mock("@/lib/savedDevices/store", () => ({
   getSavedDeviceSwitchStatus: (deviceId: string) =>
     mockState.switchStatuses[deviceId] ??
     (deviceId === mockState.savedDevices.selectedDeviceId ? "connected" : "last-known"),
+  getSelectedSavedDevice: () =>
+    mockState.savedDevices.devices.find((device) => device.id === mockState.savedDevices.selectedDeviceId) ?? null,
+  getSelectedSavedDeviceProductFamilySync: () =>
+    mockState.savedDevices.devices.find((device) => device.id === mockState.savedDevices.selectedDeviceId)
+      ?.lastKnownProduct ?? null,
 }));
 
 vi.mock("@/hooks/useSavedDeviceHealthChecks", () => ({

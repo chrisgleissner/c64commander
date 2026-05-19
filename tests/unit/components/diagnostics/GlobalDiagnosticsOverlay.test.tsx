@@ -218,6 +218,10 @@ describe("GlobalDiagnosticsOverlay", () => {
         traces: expect.any(Array),
         actions: expect.any(Array),
         supplemental: expect.objectContaining({
+          deviceSafetyResolution: expect.objectContaining({
+            storedMode: expect.any(String),
+            effectiveMode: expect.any(String),
+          }),
           hvscPerfTimings: expect.arrayContaining([
             expect.objectContaining({ id: "hvsc-perf-000001", scope: "browse:query" }),
           ]),

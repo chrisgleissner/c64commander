@@ -107,6 +107,7 @@ import {
   type NotificationVisibility,
 } from "@/lib/config/appSettings";
 import {
+  getActiveAutoResolutionContext,
   loadDeviceSafetyConfig,
   saveDeviceSafetyMode,
   saveFtpMaxConcurrency,
@@ -162,6 +163,18 @@ import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } fr
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlags";
 
 type Theme = "light" | "dark" | "system";
+
+const DEVICE_PRODUCT_DISPLAY_LABELS = {
+  C64U: "C64U",
+  U64: "U64",
+  U64E: "U64 Elite",
+  U64E2: "U64 Elite II",
+} as const;
+
+const toPresetLabel = (value: string | null | undefined) => {
+  if (!value) return "Balanced";
+  return value.charAt(0) + value.slice(1).toLowerCase();
+};
 
 const isValidConnectionPort = (value: string) => {
   const parsed = Number(value);
@@ -299,6 +312,24 @@ export default function SettingsPage() {
       ),
     [archiveClientIdOverride, archiveHostOverride, archiveUserAgentOverride, commoserveEnabled],
   );
+  const safetyResolutionContext = useMemo(
+    () => getActiveAutoResolutionContext(),
+    [savedDevices.selectedDeviceId, savedDevices.devices, savedDevices.summaries],
+  );
+  const autoSafetyDescription = useMemo(() => {
+    const resolution = deviceSafetyConfig.resolution;
+    if (deviceSafetyMode !== "AUTO" || !resolution) {
+      return null;
+    }
+    const presetLabel = toPresetLabel(resolution.resolvedPreset ?? resolution.effectiveMode);
+    if (resolution.isProvisional) {
+      return `Effective preset: ${presetLabel} (provisional - no verified product yet for this device).`;
+    }
+    const productLabel =
+      (safetyResolutionContext.activeProduct && DEVICE_PRODUCT_DISPLAY_LABELS[safetyResolutionContext.activeProduct]) ||
+      "active device";
+    return `Effective preset: ${presetLabel} - resolved from active device (${productLabel}, verified).`;
+  }, [deviceSafetyConfig.resolution, deviceSafetyMode, safetyResolutionContext.activeProduct]);
 
   const commitHvscBaseUrl = useCallback(() => {
     const trimmed = hvscBaseUrlInput.trim();
@@ -1604,12 +1635,14 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select safety mode" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="AUTO">Auto (Conservative for C64U, Balanced for others) - recommended</SelectItem>
                   <SelectItem value="RELAXED">Relaxed (lighter throttling, higher risk)</SelectItem>
-                  <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
+                  <SelectItem value="BALANCED">Balanced</SelectItem>
                   <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
                   <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
                 </SelectContent>
               </Select>
+              {autoSafetyDescription ? <p className="text-xs text-muted-foreground">{autoSafetyDescription}</p> : null}
               <p className="text-xs text-muted-foreground">
                 Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
                 enables debug logging for richer diagnostics.

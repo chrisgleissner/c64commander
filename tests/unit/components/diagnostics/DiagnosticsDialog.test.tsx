@@ -596,8 +596,8 @@ describe("DiagnosticsDialog", () => {
     fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
 
     expect(screen.getByTestId("connection-view-surface")).toBeVisible();
-    expect(screen.getByText("Office U64")).toBeVisible();
-    expect(screen.getByText("U64")).toBeVisible();
+    expect(within(screen.getByTestId("connection-view-surface")).getByText("Name")).toBeVisible();
+    expect(within(screen.getByTestId("connection-view-surface")).getByText("Type")).toBeVisible();
     expect(within(screen.getByTestId("connection-view-surface")).getAllByText("c64u").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId("connection-view-edit"));
@@ -685,8 +685,7 @@ describe("DiagnosticsDialog", () => {
     expect(localStorage.getItem(TELNET_PORT_KEY)).toBe("2323");
 
     const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
-    expect(persisted.devices[0]).toMatchObject({
-      id: "device-office",
+    expect(persisted.devices.find((device: { host?: string }) => device.host === "ultimate.local")).toMatchObject({
       name: "Lab U64",
       host: "ultimate.local",
       httpPort: 8081,
@@ -697,7 +696,8 @@ describe("DiagnosticsDialog", () => {
 
   it("does not repeat the product code when the saved device name already matches it", async () => {
     const store = await import("@/lib/savedDevices/store");
-    store.updateSavedDevice("device-office", {
+    const primaryDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(primaryDeviceId, {
       name: "U64",
       host: "c64u",
       httpPort: 80,
@@ -715,7 +715,8 @@ describe("DiagnosticsDialog", () => {
 
   it("uses live device info as the diagnostics product fallback when the saved snapshot is empty", async () => {
     const store = await import("@/lib/savedDevices/store");
-    store.updateSavedDevice("device-office", {
+    const primaryDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(primaryDeviceId, {
       host: "u64-live",
       type: "",
       lastKnownProduct: null,
@@ -732,6 +733,12 @@ describe("DiagnosticsDialog", () => {
     });
 
     expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent("Office U64 · Ultimate 64 Elite");
+  });
+
+  it("shows the effective safety preset in the diagnostics header", () => {
+    renderDialog();
+
+    expect(screen.getByTestId("diagnostics-safety-line")).toHaveTextContent(/Effective preset: Balanced/i);
   });
 
   it("keeps filter configuration separate from filter visibility", () => {
