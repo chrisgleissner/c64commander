@@ -28,6 +28,12 @@ Conventions:
   - Validation: focused diagnostics suites passed (`ActionExpandedContent`: 5 tests, `DiagnosticsDialog`: 33 tests); Gate A validation passed earlier with `npm run test:coverage` at 91.63% branch coverage, `npm run lint`, `npm run build`, and `npm run cap:build`.
   - Pixel 4 (`9B081FFAZ001WX`) verification succeeded against both devices: Settings shows `Auto (Conservative for C64U, Balanced for others) - recommended`, and the on-device Diagnostics safety line resolves to `Balanced` for `u64` / `U64E` and `Conservative` for `c64u` / `C64U`.
 
+## 2026-05-19 10:24 UTC
+
+- Phase B inventory audit complete.
+  - Re-read `docs/plans/performance/iteration2/cta-inventory.md`; no rows were `TBD`, no concrete examples or scenario IDs had drifted, and no inventory edits were required.
+  - Logged as a docs-only follow-up after the Phase A commit so the inventory status remains green before the soak handoff.
+
 <!-- Template for future entries:
 
 ## YYYY-MM-DD HH:MM UTC
