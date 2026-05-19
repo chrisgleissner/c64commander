@@ -11,6 +11,7 @@ import {
   buildHvscBrowseIndexFromSonglengthSnapshot,
   saveHvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
@@ -52,6 +53,8 @@ const facade = new SongLengthServiceFacade(backend, {
 
 let hasAttemptedColdStartLoad = false;
 let activeLoad: Promise<void> | null = null;
+
+const isHvscInstalled = () => loadHvscState().installedVersion > 0;
 
 const decodeBase64Text = (raw: string) => {
   try {
@@ -143,6 +146,12 @@ const isReadableFile = async (path: string) => {
 };
 
 const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
+  if (!isHvscInstalled()) {
+    addLog("debug", "HVSC songlengths bootstrap skipped because HVSC is not installed", {
+      service: "hvsc-songlengths",
+    });
+    return [];
+  }
   const roots = [HVSC_LIBRARY_DIR, `${HVSC_LIBRARY_DIR}/DOCUMENTS`];
   const discovered: string[] = [];
   await Promise.all(roots.map((rootPath) => ensureSonglengthDirectory(rootPath)));
@@ -292,6 +301,7 @@ export const __test__ = {
   discoverSonglengthFiles,
   exportSonglengthSnapshot,
   ensureSonglengthDirectory,
+  isHvscInstalled,
   isReadableFile,
   isMissingPathError,
   syncHvscBrowseProjection,
