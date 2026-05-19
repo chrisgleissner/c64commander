@@ -34,6 +34,13 @@ Conventions:
   - Re-read `docs/plans/performance/iteration2/cta-inventory.md`; no rows were `TBD`, no concrete examples or scenario IDs had drifted, and no inventory edits were required.
   - Logged as a docs-only follow-up after the Phase A commit so the inventory status remains green before the soak handoff.
 
+## 2026-05-19 11:30 UTC
+
+- Diagnostics REST rendering follow-up closed out.
+  - `src/components/diagnostics/ActionExpandedContent.tsx` now renders the full REST request URL, adds a one-line `User activity:` summary ahead of REST details, and suppresses hex/ascii payload previews whenever a decoded request/response body is available.
+  - `tests/unit/components/diagnostics/ActionExpandedContent.test.tsx` locks the renderer against regressions for full-URL display, the activity prefix, decoded payload rendering, and preview fallback when no decoded body exists.
+  - Validation: fresh `npm run test:coverage` passed at 91.62% branch coverage; live Pixel 4 (`9B081FFAZ001WX`) verification against `u64` confirmed the expanded Diagnostics row shows the full request URL, the user-activity prefix, pretty response JSON, and preview suppression for decoded payloads.
+
 <!-- Template for future entries:
 
 ## YYYY-MM-DD HH:MM UTC

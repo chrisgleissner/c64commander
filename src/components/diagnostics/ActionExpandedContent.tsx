@@ -64,6 +64,26 @@ const formatEndpoint = (hostname: string | null | undefined, port: number | null
   return hostname;
 };
 
+const buildRestPathWithQuery = (path: string, query: string | null | undefined) => {
+  if (!query) return path;
+  return path.includes("?") ? path : `${path}${query}`;
+};
+
+const formatRestRequestTarget = (effect: RestEffect) => {
+  const fullPath = buildRestPathWithQuery(effect.path, effect.query);
+  if (!effect.hostname) {
+    return fullPath;
+  }
+
+  const protocol = effect.protocol ?? "http";
+  const port = typeof effect.port === "number" ? `:${effect.port}` : "";
+  return `${protocol}://${effect.hostname}${port}${fullPath}`;
+};
+
+const shouldRenderPayloadPreview = (body: unknown, preview?: PayloadPreview | null) => {
+  return preview && body === undefined;
+};
+
 export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) => {
   const effects = summary.effects ?? [];
   const restEffects = effects.filter((e): e is RestEffect => e.type === "REST");
@@ -98,14 +118,15 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
       {restEffects.length > 0 ? (
         <div className="space-y-2">
           <p className="text-xs font-semibold">REST</p>
+          <p className="text-[11px] text-muted-foreground">User activity: {summary.actionName}</p>
           {restEffects.map((effect, index) => (
             <div
               key={`${summary.correlationId}-rest-${index}`}
               data-testid={`action-rest-effect-${summary.correlationId}-${index}`}
               className="rounded-md border border-border/70 p-2"
             >
-              <p className="font-medium">
-                {effect.method} {effect.path}
+              <p className="font-medium break-all">
+                {effect.method} {formatRestRequestTarget(effect)}
               </p>
               <p className="text-muted-foreground">
                 target: {formatActionEffectTarget(effect.target, effect.product ?? inferredProduct)} · status:{" "}
@@ -116,10 +137,14 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
               <div className="mt-2 space-y-2">
                 <HeaderBlock label="Request headers" headers={effect.requestHeaders} />
                 <JsonBlock label="Request payload" value={effect.requestBody} />
-                <PayloadPreviewBlock label="Request preview" preview={effect.requestPayloadPreview} />
+                {shouldRenderPayloadPreview(effect.requestBody, effect.requestPayloadPreview) ? (
+                  <PayloadPreviewBlock label="Request preview" preview={effect.requestPayloadPreview} />
+                ) : null}
                 <HeaderBlock label="Response headers" headers={effect.responseHeaders} />
                 <JsonBlock label="Response payload" value={effect.responseBody} />
-                <PayloadPreviewBlock label="Response preview" preview={effect.responsePayloadPreview} />
+                {shouldRenderPayloadPreview(effect.responseBody, effect.responsePayloadPreview) ? (
+                  <PayloadPreviewBlock label="Response preview" preview={effect.responsePayloadPreview} />
+                ) : null}
               </div>
             </div>
           ))}
