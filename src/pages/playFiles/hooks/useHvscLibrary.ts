@@ -282,8 +282,18 @@ export const useHvscLibrary = (): HvscLibraryState => {
   }, []);
 
   useEffect(() => {
+    const shouldProbeHvscCache =
+      Boolean(hvscStatus?.installedVersion) ||
+      hvscStatusSummary.extraction.status === "success" ||
+      hvscStatus?.ingestionState === "installing" ||
+      hvscStatus?.ingestionState === "updating";
+    if (!shouldProbeHvscCache) {
+      setHvscCacheBaseline(null);
+      setHvscCacheUpdates([]);
+      return;
+    }
     refreshHvscCacheStatus();
-  }, [refreshHvscCacheStatus, hvscStatus?.installedVersion, hvscStatus?.ingestionState]);
+  }, [refreshHvscCacheStatus, hvscStatus?.installedVersion, hvscStatus?.ingestionState, hvscStatusSummary.extraction.status]);
 
   useEffect(() => {
     if (!hvscStatus) return;

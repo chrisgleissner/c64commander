@@ -233,6 +233,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("refreshHvscCacheStatus logs error when getHvscCacheStatus rejects", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 1, ingestionState: "ready" }));
     mocks.getHvscCacheStatusMock.mockRejectedValueOnce(new Error("cache fetch error"));
 
     renderHook(() => useHvscLibrary());
@@ -241,8 +242,18 @@ describe("useHvscLibrary edge cases", () => {
       expect(mocks.addErrorLogMock).toHaveBeenCalledWith(
         "HVSC cache status fetch failed",
         expect.objectContaining({ error: "cache fetch error" }),
-      ),
-    );
+        ),
+      );
+  });
+
+  it("skips cache-status probing when HVSC is uninstalled and no extraction cache exists", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 0, ingestionState: "idle" }));
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() => createSummary());
+
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(result.current.hvscInstalled).toBe(false));
+    expect(mocks.getHvscCacheStatusMock).not.toHaveBeenCalled();
   });
 
   it("progress error event with storage keywords resolves to storage failure category and label", async () => {
@@ -325,6 +336,11 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("handleHvscIngest reports non-cancel ingest failures via reportUserError", async () => {
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        extraction: { status: "success" },
+      }),
+    );
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
     mocks.ingestCachedHvscMock.mockRejectedValueOnce(new Error("ingest write failed"));
 
@@ -348,6 +364,11 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("handleHvscIngest toast includes ingestion summary when getHvscStatus returns summary", async () => {
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        extraction: { status: "success" },
+      }),
+    );
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
     mocks.getHvscStatusMock.mockResolvedValueOnce(createStatus()).mockResolvedValueOnce(
       createStatus({
