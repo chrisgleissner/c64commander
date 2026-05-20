@@ -403,7 +403,17 @@ describe("useHvscLibrary preparation state coverage", () => {
   });
 
   it("runHvscPreparation calls handleHvscIngest when state is DOWNLOADED", async () => {
-    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 85, updateVersions: [] });
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        extraction: {
+          status: "success",
+          filesExtracted: 10,
+          totalFiles: 10,
+          durationMs: 1000,
+        },
+        lastUpdatedAt: new Date().toISOString(),
+      }),
+    );
 
     const { result } = renderHook(() => useHvscLibrary());
 
@@ -418,13 +428,17 @@ describe("useHvscLibrary preparation state coverage", () => {
   });
 
   it("runHvscPreparation calls handleHvscIngest when state is ERROR with failedPhase=ingest", async () => {
-    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 85, updateVersions: [] });
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         extraction: {
+          status: "success",
+          filesExtracted: 10,
+          totalFiles: 10,
+          durationMs: 1000,
+        },
+        metadata: {
           status: "failure",
-          errorMessage: "extraction failed",
-          errorCategory: "extraction",
+          errorMessage: "metadata failed",
         },
       }),
     );

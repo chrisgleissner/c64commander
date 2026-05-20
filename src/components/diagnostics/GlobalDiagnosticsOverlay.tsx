@@ -113,9 +113,10 @@ export const GlobalDiagnosticsOverlay = () => {
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
+  const actionSummariesReady = overlayOpen && overlayFirstVisible;
   const actionSummaries = useMemo(
-    () => (overlayOpen ? buildActionSummaries(traceEvents) : []),
-    [overlayOpen, traceEvents],
+    () => (actionSummariesReady ? buildActionSummaries(traceEvents) : []),
+    [actionSummariesReady, traceEvents],
   );
 
   const finishPendingDiagnosticsOpenAction = useCallback((error?: Error | null) => {
@@ -283,11 +284,13 @@ export const GlobalDiagnosticsOverlay = () => {
   const buildDiagnosticsExportData = useCallback(() => {
     const safetyConfig = loadDeviceSafetyConfig();
     const safetyContext = getActiveAutoResolutionContext();
+    const exportActionSummaries =
+      actionSummaries.length > 0 || !overlayOpen ? actionSummaries : buildActionSummaries(traceEvents);
     return {
       "error-logs": errorLogs,
       logs,
       traces: traceEvents,
-      actions: actionSummaries,
+      actions: exportActionSummaries,
       supplemental: {
         healthSnapshot: healthState,
         lastHealthCheckResult: healthCheckState.latestResult,
@@ -308,7 +311,7 @@ export const GlobalDiagnosticsOverlay = () => {
           : null,
       },
     };
-  }, [actionSummaries, errorLogs, healthCheckState.latestResult, healthState, logs, traceEvents]);
+  }, [actionSummaries, errorLogs, healthCheckState.latestResult, healthState, logs, overlayOpen, traceEvents]);
 
   const handleShareAll = trace(async function handleShareAll() {
     try {

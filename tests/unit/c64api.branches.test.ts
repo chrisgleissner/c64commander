@@ -1011,8 +1011,17 @@ describe("c64api branches", () => {
     const api = new C64API("http://c64u");
     const result = await api.getConfigItems("Audio Mixer", ["Vol UltiSid 1"]);
     expect(result["Audio Mixer"]?.items?.["Vol UltiSid 1"]).toBeDefined();
+    expect(recordRestResponseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: 500,
+        expectedFailure: true,
+      }),
+    );
+    expect(recordTraceErrorMock).not.toHaveBeenCalled();
+    expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
     expect(addLogMock).toHaveBeenCalledWith(
-      "warn",
+      "debug",
       "Category config fetch failed; falling back to item fetches",
       expect.objectContaining({ category: "Audio Mixer" }),
     );

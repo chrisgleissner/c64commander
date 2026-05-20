@@ -326,6 +326,12 @@ describe("DiagnosticsDialog", () => {
     expect(mockGetTraceTitle).not.toHaveBeenCalled();
   });
 
+  it("does not build raw trace rows while the Traces filter remains disabled", () => {
+    renderDialog();
+
+    expect(mockGetTraceTitle).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });

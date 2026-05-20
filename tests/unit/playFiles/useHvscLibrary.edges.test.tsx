@@ -242,8 +242,8 @@ describe("useHvscLibrary edge cases", () => {
       expect(mocks.addErrorLogMock).toHaveBeenCalledWith(
         "HVSC cache status fetch failed",
         expect.objectContaining({ error: "cache fetch error" }),
-        ),
-      );
+      ),
+    );
   });
 
   it("skips cache-status probing when HVSC is uninstalled and no extraction cache exists", async () => {

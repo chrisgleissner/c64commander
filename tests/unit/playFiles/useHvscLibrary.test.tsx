@@ -437,12 +437,26 @@ describe("useHvscLibrary", () => {
   });
 
   it("retries indexing from the cached archive after an ingest failure", async () => {
-    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
     mocks.getHvscStatusMock.mockResolvedValue(
       createStatus({
         installedVersion: 0,
         ingestionState: "error",
         ingestionError: "metadata failed",
+      }),
+    );
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        extraction: {
+          status: "success",
+          filesExtracted: 10,
+          totalFiles: 10,
+          durationMs: 1000,
+        },
+        metadata: {
+          status: "failure",
+          errorMessage: "metadata failed",
+        },
+        lastUpdatedAt: new Date().toISOString(),
       }),
     );
 

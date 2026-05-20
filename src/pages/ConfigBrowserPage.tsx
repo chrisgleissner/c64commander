@@ -47,6 +47,42 @@ type ConfigListItem = {
 };
 
 const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
+const CLOCK_MONTH_OPTIONS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+const resolveClockSyncValue = (item: ConfigListItem, numericValue: number): string | number => {
+  if (typeof item.value !== "string") {
+    return numericValue;
+  }
+
+  if (!item.options?.length) {
+    if (item.name.toLowerCase().includes("month")) {
+      return CLOCK_MONTH_OPTIONS[numericValue - 1] ?? numericValue;
+    }
+    return numericValue;
+  }
+
+  const exactOption = item.options.find((option) => option === String(numericValue));
+  if (exactOption) {
+    return exactOption;
+  }
+
+  const oneBasedOption = item.options[numericValue - 1];
+  return oneBasedOption ?? numericValue;
+};
+
 function CategorySection({
   categoryName,
   onOpenChange,
@@ -368,7 +404,7 @@ function CategorySection({
       normalizedItems
         .filter((entry) => matcher(entry.name))
         .forEach((entry) => {
-          updates[entry.item.name] = value;
+          updates[entry.item.name] = resolveClockSyncValue(entry.item, value);
         });
     };
 

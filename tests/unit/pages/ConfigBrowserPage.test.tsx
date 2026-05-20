@@ -145,6 +145,7 @@ const setupDefaultMocks = () => {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -421,6 +422,21 @@ describe("ConfigBrowserPage", () => {
 
   it("syncs clock settings when fields are present", async () => {
     setupDefaultMocks();
+    const now = new Date();
+    const monthOptions = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ] as const;
     mockUseC64Categories.mockReturnValue({
       data: { categories: ["Clock Settings"] },
       isLoading: false,
@@ -436,7 +452,14 @@ describe("ConfigBrowserPage", () => {
         [categoryName]: {
           items: {
             Year: { selected: 2024 },
-            Month: { selected: 1 },
+            Month: {
+              selected: "January",
+              options: [...monthOptions],
+            },
+            Day: { selected: 1 },
+            Hours: { selected: 0 },
+            Minutes: { selected: 0 },
+            Seconds: { selected: 0 },
           },
         },
       },
@@ -450,10 +473,82 @@ describe("ConfigBrowserPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalled();
+      expect(mutateAsync).toHaveBeenCalledWith({
+        category: "Clock Settings",
+        updates: {
+          Year: now.getFullYear(),
+          Month: monthOptions[now.getMonth()],
+          Day: now.getDate(),
+          Hours: now.getHours(),
+          Minutes: now.getMinutes(),
+          Seconds: now.getSeconds(),
+        },
+      });
       expect(mockUpdateHasChanges).toHaveBeenCalledWith("http://c64u", true);
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Clock synced" }));
     });
+  });
+
+  it("syncs clock month names when the live payload omits month options", async () => {
+    setupDefaultMocks();
+    const now = new Date();
+    const expectedMonth = new Intl.DateTimeFormat("en-US", { month: "long" }).format(
+      new Date(now.getFullYear(), now.getMonth(), 1),
+    );
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Clock Settings"] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    });
+    const refetch = vi.fn();
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            Year: { selected: 2024 },
+            Month: { selected: "October" },
+            Day: { selected: 1 },
+            Hours: { selected: 0 },
+            Minutes: { selected: 0 },
+            Seconds: { selected: 0 },
+          },
+        },
+      },
+      isLoading: false,
+      refetch,
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        category: "Clock Settings",
+        updates: expect.objectContaining({
+          Month: expectedMonth,
+        }),
+      });
+      expect(mockUpdateHasChanges).toHaveBeenCalledWith("http://c64u", true);
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Clock synced" }));
+    });
+
+    const [{ updates }] = mutateAsync.mock.calls.at(-1) as [{ updates: Record<string, string | number> }];
+    expect(updates).toEqual(
+      expect.objectContaining({
+        Year: now.getFullYear(),
+        Month: expectedMonth,
+        Day: now.getDate(),
+        Hours: now.getHours(),
+        Minutes: now.getMinutes(),
+        Seconds: now.getSeconds(),
+      }),
+    );
   });
 
   it("reports clock sync when no matching fields exist", async () => {

@@ -293,7 +293,12 @@ export const useHvscLibrary = (): HvscLibraryState => {
       return;
     }
     refreshHvscCacheStatus();
-  }, [refreshHvscCacheStatus, hvscStatus?.installedVersion, hvscStatus?.ingestionState, hvscStatusSummary.extraction.status]);
+  }, [
+    refreshHvscCacheStatus,
+    hvscStatus?.installedVersion,
+    hvscStatus?.ingestionState,
+    hvscStatusSummary.extraction.status,
+  ]);
 
   useEffect(() => {
     if (!hvscStatus) return;

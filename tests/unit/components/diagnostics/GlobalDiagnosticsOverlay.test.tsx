@@ -337,6 +337,31 @@ describe("GlobalDiagnosticsOverlay", () => {
     expect(buildActionSummariesMock).not.toHaveBeenCalled();
   });
 
+  it("defers action summary building until the diagnostics sheet is first visible", async () => {
+    const frameCallbacks: FrameRequestCallback[] = [];
+    const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frameCallbacks.push(callback);
+      return frameCallbacks.length;
+    });
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+    renderOverlay();
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(buildActionSummariesMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      frameCallbacks.shift()?.(0);
+    });
+
+    await waitFor(() => {
+      expect(buildActionSummariesMock).toHaveBeenCalledTimes(1);
+    });
+
+    requestAnimationFrameSpy.mockRestore();
+    cancelAnimationFrameSpy.mockRestore();
+  });
+
   it("applies seeded health-check overlay state from the diagnostics bridge and runtime events", async () => {
     const seededResult = {
       runId: "hc-seeded",

@@ -117,3 +117,43 @@ Conventions:
   - Root cause: the always-mounted Play/HVSC hook (`useHvscLibrary`) was still calling `getHvscCacheStatus()` on idle startup even when HVSC had never been installed and no extracted cache existed. The native Capacitor Filesystem bridge emitted missing-directory errors before the caught JS path reduced the result to `null`, so Diagnostics still surfaced the native failures.
   - Fix: `src/pages/playFiles/hooks/useHvscLibrary.ts` now skips the cache-status probe unless there is an installed HVSC library, an install/update in progress, or a successful extraction summary indicating cached archives are present. Regression coverage in `tests/unit/playFiles/useHvscLibrary.edges.test.tsx` locks that the uninstalled-idle state does not call `getHvscCacheStatus()`, while the existing ingest path remains available when extraction cache evidence exists.
   - Post-fix verification: rebuilt and redeployed the debug APK, force-stopped and relaunched the app from a cleared logcat, reopened Diagnostics on Home, and confirmed zero problem rows plus zero fresh `Directory does not exist` rows in `adb logcat -d`. Clean evidence is saved to `runs/622d42fb-9371-4bc3-8a2d-815a8efb1761/oracles/screenshots/home-hvsc-cache-post-fix.png` and `runs/622d42fb-9371-4bc3-8a2d-815a8efb1761/oracles/state-refs/home-hvsc-cache-post-fix.json`.
+
+## 2026-05-19 16:27 UTC
+
+- Commit `73dcc2c7da466110d634cff5390477cef77a40c4` recorded for the second HVSC missing-directory fix cycle.
+  - Subject: `Skip idle HVSC cache probes before install`.
+  - This is the committed form of the idle cache-status/Home-startup fix described above: `useHvscLibrary` now skips `getHvscCacheStatus()` while HVSC is uninstalled unless install/update or extracted-cache evidence exists, preventing native `Directory does not exist` noise from leaking into Diagnostics.
+  - Regression coverage remains in `tests/unit/playFiles/useHvscLibrary.edges.test.tsx`, and the live Pixel 4 verification described in the previous entry stayed clean after redeploy.
+- Run `38cc2862-eb4a-4a6b-bafa-3486e5166968` closed `inconclusive`; summary: `docs/plans/performance/iteration2/runs/38cc2862-eb4a-4a6b-bafa-3486e5166968/summary.json`.
+  - The run stayed clean through `N1` on `u64`, one successful `N2` quick-switch leg to `c64u`, and a full five-switch `S4` Settings-row alternation loop with correct AUTO `Balanced`/`Conservative` resolution evidence in `safety/safety-mode-trail.ndjson`.
+  - The run was not trustworthy to continue after an interrupted Safety Mode interaction left the Settings select menu open while live capture continuity had lapsed.
+  - During close-out, direct `/v1/info` probes from both the host and Pixel 4 (`9B081FFAZ001WX`) showed `c64u` resetting TCP connections again while `u64` remained healthy, so the required clean end-to-end restart is blocked pending `c64u` recovery.
+
+## 2026-05-19 18:15 UTC
+
+- Run `8678e3b1-eee1-46a2-9ce4-17c294a8bfc2` closed `inconclusive`; summary: `docs/plans/performance/iteration2/runs/8678e3b1-eee1-46a2-9ce4-17c294a8bfc2/summary.json`.
+  - The partial rerun recorded clean dual-device evidence for `N1` (20 full tab cycles on `u64`, then 20 full tab cycles on `c64u`) plus a clean `S4` Settings-row alternation loop with correct AUTO `Balanced`/`Conservative` resolution in `safety/safety-mode-trail.ndjson`.
+  - `c64u` stayed reachable through the recorded portion of the run (`safety/c64u-reachability.ndjson` stayed `ok`), but the run still could not be trusted as the final completion run because continuous capture continuity was broken before the remaining scenarios resumed: `logcat.txt` is absent, only one empty `timings/diagnostics-open.csv` header exists, and later N2/N3 attempts only produced screenshots without valid scenario rows.
+  - The branch then pivoted to the HVSC automatic-update cadence fix/validation/deploy cycle, so the honest next step is a fresh artifact-backed restart rather than stretching this partial evidence.
+
+## 2026-05-19 18:26 UTC
+
+- Run `8dd74636-54ba-4a69-aafa-d9114af8446e` closed `inconclusive`; summary: `docs/plans/performance/iteration2/runs/8dd74636-54ba-4a69-aafa-d9114af8446e/summary.json`.
+  - Explicit degraded-preflight annotation: `c64u-skipped-degraded-preflight`.
+  - Fresh preflight at `18:26 UTC` found `u64` healthy from both host and Pixel 4 (`9B081FFAZ001WX`), but `c64u` reset `/v1/info` from both paths immediately (`curl: (56) Recv failure: Connection reset by peer` on host; Pixel shell returned HTTP `000`).
+  - Live app evidence in `oracles/screenshots/preflight-c64u-offline-switch-sheet.png` shows the Switch Device sheet with both `c64u` entries marked `OFFLINE` while `u64` remained selected and healthy.
+  - Recovery attempts failed outside the app too: `c64bridge` `c64_config info`, `c64_config version`, and `c64_system reboot` all failed with `read ECONNRESET`, so the final dual-device completion run is externally blocked until the `c64u` hardware/API path recovers.
+
+## 2026-05-20 07:38 UTC
+
+- Active run `56134e09-e4c5-436c-87b5-48dc1f485277` remains open and artifact-backed while `c64u` stays externally degraded.
+  - New soak-found product fix: `ConfigBrowserPage` clock sync now maps month-name fields even when the live payload omits month `options`, fixing the live `Clock sync failed` / `Invalid value for Clock Settings/Month` error seen on the `u64` leg. Regression coverage was added in `tests/unit/pages/ConfigBrowserPage.test.tsx`, the targeted Vitest slice passed, and the rebuilt APK was revalidated on the Pixel 4 by syncing `Clock Settings` successfully on real hardware.
+  - New `Diagnostics` open optimization attempt: the dialog now skips building raw Logs/Traces rows when those filters are not selected, caches per-device labels during evidence assembly, precomputes numeric timestamps before sorting, and defers `GlobalDiagnosticsOverlay` action-summary derivation until the overlay has reached its first-visible path. Focused diagnostics unit tests were updated and stayed green through two focused Vitest reruns, and the app was rebuilt/redeployed after each pass.
+  - Measured effect on the live Pixel 4 (`9B081FFAZ001WX`): repeated U64 Diagnostics open timing improved materially from the earlier ~`p50 432 ms` range to roughly the mid-`300 ms` range on the patched build, but the scenario still misses the Stage 3 budget and the active run still lacks a trustworthy `timings/diagnostics-open.csv` marker row. The honest next step for `N3` is to capture the intended narrow marker rather than rely on the ad-hoc DOM stopwatch used during triage.
+  - New `u64` scenario evidence banked in the active run:
+    - `C2` now includes the fixed live clock-sync replay (`oracles/screenshots/C2-u64-clock-sync-fixed.png`).
+    - `S5` passed on-device: theme cycled `Auto -> Light -> Dark -> Auto`, the root HTML class followed `light` / `dark`, the About card enabled developer mode after seven taps, and cleanup restored the initial disabled state (`oracles/screenshots/S5-u64-theme-and-devmode.png`).
+    - `S7` passed on-device: Diagnostics `Share filtered` wrote `file:///data/user/0/uk.gleissner.c64commander/cache/c64commander-diagnostics-actions-2026-05-20-0727-25Z.zip` in logcat, then `Clear all` returned the dialog to `No matching activity` (`oracles/screenshots/S7-u64-diagnostics-cleared.png`).
+    - `S8` passed on-device: `Open Source Licenses` opened on `/settings/open-source-licenses` and Android Back returned the app to `/settings` (`oracles/screenshots/S8-u64-licenses-back.png`).
+    - `X1` passed for the `u64` leg: all Docs accordions (`Home`, `Play Files`, `Disks & Drives`, `Swapping Disks`, `Config`, `Settings`, `Diagnostics`) toggled open/closed on `/docs`; the external REST API link tap was skipped and annotated because the live Android run does not have a stubbed external-intent handler (`oracles/screenshots/X1-u64-docs-smoke.png`).
+  - `c64u` remains the hard blocker throughout this run: repeated host probes appended to `safety/c64u-reachability.ndjson` still end with `curl: (56) Recv failure: Connection reset by peer` while `u64` remains healthy. The run can keep collecting `u64`-leg evidence, but it still cannot close as a passing final dual-device run until the `c64u` REST path recovers.

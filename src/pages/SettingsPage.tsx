@@ -69,10 +69,10 @@ import {
   getHvscBaseUrl,
   getHvscBaseUrlOverride,
   getHvscLastUpdateCheckAt,
-  getHvscUpdateCheckIntervalHours,
-  MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS,
+  getHvscUpdateCheckIntervalDays,
+  MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS,
   setHvscBaseUrlOverride,
-  setHvscUpdateCheckIntervalHours,
+  setHvscUpdateCheckIntervalDays,
 } from "@/lib/hvsc/hvscReleaseService";
 import {
   APP_SETTINGS_KEYS,
@@ -280,7 +280,7 @@ export default function SettingsPage() {
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [hvscUpdateCheckIntervalInput, setHvscUpdateCheckIntervalInput] = useState(() =>
-    String(getHvscUpdateCheckIntervalHours()),
+    String(getHvscUpdateCheckIntervalDays()),
   );
   const [hvscLastUpdateCheckAt] = useState(() => getHvscLastUpdateCheckAt());
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
@@ -351,7 +351,7 @@ export default function SettingsPage() {
   }, [hvscBaseUrlInput]);
 
   const commitHvscUpdateCheckInterval = useCallback(() => {
-    const normalized = setHvscUpdateCheckIntervalHours(hvscUpdateCheckIntervalInput);
+    const normalized = setHvscUpdateCheckIntervalDays(hvscUpdateCheckIntervalInput);
     setHvscUpdateCheckIntervalInput(String(normalized));
   }, [hvscUpdateCheckIntervalInput]);
 
@@ -1509,10 +1509,10 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Automatic update check interval (hours)</Label>
+                <Label className="text-sm font-medium">Automatic update check interval (days)</Label>
                 <Input
                   type="number"
-                  min={MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS}
+                  min={MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS}
                   step={1}
                   value={hvscUpdateCheckIntervalInput}
                   onChange={(event) => setHvscUpdateCheckIntervalInput(event.target.value)}
@@ -1524,7 +1524,8 @@ export default function SettingsPage() {
                 />
                 <p className="text-xs text-muted-foreground">
                   Automatic HVSC update checks run from the Play page when HVSC is installed and ready. The minimum
-                  interval is {MIN_HVSC_UPDATE_CHECK_INTERVAL_HOURS} hours to avoid unnecessary mirror load.
+                  interval is {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
+                  {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"} to avoid unnecessary mirror load.
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Last automatic update check:{" "}

@@ -335,6 +335,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
   __c64uExpectedMissing?: boolean;
+  __c64uExpectedFailure?: boolean;
   __c64uSkipItemEnrichment?: boolean;
 };
 
@@ -766,6 +767,7 @@ export class C64API {
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
     const bypassCircuit = Boolean(options.__c64uBypassCircuit);
     const expectedMissing = Boolean(options.__c64uExpectedMissing);
+    const expectedFailureOption = Boolean(options.__c64uExpectedFailure);
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -776,6 +778,7 @@ export class C64API {
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
     delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
+    delete (requestOptions as { __c64uExpectedFailure?: boolean }).__c64uExpectedFailure;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -930,7 +933,8 @@ export class C64API {
                 if (!response.ok) {
                   const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
                   const failure = classifyError(err, "integration");
-                  const expectedFailure = expectedMissing && method === "GET" && response.status === 404;
+                  const expectedFailure =
+                    (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -985,7 +989,7 @@ export class C64API {
                 );
                 if (!responseRecorded) {
                   const failure = classifyError(error);
-                  const expectedFailure = callerAborted;
+                  const expectedFailure = callerAborted || expectedFailureOption;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -1002,7 +1006,7 @@ export class C64API {
                     recordTraceError(action, error as Error, failure);
                   }
                 }
-                if (!fuzzBlocked && intent !== "system" && !callerAborted) {
+                if (!fuzzBlocked && intent !== "system" && !callerAborted && !expectedFailureOption) {
                   const isTransientFailure =
                     isAbort ||
                     isNetworkFailure ||
@@ -1348,7 +1352,10 @@ export class C64API {
       }
     });
     try {
-      const categoryPayload = await this.getCategory(category, options);
+      const categoryPayload = await this.getCategory(category, {
+        ...options,
+        __c64uExpectedFailure: true,
+      });
       const payload = categoryPayload as Record<string, any>;
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
@@ -1399,7 +1406,7 @@ export class C64API {
         throw error;
       }
 
-      addLog("warn", "Category config fetch failed; falling back to item fetches", {
+      addLog("debug", "Category config fetch failed; falling back to item fetches", {
         category,
         error: categoryErrorMessage,
       });

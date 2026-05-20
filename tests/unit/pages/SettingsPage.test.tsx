@@ -47,7 +47,7 @@ const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 const FTP_PORT_STORAGE_KEY = "c64u_ftp_port";
 const TELNET_PORT_STORAGE_KEY = "c64u_telnet_port";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
-const HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY = "c64u_hvsc_update_check_interval_hours";
+const HVSC_UPDATE_CHECK_INTERVAL_DAYS_KEY = "c64u_hvsc_update_check_interval_days";
 
 vi.mock("framer-motion", () => ({
   motion: {
@@ -666,11 +666,11 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const input = screen.getByTestId("hvsc-update-check-interval");
-    fireEvent.change(input, { target: { value: "1" } });
+    fireEvent.change(input, { target: { value: "0" } });
     fireEvent.blur(input);
 
-    expect((input as HTMLInputElement).value).toBe("6");
-    expect(localStorage.getItem(HVSC_UPDATE_CHECK_INTERVAL_HOURS_KEY)).toBe("6");
+    expect((input as HTMLInputElement).value).toBe("1");
+    expect(localStorage.getItem(HVSC_UPDATE_CHECK_INTERVAL_DAYS_KEY)).toBe("1");
   });
 
   it("renders stable feature rows before experimental ones", () => {
