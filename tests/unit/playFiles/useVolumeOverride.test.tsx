@@ -308,6 +308,39 @@ describe("useVolumeOverride", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
+  it("falls back to discovered SID mixer items when enablement filtering excludes everything", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    filterEnabledSidVolumeItemsMock.mockImplementation(() => []);
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.enabledSidVolumeItems.map((item) => item.name)).toEqual(["SID 1"]);
+      expect(result.current.volumeState.index).toBe(1);
+    });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Play volume enablement fell back to discovered SID mixer items",
+      expect.objectContaining({
+        sidVolumeItemNames: ["SID 1"],
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "-42 dB" },
+      }),
+    );
+  });
+
   it("skips reconciliation reads for preview writes and only refetches after commit", async () => {
     vi.useFakeTimers();
 

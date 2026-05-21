@@ -85,10 +85,10 @@ describe("backgroundExecutionPolicy", () => {
     ).toBe(false);
   });
 
-  it("syncs due-at timestamps only while the enabled native Android path is active", () => {
+  it("syncs due-at timestamps whenever the enabled native Android path needs a new dueAtMs", () => {
     expect(shouldSyncBackgroundExecutionDueAt(true, true, true)).toBe(true);
     expect(shouldSyncBackgroundExecutionDueAt(false, true, true)).toBe(false);
-    expect(shouldSyncBackgroundExecutionDueAt(true, false, true)).toBe(false);
+    expect(shouldSyncBackgroundExecutionDueAt(true, false, true)).toBe(true);
     expect(shouldSyncBackgroundExecutionDueAt(true, true, false)).toBe(false);
   });
 });

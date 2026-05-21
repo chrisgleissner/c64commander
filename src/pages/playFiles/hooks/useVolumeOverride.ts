@@ -30,7 +30,7 @@ import {
   resolveSidMutedVolumeOption,
   type SidEnablement,
 } from "@/lib/config/sidVolumeControl";
-import { reduceVolumeState } from "../volumeState";
+import { reduceVolumeState, type VolumeAction } from "../volumeState";
 import { extractAudioMixerItems, parseVolumeOption } from "../playFilesUtils";
 import { type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
 import { resolveMutedSyncIndex, resolveMostCommonIndex, shouldHoldManualMuteSync } from "../volumeSync";
@@ -93,10 +93,16 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       ),
     [sidAddressingCategory, sidSocketsCategory],
   );
-  const enabledSidVolumeItems = useMemo(
+  const filteredSidVolumeItems = useMemo(
     () => filterEnabledSidVolumeItems(sidVolumeItems, sidEnablement),
     [sidEnablement, sidVolumeItems],
   );
+  const enabledSidVolumeItems = useMemo(() => {
+    if (filteredSidVolumeItems.length > 0 || sidVolumeItems.length === 0) {
+      return filteredSidVolumeItems;
+    }
+    return sidVolumeItems;
+  }, [filteredSidVolumeItems, sidVolumeItems]);
   const volumeSteps = useMemo(() => {
     const baseOptions =
       sidVolumeItems.find((item) => Array.isArray(item.options) && item.options.length)?.options ?? [];
@@ -108,6 +114,18 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     muted: false,
     reason: null,
   });
+  const volumeStateRef = useRef(volumeState);
+  volumeStateRef.current = volumeState;
+
+  useEffect(() => {
+    if (sidVolumeItems.length === 0 || filteredSidVolumeItems.length > 0) {
+      return;
+    }
+    addLog("warn", "Play volume enablement fell back to discovered SID mixer items", {
+      sidVolumeItemNames: sidVolumeItems.map((item) => item.name),
+      sidEnablement,
+    });
+  }, [filteredSidVolumeItems.length, sidEnablement, sidVolumeItems]);
 
   const manualMuteSnapshotRef = useRef<SidMuteSnapshot | null>(null);
   const pauseMuteSnapshotRef = useRef<SidMuteSnapshot | null>(null);
@@ -141,6 +159,11 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
 
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
+
+  const dispatchTrackedVolume = useCallback((action: VolumeAction) => {
+    volumeStateRef.current = reduceVolumeState(volumeStateRef.current, action);
+    dispatchVolume(action);
+  }, []);
 
   const resolveVolumeIndex = useCallback(
     (value: string | number) => {
@@ -204,6 +227,17 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     pendingVolumeWriteRef.current = null;
     playbackSyncIntentRef.current = null;
     volumeUiTargetRef.current = null;
+  }, []);
+
+  const resolveEffectiveVolumeState = useCallback(() => {
+    const pending = pendingVolumeWriteRef.current;
+    if (pending) {
+      return {
+        index: pending.index,
+        muted: pending.muted,
+      };
+    }
+    return volumeStateRef.current;
   }, []);
 
   const markPendingVolumeWrite = useCallback(
@@ -450,7 +484,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         volumeSessionActiveRef.current = false;
         manualMuteSnapshotRef.current = null;
         pauseMuteSnapshotRef.current = null;
-        dispatchVolume({ type: "reset", index: defaultVolumeIndex });
+        dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
         playbackSyncIntentRef.current = null;
         volumeUiTargetRef.current = null;
         return;
@@ -464,7 +498,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       volumeSessionActiveRef.current = false;
       manualMuteSnapshotRef.current = null;
       pauseMuteSnapshotRef.current = null;
-      dispatchVolume({ type: "reset", index: defaultVolumeIndex });
+      dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
       playbackSyncIntentRef.current = null;
       volumeUiTargetRef.current = null;
     },
@@ -472,6 +506,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       applyAudioMixerUpdates,
       buildEnabledSidRestoreUpdates,
       defaultVolumeIndex,
+      dispatchTrackedVolume,
       resolveEnabledSidVolumeItems,
       sidEnablement,
       status.isConnected,
@@ -537,7 +572,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           allowKnownDeviceSkip: true,
           reconcile: phase !== "preview",
         });
-        dispatchVolume({ type: "unmute", reason: "manual", index: nextIndex });
+        dispatchTrackedVolume({ type: "unmute", reason: "manual", index: nextIndex });
       } catch (error) {
         addErrorLog("Volume update failed", {
           error: (error as Error).message,
@@ -549,6 +584,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     [
       buildEnabledSidVolumeUpdates,
       clearPendingVolumeWrite,
+      dispatchTrackedVolume,
       ensureVolumeSessionSnapshot,
       queuePlaybackMixerWrite,
       reserveVolumeUiTarget,
@@ -561,7 +597,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const handleVolumeDraftChange = useCallback(
     (nextIndex: number) => {
       isDraggingVolumeRef.current = true;
-      dispatchVolume({ type: "set-index", index: nextIndex });
+      dispatchTrackedVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (!volumeMuted) return;
       previousVolumeIndexRef.current = nextIndex;
@@ -574,7 +610,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         };
       }
     },
-    [reserveVolumeUiTarget, volumeMuted, volumeSteps],
+    [dispatchTrackedVolume, reserveVolumeUiTarget, volumeMuted, volumeSteps],
   );
 
   const handleVolumePreview = useCallback(
@@ -588,7 +624,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const handleVolumeCommit = useCallback(
     async (nextIndex: number) => {
       isDraggingVolumeRef.current = false;
-      dispatchVolume({ type: "set-index", index: nextIndex });
+      dispatchTrackedVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (volumeMuted) {
         previousVolumeIndexRef.current = nextIndex;
@@ -604,7 +640,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       }
       await sendVolumeWrite(nextIndex, "commit");
     },
-    [reserveVolumeUiTarget, sendVolumeWrite, volumeMuted, volumeSteps],
+    [dispatchTrackedVolume, reserveVolumeUiTarget, sendVolumeWrite, volumeMuted, volumeSteps],
   );
 
   const handleToggleMute = useCallback(async () => {
@@ -612,14 +648,15 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     if (!cachedItems.length) return;
     isDraggingVolumeRef.current = false;
     const muteIndex = resolveMutedVolumeIndex(cachedItems);
-    if (!volumeMuted) {
-      previousVolumeIndexRef.current = volumeIndex;
+    const effectiveState = resolveEffectiveVolumeState();
+    if (!effectiveState.muted) {
+      previousVolumeIndexRef.current = effectiveState.index;
       await ensureVolumeSessionSnapshot();
       manualMuteSnapshotRef.current = captureSidMuteSnapshot(cachedItems, sidEnablement);
       manualMuteIntentRef.current = true;
-      dispatchVolume({ type: "mute", reason: "manual", index: muteIndex });
+      dispatchTrackedVolume({ type: "mute", reason: "manual", index: muteIndex });
       addLog("info", "Play volume mute requested", {
-        previousIndex: volumeIndex,
+        previousIndex: effectiveState.index,
         muteIndex,
       });
       lastManualWriteRef.current = {
@@ -640,7 +677,11 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         );
       } catch (error) {
         manualMuteIntentRef.current = false;
-        dispatchVolume({ type: "unmute", reason: "manual", index: previousVolumeIndexRef.current ?? volumeIndex });
+        dispatchTrackedVolume({
+          type: "unmute",
+          reason: "manual",
+          index: previousVolumeIndexRef.current ?? effectiveState.index,
+        });
         throw error;
       }
       addLog("info", "Play volume mute sent", {
@@ -648,19 +689,19 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       });
       return;
     }
-    const currentItems = await resolveEnabledSidVolumeItems(true);
-    const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
+    const fallbackIndex = previousVolumeIndexRef.current ?? effectiveState.index;
+    manualMuteIntentRef.current = false;
+    dispatchTrackedVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
+    manualMuteSnapshotRef.current = null;
+    addLog("info", "Play volume unmute requested", {
+      index: fallbackIndex,
+    });
+    const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : await resolveEnabledSidVolumeItems();
     const target = volumeSteps[fallbackIndex]?.option;
     let updates = target ? buildEnabledSidMutedToTargetUpdates(currentItems, sidEnablement, target) : {};
     if (!Object.keys(updates).length && target) {
       updates = buildEnabledSidVolumeUpdates(currentItems, sidEnablement, target);
     }
-    manualMuteIntentRef.current = false;
-    dispatchVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
-    manualMuteSnapshotRef.current = null;
-    addLog("info", "Play volume unmute requested", {
-      index: fallbackIndex,
-    });
     try {
       if (Object.keys(updates).length) {
         lastManualWriteRef.current = {
@@ -681,25 +722,28 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         addLog("info", "Play volume unmute sent", {
           index: fallbackIndex,
         });
+        const pending = pendingVolumeWriteRef.current;
+        if (pending?.index === fallbackIndex && pending.muted === false) {
+          clearPendingVolumeWrite();
+        }
       }
     } catch (error) {
       manualMuteIntentRef.current = true;
-      dispatchVolume({ type: "mute", reason: "manual", index: muteIndex });
+      dispatchTrackedVolume({ type: "mute", reason: "manual", index: muteIndex });
       throw error;
     }
-    clearPendingVolumeWrite();
   }, [
     buildEnabledSidMutedToTargetUpdates,
     captureSidMuteSnapshot,
     clearPendingVolumeWrite,
+    dispatchTrackedVolume,
     ensureVolumeSessionSnapshot,
     enabledSidVolumeItems,
     queuePlaybackMixerWrite,
     resolveMutedVolumeIndex,
+    resolveEffectiveVolumeState,
     resolveEnabledSidVolumeItems,
     sidEnablement,
-    volumeIndex,
-    volumeMuted,
     volumeSteps,
     withPollingPause,
   ]);
@@ -709,7 +753,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {
       lastKnownDeviceVolumeRef.current = null;
       manualMuteIntentRef.current = false;
-      dispatchVolume({ type: "reset", index: defaultVolumeIndex });
+      dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
       clearPendingVolumeWrite();
       isDraggingVolumeRef.current = false;
       return;
@@ -786,7 +830,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         }
       }
       if (!volumeMuted || volumeIndex !== nextIndex || volumeState.reason !== "sync") {
-        dispatchVolume({ type: "sync", index: nextIndex, muted: true });
+        dispatchTrackedVolume({ type: "sync", index: nextIndex, muted: true });
       }
       lastManualWriteRef.current = null;
       return;
@@ -811,11 +855,12 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     // Hardware has confirmed the unmuted state – clear the resume guard.
     resumingFromPauseRef.current = false;
     manualMuteIntentRef.current = false;
-    dispatchVolume({ type: "sync", index: nextIndex, muted: false });
+    dispatchTrackedVolume({ type: "sync", index: nextIndex, muted: false });
     lastManualWriteRef.current = null;
   }, [
     clearPendingVolumeWrite,
     defaultVolumeIndex,
+    dispatchTrackedVolume,
     resolveMutedVolumeIndex,
     volumeIndex,
     volumeState.reason,
@@ -871,7 +916,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           });
         }
       }
-      dispatchVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
+      dispatchTrackedVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
       manualMuteIntentRef.current = false;
       manualMuteSnapshotRef.current = null;
       clearPendingVolumeWrite();
@@ -880,7 +925,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       buildEnabledSidMutedToTargetUpdates,
       buildEnabledSidVolumeUpdates,
       clearPendingVolumeWrite,
-      dispatchVolume,
+      dispatchTrackedVolume,
       queuePlaybackMixerWrite,
       resolveEnabledSidVolumeItems,
       sidEnablement,
@@ -910,6 +955,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     resumingFromPauseRef,
     volumeSessionSnapshotRef,
     volumeSessionActiveRef,
+    pendingVolumeWriteRef,
     volumeUpdateTimerRef,
     volumeUpdateSeqRef,
     captureSidMuteSnapshot,

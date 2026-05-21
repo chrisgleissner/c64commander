@@ -331,13 +331,14 @@ export function UnifiedHealthBadge({ className }: Props) {
   const suppressClickRef = useRef(false);
 
   const canSwitchDevices = savedDevices.devices.length > 1;
+  const shouldRunSavedDeviceHealthChecks = pickerOpen && canSwitchDevices;
   const {
     byDeviceId: healthByDeviceId,
     refreshAll,
     totalProbeCount,
   } = useSavedDeviceHealthChecks(
     savedDevices.devices,
-    canSwitchDevices,
+    shouldRunSavedDeviceHealthChecks,
     pickerOpen ? HEALTH_CHECK_CONTEXTS.switchDeviceDialog : HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
   );
 

@@ -35,6 +35,7 @@ class BackgroundExecutionServiceTest {
     @Before
     fun setUp() {
         setIsRunning(false)
+        setRunningInstance(null)
         controller = Robolectric.buildService(BackgroundExecutionService::class.java)
         service = controller.get()
     }
@@ -47,11 +48,18 @@ class BackgroundExecutionServiceTest {
             // Service may already be destroyed
         }
         setIsRunning(false)
+        setRunningInstance(null)
     }
 
     // Helper to set the static isRunning field via reflection for testing
     private fun setIsRunning(value: Boolean) {
         val field = BackgroundExecutionService::class.java.getDeclaredField("isRunning")
+        field.isAccessible = true
+        field.set(null, value)
+    }
+
+    private fun setRunningInstance(value: BackgroundExecutionService?) {
+        val field = BackgroundExecutionService::class.java.getDeclaredField("runningInstance")
         field.isAccessible = true
         field.set(null, value)
     }
@@ -218,6 +226,21 @@ class BackgroundExecutionServiceTest {
             BackgroundExecutionService.ACTION_UPDATE_DUE_AT,
             started?.action,
         )
+    }
+
+    @Test
+    fun updateDueAtUpdatesRunningServiceWithoutRestartingForegroundService() {
+        controller.create()
+        controller.startCommand(0, 0)
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val dueAtMs = System.currentTimeMillis() + 10_000L
+
+        BackgroundExecutionService.updateDueAt(appContext, dueAtMs)
+        ShadowLooper.shadowMainLooper().idle()
+
+        assertEquals(dueAtMs, getPrivateField("dueAtMs"))
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNull("Expected no new started service intent when service is already running", shadowApp.nextStartedService)
     }
 
     @Test

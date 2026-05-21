@@ -33,6 +33,7 @@ __pycache__/
 *.iml
 .coverage
 .pytest_cache/
+tmp
 
 # Test output
 .nyc_output/
@@ -92,6 +93,7 @@ docker-inspect*.json
 filecount*.txt
 
 # Review generated research evidence (machine-generated, ephemeral)
+docs/plans/performance/playback-and-volume-control/runs/
 docs/research/**/artifacts/
 docs/research/**/logs/
 docs/research/**/*logcat*

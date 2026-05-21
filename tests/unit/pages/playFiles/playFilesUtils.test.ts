@@ -7,6 +7,8 @@
  */
 
 import {
+  buildPlaylistItemId,
+  applyDurationOverrideToPlaylist,
   formatTime,
   formatBytes,
   formatDate,
@@ -28,6 +30,7 @@ import {
   DURATION_MIN_SECONDS,
   DURATION_MAX_SECONDS,
 } from "@/pages/playFiles/playFilesUtils";
+import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeAudioMixerOptions } from "@/lib/config/audioMixer";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -133,6 +136,78 @@ describe("playFilesUtils", () => {
       releaseSingleFlight(ref);
       expect(ref.current).toBe(false);
       expect(tryAcquireSingleFlight(ref)).toBe(true);
+    });
+  });
+
+  describe("buildPlaylistItemId", () => {
+    it("distinguishes repeated playlist entries by addedAt", () => {
+      expect(
+        buildPlaylistItemId({
+          source: "hvsc",
+          sourceId: "hvsc-library",
+          path: "/MUSICIANS/Test/demo.sid",
+          addedAt: "2026-05-21T10:00:00.000Z",
+        }),
+      ).not.toBe(
+        buildPlaylistItemId({
+          source: "hvsc",
+          sourceId: "hvsc-library",
+          path: "/MUSICIANS/Test/demo.sid",
+          addedAt: "2026-05-21T10:00:01.000Z",
+        }),
+      );
+    });
+
+    it("preserves the legacy base id when addedAt is absent", () => {
+      expect(
+        buildPlaylistItemId({
+          source: "hvsc",
+          sourceId: "hvsc-library",
+          path: "/MUSICIANS/Test/demo.sid",
+        }),
+      ).toBe("hvsc:hvsc-library:/MUSICIANS/Test/demo.sid");
+    });
+  });
+
+  describe("applyDurationOverrideToPlaylist", () => {
+    const createPlaylistItem = (id: string, durationMs: number | undefined): PlaylistItem => ({
+      id,
+      request: {
+        source: "ultimate",
+        path: `/${id}.sid`,
+      },
+      category: "sid",
+      label: id,
+      path: `/${id}.sid`,
+      durationMs,
+      sourceId: null,
+      sizeBytes: null,
+      modifiedAt: null,
+      addedAt: null,
+      status: "ready",
+      unavailableReason: null,
+      configRef: null,
+      configOrigin: null,
+      configOverrides: null,
+      archiveRef: null,
+      subsongCount: null,
+    });
+
+    it("updates every playlist item's duration", () => {
+      const first = createPlaylistItem("first", 180_000);
+      const second = createPlaylistItem("second", 90_000);
+      const playlist = [first, second];
+
+      const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
+
+      expect(updated[0]).toEqual({ ...first, durationMs: 12_000 });
+      expect(updated[1]).toEqual({ ...second, durationMs: 12_000 });
+    });
+
+    it("returns the original playlist when every duration already matches", () => {
+      const playlist = [createPlaylistItem("first", 12_000), createPlaylistItem("second", 12_000)];
+
+      expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
     });
   });
 

@@ -295,6 +295,23 @@ describe("SwipeNavigationLayer", () => {
     expect(container.getAttribute("style")).toContain("height: calc(100dvh - var(--app-tab-bar-reserved-height))");
   });
 
+  it("resets accidental horizontal runway scroll drift", async () => {
+    renderLayer("/play");
+
+    const container = await screen.findByTestId("swipe-navigation-container");
+    act(() => {
+      container.scrollLeft = 120;
+      fireEvent.scroll(container);
+    });
+
+    expect(container.scrollLeft).toBe(0);
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "debug",
+      "[SwipeNav] reset-scroll-left",
+      expect.objectContaining({ reason: "native-scroll", offset: 120 }),
+    );
+  });
+
   it("uses the slow-motion test probe duration for deterministic evidence", async () => {
     (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     renderLayer("/", undefined, false, true);
@@ -390,6 +407,32 @@ describe("SwipeNavigationLayer", () => {
         "debug",
         "[SwipeNav] transition-end-synthesized",
         expect.objectContaining({ settleAfterMs: 320 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resets an orphaned drag back to idle when pointer end never arrives", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        capturedCallbacks?.onProgress(-96, -0.5);
+      });
+      expect(runway).toHaveAttribute("data-runway-phase", "dragging");
+
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+
+      expect(runway).toHaveAttribute("data-runway-phase", "idle");
+      expect(mocks.addLog).toHaveBeenCalledWith(
+        "debug",
+        "[SwipeNav] drag-reset-synthesized",
+        expect.objectContaining({ center: "Play", settleAfterMs: 600, dragOffsetPx: -96 }),
       );
     } finally {
       vi.useRealTimers();

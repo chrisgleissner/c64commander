@@ -41,6 +41,10 @@ type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> &
     haptics?: boolean;
     notch?: boolean;
   };
+  nativeInputMode?: "none" | "overlay";
+  nativeInputAriaLabel?: string;
+  nativeInputTestId?: string;
+  nativeInputClassName?: string;
 };
 
 const normalizeSliderValue = (value: number, min: number, max: number) =>
@@ -71,6 +75,10 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       valueLabelClassName,
       showValueOnDrag = true,
       midpoint,
+      nativeInputMode = "none",
+      nativeInputAriaLabel,
+      nativeInputTestId,
+      nativeInputClassName,
       onPointerDown,
       onPointerUp,
       onPointerCancel,
@@ -264,6 +272,22 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       () => wrapValueChange(handleValueCommit, "slide", "Slider", props, "Slider"),
       [handleValueCommit, props],
     );
+    const handleNativeInput = React.useCallback(
+      (event: React.FormEvent<HTMLInputElement>) => {
+        const nextValue = Number(event.currentTarget.value);
+        if (!Number.isFinite(nextValue)) return;
+        handleValueChange([nextValue]);
+      },
+      [handleValueChange],
+    );
+    const handleNativeChange = React.useCallback(
+      (event: React.ChangeEvent<HTMLInputElement>) => {
+        const nextValue = Number(event.currentTarget.value);
+        if (!Number.isFinite(nextValue)) return;
+        handleValueCommit([nextValue]);
+      },
+      [handleValueCommit],
+    );
 
     const fallbackValue = normalizedDefaultValue?.[0] ?? min;
     const currentValue = normalizedValue?.[0] ?? normalizeSliderValue(dragValue ?? fallbackValue, min, max);
@@ -301,6 +325,24 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
             />
           ) : null}
         </SliderPrimitive.Track>
+        {nativeInputMode === "overlay" ? (
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={Number.isFinite(step) && step ? step : 1}
+            value={displayValue}
+            onInput={handleNativeInput}
+            onChange={handleNativeChange}
+            aria-label={nativeInputAriaLabel}
+            data-testid={nativeInputTestId}
+            disabled={props.disabled}
+            className={cn(
+              "absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0",
+              nativeInputClassName,
+            )}
+          />
+        ) : null}
         {showValue ? (
           <div
             data-testid="slider-value-display"

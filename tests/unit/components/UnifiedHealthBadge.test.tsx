@@ -515,12 +515,12 @@ describe("UnifiedHealthBadge", () => {
     expect(badge).toHaveAttribute("data-connectivity-state", "Online");
   });
 
-  it("enables saved-device health polling on cold boot without opening the switcher", () => {
+  it("keeps saved-device health polling disabled until the switcher opens", () => {
     render(<UnifiedHealthBadge />);
 
     expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(
       mockState.savedDevices.devices,
-      true,
+      false,
       expect.objectContaining({
         context: "background-maintenance",
         configPulsePolicy: "read-only",

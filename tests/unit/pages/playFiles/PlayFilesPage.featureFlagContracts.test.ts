@@ -26,4 +26,12 @@ describe("PlayFilesPage feature-flag contracts", () => {
       "shouldCancelHvscLifecycleOnDisable(hvscControlsEnabled, hvsc.hvscPreparationState)",
     );
   });
+
+  it("turns Android background auto-skip callbacks into auto next transitions", () => {
+    expect(playFilesPageSource).toContain("void onBackgroundAutoSkipDue((event) => {");
+    expect(playFilesPageSource).toContain("if (event.dueAtMs !== guard.dueAtMs) return;");
+    expect(playFilesPageSource).toContain('await handleNext("auto", expectedTrackInstanceId);');
+    expect(playFilesPageSource).toContain("await BackgroundExecution.setDueAtMs({ dueAtMs: nextGuard.dueAtMs });");
+    expect(playFilesPageSource).toContain('addErrorLog("Failed to re-arm background auto-advance"');
+  });
 });

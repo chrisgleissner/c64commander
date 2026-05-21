@@ -52,6 +52,8 @@ class BackgroundExecutionService : Service() {
         @Volatile
         var isRunning = false
             private set
+        @Volatile
+        private var runningInstance: BackgroundExecutionService? = null
 
         fun start(context: Context) {
             if (isRunning) {
@@ -85,6 +87,11 @@ class BackgroundExecutionService : Service() {
         }
 
         fun updateDueAt(context: Context, dueAtMs: Long?) {
+            val activeService = runningInstance
+            if (isRunning && activeService != null) {
+                activeService.applyDueAtUpdate(dueAtMs)
+                return
+            }
             val intent = Intent(context, BackgroundExecutionService::class.java)
             intent.action = ACTION_UPDATE_DUE_AT
             if (dueAtMs != null) {
@@ -120,6 +127,7 @@ class BackgroundExecutionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        runningInstance = this
         AppLogger.info(this, TAG, "Service created", "BackgroundExecutionService")
         createNotificationChannel()
     }
@@ -155,6 +163,7 @@ class BackgroundExecutionService : Service() {
         releaseMediaSession()
         releaseWakeLock()
         isRunning = false
+        runningInstance = null
         super.onDestroy()
     }
 
@@ -175,6 +184,10 @@ class BackgroundExecutionService : Service() {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
+    }
+
+    private fun applyDueAtUpdate(nextDueAtMs: Long?) {
+        handler.post { updateDueAtInternal(nextDueAtMs) }
     }
 
     private fun buildNotification(): Notification {

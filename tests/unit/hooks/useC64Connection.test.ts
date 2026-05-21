@@ -207,6 +207,20 @@ describe("useC64Connection", () => {
     expect(result.current.deviceHost).toBe("host.local");
   });
 
+  it("uses background intent for scheduled device info polling", async () => {
+    const { wrapper } = createWrapper();
+    renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() =>
+      expect(mockApi.getInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          __c64uIntent: "background",
+          timeoutMs: 3000,
+        }),
+      ),
+    );
+  });
+
   it("responds to connection change events", async () => {
     const { wrapper, client } = createWrapper();
     const invalidateSpy = vi.spyOn(client, "invalidateQueries");
@@ -311,7 +325,7 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(mockApi.getCategories).toHaveBeenCalledWith({ __c64uIntent: "user" }));
   });
 
-  it("uses user intent for the visible device info query", async () => {
+  it("uses background intent for the visible device info query", async () => {
     const { wrapper } = createWrapper();
 
     renderHook(() => useC64Connection(), { wrapper });
@@ -319,7 +333,7 @@ describe("useC64Connection", () => {
     await waitFor(() =>
       expect(mockApi.getInfo).toHaveBeenCalledWith(
         expect.objectContaining({
-          __c64uIntent: "user",
+          __c64uIntent: "background",
           timeoutMs: 3000,
         }),
       ),

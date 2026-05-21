@@ -152,7 +152,7 @@ export function useC64Connection() {
       return api.getInfo({
         timeoutMs: 3000,
         signal,
-        __c64uIntent: "user",
+        __c64uIntent: "background",
       });
     },
     enabled:

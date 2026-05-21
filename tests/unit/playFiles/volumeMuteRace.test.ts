@@ -396,6 +396,23 @@ describe("pending volume write protection", () => {
       }),
     ).toBe(false);
   });
+
+  it("keeps the pending write guard when manual unmute does not need to send a device write", async () => {
+    const clearPending = vi.fn();
+    const writeUnmute = vi.fn();
+
+    const handleManualUnmute = async (updates: Record<string, string>) => {
+      if (Object.keys(updates).length) {
+        await writeUnmute();
+        clearPending();
+      }
+    };
+
+    await handleManualUnmute({});
+
+    expect(writeUnmute).not.toHaveBeenCalled();
+    expect(clearPending).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

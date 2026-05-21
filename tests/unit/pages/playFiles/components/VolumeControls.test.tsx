@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
@@ -17,9 +17,23 @@ type RenderOptions = {
   volumeMuted: boolean;
   canControlVolume?: boolean;
   profile?: "compact" | "medium" | "expanded";
+  useNativeRangeInput?: boolean;
+  onToggleMute?: () => void;
+  onVolumeDraftChange?: (value: number) => void;
+  onVolumePreview?: (value: number) => Promise<void> | void;
+  onVolumeCommit?: (value: number) => Promise<void> | void;
 };
 
-const ProfileHarness = ({ volumeMuted, canControlVolume = true, profile }: RenderOptions) => {
+const ProfileHarness = ({
+  volumeMuted,
+  canControlVolume = true,
+  profile,
+  useNativeRangeInput = false,
+  onToggleMute = vi.fn(),
+  onVolumeDraftChange = vi.fn(),
+  onVolumePreview = vi.fn(),
+  onVolumeCommit = vi.fn(),
+}: RenderOptions) => {
   const { setOverride } = useDisplayProfilePreference();
 
   useEffect(() => {
@@ -30,23 +44,23 @@ const ProfileHarness = ({ volumeMuted, canControlVolume = true, profile }: Rende
     <VolumeControls
       volumeMuted={volumeMuted}
       canControlVolume={canControlVolume}
-      isPending={false}
-      onToggleMute={vi.fn()}
+      onToggleMute={onToggleMute}
       volumeStepsCount={5}
       volumeIndex={2}
-      onVolumeChange={vi.fn()}
-      onVolumeChangeAsync={vi.fn()}
-      onVolumeCommit={vi.fn()}
+      onVolumeDraftChange={onVolumeDraftChange}
+      onVolumePreview={onVolumePreview}
+      onVolumeCommit={onVolumeCommit}
       previewIntervalMs={200}
       volumeLabel="0 dB"
+      useNativeRangeInput={useNativeRangeInput}
     />
   );
 };
 
-const renderVolumeControls = ({ volumeMuted, canControlVolume = true, profile }: RenderOptions) =>
+const renderVolumeControls = (options: RenderOptions) =>
   render(
     <DisplayProfileProvider>
-      <ProfileHarness volumeMuted={volumeMuted} canControlVolume={canControlVolume} profile={profile} />
+      <ProfileHarness {...options} />
     </DisplayProfileProvider>,
   );
 
@@ -77,5 +91,28 @@ describe("VolumeControls", () => {
     renderVolumeControls({ volumeMuted: false, profile: "expanded" });
 
     expect(screen.getByTestId("volume-caption").parentElement).toHaveClass("min-w-[200px]");
+  });
+
+  it("renders an Android-friendly native range input that keeps drag feedback local until commit", () => {
+    const onVolumeDraftChange = vi.fn();
+    const onVolumePreview = vi.fn();
+    const onVolumeCommit = vi.fn();
+
+    renderVolumeControls({
+      volumeMuted: false,
+      useNativeRangeInput: true,
+      onVolumeDraftChange,
+      onVolumePreview,
+      onVolumeCommit,
+    });
+
+    const nativeInput = screen.getByTestId("volume-slider-native-input");
+    fireEvent.input(nativeInput, { target: { value: "4" } });
+    fireEvent.change(nativeInput, { target: { value: "4" } });
+
+    expect(onVolumeDraftChange).toHaveBeenCalledWith(4);
+    expect(onVolumePreview).not.toHaveBeenCalled();
+    expect(onVolumeCommit).toHaveBeenCalledWith(4);
+    expect(nativeInput).toHaveAttribute("aria-label", "Playback volume");
   });
 });

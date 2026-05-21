@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
@@ -57,6 +57,7 @@ const TRANSITION_DURATION_COMPACT_MS = 220;
 const TRANSITION_DURATION_REDUCED_MS = 180;
 const TRANSITION_DURATION_TEST_MS = 1200;
 const TRANSITION_SETTLE_BUFFER_MS = 80;
+const DRAG_SETTLE_TIMEOUT_MS = 600;
 
 const HomeSlot = () => <HomePage />;
 const PlaySlot = () => <PlayFilesPage />;
@@ -164,6 +165,16 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeMotionMode = readRuntimeMotionMode();
   const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
+  const resetContainerScroll = useCallback((reason: string) => {
+    const container = containerRef.current;
+    if (!container || container.scrollLeft === 0) return;
+    const offset = container.scrollLeft;
+    container.scrollLeft = 0;
+    addLog("debug", "[SwipeNav] reset-scroll-left", {
+      reason,
+      offset,
+    });
+  }, []);
 
   useEffect(() => {
     const handleSettingsUpdate = (event: Event) => {
@@ -175,6 +186,21 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     window.addEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
     return () => window.removeEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
   }, []);
+
+  useLayoutEffect(() => {
+    resetContainerScroll("state-sync");
+  }, [resetContainerScroll, routeIndex, runway.phase]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      resetContainerScroll("native-scroll");
+    };
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [resetContainerScroll]);
 
   useEffect(() => {
     const current = runwayRef.current;
@@ -199,7 +225,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       phase: "transitioning",
       centerIndex: current.centerIndex,
       panelIndexes: buildRunwayPanelIndexes(current.centerIndex, routeIndex),
-      dragOffsetPx: current.phase === "dragging" ? current.dragOffsetPx : 0,
+      dragOffsetPx: 0,
       targetIndex: routeIndex,
       transitionDirection: direction,
       lastVelocityX: current.lastVelocityX,
@@ -237,6 +263,21 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     }, settleAfterMs);
     return () => clearTimeout(timer);
   }, [runway.phase, runway.targetIndex, transitionConfig.durationMs]);
+
+  useEffect(() => {
+    if (runway.phase !== "dragging") return;
+    const timer = setTimeout(() => {
+      const current = runwayRef.current;
+      if (current.phase !== "dragging") return;
+      addLog("debug", "[SwipeNav] drag-reset-synthesized", {
+        center: TAB_ROUTES[current.centerIndex].label,
+        settleAfterMs: DRAG_SETTLE_TIMEOUT_MS,
+        dragOffsetPx: current.dragOffsetPx,
+      });
+      setRunway(buildIdleState(current.centerIndex));
+    }, DRAG_SETTLE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [runway.centerIndex, runway.dragOffsetPx, runway.phase]);
 
   const onProgress = useCallback(
     (dx: number, velocityX: number) => {

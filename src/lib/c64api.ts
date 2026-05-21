@@ -337,6 +337,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uExpectedMissing?: boolean;
   __c64uExpectedFailure?: boolean;
   __c64uSkipItemEnrichment?: boolean;
+  __c64uSkipSuccessBodyInspection?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -768,6 +769,7 @@ export class C64API {
     const bypassCircuit = Boolean(options.__c64uBypassCircuit);
     const expectedMissing = Boolean(options.__c64uExpectedMissing);
     const expectedFailureOption = Boolean(options.__c64uExpectedFailure);
+    const skipSuccessBodyInspection = Boolean(options.__c64uSkipSuccessBodyInspection);
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -779,6 +781,7 @@ export class C64API {
     delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
     delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
     delete (requestOptions as { __c64uExpectedFailure?: boolean }).__c64uExpectedFailure;
+    delete (requestOptions as { __c64uSkipSuccessBodyInspection?: boolean }).__c64uSkipSuccessBodyInspection;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -954,6 +957,26 @@ export class C64API {
                   throw err;
                 }
 
+                if (skipSuccessBodyInspection) {
+                  noteRestReachable(url, this.deviceHost);
+                  recordRestResponse(action, {
+                    method,
+                    path,
+                    url,
+                    status: response.status,
+                    headers: collectTraceHeaders(response.headers),
+                    body: null,
+                    payloadPreview: null,
+                    durationMs,
+                    error: null,
+                  });
+                  responseRecorded = true;
+                  if (!DEDUPEABLE_READ_METHODS.has(method)) {
+                    this.resetRequestReadState();
+                  }
+                  return { errors: [] } as T;
+                }
+
                 const parsedBody = await this.parseResponseJson<T>(response, path);
                 noteRestReachable(url, this.deviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
                 recordRestResponse(action, {
@@ -981,6 +1004,7 @@ export class C64API {
                 const callerAborted = requestSignal?.aborted === true;
                 const isAbort = (error as { name?: string }).name === "AbortError" || /timed out/i.test(rawMessage);
                 const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                const failure = classifyError(error);
                 const normalizedError =
                   !callerAborted && (isAbort || isNetworkFailure) ? resolveHostErrorMessage(rawMessage) : rawMessage;
                 const durationMs = Math.max(
@@ -988,8 +1012,7 @@ export class C64API {
                   Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
                 if (!responseRecorded) {
-                  const failure = classifyError(error);
-                  const expectedFailure = callerAborted || expectedFailureOption;
+                  const expectedFailure = callerAborted || expectedFailureOption || failure.isExpected;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -1006,7 +1029,13 @@ export class C64API {
                     recordTraceError(action, error as Error, failure);
                   }
                 }
-                if (!fuzzBlocked && intent !== "system" && !callerAborted && !expectedFailureOption) {
+                if (
+                  !fuzzBlocked &&
+                  intent !== "system" &&
+                  !callerAborted &&
+                  !expectedFailureOption &&
+                  !failure.isExpected
+                ) {
                   const isTransientFailure =
                     isAbort ||
                     isNetworkFailure ||
@@ -1234,7 +1263,7 @@ export class C64API {
             );
             const failure = classifyError(error);
             const callerAborted = options.signal?.aborted === true;
-            const expectedFailure = callerAborted;
+            const expectedFailure = callerAborted || failure.isExpected;
             recordRestResponse(action, {
               method,
               path: normalizeUrlPath(url),
@@ -1263,12 +1292,14 @@ export class C64API {
               error: normalizedError,
               rawError: rawMessage,
             });
-            // Always log as error so the entry is captured when the diagnostics
-            // overlay is open. The transient flag marks recoverable upload failures.
-            addErrorLog(
-              "C64 API upload failed",
-              transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails,
-            );
+            if (!failure.isExpected) {
+              // Always log as error so the entry is captured when the diagnostics
+              // overlay is open. The transient flag marks recoverable upload failures.
+              addErrorLog(
+                "C64 API upload failed",
+                transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails,
+              );
+            }
             console.info(
               "C64U_HTTP_FAILURE",
               JSON.stringify({
@@ -1527,6 +1558,7 @@ export class C64API {
     return this.request("/v1/machine:reset", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1534,6 +1566,7 @@ export class C64API {
     return this.request("/v1/machine:reboot", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1541,6 +1574,7 @@ export class C64API {
     return this.request("/v1/machine:pause", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1548,6 +1582,7 @@ export class C64API {
     return this.request("/v1/machine:resume", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1555,6 +1590,7 @@ export class C64API {
     return this.request("/v1/machine:poweroff", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1562,6 +1598,7 @@ export class C64API {
     return this.request("/v1/machine:menu_button", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 

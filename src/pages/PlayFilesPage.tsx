@@ -127,6 +127,8 @@ import {
   PLAYLIST_STORAGE_PREFIX,
   SHARED_PLAYLIST_STORAGE_KEY,
   buildPlaylistStorageKey,
+  buildPlaylistItemId,
+  applyDurationOverrideToPlaylist,
   clampDurationSeconds,
   durationSecondsToSlider,
   formatBytes,
@@ -978,9 +980,15 @@ export default function PlayFilesPage() {
       };
       const resolvedSourceId = entry.sourceId ?? (entry.source === "hvsc" ? "hvsc-library" : null);
       const originDeviceId = request.origin?.originDeviceId ?? null;
-      const idParts = [entry.source, resolvedSourceId ?? originDeviceId ?? ""];
+      const addedAt = addedAtOverride ?? new Date().toISOString();
       return {
-        id: `${idParts.join(":")}:${entry.path}`,
+        id: buildPlaylistItemId({
+          source: entry.source,
+          sourceId: resolvedSourceId,
+          originDeviceId,
+          path: entry.path,
+          addedAt,
+        }),
         request,
         category,
         label: entry.name,
@@ -997,7 +1005,7 @@ export default function PlayFilesPage() {
         sourceId: resolvedSourceId,
         sizeBytes: entry.sizeBytes ?? null,
         modifiedAt: entry.modifiedAt ?? null,
-        addedAt: addedAtOverride ?? new Date().toISOString(),
+        addedAt,
         status: "ready",
         unavailableReason: null,
       };
@@ -1080,9 +1088,28 @@ export default function PlayFilesPage() {
     let cancelled = false;
     let handle: { remove: () => Promise<void> } | null = null;
 
-    void onBackgroundAutoSkipDue(() => {
+    void onBackgroundAutoSkipDue((event) => {
       if (cancelled) return;
       syncPlaybackTimeline();
+      const guard = autoAdvanceGuardRef.current;
+      if (!guard || !isPlaying || isPaused) return;
+      if (event.dueAtMs !== guard.dueAtMs) return;
+      const expectedTrackInstanceId = guard.trackInstanceId;
+      void (async () => {
+        try {
+          await handleNext("auto", expectedTrackInstanceId);
+          if (cancelled) return;
+          const nextGuard = autoAdvanceGuardRef.current;
+          if (!nextGuard || nextGuard.trackInstanceId === expectedTrackInstanceId) return;
+          await BackgroundExecution.setDueAtMs({ dueAtMs: nextGuard.dueAtMs });
+        } catch (error) {
+          addErrorLog("Failed to re-arm background auto-advance", {
+            error: error instanceof Error ? error.message : String(error),
+            expectedTrackInstanceId,
+            dueAtMs: event.dueAtMs,
+          });
+        }
+      })();
     }).then((next) => {
       handle = next;
       if (cancelled) {
@@ -1096,7 +1123,7 @@ export default function PlayFilesPage() {
         void handle.remove();
       }
     };
-  }, [syncPlaybackTimeline]);
+  }, [autoAdvanceGuardRef, handleNext, isPaused, isPlaying, syncPlaybackTimeline]);
 
   const currentItem = playlist[currentIndex];
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
@@ -1349,17 +1376,23 @@ export default function PlayFilesPage() {
 
   const handleDurationSliderChange = useCallback((value: number[]) => {
     const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
+    const nextDurationMs = nextSeconds * 1000;
     setDurationSeconds(nextSeconds);
+    setDurationMs(nextDurationMs);
+    setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
     setDurationInput(formatDurationSeconds(nextSeconds));
-  }, []);
+  }, [setDurationMs, setPlaylist]);
 
   const handleDurationInputChange = useCallback((value: string) => {
     setDurationInput(value);
     const parsed = parseDurationInput(value);
     if (parsed === undefined) return;
     const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
+    const nextDurationMs = nextSeconds * 1000;
     setDurationSeconds(nextSeconds);
-  }, []);
+    setDurationMs(nextDurationMs);
+    setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+  }, [setDurationMs, setPlaylist]);
 
   const handleDurationInputBlur = useCallback(() => {
     const parsed = parseDurationInput(durationInput);
@@ -1368,11 +1401,14 @@ export default function PlayFilesPage() {
       return;
     }
     const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
+    const nextDurationMs = nextSeconds * 1000;
     if (nextSeconds !== durationSeconds) {
       setDurationSeconds(nextSeconds);
     }
+    setDurationMs(nextDurationMs);
+    setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
     setDurationInput(formatDurationSeconds(nextSeconds));
-  }, [durationInput, durationSeconds]);
+  }, [durationInput, durationSeconds, setDurationMs, setPlaylist]);
 
   const queryFilteredPlaylist = useQueryFilteredPlaylist({
     playlist,
@@ -1517,6 +1553,7 @@ export default function PlayFilesPage() {
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
                     volumeLabel={volumeLabel}
                     volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
+                    useNativeRangeInput={isAndroid}
                   />
                 }
                 recurseFolders={recurseFolders}

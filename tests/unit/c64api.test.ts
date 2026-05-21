@@ -1040,6 +1040,29 @@ describe("c64api", () => {
     expect(calls).toContain("http://c64u/v1/machine:resume");
   });
 
+  it("does not inspect successful machine-control response bodies", async () => {
+    const fetchMock = getFetchMock();
+    const clone = vi.fn(() => {
+      throw new Error("machine-control success body should not be inspected");
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      clone,
+    } as unknown as Response);
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.machineResume()).resolves.toEqual({ errors: [] });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://c64u/v1/machine:resume",
+      expect.objectContaining({
+        method: "PUT",
+      }),
+    );
+  });
+
   it("encodes joystick swap config writes with the expected category and item", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {

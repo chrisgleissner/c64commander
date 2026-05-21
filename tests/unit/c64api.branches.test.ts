@@ -451,6 +451,32 @@ describe("c64api branches", () => {
     expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
   });
 
+  it("suppresses trace errors for internally classified expected abort failures", async () => {
+    const fetchMock = getFetchMock();
+    const abortErr = new Error("The operation was aborted");
+    abortErr.name = "AbortError";
+    fetchMock.mockRejectedValue(abortErr);
+    classifyErrorMock.mockReturnValue({
+      failureClass: "user-cancellation",
+      category: "cancelled",
+      isExpected: true,
+      errorType: "AbortError",
+    });
+
+    const api = new C64API("http://c64u");
+    await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toThrow("Host unreachable");
+
+    expect(recordRestResponseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        expectedFailure: true,
+        error: abortErr,
+      }),
+    );
+    expect(recordTraceErrorMock).not.toHaveBeenCalled();
+    expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+  });
+
   // #3: scheduled retry path after a timeout/network failure
   it("retries background GET requests after a scheduled timeout", async () => {
     vi.useFakeTimers();
