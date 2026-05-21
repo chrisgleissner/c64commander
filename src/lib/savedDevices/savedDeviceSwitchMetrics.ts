@@ -1,4 +1,6 @@
-import type { VerificationResult } from "@/lib/connection/connectionManager";
+import type { ProbeInfoResult } from "@/lib/connection/connectionManager";
+
+type VerificationResult = ProbeInfoResult;
 
 export const SAVED_DEVICE_SWITCH_METRICS_EVENT = "c64u-saved-device-switch-metrics";
 

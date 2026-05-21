@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export {
-  ingestArchiveBuffer,
-  type IngestArchiveBufferOptions,
-  type IngestArchiveBufferResult,
-} from "./hvscIngestionRuntime";
+import "react";
 
-export { type HvscPipelineState, type PipelineStateMachine } from "./hvscIngestionPipeline";
+declare module "react" {
+  interface HTMLAttributes<T> {
+    inert?: string | boolean;
+  }
+}

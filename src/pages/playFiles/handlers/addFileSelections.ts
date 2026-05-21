@@ -128,7 +128,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     modifiedAt?: string | null,
   ): LocalPlayFile => {
     const normalizedPath = normalizeSourcePath(entryPath);
-    const lastModified = parseModifiedAt(modifiedAt);
+    const lastModified = parseModifiedAt(modifiedAt) ?? Date.now();
     return {
       name: entryName,
       webkitRelativePath: normalizedPath,

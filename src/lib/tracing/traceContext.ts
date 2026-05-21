@@ -83,9 +83,8 @@ export const setTraceDeviceAttributionContext = (device: DiagnosticsDeviceAttrib
 };
 
 export const setTraceDeviceConnectionState = (connectionState: string | null) => {
-  const base = snapshot.device
-    ? cloneDiagnosticsDeviceContext(snapshot.device)
-    : { ...createEmptyDiagnosticsDeviceAttribution(), connectionState: null };
+  const cloned = snapshot.device ? cloneDiagnosticsDeviceContext(snapshot.device) : null;
+  const base = cloned ?? { ...createEmptyDiagnosticsDeviceAttribution(), connectionState: null };
   snapshot = {
     ...snapshot,
     device: {

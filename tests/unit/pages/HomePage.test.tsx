@@ -598,10 +598,6 @@ vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
-vi.mock("@/hooks/useDiagnosticsActivity", () => ({
-  useDiagnosticsActivity: () => ({ restInFlight: 0, setRestInFlight: vi.fn() }),
-}));
-
 vi.mock("@/lib/deviceControl/deviceControl", () => ({
   useDeviceControl: () => deviceControlPayloadRef.current,
   isDeviceControlError: (error: unknown) =>

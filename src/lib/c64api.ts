@@ -34,6 +34,7 @@ import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInterac
 import {
   DEFAULT_BASE_URL,
   DEFAULT_DEVICE_HOST,
+  DEFAULT_HTTP_PORT,
   DEFAULT_PROXY_URL,
   WEB_PROXY_PATH,
   buildBaseUrlFromDeviceHost,
@@ -2347,6 +2348,7 @@ export const C64_DEFAULTS = {
   DEFAULT_BASE_URL,
   DEFAULT_DEVICE_HOST,
   DEFAULT_PROXY_URL,
+  DEFAULT_HTTP_PORT,
 };
 
 export { buildBaseUrlFromDeviceHost, getDeviceHostFromBaseUrl, normalizeDeviceHost, resolveDeviceHostFromStorage };

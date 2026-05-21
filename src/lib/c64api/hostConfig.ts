@@ -189,7 +189,7 @@ export const resolveDeviceHostFromStorage = () => {
     }
   }
   const storedDeviceHost = currentStoredDeviceHost;
-  const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
+  const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost ?? undefined);
   if (storedDeviceHost) {
     persistDeviceHostToStorage(normalizedStoredHost);
     localStorage.removeItem(CURRENT_BASE_URL_KEY);

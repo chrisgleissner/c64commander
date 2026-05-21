@@ -97,7 +97,7 @@ const extractSevenZArchive = async (archive: LocalSidFile): Promise<LocalSidFile
 
   const cleanupDir = (dir: string) => {
     const entries = module.FS.readdir(dir);
-    entries.forEach((entry) => {
+    entries.forEach((entry: string) => {
       if (entry === "." || entry === "..") return;
       const fullPath = `${dir}/${entry}`;
       const stat = module.FS.stat(fullPath);
@@ -122,7 +122,7 @@ const extractSevenZArchive = async (archive: LocalSidFile): Promise<LocalSidFile
     const results: LocalSidFile[] = [];
     const walkDir = (dir: string, prefix: string) => {
       const entries = module.FS.readdir(dir);
-      entries.forEach((entry) => {
+      entries.forEach((entry: string) => {
         if (entry === "." || entry === "..") return;
         const fullPath = `${dir}/${entry}`;
         const stat = module.FS.stat(fullPath);

@@ -86,8 +86,8 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     },
     ref,
   ) => {
-    const min = Number.isFinite(props.min) ? props.min : 0;
-    const resolvedMax = Number.isFinite(props.max) ? Math.max(props.max, min) : Math.max(min, 100);
+    const min: number = Number.isFinite(props.min) ? (props.min as number) : 0;
+    const resolvedMax: number = Number.isFinite(props.max) ? Math.max(props.max as number, min) : Math.max(min, 100);
     const max = resolvedMax <= min ? min + 1 : resolvedMax;
     const step = props.step;
     const [dragValue, setDragValue] = React.useState<number | null>(null);

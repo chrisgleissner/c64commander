@@ -60,7 +60,7 @@ const markHandledUiError = (error: unknown) => {
 };
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
-  error instanceof Error && Boolean(error.c64uHandled);
+  error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;

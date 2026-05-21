@@ -51,10 +51,10 @@ export const isUnsupportedSignalError = (error: unknown) =>
 export const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
-    return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+    return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
   }
   if (Array.isArray(value)) {
-    return Uint8Array.from(value).buffer;
+    return Uint8Array.from(value).buffer as ArrayBuffer;
   }
   if (typeof value === "string") {
     if (typeof atob === "function") {

@@ -308,6 +308,30 @@ describe("useVolumeOverride", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
+  it("still sends playback commits when the latest device snapshot matches the requested index", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "5" },
+      }),
+    );
+  });
+
   it("falls back to discovered SID mixer items when enablement filtering excludes everything", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
     filterEnabledSidVolumeItemsMock.mockImplementation(() => []);
@@ -479,6 +503,37 @@ describe("useVolumeOverride", () => {
     });
 
     await togglePromise;
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
+  });
+
+  it("holds the polling pause while a playback volume commit write is in flight", async () => {
+    let resolveWrite: (() => void) | null = null;
+    mutateAsyncMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+    audioMixerItemsRef.current = defaultMixerItems("0");
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    const commitPromise = act(async () => {
+      const pending = result.current.handleVolumeCommit(1);
+      await Promise.resolve();
+      expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+      resolveWrite?.();
+      await pending;
+    });
+
+    await commitPromise;
     expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
   });
 
@@ -884,16 +939,14 @@ describe("useVolumeOverride", () => {
     expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
   });
 
-  it("reports failed preview writes with phase-specific context", async () => {
+  it("rethrows failed preview writes with phase-specific context", async () => {
     mutateAsyncMock.mockRejectedValueOnce(new Error("preview failed"));
 
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }),
     );
 
-    act(() => {
-      result.current.handleVolumeAsyncChange(1);
-    });
+    await expect(result.current.handleVolumeAsyncChange(1)).rejects.toThrow("preview failed");
 
     await waitFor(() => {
       expect(addErrorLog).toHaveBeenCalledWith(
@@ -901,6 +954,27 @@ describe("useVolumeOverride", () => {
         expect.objectContaining({
           error: "preview failed",
           phase: "preview",
+          index: 1,
+        }),
+      );
+    });
+  });
+
+  it("rethrows failed commit writes so the slider can clear its optimistic latch", async () => {
+    mutateAsyncMock.mockRejectedValueOnce(new Error("commit failed"));
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await expect(result.current.handleVolumeCommit(1)).rejects.toThrow("commit failed");
+
+    await waitFor(() => {
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "Volume update failed",
+        expect.objectContaining({
+          error: "commit failed",
+          phase: "commit",
           index: 1,
         }),
       );

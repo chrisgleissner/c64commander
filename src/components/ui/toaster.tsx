@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { SwipeEvent } from "@radix-ui/react-toast";
+import type { ComponentProps } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -68,7 +68,7 @@ function ToastItem({ id, title, description, action, dismiss, ...props }: ToastI
 
   // Radix handles rightward swipe natively via swipeDirection="right" (provider default).
   // For leftward swipe we check the delta and call dismiss() manually.
-  const handleSwipeEnd = (e: SwipeEvent) => {
+  const handleSwipeEnd: NonNullable<ComponentProps<typeof Toast>["onSwipeEnd"]> = (e) => {
     swipingRef.current = false;
     if (e.detail.delta.x < -50) {
       dismiss(id);

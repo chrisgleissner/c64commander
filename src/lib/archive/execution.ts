@@ -27,7 +27,10 @@ const toRuntimeFile = (binary: ArchiveBinary): LocalPlayFile => ({
   name: binary.fileName,
   lastModified: Date.now(),
   arrayBuffer: async () =>
-    binary.bytes.buffer.slice(binary.bytes.byteOffset, binary.bytes.byteOffset + binary.bytes.byteLength),
+    binary.bytes.buffer.slice(
+      binary.bytes.byteOffset,
+      binary.bytes.byteOffset + binary.bytes.byteLength,
+    ) as ArrayBuffer,
 });
 
 const ensureExecutableName = (fileName: string, detectedType: string) => {
@@ -46,7 +49,8 @@ export const getArchiveEntryActionLabel = (fileName: string) => {
 
 export const buildArchivePlayPlan = (binary: ArchiveBinary): PlayPlan => {
   const preferredCategory = getPlayCategory(binary.fileName);
-  const detectedType = FileTypeDetector.detect(binary.bytes, preferredCategory ?? undefined);
+  const detectorHint = preferredCategory === "disk" ? undefined : (preferredCategory ?? undefined);
+  const detectedType = FileTypeDetector.detect(binary.bytes, detectorHint);
   const validation = validateFileBytes(binary.bytes, detectedType === "unknown" ? undefined : detectedType);
   if (!validation.ok) {
     throw new Error(`Unsupported archive file ${binary.fileName}: ${validation.reason}`);

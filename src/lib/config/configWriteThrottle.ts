@@ -37,11 +37,14 @@ export const scheduleConfigWrite = async <T>(task: () => Promise<T>): Promise<T>
     return task();
   };
   const next = queue.then(run);
-  queue = next.catch((error) => {
-    addErrorLog("Config write queue: preceding task failed", {
-      error: (error as Error).message,
-    });
-  });
+  queue = next.then(
+    () => undefined,
+    (error) => {
+      addErrorLog("Config write queue: preceding task failed", {
+        error: (error as Error).message,
+      });
+    },
+  );
   return next;
 };
 

@@ -77,7 +77,7 @@ export function PrinterManager({
     telnetAvailable && typeof onTelnetAction === "function" && typeof getTelnetActionSupport === "function"
       ? buildPrinterTelnetActions(printerEnabled).map((action) => ({
           ...action,
-          support: getTelnetActionSupport(action.actionId),
+          support: getTelnetActionSupport(action.actionId as TelnetActionId),
         }))
       : [];
   const disabledPrinterTelnetNotes = printerTelnetActions.filter(

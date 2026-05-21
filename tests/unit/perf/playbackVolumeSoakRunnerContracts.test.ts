@@ -24,6 +24,11 @@ describe("playbackVolumeSoakRunner contracts", () => {
     expect(runnerSource).toContain("await adb(['logcat', '-d', '-v', 'epoch'], { timeoutMs: 60_000 });");
     expect(runnerSource).toContain("const uniqueScheduleRows = dedupeByDueAtMs(scheduleRows);");
     expect(runnerSource).toContain("const uniqueFireRows = dedupeByDueAtMs(fireRows);");
+    expect(runnerSource).toContain("const firedDueSet = new Set(uniqueFireRows.map((row) => row.dueAtMs));");
+    expect(runnerSource).toContain("const boundaryRows = [...uniqueFireRows, ...scheduleOnlyRows]");
+    expect(runnerSource).toContain(
+      "const isEarlyFire = Boolean(fired && dueAtMs !== null && dueAtMs < firstExpectedDueAtMs);",
+    );
   });
 
   it("samples V2 from the lightweight volume drag probe instead of the full page state loop", () => {
@@ -39,8 +44,34 @@ describe("playbackVolumeSoakRunner contracts", () => {
     );
   });
 
+  it("cancels residual swipe state after synthetic slider drags so Play layout does not stay shifted", () => {
+    expect(runnerSource).toContain("swipeContainer.dispatchEvent(new PointerEvent('pointercancel'");
+    expect(runnerSource).toContain("swipeContainer.dispatchEvent(new PointerEvent('pointerup'");
+    expect(runnerSource).toContain("document.activeElement.blur();");
+  });
+
+  it("warms the V1 audio probe before judging direction from the U64 stream", () => {
+    expect(runnerSource).toContain("durationMs: 4_000");
+    expect(runnerSource).toContain("await sleep(1_200);");
+    expect(runnerSource).toContain("beforeWindow: { startOffsetMs: -500, endOffsetMs: -100 }");
+    expect(runnerSource).toContain("afterWindow: { startOffsetMs: 350, endOffsetMs: 1_900 }");
+    expect(runnerSource).toContain(
+      "const descriptor = prototype ? Object.getOwnPropertyDescriptor(prototype, 'value') : null;",
+    );
+    expect(runnerSource).toContain("input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));");
+  });
+
   it("retries stale source-picker root recovery by cancelling and reopening once", () => {
     expect(runnerSource).toContain("const addPlaylistItems = async (cdp, desiredCount, attempt = 0) => {");
+    expect(runnerSource).toContain("const findUniquePlaylistSelectionBatch = async (");
+    expect(runnerSource).toContain("if (pickedHere.length > 0 || depth >= maxDepth) {");
+    expect(runnerSource).toContain("return { picked: pickedHere, folderChain };");
+    expect(runnerSource).toContain("if (childBatch.picked.length > 0) {");
+    expect(runnerSource).toContain("selectedNames = selectionBatch.picked;");
+    expect(runnerSource).toContain("const startingState = await getPageState(cdp);");
+    expect(runnerSource).toContain("Playlist did not reflect confirmed add-items selection in time");
+    expect(runnerSource).toContain("nextState.playlistCount >= startingState.playlistCount + selectedNames.length");
+    expect(runnerSource).toContain("Playlist restore did not reach the required count before add-items fallback");
     expect(runnerSource).toContain("if (attempt > 0) throw error;");
     expect(runnerSource).toContain("const cancelled = await clickByText(cdp, '^Cancel$');");
     expect(runnerSource).toContain("return addPlaylistItems(cdp, desiredCount, attempt + 1);");

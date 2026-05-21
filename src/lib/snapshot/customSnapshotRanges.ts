@@ -73,7 +73,9 @@ export const validateCustomSnapshotRanges = (
     };
   }
 
-  const reversedRange = parsedRanges.find((range) => range.end < range.start);
+  const reversedRange = parsedRanges.find(
+    (range) => range.end !== null && range.start !== null && range.end < range.start,
+  );
   if (reversedRange) {
     return {
       ok: false,

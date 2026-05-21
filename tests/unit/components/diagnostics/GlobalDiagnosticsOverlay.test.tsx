@@ -158,12 +158,6 @@ vi.mock("@/components/diagnostics/DiagnosticsListItem", () => ({
   ),
 }));
 
-vi.mock("@/components/diagnostics/ActionSummaryListItem", () => ({
-  ActionSummaryListItem: ({ summary }: { summary: { correlationId: string; actionName: string } }) => (
-    <div data-testid={`action-summary-${summary.correlationId}`}>{summary.actionName}</div>
-  ),
-}));
-
 const renderOverlay = (initialPath = "/") => {
   const queryClient = new QueryClient({
     defaultOptions: {

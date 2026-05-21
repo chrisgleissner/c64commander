@@ -131,7 +131,7 @@ export const installAsyncContextPropagation = (): void => {
       this,
       onfulfilled ? wrapCallback(onfulfilled, capturedCtx) : undefined,
       onrejected ? wrapCallback(onrejected, capturedCtx) : undefined,
-    );
+    ) as Promise<TResult1 | TResult2>;
   };
 
   // Patch Promise.prototype.catch

@@ -85,10 +85,6 @@ vi.mock("@/hooks/useLocalSources", () => ({
   useLocalSources: useLocalSourcesMock,
 }));
 
-vi.mock("@/hooks/useDiagnosticsActivity", () => ({
-  useDiagnosticsActivity: () => ({ restInFlight: 0, setRestInFlight: vi.fn() }),
-}));
-
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => {},

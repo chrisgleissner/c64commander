@@ -350,13 +350,13 @@ export const useHvscLibrary = (): HvscLibraryState => {
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
       const applyExtractionCounts = (payload: { processedCount?: number; totalCount?: number }) => {
-        if (typeof payload.processedCount === "number" && payload.processedCount > 0) {
-          setHvscExtractionFiles((prev) =>
-            prev === null ? payload.processedCount : Math.max(prev, payload.processedCount),
-          );
+        const processed = payload.processedCount;
+        if (typeof processed === "number" && processed > 0) {
+          setHvscExtractionFiles((prev) => (prev === null ? processed : Math.max(prev, processed)));
         }
-        if (typeof payload.totalCount === "number" && payload.totalCount > 0) {
-          setHvscExtractionTotal((prev) => (prev === null ? payload.totalCount : Math.max(prev, payload.totalCount)));
+        const total = payload.totalCount;
+        if (typeof total === "number" && total > 0) {
+          setHvscExtractionTotal((prev) => (prev === null ? total : Math.max(prev, total)));
         }
       };
       const isDownloadComplete = (payload: HvscProgressEvent) =>
@@ -1070,8 +1070,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
     hvscStatus?.ingestionState === "installing" ||
     hvscStatus?.ingestionState === "updating";
   const hvscUpdating = hvscLoading || hvscInProgress;
-  const hvscInlineError =
-    hvscErrorMessage || (hvscStatus?.ingestionState === "error" ? hvscStatus.ingestionError : null);
+  const hvscInlineError: string | null =
+    hvscErrorMessage || (hvscStatus?.ingestionState === "error" ? (hvscStatus.ingestionError ?? null) : null);
   const hvscCanIngest = hvscAvailable && hvscHasCache && !hvscUpdating;
   const hvscSummaryState = useMemo(() => {
     if (hvscStatusSummary.download.status === "failure" || hvscStatusSummary.extraction.status === "failure")

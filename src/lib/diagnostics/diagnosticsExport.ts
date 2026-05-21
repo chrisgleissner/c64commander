@@ -127,17 +127,20 @@ const buildDiagnosticsZipEntries = (scope: DiagnosticsExportScope, data: unknown
       [strToU8(JSON.stringify(sanitizeDiagnosticsExportPayload(payloads[tab] ?? []), null, 2)), {}],
     ]),
   );
-  if (scope === "all" && payloads.supplemental) {
-    entries[`supplemental-${timestamp}.json`] = [strToU8(JSON.stringify(payloads.supplemental, null, 2)), {}];
+  if (scope === "all") {
+    const supplemental = (payloads as DiagnosticsExportPayload).supplemental;
+    if (supplemental) {
+      entries[`supplemental-${timestamp}.json`] = [strToU8(JSON.stringify(supplemental, null, 2)), {}];
+    }
   }
   return entries;
 };
 
 export const buildDiagnosticsZipData = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) =>
-  zipSync(buildDiagnosticsZipEntries(scope, data, timestamp));
+  zipSync(buildDiagnosticsZipEntries(scope, data, timestamp) as Parameters<typeof zipSync>[0]);
 
 export const buildDiagnosticsZipBlob = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) =>
-  new Blob([buildDiagnosticsZipData(scope, data, timestamp)], { type: "application/zip" });
+  new Blob([buildDiagnosticsZipData(scope, data, timestamp) as BlobPart], { type: "application/zip" });
 
 const downloadDiagnosticsZip = (filename: string, scope: DiagnosticsExportScope, data: unknown, timestamp: string) => {
   const blob = buildDiagnosticsZipBlob(scope, data, timestamp);

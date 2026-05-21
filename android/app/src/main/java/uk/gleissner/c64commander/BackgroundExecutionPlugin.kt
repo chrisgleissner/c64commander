@@ -26,6 +26,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 @CapacitorPlugin(name = "BackgroundExecution")
 open class BackgroundExecutionPlugin : Plugin() {
     private val logTag = "BackgroundExecutionPlugin"
+    private var isAutoSkipReceiverRegistered = false
 
     private val autoSkipReceiver =
             object : BroadcastReceiver() {
@@ -45,11 +46,13 @@ open class BackgroundExecutionPlugin : Plugin() {
 
     override fun load() {
         super.load()
+        if (isAutoSkipReceiverRegistered) return
         try {
             registerPluginReceiver(
                     autoSkipReceiver,
                     IntentFilter(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE),
             )
+            isAutoSkipReceiverRegistered = true
         } catch (e: Exception) {
             AppLogger.error(
                     context,
@@ -66,6 +69,10 @@ open class BackgroundExecutionPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        if (!isAutoSkipReceiverRegistered) {
+            super.handleOnDestroy()
+            return
+        }
         try {
             context.unregisterReceiver(autoSkipReceiver)
         } catch (e: Exception) {
@@ -76,6 +83,8 @@ open class BackgroundExecutionPlugin : Plugin() {
                     "BackgroundExecutionPlugin",
                     e
             )
+        } finally {
+            isAutoSkipReceiverRegistered = false
         }
         super.handleOnDestroy()
     }

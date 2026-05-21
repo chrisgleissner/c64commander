@@ -11,7 +11,7 @@ import type { ArchiveSearchParams } from "./types";
 const TEXT_FIELDS = ["name", "group", "handle", "event"] as const;
 const ENUM_FIELDS = ["category", "date", "type", "sort", "order"] as const;
 
-const hasValue = (value: string | undefined) => typeof value === "string" && value.trim().length > 0;
+const hasValue = (value: string | undefined): value is string => typeof value === "string" && value.trim().length > 0;
 
 const escapeQuoted = (value: string) => value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 

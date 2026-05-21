@@ -30,7 +30,7 @@ const buildTraceZipData = (options: { redacted?: boolean } = {}) => {
 };
 
 export const buildTraceZipBlob = (options: { redacted?: boolean } = {}) =>
-  new Blob([buildTraceZipData(options)], { type: "application/zip" });
+  new Blob([buildTraceZipData(options) as BlobPart], { type: "application/zip" });
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {

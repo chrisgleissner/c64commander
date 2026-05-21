@@ -89,4 +89,30 @@ describe("playbackVolumeAudioOracle", () => {
     expect(row.result).toBe("DIRECTION_MISMATCH");
     expect(row.steadyStateRmsAfter).toBeGreaterThan(row.steadyStateRmsBefore!);
   });
+
+  it("treats near-flat post-action RMS deltas as amplitude-insufficient rather than reversed", () => {
+    const envelope = [
+      { receivedAtMs: 0, packetDurationMs: 40, rms: 0.12, peakAbs: 0.1, samplePairs: 2 },
+      { receivedAtMs: 120, packetDurationMs: 40, rms: 0.119, peakAbs: 0.1, samplePairs: 2 },
+      { receivedAtMs: 360, packetDurationMs: 40, rms: 0.1185, peakAbs: 0.1, samplePairs: 2 },
+      { receivedAtMs: 520, packetDurationMs: 40, rms: 0.1192, peakAbs: 0.1, samplePairs: 2 },
+      { receivedAtMs: 700, packetDurationMs: 40, rms: 0.1191, peakAbs: 0.1, samplePairs: 2 },
+    ];
+
+    const row = buildAudioVolumeVerificationRow({
+      scenario: "V1",
+      actionKind: "slider-drag",
+      actionIssuedAtMs: 250,
+      expectedDirection: "increase",
+      committedIndex: 24,
+      previousCommittedIndex: 12,
+      envelope,
+      beforeWindow: { startOffsetMs: -260, endOffsetMs: -40 },
+      afterWindow: { startOffsetMs: 80, endOffsetMs: 520 },
+      minDeltaRms: 0.02,
+    });
+
+    expect(row.result).toBe("AMPLITUDE_INSUFFICIENT");
+    expect(Math.abs(row.rmsDeltaMagnitude ?? 0)).toBeLessThan(0.003);
+  });
 });

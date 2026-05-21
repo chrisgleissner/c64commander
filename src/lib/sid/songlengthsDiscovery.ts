@@ -12,7 +12,10 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 export const SONGLENGTHS_FILE_NAMES = ["songlengths.md5", "songlengths.txt"];
 export const DOCUMENTS_FOLDER = "DOCUMENTS";
 export const HVSC_FOLDER = "HVSC";
-const SIBLING_LIBRARY_DOCUMENTS_FOLDERS = [`${HVSC_FOLDER}/${DOCUMENTS_FOLDER}/`, `${HVSC_FOLDER}/C64Music/${DOCUMENTS_FOLDER}/`];
+const SIBLING_LIBRARY_DOCUMENTS_FOLDERS = [
+  `${HVSC_FOLDER}/${DOCUMENTS_FOLDER}/`,
+  `${HVSC_FOLDER}/C64Music/${DOCUMENTS_FOLDER}/`,
+];
 
 export const isSonglengthsFileName = (name: string) => SONGLENGTHS_FILE_NAMES.includes(name.trim().toLowerCase());
 

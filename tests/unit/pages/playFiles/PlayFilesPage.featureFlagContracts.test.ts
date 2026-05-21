@@ -28,10 +28,32 @@ describe("PlayFilesPage feature-flag contracts", () => {
   });
 
   it("turns Android background auto-skip callbacks into auto next transitions", () => {
-    expect(playFilesPageSource).toContain("void onBackgroundAutoSkipDue((event) => {");
+    expect(playFilesPageSource).toContain("const registerBackgroundAutoSkipListener = async () => {");
+    expect(playFilesPageSource).toContain("const nextHandle = await onBackgroundAutoSkipDue((event) => {");
+    expect(playFilesPageSource).toContain("syncPlaybackTimeline({ allowAutoAdvance: false });");
     expect(playFilesPageSource).toContain("if (event.dueAtMs !== guard.dueAtMs) return;");
     expect(playFilesPageSource).toContain('await handleNext("auto", expectedTrackInstanceId);');
-    expect(playFilesPageSource).toContain("await BackgroundExecution.setDueAtMs({ dueAtMs: nextGuard.dueAtMs });");
+    expect(playFilesPageSource).toContain(
+      "const backgroundDueWriteLaneRef = useRef<LatestIntentWriteLane<number | null> | null>(null);",
+    );
+    expect(playFilesPageSource).toContain("await BackgroundExecution.setDueAtMs({ dueAtMs: nextDueAtMs });");
+    expect(playFilesPageSource).toContain(
+      'addLog("debug", "Cleared background auto-advance watchdog after auto next with no remaining guard"',
+    );
+    expect(playFilesPageSource).toContain(
+      'addLog("warn", "Background auto-advance did not move to a new track instance; cleared stale watchdog"',
+    );
+    expect(playFilesPageSource).toContain("setAutoAdvanceDueAtMs(null);");
+    expect(playFilesPageSource).toContain("setAutoAdvanceDueAtMs(nextGuard.dueAtMs);");
+    expect(playFilesPageSource).toContain("await queueBackgroundDueAtUpdate(null);");
+    expect(playFilesPageSource).toContain("await queueBackgroundDueAtUpdate(nextGuard.dueAtMs);");
     expect(playFilesPageSource).toContain('addErrorLog("Failed to re-arm background auto-advance"');
+    expect(playFilesPageSource).toContain('addErrorLog("Failed to register background auto-advance listener"');
+  });
+
+  it("restores Play volume overrides on real navigation cleanup without firing on callback identity churn", () => {
+    expect(playFilesPageSource).toContain("const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);");
+    expect(playFilesPageSource).toContain("restoreVolumeOverridesOnNavigateRef.current = restoreVolumeOverrides;");
+    expect(playFilesPageSource).toContain('void restoreVolumeOverridesOnNavigateRef.current("navigate").catch((error) => {');
   });
 });

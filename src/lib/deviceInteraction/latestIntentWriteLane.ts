@@ -54,13 +54,14 @@ export const createLatestIntentWriteLane = <T>(params: {
     if (activePromise) return activePromise;
     activePromise = (async () => {
       while (latestJob) {
-        const job = latestJob;
+        const job: PendingJob<T> = latestJob;
         latestJob = null;
         try {
           if (beforeRun) {
             await beforeRun();
           }
-          if (latestJob && latestJob.version > job.version) {
+          const nextLatest = latestJob as PendingJob<T> | null;
+          if (nextLatest && nextLatest.version > job.version) {
             continue;
           }
           await run(job.value);

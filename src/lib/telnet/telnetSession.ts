@@ -50,7 +50,7 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
   let password: string | undefined;
   let authenticated = false;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
-  let screenBuffer = new Uint8Array(0);
+  let screenBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
   let requestSteps: TelnetTraceSnapshot["requestPayload"]["steps"] = [];
   let responseSteps: TelnetTraceSnapshot["responsePayload"]["steps"] = [];
 

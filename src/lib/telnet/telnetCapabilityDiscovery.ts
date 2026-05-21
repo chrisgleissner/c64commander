@@ -192,10 +192,10 @@ const openActionMenu = async (session: TelnetSessionApi, menuKey: TelnetMenuKey)
 
   await session.sendKey(menuKey);
   let screen = await readUntilMenuVisible();
-  if (findTopMenu(screen)) return screen;
+  if (screen && findTopMenu(screen)) return screen;
   await session.sendKey(menuKey);
   screen = await readUntilMenuVisible();
-  if (findTopMenu(screen)) return screen;
+  if (screen && findTopMenu(screen)) return screen;
   const fallbackMenuKey = getFallbackTelnetMenuKey(menuKey);
   addLog("warn", `${LOG_TAG}: action menu not visible after preferred key, trying alternate key`, {
     menuKey,
@@ -203,10 +203,10 @@ const openActionMenu = async (session: TelnetSessionApi, menuKey: TelnetMenuKey)
   });
   await session.sendKey(fallbackMenuKey);
   screen = await readUntilMenuVisible();
-  if (findTopMenu(screen)) return screen;
+  if (screen && findTopMenu(screen)) return screen;
   await session.sendKey(fallbackMenuKey);
   screen = await readUntilMenuVisible();
-  if (findTopMenu(screen)) return screen;
+  if (screen && findTopMenu(screen)) return screen;
   throw new TelnetError(`Action menu not visible after ${menuKey} or ${fallbackMenuKey}`, "MENU_NOT_FOUND", {
     fallbackMenuKey,
     menuKey,

@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { PlayFileCategory, PlaySource, LocalPlayFile } from "./playbackRouter";
+import type { PlayFileCategory } from "./fileTypes";
+import type { PlaySource, LocalPlayFile } from "./playbackRouter";
 
 export type FileLibraryEntry = {
   id: string;

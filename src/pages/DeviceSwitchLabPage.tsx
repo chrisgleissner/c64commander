@@ -47,7 +47,7 @@ type SoakRunnerResult = {
   failureCount: number;
   failureSamples: Array<{
     id: string;
-    fromDeviceId: string;
+    fromDeviceId: string | null;
     toDeviceId: string;
     outcome: SavedDeviceSwitchAttempt["outcome"];
     totalDurationMs: number | null;

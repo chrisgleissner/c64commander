@@ -158,13 +158,13 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
     await session.sendKey(menuKey);
     let screen = await readUntilMenuVisible();
 
-    if (!findTopMenu(screen)) {
+    if (!screen || !findTopMenu(screen)) {
       // Retry once
       addLog("warn", `${LOG_TAG}: menu not visible after ${menuKey}, retrying`);
       await session.sendKey(menuKey);
       screen = await readUntilMenuVisible();
 
-      if (!findTopMenu(screen)) {
+      if (!screen || !findTopMenu(screen)) {
         const fallbackMenuKey = getFallbackTelnetMenuKey(menuKey);
         addLog("warn", `${LOG_TAG}: menu not visible after ${menuKey}, trying alternate key`, {
           fallbackMenuKey,
@@ -173,12 +173,12 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
         await session.sendKey(fallbackMenuKey);
         screen = await readUntilMenuVisible();
 
-        if (!findTopMenu(screen)) {
+        if (!screen || !findTopMenu(screen)) {
           await session.sendKey(fallbackMenuKey);
           screen = await readUntilMenuVisible();
         }
 
-        if (!findTopMenu(screen)) {
+        if (!screen || !findTopMenu(screen)) {
           throw new TelnetError(`Action menu not visible after ${menuKey} or ${fallbackMenuKey}`, "MENU_NOT_FOUND", {
             fallbackMenuKey,
             menuKey,
@@ -187,7 +187,7 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
       }
     }
 
-    return screen;
+    return screen as TelnetScreen;
   }
 
   /** Find the top-level (level 0) menu on screen */

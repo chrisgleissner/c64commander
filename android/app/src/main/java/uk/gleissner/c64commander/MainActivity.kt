@@ -153,6 +153,11 @@ class MainActivity : BridgeActivity() {
     keepWebViewPlaybackAliveDuringBackgroundExecution()
   }
 
+  override fun onStop() {
+    super.onStop()
+    keepWebViewPlaybackAliveDuringBackgroundExecution()
+  }
+
   internal fun installLanCookieBypassIfNeeded() {
     val cookiesEnabled = bridge.config.getPluginConfiguration("CapacitorCookies").getBoolean("enabled", false)
     if (cookiesEnabled) {

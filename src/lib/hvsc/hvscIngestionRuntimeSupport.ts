@@ -74,7 +74,11 @@ export const drainNativeProgressListeners = async (token?: string) => {
   }
 };
 
-export const resetCacheStatFailure = (archiveName: string) => {
+export const resetCacheStatFailure = (archiveName?: string) => {
+  if (archiveName === undefined) {
+    runtimeState.cacheStatFailures.clear();
+    return;
+  }
   runtimeState.cacheStatFailures.delete(archiveName);
 };
 

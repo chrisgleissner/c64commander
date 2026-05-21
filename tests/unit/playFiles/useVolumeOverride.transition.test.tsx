@@ -489,6 +489,63 @@ describe("useVolumeOverride transition race", () => {
     );
   });
 
+  it("keeps the UI unmuted while unmute preparation is still resolving live SID enablement", async () => {
+    const enablementResolvers: Array<() => void> = [];
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "-42 dB",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 2",
+        value: "-42 dB",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+    getConfigItemsMock.mockImplementation((category: string) => {
+      if (category === "Audio Mixer") return Promise.resolve(audioMixerItemsRef.current);
+      if (category === "SID Sockets Configuration" || category === "SID Addressing") {
+        return new Promise((resolve) => {
+          enablementResolvers.push(() => resolve({}));
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.muted).toBe(true));
+
+    let unmuteToggle!: Promise<void>;
+    await act(async () => {
+      unmuteToggle = result.current.handleToggleMute();
+      await Promise.resolve();
+    });
+
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(result.current.volumeState.index).toBe(0);
+
+    act(() => {
+      rerender();
+    });
+
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(result.current.pendingVolumeWriteRef.current).toBeNull();
+
+    enablementResolvers.forEach((resolve) => resolve());
+    await act(async () => {
+      await unmuteToggle;
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "0" } }),
+    );
+    expect(result.current.volumeState.muted).toBe(false);
+  });
+
   it("keeps rapid mute bursts aligned with the latest tap parity while writes are still in flight", async () => {
     let resolveFirstWrite: (() => void) | null = null;
     mutateAsyncMock
