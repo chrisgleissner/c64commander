@@ -213,6 +213,34 @@ describe("useSonglengths", () => {
     expect(candidates.some((path) => path.toLowerCase().includes("songlengths"))).toBe(true);
   });
 
+  it("loads sibling HVSC songlengths files for ultimate SID paths and resolves duration by md5", async () => {
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => new TextEncoder().encode("; /DEMOS/0-9/10_Orbyte.sid\ndeadbeef=1:17\n").buffer,
+    };
+    const extraFiles: SonglengthsFileEntry[] = [
+      { path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5", file: songlengthsFile },
+    ];
+    const { result } = renderUseSonglengths([]);
+    const playlistItem: PlaylistItem = {
+      id: "ultimate-song",
+      category: "sid",
+      label: "10_Orbyte.sid",
+      path: "/USB2/test-data/SID/10_Orbyte.sid",
+      request: { source: "ultimate", path: "/USB2/test-data/SID/10_Orbyte.sid", songNr: 1 },
+    };
+
+    const loaded = await result.current?.loadSonglengthsForPath("/USB2/test-data/SID/10_Orbyte.sid", extraFiles);
+    expect(loaded?.md5ToSeconds.get("deadbeef")).toEqual([77]);
+
+    const updated = await result.current?.applySonglengthsToItems([playlistItem], extraFiles, {
+      allowMd5Fallback: true,
+    });
+    expect(updated[0]?.durationMs).toBe(77_000);
+  });
+
   it("logs songlengths read/parse failures and returns null when no candidates exist", async () => {
     const failingFile = {
       name: "Songlengths.md5",

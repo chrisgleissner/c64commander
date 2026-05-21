@@ -191,6 +191,17 @@ For each confirmed bug from Phase 2:
      jump-back after the user-visible state settles
    - live `u64` audio-stream checks that confirm the audible amplitude
      changes in the same direction as the UX state
+6. Extend the playlist-control soak beyond volume alone: frequently skip
+   backward/forward and stop/resume songs, and prove every CTA updates
+   promptly and consistently in both UI state and live device audio.
+   Audio evidence must show the expected transport change within 500 ms
+   of the CTA action, without buttons or sliders snapping back to their
+   pre-action state.
+7. Restore HVSC songlength discovery during the test run so playlists
+   sourced from `/USB2/test-data/SID` resolve their real durations from
+   `Songlengths.md5` instead of falling back to the 3:00 default. This
+   is required so the playback and auto-advance soak timings reflect the
+   true track metadata.
 
 Gate 3: every bug from Phase 2 has a regression test, a commit, and
 a passing scenario re-run.

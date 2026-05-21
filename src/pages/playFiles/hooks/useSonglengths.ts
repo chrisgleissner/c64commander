@@ -14,7 +14,11 @@ import { buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { countSonglengthsEntries } from "@/lib/sid/songlengths";
 import { InMemoryTextBackend, SongLengthServiceFacade, type InMemorySongLengthSnapshot } from "@/lib/songlengths";
-import { collectSonglengthsSearchPaths, DOCUMENTS_FOLDER, isSonglengthsFileName } from "@/lib/sid/songlengthsDiscovery";
+import {
+  buildSonglengthsSearchFolders,
+  collectSonglengthsSearchPaths,
+  isSonglengthsFileName,
+} from "@/lib/sid/songlengthsDiscovery";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { getLocalFilePath, normalizeLocalPath } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -275,15 +279,10 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
           }, new Map(songlengthsFilesByDir))
         : songlengthsFilesByDir;
       const files = new Map<string, LocalPlayFile>();
-      let current = cacheKey;
-      while (current) {
-        const candidate = filesByDir.get(current);
+      buildSonglengthsSearchFolders(cacheKey).forEach((folder) => {
+        const candidate = filesByDir.get(folder);
         if (candidate) files.set(getLocalFilePath(candidate), candidate);
-        const docsCandidate = filesByDir.get(`${current}${DOCUMENTS_FOLDER}/`);
-        if (docsCandidate) files.set(getLocalFilePath(docsCandidate), docsCandidate);
-        if (current === "/") break;
-        current = getParentPath(current);
-      }
+      });
       const globalFiles = globalSonglengthsFiles.filter((file) => !files.has(getLocalFilePath(file)));
       if (!files.size && globalFiles.length === 0) return null;
 

@@ -30,9 +30,13 @@ describe("playbackVolumeSoakRunner contracts", () => {
     expect(runnerSource).toContain("const readVolumeDragSample = async (cdp) =>");
     expect(runnerSource).toContain("root.querySelector('[data-testid=\"volume-slider-native-input\"]')");
     expect(runnerSource).toContain("root.querySelector('[data-testid=\"slider-value-display\"]')");
-    expect(runnerSource).toContain("const pointerTravelPx = Math.abs(samples[index].pointerX - samples[index - 1].pointerX);");
+    expect(runnerSource).toContain(
+      "const pointerTravelPx = Math.abs(samples[index].pointerX - samples[index - 1].pointerX);",
+    );
     expect(runnerSource).toContain("pointerTravelPx >= minPointerTravelPx");
-    expect(runnerSource).not.toContain("const state = await getPageState(cdp);\n      samples.push({ tsMs: Date.now(), value: Number(state.volumeValue ?? 0), pointerX: x });");
+    expect(runnerSource).not.toContain(
+      "const state = await getPageState(cdp);\n      samples.push({ tsMs: Date.now(), value: Number(state.volumeValue ?? 0), pointerX: x });",
+    );
   });
 
   it("retries stale source-picker root recovery by cancelling and reopening once", () => {

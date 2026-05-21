@@ -1374,25 +1374,31 @@ export default function PlayFilesPage() {
     [restoreVolumeOverrides],
   );
 
-  const handleDurationSliderChange = useCallback((value: number[]) => {
-    const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-    const nextDurationMs = nextSeconds * 1000;
-    setDurationSeconds(nextSeconds);
-    setDurationMs(nextDurationMs);
-    setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
-    setDurationInput(formatDurationSeconds(nextSeconds));
-  }, [setDurationMs, setPlaylist]);
+  const handleDurationSliderChange = useCallback(
+    (value: number[]) => {
+      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
+      const nextDurationMs = nextSeconds * 1000;
+      setDurationSeconds(nextSeconds);
+      setDurationMs(nextDurationMs);
+      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+      setDurationInput(formatDurationSeconds(nextSeconds));
+    },
+    [setDurationMs, setPlaylist],
+  );
 
-  const handleDurationInputChange = useCallback((value: string) => {
-    setDurationInput(value);
-    const parsed = parseDurationInput(value);
-    if (parsed === undefined) return;
-    const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-    const nextDurationMs = nextSeconds * 1000;
-    setDurationSeconds(nextSeconds);
-    setDurationMs(nextDurationMs);
-    setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
-  }, [setDurationMs, setPlaylist]);
+  const handleDurationInputChange = useCallback(
+    (value: string) => {
+      setDurationInput(value);
+      const parsed = parseDurationInput(value);
+      if (parsed === undefined) return;
+      const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
+      const nextDurationMs = nextSeconds * 1000;
+      setDurationSeconds(nextSeconds);
+      setDurationMs(nextDurationMs);
+      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+    },
+    [setDurationMs, setPlaylist],
+  );
 
   const handleDurationInputBlur = useCallback(() => {
     const parsed = parseDurationInput(durationInput);
