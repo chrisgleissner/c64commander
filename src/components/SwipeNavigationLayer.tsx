@@ -163,6 +163,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   runwayRef.current = runway;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollResetFrameRef = useRef<number | null>(null);
   const runtimeMotionMode = readRuntimeMotionMode();
   const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
   const resetContainerScroll = useCallback((reason: string) => {
@@ -175,6 +176,22 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       offset,
     });
   }, []);
+  const scheduleContainerScrollReset = useCallback(
+    (reason: string) => {
+      if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+        resetContainerScroll(reason);
+        return;
+      }
+      if (scrollResetFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollResetFrameRef.current);
+      }
+      scrollResetFrameRef.current = window.requestAnimationFrame(() => {
+        scrollResetFrameRef.current = null;
+        resetContainerScroll(reason);
+      });
+    },
+    [resetContainerScroll],
+  );
 
   useEffect(() => {
     const handleSettingsUpdate = (event: Event) => {
@@ -189,18 +206,26 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
   useLayoutEffect(() => {
     resetContainerScroll("state-sync");
-  }, [resetContainerScroll, routeIndex, runway.phase]);
+    scheduleContainerScrollReset("state-sync-frame");
+  }, [resetContainerScroll, routeIndex, runway.phase, scheduleContainerScrollReset]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     const handleScroll = () => {
       resetContainerScroll("native-scroll");
+      scheduleContainerScrollReset("native-scroll-frame");
     };
     handleScroll();
     container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [resetContainerScroll]);
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      if (scrollResetFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollResetFrameRef.current);
+        scrollResetFrameRef.current = null;
+      }
+    };
+  }, [resetContainerScroll, scheduleContainerScrollReset]);
 
   useEffect(() => {
     const current = runwayRef.current;

@@ -14,6 +14,10 @@ Ultimate 64 Elite (`u64`) over the local network, C64 Commander must be:
   mute/unmute taps, must complete with zero user-visible errors and with
   the slider never getting stuck, snapping back to a previous position
   on release, or drifting away from the user's last intent.
+- **Proven aligned across UI and hardware audio**: repeated slider writes
+  and mute/unmute bursts must keep the visible control state monotonic in
+  logs and must produce matching amplitude direction changes on the live
+  `u64` audio stream without later jump-back.
 - **Reliable for playback transport**: Play, Pause, Resume, Skip Next,
   Skip Previous on the Play page must respond within budget, must not
   double-fire, must not leak audio (no "still playing the previous
@@ -181,6 +185,12 @@ For each confirmed bug from Phase 2:
    cadence.
 4. Commit each fix as a separate, focused commit on the working
    branch.
+5. For repeated volume and mute/unmute interactions, preserve two-sided
+   proof:
+   - logs that emit the precise slider/mute state over time and show no
+     jump-back after the user-visible state settles
+   - live `u64` audio-stream checks that confirm the audible amplitude
+     changes in the same direction as the UX state
 
 Gate 3: every bug from Phase 2 has a regression test, a commit, and
 a passing scenario re-run.
@@ -203,8 +213,11 @@ in one `runs/<runId>/` directory:
 
 1. Volume soak (V1-V4) produces zero `user-visible-error` rows in
    `oracles/errors.ndjson`, zero slider snap-back events (per the
-   oracle in `proof-of-work.md`), zero stuck-thumb events, and 100%
-   slider-commit-to-device-echo agreement.
+   oracle in `proof-of-work.md`), zero stuck-thumb events, 100%
+   slider-commit-to-device-echo agreement, and zero Play-page
+   audio-verification failures in
+   `oracles/audio-volume-verification.ndjson` when the slider is
+   moved through large steps.
 2. Playback soak (P1-P3) produces zero double-fires of Next or
    Previous, zero stuck Pause buttons, and a tap-to-feedback p95
    under 350 ms.

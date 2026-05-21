@@ -329,7 +329,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       if (values.length === 0 || !Number.isFinite(values[0])) {
         return;
       }
-      const nextSliderValue = domain.clampSliderValue(values[0] ?? deviceSliderValue);
+      const nextSliderValue = domain.clampSliderValue(draftSliderValue ?? values[0] ?? deviceSliderValue);
       const nextValue = domain.fromSliderValue(nextSliderValue);
       isDraggingRef.current = false;
       clearPreviewTimer();
@@ -362,6 +362,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       clearLatchedState,
       clearPreviewTimer,
       commit,
+      draftSliderValue,
       deviceSliderValue,
       deviceValue,
       domain,

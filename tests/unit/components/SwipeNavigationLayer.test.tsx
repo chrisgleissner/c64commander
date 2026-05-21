@@ -312,6 +312,37 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
+  it("re-clears late horizontal drift on the next animation frame", async () => {
+    let frameCallback: FrameRequestCallback | null = null;
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        frameCallback = callback;
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+    renderLayer("/play");
+
+    const container = await screen.findByTestId("swipe-navigation-container");
+    act(() => {
+      container.scrollLeft = 120;
+      fireEvent.scroll(container);
+      container.scrollLeft = 96;
+      frameCallback?.(16);
+    });
+
+    expect(container.scrollLeft).toBe(0);
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "debug",
+      "[SwipeNav] reset-scroll-left",
+      expect.objectContaining({ reason: "native-scroll-frame", offset: 96 }),
+    );
+
+    requestAnimationFrameSpy.mockRestore();
+    cancelAnimationFrameSpy.mockRestore();
+  });
+
   it("uses the slow-motion test probe duration for deterministic evidence", async () => {
     (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     renderLayer("/", undefined, false, true);

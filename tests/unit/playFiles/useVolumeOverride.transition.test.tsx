@@ -378,4 +378,153 @@ describe("useVolumeOverride transition race", () => {
       expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "-42 dB" } }),
     );
   });
+
+  it("keeps the unmute pending write authoritative until hardware echoes the restored volume", async () => {
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.muted).toBe(false));
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(result.current.volumeState.muted).toBe(true);
+
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "-42 dB",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(result.current.pendingVolumeWriteRef.current).toMatchObject({
+      index: 0,
+      muted: false,
+    });
+
+    act(() => {
+      rerender();
+    });
+
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(result.current.pendingVolumeWriteRef.current).toMatchObject({
+      index: 0,
+      muted: false,
+    });
+
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "0",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+
+    act(() => {
+      rerender();
+    });
+
+    await waitFor(() => expect(result.current.pendingVolumeWriteRef.current).toBeNull());
+    expect(result.current.volumeState.muted).toBe(false);
+  });
+
+  it("drops stale unmute queue work when a later mute tap overtakes its async preparation", async () => {
+    const enablementResolvers: Array<() => void> = [];
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "-42 dB",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 2",
+        value: "-42 dB",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+    getConfigItemsMock.mockImplementation((category: string) => {
+      if (category === "Audio Mixer") return Promise.resolve(audioMixerItemsRef.current);
+      if (category === "SID Sockets Configuration" || category === "SID Addressing") {
+        return new Promise((resolve) => {
+          enablementResolvers.push(() => resolve({}));
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.muted).toBe(true));
+
+    let unmuteToggle!: Promise<void>;
+    let muteToggle!: Promise<void>;
+    await act(async () => {
+      unmuteToggle = result.current.handleToggleMute();
+      await Promise.resolve();
+      muteToggle = result.current.handleToggleMute();
+      await Promise.resolve();
+    });
+
+    expect(result.current.volumeState.muted).toBe(true);
+
+    enablementResolvers.forEach((resolve) => resolve());
+    await act(async () => {
+      await Promise.all([unmuteToggle, muteToggle]);
+    });
+
+    expect(result.current.volumeState.muted).toBe(true);
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "-42 dB" } }),
+    );
+  });
+
+  it("keeps rapid mute bursts aligned with the latest tap parity while writes are still in flight", async () => {
+    let resolveFirstWrite: (() => void) | null = null;
+    mutateAsyncMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirstWrite = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.muted).toBe(false));
+
+    const toggles: Array<Promise<void>> = [];
+    await act(async () => {
+      for (let index = 0; index < 5; index += 1) {
+        toggles.push(result.current.handleToggleMute());
+        await Promise.resolve();
+      }
+    });
+
+    expect(result.current.volumeState.muted).toBe(true);
+    expect(result.current.pendingVolumeWriteRef.current).toMatchObject({
+      index: 0,
+      muted: true,
+    });
+
+    resolveFirstWrite?.();
+    await act(async () => {
+      await Promise.all(toggles);
+    });
+
+    expect(result.current.volumeState.muted).toBe(true);
+  });
 });

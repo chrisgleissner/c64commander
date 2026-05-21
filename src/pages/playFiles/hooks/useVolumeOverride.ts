@@ -60,6 +60,10 @@ type EnsureUnmutedOptions = {
   refreshItems?: boolean;
 };
 
+const PLAYBACK_RECONCILE_MIN_DELAY_MS = 50;
+const PLAYBACK_RECONCILE_MAX_DELAY_MS = 250;
+const PENDING_VOLUME_WRITE_STALE_MS = 5000;
+
 export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
@@ -142,7 +146,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const manualMuteIntentRef = useRef(false);
   const isDraggingVolumeRef = useRef(false);
   const playbackReconcileTimerRef = useRef<number | null>(null);
+  const playbackWriteDurationRef = useRef(PLAYBACK_RECONCILE_MIN_DELAY_MS);
   const playbackWriteLaneRef = useRef<LatestIntentWriteLane<PlaybackMixerWrite> | null>(null);
+  const muteToggleSequenceRef = useRef(0);
   // Set to true during the pause-to-mute transition to prevent stale query
   // data from immediately flipping the UI back to the pre-pause unmuted state
   // before the hardware mute write is observed.
@@ -230,6 +236,13 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   }, []);
 
   const resolveEffectiveVolumeState = useCallback(() => {
+    const localState = volumeStateRef.current;
+    if (localState.reason === "manual") {
+      return {
+        index: localState.index,
+        muted: localState.muted,
+      };
+    }
     const pending = pendingVolumeWriteRef.current;
     if (pending) {
       return {
@@ -239,6 +252,20 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     }
     return volumeStateRef.current;
   }, []);
+
+  const beginMuteToggleIntent = useCallback((desiredMuted: boolean) => {
+    muteToggleSequenceRef.current += 1;
+    return {
+      sequence: muteToggleSequenceRef.current,
+      desiredMuted,
+    };
+  }, []);
+
+  const isCurrentMuteToggleIntent = useCallback(
+    (intent: { sequence: number; desiredMuted: boolean }) =>
+      muteToggleSequenceRef.current === intent.sequence && volumeStateRef.current.muted === intent.desiredMuted,
+    [],
+  );
 
   const markPendingVolumeWrite = useCallback(
     (index: number, muted: boolean) => {
@@ -276,6 +303,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       beforeRun: waitForMachineTransitionsToSettle,
       run: async (write) => {
         const endWriteBurst = beginPlaybackWriteBurst();
+        const startedAtMs = Date.now();
         try {
           await withTimeout(
             updateConfigBatch.mutateAsync({
@@ -289,6 +317,11 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           );
         } finally {
           endWriteBurst();
+          const elapsedMs = Date.now() - startedAtMs;
+          playbackWriteDurationRef.current = Math.min(
+            PLAYBACK_RECONCILE_MAX_DELAY_MS,
+            Math.max(PLAYBACK_RECONCILE_MIN_DELAY_MS, elapsedMs + PLAYBACK_RECONCILE_MIN_DELAY_MS),
+          );
         }
       },
     });
@@ -298,10 +331,14 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     if (playbackReconcileTimerRef.current) {
       window.clearTimeout(playbackReconcileTimerRef.current);
     }
+    const delayMs = Math.min(
+      PLAYBACK_RECONCILE_MAX_DELAY_MS,
+      Math.max(PLAYBACK_RECONCILE_MIN_DELAY_MS, playbackWriteDurationRef.current),
+    );
     playbackReconcileTimerRef.current = window.setTimeout(() => {
       playbackReconcileTimerRef.current = null;
       void Promise.all([refetchAudioMixerCategory(), refetchSidSocketsCategory(), refetchSidAddressingCategory()]);
-    }, 250);
+    }, delayMs);
   }, [refetchAudioMixerCategory, refetchSidAddressingCategory, refetchSidSocketsCategory]);
 
   const applyAudioMixerUpdates = useCallback(
@@ -650,11 +687,15 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     const muteIndex = resolveMutedVolumeIndex(cachedItems);
     const effectiveState = resolveEffectiveVolumeState();
     if (!effectiveState.muted) {
+      const toggleIntent = beginMuteToggleIntent(true);
       previousVolumeIndexRef.current = effectiveState.index;
       await ensureVolumeSessionSnapshot();
+      dispatchTrackedVolume({ type: "mute", reason: "manual", index: muteIndex });
+      if (!isCurrentMuteToggleIntent(toggleIntent)) {
+        return;
+      }
       manualMuteSnapshotRef.current = captureSidMuteSnapshot(cachedItems, sidEnablement);
       manualMuteIntentRef.current = true;
-      dispatchTrackedVolume({ type: "mute", reason: "manual", index: muteIndex });
       addLog("info", "Play volume mute requested", {
         previousIndex: effectiveState.index,
         muteIndex,
@@ -676,12 +717,14 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
             }),
         );
       } catch (error) {
-        manualMuteIntentRef.current = false;
-        dispatchTrackedVolume({
-          type: "unmute",
-          reason: "manual",
-          index: previousVolumeIndexRef.current ?? effectiveState.index,
-        });
+        if (isCurrentMuteToggleIntent(toggleIntent)) {
+          manualMuteIntentRef.current = false;
+          dispatchTrackedVolume({
+            type: "unmute",
+            reason: "manual",
+            index: previousVolumeIndexRef.current ?? effectiveState.index,
+          });
+        }
         throw error;
       }
       addLog("info", "Play volume mute sent", {
@@ -689,6 +732,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       });
       return;
     }
+    const toggleIntent = beginMuteToggleIntent(false);
     const fallbackIndex = previousVolumeIndexRef.current ?? effectiveState.index;
     manualMuteIntentRef.current = false;
     dispatchTrackedVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
@@ -696,11 +740,19 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     addLog("info", "Play volume unmute requested", {
       index: fallbackIndex,
     });
-    const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : await resolveEnabledSidVolumeItems();
+    const currentEnablement =
+      enabledSidVolumeItems.length > 1 || sidVolumeItems.length > 1 ? await resolveSidEnablement(true) : sidEnablement;
+    const currentItems = filterEnabledSidVolumeItems(
+      enabledSidVolumeItems.length ? enabledSidVolumeItems : await resolveSidVolumeItems(),
+      currentEnablement,
+    );
+    if (!isCurrentMuteToggleIntent(toggleIntent)) {
+      return;
+    }
     const target = volumeSteps[fallbackIndex]?.option;
-    let updates = target ? buildEnabledSidMutedToTargetUpdates(currentItems, sidEnablement, target) : {};
+    let updates = target ? buildEnabledSidMutedToTargetUpdates(currentItems, currentEnablement, target) : {};
     if (!Object.keys(updates).length && target) {
-      updates = buildEnabledSidVolumeUpdates(currentItems, sidEnablement, target);
+      updates = buildEnabledSidVolumeUpdates(currentItems, currentEnablement, target);
     }
     try {
       if (Object.keys(updates).length) {
@@ -722,27 +774,29 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         addLog("info", "Play volume unmute sent", {
           index: fallbackIndex,
         });
-        const pending = pendingVolumeWriteRef.current;
-        if (pending?.index === fallbackIndex && pending.muted === false) {
-          clearPendingVolumeWrite();
-        }
       }
     } catch (error) {
-      manualMuteIntentRef.current = true;
-      dispatchTrackedVolume({ type: "mute", reason: "manual", index: muteIndex });
+      if (isCurrentMuteToggleIntent(toggleIntent)) {
+        manualMuteIntentRef.current = true;
+        dispatchTrackedVolume({ type: "mute", reason: "manual", index: muteIndex });
+      }
       throw error;
     }
   }, [
+    beginMuteToggleIntent,
     buildEnabledSidMutedToTargetUpdates,
     captureSidMuteSnapshot,
-    clearPendingVolumeWrite,
     dispatchTrackedVolume,
     ensureVolumeSessionSnapshot,
     enabledSidVolumeItems,
+    isCurrentMuteToggleIntent,
     queuePlaybackMixerWrite,
     resolveMutedVolumeIndex,
     resolveEffectiveVolumeState,
+    resolveSidEnablement,
+    resolveSidVolumeItems,
     resolveEnabledSidVolumeItems,
+    sidVolumeItems.length,
     sidEnablement,
     volumeSteps,
     withPollingPause,
@@ -750,6 +804,15 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
 
   useEffect(() => {
     if (updateConfigBatch.isPending) return;
+    const pendingWriteAgeMs = pendingVolumeWriteRef.current ? Date.now() - pendingVolumeWriteRef.current.setAtMs : null;
+    if (pendingWriteAgeMs !== null && pendingWriteAgeMs > PENDING_VOLUME_WRITE_STALE_MS) {
+      addLog("warn", "Play volume stale pending write cleared", {
+        index: pendingVolumeWriteRef.current?.index,
+        muted: pendingVolumeWriteRef.current?.muted,
+        ageMs: pendingWriteAgeMs,
+      });
+      clearPendingVolumeWrite();
+    }
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {
       lastKnownDeviceVolumeRef.current = null;
       manualMuteIntentRef.current = false;
@@ -919,12 +982,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       dispatchTrackedVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
       manualMuteIntentRef.current = false;
       manualMuteSnapshotRef.current = null;
-      clearPendingVolumeWrite();
     },
     [
       buildEnabledSidMutedToTargetUpdates,
       buildEnabledSidVolumeUpdates,
-      clearPendingVolumeWrite,
       dispatchTrackedVolume,
       queuePlaybackMixerWrite,
       resolveEnabledSidVolumeItems,

@@ -378,6 +378,31 @@ describe("useVolumeOverride", () => {
     vi.useRealTimers();
   });
 
+  it("clears stale pending writes so sync can recover after a lost response", async () => {
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.muted).toBe(false));
+
+    act(() => {
+      result.current.pendingVolumeWriteRef.current = {
+        index: 1,
+        muted: false,
+        setAtMs: Date.now() - 6000,
+      };
+      audioMixerItemsRef.current = defaultMixerItems("0");
+      rerender();
+    });
+
+    await waitFor(() => expect(result.current.pendingVolumeWriteRef.current).toBeNull());
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Play volume stale pending write cleared",
+      expect.objectContaining({ index: 1, muted: false }),
+    );
+  });
+
   it("mutes to -42 dB and restores the current slider target on unmute", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
 

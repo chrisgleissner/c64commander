@@ -221,9 +221,13 @@ export function usePlaybackController({
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
   const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
   const sessionDeclinedPlaybackConfigRef = useRef(new Map<string, string>());
-  const nextInFlightRef = useRef(false);
-  const previousInFlightRef = useRef(false);
+  const playlistRef = useRef(playlist);
+  const currentIndexRef = useRef(currentIndex);
+  const userTransportQueueRef = useRef(Promise.resolve());
   const STOP_MACHINE_TIMEOUT_MS = 6000;
+
+  playlistRef.current = playlist;
+  currentIndexRef.current = currentIndex;
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -235,6 +239,15 @@ export function usePlaybackController({
     } finally {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     }
+  }, []);
+
+  const enqueueUserTransport = useCallback(async <T>(task: () => Promise<T>) => {
+    const run = userTransportQueueRef.current.then(task, task);
+    userTransportQueueRef.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await run;
   }, []);
 
   const resumeMachineWithRetry = useCallback(
@@ -952,26 +965,25 @@ export function usePlaybackController({
 
   const handleNext = useCallback(
     async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
-      if (!playlist.length) return;
-      let userTransitionAcquired = false;
-      if (source === "auto") {
-        const guard = autoAdvanceGuardRef.current;
-        if (!guard || guard.autoFired || guard.userCancelled) return;
-        if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
-        guard.autoFired = true;
-      } else {
-        if (!tryAcquireSingleFlight(nextInFlightRef)) return;
-        userTransitionAcquired = true;
-        cancelAutoAdvance();
-      }
+      const runTransition = async () => {
+        const activePlaylist = playlistRef.current;
+        if (!activePlaylist.length) return;
+        if (source === "auto") {
+          const guard = autoAdvanceGuardRef.current;
+          if (!guard || guard.autoFired || guard.userCancelled) return;
+          if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
+          guard.autoFired = true;
+        } else {
+          cancelAutoAdvance();
+        }
 
-      let nextIndex = currentIndex + 1;
-      try {
+        const activeIndex = currentIndexRef.current;
+        let nextIndex = activeIndex + 1;
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
-        const currentItem = playlist[currentIndex];
-        if (nextIndex >= playlist.length) {
+        const currentItem = activePlaylist[activeIndex];
+        if (nextIndex >= activePlaylist.length) {
           if (!repeatEnabled) {
             playedClockRef.current.pause(Date.now());
             setIsPlaying(false);
@@ -983,43 +995,46 @@ export function usePlaybackController({
           nextIndex = 0;
         }
 
-        const nextItem = playlist[nextIndex];
+        const nextItem = activePlaylist[nextIndex];
         const shouldReboot = currentItem?.category === "disk" || nextItem?.category === "disk";
-        await playItem(nextItem, {
-          rebootBeforePlay: shouldReboot,
-          playlistIndex: nextIndex,
-        });
-        setIsPaused(false);
-      } catch (error) {
-        if (!isHandledUiError(error)) {
-          reportUserError({
-            operation: "PLAYBACK_NEXT",
-            title: "Playback next failed",
-            description: (error as Error).message,
-            error,
-            context: {
-              currentIndex,
-              nextIndex,
-              source,
-            },
+        try {
+          await playItem(nextItem, {
+            rebootBeforePlay: shouldReboot,
+            playlistIndex: nextIndex,
           });
+          setIsPaused(false);
+        } catch (error) {
+          if (!isHandledUiError(error)) {
+            reportUserError({
+              operation: "PLAYBACK_NEXT",
+              title: "Playback next failed",
+              description: (error as Error).message,
+              error,
+              context: {
+                currentIndex: activeIndex,
+                nextIndex,
+                source,
+              },
+            });
+          }
+          setIsPlaying(false);
+          setIsPaused(false);
+          trackStartedAtRef.current = null;
+          autoAdvanceGuardRef.current = null;
+          setAutoAdvanceDueAtMs(null);
         }
-        setIsPlaying(false);
-        setIsPaused(false);
-        trackStartedAtRef.current = null;
-        autoAdvanceGuardRef.current = null;
-        setAutoAdvanceDueAtMs(null);
-      } finally {
-        if (userTransitionAcquired) {
-          releaseSingleFlight(nextInFlightRef);
-        }
+      };
+
+      if (source === "user") {
+        await enqueueUserTransport(runTransition);
+        return;
       }
+      await runTransition();
     },
     [
       cancelAutoAdvance,
-      currentIndex,
+      enqueueUserTransport,
       playItem,
-      playlist,
       repeatEnabled,
       playedClockRef,
       setAutoAdvanceDueAtMs,
@@ -1032,48 +1047,48 @@ export function usePlaybackController({
   );
 
   const handlePrevious = useCallback(async () => {
-    if (!playlist.length) return;
-    if (!tryAcquireSingleFlight(previousInFlightRef)) return;
-    const prevIndex = Math.max(0, currentIndex - 1);
-    try {
+    await enqueueUserTransport(async () => {
+      const activePlaylist = playlistRef.current;
+      if (!activePlaylist.length) return;
+      const activeIndex = currentIndexRef.current;
+      const prevIndex = Math.max(0, activeIndex - 1);
       cancelAutoAdvance();
       const now = Date.now();
       playedClockRef.current.pause(now);
       setPlayedMs(playedClockRef.current.current(now));
-      const currentItem = playlist[currentIndex];
-      const prevItem = playlist[prevIndex];
+      const currentItem = activePlaylist[activeIndex];
+      const prevItem = activePlaylist[prevIndex];
       const shouldReboot = currentItem?.category === "disk" || prevItem?.category === "disk";
-      await playItem(prevItem, {
-        rebootBeforePlay: shouldReboot,
-        playlistIndex: prevIndex,
-      });
-      setIsPaused(false);
-    } catch (error) {
-      if (!isHandledUiError(error)) {
-        reportUserError({
-          operation: "PLAYBACK_PREVIOUS",
-          title: "Playback previous failed",
-          description: (error as Error).message,
-          error,
-          context: {
-            currentIndex,
-            prevIndex,
-          },
+      try {
+        await playItem(prevItem, {
+          rebootBeforePlay: shouldReboot,
+          playlistIndex: prevIndex,
         });
+        setIsPaused(false);
+      } catch (error) {
+        if (!isHandledUiError(error)) {
+          reportUserError({
+            operation: "PLAYBACK_PREVIOUS",
+            title: "Playback previous failed",
+            description: (error as Error).message,
+            error,
+            context: {
+              currentIndex: activeIndex,
+              prevIndex,
+            },
+          });
+        }
+        setIsPlaying(false);
+        setIsPaused(false);
+        trackStartedAtRef.current = null;
+        autoAdvanceGuardRef.current = null;
+        setAutoAdvanceDueAtMs(null);
       }
-      setIsPlaying(false);
-      setIsPaused(false);
-      trackStartedAtRef.current = null;
-      autoAdvanceGuardRef.current = null;
-      setAutoAdvanceDueAtMs(null);
-    } finally {
-      releaseSingleFlight(previousInFlightRef);
-    }
+    });
   }, [
     cancelAutoAdvance,
-    currentIndex,
+    enqueueUserTransport,
     playItem,
-    playlist,
     playedClockRef,
     setAutoAdvanceDueAtMs,
     setPlayedMs,

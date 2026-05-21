@@ -29,6 +29,8 @@ runs/<runId>/
 │   ├── slider-snapback.ndjson
 │   ├── slider-stuck.ndjson
 │   ├── mute-glitch.ndjson
+│   ├── audio-volume-verification.ndjson
+│   ├── volume-state-trail.ndjson
 │   ├── transport-events.ndjson
 │   ├── background-advance.ndjson
 │   └── errors.ndjson
@@ -68,10 +70,13 @@ Files marked optional below may be omitted only with an explicit
       "verdict": "PASS" | "BUG_REPRODUCED" | "INCONCLUSIVE",
       "evidenceFiles": [
         "oracles/slider-snapback.ndjson",
+        "oracles/audio-volume-verification.ndjson",
+        "oracles/volume-state-trail.ndjson",
         "timings/volume-slider.csv",
         "screenshots/V1-play-after-drag.png"
       ],
       "snapbackEventCount": 0,
+      "audioVerificationFailureCount": 0,
       "stuckThumbEventCount": null,
       "muteGlitchEventCount": null,
       "doubleAdvanceCount": null,
@@ -192,6 +197,64 @@ One row per mute/unmute glitch. Schema:
 
 `convergenceDelayMs > 1500` is a fail row. So is any row where the
 final state never converges.
+
+## `oracles/audio-volume-verification.ndjson`
+
+One row per explicit Play-page volume probe correlated against the live
+`u64` audio stream. Schema:
+
+```json
+{
+  "tsMs": 0,
+  "scenario": "V1",
+  "actionKind": "slider-drag",
+  "expectedDirection": "increase" | "decrease",
+  "committedIndex": 0,
+  "previousCommittedIndex": 0,
+  "baselineWindow": {
+    "startMs": 0,
+    "endMs": 0,
+    "medianRms": 0.12
+  },
+  "comparisonWindow": {
+    "startMs": 0,
+    "endMs": 0,
+    "medianRms": 0.31
+  },
+  "deltaRms": 0.19,
+  "minDeltaRms": 0.04,
+  "result": "VERIFIED" | "NO_AUDIO_WINDOW" | "DIRECTION_MISMATCH" | "AMPLITUDE_INSUFFICIENT"
+}
+```
+
+`overallVerdict: "PASS"` is forbidden if any row in this file has
+`result !== "VERIFIED"`.
+
+## `oracles/volume-state-trail.ndjson`
+
+One row per repeated-volume or mute/unmute observation used to prove
+that the visible control state does not jump backward after settling.
+Schema:
+
+```json
+{
+  "tsMs": 0,
+  "scenario": "V1" | "V4",
+  "phase": "audio-probe-start" | "audio-probe-before-action" | "audio-probe-after-action" | "volume-commit-settled" | "mute-tap",
+  "sliderIndex": 0,
+  "sliderLabel": "-12 dB",
+  "muted": false,
+  "muteLabel": "Mute",
+  "tapIndex": 0,
+  "expectedMuted": false,
+  "committedIndex": 0,
+  "previousCommittedIndex": 0
+}
+```
+
+The log must show monotonic post-settle state for the corresponding user
+action. Any later row that proves the visible state jumped away from the
+settled target is a fail signal for the affected scenario.
 
 ## `oracles/transport-events.ndjson`
 

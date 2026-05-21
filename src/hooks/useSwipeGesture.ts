@@ -124,8 +124,11 @@ export function useSwipeGesture(
       if (container?.hasPointerCapture?.(pointerId)) {
         try {
           container.releasePointerCapture(pointerId);
-        } catch {
-          // Pointer capture may already have been released by the browser.
+        } catch (error) {
+          addLog("warn", "[SwipeNav] release-pointer-capture-failed", {
+            pointerId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
       stateRef.current = { ...IDLE };

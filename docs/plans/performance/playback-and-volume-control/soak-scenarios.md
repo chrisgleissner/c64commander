@@ -35,11 +35,21 @@ entire run.
     "tsMs": 1747695600000,
     "scenario": "V1",
     "committedIndex": 12,
-    "renderedIndexAfterMs1500": 9,
-    "renderedDeltaIndex": -3
-  }
-  ```
+     "renderedIndexAfterMs1500": 9,
+     "renderedDeltaIndex": -3
+   }
+   ```
+  Plus an explicit `oracles/audio-volume-verification.ndjson` probe at
+  the start of the scenario: the runner commits several large slider
+  steps on `/play`, captures the live `u64` UDP audio stream during the
+  probe, and verifies that the median RMS moves in the same direction as
+  the committed slider change by at least the minimum configured delta.
+  The runner also appends `oracles/volume-state-trail.ndjson` rows for
+  each pre/post-settle observation so the visible slider state can be
+  audited for jump-back after each repeated change.
 - **Pass**: zero rows in `slider-snapback.ndjson` for this scenario.
+  Every `audio-volume-verification.ndjson` row for `V1` must report
+  `result: "VERIFIED"`.
 - **Stop early**: stop after 3 snap-back events; the bug is reproduced.
   Mark verdict `BUG_REPRODUCED`.
 
@@ -89,6 +99,9 @@ entire run.
   ```
 - **Pass**: zero rows, and after the final tap the device state and
   the UI state must converge within 1500 ms.
+- **Additional evidence**: `oracles/volume-state-trail.ndjson` logs the
+  precise visible mute/slider state after every tap so later jump-back
+  can be correlated with the glitch row and the audio-stream evidence.
 - **Stop early**: 3 glitches.
 
 ## Playback transport scenarios

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -85,17 +85,24 @@ const createDeferred = <T,>() => {
 describe("usePlaybackController play transition supersession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(executePlayPlan).mockReset();
+    vi.mocked(executePlayPlan).mockImplementation(async () => undefined);
   });
 
-  it("ignores a second rapid next tap while the first next transition is still in flight", async () => {
+  it("queues a second rapid next tap until the first next transition finishes", async () => {
     const firstItem = createPlaylistItem("track-a", "/PROGRAMS/track-a.prg");
     const secondItem = createPlaylistItem("track-b", "/PROGRAMS/track-b.prg");
     const playlist = [firstItem, secondItem];
-    const releasePlay = createDeferred<void>();
+    const firstPlay = createDeferred<void>();
+    const secondPlay = createDeferred<void>();
 
-    vi.mocked(executePlayPlan).mockImplementation(async () => {
-      await releasePlay.promise;
-    });
+    vi.mocked(executePlayPlan)
+      .mockImplementationOnce(async () => {
+        await firstPlay.promise;
+      })
+      .mockImplementationOnce(async () => {
+        await secondPlay.promise;
+      });
 
     const { result } = renderHook(() =>
       usePlaybackController({
@@ -158,28 +165,34 @@ describe("usePlaybackController play transition supersession", () => {
     );
 
     const firstNext = result.current.handleNext("user");
-    await Promise.resolve();
     const secondNext = result.current.handleNext("user");
-    await Promise.resolve();
 
-    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1));
 
-    releasePlay.resolve();
+    firstPlay.resolve();
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2));
+
+    secondPlay.resolve();
     await firstNext;
     await secondNext;
 
-    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
   });
 
-  it("ignores a second rapid previous tap while the first previous transition is still in flight", async () => {
+  it("queues a second rapid previous tap until the first previous transition finishes", async () => {
     const firstItem = createPlaylistItem("track-a", "/PROGRAMS/track-a.prg");
     const secondItem = createPlaylistItem("track-b", "/PROGRAMS/track-b.prg");
     const playlist = [firstItem, secondItem];
-    const releasePlay = createDeferred<void>();
+    const firstPlay = createDeferred<void>();
+    const secondPlay = createDeferred<void>();
 
-    vi.mocked(executePlayPlan).mockImplementation(async () => {
-      await releasePlay.promise;
-    });
+    vi.mocked(executePlayPlan)
+      .mockImplementationOnce(async () => {
+        await firstPlay.promise;
+      })
+      .mockImplementationOnce(async () => {
+        await secondPlay.promise;
+      });
 
     const { result } = renderHook(() =>
       usePlaybackController({
@@ -242,17 +255,18 @@ describe("usePlaybackController play transition supersession", () => {
     );
 
     const firstPrevious = result.current.handlePrevious();
-    await Promise.resolve();
     const secondPrevious = result.current.handlePrevious();
-    await Promise.resolve();
 
-    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1));
 
-    releasePlay.resolve();
+    firstPlay.resolve();
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2));
+
+    secondPlay.resolve();
     await firstPrevious;
     await secondPrevious;
 
-    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
   });
 
   it("lets a newer play request supersede an older queued transition", async () => {
