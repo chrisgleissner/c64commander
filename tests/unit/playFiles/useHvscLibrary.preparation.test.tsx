@@ -459,6 +459,28 @@ describe("useHvscLibrary preparation state coverage", () => {
     expect(mocks.installOrUpdateHvscMock).not.toHaveBeenCalled();
   });
 
+  it("keeps cached ingest available after extraction errors when a cache baseline exists", async () => {
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        download: {
+          status: "failure",
+          errorMessage: "Simulated extraction failure",
+        },
+        extraction: {
+          status: "failure",
+          errorCategory: "extraction",
+          errorMessage: "Simulated extraction failure",
+        },
+      }),
+    );
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus());
+    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 84, updateVersions: [] });
+
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(result.current.hvscCanIngest).toBe(true));
+  });
+
   it("runHvscPreparation calls handleHvscInstall when state is NOT_PRESENT", async () => {
     const { result } = renderHook(() => useHvscLibrary());
 

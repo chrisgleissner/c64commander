@@ -134,8 +134,7 @@ test("verify comprehensive user tracing", async ({ page }) => {
   expect(configTabClick.data.component).toBe("Tab");
 
   const diagnosticsOpen = userActions.find(
-    (t: any) =>
-      t.data?.component === "GlobalDiagnosticsOverlay" && t.data?.name === "diagnostics.open",
+    (t: any) => t.data?.component === "GlobalDiagnosticsOverlay" && t.data?.name === "diagnostics.open",
   );
   expect(diagnosticsOpen).toBeDefined();
   expect(diagnosticsOpen.data.component).toBe("GlobalDiagnosticsOverlay");

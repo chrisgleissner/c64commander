@@ -285,8 +285,11 @@ export const useHvscLibrary = (): HvscLibraryState => {
     const shouldProbeHvscCache =
       Boolean(hvscStatus?.installedVersion) ||
       hvscStatusSummary.extraction.status === "success" ||
+      hvscStatusSummary.download.status === "failure" ||
+      hvscStatusSummary.extraction.status === "failure" ||
       hvscStatus?.ingestionState === "installing" ||
-      hvscStatus?.ingestionState === "updating";
+      hvscStatus?.ingestionState === "updating" ||
+      hvscStatus?.ingestionState === "error";
     if (!shouldProbeHvscCache) {
       setHvscCacheBaseline(null);
       setHvscCacheUpdates([]);
@@ -295,6 +298,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
     refreshHvscCacheStatus();
   }, [
     refreshHvscCacheStatus,
+    hvscStatusSummary.download.status,
     hvscStatus?.installedVersion,
     hvscStatus?.ingestionState,
     hvscStatusSummary.extraction.status,

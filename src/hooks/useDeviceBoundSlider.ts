@@ -114,6 +114,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
 }: UseDeviceBoundSliderOptions<T>) {
   const { selectedDeviceId } = useSavedDevices();
   const [draftSliderValue, setDraftSliderValue] = useState<number | null>(null);
+  const draftSliderValueRef = useRef<number | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent<T> | null>(null);
   const [defaultPreviewThrottleMs, setDefaultPreviewThrottleMs] = useState(() => loadVolumeSliderPreviewIntervalMs());
   const isDraggingRef = useRef(false);
@@ -238,6 +239,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
 
   const clearLatchedState = useCallback(() => {
     isDraggingRef.current = false;
+    draftSliderValueRef.current = null;
     setDraftSliderValue(null);
     setPendingIntent(null);
     clearPreviewTimer();
@@ -317,6 +319,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         acquirePollingPauseIfNeeded();
       }
       isDraggingRef.current = true;
+      draftSliderValueRef.current = nextSliderValue;
       setDraftSliderValue(nextSliderValue);
       onDraftChange?.(nextValue);
       schedulePreview(nextSliderValue);
@@ -329,12 +332,13 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       if (values.length === 0 || !Number.isFinite(values[0])) {
         return;
       }
-      const nextSliderValue = domain.clampSliderValue(draftSliderValue ?? values[0] ?? deviceSliderValue);
+      const nextSliderValue = domain.clampSliderValue(draftSliderValueRef.current ?? values[0] ?? deviceSliderValue);
       const nextValue = domain.fromSliderValue(nextSliderValue);
       isDraggingRef.current = false;
       clearPreviewTimer();
       pendingPreviewSliderValueRef.current = null;
       lastPreviewSentAtRef.current = null;
+      draftSliderValueRef.current = null;
       setDraftSliderValue(null);
       if (equals(deviceValue, nextValue)) {
         clearLatchedState();
@@ -362,7 +366,6 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       clearLatchedState,
       clearPreviewTimer,
       commit,
-      draftSliderValue,
       deviceSliderValue,
       deviceValue,
       domain,

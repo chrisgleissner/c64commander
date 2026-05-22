@@ -43,7 +43,10 @@ export const resolvePlaylistIndexFromState = (state: PlaybackSessionIndexState) 
   return -1;
 };
 
-export const hasPlaylistSelectionChanged = (beforeState: PlaybackSessionIndexState, afterState: PlaybackSessionIndexState) => {
+export const hasPlaylistSelectionChanged = (
+  beforeState: PlaybackSessionIndexState,
+  afterState: PlaybackSessionIndexState,
+) => {
   const beforeItemId = beforeState?.playbackSession?.currentItemId ?? null;
   const afterItemId = afterState?.playbackSession?.currentItemId ?? null;
   if (beforeItemId && afterItemId && beforeItemId !== afterItemId) {

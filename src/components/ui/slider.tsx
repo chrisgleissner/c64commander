@@ -82,6 +82,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       onPointerDown,
       onPointerUp,
       onPointerCancel,
+      onBlur,
       ...props
     },
     ref,
@@ -298,12 +299,22 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       if (dragValue === null) return;
       handleValueCommit([displayValue]);
     }, [displayValue, dragValue, handleValueCommit]);
+    const handleBlur = React.useCallback(
+      (event: React.FocusEvent<HTMLSpanElement>) => {
+        if (dragValue !== null) {
+          handleValueCommit([displayValue]);
+        }
+        onBlur?.(event);
+      },
+      [displayValue, dragValue, handleValueCommit, onBlur],
+    );
 
     return (
       <SliderPrimitive.Root
         ref={ref}
         onValueChange={tracedChange}
         onValueCommit={tracedCommit}
+        onBlur={handleBlur}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}

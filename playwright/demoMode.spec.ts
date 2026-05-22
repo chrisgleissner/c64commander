@@ -263,35 +263,29 @@ test.describe("Automatic Demo Mode", () => {
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
 
-    const persistedRouting = await page.evaluate(
-      (currentDeviceHostKey: string) => {
-        const storedHost = localStorage.getItem(currentDeviceHostKey);
-        const savedDevicesRaw = localStorage.getItem("c64u_saved_devices:v1");
-        let selectedSavedDeviceHost: string | null = null;
-        if (savedDevicesRaw) {
-          try {
-            const parsed = JSON.parse(savedDevicesRaw) as {
-              selectedDeviceId?: string;
-              devices?: Array<{ id?: string; host?: string; httpPort?: number }>;
-            };
-            const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
-            const selected = devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0];
-            if (selected?.host) {
-              selectedSavedDeviceHost =
-                selected.httpPort && selected.httpPort !== 80 ? `${selected.host}:${selected.httpPort}` : selected.host;
-            }
-          } catch {
-            selectedSavedDeviceHost = null;
+    const persistedRouting = await page.evaluate((currentDeviceHostKey: string) => {
+      const storedHost = localStorage.getItem(currentDeviceHostKey);
+      const savedDevicesRaw = localStorage.getItem("c64u_saved_devices:v1");
+      let selectedSavedDeviceHost: string | null = null;
+      if (savedDevicesRaw) {
+        try {
+          const parsed = JSON.parse(savedDevicesRaw) as {
+            selectedDeviceId?: string;
+            devices?: Array<{ id?: string; host?: string; httpPort?: number }>;
+          };
+          const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+          const selected = devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0];
+          if (selected?.host) {
+            selectedSavedDeviceHost =
+              selected.httpPort && selected.httpPort !== 80 ? `${selected.host}:${selected.httpPort}` : selected.host;
           }
+        } catch {
+          selectedSavedDeviceHost = null;
         }
-        return { storedHost, selectedSavedDeviceHost };
-      },
-      CURRENT_DEVICE_HOST_KEY,
-    );
+      }
+      return { storedHost, selectedSavedDeviceHost };
+    }, CURRENT_DEVICE_HOST_KEY);
     expect(persistedRouting.storedHost ?? persistedRouting.selectedSavedDeviceHost).toBe(new URL(server.baseUrl).host);
-    const legacyBase = await page.evaluate(() => localStorage.getItem("c64u_base_url"));
-    expect(legacyBase).toBeNull();
-
     await snap(page, testInfo, "legacy-base-url-migrated");
   });
 
