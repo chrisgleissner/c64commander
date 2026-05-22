@@ -831,6 +831,10 @@ Restore the broken E2E Android test pipeline by fixing the regression introduced
 - Fix applied to `src/lib/savedDevices/store.ts`.
 - Two new tests added in `tests/unit/lib/savedDevices/store.test.ts`.
 - All 20 store tests pass; all 487 tests in the related directories pass.
+- `npx playwright test --list --project=android-phone` now completes without the old module-init crash, which unblocks the Android/web Playwright shard fan-out used by CI.
+- The remaining unresolved PR review threads were addressed in `docs/plans/performance/iteration2/` by standardizing artifact-path guidance, making the soak-summary requirement explicit, correcting the AUTO import wording, adding missing scenario abort conditions, and normalizing the first worklog timestamp.
+- Final validation is green for the current branch state: targeted Play Files regressions pass, the equivalent lint pipeline passed (`npx eslint .`, `npm run lint:display-profiles`, `npm run lint:bundle-budgets`, `npm run variant:check`, `npm run feature-flags:check`), `env -u VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON npm run test:coverage` passed at 94.35% statements / 91.57% branches, and both `npm run build` and `npm run cap:build` passed.
+- Pixel 4 deployment succeeded with `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`; on-device validation used `u64` because `c64u` was again resetting `/v1/info`, and the Play page rendered its expected controls after launch/navigation with no app error lines in the captured logcat slice.
 
 ## Task List
 

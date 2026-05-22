@@ -543,3 +543,40 @@ All five open questions resolved. The implementation plan is upgraded from a sma
 
 - Other module-init paths that touch `import.meta.env` may be added in the future. The contract test guards only the savedDevices store path. A broader lint rule (`no-unsafe-import-meta-env-access`) would be the durable defense but is out of scope for this iteration.
 - The lower-priority feature areas (RAM/REU, stream controls, Telnet) were not inspected in this iteration because the urgent E2E blocker took priority.
+
+## [2026-05-22] Iteration 3 completion: Playwright unblocked, review threads aligned, full validation green
+
+### Follow-up Fixes
+
+- Verified that the saved-devices guard fix fully restores the Playwright shard bootstrap path: `npx playwright test --list --project=android-phone` now completes instead of crashing in `createDebugBootstrapDevices()`.
+- Addressed the six unresolved PR review threads in `docs/plans/performance/iteration2/`:
+  - `agent-prompt.md` now states that `runs/...` paths are repo-root-relative shorthand for `docs/plans/performance/iteration2/runs/...`, uses a single `runs/HARDWARE_LOCK.json` path, and explicitly requires the final worklog line to include the verdict plus `runs/${RUN_ID}/summary.json`.
+  - `auto-safety-mode-spec.md` now matches current importer behavior: builds without `AUTO` support reject it as an unknown mode.
+  - `soak-scenarios.md` now gives every scenario an explicit `Abort:` condition, matching the document convention.
+  - `docs/plans/performance/iteration2/worklog.md` now normalizes the first entry to the documented `YYYY-MM-DD HH:MM UTC` format.
+- While rerunning coverage, a single source-contract test needed tightening after Prettier wrapped `void stopBackgroundExecutionRef.current(...)` across lines. Updated `tests/unit/pages/playFiles/PlayFilesPage.featureFlagContracts.test.ts` to use a whitespace-tolerant regex instead of a brittle raw substring.
+
+### Validation
+
+- Targeted regressions:
+  - `npx vitest run tests/unit/lib/savedDevices/store.test.ts tests/unit/playFiles/usePlaybackController.test.tsx tests/unit/playFiles/useVolumeOverride.test.tsx tests/unit/pages/playFiles/PlayFilesPage.featureFlagContracts.test.ts tests/unit/perf/playbackVolumeSoakRunnerContracts.test.ts`
+  - `npx vitest run tests/unit/pages/playFiles/PlayFilesPage.featureFlagContracts.test.ts`
+  - `npx playwright test --list --project=android-phone`
+- Equivalent lint/build pipeline:
+  - `npx prettier --check src/lib/savedDevices/store.ts src/pages/PlayFilesPage.tsx src/pages/playFiles/hooks/usePlaybackController.ts tests/unit/lib/savedDevices/store.test.ts tests/unit/pages/playFiles/PlayFilesPage.featureFlagContracts.test.ts tests/unit/perf/playbackVolumeSoakRunnerContracts.test.ts tests/unit/playFiles/usePlaybackController.test.tsx tests/unit/playFiles/useVolumeOverride.test.tsx`
+  - `npx eslint .`
+  - `npm run lint:display-profiles`
+  - `npm run lint:bundle-budgets`
+  - `npm run variant:check`
+  - `npm run feature-flags:check`
+- Full verification:
+  - `env -u VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON npm run test:coverage` passed with `Statements 94.35%`, `Branches 91.57%`, `Functions 90.69%`, `Lines 94.35%`.
+  - `npm run build` passed.
+  - `npm run cap:build` passed.
+
+### Device Deployment
+
+- Probed hardware before device validation: `u64 /v1/info` returned `200`; `c64u /v1/info` still reset the TCP connection, so the live app check proceeded against `u64`.
+- Installed `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` to Pixel 4 `9B081FFAZ001WX` and launched `uk.gleissner.c64commander/.MainActivity`.
+- Home rendered healthy on `u64`, and the Play page rendered its expected title, transport controls, volume slider, repeat toggle, and playlist controls after navigation. The first immediate screenshot landed before the WebView finished repainting; the follow-up UI hierarchy and screenshot confirmed the screen had settled normally.
+- A focused logcat slice after Play-page navigation showed no app error/fatal rows for `uk.gleissner.c64commander`.
