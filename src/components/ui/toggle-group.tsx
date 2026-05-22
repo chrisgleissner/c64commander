@@ -25,7 +25,15 @@ const ToggleGroup = React.forwardRef<
 >(({ className, variant, size, children, onValueChange, ...props }, ref) => (
   <ToggleGroupPrimitive.Root
     ref={ref}
-    onValueChange={wrapValueChange(onValueChange, "toggle", "ToggleGroup", props, "ToggleGroup")}
+    onValueChange={
+      wrapValueChange(
+        onValueChange as ((value: unknown) => void) | undefined,
+        "toggle",
+        "ToggleGroup",
+        props as unknown as Record<string, unknown>,
+        "ToggleGroup",
+      ) as ((value: string) => void) & ((value: string[]) => void)
+    }
     className={cn("flex items-center justify-center gap-1", className)}
     {...props}
   >

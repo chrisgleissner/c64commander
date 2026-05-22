@@ -65,7 +65,15 @@ import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
-import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
+import {
+  getHvscBaseUrl,
+  getHvscBaseUrlOverride,
+  getHvscLastUpdateCheckAt,
+  getHvscUpdateCheckIntervalDays,
+  MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS,
+  setHvscBaseUrlOverride,
+  setHvscUpdateCheckIntervalDays,
+} from "@/lib/hvsc/hvscReleaseService";
 import {
   APP_SETTINGS_KEYS,
   loadArchiveClientIdOverride,
@@ -107,6 +115,7 @@ import {
   type NotificationVisibility,
 } from "@/lib/config/appSettings";
 import {
+  getActiveAutoResolutionContext,
   loadDeviceSafetyConfig,
   saveDeviceSafetyMode,
   saveFtpMaxConcurrency,
@@ -162,6 +171,18 @@ import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } fr
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlags";
 
 type Theme = "light" | "dark" | "system";
+
+const DEVICE_PRODUCT_DISPLAY_LABELS = {
+  C64U: "C64U",
+  U64: "U64",
+  U64E: "U64 Elite",
+  U64E2: "U64 Elite II",
+} as const;
+
+const toPresetLabel = (value: string | null | undefined) => {
+  if (!value) return "Balanced";
+  return value.charAt(0) + value.slice(1).toLowerCase();
+};
 
 const isValidConnectionPort = (value: string) => {
   const parsed = Number(value);
@@ -258,6 +279,10 @@ export default function SettingsPage() {
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
+  const [hvscUpdateCheckIntervalInput, setHvscUpdateCheckIntervalInput] = useState(() =>
+    String(getHvscUpdateCheckIntervalDays()),
+  );
+  const [hvscLastUpdateCheckAt] = useState(() => getHvscLastUpdateCheckAt());
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
   const [archiveClientIdOverride, setArchiveClientIdOverride] = useState(loadArchiveClientIdOverride());
   const [archiveUserAgentOverride, setArchiveUserAgentOverride] = useState(loadArchiveUserAgentOverride());
@@ -299,7 +324,24 @@ export default function SettingsPage() {
       ),
     [archiveClientIdOverride, archiveHostOverride, archiveUserAgentOverride, commoserveEnabled],
   );
-
+  const safetyResolutionContext = useMemo(
+    () => getActiveAutoResolutionContext(),
+    [savedDevices.selectedDeviceId, savedDevices.devices, savedDevices.summaries],
+  );
+  const autoSafetyDescription = useMemo(() => {
+    const resolution = deviceSafetyConfig.resolution;
+    if (deviceSafetyMode !== "AUTO" || !resolution) {
+      return null;
+    }
+    const presetLabel = toPresetLabel(resolution.resolvedPreset ?? resolution.effectiveMode);
+    if (resolution.isProvisional) {
+      return `Effective preset: ${presetLabel} (provisional - no verified product yet for this device).`;
+    }
+    const productLabel =
+      (safetyResolutionContext.activeProduct && DEVICE_PRODUCT_DISPLAY_LABELS[safetyResolutionContext.activeProduct]) ||
+      "active device";
+    return `Effective preset: ${presetLabel} - resolved from active device (${productLabel}, verified).`;
+  }, [deviceSafetyConfig.resolution, deviceSafetyMode, safetyResolutionContext.activeProduct]);
   const commitHvscBaseUrl = useCallback(() => {
     const trimmed = hvscBaseUrlInput.trim();
     setHvscBaseUrlOverride(trimmed || null);
@@ -307,6 +349,11 @@ export default function SettingsPage() {
     setHvscBaseUrlInput(trimmed ? resolved : "");
     setHvscBaseUrlPreview(resolved);
   }, [hvscBaseUrlInput]);
+
+  const commitHvscUpdateCheckInterval = useCallback(() => {
+    const normalized = setHvscUpdateCheckIntervalDays(hvscUpdateCheckIntervalInput);
+    setHvscUpdateCheckIntervalInput(String(normalized));
+  }, [hvscUpdateCheckIntervalInput]);
 
   useEffect(() => {
     passwordInputRef.current = password;
@@ -1425,7 +1472,6 @@ export default function SettingsPage() {
             </motion.div>
           ))}
 
-          {/* 6. HVSC */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1441,28 +1487,51 @@ export default function SettingsPage() {
 
             <div className="space-y-3 text-sm">
               <p className="text-xs text-muted-foreground">
-                HVSC visibility now follows the unified Experimental Features registry. Mirror configuration remains a
-                separate operational setting.
+                HVSC visibility follows the unified feature registry, and the archive mirror can be overridden here when
+                you need to point downloads at a different source.
               </p>
 
-              {isDeveloperModeEnabled ? (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">HVSC base URL override</Label>
-                  <Input
-                    value={hvscBaseUrlInput}
-                    onChange={(event) => setHvscBaseUrlInput(event.target.value)}
-                    onBlur={commitHvscBaseUrl}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") commitHvscBaseUrl();
-                    }}
-                    placeholder={hvscBaseUrlPreview}
-                    data-testid="hvsc-base-url"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
-                  </p>
-                </div>
-              ) : null}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">HVSC base URL override</Label>
+                <Input
+                  value={hvscBaseUrlInput}
+                  onChange={(event) => setHvscBaseUrlInput(event.target.value)}
+                  onBlur={commitHvscBaseUrl}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitHvscBaseUrl();
+                  }}
+                  placeholder={hvscBaseUrlPreview}
+                  data-testid="hvsc-base-url"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Automatic update check interval (days)</Label>
+                <Input
+                  type="number"
+                  min={MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS}
+                  step={1}
+                  value={hvscUpdateCheckIntervalInput}
+                  onChange={(event) => setHvscUpdateCheckIntervalInput(event.target.value)}
+                  onBlur={commitHvscUpdateCheckInterval}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitHvscUpdateCheckInterval();
+                  }}
+                  data-testid="hvsc-update-check-interval"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Automatic HVSC update checks run from the Play page when HVSC is installed and ready. The minimum
+                  interval is {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
+                  {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"} to avoid unnecessary mirror load.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Last automatic update check:{" "}
+                  {hvscLastUpdateCheckAt ? new Date(hvscLastUpdateCheckAt).toLocaleString() : "Never"}
+                </p>
+              </div>
             </div>
           </motion.div>
 
@@ -1604,12 +1673,14 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select safety mode" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="AUTO">Auto (Conservative for C64U, Balanced for others) - recommended</SelectItem>
                   <SelectItem value="RELAXED">Relaxed (lighter throttling, higher risk)</SelectItem>
-                  <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
+                  <SelectItem value="BALANCED">Balanced</SelectItem>
                   <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
                   <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
                 </SelectContent>
               </Select>
+              {autoSafetyDescription ? <p className="text-xs text-muted-foreground">{autoSafetyDescription}</p> : null}
               <p className="text-xs text-muted-foreground">
                 Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
                 enables debug logging for richer diagnostics.

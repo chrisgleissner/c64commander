@@ -13,6 +13,7 @@ import { buildArchivePlayPlan } from "@/lib/archive/execution";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
   createMachineTransitionCoordinator,
   SupersededMachineTransitionError,
@@ -59,7 +60,7 @@ const markHandledUiError = (error: unknown) => {
 };
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
-  error instanceof Error && Boolean(error.c64uHandled);
+  error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -220,7 +221,13 @@ export function usePlaybackController({
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
   const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
   const sessionDeclinedPlaybackConfigRef = useRef(new Map<string, string>());
+  const playlistRef = useRef(playlist);
+  const currentIndexRef = useRef(currentIndex);
+  const userTransportQueueRef = useRef(Promise.resolve());
   const STOP_MACHINE_TIMEOUT_MS = 6000;
+
+  playlistRef.current = playlist;
+  currentIndexRef.current = currentIndex;
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -232,6 +239,15 @@ export function usePlaybackController({
     } finally {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     }
+  }, []);
+
+  const enqueueUserTransport = useCallback(async <T>(task: () => Promise<T>) => {
+    const run = userTransportQueueRef.current.then(task, task);
+    userTransportQueueRef.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await run;
   }, []);
 
   const resumeMachineWithRetry = useCallback(
@@ -463,16 +479,13 @@ export function usePlaybackController({
             throw new Error("Local file unavailable. Re-add it to the playlist.");
           }
         }
-        let durationOverride: number | undefined;
-        let subsongCount: number | undefined;
+        let durationOverride: number | undefined = item.durationMs;
+        let subsongCount: number | undefined = item.subsongCount ?? undefined;
         if (item.category === "sid" && item.request.source !== "ultimate") {
-          if (item.durationMs !== undefined && item.subsongCount !== undefined) {
-            durationOverride = item.durationMs;
-            subsongCount = item.subsongCount;
-          } else {
+          if (durationOverride === undefined || subsongCount === undefined) {
             const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
-            durationOverride = item.durationMs ?? metadata.durationMs;
-            subsongCount = item.subsongCount ?? metadata.subsongCount;
+            durationOverride ??= metadata.durationMs;
+            subsongCount ??= metadata.subsongCount;
             if (!metadata.readable) {
               throw new Error(
                 item.request.source === "hvsc"
@@ -617,6 +630,7 @@ export function usePlaybackController({
         const executionOptions = {
           ...(shouldReboot ? { rebootBeforeMount: true } : {}),
           ...(applyPlaybackConfigBeforeLaunch ? { beforeLaunch: applyPlaybackConfigBeforeLaunch } : {}),
+          ...(item.category === "sid" && request.source === "ultimate" ? { skipSidSslPropagation: true } : {}),
           benchmarkMetadata: {
             feedbackKind: "result",
             ...(typeof options?.playlistSize === "number" ? { playlistSize: options.playlistSize } : {}),
@@ -874,6 +888,7 @@ export function usePlaybackController({
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
       if (!isPlaying) return;
+      const pollingPauseHandle = pollingPauseRegistry.acquirePause();
       try {
         const target = isPaused ? "running" : "paused";
         await machineTransitionCoordinatorRef.current.request(target, async () => {
@@ -882,33 +897,10 @@ export function usePlaybackController({
           try {
             if (target === "running") {
               pausingFromPauseRef.current = false;
-              const resumeItems = await resolveEnabledSidVolumeItems();
-              const resumeSnapshot = pauseMuteSnapshotRef.current;
-              const wasMuted =
-                resumeSnapshot && resumeItems.length
-                  ? resumeItems.every(
-                      (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
-                    )
-                  : false;
-              if (!wasMuted) resumingFromPauseRef.current = true;
+              resumingFromPauseRef.current = false;
               await resumeMachineWithRetry(api);
-              if (pauseMuteSnapshotRef.current && resumeItems.length) {
-                try {
-                  await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), "Resume");
-                } catch (error) {
-                  resumingFromPauseRef.current = false;
-                  addErrorLog("Failed to reapply audio mixer settings after resume", {
-                    error: (error as Error).message,
-                    itemCount: resumeItems.length,
-                  });
-                }
-              }
               pauseMuteSnapshotRef.current = null;
               setIsPaused(false);
-              dispatchVolume({
-                type: wasMuted ? "mute" : "unmute",
-                reason: "pause",
-              });
               const now = Date.now();
               trackStartedAtRef.current = now - elapsedMs;
               playedClockRef.current.resume(now);
@@ -922,16 +914,10 @@ export function usePlaybackController({
               return;
             }
 
-            const pauseItems = await resolveEnabledSidVolumeItems();
-            if (pauseItems.length) {
-              pauseMuteSnapshotRef.current = captureSidMuteSnapshot(pauseItems, sidEnablement);
-            }
+            pauseMuteSnapshotRef.current = null;
+            pausingFromPauseRef.current = false;
+            resumingFromPauseRef.current = false;
             await withTimeout(api.machinePause(), 3000, "Pause");
-            if (pauseItems.length) {
-              pausingFromPauseRef.current = true;
-              await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(pauseItems, sidEnablement), "Pause");
-              dispatchVolume({ type: "mute", reason: "pause" });
-            }
             const now = Date.now();
             playedClockRef.current.pause(now);
             setPlayedMs(playedClockRef.current.current(now));
@@ -955,20 +941,15 @@ export function usePlaybackController({
             isPlaying,
           },
         });
+      } finally {
+        pollingPauseHandle.release();
       }
     }),
     [
-      applyAudioMixerUpdates,
-      buildEnabledSidMuteUpdates,
-      captureSidMuteSnapshot,
-      dispatchVolume,
       durationMs,
       elapsedMs,
       isPaused,
       isPlaying,
-      resolveEnabledSidVolumeItems,
-      sidEnablement,
-      snapshotToUpdates,
       trace,
       pauseMuteSnapshotRef,
       pausingFromPauseRef,
@@ -985,67 +966,76 @@ export function usePlaybackController({
 
   const handleNext = useCallback(
     async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
-      if (!playlist.length) return;
-      if (source === "auto") {
-        const guard = autoAdvanceGuardRef.current;
-        if (!guard || guard.autoFired || guard.userCancelled) return;
-        if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
-        guard.autoFired = true;
-      } else {
-        cancelAutoAdvance();
-      }
+      const runTransition = async () => {
+        const activePlaylist = playlistRef.current;
+        if (!activePlaylist.length) return;
+        if (source === "auto") {
+          const guard = autoAdvanceGuardRef.current;
+          if (!guard || guard.autoFired || guard.userCancelled) return;
+          if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
+          guard.autoFired = true;
+        } else {
+          cancelAutoAdvance();
+        }
 
-      const now = Date.now();
-      playedClockRef.current.pause(now);
-      setPlayedMs(playedClockRef.current.current(now));
-      const currentItem = playlist[currentIndex];
-      let nextIndex = currentIndex + 1;
-      if (nextIndex >= playlist.length) {
-        if (!repeatEnabled) {
-          playedClockRef.current.pause(Date.now());
+        const activeIndex = currentIndexRef.current;
+        let nextIndex = activeIndex + 1;
+        const now = Date.now();
+        playedClockRef.current.pause(now);
+        setPlayedMs(playedClockRef.current.current(now));
+        const currentItem = activePlaylist[activeIndex];
+        if (nextIndex >= activePlaylist.length) {
+          if (!repeatEnabled) {
+            playedClockRef.current.pause(Date.now());
+            setIsPlaying(false);
+            setIsPaused(false);
+            autoAdvanceGuardRef.current = null;
+            setAutoAdvanceDueAtMs(null);
+            return;
+          }
+          nextIndex = 0;
+        }
+
+        const nextItem = activePlaylist[nextIndex];
+        const shouldReboot = currentItem?.category === "disk" || nextItem?.category === "disk";
+        try {
+          await playItem(nextItem, {
+            rebootBeforePlay: shouldReboot,
+            playlistIndex: nextIndex,
+          });
+          setIsPaused(false);
+        } catch (error) {
+          if (!isHandledUiError(error)) {
+            reportUserError({
+              operation: "PLAYBACK_NEXT",
+              title: "Playback next failed",
+              description: (error as Error).message,
+              error,
+              context: {
+                currentIndex: activeIndex,
+                nextIndex,
+                source,
+              },
+            });
+          }
           setIsPlaying(false);
           setIsPaused(false);
+          trackStartedAtRef.current = null;
           autoAdvanceGuardRef.current = null;
           setAutoAdvanceDueAtMs(null);
-          return;
         }
-        nextIndex = 0;
-      }
+      };
 
-      const nextItem = playlist[nextIndex];
-      const shouldReboot = currentItem?.category === "disk" || nextItem?.category === "disk";
-      try {
-        await playItem(nextItem, {
-          rebootBeforePlay: shouldReboot,
-          playlistIndex: nextIndex,
-        });
-        setIsPaused(false);
-      } catch (error) {
-        if (!isHandledUiError(error)) {
-          reportUserError({
-            operation: "PLAYBACK_NEXT",
-            title: "Playback next failed",
-            description: (error as Error).message,
-            error,
-            context: {
-              currentIndex,
-              nextIndex,
-              source,
-            },
-          });
-        }
-        setIsPlaying(false);
-        setIsPaused(false);
-        trackStartedAtRef.current = null;
-        autoAdvanceGuardRef.current = null;
-        setAutoAdvanceDueAtMs(null);
+      if (source === "user") {
+        await enqueueUserTransport(runTransition);
+        return;
       }
+      await runTransition();
     },
     [
       cancelAutoAdvance,
-      currentIndex,
+      enqueueUserTransport,
       playItem,
-      playlist,
       repeatEnabled,
       playedClockRef,
       setAutoAdvanceDueAtMs,
@@ -1058,45 +1048,50 @@ export function usePlaybackController({
   );
 
   const handlePrevious = useCallback(async () => {
-    if (!playlist.length) return;
-    cancelAutoAdvance();
-    const now = Date.now();
-    playedClockRef.current.pause(now);
-    setPlayedMs(playedClockRef.current.current(now));
-    const currentItem = playlist[currentIndex];
-    const prevIndex = Math.max(0, currentIndex - 1);
-    const prevItem = playlist[prevIndex];
-    const shouldReboot = currentItem?.category === "disk" || prevItem?.category === "disk";
-    try {
-      await playItem(prevItem, {
-        rebootBeforePlay: shouldReboot,
-        playlistIndex: prevIndex,
-      });
-      setIsPaused(false);
-    } catch (error) {
-      if (!isHandledUiError(error)) {
-        reportUserError({
-          operation: "PLAYBACK_PREVIOUS",
-          title: "Playback previous failed",
-          description: (error as Error).message,
-          error,
-          context: {
-            currentIndex,
-            prevIndex,
-          },
+    await enqueueUserTransport(async () => {
+      const activePlaylist = playlistRef.current;
+      if (!activePlaylist.length) return;
+      const activeIndex = currentIndexRef.current;
+      const prevIndex =
+        activeIndex > 0 ? activeIndex - 1 : repeatEnabled && activePlaylist.length > 1 ? activePlaylist.length - 1 : 0;
+      cancelAutoAdvance();
+      const now = Date.now();
+      playedClockRef.current.pause(now);
+      setPlayedMs(playedClockRef.current.current(now));
+      const currentItem = activePlaylist[activeIndex];
+      const prevItem = activePlaylist[prevIndex];
+      const shouldReboot = currentItem?.category === "disk" || prevItem?.category === "disk";
+      try {
+        await playItem(prevItem, {
+          rebootBeforePlay: shouldReboot,
+          playlistIndex: prevIndex,
         });
+        setIsPaused(false);
+      } catch (error) {
+        if (!isHandledUiError(error)) {
+          reportUserError({
+            operation: "PLAYBACK_PREVIOUS",
+            title: "Playback previous failed",
+            description: (error as Error).message,
+            error,
+            context: {
+              currentIndex: activeIndex,
+              prevIndex,
+            },
+          });
+        }
+        setIsPlaying(false);
+        setIsPaused(false);
+        trackStartedAtRef.current = null;
+        autoAdvanceGuardRef.current = null;
+        setAutoAdvanceDueAtMs(null);
       }
-      setIsPlaying(false);
-      setIsPaused(false);
-      trackStartedAtRef.current = null;
-      autoAdvanceGuardRef.current = null;
-      setAutoAdvanceDueAtMs(null);
-    }
+    });
   }, [
     cancelAutoAdvance,
-    currentIndex,
+    enqueueUserTransport,
     playItem,
-    playlist,
+    repeatEnabled,
     playedClockRef,
     setAutoAdvanceDueAtMs,
     setPlayedMs,

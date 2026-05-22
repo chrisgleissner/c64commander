@@ -8,7 +8,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CATEGORY_OPTIONS, shuffleArray } from "../playFilesUtils";
-import type { PlayFileCategory, PlaylistItem } from "@/pages/playFiles/types";
+import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import type { PlaylistItem } from "@/pages/playFiles/types";
 
 export const reshufflePlaylist = (items: PlaylistItem[], lockedIndex: number) => {
   if (items.length < 2) return items;

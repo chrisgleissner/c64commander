@@ -295,6 +295,54 @@ describe("SwipeNavigationLayer", () => {
     expect(container.getAttribute("style")).toContain("height: calc(100dvh - var(--app-tab-bar-reserved-height))");
   });
 
+  it("resets accidental horizontal runway scroll drift", async () => {
+    renderLayer("/play");
+
+    const container = await screen.findByTestId("swipe-navigation-container");
+    act(() => {
+      container.scrollLeft = 120;
+      fireEvent.scroll(container);
+    });
+
+    expect(container.scrollLeft).toBe(0);
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "debug",
+      "[SwipeNav] reset-scroll-left",
+      expect.objectContaining({ reason: "native-scroll", offset: 120 }),
+    );
+  });
+
+  it("re-clears late horizontal drift on the next animation frame", async () => {
+    let frameCallback: FrameRequestCallback | null = null;
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        frameCallback = callback;
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+    renderLayer("/play");
+
+    const container = await screen.findByTestId("swipe-navigation-container");
+    act(() => {
+      container.scrollLeft = 120;
+      fireEvent.scroll(container);
+      container.scrollLeft = 96;
+      frameCallback?.(16);
+    });
+
+    expect(container.scrollLeft).toBe(0);
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "debug",
+      "[SwipeNav] reset-scroll-left",
+      expect.objectContaining({ reason: "native-scroll-frame", offset: 96 }),
+    );
+
+    requestAnimationFrameSpy.mockRestore();
+    cancelAnimationFrameSpy.mockRestore();
+  });
+
   it("uses the slow-motion test probe duration for deterministic evidence", async () => {
     (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     renderLayer("/", undefined, false, true);
@@ -368,7 +416,7 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
-  it("forces idle via fallback timeout when transitionend never fires", async () => {
+  it("settles via a synthesized transition end when transitionend never fires", async () => {
     // Render and find elements with real timers first so async queries work normally.
     renderLayer("/", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
@@ -382,11 +430,41 @@ describe("SwipeNavigationLayer", () => {
 
       // Do NOT fire transitionEnd — simulate the CSS engine not delivering the event.
       act(() => {
-        vi.advanceTimersByTime(3000);
+        vi.advanceTimersByTime(320);
       });
 
       expect(runway).toHaveAttribute("data-runway-phase", "idle");
-      expect(mocks.addLog).toHaveBeenCalledWith("warn", "[SwipeNav] transition-end-fallback", expect.any(Object));
+      expect(mocks.addLog).toHaveBeenCalledWith(
+        "debug",
+        "[SwipeNav] transition-end-synthesized",
+        expect.objectContaining({ settleAfterMs: 320 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resets an orphaned drag back to idle when pointer end never arrives", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        capturedCallbacks?.onProgress(-96, -0.5);
+      });
+      expect(runway).toHaveAttribute("data-runway-phase", "dragging");
+
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+
+      expect(runway).toHaveAttribute("data-runway-phase", "idle");
+      expect(mocks.addLog).toHaveBeenCalledWith(
+        "debug",
+        "[SwipeNav] drag-reset-synthesized",
+        expect.objectContaining({ center: "Play", settleAfterMs: 600, dragOffsetPx: -96 }),
+      );
     } finally {
       vi.useRealTimers();
     }

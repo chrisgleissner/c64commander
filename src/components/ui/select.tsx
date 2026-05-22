@@ -16,7 +16,13 @@ import { wrapValueChange } from "@/lib/tracing/userTrace";
 const Select = (props: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>) => (
   <SelectPrimitive.Root
     {...props}
-    onValueChange={wrapValueChange(props.onValueChange, "select", "Select", props, "Select")}
+    onValueChange={wrapValueChange(
+      props.onValueChange,
+      "select",
+      "Select",
+      props as unknown as Record<string, unknown>,
+      "Select",
+    )}
   />
 );
 Select.displayName = SelectPrimitive.Root.displayName;

@@ -158,12 +158,6 @@ vi.mock("@/components/diagnostics/DiagnosticsListItem", () => ({
   ),
 }));
 
-vi.mock("@/components/diagnostics/ActionSummaryListItem", () => ({
-  ActionSummaryListItem: ({ summary }: { summary: { correlationId: string; actionName: string } }) => (
-    <div data-testid={`action-summary-${summary.correlationId}`}>{summary.actionName}</div>
-  ),
-}));
-
 const renderOverlay = (initialPath = "/") => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -218,6 +212,10 @@ describe("GlobalDiagnosticsOverlay", () => {
         traces: expect.any(Array),
         actions: expect.any(Array),
         supplemental: expect.objectContaining({
+          deviceSafetyResolution: expect.objectContaining({
+            storedMode: expect.any(String),
+            effectiveMode: expect.any(String),
+          }),
           hvscPerfTimings: expect.arrayContaining([
             expect.objectContaining({ id: "hvsc-perf-000001", scope: "browse:query" }),
           ]),
@@ -331,6 +329,31 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(buildActionSummariesMock).not.toHaveBeenCalled();
+  });
+
+  it("defers action summary building until the diagnostics sheet is first visible", async () => {
+    const frameCallbacks: FrameRequestCallback[] = [];
+    const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frameCallbacks.push(callback);
+      return frameCallbacks.length;
+    });
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+    renderOverlay();
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(buildActionSummariesMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      frameCallbacks.shift()?.(0);
+    });
+
+    await waitFor(() => {
+      expect(buildActionSummariesMock).toHaveBeenCalledTimes(1);
+    });
+
+    requestAnimationFrameSpy.mockRestore();
+    cancelAnimationFrameSpy.mockRestore();
   });
 
   it("applies seeded health-check overlay state from the diagnostics bridge and runtime events", async () => {

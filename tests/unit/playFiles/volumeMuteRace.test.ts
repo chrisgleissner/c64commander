@@ -292,15 +292,17 @@ function shouldSkipVolumeWrite(opts: {
   knownDevice: { index: number; muted: boolean } | null;
   requested: { index: number; muted: boolean };
   isDragging: boolean;
+  phase?: "preview" | "commit";
   allowKnownDeviceSkip?: boolean;
 }) {
-  const { pending, knownDevice, requested, isDragging, allowKnownDeviceSkip = true } = opts;
+  const { pending, knownDevice, requested, isDragging, phase = "preview", allowKnownDeviceSkip = true } = opts;
   const pendingMatchesRequestedState =
     !pending || (pending.index === requested.index && pending.muted === requested.muted);
   if (pending && pending.index === requested.index && pending.muted === requested.muted) {
     return "pending" as const;
   }
   if (
+    phase === "preview" &&
     allowKnownDeviceSkip &&
     !isDragging &&
     knownDevice &&
@@ -368,6 +370,18 @@ describe("pending volume write protection", () => {
     ).toBeNull();
   });
 
+  it("does not skip explicit commit writes just because the known device snapshot matches", () => {
+    expect(
+      shouldSkipVolumeWrite({
+        pending: null,
+        knownDevice: { index: 18, muted: false },
+        requested: { index: 18, muted: false },
+        isDragging: false,
+        phase: "commit",
+      }),
+    ).toBeNull();
+  });
+
   it("does not skip a commit back to the current device value while a different preview write is pending", () => {
     expect(
       shouldSkipVolumeWrite({
@@ -395,6 +409,23 @@ describe("pending volume write protection", () => {
         device: { index: 27, muted: false },
       }),
     ).toBe(false);
+  });
+
+  it("keeps the pending write guard when manual unmute does not need to send a device write", async () => {
+    const clearPending = vi.fn();
+    const writeUnmute = vi.fn();
+
+    const handleManualUnmute = async (updates: Record<string, string>) => {
+      if (Object.keys(updates).length) {
+        await writeUnmute();
+        clearPending();
+      }
+    };
+
+    await handleManualUnmute({});
+
+    expect(writeUnmute).not.toHaveBeenCalled();
+    expect(clearPending).not.toHaveBeenCalled();
   });
 });
 

@@ -337,7 +337,12 @@ class FtpClientPlugin : Plugin() {
       if (listed != null && listed.isNotEmpty()) {
         listed
       } else {
-        client.mlistDir(path) ?: emptyArray()
+        val mlisted = client.mlistDir(path)
+        if (mlisted != null && mlisted.isNotEmpty()) {
+          mlisted
+        } else {
+          resolveListingFromNames(client, path)
+        }
       }
     } catch (error: Exception) {
       AppLogger.warn(
@@ -347,7 +352,123 @@ class FtpClientPlugin : Plugin() {
               "FtpClientPlugin",
               error
       )
-      client.mlistDir(path) ?: emptyArray()
+      val mlisted =
+              try {
+                client.mlistDir(path)
+              } catch (mlistError: Exception) {
+                AppLogger.warn(
+                        pluginContextOrNull(),
+                        logTag,
+                        "FTP MLSD fallback failed; falling back to NLST",
+                        "FtpClientPlugin",
+                        mlistError,
+                )
+                null
+              }
+      if (mlisted != null && mlisted.isNotEmpty()) {
+        mlisted
+      } else {
+        resolveListingFromNames(client, path)
+      }
+    }
+  }
+
+  private fun resolveListingFromNames(client: FTPClient, path: String): Array<FTPFile> {
+    val names =
+            try {
+              client.listNames(path)
+            } catch (error: Exception) {
+              AppLogger.warn(
+                      pluginContextOrNull(),
+                      logTag,
+                      "FTP NLST fallback failed",
+                      "FtpClientPlugin",
+                      error,
+              )
+              null
+            } ?: emptyArray()
+    if (names.isEmpty()) {
+      return emptyArray()
+    }
+
+    return names.mapNotNull { rawName ->
+      val name = rawName.substringAfterLast('/').trim()
+      if (name.isBlank() || name == "." || name == "..") {
+        return@mapNotNull null
+      }
+      val fullPath = buildPath(path, name)
+      resolveFileFromMetadata(client, fullPath, name) ?: synthesizeFileFromDirectoryProbe(client, fullPath, name)
+    }.toTypedArray()
+  }
+
+  private fun resolveFileFromMetadata(client: FTPClient, fullPath: String, fallbackName: String): FTPFile? {
+    return try {
+      client.mlistFile(fullPath)?.apply {
+        if (name.isNullOrBlank() || name == fullPath) {
+          name = fallbackName
+        }
+      }
+    } catch (error: Exception) {
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "FTP MLST probe failed during NLST fallback",
+              "FtpClientPlugin",
+              error,
+      )
+      null
+    }
+  }
+
+  private fun synthesizeFileFromDirectoryProbe(client: FTPClient, fullPath: String, name: String): FTPFile {
+    val workingDirectory =
+            try {
+              client.printWorkingDirectory()
+            } catch (error: Exception) {
+              AppLogger.warn(
+                      pluginContextOrNull(),
+                      logTag,
+                      "FTP PWD probe failed during NLST fallback",
+                      "FtpClientPlugin",
+                      error,
+              )
+              null
+            }
+    val isDirectory =
+            try {
+              client.changeWorkingDirectory(fullPath)
+            } catch (error: Exception) {
+              AppLogger.warn(
+                      pluginContextOrNull(),
+                      logTag,
+                      "FTP CWD probe failed during NLST fallback",
+                      "FtpClientPlugin",
+                      error,
+              )
+              false
+            }
+
+    if (isDirectory) {
+      try {
+        if (!workingDirectory.isNullOrBlank()) {
+          client.changeWorkingDirectory(workingDirectory)
+        } else {
+          client.changeToParentDirectory()
+        }
+      } catch (error: Exception) {
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Failed to restore FTP working directory after NLST fallback probe",
+                "FtpClientPlugin",
+                error,
+        )
+      }
+    }
+
+    return FTPFile().apply {
+      this.name = name
+      type = if (isDirectory) FTPFile.DIRECTORY_TYPE else FTPFile.FILE_TYPE
     }
   }
 

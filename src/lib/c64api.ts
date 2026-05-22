@@ -34,6 +34,7 @@ import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInterac
 import {
   DEFAULT_BASE_URL,
   DEFAULT_DEVICE_HOST,
+  DEFAULT_HTTP_PORT,
   DEFAULT_PROXY_URL,
   WEB_PROXY_PATH,
   buildBaseUrlFromDeviceHost,
@@ -335,7 +336,9 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
   __c64uExpectedMissing?: boolean;
+  __c64uExpectedFailure?: boolean;
   __c64uSkipItemEnrichment?: boolean;
+  __c64uSkipSuccessBodyInspection?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -766,6 +769,8 @@ export class C64API {
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
     const bypassCircuit = Boolean(options.__c64uBypassCircuit);
     const expectedMissing = Boolean(options.__c64uExpectedMissing);
+    const expectedFailureOption = Boolean(options.__c64uExpectedFailure);
+    const skipSuccessBodyInspection = Boolean(options.__c64uSkipSuccessBodyInspection);
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -776,6 +781,8 @@ export class C64API {
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
     delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
+    delete (requestOptions as { __c64uExpectedFailure?: boolean }).__c64uExpectedFailure;
+    delete (requestOptions as { __c64uSkipSuccessBodyInspection?: boolean }).__c64uSkipSuccessBodyInspection;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -930,7 +937,8 @@ export class C64API {
                 if (!response.ok) {
                   const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
                   const failure = classifyError(err, "integration");
-                  const expectedFailure = expectedMissing && method === "GET" && response.status === 404;
+                  const expectedFailure =
+                    (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -948,6 +956,26 @@ export class C64API {
                   }
                   responseRecorded = true;
                   throw err;
+                }
+
+                if (skipSuccessBodyInspection) {
+                  noteRestReachable(url, this.deviceHost);
+                  recordRestResponse(action, {
+                    method,
+                    path,
+                    url,
+                    status: response.status,
+                    headers: collectTraceHeaders(response.headers),
+                    body: null,
+                    payloadPreview: null,
+                    durationMs,
+                    error: null,
+                  });
+                  responseRecorded = true;
+                  if (!DEDUPEABLE_READ_METHODS.has(method)) {
+                    this.resetRequestReadState();
+                  }
+                  return { errors: [] } as T;
                 }
 
                 const parsedBody = await this.parseResponseJson<T>(response, path);
@@ -977,6 +1005,7 @@ export class C64API {
                 const callerAborted = requestSignal?.aborted === true;
                 const isAbort = (error as { name?: string }).name === "AbortError" || /timed out/i.test(rawMessage);
                 const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                const failure = classifyError(error);
                 const normalizedError =
                   !callerAborted && (isAbort || isNetworkFailure) ? resolveHostErrorMessage(rawMessage) : rawMessage;
                 const durationMs = Math.max(
@@ -984,7 +1013,7 @@ export class C64API {
                   Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
                 if (!responseRecorded) {
-                  const failure = classifyError(error);
+                  const expectedFailure = callerAborted || expectedFailureOption || failure.isExpected;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -995,10 +1024,19 @@ export class C64API {
                     payloadPreview: null,
                     durationMs,
                     error: error as Error,
+                    expectedFailure,
                   });
-                  recordTraceError(action, error as Error, failure);
+                  if (!expectedFailure) {
+                    recordTraceError(action, error as Error, failure);
+                  }
                 }
-                if (!fuzzBlocked && intent !== "system" && !callerAborted) {
+                if (
+                  !fuzzBlocked &&
+                  intent !== "system" &&
+                  !callerAborted &&
+                  !expectedFailureOption &&
+                  !failure.isExpected
+                ) {
                   const isTransientFailure =
                     isAbort ||
                     isNetworkFailure ||
@@ -1225,6 +1263,8 @@ export class C64API {
               Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
             );
             const failure = classifyError(error);
+            const callerAborted = options.signal?.aborted === true;
+            const expectedFailure = callerAborted || failure.isExpected;
             recordRestResponse(action, {
               method,
               path: normalizeUrlPath(url),
@@ -1235,8 +1275,11 @@ export class C64API {
               payloadPreview: null,
               durationMs,
               error: error as Error,
+              expectedFailure,
             });
-            recordTraceError(action, error as Error, failure);
+            if (!expectedFailure) {
+              recordTraceError(action, error as Error, failure);
+            }
             const transientUploadFailure = isAbort || isNetworkFailure || isTransientConnectivityFailure(rawMessage);
             const uploadFailureDetails = buildErrorLogDetails(error as Error, {
               url,
@@ -1250,12 +1293,14 @@ export class C64API {
               error: normalizedError,
               rawError: rawMessage,
             });
-            // Always log as error so the entry is captured when the diagnostics
-            // overlay is open. The transient flag marks recoverable upload failures.
-            addErrorLog(
-              "C64 API upload failed",
-              transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails,
-            );
+            if (!failure.isExpected) {
+              // Always log as error so the entry is captured when the diagnostics
+              // overlay is open. The transient flag marks recoverable upload failures.
+              addErrorLog(
+                "C64 API upload failed",
+                transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails,
+              );
+            }
             console.info(
               "C64U_HTTP_FAILURE",
               JSON.stringify({
@@ -1339,7 +1384,10 @@ export class C64API {
       }
     });
     try {
-      const categoryPayload = await this.getCategory(category, options);
+      const categoryPayload = await this.getCategory(category, {
+        ...options,
+        __c64uExpectedFailure: true,
+      });
       const payload = categoryPayload as Record<string, any>;
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
@@ -1390,7 +1438,7 @@ export class C64API {
         throw error;
       }
 
-      addLog("warn", "Category config fetch failed; falling back to item fetches", {
+      addLog("debug", "Category config fetch failed; falling back to item fetches", {
         category,
         error: categoryErrorMessage,
       });
@@ -1511,6 +1559,7 @@ export class C64API {
     return this.request("/v1/machine:reset", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1518,6 +1567,7 @@ export class C64API {
     return this.request("/v1/machine:reboot", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1525,6 +1575,7 @@ export class C64API {
     return this.request("/v1/machine:pause", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1532,6 +1583,7 @@ export class C64API {
     return this.request("/v1/machine:resume", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1539,6 +1591,7 @@ export class C64API {
     return this.request("/v1/machine:poweroff", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -1546,6 +1599,7 @@ export class C64API {
     return this.request("/v1/machine:menu_button", {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 
@@ -2294,6 +2348,7 @@ export const C64_DEFAULTS = {
   DEFAULT_BASE_URL,
   DEFAULT_DEVICE_HOST,
   DEFAULT_PROXY_URL,
+  DEFAULT_HTTP_PORT,
 };
 
 export { buildBaseUrlFromDeviceHost, getDeviceHostFromBaseUrl, normalizeDeviceHost, resolveDeviceHostFromStorage };

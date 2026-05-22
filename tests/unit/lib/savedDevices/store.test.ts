@@ -143,6 +143,35 @@ describe("savedDevices store", () => {
     ]);
   });
 
+  it("falls back to the legacy device when the debug bootstrap env is missing or empty (no import.meta.env crash)", async () => {
+    // Regression: createDebugBootstrapDevices() previously accessed
+    // import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON directly. When the store
+    // was loaded from a Node context where import.meta.env is undefined (e.g.
+    // playwright --list pulling in deviceInteractionManager which calls
+    // loadDeviceSafetyConfig at module init), the access threw and broke all
+    // E2E Android shards. The helper must tolerate both an unset and an
+    // explicitly empty value.
+    vi.stubEnv("VITE_DEBUG_SAVED_DEVICES_JSON", "");
+
+    const store = await loadStore();
+    const snapshot = store.getSavedDevicesSnapshot();
+
+    expect(snapshot.devices).toHaveLength(1);
+    expect(snapshot.devices[0]).toMatchObject({ host: "c64u" });
+  });
+
+  it("guards the debug bootstrap env read with a typeof check so module init survives non-Vite runners", async () => {
+    // Contract: the readDebugSavedDevicesEnv helper must defensively probe
+    // import.meta before reading .env, matching the safe pattern used by
+    // src/lib/fuzz/fuzzMode.ts. This protects the eager module-init chain
+    // deviceInteractionManager -> loadDeviceSafetyConfig -> store from
+    // crashing under playwright --list / ts-node / other non-Vite runners.
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile("src/lib/savedDevices/store.ts", "utf8");
+    expect(source).toContain('if (typeof import.meta === "undefined" || !import.meta.env) return undefined;');
+    expect(source).toMatch(/const raw = readDebugSavedDevicesEnv\(\);/);
+  });
+
   it("hydrates persisted device summaries and keeps resolved addresses on reload", async () => {
     vi.resetModules();
     localStorage.setItem(

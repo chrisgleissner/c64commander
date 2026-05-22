@@ -43,6 +43,18 @@ vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
 }));
 
+vi.mock("@/lib/c64api", () => ({
+  getC64APIConfigSnapshot: vi.fn(() => ({ deviceHost: "u64", password: "secret" })),
+}));
+
+vi.mock("@/lib/ftp/ftpClient", () => ({
+  readFtpFile: vi.fn(),
+}));
+
+vi.mock("@/lib/ftp/ftpConfig", () => ({
+  getStoredFtpPort: vi.fn(() => 21),
+}));
+
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
 }));
@@ -60,12 +72,16 @@ vi.mock("@/lib/sourceNavigation/localSourceAdapter", () => ({
   resolveLocalRuntimeFile: vi.fn(),
 }));
 
+vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", () => ({
+  normalizeFtpHost: vi.fn((host: string) => host),
+}));
+
 vi.mock("@/lib/native/safUtils", () => ({
   redactTreeUri: vi.fn(() => "[redacted]"),
 }));
 
 vi.mock("@/lib/sid/songlengthsDiscovery", () => ({
-  isSonglengthsFileName: vi.fn((name: string) => /\.ssl$/i.test(name)),
+  isSonglengthsFileName: vi.fn((name: string) => /\.ssl$/i.test(name) || /songlengths\.md5$/i.test(name)),
 }));
 
 vi.mock("@/lib/config/configDiscovery", () => ({
@@ -117,6 +133,19 @@ const createLocalSource = (
   type: "local",
   name: "Local",
   rootPath: "/music",
+  isAvailable: true,
+  listEntries,
+  listFilesRecursive: listFilesRecursive ?? (async () => []),
+});
+
+const createUltimateSource = (
+  listEntries: SourceLocation["listEntries"],
+  listFilesRecursive?: SourceLocation["listFilesRecursive"],
+): SourceLocation => ({
+  id: "ultimate",
+  type: "ultimate",
+  name: "U64",
+  rootPath: "/",
   isAvailable: true,
   listEntries,
   listFilesRecursive: listFilesRecursive ?? (async () => []),
@@ -465,6 +494,49 @@ describe("addFileSelections batching", () => {
     // listFilesRecursive should NOT be called when recurseFolders is true
     // because songlengths entries are tracked during the streaming recursive traversal
     expect(listFilesRecursiveSpy).not.toHaveBeenCalled();
+  });
+
+  it("discovers sibling HVSC Songlengths.md5 for ultimate selections and passes it to resolution", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
+    const source = createUltimateSource(async (path: string) => {
+      if (path === "/USB2/test-data/SID") {
+        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
+      }
+      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
+        return [
+          {
+            type: "file" as const,
+            name: "Songlengths.md5",
+            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+          },
+        ];
+      }
+      return [];
+    });
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
+
+    expect(result).toBe(true);
+    expect(deps.mergeSonglengthsFiles).toHaveBeenCalledWith([
+      expect.objectContaining({
+        path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+        file: expect.objectContaining({
+          name: "Songlengths.md5",
+          webkitRelativePath: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+        }),
+      }),
+    ]);
+    expect(deps.applySonglengthsToItems).toHaveBeenCalledWith(
+      expect.any(Array),
+      [
+        expect.objectContaining({
+          path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+        }),
+      ],
+      { allowMd5Fallback: true },
+    );
   });
 
   it("flushes 5k hvsc files in a single bulk batch", async () => {

@@ -19,6 +19,11 @@ import { reportUserError } from "@/lib/uiErrors";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
+import { getC64APIConfigSnapshot } from "@/lib/c64api";
+import { readFtpFile } from "@/lib/ftp/ftpClient";
+import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
@@ -112,6 +117,34 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       throw new Error(`Invalid archive selection: ${path}`);
     }
     return { resultId, category };
+  };
+
+  const hasMd5SonglengthsFile = (entries: SonglengthsFileEntry[] | undefined) =>
+    Boolean(entries?.some((entry) => entry.path.toLowerCase().endsWith(".md5")));
+
+  const buildUltimateSonglengthsFile = (
+    entryPath: string,
+    entryName: string,
+    modifiedAt?: string | null,
+  ): LocalPlayFile => {
+    const normalizedPath = normalizeSourcePath(entryPath);
+    const lastModified = parseModifiedAt(modifiedAt) ?? Date.now();
+    return {
+      name: entryName,
+      webkitRelativePath: normalizedPath,
+      lastModified,
+      arrayBuffer: async () => {
+        const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
+        const { data } = await readFtpFile({
+          host: normalizeFtpHost(rawHost),
+          port: getStoredFtpPort(),
+          password,
+          path: normalizedPath,
+        });
+        const bytes = base64ToUint8(data);
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      },
+    };
   };
 
   const hasResolvedSelectionMetadata = (selection: SelectedItem) =>
@@ -490,7 +523,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               source.type === "hvsc"
                 ? batch
                 : await applySonglengthsToItems(batch, discoveredSonglengths, {
-                    allowMd5Fallback: false,
+                    allowMd5Fallback:
+                      source.type === "ultimate" &&
+                      (hasMd5SonglengthsFile(songlengthsFiles) || hasMd5SonglengthsFile(discoveredSonglengths)),
                   });
             console.info(
               `[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`,
@@ -657,7 +692,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       console.info(`[hvsc-perf] scan done files=${selectedFiles.length} ms=${Date.now() - scanT0}`);
 
-      if (source.type === "local") {
+      if (source.type === "local" || source.type === "ultimate") {
         const treeUri = localSourceTreeUris.get(source.id);
         const entriesMap = localEntriesBySourceId.get(source.id);
         const knownSonglengths = new Set(songlengthsFiles.map((entry) => entry.path));
@@ -672,6 +707,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const resolveSonglengthsFile = (entryPath: string, entryName: string, modifiedAt?: string | null) => {
           const normalizedPath = normalizeSourcePath(entryPath);
           const lastModified = parseModifiedAt(modifiedAt);
+          if (source.type === "ultimate") {
+            return buildUltimateSonglengthsFile(normalizedPath, entryName, modifiedAt);
+          }
           const entry = entriesMap?.get(normalizedPath);
           return (
             resolveLocalRuntimeFile(source.id, normalizedPath) ||

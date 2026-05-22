@@ -14,6 +14,7 @@ import {
   subscribeDeviceSafetyUpdates,
   type DeviceSafetyConfig,
 } from "@/lib/config/deviceSafetySettings";
+import { getActiveAutoResolutionContext } from "@/lib/config/deviceSafetySettings";
 import {
   getDeviceStateSnapshot,
   markDeviceRequestEnd,
@@ -183,6 +184,30 @@ class InteractionScheduler {
 }
 
 let config: DeviceSafetyConfig = loadDeviceSafetyConfig();
+let lastLoggedEffectivePresetSignature: string | null = null;
+
+const logEffectivePresetChange = (nextConfig: DeviceSafetyConfig) => {
+  const resolution = nextConfig.resolution;
+  const effectiveMode = resolution?.effectiveMode ?? nextConfig.mode;
+  const signature = `${nextConfig.mode}:${effectiveMode}`;
+  if (signature === lastLoggedEffectivePresetSignature) {
+    return;
+  }
+  lastLoggedEffectivePresetSignature = signature;
+  const context = getActiveAutoResolutionContext();
+  const message =
+    nextConfig.mode === "AUTO"
+      ? `Device safety effective-preset = ${effectiveMode}`
+      : `Device safety preset = ${effectiveMode}`;
+  addLog("info", message, {
+    mode: nextConfig.mode,
+    resolvedPreset: resolution?.resolvedPreset ?? null,
+    provisional: resolution?.isProvisional ?? false,
+    activeProduct: context.activeProduct,
+    activeDeviceId: context.activeDeviceId,
+    reason: resolution?.reason ?? "explicit-user-choice",
+  });
+};
 
 const updateConfig = () => {
   config = loadDeviceSafetyConfig();
@@ -201,6 +226,7 @@ const updateConfig = () => {
   telnetBackoffUntilMs = 0;
   telnetCircuitUntilMs = 0;
   setCircuitOpenUntil(null);
+  logEffectivePresetChange(config);
   addLog("info", "Device safety config updated", { mode: config.mode, config });
 };
 

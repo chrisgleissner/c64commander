@@ -12,6 +12,7 @@ import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/t
 import type { TraceActionContext } from "@/lib/tracing/types";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { inspectRequestPayload, inspectResponsePayload } from "@/lib/c64api/requestRuntime";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
 
 const parseUrl = (url: string) => {
   const fallbackBase = typeof window !== "undefined" ? window.location.origin : "http://localhost";
@@ -57,6 +58,7 @@ export const registerFetchTrace = () => {
     method: string,
   ): Promise<Response> => {
     incrementRestInFlight();
+    const requestSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
     const requestTrace = await inspectRequestPayload(init?.body ?? (input instanceof Request ? input.body : null));
     recordRestRequest(action, {
       method,
@@ -137,6 +139,9 @@ export const registerFetchTrace = () => {
         traceError = new Error(errorMessage);
       }
 
+      const failure = classifyError(traceError ?? error);
+      const expectedFailure = requestSignal?.aborted === true || failure.isExpected === true;
+
       if (!(error instanceof Response)) {
         recordRestResponse(action, {
           status: responseStatus,
@@ -146,9 +151,12 @@ export const registerFetchTrace = () => {
           durationMs,
           error: traceError,
           errorMessage,
+          expectedFailure,
         });
       }
-      recordTraceError(action, traceError ?? new Error("Request failed"));
+      if (!expectedFailure) {
+        recordTraceError(action, traceError ?? new Error("Request failed"), failure);
+      }
       throw error;
     } finally {
       decrementRestInFlight();

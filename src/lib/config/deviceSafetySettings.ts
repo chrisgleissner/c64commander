@@ -6,7 +6,29 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type DeviceSafetyMode = "RELAXED" | "BALANCED" | "CONSERVATIVE" | "TROUBLESHOOTING";
+import {
+  getSelectedSavedDevice,
+  getSelectedSavedDeviceProductFamilySync,
+  type ProductFamilyCode,
+} from "@/lib/savedDevices/store";
+
+export type DeviceSafetyMode = "AUTO" | "RELAXED" | "BALANCED" | "CONSERVATIVE" | "TROUBLESHOOTING";
+type ConcreteDeviceSafetyMode = Exclude<DeviceSafetyMode, "AUTO">;
+
+export type ResolvedSafetyPreset = "BALANCED" | "CONSERVATIVE";
+
+export type AutoResolutionContext = {
+  activeProduct: ProductFamilyCode | null;
+  activeDeviceId: string | null;
+};
+
+export type AutoResolution = {
+  storedMode: DeviceSafetyMode;
+  effectiveMode: ConcreteDeviceSafetyMode;
+  resolvedPreset: ResolvedSafetyPreset | null;
+  isProvisional: boolean;
+  reason: string;
+};
 
 export type DeviceSafetyConfig = {
   mode: DeviceSafetyMode;
@@ -23,6 +45,7 @@ export type DeviceSafetyConfig = {
   circuitBreakerCooldownMs: number;
   discoveryProbeIntervalMs: number;
   allowUserOverrideCircuit: boolean;
+  resolution?: AutoResolution;
 };
 
 const DEVICE_SAFETY_MODE_KEY = "c64u_device_safety_mode";
@@ -40,9 +63,9 @@ const CIRCUIT_BREAKER_COOLDOWN_MS_KEY = "c64u_device_safety_circuit_breaker_cool
 const DISCOVERY_PROBE_INTERVAL_MS_KEY = "c64u_device_safety_discovery_probe_interval_ms";
 const ALLOW_USER_OVERRIDE_CIRCUIT_KEY = "c64u_device_safety_allow_user_override_circuit";
 
-export const DEFAULT_DEVICE_SAFETY_MODE: DeviceSafetyMode = "BALANCED";
+export const DEFAULT_DEVICE_SAFETY_MODE: DeviceSafetyMode = "AUTO";
 
-const MODE_DEFAULTS: Record<DeviceSafetyMode, Omit<DeviceSafetyConfig, "mode">> = {
+const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "mode" | "resolution">> = {
   RELAXED: {
     ftpMaxConcurrency: 3,
     infoCacheMs: 200,
@@ -133,9 +156,65 @@ const clampNumber = (value: number, min: number, max: number, step = 1) => {
 };
 
 const normalizeMode = (mode?: string | null): DeviceSafetyMode => {
-  if (mode === "RELAXED" || mode === "CONSERVATIVE" || mode === "TROUBLESHOOTING") return mode;
+  if (
+    mode === "AUTO" ||
+    mode === "RELAXED" ||
+    mode === "BALANCED" ||
+    mode === "CONSERVATIVE" ||
+    mode === "TROUBLESHOOTING"
+  ) {
+    return mode;
+  }
+  if (mode === null || mode === undefined) {
+    return DEFAULT_DEVICE_SAFETY_MODE;
+  }
   return "BALANCED";
 };
+
+export const resolveAutoSafetyMode = (stored: DeviceSafetyMode, ctx: AutoResolutionContext): AutoResolution => {
+  if (stored !== "AUTO") {
+    return {
+      storedMode: stored,
+      effectiveMode: stored,
+      resolvedPreset: null,
+      isProvisional: false,
+      reason: "explicit-user-choice",
+    };
+  }
+
+  if (ctx.activeProduct === "C64U") {
+    return {
+      storedMode: stored,
+      effectiveMode: "CONSERVATIVE",
+      resolvedPreset: "CONSERVATIVE",
+      isProvisional: false,
+      reason: "auto-c64u",
+    };
+  }
+
+  if (ctx.activeProduct === "U64" || ctx.activeProduct === "U64E" || ctx.activeProduct === "U64E2") {
+    return {
+      storedMode: stored,
+      effectiveMode: "BALANCED",
+      resolvedPreset: "BALANCED",
+      isProvisional: false,
+      reason: "auto-u64-family",
+    };
+  }
+
+  return {
+    storedMode: stored,
+    effectiveMode: "BALANCED",
+    resolvedPreset: "BALANCED",
+    isProvisional: true,
+    reason: "auto-no-verified-product",
+  };
+};
+
+export const getActiveAutoResolutionContext = (): AutoResolutionContext => ({
+  activeProduct: getSelectedSavedDeviceProductFamilySync(),
+  activeDeviceId: getSelectedSavedDevice()?.id ?? null,
+});
 
 const broadcast = (key: string, value: unknown) => {
   if (typeof window === "undefined") return;
@@ -192,7 +271,8 @@ const resolveBooleanOverride = (key: string, fallback: boolean) => {
 
 export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
   const mode = loadDeviceSafetyMode();
-  const defaults = MODE_DEFAULTS[mode];
+  const resolution = resolveAutoSafetyMode(mode, getActiveAutoResolutionContext());
+  const defaults = MODE_DEFAULTS[resolution.effectiveMode];
   return {
     mode,
     ftpMaxConcurrency: clampNumber(resolveOverride(FTP_MAX_CONCURRENCY_KEY, defaults.ftpMaxConcurrency), 1, 4, 1),
@@ -226,6 +306,7 @@ export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
       ALLOW_USER_OVERRIDE_CIRCUIT_KEY,
       defaults.allowUserOverrideCircuit,
     ),
+    resolution,
   };
 };
 

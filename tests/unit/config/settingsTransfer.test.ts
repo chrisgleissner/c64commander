@@ -20,7 +20,7 @@ import {
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
-import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
+import { loadDeviceSafetyConfig, saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
 
@@ -144,6 +144,17 @@ describe("settingsTransfer", () => {
     expect(snapshot.featureFlags).toEqual({
       commoserve_enabled: false,
     });
+  });
+
+  it("round-trips AUTO device safety mode through export and import", async () => {
+    saveDeviceSafetyMode("AUTO");
+
+    const snapshot = await exportSettingsSnapshot();
+    expect(snapshot.deviceSafety.mode).toBe("AUTO");
+
+    const result = await importSettingsJson(JSON.stringify(snapshot));
+    expect(result.ok).toBe(true);
+    expect(loadDeviceSafetyConfig().mode).toBe("AUTO");
   });
 
   it("rejects invalid JSON payloads", async () => {

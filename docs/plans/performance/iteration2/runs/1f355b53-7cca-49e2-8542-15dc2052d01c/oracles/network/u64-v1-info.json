@@ -1,0 +1,9 @@
+{ 
+  "product" : "Ultimate 64 Elite",
+  "firmware_version" : "3.14e",
+  "fpga_version" : "122",
+  "core_version" : "1.4B",
+  "hostname" : "u64",
+  "unique_id" : "38C1BA",
+  "errors" : [  ]
+}

@@ -331,13 +331,14 @@ export function UnifiedHealthBadge({ className }: Props) {
   const suppressClickRef = useRef(false);
 
   const canSwitchDevices = savedDevices.devices.length > 1;
+  const shouldRunSavedDeviceHealthChecks = pickerOpen && canSwitchDevices;
   const {
     byDeviceId: healthByDeviceId,
     refreshAll,
     totalProbeCount,
   } = useSavedDeviceHealthChecks(
     savedDevices.devices,
-    canSwitchDevices,
+    shouldRunSavedDeviceHealthChecks,
     pickerOpen ? HEALTH_CHECK_CONTEXTS.switchDeviceDialog : HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
   );
 
@@ -484,6 +485,8 @@ export function UnifiedHealthBadge({ className }: Props) {
     [pendingSwitch?.fromDeviceId, savedDevices.selectedDeviceId, switchSavedDevice],
   );
 
+  const pickerSelectedDeviceId = pendingSwitch?.toDeviceId ?? savedDevices.selectedDeviceId;
+
   return (
     <>
       <button
@@ -491,6 +494,7 @@ export function UnifiedHealthBadge({ className }: Props) {
         role="button"
         aria-label={ariaLabel}
         data-testid="unified-health-badge"
+        data-diagnostics-open-trigger="true"
         data-connection-state={rawConnectionState}
         data-health-state={state}
         data-connectivity-state={connectivity}
@@ -581,7 +585,7 @@ export function UnifiedHealthBadge({ className }: Props) {
           <AppSheetBody className="space-y-3 px-4 py-4 sm:px-5">
             {savedDevices.devices.map((device) => {
               const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
-              const isSelected = device.id === (pendingSwitch?.fromDeviceId ?? savedDevices.selectedDeviceId);
+              const isSelected = device.id === pickerSelectedDeviceId;
               const isPendingTarget = pendingSwitch?.toDeviceId === device.id;
               const status = isPendingTarget
                 ? "verifying"

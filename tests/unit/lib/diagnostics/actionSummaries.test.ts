@@ -204,6 +204,33 @@ describe("actionSummaries", () => {
     );
   });
 
+  it("omits expected cancellation errors from REST effects", () => {
+    const events: TraceEvent[] = [
+      makeEvent("1", "action-start", "expected-abort", 10, { name: "Switch device" }),
+      makeEvent("2", "rest-request", "expected-abort", 11, {
+        method: "GET",
+        normalizedUrl: "/v1/info",
+      }),
+      makeEvent("3", "rest-response", "expected-abort", 12, {
+        status: null,
+        error: "signal is aborted without reason",
+        expectedFailure: true,
+      }),
+      makeEvent("4", "action-end", "expected-abort", 13, { status: "success" }),
+    ];
+
+    const [summary] = buildActionSummaries(events);
+    const restEffect = summary.effects?.find((effect) => effect.type === "REST");
+    expect(restEffect).toMatchObject({
+      type: "REST",
+      method: "GET",
+      path: "/v1/info",
+      status: null,
+    });
+    expect(restEffect && "error" in restEffect ? restEffect.error : undefined).toBeUndefined();
+    expect(summary.effects?.some((effect) => effect.type === "ERROR")).toBe(false);
+  });
+
   it("adds pending REST request effect and action-end fallback error", () => {
     const events: TraceEvent[] = [
       makeEvent("1", "action-start", "pending", 1, { name: "Write config" }, undefined, "automatic"),

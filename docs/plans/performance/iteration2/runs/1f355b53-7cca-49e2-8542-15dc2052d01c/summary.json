@@ -1,0 +1,79 @@
+{
+  "runId": "1f355b53-7cca-49e2-8542-15dc2052d01c",
+  "startedAt": "2026-05-19T12:03:25.129346Z",
+  "endedAt": "2026-05-19T12:53:05Z",
+  "verdict": "inconclusive",
+  "verdictReason": "Preflight passed, but after switching to verified saved device c64u-2 the c64u REST endpoint began resetting TCP connections; the Pixel and host both observed the C64U leg offline.",
+  "scenarios": [
+    {
+      "id": "PRE",
+      "leg": "U64",
+      "verdict": "pass",
+      "stepCount": 0
+    },
+    {
+      "id": "PRE",
+      "leg": "C64U",
+      "verdict": "inconclusive",
+      "stepCount": 1
+    }
+  ],
+  "ctaCoverage": {
+    "total": 56,
+    "exercised": 1,
+    "missing": [
+      "55 remaining CTA shapes were not exercised after the external C64U outage ended the run."
+    ]
+  },
+  "responsiveness": {
+    "tapToFeedback": {
+      "p50Ms": null,
+      "p95Ms": null,
+      "budgetMet": false
+    },
+    "pageNav": {
+      "p50Ms": null,
+      "p95Ms": null,
+      "budgetMet": false
+    },
+    "diagnosticsOpen": {
+      "p50Ms": null,
+      "p95Ms": null,
+      "budgetMet": false
+    },
+    "savedDeviceSwitch": {
+      "p50Ms": 3000,
+      "p95Ms": 3000,
+      "budgetMet": false
+    }
+  },
+  "errors": {
+    "totalUnexpected": 0,
+    "totalExpected": 0,
+    "expectedRows": []
+  },
+  "c64uReachability": {
+    "preflight": "ok",
+    "endOfRun": "fail",
+    "lostMidRun": true
+  },
+  "safetyTrail": {
+    "u64Legs": 1,
+    "c64uLegs": 1,
+    "balancedRows": 0,
+    "conservativeRows": 0,
+    "provisionalRowsAfterFirstVerification": 0
+  },
+  "specConcerns": [],
+  "knownBugs": [
+    {
+      "title": "External C64U REST endpoint reset during Iteration 2 soak",
+      "severity": "blocker",
+      "scenarioId": "PRE",
+      "steps": [
+        "preflight-select-c64u2"
+      ],
+      "screenshot": "oracles/screenshots/settings-c64u2-offline.png"
+    }
+  ]
+}

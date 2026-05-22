@@ -14,7 +14,7 @@ export type LaunchSequenceTimings = {
   fadeOutMs: number;
 };
 
-type TimerHandle = ReturnType<typeof setTimeout>;
+type TimerHandle = number;
 
 type LaunchSequenceScheduler = (callback: () => void, delayMs: number) => TimerHandle;
 type LaunchSequenceCanceller = (handle: TimerHandle) => void;

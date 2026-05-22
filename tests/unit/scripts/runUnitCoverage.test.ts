@@ -19,7 +19,6 @@ import {
   runOrThrow,
   splitFilesIntoChunks,
   unitCoverageRuns,
-  wrapCommandWithDirectoryKeepalive,
 } from "../../../scripts/run-unit-coverage.mjs";
 
 type UnitCoverageRun = (typeof unitCoverageRuns)[number];
@@ -223,17 +222,31 @@ describe("run-unit-coverage", () => {
     }
   });
 
-  it("wraps a coverage command with a keepalive loop for the reports temp directory", () => {
-    const wrapped = wrapCommandWithDirectoryKeepalive(
-      process.execPath,
-      ["node_modules/vitest/vitest.mjs", "run"],
-      "/tmp/c64commander/.cov-unit/jsdom-1/.tmp",
-    );
+  it("runs coverage shards directly without injecting a temp-directory keepalive wrapper", () => {
+    const tempRoot = mkdtempSync(path.join(os.tmpdir(), "run-unit-coverage-"));
+    const runConfig = unitCoverageRuns[0];
+    const plan = createCoveragePlan(tempRoot);
+    const executeRun = vi.fn((_command, args) => {
+      const reportsDirectoryArg = args.find((arg) => arg.startsWith("--coverage.reportsDirectory="));
 
-    expect(wrapped.command).toBe("bash");
-    expect(wrapped.args[0]).toBe("-lc");
-    expect(wrapped.args[1]).toContain('keepalive() { while :; do mkdir -p "$keepalive_dir"; sleep 0.2; done; }');
-    expect(wrapped.args[1]).toContain("/tmp/c64commander/.cov-unit/jsdom-1/.tmp");
-    expect(wrapped.args[1]).toContain("node_modules/vitest/vitest.mjs");
+      if (!reportsDirectoryArg) {
+        throw new Error("Expected coverage reports directory argument");
+      }
+
+      const reportsDirectory = reportsDirectoryArg.slice("--coverage.reportsDirectory=".length);
+      writeFileSync(path.join(reportsDirectory, "coverage-final.json"), '{"result":"ok"}');
+    });
+
+    try {
+      mkdirSync(plan.rawDir, { recursive: true });
+
+      runCoverageShard(tempRoot, runConfig, plan, { executeRun });
+
+      expect(executeRun).toHaveBeenCalledWith(process.execPath, expect.any(Array), "unit-jsdom coverage", tempRoot, {
+        maxAttempts: 1,
+      });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

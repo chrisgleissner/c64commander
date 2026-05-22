@@ -785,3 +785,61 @@ Code-shape changes follow-up (this iteration):
 
 - Reboot (Clr Mem) is now Telnet-only. If Telnet is offline or the device is uncapable, the action is hidden and the user must rely on the standard `Reboot` (REST keep-RAM) action.
 - `deviceControl.powerCycle` and `deviceControl.rebootFull` removal also drops the unused `clearRamAndRebootImpl` dependency injection. `clearRamAndReboot` itself remains exported from `@/lib/machine/ramOperations` (still used by `useHomeActions`).
+
+# PLANS - Iteration 3: Restore E2E Android pipeline (2026-05-21)
+
+## Objective
+
+Restore the broken E2E Android test pipeline by fixing the regression introduced in `6dc4813d (Implement AUTO device safety mode)` that crashes `npx playwright test --list` with `TypeError: Cannot read properties of undefined (reading 'VITE_DEBUG_SAVED_DEVICES_JSON')` at `src/lib/savedDevices/store.ts:350`.
+
+## Constraints
+
+- Minimal, scoped fix that does not regress any of the 6516 existing unit tests.
+- Preserve the existing AUTO device safety mode behavior on Android, iOS, and web.
+- Preserve the existing `VITE_DEBUG_SAVED_DEVICES_JSON` bootstrap behavior for dev/test builds.
+- Add a regression test that fails before the fix and passes after it.
+
+## Investigation Checklist
+
+- [completed] Read the original crash trace and identify the throwing line.
+- [completed] Trace the eager module-init call chain that drags `savedDevices/store` into Node-side TypeScript loaders: `playwright spec -> playFilesUtils -> playbackRouter -> c64api -> deviceInteractionManager (module init: loadDeviceSafetyConfig) -> deviceSafetySettings -> store`.
+- [completed] Find the safe `import.meta.env` access pattern already used elsewhere (`src/lib/fuzz/fuzzMode.ts`).
+- [completed] Verify with `npx tsx -e ...` that the unsafe access reproduces the exact error message and that the new safe access does not.
+
+## Prioritized Bug Hypotheses
+
+1. `createDebugBootstrapDevices()` accesses `import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON` without guarding for `import.meta.env` being undefined. Confirmed root cause.
+
+## Execution Phases
+
+- [completed] Phase 1 - Baseline: ran `npm run test` (6516/6516 pass) before any code change.
+- [completed] Phase 2 - Investigation: traced eager module-init chain and confirmed root cause via `tsx` reproduction.
+- [completed] Phase 3 - Fix: replaced direct `import.meta.env.X` access with a defensive `readDebugSavedDevicesEnv()` helper that probes `import.meta` and `import.meta.env` before reading the variable.
+- [completed] Phase 4 - Regression coverage: added two tests in `tests/unit/lib/savedDevices/store.test.ts` (functional smoke + source-contract).
+- [completed] Phase 5 - Cross-platform sanity: type-check passes; lint passes; prettier passes.
+- [completed] Phase 6 - Final verification: full unit-test suite re-run (see Status).
+
+## Acceptance Criteria
+
+- The `npx playwright test --list --project=android-phone` invocation no longer crashes at module init (verified locally via `tsx` reproduction).
+- All 6516 existing unit tests continue to pass.
+- A regression test asserts the safe `typeof import.meta` guard remains in place.
+- A functional test asserts the store loads with no debug-bootstrap env set.
+
+## Current Status
+
+- Fix applied to `src/lib/savedDevices/store.ts`.
+- Two new tests added in `tests/unit/lib/savedDevices/store.test.ts`.
+- All 20 store tests pass; all 487 tests in the related directories pass.
+- `npx playwright test --list --project=android-phone` now completes without the old module-init crash, which unblocks the Android/web Playwright shard fan-out used by CI.
+- The remaining unresolved PR review threads were addressed in `docs/plans/performance/iteration2/` by standardizing artifact-path guidance, making the soak-summary requirement explicit, correcting the AUTO import wording, adding missing scenario abort conditions, and normalizing the first worklog timestamp.
+- Final validation is green for the current branch state: targeted Play Files regressions pass, the equivalent lint pipeline passed (`npx eslint .`, `npm run lint:display-profiles`, `npm run lint:bundle-budgets`, `npm run variant:check`, `npm run feature-flags:check`), `env -u VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON npm run test:coverage` passed at 94.35% statements / 91.57% branches, and both `npm run build` and `npm run cap:build` passed.
+- Pixel 4 deployment succeeded with `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`; on-device validation used `u64` because `c64u` was again resetting `/v1/info`, and the Play page rendered its expected controls after launch/navigation with no app error lines in the captured logcat slice.
+
+## Task List
+
+- [x] Reproduce the crash mode with `tsx` (which, like ts-node/esbuild, does not inject `import.meta.env`).
+- [x] Add safe `readDebugSavedDevicesEnv` helper.
+- [x] Add regression test for the safe pattern.
+- [x] Add functional test that proves no crash with missing env.
+- [x] Re-run full unit-test suite.

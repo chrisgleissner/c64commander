@@ -122,6 +122,42 @@ class MainActivity : BridgeActivity() {
     )
   }
 
+  internal fun keepWebViewPlaybackAliveDuringBackgroundExecution(
+    resumeWebView: () -> Unit = {
+      bridge.webView.onResume()
+      bridge.webView.resumeTimers()
+    },
+  ) {
+    if (!BackgroundExecutionService.isRunning) return
+    try {
+      resumeWebView()
+      AppLogger.debug(
+        null,
+        "MainActivity",
+        "Kept WebView timers resumed for background playback",
+        "MainActivity",
+      )
+    } catch (error: Exception) {
+      AppLogger.warn(
+        null,
+        "MainActivity",
+        "Failed to keep WebView timers resumed for background playback",
+        "MainActivity",
+        error,
+      )
+    }
+  }
+
+  override fun onPause() {
+    super.onPause()
+    keepWebViewPlaybackAliveDuringBackgroundExecution()
+  }
+
+  override fun onStop() {
+    super.onStop()
+    keepWebViewPlaybackAliveDuringBackgroundExecution()
+  }
+
   internal fun installLanCookieBypassIfNeeded() {
     val cookiesEnabled = bridge.config.getPluginConfiguration("CapacitorCookies").getBoolean("enabled", false)
     if (cookiesEnabled) {

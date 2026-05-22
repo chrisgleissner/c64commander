@@ -490,6 +490,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
               volumeStep={SID_SLIDER_STEP}
               onVolumeCommit={handleVolumeCommit}
               onVolumePreview={handleVolumePreview}
+              volumePreviewMode="commitOnly"
               volumeRound={resolveVolumeIndexValue}
               volumeValueFormatter={volumeValueFormatter}
               volumeMidpoint={volumeCenterIndex}

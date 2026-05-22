@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -72,9 +72,201 @@ const createPlaylistItem = (id: string, path: string): PlaylistItem => ({
   unavailableReason: null,
 });
 
+const createDeferred = <T,>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
 describe("usePlaybackController play transition supersession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(executePlayPlan).mockReset();
+    vi.mocked(executePlayPlan).mockImplementation(async () => undefined);
+  });
+
+  it("queues a second rapid next tap until the first next transition finishes", async () => {
+    const firstItem = createPlaylistItem("track-a", "/PROGRAMS/track-a.prg");
+    const secondItem = createPlaylistItem("track-b", "/PROGRAMS/track-b.prg");
+    const playlist = [firstItem, secondItem];
+    const firstPlay = createDeferred<void>();
+    const secondPlay = createDeferred<void>();
+
+    vi.mocked(executePlayPlan)
+      .mockImplementationOnce(async () => {
+        await firstPlay.promise;
+      })
+      .mockImplementationOnce(async () => {
+        await secondPlay.promise;
+      });
+
+    const { result } = renderHook(() =>
+      usePlaybackController({
+        playlist,
+        setPlaylist: vi.fn(),
+        currentIndex: 0,
+        setCurrentIndex: vi.fn(),
+        isPlaying: true,
+        setIsPlaying: vi.fn(),
+        isPaused: false,
+        setIsPaused: vi.fn(),
+        setIsPlaylistLoading: vi.fn(),
+        elapsedMs: 0,
+        setElapsedMs: vi.fn(),
+        playedMs: 0,
+        setPlayedMs: vi.fn(),
+        durationMs: undefined,
+        setDurationMs: vi.fn(),
+        setCurrentSubsongCount: vi.fn(),
+        setTrackInstanceId: vi.fn(),
+        repeatEnabled: false,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+        deviceProduct: "C64 Ultimate",
+        ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
+        resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
+        applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
+        restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
+        applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
+        buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
+        captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
+        snapshotToUpdates: vi.fn().mockReturnValue({}),
+        resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+        dispatchVolume: vi.fn(),
+        sidEnablement: {} as never,
+        pauseMuteSnapshotRef: { current: null },
+        pausingFromPauseRef: { current: false },
+        resumingFromPauseRef: { current: false },
+        ensureUnmuted: vi.fn().mockResolvedValue(undefined),
+        playedClockRef: {
+          current: {
+            start: vi.fn(),
+            stop: vi.fn(),
+            pause: vi.fn(),
+            resume: vi.fn(),
+            reset: vi.fn(),
+            current: vi.fn().mockReturnValue(0),
+          },
+        },
+        trackStartedAtRef: { current: null },
+        trackInstanceIdRef: { current: 0 },
+        autoAdvanceGuardRef: { current: null },
+        playStartInFlightRef: { current: false },
+        cancelAutoAdvance: vi.fn(),
+        enqueuePlayTransition: vi.fn().mockImplementation(async (task) => task()),
+        durationSeconds: 45,
+        setAutoAdvanceDueAtMs: vi.fn(),
+        trace: (fn: (...args: unknown[]) => unknown) => fn,
+      }),
+    );
+
+    const firstNext = result.current.handleNext("user");
+    const secondNext = result.current.handleNext("user");
+
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1));
+
+    firstPlay.resolve();
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2));
+
+    secondPlay.resolve();
+    await firstNext;
+    await secondNext;
+
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
+  });
+
+  it("queues a second rapid previous tap until the first previous transition finishes", async () => {
+    const firstItem = createPlaylistItem("track-a", "/PROGRAMS/track-a.prg");
+    const secondItem = createPlaylistItem("track-b", "/PROGRAMS/track-b.prg");
+    const playlist = [firstItem, secondItem];
+    const firstPlay = createDeferred<void>();
+    const secondPlay = createDeferred<void>();
+
+    vi.mocked(executePlayPlan)
+      .mockImplementationOnce(async () => {
+        await firstPlay.promise;
+      })
+      .mockImplementationOnce(async () => {
+        await secondPlay.promise;
+      });
+
+    const { result } = renderHook(() =>
+      usePlaybackController({
+        playlist,
+        setPlaylist: vi.fn(),
+        currentIndex: 1,
+        setCurrentIndex: vi.fn(),
+        isPlaying: true,
+        setIsPlaying: vi.fn(),
+        isPaused: false,
+        setIsPaused: vi.fn(),
+        setIsPlaylistLoading: vi.fn(),
+        elapsedMs: 0,
+        setElapsedMs: vi.fn(),
+        playedMs: 0,
+        setPlayedMs: vi.fn(),
+        durationMs: undefined,
+        setDurationMs: vi.fn(),
+        setCurrentSubsongCount: vi.fn(),
+        setTrackInstanceId: vi.fn(),
+        repeatEnabled: false,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+        deviceProduct: "C64 Ultimate",
+        ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
+        resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
+        applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
+        restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
+        applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
+        buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
+        captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
+        snapshotToUpdates: vi.fn().mockReturnValue({}),
+        resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+        dispatchVolume: vi.fn(),
+        sidEnablement: {} as never,
+        pauseMuteSnapshotRef: { current: null },
+        pausingFromPauseRef: { current: false },
+        resumingFromPauseRef: { current: false },
+        ensureUnmuted: vi.fn().mockResolvedValue(undefined),
+        playedClockRef: {
+          current: {
+            start: vi.fn(),
+            stop: vi.fn(),
+            pause: vi.fn(),
+            resume: vi.fn(),
+            reset: vi.fn(),
+            current: vi.fn().mockReturnValue(0),
+          },
+        },
+        trackStartedAtRef: { current: null },
+        trackInstanceIdRef: { current: 1 },
+        autoAdvanceGuardRef: { current: null },
+        playStartInFlightRef: { current: false },
+        cancelAutoAdvance: vi.fn(),
+        enqueuePlayTransition: vi.fn().mockImplementation(async (task) => task()),
+        durationSeconds: 45,
+        setAutoAdvanceDueAtMs: vi.fn(),
+        trace: (fn: (...args: unknown[]) => unknown) => fn,
+      }),
+    );
+
+    const firstPrevious = result.current.handlePrevious();
+    const secondPrevious = result.current.handlePrevious();
+
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1));
+
+    firstPlay.resolve();
+    await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2));
+
+    secondPlay.resolve();
+    await firstPrevious;
+    await secondPrevious;
+
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
   });
 
   it("lets a newer play request supersede an older queued transition", async () => {

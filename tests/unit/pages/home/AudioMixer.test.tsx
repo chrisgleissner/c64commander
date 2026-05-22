@@ -76,10 +76,6 @@ vi.mock("@/hooks/useC64Connection", () => ({
   useC64Drives: () => ({ data: { drives: [] }, refetch: vi.fn() }),
 }));
 
-vi.mock("@/hooks/useDiagnosticsActivity", () => ({
-  useDiagnosticsActivity: () => ({ restInFlight: 0, setRestInFlight: vi.fn() }),
-}));
-
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => {},
@@ -137,6 +133,7 @@ vi.mock("@/pages/home/SidCard", () => ({
       <button data-testid="volume-change" onClick={() => props.onVolumeChange?.(5)}>
         VolChange
       </button>
+      <span data-testid="volume-preview-mode">{props.volumePreviewMode ?? "unset"}</span>
       <button
         data-testid="volume-commit"
         onClick={() => void Promise.resolve(props.onVolumeCommit?.(5)).catch(() => undefined)}
@@ -345,11 +342,9 @@ describe("AudioMixer", () => {
       // Clears active slider; no updateConfigValue call
     });
 
-    it("handles volume async change via interactive write (no toast)", () => {
+    it("configures Home volume sliders for commit-only writes to avoid preview chatter", () => {
       render(<AudioMixer {...defaultProps} />);
-      fireEvent.click(screen.getByTestId("volume-async-change"));
-      expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Vol SID Socket 1": expect.any(String) });
-      expect(updateConfigValueSpy).not.toHaveBeenCalled();
+      expect(screen.getByTestId("volume-preview-mode").textContent).toBe("commitOnly");
     });
 
     it("handles volume async commit via interactive write (no toast)", () => {

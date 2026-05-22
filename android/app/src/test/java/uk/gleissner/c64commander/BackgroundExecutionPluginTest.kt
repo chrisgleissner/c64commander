@@ -144,6 +144,21 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun loadDoesNotRegisterAutoSkipReceiverTwice() {
+        plugin.load()
+        plugin.load()
+
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        val receiverCount =
+                shadowApp.registeredReceivers.count { wrapper ->
+                    wrapper.intentFilter.hasAction(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE)
+                }
+
+        assertEquals("Auto-skip receiver should only be registered once", 1, receiverCount)
+    }
+
+    @Test
     fun autoSkipReceiverIgnoresWrongAction() {
         plugin.load()
         val receiverField =

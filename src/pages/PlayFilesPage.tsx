@@ -36,6 +36,7 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { getC64API } from "@/lib/c64api";
+import { createLatestIntentWriteLane, type LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { TraceSourceKind } from "@/lib/tracing/types";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
@@ -127,6 +128,8 @@ import {
   PLAYLIST_STORAGE_PREFIX,
   SHARED_PLAYLIST_STORAGE_KEY,
   buildPlaylistStorageKey,
+  buildPlaylistItemId,
+  applyDurationOverrideToPlaylist,
   clampDurationSeconds,
   durationSecondsToSlider,
   formatBytes,
@@ -313,6 +316,7 @@ export default function PlayFilesPage() {
   const [trackInstanceId, setTrackInstanceId] = useState(0);
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
   const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
+  const backgroundDueWriteLaneRef = useRef<LatestIntentWriteLane<number | null> | null>(null);
   const backgroundExecutionActiveRef = useRef(false);
   const hvscDisableCancellationRequestedRef = useRef(false);
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
@@ -343,6 +347,30 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef.current.userCancelled = true;
     setAutoAdvanceDueAtMs(null);
   }, [setAutoAdvanceDueAtMs]);
+
+  if (!backgroundDueWriteLaneRef.current) {
+    backgroundDueWriteLaneRef.current = createLatestIntentWriteLane<number | null>({
+      run: async (nextDueAtMs) => {
+        await BackgroundExecution.setDueAtMs({ dueAtMs: nextDueAtMs });
+      },
+    });
+  }
+
+  const queueBackgroundDueAtUpdate = useCallback(async (nextDueAtMs: number | null) => {
+    await backgroundDueWriteLaneRef.current?.schedule(nextDueAtMs);
+  }, []);
+  const queueBackgroundDueAtUpdateRef = useRef(queueBackgroundDueAtUpdate);
+  useEffect(() => {
+    queueBackgroundDueAtUpdateRef.current = queueBackgroundDueAtUpdate;
+  }, [queueBackgroundDueAtUpdate]);
+  const stopBackgroundExecutionRef = useRef(stopBackgroundExecution);
+  useEffect(() => {
+    stopBackgroundExecutionRef.current = stopBackgroundExecution;
+  }, [stopBackgroundExecution]);
+  const backgroundCleanupTrackInstanceIdRef = useRef(trackInstanceId);
+  useEffect(() => {
+    backgroundCleanupTrackInstanceIdRef.current = trackInstanceId;
+  }, [trackInstanceId]);
 
   const ensurePlaybackConnection = useCallback(async () => {
     if (status.isConnected) return;
@@ -474,7 +502,7 @@ export default function PlayFilesPage() {
           context: { trackInstanceId },
         });
       });
-      void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
+      void queueBackgroundDueAtUpdate(autoAdvanceDueAtMs);
       return;
     }
     if (
@@ -501,29 +529,41 @@ export default function PlayFilesPage() {
         context: { trackInstanceId, reason: isPaused ? "pause" : "stop" },
       });
     });
-    void BackgroundExecution.setDueAtMs({ dueAtMs: null });
-  }, [autoAdvanceDueAtMs, backgroundExecutionEnabled, isPaused, isPlaying, trackInstanceId]);
+    void queueBackgroundDueAtUpdate(null);
+  }, [
+    autoAdvanceDueAtMs,
+    backgroundExecutionEnabled,
+    isPaused,
+    isPlaying,
+    queueBackgroundDueAtUpdate,
+    trackInstanceId,
+  ]);
 
   useEffect(
     () => () => {
       if (!backgroundExecutionActiveRef.current) return;
       backgroundExecutionActiveRef.current = false;
-      void stopBackgroundExecution({
-        source: "playback-controller",
-        reason: "cleanup",
-        context: { trackInstanceId },
-      }).catch((error) => {
-        reportUserError({
-          operation: "stopBackgroundExecution",
-          title: "Background playback cleanup failed",
-          description: "Background playback guard could not be fully stopped.",
-          error,
-          context: { trackInstanceId, reason: "cleanup" },
+      void stopBackgroundExecutionRef
+        .current({
+          source: "playback-controller",
+          reason: "cleanup",
+          context: { trackInstanceId: backgroundCleanupTrackInstanceIdRef.current },
+        })
+        .catch((error) => {
+          reportUserError({
+            operation: "stopBackgroundExecution",
+            title: "Background playback cleanup failed",
+            description: "Background playback guard could not be fully stopped.",
+            error,
+            context: {
+              trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
+              reason: "cleanup",
+            },
+          });
         });
-      });
-      void BackgroundExecution.setDueAtMs({ dueAtMs: null });
+      void queueBackgroundDueAtUpdateRef.current(null);
     },
-    [trackInstanceId],
+    [],
   );
 
   useEffect(() => {
@@ -536,8 +576,8 @@ export default function PlayFilesPage() {
     ) {
       return;
     }
-    void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
-  }, [autoAdvanceDueAtMs, backgroundExecutionEnabled]);
+    void queueBackgroundDueAtUpdate(autoAdvanceDueAtMs);
+  }, [autoAdvanceDueAtMs, backgroundExecutionEnabled, queueBackgroundDueAtUpdate]);
 
   useEffect(() => {
     if (!ACTIVE_ADD_ITEMS_PROGRESS_STATES.has(addItemsProgress.status)) return undefined;
@@ -978,9 +1018,15 @@ export default function PlayFilesPage() {
       };
       const resolvedSourceId = entry.sourceId ?? (entry.source === "hvsc" ? "hvsc-library" : null);
       const originDeviceId = request.origin?.originDeviceId ?? null;
-      const idParts = [entry.source, resolvedSourceId ?? originDeviceId ?? ""];
+      const addedAt = addedAtOverride ?? new Date().toISOString();
       return {
-        id: `${idParts.join(":")}:${entry.path}`,
+        id: buildPlaylistItemId({
+          source: entry.source,
+          sourceId: resolvedSourceId,
+          originDeviceId,
+          path: entry.path,
+          addedAt,
+        }),
         request,
         category,
         label: entry.name,
@@ -997,7 +1043,7 @@ export default function PlayFilesPage() {
         sourceId: resolvedSourceId,
         sizeBytes: entry.sizeBytes ?? null,
         modifiedAt: entry.modifiedAt ?? null,
-        addedAt: addedAtOverride ?? new Date().toISOString(),
+        addedAt,
         status: "ready",
         unavailableReason: null,
       };
@@ -1047,24 +1093,28 @@ export default function PlayFilesPage() {
     ],
   );
 
-  const syncPlaybackTimeline = useCallback(() => {
-    if (!isPlaying || isPaused || currentIndex < 0) return;
-    const now = Date.now();
-    if (trackStartedAtRef.current) {
-      setElapsedMs(now - trackStartedAtRef.current);
-    }
-    setPlayedMs(playedClockRef.current.current(now));
-    const guard = autoAdvanceGuardRef.current;
-    if (guard && !guard.autoFired && !guard.userCancelled && now >= guard.dueAtMs) {
-      addLog("debug", "Auto-advance due guard fired on timeline reconciliation", {
-        trackInstanceId: guard.trackInstanceId,
-        dueAtMs: guard.dueAtMs,
-        nowMs: now,
-        overdueMs: now - guard.dueAtMs,
-      });
-      void handleNext("auto", guard.trackInstanceId);
-    }
-  }, [currentIndex, handleNext, isPaused, isPlaying, playedClockRef]);
+  const syncPlaybackTimeline = useCallback(
+    (options?: { allowAutoAdvance?: boolean }) => {
+      const allowAutoAdvance = options?.allowAutoAdvance ?? true;
+      if (!isPlaying || isPaused || currentIndex < 0) return;
+      const now = Date.now();
+      if (trackStartedAtRef.current) {
+        setElapsedMs(now - trackStartedAtRef.current);
+      }
+      setPlayedMs(playedClockRef.current.current(now));
+      const guard = autoAdvanceGuardRef.current;
+      if (allowAutoAdvance && guard && !guard.autoFired && !guard.userCancelled && now >= guard.dueAtMs) {
+        addLog("debug", "Auto-advance due guard fired on timeline reconciliation", {
+          trackInstanceId: guard.trackInstanceId,
+          dueAtMs: guard.dueAtMs,
+          nowMs: now,
+          overdueMs: now - guard.dueAtMs,
+        });
+        void handleNext("auto", guard.trackInstanceId);
+      }
+    },
+    [currentIndex, handleNext, isPaused, isPlaying, playedClockRef],
+  );
 
   useEffect(() => {
     if (!isPlaying || isPaused || currentIndex < 0) return;
@@ -1079,16 +1129,63 @@ export default function PlayFilesPage() {
     if (!isNativePlatform() || getPlatform() !== "android") return;
     let cancelled = false;
     let handle: { remove: () => Promise<void> } | null = null;
-
-    void onBackgroundAutoSkipDue(() => {
-      if (cancelled) return;
-      syncPlaybackTimeline();
-    }).then((next) => {
-      handle = next;
-      if (cancelled) {
-        void handle.remove();
+    const registerBackgroundAutoSkipListener = async () => {
+      try {
+        const nextHandle = await onBackgroundAutoSkipDue((event) => {
+          if (cancelled) return;
+          syncPlaybackTimeline({ allowAutoAdvance: false });
+          const guard = autoAdvanceGuardRef.current;
+          if (!guard || !isPlaying || isPaused) return;
+          if (event.dueAtMs !== guard.dueAtMs) return;
+          const expectedTrackInstanceId = guard.trackInstanceId;
+          void (async () => {
+            try {
+              await handleNext("auto", expectedTrackInstanceId);
+              if (cancelled) return;
+              const nextGuard = autoAdvanceGuardRef.current;
+              if (!nextGuard) {
+                setAutoAdvanceDueAtMs(null);
+                await queueBackgroundDueAtUpdate(null);
+                addLog("debug", "Cleared background auto-advance watchdog after auto next with no remaining guard", {
+                  expectedTrackInstanceId,
+                  dueAtMs: event.dueAtMs,
+                });
+                return;
+              }
+              if (nextGuard.trackInstanceId === expectedTrackInstanceId) {
+                setAutoAdvanceDueAtMs(null);
+                await queueBackgroundDueAtUpdate(null);
+                addLog("warn", "Background auto-advance did not move to a new track instance; cleared stale watchdog", {
+                  expectedTrackInstanceId,
+                  dueAtMs: event.dueAtMs,
+                  nextDueAtMs: nextGuard.dueAtMs,
+                });
+                return;
+              }
+              setAutoAdvanceDueAtMs(nextGuard.dueAtMs);
+              await queueBackgroundDueAtUpdate(nextGuard.dueAtMs);
+            } catch (error) {
+              addErrorLog("Failed to re-arm background auto-advance", {
+                error: error instanceof Error ? error.message : String(error),
+                expectedTrackInstanceId,
+                dueAtMs: event.dueAtMs,
+              });
+            }
+          })();
+        });
+        if (cancelled) {
+          await nextHandle.remove();
+          return;
+        }
+        handle = nextHandle;
+      } catch (error) {
+        addErrorLog("Failed to register background auto-advance listener", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
-    });
+    };
+
+    void registerBackgroundAutoSkipListener();
 
     return () => {
       cancelled = true;
@@ -1096,7 +1193,7 @@ export default function PlayFilesPage() {
         void handle.remove();
       }
     };
-  }, [syncPlaybackTimeline]);
+  }, [autoAdvanceGuardRef, handleNext, isPaused, isPlaying, syncPlaybackTimeline]);
 
   const currentItem = playlist[currentIndex];
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
@@ -1209,7 +1306,7 @@ export default function PlayFilesPage() {
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
   const canPause = isPlaying;
-  const hasPrev = currentIndex > 0;
+  const hasPrev = hasPlaylist && (currentIndex > 0 || repeatEnabled);
   const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
@@ -1218,17 +1315,20 @@ export default function PlayFilesPage() {
     );
   };
 
-  const handlePlaylistSelect = useCallback((item: PlaylistItem, selected: boolean) => {
-    setSelectedPlaylistIds((prev) => {
-      const next = new Set(prev);
-      if (selected) {
-        next.add(item.id);
-      } else {
-        next.delete(item.id);
-      }
-      return next;
-    });
-  }, []);
+  const handlePlaylistSelect = useCallback(
+    (item: PlaylistItem, selected: boolean) => {
+      setSelectedPlaylistIds((prev) => {
+        const next = new Set(prev);
+        if (selected) {
+          next.add(item.id);
+        } else {
+          next.delete(item.id);
+        }
+        return next;
+      });
+    },
+    [queueBackgroundDueAtUpdate],
+  );
 
   const toggleSelectAllPlaylist = useCallback(() => {
     setSelectedPlaylistIds(allPlaylistSelected ? new Set() : new Set(playlistIds));
@@ -1336,30 +1436,48 @@ export default function PlayFilesPage() {
     void restoreVolumeOverrides("playback-ended");
   }, [isPaused, isPlaying, restoreVolumeOverrides]);
 
+  const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);
+
+  useEffect(() => {
+    restoreVolumeOverridesOnNavigateRef.current = restoreVolumeOverrides;
+  }, [restoreVolumeOverrides]);
+
   useEffect(
     () => () => {
-      void restoreVolumeOverrides("navigate").catch((error) => {
+      void restoreVolumeOverridesOnNavigateRef.current("navigate").catch((error) => {
         addErrorLog("Volume restore failed during navigation", {
           error: (error as Error).message,
         });
       });
     },
-    [restoreVolumeOverrides],
+    [],
   );
 
-  const handleDurationSliderChange = useCallback((value: number[]) => {
-    const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-    setDurationSeconds(nextSeconds);
-    setDurationInput(formatDurationSeconds(nextSeconds));
-  }, []);
+  const handleDurationSliderChange = useCallback(
+    (value: number[]) => {
+      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
+      const nextDurationMs = nextSeconds * 1000;
+      setDurationSeconds(nextSeconds);
+      setDurationMs(nextDurationMs);
+      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+      setDurationInput(formatDurationSeconds(nextSeconds));
+    },
+    [setDurationMs, setPlaylist],
+  );
 
-  const handleDurationInputChange = useCallback((value: string) => {
-    setDurationInput(value);
-    const parsed = parseDurationInput(value);
-    if (parsed === undefined) return;
-    const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-    setDurationSeconds(nextSeconds);
-  }, []);
+  const handleDurationInputChange = useCallback(
+    (value: string) => {
+      setDurationInput(value);
+      const parsed = parseDurationInput(value);
+      if (parsed === undefined) return;
+      const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
+      const nextDurationMs = nextSeconds * 1000;
+      setDurationSeconds(nextSeconds);
+      setDurationMs(nextDurationMs);
+      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+    },
+    [setDurationMs, setPlaylist],
+  );
 
   const handleDurationInputBlur = useCallback(() => {
     const parsed = parseDurationInput(durationInput);
@@ -1368,11 +1486,14 @@ export default function PlayFilesPage() {
       return;
     }
     const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
+    const nextDurationMs = nextSeconds * 1000;
     if (nextSeconds !== durationSeconds) {
       setDurationSeconds(nextSeconds);
     }
+    setDurationMs(nextDurationMs);
+    setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
     setDurationInput(formatDurationSeconds(nextSeconds));
-  }, [durationInput, durationSeconds]);
+  }, [durationInput, durationSeconds, setDurationMs, setPlaylist]);
 
   const queryFilteredPlaylist = useQueryFilteredPlaylist({
     playlist,
@@ -1517,6 +1638,7 @@ export default function PlayFilesPage() {
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
                     volumeLabel={volumeLabel}
                     volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
+                    useNativeRangeInput={isAndroid}
                   />
                 }
                 recurseFolders={recurseFolders}

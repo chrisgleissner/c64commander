@@ -51,7 +51,7 @@ export const HvscSongSource: SongSource = {
               durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
               songNr: 1,
               subsongCount: resolvedCount,
-              source: "hvsc",
+              source: "hvsc" as const,
               payload: song,
             },
           ];
@@ -64,7 +64,7 @@ export const HvscSongSource: SongSource = {
           durationMs: durations?.[index] ? durations[index] * 1000 : undefined,
           songNr: index + 1,
           subsongCount: resolvedCount,
-          source: "hvsc",
+          source: "hvsc" as const,
           payload: song,
         }));
       }),

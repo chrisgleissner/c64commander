@@ -52,6 +52,8 @@ class BackgroundExecutionService : Service() {
         @Volatile
         var isRunning = false
             private set
+        @Volatile
+        private var runningInstance: BackgroundExecutionService? = null
 
         fun start(context: Context) {
             if (isRunning) {
@@ -85,6 +87,11 @@ class BackgroundExecutionService : Service() {
         }
 
         fun updateDueAt(context: Context, dueAtMs: Long?) {
+            val activeService = runningInstance
+            if (isRunning && activeService != null) {
+                activeService.applyDueAtUpdate(dueAtMs)
+                return
+            }
             val intent = Intent(context, BackgroundExecutionService::class.java)
             intent.action = ACTION_UPDATE_DUE_AT
             if (dueAtMs != null) {
@@ -120,6 +127,7 @@ class BackgroundExecutionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        runningInstance = this
         AppLogger.info(this, TAG, "Service created", "BackgroundExecutionService")
         createNotificationChannel()
     }
@@ -155,6 +163,7 @@ class BackgroundExecutionService : Service() {
         releaseMediaSession()
         releaseWakeLock()
         isRunning = false
+        runningInstance = null
         super.onDestroy()
     }
 
@@ -175,6 +184,10 @@ class BackgroundExecutionService : Service() {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
+    }
+
+    private fun applyDueAtUpdate(nextDueAtMs: Long?) {
+        handler.post { updateDueAtInternal(nextDueAtMs) }
     }
 
     private fun buildNotification(): Notification {
@@ -365,10 +378,10 @@ class BackgroundExecutionService : Service() {
     }
 
     private fun updateDueAtInternal(nextDueAtMs: Long?) {
-        dueAtMs = nextDueAtMs
-        dueAtElapsedMs = null
         dueRunnable?.let { handler.removeCallbacks(it) }
         dueRunnable = null
+        dueAtMs = null
+        dueAtElapsedMs = null
 
         if (nextDueAtMs == null) {
             AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
@@ -379,8 +392,10 @@ class BackgroundExecutionService : Service() {
         val nowElapsed = SystemClock.elapsedRealtime()
         val delay = maxOf(0L, nextDueAtMs - nowWall)
         val scheduledElapsed = nowElapsed + delay
+        dueAtMs = nextDueAtMs
         dueAtElapsedMs = scheduledElapsed
-        val runnable = Runnable {
+        lateinit var runnable: Runnable
+        runnable = Runnable {
             val currentDue = dueAtMs
             val currentDueElapsed = dueAtElapsedMs
             if (currentDue == null) return@Runnable
@@ -389,8 +404,7 @@ class BackgroundExecutionService : Service() {
             val nowElapsedRealtime = SystemClock.elapsedRealtime()
             if (nowElapsedRealtime < currentDueElapsed) {
                 val remaining = currentDueElapsed - nowElapsedRealtime
-                val nextRunnable = this.dueRunnable ?: return@Runnable
-                handler.postDelayed(nextRunnable, remaining)
+                handler.postDelayed(runnable, remaining)
                 AppLogger.debug(
                         this,
                         TAG,

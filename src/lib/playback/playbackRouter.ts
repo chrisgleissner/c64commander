@@ -313,6 +313,7 @@ export type PlayExecutionOptions = {
   diskAutostartMode?: DiskAutostartMode;
   beforeLaunch?: (() => Promise<void>) | null;
   benchmarkMetadata?: Record<string, unknown> | null;
+  skipSidSslPropagation?: boolean;
 };
 
 export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: PlayExecutionOptions = {}) => {
@@ -340,11 +341,11 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         }
         if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
           const hasSonglengthData = typeof plan.durationMs === "number" && plan.durationMs > 0;
-          if (!hasSonglengthData) {
+          if (!hasSonglengthData || options.skipSidSslPropagation) {
             emitDurationPropagationEvent({
               type: "playback-no-duration",
               level: "info",
-              reason: "no-songlength-entry",
+              reason: hasSonglengthData ? "ssl-propagation-skipped" : "no-songlength-entry",
               path: plan.path,
             });
             await withPlaybackFirstAudioScope(plan, "ultimate-direct", () => api.playSid(plan.path, plan.songNr));

@@ -8,7 +8,7 @@
 
 import React from "react";
 import { toast } from "@/hooks/use-toast";
-import { ToastAction } from "@/components/ui/toast";
+import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { isHandledUiError } from "@/lib/fileValidation";
 import { addErrorLog, addLog } from "@/lib/logging";
 
@@ -81,7 +81,11 @@ export const reportUserError = ({ operation, title, description, error, context,
     variant: "destructive",
     ...(retry
       ? {
-          action: React.createElement(ToastAction, { altText: "Retry", onClick: retry }, "Retry"),
+          action: React.createElement(
+            ToastAction,
+            { altText: "Retry", onClick: retry },
+            "Retry",
+          ) as unknown as ToastActionElement,
         }
       : {}),
   });

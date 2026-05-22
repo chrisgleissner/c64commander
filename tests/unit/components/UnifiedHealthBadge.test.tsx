@@ -212,6 +212,11 @@ vi.mock("@/lib/savedDevices/store", () => ({
   getSavedDeviceSwitchStatus: (deviceId: string) =>
     mockState.switchStatuses[deviceId] ??
     (deviceId === mockState.savedDevices.selectedDeviceId ? "connected" : "last-known"),
+  getSelectedSavedDevice: () =>
+    mockState.savedDevices.devices.find((device) => device.id === mockState.savedDevices.selectedDeviceId) ?? null,
+  getSelectedSavedDeviceProductFamilySync: () =>
+    mockState.savedDevices.devices.find((device) => device.id === mockState.savedDevices.selectedDeviceId)
+      ?.lastKnownProduct ?? null,
 }));
 
 vi.mock("@/hooks/useSavedDeviceHealthChecks", () => ({
@@ -404,7 +409,10 @@ describe("UnifiedHealthBadge", () => {
     mockState.currentProfile = "compact";
     render(<UnifiedHealthBadge />);
 
-    fireEvent.click(screen.getByTestId("unified-health-badge"));
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge).toHaveAttribute("data-diagnostics-open-trigger", "true");
+
+    fireEvent.click(badge);
 
     expect(mockState.requestDiagnosticsOpen).toHaveBeenCalledWith("header");
   });
@@ -507,12 +515,12 @@ describe("UnifiedHealthBadge", () => {
     expect(badge).toHaveAttribute("data-connectivity-state", "Online");
   });
 
-  it("enables saved-device health polling on cold boot without opening the switcher", () => {
+  it("keeps saved-device health polling disabled until the switcher opens", () => {
     render(<UnifiedHealthBadge />);
 
     expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(
       mockState.savedDevices.devices,
-      true,
+      false,
       expect.objectContaining({
         context: "background-maintenance",
         configPulsePolicy: "read-only",
@@ -638,6 +646,40 @@ describe("UnifiedHealthBadge", () => {
 
     expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
     expect(mockState.switchSavedDevice).toHaveBeenCalledWith("device-backup");
+
+    await act(async () => {
+      switchDeferred.resolve();
+      await Promise.resolve();
+    });
+  });
+
+  it("treats the tapped target as selected while switch verification is pending", async () => {
+    vi.useFakeTimers();
+    const switchDeferred = createDeferred<void>();
+    mockState.switchSavedDevice.mockImplementationOnce(async (deviceId: string) => {
+      mockState.savedDevices.selectedDeviceId = deviceId;
+      await switchDeferred.promise;
+    });
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+      await Promise.resolve();
+    });
+
+    fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+    await vi.advanceTimersByTimeAsync(450);
+
+    const selectedCard = screen.getByTestId("switch-device-row-device-backup").closest("[data-selected]");
+    const previousCard = screen.getByTestId("switch-device-row-device-office").closest("[data-selected]");
+
+    expect(selectedCard).toHaveAttribute("data-selected", "true");
+    expect(previousCard).toHaveAttribute("data-selected", "false");
 
     await act(async () => {
       switchDeferred.resolve();

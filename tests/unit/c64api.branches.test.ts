@@ -18,6 +18,8 @@ import {
   resolveDeviceHostFromStorage,
   C64_DEFAULTS,
 } from "@/lib/c64api";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
+import { recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import {
   clearPassword as clearStoredPassword,
   setPassword as storePassword,
@@ -247,6 +249,7 @@ vi.mock("@/lib/secureStorage", () => ({
 
 const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
+const classifyErrorMock = classifyError as unknown as ReturnType<typeof vi.fn>;
 const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
 const getSmokeConfigMock = getSmokeConfig as unknown as ReturnType<typeof vi.fn>;
@@ -258,6 +261,8 @@ const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi
 const hasStoredPasswordFlagMock = hasStoredPasswordFlag as unknown as ReturnType<typeof vi.fn>;
 const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<typeof vi.fn>;
 const loadStoredPasswordMock = loadStoredPassword as unknown as ReturnType<typeof vi.fn>;
+const recordRestResponseMock = recordRestResponse as unknown as ReturnType<typeof vi.fn>;
+const recordTraceErrorMock = recordTraceError as unknown as ReturnType<typeof vi.fn>;
 
 const withNoPerformance = async (run: () => Promise<void>) => {
   const original = globalThis.performance;
@@ -286,6 +291,7 @@ describe("c64api branches", () => {
     localStorage.clear();
     addErrorLogMock.mockReset();
     addLogMock.mockReset();
+    classifyErrorMock.mockReset();
     fuzzEnabledMock.mockReset();
     fuzzSafeMock.mockReset();
     getSmokeConfigMock.mockReset();
@@ -297,6 +303,12 @@ describe("c64api branches", () => {
     getSmokeConfigMock.mockReturnValue(undefined);
     smokeEnabledMock.mockReturnValue(false);
     smokeReadOnlyMock.mockReturnValue(true);
+    classifyErrorMock.mockReturnValue({
+      failureClass: "unknown",
+      category: "unknown",
+      isExpected: false,
+      errorType: null,
+    });
     deviceStateSnapshotMock.mockReturnValue({
       state: "READY",
       connectionState: "REAL_CONNECTED",
@@ -318,6 +330,8 @@ describe("c64api branches", () => {
     loadStoredPasswordMock.mockReset();
     hasStoredPasswordFlagMock.mockReturnValue(false);
     getCachedPasswordMock.mockReturnValue(null);
+    recordRestResponseMock.mockReset();
+    recordTraceErrorMock.mockReset();
     loadStoredPasswordMock.mockResolvedValue(null);
     storePasswordMock.mockImplementation(async () => {
       localStorage.setItem("c64u_has_password", "1");
@@ -394,6 +408,73 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     await expect(api.getInfo({ signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("marks expected abort responses and suppresses diagnostics side effects", async () => {
+    const fetchMock = getFetchMock();
+    const controller = new AbortController();
+    const abortErr = new Error("signal is aborted without reason");
+    abortErr.name = "AbortError";
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((_resolve, reject) => {
+          controller.signal.addEventListener(
+            "abort",
+            () => {
+              reject(abortErr);
+            },
+            { once: true },
+          );
+        }),
+    );
+    classifyErrorMock.mockReturnValue({
+      failureClass: "user-cancellation",
+      category: "cancelled",
+      isExpected: true,
+      errorType: "AbortError",
+    });
+
+    const api = new C64API("http://c64u");
+    const pending = api.getInfo({ signal: controller.signal, __c64uBypassCache: true });
+    await Promise.resolve();
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(recordRestResponseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        expectedFailure: true,
+        error: abortErr,
+      }),
+    );
+    expect(recordTraceErrorMock).not.toHaveBeenCalled();
+    expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+  });
+
+  it("suppresses trace errors for internally classified expected abort failures", async () => {
+    const fetchMock = getFetchMock();
+    const abortErr = new Error("The operation was aborted");
+    abortErr.name = "AbortError";
+    fetchMock.mockRejectedValue(abortErr);
+    classifyErrorMock.mockReturnValue({
+      failureClass: "user-cancellation",
+      category: "cancelled",
+      isExpected: true,
+      errorType: "AbortError",
+    });
+
+    const api = new C64API("http://c64u");
+    await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toThrow("Host unreachable");
+
+    expect(recordRestResponseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        expectedFailure: true,
+        error: abortErr,
+      }),
+    );
+    expect(recordTraceErrorMock).not.toHaveBeenCalled();
+    expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
   });
 
   // #3: scheduled retry path after a timeout/network failure
@@ -956,8 +1037,17 @@ describe("c64api branches", () => {
     const api = new C64API("http://c64u");
     const result = await api.getConfigItems("Audio Mixer", ["Vol UltiSid 1"]);
     expect(result["Audio Mixer"]?.items?.["Vol UltiSid 1"]).toBeDefined();
+    expect(recordRestResponseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: 500,
+        expectedFailure: true,
+      }),
+    );
+    expect(recordTraceErrorMock).not.toHaveBeenCalled();
+    expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
     expect(addLogMock).toHaveBeenCalledWith(
-      "warn",
+      "debug",
       "Category config fetch failed; falling back to item fetches",
       expect.objectContaining({ category: "Audio Mixer" }),
     );

@@ -11,6 +11,7 @@ import type { TelnetSessionApi, TelnetAction, TelnetActionId } from "@/lib/telne
 import { TELNET_ACTIONS, TelnetError } from "@/lib/telnet/telnetTypes";
 import { createMenuNavigator } from "@/lib/telnet/telnetMenuNavigator";
 import type { MenuNavigator } from "@/lib/telnet/telnetMenuNavigator";
+import type { MenuPath } from "@/lib/telnet/telnetTypes";
 import { addLog } from "@/lib/logging";
 
 const LOG_TAG = "TelnetActionExecutor";
@@ -48,7 +49,7 @@ export function createActionExecutor(
   const resolvedTargets = options?.resolvedTargets;
 
   async function execute(actionId: string): Promise<void> {
-    const action = TELNET_ACTIONS[actionId];
+    const action = TELNET_ACTIONS[actionId as keyof typeof TELNET_ACTIONS];
     if (!action) {
       throw new TelnetError(
         `Unknown Telnet action: "${actionId}". Available: [${Object.keys(TELNET_ACTIONS).join(", ")}]`,
@@ -57,9 +58,9 @@ export function createActionExecutor(
       );
     }
 
-    const resolvedTarget = resolvedTargets?.[action.id];
-    const menuPath = resolvedTarget
-      ? ([resolvedTarget.categoryLabel, resolvedTarget.actionLabel] as const)
+    const resolvedTarget = resolvedTargets?.[action.id as keyof typeof resolvedTargets];
+    const menuPath: MenuPath = resolvedTarget
+      ? [resolvedTarget.categoryLabel, resolvedTarget.actionLabel]
       : action.menuPath;
     const startTime = Date.now();
     addLog("info", `${LOG_TAG}: executing action "${action.label}" (${actionId})`, {
@@ -87,7 +88,7 @@ export function createActionExecutor(
   }
 
   function getAction(actionId: string): TelnetAction | null {
-    return TELNET_ACTIONS[actionId] ?? null;
+    return TELNET_ACTIONS[actionId as keyof typeof TELNET_ACTIONS] ?? null;
   }
 
   function listActions(): TelnetAction[] {

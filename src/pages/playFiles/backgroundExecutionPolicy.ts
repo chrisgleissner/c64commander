@@ -26,6 +26,6 @@ export const shouldStopBackgroundExecution = ({
 
 export const shouldSyncBackgroundExecutionDueAt = (
   backgroundExecutionEnabled: boolean,
-  backgroundExecutionActive: boolean,
+  _backgroundExecutionActive: boolean,
   isNativeAndroid: boolean,
-) => backgroundExecutionEnabled && backgroundExecutionActive && isNativeAndroid;
+) => backgroundExecutionEnabled && isNativeAndroid;

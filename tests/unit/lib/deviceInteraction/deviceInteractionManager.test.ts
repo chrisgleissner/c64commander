@@ -33,6 +33,7 @@ let deviceStateValue: DeviceState = "READY";
 
 const loadDeviceSafetyConfig = vi.fn(() => config);
 const subscribeDeviceSafetyUpdates = vi.fn(() => () => undefined);
+const getActiveAutoResolutionContext = vi.fn(() => ({ activeProduct: null, activeDeviceId: null }));
 
 const getDeviceStateSnapshot = vi.fn(() => ({
   state: deviceStateValue,
@@ -55,6 +56,7 @@ const addErrorLog = vi.fn();
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig,
   subscribeDeviceSafetyUpdates,
+  getActiveAutoResolutionContext,
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({

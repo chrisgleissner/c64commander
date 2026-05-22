@@ -73,11 +73,26 @@ vi.mock("@/lib/songlengths", () => ({
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => browseIndexMocks);
 
+const hvscStateMocks = vi.hoisted(() => ({
+  loadHvscState: vi.fn(() => ({
+    installedBaselineVersion: 1,
+    installedVersion: 1,
+    ingestionState: "ready",
+    lastUpdateCheckUtcMs: null,
+    ingestionError: null,
+    ingestionSummary: null,
+    updates: {},
+  })),
+}));
+
+vi.mock("@/lib/hvsc/hvscStateStore", () => hvscStateMocks);
+
 import { Filesystem } from "@capacitor/filesystem";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { InMemoryTextBackend } from "@/lib/songlengths";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import { saveHvscBrowseIndexSnapshot } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import {
   ensureHvscSonglengthsReadyOnColdStart,
   exportHvscSonglengthsSnapshot,
@@ -110,6 +125,15 @@ describe("hvscSongLengthService", () => {
     resetHvscSonglengths("test-reset");
     vi.mocked(mockFacade.loadOnColdStart).mockResolvedValue(undefined);
     vi.mocked(mockFacade.reloadOnConfigChange).mockResolvedValue(undefined);
+    vi.mocked(loadHvscState).mockReturnValue({
+      installedBaselineVersion: 1,
+      installedVersion: 1,
+      ingestionState: "ready",
+      lastUpdateCheckUtcMs: null,
+      ingestionError: null,
+      ingestionSummary: null,
+      updates: {},
+    });
   });
 
   afterEach(() => {
@@ -150,6 +174,24 @@ describe("hvscSongLengthService", () => {
   });
 
   describe("discoverSonglengthFiles", () => {
+    it("returns no files and skips filesystem probing when HVSC is not installed", async () => {
+      vi.mocked(loadHvscState).mockReturnValue({
+        installedBaselineVersion: null,
+        installedVersion: 0,
+        ingestionState: "idle",
+        lastUpdateCheckUtcMs: null,
+        ingestionError: null,
+        ingestionSummary: null,
+        updates: {},
+      });
+
+      const files = await __test__.discoverSonglengthFiles();
+
+      expect(files).toEqual([]);
+      expect(Filesystem.mkdir).not.toHaveBeenCalled();
+      expect(Filesystem.readdir).not.toHaveBeenCalled();
+    });
+
     it("returns md5 before txt and skips missing roots", async () => {
       vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
       vi.mocked(Filesystem.readdir)

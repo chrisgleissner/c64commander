@@ -10,6 +10,7 @@ import { mergeAudioMixerOptions } from "@/lib/config/audioMixer";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import type { PlaylistItem } from "./types";
 
 export type AudioMixerItem = {
   name: string;
@@ -106,6 +107,28 @@ export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: num
   if (playlistLength <= 0) return null;
   if (currentIndex < 0) return 0;
   return currentIndex < playlistLength ? currentIndex : 0;
+};
+
+export const applyDurationOverrideToPlaylist = (playlist: PlaylistItem[], durationMs: number) => {
+  const updated = playlist.map((entry) => (entry.durationMs === durationMs ? entry : { ...entry, durationMs }));
+  return updated.some((entry, index) => entry !== playlist[index]) ? updated : playlist;
+};
+
+export const buildPlaylistItemId = ({
+  source,
+  sourceId,
+  originDeviceId,
+  path,
+  addedAt,
+}: {
+  source: string;
+  sourceId?: string | null;
+  originDeviceId?: string | null;
+  path: string;
+  addedAt?: string | null;
+}) => {
+  const baseId = `${source}:${sourceId ?? originDeviceId ?? ""}:${path}`;
+  return addedAt ? `${baseId}:${addedAt}` : baseId;
 };
 
 export type BooleanRef = { current: boolean };

@@ -24,6 +24,7 @@ export type VolumeControlsProps = {
   previewIntervalMs: number;
   volumeLabel: string;
   volumeValueFormatter?: (value: number) => string;
+  useNativeRangeInput?: boolean;
 };
 
 export const VolumeControls = ({
@@ -38,12 +39,13 @@ export const VolumeControls = ({
   previewIntervalMs,
   volumeLabel,
   volumeValueFormatter,
+  useNativeRangeInput = false,
 }: VolumeControlsProps) => {
   const { profile } = useDisplayProfile();
   const volumeSlider = useDeviceBoundSlider({
     deviceValue: volumeIndex,
     domain: createNumericSliderDomain({ min: 0, max: Math.max(0, volumeStepsCount - 1), round: Math.round }),
-    previewMode: "throttled",
+    previewMode: "commitOnly",
     preview: onVolumePreview,
     commit: onVolumeCommit,
     previewThrottleMs: previewIntervalMs,
@@ -60,6 +62,7 @@ export const VolumeControls = ({
         disabled={!canControlVolume}
         data-c64-persistent-active={volumeMuted ? "true" : undefined}
         data-testid="volume-mute"
+        aria-label={volumeMuted ? "Unmute" : "Mute"}
       >
         {volumeMuted ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
         {volumeMuted ? "Unmute" : "Mute"}
@@ -85,6 +88,10 @@ export const VolumeControls = ({
             valueFormatter={volumeValueFormatter}
             disabled={!canControlVolume}
             data-testid="volume-slider"
+            nativeInputMode={useNativeRangeInput ? "overlay" : "none"}
+            nativeInputAriaLabel="Playback volume"
+            nativeInputTestId={useNativeRangeInput ? "volume-slider-native-input" : undefined}
+            aria-label="Playback volume"
           />
           <span className="text-xs text-muted-foreground w-[52px] text-right" data-testid="volume-label">
             {volumeLabel}

@@ -11,25 +11,43 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 export const SONGLENGTHS_FILE_NAMES = ["songlengths.md5", "songlengths.txt"];
 export const DOCUMENTS_FOLDER = "DOCUMENTS";
+export const HVSC_FOLDER = "HVSC";
+const SIBLING_LIBRARY_DOCUMENTS_FOLDERS = [
+  `${HVSC_FOLDER}/${DOCUMENTS_FOLDER}/`,
+  `${HVSC_FOLDER}/C64Music/${DOCUMENTS_FOLDER}/`,
+];
 
 export const isSonglengthsFileName = (name: string) => SONGLENGTHS_FILE_NAMES.includes(name.trim().toLowerCase());
 
 const normalizeLocalPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 
-export const buildSonglengthsSearchPaths = (path: string) => {
+export const buildSonglengthsSearchFolders = (path: string) => {
   const normalized = normalizeLocalPath(path || "/");
   const folder = normalized.endsWith("/") ? normalized : normalized.slice(0, normalized.lastIndexOf("/") + 1);
-  const paths: string[] = [];
+  const folders = new Set<string>();
   let current = folder || "/";
   while (current) {
-    const base = current.endsWith("/") ? current : `${current}/`;
-    SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
-      paths.push(`${base}${fileName}`);
-      paths.push(`${base}${DOCUMENTS_FOLDER}/${fileName}`);
-    });
+    const base = normalizeSourcePath(current.endsWith("/") ? current : `${current}/`);
+    folders.add(base);
+    folders.add(normalizeSourcePath(`${base}${DOCUMENTS_FOLDER}/`));
+    if (!base.toLowerCase().includes(`/${HVSC_FOLDER.toLowerCase()}/`)) {
+      SIBLING_LIBRARY_DOCUMENTS_FOLDERS.forEach((relativeFolder) => {
+        folders.add(normalizeSourcePath(`${base}${relativeFolder}`));
+      });
+    }
     if (base === "/") break;
     current = getParentPath(base);
   }
+  return Array.from(folders);
+};
+
+export const buildSonglengthsSearchPaths = (path: string) => {
+  const paths: string[] = [];
+  buildSonglengthsSearchFolders(path).forEach((base) => {
+    SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
+      paths.push(`${base}${fileName}`);
+    });
+  });
   return paths;
 };
 

@@ -114,10 +114,13 @@ const resolveOverrideMethod = <K extends keyof FolderPickerPlugin>(method: K) =>
   throw new Error("Android SAF picker is required.");
 };
 
-const withTraceContext = <T extends Record<string, unknown> | undefined>(options: T) => ({
-  ...(options ?? {}),
-  traceContext: resolveNativeTraceContext(getActiveAction()),
-});
+const withTraceContext = <T extends Record<string, unknown> | undefined>(
+  options: T,
+): T & { traceContext: NativeTraceContext } =>
+  ({
+    ...(options ?? {}),
+    traceContext: resolveNativeTraceContext(getActiveAction()),
+  }) as T & { traceContext: NativeTraceContext };
 
 const plugin = registerPlugin<FolderPickerPlugin>("FolderPicker");
 

@@ -25,7 +25,12 @@ const FeatureFlagsContext = createContext<FeatureFlagsContextValue | null>(null)
 export const FeatureFlagsProvider = ({ children }: { children: React.ReactNode }) => {
   const [snapshot, setSnapshot] = useState<FeatureFlagSnapshot>(featureFlagManager.getSnapshot());
 
-  useEffect(() => featureFlagManager.subscribe(setSnapshot), []);
+  useEffect(() => {
+    const unsubscribe = featureFlagManager.subscribe(setSnapshot);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
   useEffect(() => {
     void featureFlagManager.load();
     return featureFlagManager.subscribeToDeveloperMode();

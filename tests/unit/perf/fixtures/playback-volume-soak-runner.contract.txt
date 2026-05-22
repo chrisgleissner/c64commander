@@ -1,0 +1,62 @@
+const ensureDurationAppliedToActivePlayback = async
+const waitForBackgroundWatchdogArm = async (scenario, logWindowStartMs, configuredDurationMs, readLogcatChunk) => {
+await clickTestId(cdp, 'playlist-play');
+async () => (await getPageState(cdp)).playLabel === 'Play'
+await ensureDurationAppliedToActivePlayback(cdp, scenario, 6);
+const armedWatchdog = await waitForBackgroundWatchdogArm(scenario, logWindowStartMs, configuredDurationMs, captureBackgroundLogcatChunk);
+const firstExpectedDueAtMs = armedWatchdog.dueAtMs;
+
+const descriptor = prototype ? Object.getOwnPropertyDescriptor(prototype, 'value') : null;
+descriptor.set.call(input
+input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+await adb(['logcat', '-d', '-v', 'epoch'], { timeoutMs: 60_000 });
+const parseScheduledWatchdogRows = (stdout, windowStartMs) => {
+const logcatChunks = [];
+const captureBackgroundLogcatChunk = async () => {
+await captureBackgroundLogcatChunk();
+const combinedLogcat = logcatChunks.join('\n');
+const uniqueScheduleRows = dedupeByDueAtMs(scheduleRows);
+const uniqueFireRows = dedupeByDueAtMs(fireRows);
+const firedDueSet = new Set(uniqueFireRows.map((row) => row.dueAtMs));
+const boundaryRows = [...uniqueFireRows, ...scheduleOnlyRows]
+const isEarlyFire = Boolean(fired && dueAtMs !== null && dueAtMs < firstExpectedDueAtMs);
+
+const readVolumeDragSample = async (cdp) =>
+root.querySelector('[data-testid="volume-slider-native-input"]')
+root.querySelector('[data-testid="slider-value-display"]')
+const pointerTravelPx = Math.abs(samples[index].pointerX - samples[index - 1].pointerX);
+pointerTravelPx >= minPointerTravelPx
+
+swipeContainer.dispatchEvent(new PointerEvent('pointercancel'
+swipeContainer.dispatchEvent(new PointerEvent('pointerup'
+document.activeElement.blur();
+
+durationMs: 4_000
+await sleep(1_200);
+const preferLoudFirst = currentValue <= quietValue + 2;
+const orderedTargets = preferLoudFirst ? [loudValue, quietValue, loudValue] : [quietValue, loudValue, quietValue];
+beforeWindow: { startOffsetMs: -500, endOffsetMs: -100 }
+afterWindow: { startOffsetMs: 350, endOffsetMs: 1_900 }
+
+const addPlaylistItems = async (cdp, desiredCount, attempt = 0) => {
+const findUniquePlaylistSelectionBatch = async (
+if (pickedHere.length > 0 || depth >= maxDepth) {
+return { picked: pickedHere, folderChain };
+if (childBatch.picked.length > 0) {
+selectedNames = selectionBatch.picked;
+const startingState = await getPageState(cdp);
+Playlist did not reflect confirmed add-items selection in time
+nextState.playlistCount >= startingState.playlistCount + selectedNames.length
+Playlist restore did not reach the required count before add-items fallback
+if (attempt > 0) throw error;
+const cancelled = await clickByText(cdp, '^Cancel$');
+return addPlaylistItems(cdp, desiredCount, attempt + 1);
+
+const normalizeStoppedPlaybackSelection = async (cdp, scenario, minimumCount = 3) => {
+Playback did not stop while priming
+Known playlist row did not start while priming
+Known playlist row did not stop while priming
+await normalizeStoppedPlaybackSelection(cdp, scenario, 3);
+
+if (screenWakefulnessAtStart !== 'Awake') {
+await wakeAndForegroundApp();

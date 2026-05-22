@@ -366,9 +366,10 @@ export function usePlaybackPersistence({
       pendingPlaybackRestoreRef.current = null;
       return;
     }
-    const matchedIndex = pending.currentItemId
+    const matchedIndexById = pending.currentItemId
       ? playlist.findIndex((item) => item.id === pending.currentItemId)
-      : pending.currentIndex;
+      : -1;
+    const matchedIndex = matchedIndexById >= 0 ? matchedIndexById : pending.currentIndex;
     if (matchedIndex < 0 || matchedIndex >= playlist.length) {
       pendingPlaybackRestoreRef.current = null;
       return;

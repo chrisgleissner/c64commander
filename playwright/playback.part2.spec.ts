@@ -404,8 +404,9 @@ test.describe("Playback file browser (part 2)", () => {
     expect(configIndicesAfterPlay).toEqual([]);
   });
 
-  test("pause mutes SID outputs and resume restores them", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    const initialState = server.getState()["Audio Mixer"];
+  test("pause preserves SID mixer state and resume avoids extra mixer writes", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -423,33 +424,42 @@ test.describe("Playback file browser (part 2)", () => {
 
     const playButton = page.getByTestId("playlist-play");
     const pauseButton = page.getByTestId("playlist-pause");
+    const muteButton = page.getByTestId("volume-mute");
 
     await playButton.click();
     await expect(pauseButton).toBeEnabled();
+    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
     await snap(page, testInfo, "play-started");
+
+    const playingState = JSON.parse(JSON.stringify(server.getState()["Audio Mixer"])) as Record<
+      string,
+      { value: string }
+    >;
+    const configCountBeforePause = server.requests.filter((req) => req.url.includes("/v1/configs")).length;
 
     await pauseButton.click();
     await snap(page, testInfo, "paused");
-    await expect(page.getByTestId("volume-mute")).toContainText("Unmute");
-    await expect(page.getByTestId("volume-mute")).toHaveAttribute(PERSISTENT_ATTR, "true");
+    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
 
     await expect
       .poll(() => {
         const audio = server.getState()["Audio Mixer"];
         return (
-          audio["Vol UltiSid 1"].value === initialState["Vol UltiSid 1"].value &&
-          audio["Vol UltiSid 2"].value === "-42 dB" &&
-          audio["Vol Socket 1"].value === "-42 dB" &&
-          audio["Vol Socket 2"].value === "-42 dB"
+          audio["Vol UltiSid 1"].value === playingState["Vol UltiSid 1"].value &&
+          audio["Vol UltiSid 2"].value === playingState["Vol UltiSid 2"].value &&
+          audio["Vol Socket 1"].value === playingState["Vol Socket 1"].value &&
+          audio["Vol Socket 2"].value === playingState["Vol Socket 2"].value
         );
       })
       .toBe(true);
-    await snap(page, testInfo, "sid-muted");
+    await snap(page, testInfo, "pause-preserved-mixer");
 
     await pauseButton.click();
     await snap(page, testInfo, "resumed");
-    await expect(page.getByTestId("volume-mute")).toContainText("Mute");
-    await expect(page.getByTestId("volume-mute")).not.toHaveAttribute(PERSISTENT_ATTR, "true");
+    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
 
     await expect
       .poll(() => server.requests.some((req) => req.url.includes("/v1/machine:resume")), { timeout: 2000 })
@@ -457,16 +467,16 @@ test.describe("Playback file browser (part 2)", () => {
 
     await expect
       .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value)
-      .toBe(initialState["Vol UltiSid 1"].value);
+      .toBe(playingState["Vol UltiSid 1"].value);
     await expect
       .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value)
-      .toBe(initialState["Vol UltiSid 2"].value);
+      .toBe(playingState["Vol UltiSid 2"].value);
     await expect
       .poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"].value)
-      .toBe(initialState["Vol Socket 1"].value);
+      .toBe(playingState["Vol Socket 1"].value);
     await expect
       .poll(() => server.getState()["Audio Mixer"]["Vol Socket 2"].value)
-      .toBe(initialState["Vol Socket 2"].value);
+      .toBe(playingState["Vol Socket 2"].value);
 
     const pauseIndex = server.requests.findIndex((req) => req.url.includes("/v1/machine:pause"));
     const resumeIndex = server.requests.findIndex((req) => req.url.includes("/v1/machine:resume"));
@@ -476,8 +486,9 @@ test.describe("Playback file browser (part 2)", () => {
     const configBetweenPauseAndResume = configIndices.filter((index) => index > pauseIndex && index < resumeIndex);
     expect(pauseIndex).toBeGreaterThan(-1);
     expect(resumeIndex).toBeGreaterThan(-1);
-    expect(configBetweenPauseAndResume.length).toBeGreaterThan(0);
-    await snap(page, testInfo, "sid-restored");
+    expect(configBetweenPauseAndResume).toEqual([]);
+    expect(server.requests.filter((req) => req.url.includes("/v1/configs")).length).toBe(configCountBeforePause);
+    await snap(page, testInfo, "resume-preserved-mixer");
   });
 
   test("native folder picker adds local files to playlist", async ({ page }: { page: Page }, testInfo: TestInfo) => {

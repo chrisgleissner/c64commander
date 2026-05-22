@@ -15,6 +15,12 @@ declare module "@capacitor/filesystem" {
     ExternalStorage = "EXTERNAL_STORAGE",
   }
 
+  export enum Encoding {
+    UTF8 = "utf8",
+    ASCII = "ascii",
+    UTF16 = "utf16",
+  }
+
   export type FileInfo = {
     name: string;
     type?: "file" | "directory";
@@ -34,17 +40,25 @@ declare module "@capacitor/filesystem" {
 
   export const Filesystem: {
     mkdir: (options: { directory: Directory; path: string; recursive?: boolean }) => Promise<void>;
-    readFile: (options: { directory: Directory; path: string }) => Promise<{ data: string }>;
-    writeFile: (options: { directory: Directory; path: string; data: string }) => Promise<void>;
+    readFile: (options: { directory: Directory; path: string; encoding?: Encoding }) => Promise<{ data: string }>;
+    writeFile: (options: {
+      directory: Directory;
+      path: string;
+      data: string;
+      recursive?: boolean;
+      encoding?: Encoding;
+    }) => Promise<void>;
     readdir: (options: { directory: Directory; path: string }) => Promise<{ files: Array<FileInfo | string> }>;
     stat: (options: { directory: Directory; path: string }) => Promise<StatResult>;
     deleteFile: (options: { directory: Directory; path: string }) => Promise<void>;
     rmdir: (options: { directory: Directory; path: string; recursive?: boolean }) => Promise<void>;
+    rename: (options: { from: string; to: string; directory?: Directory; toDirectory?: Directory }) => Promise<void>;
     downloadFile: (options: {
       url: string;
       directory: Directory;
       path: string;
       progress?: (status: ProgressStatus) => void;
     }) => Promise<{ path?: string }>;
+    getUri: (options: { directory: Directory; path: string }) => Promise<{ uri: string }>;
   };
 }

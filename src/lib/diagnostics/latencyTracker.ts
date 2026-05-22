@@ -23,7 +23,7 @@ export type EndpointClass =
   | "Other";
 
 /** Transport family per §12.6 */
-export type TransportFamily = "REST" | "FTP";
+export type TransportFamily = "REST" | "FTP" | "Telnet";
 
 export type LatencySample = {
   timestampMs: number;

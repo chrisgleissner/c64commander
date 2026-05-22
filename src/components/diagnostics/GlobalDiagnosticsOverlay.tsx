@@ -39,6 +39,7 @@ import { recordRecentTarget } from "@/lib/diagnostics/recentTargets";
 import type { ConnectionActionsCallbacks } from "@/components/diagnostics/ConnectionActionsRegion";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
 import { buildBaseUrlFromDeviceHost, normalizeDeviceHost } from "@/lib/c64api";
+import { getActiveAutoResolutionContext, loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordRestResponse } from "@/lib/tracing/traceSession";
 import { getRecoveryEvidence, clearRecoveryEvidence, recordRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
@@ -112,16 +113,20 @@ export const GlobalDiagnosticsOverlay = () => {
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
+  const actionSummariesReady = overlayOpen && overlayFirstVisible;
   const actionSummaries = useMemo(
-    () => (overlayOpen ? buildActionSummaries(traceEvents) : []),
-    [overlayOpen, traceEvents],
+    () => (actionSummariesReady ? buildActionSummaries(traceEvents) : []),
+    [actionSummariesReady, traceEvents],
   );
 
   const finishPendingDiagnosticsOpenAction = useCallback((error?: Error | null) => {
     const action = diagnosticsOpenActionRef.current;
     if (!action) return null;
     diagnosticsOpenActionRef.current = null;
-    recordActionEnd(action, error);
+    void withDiagnosticsTraceOverride(() => {
+      recordActionEnd(action, error);
+      return null;
+    });
     return action;
   }, []);
 
@@ -132,7 +137,10 @@ export const GlobalDiagnosticsOverlay = () => {
         if (!diagnosticsOpenActionRef.current) {
           const action = createActionContext("diagnostics.open", "user", "GlobalDiagnosticsOverlay");
           diagnosticsOpenActionRef.current = action;
-          recordActionStart(action);
+          void withDiagnosticsTraceOverride(() => {
+            recordActionStart(action);
+            return null;
+          });
         }
       } else {
         finishPendingDiagnosticsOpenAction(new Error("Diagnostics overlay closed before first visible paint"));
@@ -212,8 +220,11 @@ export const GlobalDiagnosticsOverlay = () => {
     if (!action) {
       return;
     }
-    addLog("info", "Diagnostics first visible", {
-      action: action.name,
+    void withDiagnosticsTraceOverride(() => {
+      addLog("info", "Diagnostics first visible", {
+        action: action.name,
+      });
+      return null;
     });
   }, [finishPendingDiagnosticsOpenAction]);
 
@@ -273,12 +284,16 @@ export const GlobalDiagnosticsOverlay = () => {
     return () => window.removeEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed as EventListener);
   }, []);
 
-  const buildDiagnosticsExportData = useCallback(
-    () => ({
+  const buildDiagnosticsExportData = useCallback(() => {
+    const safetyConfig = loadDeviceSafetyConfig();
+    const safetyContext = getActiveAutoResolutionContext();
+    const exportActionSummaries =
+      actionSummaries.length > 0 || !overlayOpen ? actionSummaries : buildActionSummaries(traceEvents);
+    return {
       "error-logs": errorLogs,
       logs,
       traces: traceEvents,
-      actions: actionSummaries,
+      actions: exportActionSummaries,
       supplemental: {
         healthSnapshot: healthState,
         lastHealthCheckResult: healthCheckState.latestResult,
@@ -286,10 +301,20 @@ export const GlobalDiagnosticsOverlay = () => {
         hvscPerfTimings: collectHvscPerfTimings(),
         latencySamples: getAllLatencySamples(),
         recoveryEvidence: getRecoveryEvidence(),
+        deviceSafetyResolution: safetyConfig.resolution
+          ? {
+              storedMode: safetyConfig.mode,
+              effectiveMode: safetyConfig.resolution.effectiveMode,
+              resolvedPreset: safetyConfig.resolution.resolvedPreset,
+              isProvisional: safetyConfig.resolution.isProvisional,
+              reason: safetyConfig.resolution.reason,
+              activeProduct: safetyContext.activeProduct,
+              activeDeviceId: safetyContext.activeDeviceId,
+            }
+          : null,
       },
-    }),
-    [actionSummaries, errorLogs, healthCheckState.latestResult, healthState, logs, traceEvents],
-  );
+    };
+  }, [actionSummaries, errorLogs, healthCheckState.latestResult, healthState, logs, overlayOpen, traceEvents]);
 
   const handleShareAll = trace(async function handleShareAll() {
     try {

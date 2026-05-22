@@ -412,7 +412,10 @@ export function useSavedDeviceHealthChecks(
       handleDiagnosticsSuppression(true);
     }
 
-    return subscribeDiagnosticsSuppression(handleDiagnosticsSuppression);
+    const unsubscribe = subscribeDiagnosticsSuppression(handleDiagnosticsSuppression);
+    return () => {
+      unsubscribe?.();
+    };
   }, [cancelAll, context, seededState]);
 
   useEffect(() => {

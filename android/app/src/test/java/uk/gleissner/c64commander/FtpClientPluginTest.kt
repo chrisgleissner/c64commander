@@ -834,4 +834,78 @@ class FtpClientPluginTest {
     assertEquals("fallback.txt", result[0].name)
     verify(ftpClient).mlistDir("/")
   }
+
+  @Test
+  fun resolveListingFallsBackToNlstWhenListAndMlistAreEmpty() {
+    val plugin = FtpClientPlugin()
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
+    method.isAccessible = true
+
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+    `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
+    `when`(ftpClient.listNames("/")).thenReturn(arrayOf("USB2", "demo.sid"))
+    `when`(ftpClient.mlistFile("/USB2"))
+            .thenReturn(
+                    FTPFile().apply {
+                      name = "USB2"
+                      type = FTPFile.DIRECTORY_TYPE
+                    }
+            )
+    `when`(ftpClient.mlistFile("/demo.sid"))
+            .thenReturn(
+                    FTPFile().apply {
+                      name = "demo.sid"
+                      type = FTPFile.FILE_TYPE
+                    }
+            )
+
+    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+
+    assertEquals(2, result.size)
+    assertEquals("USB2", result[0].name)
+    assertTrue(result[0].isDirectory)
+    assertEquals("demo.sid", result[1].name)
+    assertTrue(result[1].isFile)
+    verify(ftpClient).listNames("/")
+  }
+
+  @Test
+  fun resolveListingFallsBackToDirectoryProbeWhenNlstMetadataMissing() {
+    val plugin = FtpClientPlugin()
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
+    method.isAccessible = true
+
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+    `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
+    `when`(ftpClient.listNames("/")).thenReturn(arrayOf("USB2", "demo.sid"))
+    `when`(ftpClient.mlistFile("/USB2")).thenReturn(null)
+    `when`(ftpClient.mlistFile("/demo.sid")).thenReturn(null)
+    `when`(ftpClient.printWorkingDirectory()).thenReturn("/")
+    `when`(ftpClient.changeWorkingDirectory("/USB2")).thenReturn(true)
+    `when`(ftpClient.changeWorkingDirectory("/")).thenReturn(true)
+    `when`(ftpClient.changeWorkingDirectory("/demo.sid")).thenReturn(false)
+
+    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+
+    assertEquals(2, result.size)
+    assertEquals("USB2", result[0].name)
+    assertTrue(result[0].isDirectory)
+    assertEquals("demo.sid", result[1].name)
+    assertTrue(result[1].isFile)
+    verify(ftpClient).changeWorkingDirectory("/USB2")
+    verify(ftpClient).changeWorkingDirectory("/")
+    verify(ftpClient).changeWorkingDirectory("/demo.sid")
+  }
 }

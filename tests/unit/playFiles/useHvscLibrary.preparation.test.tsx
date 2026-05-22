@@ -33,8 +33,10 @@ const mocks = vi.hoisted(() => ({
   ingestCachedHvscMock: vi.fn(),
   installOrUpdateHvscMock: vi.fn(),
   isHvscBridgeAvailableMock: vi.fn(),
+  markHvscUpdateCheckAtMock: vi.fn(),
   resetHvscLibraryDataMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
+  shouldCheckForHvscUpdatesMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -77,6 +79,15 @@ vi.mock("@/lib/hvsc", async () => {
     isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
     resetHvscLibraryData: (...args: unknown[]) => mocks.resetHvscLibraryDataMock(...args),
     recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
+  };
+});
+
+vi.mock("@/lib/hvsc/hvscReleaseService", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/hvsc/hvscReleaseService")>("@/lib/hvsc/hvscReleaseService");
+  return {
+    ...actual,
+    markHvscUpdateCheckAt: (...args: unknown[]) => mocks.markHvscUpdateCheckAtMock(...args),
+    shouldCheckForHvscUpdates: (...args: unknown[]) => mocks.shouldCheckForHvscUpdatesMock(...args),
   };
 });
 
@@ -178,7 +189,9 @@ describe("useHvscLibrary preparation state coverage", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.markHvscUpdateCheckAtMock.mockReset();
     mocks.resetHvscLibraryDataMock.mockResolvedValue(undefined);
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -390,7 +403,17 @@ describe("useHvscLibrary preparation state coverage", () => {
   });
 
   it("runHvscPreparation calls handleHvscIngest when state is DOWNLOADED", async () => {
-    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 85, updateVersions: [] });
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        extraction: {
+          status: "success",
+          filesExtracted: 10,
+          totalFiles: 10,
+          durationMs: 1000,
+        },
+        lastUpdatedAt: new Date().toISOString(),
+      }),
+    );
 
     const { result } = renderHook(() => useHvscLibrary());
 
@@ -405,13 +428,17 @@ describe("useHvscLibrary preparation state coverage", () => {
   });
 
   it("runHvscPreparation calls handleHvscIngest when state is ERROR with failedPhase=ingest", async () => {
-    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 85, updateVersions: [] });
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         extraction: {
+          status: "success",
+          filesExtracted: 10,
+          totalFiles: 10,
+          durationMs: 1000,
+        },
+        metadata: {
           status: "failure",
-          errorMessage: "extraction failed",
-          errorCategory: "extraction",
+          errorMessage: "metadata failed",
         },
       }),
     );
@@ -430,6 +457,28 @@ describe("useHvscLibrary preparation state coverage", () => {
 
     expect(mocks.ingestCachedHvscMock).toHaveBeenCalledTimes(1);
     expect(mocks.installOrUpdateHvscMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps cached ingest available after extraction errors when a cache baseline exists", async () => {
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        download: {
+          status: "failure",
+          errorMessage: "Simulated extraction failure",
+        },
+        extraction: {
+          status: "failure",
+          errorCategory: "extraction",
+          errorMessage: "Simulated extraction failure",
+        },
+      }),
+    );
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus());
+    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 84, updateVersions: [] });
+
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(result.current.hvscCanIngest).toBe(true));
   });
 
   it("runHvscPreparation calls handleHvscInstall when state is NOT_PRESENT", async () => {

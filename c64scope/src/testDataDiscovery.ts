@@ -56,6 +56,13 @@ export interface DeviceMirrorDiscovery {
   approximationBasis: string;
 }
 
+export interface PlaybackMirrorDiscovery {
+  rootPath: string;
+  sidPath: string;
+  topLevelEntries: string[];
+  sidCandidates: string[];
+}
+
 export interface MirroredCorpusDiscovery {
   local: LocalMirrorDiscovery;
   device: DeviceMirrorDiscovery;
@@ -176,16 +183,23 @@ async function walkLocalTree(rootPath: string, options: WalkOptions = {}): Promi
 }
 
 async function ftpList(host: string, ftpPath: string): Promise<string[]> {
-  const { stdout } = await execFileAsync("curl", [
-    "--connect-timeout",
-    "5",
-    "--max-time",
-    "20",
-    "--silent",
-    "--show-error",
-    "--list-only",
-    `ftp://${host}${ftpPath}`,
-  ]);
+  const normalizedPath = ftpPath !== "/" ? ftpPath.replace(/\/+$/, "") : "/";
+  const script = [
+    "from ftplib import FTP",
+    "import sys",
+    "host = sys.argv[1]",
+    "ftp_path = sys.argv[2]",
+    "ftp = FTP()",
+    "ftp.connect(host, 21, timeout=8)",
+    "ftp.login('user', '')",
+    "names = ftp.nlst(ftp_path)",
+    "for name in names:",
+    "    base = name.rsplit('/', 1)[-1].strip()",
+    "    if base:",
+    "        print(base)",
+    "ftp.quit()",
+  ].join("\n");
+  const { stdout } = await execFileAsync("python3", ["-c", script, host, normalizedPath]);
   return stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -232,6 +246,37 @@ async function resolveDeviceTestDataRoot(c64uHost: string): Promise<{ rootPath: 
   }
 
   throw new Error("Unable to locate a mirrored test-data root on the C64U FTP filesystem.");
+}
+
+async function resolvePlaybackSidRoot(
+  c64uHost: string,
+): Promise<{ rootPath: string; sidPath: string; topLevelEntries: string[]; sidEntries: string[] }> {
+  const candidateSidRoots = ["/USB2/test-data/SID", "/USB2/test-data/sid", "/USB1/test-data/SID", "/SD/test-data/SID"];
+
+  for (const sidPath of candidateSidRoots) {
+    try {
+      const sidEntries = await ftpList(c64uHost, `${sidPath}/`);
+      return {
+        rootPath: sidPath.replace(/\/[^/]+$/, ""),
+        sidPath,
+        topLevelEntries: [sidPath.split("/").at(-1)!],
+        sidEntries,
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn("FTP probe failed for candidate playback SID root", {
+        c64uHost,
+        sidPath,
+        error: message,
+      });
+    }
+  }
+
+  const { rootPath, topLevelEntries } = await resolveDeviceTestDataRoot(c64uHost);
+  const sidEntry = topLevelEntries.find((entry) => entry.toUpperCase() === "SID") ?? "SID";
+  const sidPath = `${rootPath}/${sidEntry}`;
+  const sidEntries = await ftpList(c64uHost, `${sidPath}/`);
+  return { rootPath, sidPath, topLevelEntries, sidEntries };
 }
 
 export async function discoverLocalMirror(workspaceRoot: string): Promise<LocalMirrorDiscovery> {
@@ -292,6 +337,18 @@ export async function discoverDeviceMirror(
       approximateFileCount === null
         ? "Device-side FTP sampling only. No local parity model was available."
         : "Device-side FTP root, SID root, HVSC root, and d64 samples matched the mirrored local corpus structure; approximate counts are derived from the local mirror plus resolved HVSC target.",
+  };
+}
+
+export async function discoverPlaybackMirror(c64uHost: string): Promise<PlaybackMirrorDiscovery> {
+  const { rootPath, sidPath, topLevelEntries, sidEntries } = await resolvePlaybackSidRoot(c64uHost);
+  const sidCandidates = sidEntries.filter((entry) => /\.sid$/i.test(entry)).slice(0, 10);
+
+  return {
+    rootPath,
+    sidPath,
+    topLevelEntries,
+    sidCandidates,
   };
 }
 

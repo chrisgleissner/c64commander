@@ -7,7 +7,7 @@
  */
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { App } from "@capacitor/app";
 import { addErrorLog } from "@/lib/logging";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +15,8 @@ import { useNavigate } from "react-router-dom";
 type MarkdownBlock =
   | { type: "heading"; level: number; text: string }
   | { type: "paragraph"; text: string }
-  | { type: "list"; items: string[] };
+  | { type: "list"; items: string[] }
+  | { type: "table"; headers: string[]; rows: string[][] };
 
 const loadNoticeText = async (): Promise<string> => {
   const baseUrl = import.meta.env.BASE_URL || "/";
@@ -66,10 +67,11 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
     }
 
     if (line.startsWith("|") && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
-      const headerCells = splitTableRow(lines[index]).map((cell) => cell.toLowerCase());
+      const headers = splitTableRow(lines[index]);
+      const normalizedHeaders = headers.map((cell) => cell.toLowerCase());
       index += 2;
 
-      const items: string[] = [];
+      const rows: string[][] = [];
       while (index < lines.length) {
         const tableLine = lines[index].trim();
         if (!tableLine.startsWith("|")) break;
@@ -79,26 +81,13 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
         }
 
         const rowCells = splitTableRow(tableLine);
-        const rowByHeader = new Map<string, string>();
-        for (let i = 0; i < headerCells.length; i += 1) {
-          rowByHeader.set(headerCells[i], rowCells[i] ?? "-");
-        }
-
-        const ecosystem = rowByHeader.get("ecosystem") ?? "-";
-        const packageName = rowByHeader.get("package") ?? "-";
-        const version = rowByHeader.get("version") ?? "-";
-        const license = rowByHeader.get("license") ?? "-";
-        const source = rowByHeader.get("source") ?? rowByHeader.get("source url") ?? "-";
-
-        const firstLine = [ecosystem, packageName, version, license].filter((part) => part && part !== "-").join(" ");
-        const secondLine = `Source: ${source || "-"}`;
-        items.push(`${firstLine}\n${secondLine}`);
+        rows.push(normalizedHeaders.map((_, cellIndex) => rowCells[cellIndex] ?? "-"));
 
         index += 1;
       }
 
-      if (items.length > 0) {
-        blocks.push({ type: "list", items });
+      if (rows.length > 0) {
+        blocks.push({ type: "table", headers, rows });
       }
       continue;
     }
@@ -176,7 +165,10 @@ const renderInlineText = (value: string) => {
     const codeMatch = token.match(/^`([^`]+)`$/);
     if (codeMatch) {
       nodes.push(
-        <code key={`code-${keyIndex}`} className="rounded bg-muted px-1 py-0.5 text-[0.85em]">
+        <code
+          key={`code-${keyIndex}`}
+          className="break-all whitespace-pre-wrap rounded bg-muted px-1 py-0.5 text-[0.85em]"
+        >
           {codeMatch[1]}
         </code>,
       );
@@ -221,8 +213,7 @@ export default function OpenSourceLicensesPage() {
   const navigate = useNavigate();
   const [noticeText, setNoticeText] = useState<string>("Loading open source licenses...");
   const [hasError, setHasError] = useState(false);
-
-  const blocks = useMemo(() => parseMarkdownBlocks(noticeText), [noticeText]);
+  const blocks = useMemo(() => (hasError ? [] : parseMarkdownBlocks(noticeText)), [noticeText, hasError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,43 +242,75 @@ export default function OpenSourceLicensesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let removed = false;
+    let removeListener: (() => Promise<void>) | undefined;
+
+    void App.addListener("backButton", () => {
+      navigate("/settings");
+    }).then((handle) => {
+      if (removed) {
+        void handle.remove();
+        return;
+      }
+      removeListener = () => handle.remove();
+    });
+
+    return () => {
+      removed = true;
+      void removeListener?.();
+    };
+  }, [navigate]);
+
   return (
-    <div className="fixed inset-0 z-50 bg-background/84 backdrop-blur-sm supports-[backdrop-filter]:bg-background/72">
-      <div className="mx-auto flex h-full max-w-6xl flex-col px-4 py-4 sm:px-6">
-        <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
-          <div>
-            <h1 className="text-lg font-semibold">Open Source Licenses</h1>
-            <p className="text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
+    <div
+      data-testid="open-source-licenses-overlay"
+      className="absolute inset-0 z-50 overflow-hidden bg-background/84 backdrop-blur-sm supports-[backdrop-filter]:bg-background/72"
+    >
+      <div className="mx-auto flex h-full w-full max-w-6xl min-w-0 flex-col px-3 py-3 sm:px-6 sm:py-4">
+        <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="break-words text-lg font-semibold">Open Source Licenses</h1>
+            <p className="break-words text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => navigate("/settings")} aria-label="Close licenses overlay">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            onClick={() => navigate("/settings")}
+            aria-label="Close licenses overlay"
+          >
             <span className="text-lg leading-none">×</span>
           </Button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
-          <ScrollArea className="h-full">
-            <div className={`space-y-4 p-4 sm:p-6 ${hasError ? "text-destructive" : "text-foreground"}`}>
+          <div
+            data-testid="open-source-licenses-scroll"
+            className="h-full w-full overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]"
+          >
+            <div className={`min-w-0 space-y-4 p-4 sm:p-6 ${hasError ? "text-destructive" : "text-foreground"}`}>
               {hasError ? (
-                <p className="text-sm">{noticeText}</p>
+                <p className="break-words text-sm">{noticeText}</p>
               ) : (
                 blocks.map((block, blockIndex) => {
                   if (block.type === "heading") {
                     if (block.level === 1) {
                       return (
-                        <h2 key={`h-${blockIndex}`} className="text-2xl font-semibold tracking-tight">
+                        <h2 key={`h-${blockIndex}`} className="break-words text-2xl font-semibold tracking-tight">
                           {block.text}
                         </h2>
                       );
                     }
                     if (block.level === 2) {
                       return (
-                        <h3 key={`h-${blockIndex}`} className="pt-2 text-xl font-semibold">
+                        <h3 key={`h-${blockIndex}`} className="break-words pt-2 text-xl font-semibold">
                           {block.text}
                         </h3>
                       );
                     }
                     return (
-                      <h4 key={`h-${blockIndex}`} className="text-lg font-medium">
+                      <h4 key={`h-${blockIndex}`} className="break-words text-lg font-medium">
                         {block.text}
                       </h4>
                     );
@@ -295,7 +318,7 @@ export default function OpenSourceLicensesPage() {
 
                   if (block.type === "paragraph") {
                     return (
-                      <p key={`p-${blockIndex}`} className="text-sm leading-6">
+                      <p key={`p-${blockIndex}`} className="break-words text-sm leading-6">
                         {renderInlineText(block.text)}
                       </p>
                     );
@@ -305,7 +328,7 @@ export default function OpenSourceLicensesPage() {
                     return (
                       <ul key={`l-${blockIndex}`} className="list-disc space-y-2 pl-5 text-sm leading-6">
                         {block.items.map((item, itemIndex) => (
-                          <li key={`li-${itemIndex}`} className="break-words">
+                          <li key={`li-${itemIndex}`} className="min-w-0 break-words">
                             {renderInlineText(item)}
                           </li>
                         ))}
@@ -313,11 +336,102 @@ export default function OpenSourceLicensesPage() {
                     );
                   }
 
+                  if (block.type === "table") {
+                    const normalizedHeaders = block.headers.map((header) => header.trim().toLowerCase());
+                    const isDependencyTable =
+                      normalizedHeaders.includes("ecosystem") &&
+                      normalizedHeaders.includes("package") &&
+                      normalizedHeaders.includes("version") &&
+                      normalizedHeaders.includes("license") &&
+                      (normalizedHeaders.includes("source") || normalizedHeaders.includes("source url"));
+
+                    if (isDependencyTable) {
+                      const getCell = (row: string[], header: string) => {
+                        const index = normalizedHeaders.indexOf(header);
+                        return index >= 0 ? (row[index] ?? "-") : "-";
+                      };
+
+                      return (
+                        <div
+                          key={`t-${blockIndex}`}
+                          data-testid="open-source-licenses-dependency-table"
+                          className="space-y-3"
+                        >
+                          {block.rows.map((row, rowIndex) => {
+                            const ecosystem = getCell(row, "ecosystem");
+                            const packageName = getCell(row, "package");
+                            const version = getCell(row, "version");
+                            const license = getCell(row, "license");
+                            const source =
+                              getCell(row, "source") !== "-" ? getCell(row, "source") : getCell(row, "source url");
+
+                            return (
+                              <article
+                                key={`t-${blockIndex}-row-${rowIndex}`}
+                                data-testid="open-source-license-card"
+                                className="rounded-xl border border-border/70 bg-muted/20 p-4 [contain-intrinsic-size:180px] [content-visibility:auto]"
+                              >
+                                <div className="flex flex-wrap items-start gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <h4 className="break-words text-base font-semibold">
+                                      {renderInlineText(packageName)}
+                                    </h4>
+                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                      {renderInlineText(ecosystem)}
+                                    </p>
+                                  </div>
+                                  {version && version !== "-" ? (
+                                    <span className="rounded-full border border-border/70 px-2 py-1 text-xs font-medium text-muted-foreground">
+                                      {renderInlineText(version)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[auto,1fr]">
+                                  <dt className="font-medium text-muted-foreground">License</dt>
+                                  <dd className="min-w-0 break-words">{renderInlineText(license)}</dd>
+                                  <dt className="font-medium text-muted-foreground">Source</dt>
+                                  <dd className="min-w-0 break-words">{renderInlineText(source)}</dd>
+                                </dl>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={`t-${blockIndex}`} className="overflow-x-auto rounded-xl border border-border/70">
+                        <table className="min-w-full border-collapse text-sm">
+                          <thead className="bg-muted/40 text-left">
+                            <tr>
+                              {block.headers.map((header, headerIndex) => (
+                                <th key={`th-${headerIndex}`} className="px-3 py-2 font-medium text-foreground">
+                                  {header}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {block.rows.map((row, rowIndex) => (
+                              <tr key={`tr-${rowIndex}`} className="border-t border-border/70 align-top">
+                                {row.map((cell, cellIndex) => (
+                                  <td key={`td-${rowIndex}-${cellIndex}`} className="px-3 py-2 break-words">
+                                    {renderInlineText(cell)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  }
+
                   return null;
                 })
               )}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       </div>
     </div>

@@ -10,6 +10,7 @@ package uk.gleissner.c64commander
 
 import com.getcapacitor.BridgeActivity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,6 +19,12 @@ import org.robolectric.shadows.ShadowLog
 
 @RunWith(RobolectricTestRunner::class)
 class MainActivityTest {
+  private fun setBackgroundExecutionRunning(value: Boolean) {
+    val field = BackgroundExecutionService::class.java.getDeclaredField("isRunning")
+    field.isAccessible = true
+    field.set(null, value)
+  }
+
   @Test
   fun mainActivityIsBridgeActivity() {
     assertTrue(BridgeActivity::class.java.isAssignableFrom(MainActivity::class.java))
@@ -57,6 +64,49 @@ class MainActivityTest {
     assertTrue(
       ShadowLog.getLogsForTag("MainActivity").any {
         it.msg?.contains("MimeMap prewarm failed; continuing without prewarm") == true
+      },
+    )
+  }
+
+  @Test
+  fun keepWebViewPlaybackAliveDuringBackgroundExecutionSkipsWhenServiceInactive() {
+    val activity = MainActivity()
+    var resumed = false
+    setBackgroundExecutionRunning(false)
+
+    activity.keepWebViewPlaybackAliveDuringBackgroundExecution {
+      resumed = true
+    }
+
+    assertFalse(resumed)
+  }
+
+  @Test
+  fun keepWebViewPlaybackAliveDuringBackgroundExecutionResumesWhenServiceRunning() {
+    val activity = MainActivity()
+    var resumed = false
+    setBackgroundExecutionRunning(true)
+
+    activity.keepWebViewPlaybackAliveDuringBackgroundExecution {
+      resumed = true
+    }
+
+    assertTrue(resumed)
+  }
+
+  @Test
+  fun keepWebViewPlaybackAliveDuringBackgroundExecutionLogsAndSwallowsResumeFailures() {
+    val activity = MainActivity()
+    ShadowLog.clear()
+    setBackgroundExecutionRunning(true)
+
+    activity.keepWebViewPlaybackAliveDuringBackgroundExecution {
+      throw IllegalStateException("resume failed")
+    }
+
+    assertTrue(
+      ShadowLog.getLogsForTag("MainActivity").any {
+        it.msg?.contains("Failed to keep WebView timers resumed for background playback") == true
       },
     )
   }

@@ -63,6 +63,53 @@ describe("useDeviceBoundSlider", () => {
     expect(result.current.sliderValue).toBe(2);
   });
 
+  it("commits the last displayed draft value when the release event rounds to a neighboring step", () => {
+    const commit = vi.fn();
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 20,
+        domain: createNumericSliderDomain({ min: 0, max: 31, round: Math.round }),
+        previewMode: "commitOnly",
+        commit,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([23]);
+    });
+    expect(result.current.sliderValue).toBe(23);
+
+    act(() => {
+      result.current.onValueCommit([24]);
+    });
+
+    expect(commit).toHaveBeenCalledWith(23);
+    expect(result.current.sliderValue).toBe(23);
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+  });
+
+  it("commits the latest draft value when change and commit happen in the same turn", () => {
+    const commit = vi.fn();
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: " 1",
+        domain: createIndexedSliderDomain([" 1", " 2", " 4"] as const),
+        previewMode: "commitOnly",
+        commit,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([2]);
+      result.current.onValueCommit([1]);
+    });
+
+    expect(commit).toHaveBeenCalledWith(" 4");
+    expect(result.current.sliderValue).toBe(2);
+    expect(result.current.displayValue).toBe(" 4");
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+  });
+
   it("supports numeric sliders with domain clamping", () => {
     const commit = vi.fn();
     const { result } = renderHook(() =>

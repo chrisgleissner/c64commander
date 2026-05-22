@@ -91,6 +91,7 @@ export type SavedDevicesSnapshot = {
 
 const STORAGE_KEY = "c64u_saved_devices:v1";
 const EVENT_NAME = "c64u-saved-devices-change";
+const DEVICE_SAFETY_UPDATE_EVENT = "c64u-device-safety-updated";
 const LEGACY_DEVICE_HOST_KEY = "c64u_device_host";
 const LEGACY_BASE_URL_KEY = "c64u_base_url";
 const LEGACY_FTP_PORT_KEY = "c64u_ftp_port";
@@ -345,8 +346,19 @@ const createLegacyDevice = (): SavedDevice => {
   };
 };
 
+const readDebugSavedDevicesEnv = (): string | undefined => {
+  try {
+    if (typeof import.meta === "undefined" || !import.meta.env) return undefined;
+    const value = import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON;
+    return typeof value === "string" ? value : undefined;
+  } catch (error) {
+    console.warn("Failed to read VITE_DEBUG_SAVED_DEVICES_JSON", { error });
+    return undefined;
+  }
+};
+
 const createDebugBootstrapDevices = (): SavedDevice[] | null => {
-  const raw = import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON;
+  const raw = readDebugSavedDevicesEnv();
   if (!raw?.trim()) return null;
 
   try {
@@ -462,6 +474,11 @@ const emit = () => {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(EVENT_NAME));
   }
+};
+
+const broadcastSafetyConfigUpdate = (key: string, value: unknown) => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(DEVICE_SAFETY_UPDATE_EVENT, { detail: { key, value } }));
 };
 
 const persistEnvelope = (envelope: PersistedSavedDevicesEnvelope) => {
@@ -666,6 +683,14 @@ export const getSelectedSavedDevice = () => {
   return current.devices.find((device) => device.id === current.selectedDeviceId) ?? current.devices[0] ?? null;
 };
 
+export const getSelectedSavedDeviceProductFamilySync = (): ProductFamilyCode | null => {
+  const current = getSavedDevicesSnapshot();
+  const selectedDevice =
+    current.devices.find((device) => device.id === current.selectedDeviceId) ?? current.devices[0] ?? null;
+  if (!selectedDevice) return null;
+  return selectedDevice.lastKnownProduct ?? current.summaries[selectedDevice.id]?.lastVerifiedProduct ?? null;
+};
+
 export const getSavedDeviceById = (deviceId: string) => {
   const current = getSavedDevicesSnapshot();
   return current.devices.find((device) => device.id === deviceId) ?? null;
@@ -826,7 +851,7 @@ export const updateSelectedSavedDevicePorts = (update: { ftpPort?: number; telne
 
 export const selectSavedDevice = (deviceId: string) => {
   const nowIso = new Date().toISOString();
-  return updateSnapshot((envelope) => {
+  const nextSnapshot = updateSnapshot((envelope) => {
     if (!envelope.devices.some((device) => device.id === deviceId)) {
       throw new Error(`Unknown saved device: ${deviceId}`);
     }
@@ -843,6 +868,8 @@ export const selectSavedDevice = (deviceId: string) => {
       ),
     };
   });
+  broadcastSafetyConfigUpdate("selectedDeviceId", deviceId);
+  return nextSnapshot;
 };
 
 export const removeSavedDevice = (deviceId: string) => {
@@ -976,6 +1003,10 @@ export const completeSavedDeviceVerification = (
       [deviceId]: actualDeviceId,
     },
   }));
+  broadcastSafetyConfigUpdate("verifiedProduct", {
+    deviceId,
+    product,
+  });
   return getSavedDevicesSnapshot();
 };
 

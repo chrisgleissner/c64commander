@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { markHvscUpdateCheckAt, shouldCheckForHvscUpdates } from "@/lib/hvsc/hvscReleaseService";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -281,8 +282,27 @@ export const useHvscLibrary = (): HvscLibraryState => {
   }, []);
 
   useEffect(() => {
+    const shouldProbeHvscCache =
+      Boolean(hvscStatus?.installedVersion) ||
+      hvscStatusSummary.extraction.status === "success" ||
+      hvscStatusSummary.download.status === "failure" ||
+      hvscStatusSummary.extraction.status === "failure" ||
+      hvscStatus?.ingestionState === "installing" ||
+      hvscStatus?.ingestionState === "updating" ||
+      hvscStatus?.ingestionState === "error";
+    if (!shouldProbeHvscCache) {
+      setHvscCacheBaseline(null);
+      setHvscCacheUpdates([]);
+      return;
+    }
     refreshHvscCacheStatus();
-  }, [refreshHvscCacheStatus, hvscStatus?.installedVersion, hvscStatus?.ingestionState]);
+  }, [
+    refreshHvscCacheStatus,
+    hvscStatusSummary.download.status,
+    hvscStatus?.installedVersion,
+    hvscStatus?.ingestionState,
+    hvscStatusSummary.extraction.status,
+  ]);
 
   useEffect(() => {
     if (!hvscStatus) return;
@@ -334,13 +354,13 @@ export const useHvscLibrary = (): HvscLibraryState => {
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
       const applyExtractionCounts = (payload: { processedCount?: number; totalCount?: number }) => {
-        if (typeof payload.processedCount === "number" && payload.processedCount > 0) {
-          setHvscExtractionFiles((prev) =>
-            prev === null ? payload.processedCount : Math.max(prev, payload.processedCount),
-          );
+        const processed = payload.processedCount;
+        if (typeof processed === "number" && processed > 0) {
+          setHvscExtractionFiles((prev) => (prev === null ? processed : Math.max(prev, processed)));
         }
-        if (typeof payload.totalCount === "number" && payload.totalCount > 0) {
-          setHvscExtractionTotal((prev) => (prev === null ? payload.totalCount : Math.max(prev, payload.totalCount)));
+        const total = payload.totalCount;
+        if (typeof total === "number" && total > 0) {
+          setHvscExtractionTotal((prev) => (prev === null ? total : Math.max(prev, total)));
         }
       };
       const isDownloadComplete = (payload: HvscProgressEvent) =>
@@ -607,6 +627,43 @@ export const useHvscLibrary = (): HvscLibraryState => {
     void loadHvscFolder(selectedHvscFolder || "/");
   }, [hvscStatus?.installedVersion, hvscFolders.length, hvscSongs.length, loadHvscFolder, selectedHvscFolder]);
 
+  useEffect(() => {
+    if (!hvscStatus?.installedVersion) return;
+    if (hvscStatus.ingestionState !== "ready") return;
+    if (!shouldCheckForHvscUpdates()) return;
+
+    let cancelled = false;
+    markHvscUpdateCheckAt();
+
+    void checkForHvscUpdates()
+      .then((updateStatus) => {
+        if (cancelled || !updateStatus.requiredUpdates.length) return;
+
+        addLog("info", "HVSC updates available", {
+          installedVersion: updateStatus.installedVersion,
+          latestVersion: updateStatus.latestVersion,
+          requiredUpdates: updateStatus.requiredUpdates,
+        });
+        toast({
+          title: "HVSC updates available",
+          description:
+            updateStatus.requiredUpdates.length === 1
+              ? "A new HVSC update is ready to install from the Play page."
+              : `${updateStatus.requiredUpdates.length} HVSC updates are ready to install from the Play page.`,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        addErrorLog("HVSC automatic update check failed", {
+          error: (error as Error).message,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hvscStatus?.ingestionState, hvscStatus?.installedVersion]);
+
   const handleHvscInstall = useCallback(
     () =>
       runHvscAction("HvscLibrary.handleHvscInstall", async () => {
@@ -641,6 +698,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
             },
             lastUpdatedAt: startedAt,
           }));
+          markHvscUpdateCheckAt(startedAt);
           const updateStatus = await checkForHvscUpdates();
           if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
             toast({
@@ -1016,8 +1074,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
     hvscStatus?.ingestionState === "installing" ||
     hvscStatus?.ingestionState === "updating";
   const hvscUpdating = hvscLoading || hvscInProgress;
-  const hvscInlineError =
-    hvscErrorMessage || (hvscStatus?.ingestionState === "error" ? hvscStatus.ingestionError : null);
+  const hvscInlineError: string | null =
+    hvscErrorMessage || (hvscStatus?.ingestionState === "error" ? (hvscStatus.ingestionError ?? null) : null);
   const hvscCanIngest = hvscAvailable && hvscHasCache && !hvscUpdating;
   const hvscSummaryState = useMemo(() => {
     if (hvscStatusSummary.download.status === "failure" || hvscStatusSummary.extraction.status === "failure")

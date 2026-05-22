@@ -326,6 +326,12 @@ describe("DiagnosticsDialog", () => {
     expect(mockGetTraceTitle).not.toHaveBeenCalled();
   });
 
+  it("does not build raw trace rows while the Traces filter remains disabled", () => {
+    renderDialog();
+
+    expect(mockGetTraceTitle).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -596,8 +602,8 @@ describe("DiagnosticsDialog", () => {
     fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
 
     expect(screen.getByTestId("connection-view-surface")).toBeVisible();
-    expect(screen.getByText("Office U64")).toBeVisible();
-    expect(screen.getByText("U64")).toBeVisible();
+    expect(within(screen.getByTestId("connection-view-surface")).getByText("Name")).toBeVisible();
+    expect(within(screen.getByTestId("connection-view-surface")).getByText("Type")).toBeVisible();
     expect(within(screen.getByTestId("connection-view-surface")).getAllByText("c64u").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId("connection-view-edit"));
@@ -685,8 +691,7 @@ describe("DiagnosticsDialog", () => {
     expect(localStorage.getItem(TELNET_PORT_KEY)).toBe("2323");
 
     const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
-    expect(persisted.devices[0]).toMatchObject({
-      id: "device-office",
+    expect(persisted.devices.find((device: { host?: string }) => device.host === "ultimate.local")).toMatchObject({
       name: "Lab U64",
       host: "ultimate.local",
       httpPort: 8081,
@@ -697,7 +702,8 @@ describe("DiagnosticsDialog", () => {
 
   it("does not repeat the product code when the saved device name already matches it", async () => {
     const store = await import("@/lib/savedDevices/store");
-    store.updateSavedDevice("device-office", {
+    const primaryDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(primaryDeviceId, {
       name: "U64",
       host: "c64u",
       httpPort: 80,
@@ -715,7 +721,8 @@ describe("DiagnosticsDialog", () => {
 
   it("uses live device info as the diagnostics product fallback when the saved snapshot is empty", async () => {
     const store = await import("@/lib/savedDevices/store");
-    store.updateSavedDevice("device-office", {
+    const primaryDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(primaryDeviceId, {
       host: "u64-live",
       type: "",
       lastKnownProduct: null,
@@ -732,6 +739,13 @@ describe("DiagnosticsDialog", () => {
     });
 
     expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent("Office U64 · Ultimate 64 Elite");
+  });
+
+  it("keeps the diagnostics header focused on device health and timing", () => {
+    renderDialog();
+
+    expect(screen.queryByTestId("diagnostics-safety-line")).toBeNull();
+    expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/Last check/i);
   });
 
   it("keeps filter configuration separate from filter visibility", () => {
@@ -1059,6 +1073,42 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("evidence-row-problem-trace-trace-problem")).toHaveTextContent(
       "GET /v1/runners/script/status",
     );
+  });
+
+  it("hides expected cancellation trace failures from the Problems list", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      logs: [],
+      errorLogs: [],
+      traceEvents: [
+        {
+          id: "trace-abort",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+          relativeMs: 0,
+          type: "rest-response" as const,
+          origin: "system" as const,
+          correlationId: "trace-abort-correlation",
+          data: {
+            lifecycleState: "foreground" as const,
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            method: "GET",
+            path: "/v1/info",
+            status: null,
+            error: "signal is aborted without reason",
+            expectedFailure: true,
+          },
+        },
+      ],
+      actionSummaries: [],
+    });
+
+    expect(screen.queryByTestId("evidence-row-problem-trace-trace-abort")).not.toBeInTheDocument();
+    expect(screen.queryByText("signal is aborted without reason")).not.toBeInTheDocument();
   });
 
   it("auto-expands the health detail view when a health check starts", () => {

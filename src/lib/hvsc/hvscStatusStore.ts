@@ -151,7 +151,7 @@ export const applyHvscProgressEventToSummary = (
   summary: HvscStatusSummary,
   event: HvscProgressEvent,
   lastStage?: string | null,
-) => {
+): HvscStatusSummary => {
   const now = new Date().toISOString();
   const isDownloadComplete =
     event.stage === "download" &&

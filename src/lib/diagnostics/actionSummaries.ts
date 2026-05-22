@@ -299,6 +299,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       if (!request) return;
       const requestData = request.data as Record<string, unknown>;
       const responseData = event.data as Record<string, unknown>;
+      const expectedFailure = responseData.expectedFailure === true;
       const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
       const method = readString(requestData.method) ?? "UNKNOWN";
       const normalizedPath = readString(requestData.normalizedUrl);
@@ -338,7 +339,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
           ? { requestPayloadPreview: readPayloadPreview(requestData.payloadPreview) }
           : {}),
         ...(responsePayloadPreview ? { responsePayloadPreview } : {}),
-        ...(error !== null ? { error } : {}),
+        ...(error !== null && !expectedFailure ? { error } : {}),
       });
     }
   });
@@ -480,6 +481,12 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
     const telnetCount = telnetEffects.length;
     const errorCount = errorEffects.length;
     const device = resolveSummaryDevice(actionStart, ordered);
+    const isSyntheticSuccessEndOnly =
+      !actionStart && Boolean(actionEnd) && status === "success" && effects.length === 0 && errorEvents.length === 0;
+
+    if (isSyntheticSuccessEndOnly) {
+      return;
+    }
 
     const startTimestamp = actionStart?.timestamp ?? ordered[0]?.timestamp ?? null;
     const endTimestamp = actionEnd?.timestamp ?? ordered[ordered.length - 1]?.timestamp ?? null;

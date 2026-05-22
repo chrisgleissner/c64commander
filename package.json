@@ -108,6 +108,7 @@
     "scope:hil:evidence": "cd c64scope && npm run hil:evidence"
   },
   "dependencies": {
+    "@capacitor/app": "^6.0.3",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/share": "^6.0.4",
     "@hookform/resolvers": "^3.10.0",
@@ -178,9 +179,7 @@
     "@capacitor/core": "^6.2.1",
     "@capacitor/ios": "^6.2.1",
     "@eslint/js": "^9.32.0",
-    "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@playwright/test": "^1.60.0",
-    "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.2",
     "@types/js-yaml": "^4.0.9",
@@ -188,7 +187,6 @@
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.11.0",
-    "@vitest/coverage-istanbul": "^3.2.4",
     "@vitest/coverage-v8": "^3.2.4",
     "ajv": "^8.20.0",
     "ajv-formats": "^2.1.1",

@@ -70,7 +70,12 @@ import {
   type DiagnosticsDeviceAttribution,
 } from "@/lib/diagnostics/deviceAttribution";
 import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
-import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
+import {
+  HEALTH_GLYPHS,
+  isExpectedCancellationFailure,
+  type ContributorKey,
+  type OverallHealthState,
+} from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
 import {
@@ -131,6 +136,7 @@ type EvidenceEntry = {
   contributor: ContributorKey | null;
   severity: DiagnosticsSeverity;
   timestamp: string;
+  timestampMs: number;
   device: DiagnosticsDeviceAttribution | null;
   deviceLabel: string | null;
   payload: LogEntry | ActionSummary | TraceEvent;
@@ -200,6 +206,9 @@ const isRoutineInProgressHealthCheck = (summary: ActionSummary) => {
 };
 
 const isTraceProblem = (entry: TraceEvent) => {
+  if (entry.data.expectedFailure === true || isExpectedCancellationFailure(entry)) {
+    return false;
+  }
   if (entry.type === "rest-response") {
     const status = typeof entry.data.status === "number" ? entry.data.status : null;
     const error = typeof entry.data.error === "string" ? entry.data.error.trim() : "";
@@ -1042,105 +1051,142 @@ export function DiagnosticsDialog({
     if (!open) {
       return [];
     }
+    const includeProblems = selectedTypes.has("Problems");
+    const includeActions = selectedTypes.has("Actions");
+    const includeLogs = selectedTypes.has("Logs");
+    const includeTraces = selectedTypes.has("Traces");
     const items: EvidenceEntry[] = [];
+    const resolveTimestampMs = (timestamp: string) => {
+      const parsed = Date.parse(timestamp);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+    const deviceLabelCache = new Map<string, string | null>();
     const resolveEntryDeviceLabel = (device: DiagnosticsDeviceAttribution | null) => {
       if (!device) return null;
-      return (
+      const cacheKey =
+        device.savedDeviceId ??
+        [
+          device.savedDeviceNameSnapshot ?? "",
+          device.savedDeviceHostSnapshot ?? "",
+          device.verifiedHostname ?? "",
+          device.verifiedUniqueId ?? "",
+        ].join("|");
+      if (deviceLabelCache.has(cacheKey)) {
+        return deviceLabelCache.get(cacheKey) ?? null;
+      }
+      const label =
         resolveDiagnosticsDeviceLabel(device, savedDevices) ??
-        (hasDiagnosticsDeviceAttribution(device) ? "Unknown device" : null)
-      );
+        (hasDiagnosticsDeviceAttribution(device) ? "Unknown device" : null);
+      deviceLabelCache.set(cacheKey, label);
+      return label;
     };
 
-    for (const entry of errorLogs) {
-      const device = readDiagnosticsDeviceAttribution(entry.device);
-      items.push({
-        id: `problem-log-${entry.id}`,
-        type: "Problems",
-        title: formatLogHeadline(entry),
-        detail: getLogSecondaryDetail(entry),
-        contributor: "App",
-        severity: resolveLogSeverity(entry.level),
-        timestamp: entry.timestamp,
-        device,
-        deviceLabel: resolveEntryDeviceLabel(device),
-        payload: entry,
-      });
+    if (includeProblems) {
+      for (const entry of errorLogs) {
+        const device = readDiagnosticsDeviceAttribution(entry.device);
+        items.push({
+          id: `problem-log-${entry.id}`,
+          type: "Problems",
+          title: formatLogHeadline(entry),
+          detail: getLogSecondaryDetail(entry),
+          contributor: "App",
+          severity: resolveLogSeverity(entry.level),
+          timestamp: entry.timestamp,
+          timestampMs: resolveTimestampMs(entry.timestamp),
+          device,
+          deviceLabel: resolveEntryDeviceLabel(device),
+          payload: entry,
+        });
+      }
     }
 
-    for (const entry of traceEvents) {
-      if (!isTraceProblem(entry)) continue;
-      const device = readDiagnosticsDeviceAttribution(entry.data?.device);
-      const detail =
-        typeof entry.data.error === "string"
-          ? entry.data.error
-          : typeof entry.data.status === "number"
-            ? `HTTP ${entry.data.status}`
-            : null;
-      items.push({
-        id: `problem-trace-${entry.id}`,
-        type: "Problems",
-        title: getProblemTitle(entry),
-        detail,
-        contributor: getTraceContributor(entry),
-        severity: resolveTraceSeverity(entry),
-        timestamp: entry.timestamp,
-        device,
-        deviceLabel: resolveEntryDeviceLabel(device),
-        payload: entry,
-      });
+    if (includeProblems) {
+      for (const entry of traceEvents) {
+        if (!isTraceProblem(entry)) continue;
+        const device = readDiagnosticsDeviceAttribution(entry.data?.device);
+        const detail =
+          typeof entry.data.error === "string"
+            ? entry.data.error
+            : typeof entry.data.status === "number"
+              ? `HTTP ${entry.data.status}`
+              : null;
+        items.push({
+          id: `problem-trace-${entry.id}`,
+          type: "Problems",
+          title: getProblemTitle(entry),
+          detail,
+          contributor: getTraceContributor(entry),
+          severity: resolveTraceSeverity(entry),
+          timestamp: entry.timestamp,
+          timestampMs: resolveTimestampMs(entry.timestamp),
+          device,
+          deviceLabel: resolveEntryDeviceLabel(device),
+          payload: entry,
+        });
+      }
     }
 
-    for (const summary of actionSummaries) {
-      if (isRoutineInProgressHealthCheck(summary)) continue;
-      const device = summary.device ?? null;
-      items.push({
-        id: `action-${summary.correlationId}`,
-        type: "Actions",
-        title: buildActionTitle(summary),
-        detail: buildActionDetail(summary),
-        contributor: getActionContributor(summary),
-        severity: resolveActionSeverity(summary.outcome),
-        timestamp: summary.startTimestamp ?? summary.endTimestamp ?? new Date(0).toISOString(),
-        device,
-        deviceLabel: resolveEntryDeviceLabel(device),
-        payload: summary,
-      });
+    if (includeActions) {
+      for (const summary of actionSummaries) {
+        if (isRoutineInProgressHealthCheck(summary)) continue;
+        const device = summary.device ?? null;
+        const timestamp = summary.startTimestamp ?? summary.endTimestamp ?? new Date(0).toISOString();
+        items.push({
+          id: `action-${summary.correlationId}`,
+          type: "Actions",
+          title: buildActionTitle(summary),
+          detail: buildActionDetail(summary),
+          contributor: getActionContributor(summary),
+          severity: resolveActionSeverity(summary.outcome),
+          timestamp,
+          timestampMs: resolveTimestampMs(timestamp),
+          device,
+          deviceLabel: resolveEntryDeviceLabel(device),
+          payload: summary,
+        });
+      }
     }
 
-    for (const entry of logs) {
-      const device = readDiagnosticsDeviceAttribution(entry.device);
-      items.push({
-        id: `log-${entry.id}`,
-        type: "Logs",
-        title: formatLogHeadline(entry),
-        detail: getLogSecondaryDetail(entry),
-        contributor: "App",
-        severity: resolveLogSeverity(entry.level),
-        timestamp: entry.timestamp,
-        device,
-        deviceLabel: resolveEntryDeviceLabel(device),
-        payload: entry,
-      });
+    if (includeLogs) {
+      for (const entry of logs) {
+        const device = readDiagnosticsDeviceAttribution(entry.device);
+        items.push({
+          id: `log-${entry.id}`,
+          type: "Logs",
+          title: formatLogHeadline(entry),
+          detail: getLogSecondaryDetail(entry),
+          contributor: "App",
+          severity: resolveLogSeverity(entry.level),
+          timestamp: entry.timestamp,
+          timestampMs: resolveTimestampMs(entry.timestamp),
+          device,
+          deviceLabel: resolveEntryDeviceLabel(device),
+          payload: entry,
+        });
+      }
     }
 
-    for (const entry of traceEvents) {
-      const device = readDiagnosticsDeviceAttribution(entry.data?.device);
-      items.push({
-        id: `trace-${entry.id}`,
-        type: "Traces",
-        title: getTraceTitle(entry),
-        detail: null,
-        contributor: getTraceContributor(entry),
-        severity: resolveTraceSeverity(entry),
-        timestamp: entry.timestamp,
-        device,
-        deviceLabel: resolveEntryDeviceLabel(device),
-        payload: entry,
-      });
+    if (includeTraces) {
+      for (const entry of traceEvents) {
+        const device = readDiagnosticsDeviceAttribution(entry.data?.device);
+        items.push({
+          id: `trace-${entry.id}`,
+          type: "Traces",
+          title: getTraceTitle(entry),
+          detail: null,
+          contributor: getTraceContributor(entry),
+          severity: resolveTraceSeverity(entry),
+          timestamp: entry.timestamp,
+          timestampMs: resolveTimestampMs(entry.timestamp),
+          device,
+          deviceLabel: resolveEntryDeviceLabel(device),
+          payload: entry,
+        });
+      }
     }
 
-    return items.sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
-  }, [actionSummaries, errorLogs, logs, open, savedDevices, traceEvents]);
+    return items.sort((left, right) => right.timestampMs - left.timestampMs);
+  }, [actionSummaries, errorLogs, logs, open, savedDevices, selectedTypes, traceEvents]);
 
   const deviceFilterOptions = useMemo(() => {
     const seen = new Set<string>();

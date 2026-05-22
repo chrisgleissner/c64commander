@@ -27,6 +27,7 @@ vi.mock("../src/validation/appFirstPrimitives.js", async () => {
 import {
   expectedMuteToggleLabel,
   hasVisibleButtonLabel,
+  openPlaybackSourceSegments,
   requireAudioFeatures,
   tapVisibleText,
 } from "../src/validation/cases/exploratoryPlayback.js";
@@ -114,5 +115,43 @@ describe("exploratory playback audio analysis guard", () => {
     expect(swipe).toHaveBeenCalledTimes(1);
     expect(swipe).toHaveBeenCalledWith("serial-1", 540, 1750, 540, 950, 260);
     expect(tapByTextMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries playback source navigation without the storage-root segment when the picker already starts there", async () => {
+    const openPathSegmentsMock = vi
+      .fn<Parameters<typeof openPlaybackSourceSegments>[3], ReturnType<typeof openPlaybackSourceSegments>>()
+      .mockRejectedValueOnce(new Error("Could not open path segment 'USB2'."))
+      .mockResolvedValueOnce(undefined);
+
+    await openPlaybackSourceSegments(
+      {} as Parameters<typeof openPlaybackSourceSegments>[0],
+      "serial-1",
+      ["USB2", "test-data", "SID"],
+      openPathSegmentsMock as unknown as Parameters<typeof openPlaybackSourceSegments>[3],
+    );
+
+    expect(openPathSegmentsMock).toHaveBeenNthCalledWith(1, expect.anything(), "serial-1", [
+      "USB2",
+      "test-data",
+      "SID",
+    ]);
+    expect(openPathSegmentsMock).toHaveBeenNthCalledWith(2, expect.anything(), "serial-1", ["test-data", "SID"]);
+  });
+
+  it("does not hide non-storage picker failures behind the fallback retry", async () => {
+    const openPathSegmentsMock = vi
+      .fn<Parameters<typeof openPlaybackSourceSegments>[3], ReturnType<typeof openPlaybackSourceSegments>>()
+      .mockRejectedValueOnce(new Error("Could not open path segment 'test-data'."));
+
+    await expect(
+      openPlaybackSourceSegments(
+        {} as Parameters<typeof openPlaybackSourceSegments>[0],
+        "serial-1",
+        ["USB2", "test-data", "SID"],
+        openPathSegmentsMock as unknown as Parameters<typeof openPlaybackSourceSegments>[3],
+      ),
+    ).rejects.toThrow("Could not open path segment 'test-data'.");
+
+    expect(openPathSegmentsMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -33,8 +33,10 @@ const mocks = vi.hoisted(() => ({
   ingestCachedHvscMock: vi.fn(),
   installOrUpdateHvscMock: vi.fn(),
   isHvscBridgeAvailableMock: vi.fn(),
+  markHvscUpdateCheckAtMock: vi.fn(),
   resetHvscLibraryDataMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
+  shouldCheckForHvscUpdatesMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -77,6 +79,15 @@ vi.mock("@/lib/hvsc", async () => {
     isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
     resetHvscLibraryData: (...args: unknown[]) => mocks.resetHvscLibraryDataMock(...args),
     recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
+  };
+});
+
+vi.mock("@/lib/hvsc/hvscReleaseService", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/hvsc/hvscReleaseService")>("@/lib/hvsc/hvscReleaseService");
+  return {
+    ...actual,
+    markHvscUpdateCheckAt: (...args: unknown[]) => mocks.markHvscUpdateCheckAtMock(...args),
+    shouldCheckForHvscUpdates: (...args: unknown[]) => mocks.shouldCheckForHvscUpdatesMock(...args),
   };
 });
 
@@ -175,7 +186,9 @@ describe("useHvscLibrary edge cases", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.markHvscUpdateCheckAtMock.mockReset();
     mocks.resetHvscLibraryDataMock.mockResolvedValue(undefined);
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -220,6 +233,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("refreshHvscCacheStatus logs error when getHvscCacheStatus rejects", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 1, ingestionState: "ready" }));
     mocks.getHvscCacheStatusMock.mockRejectedValueOnce(new Error("cache fetch error"));
 
     renderHook(() => useHvscLibrary());
@@ -230,6 +244,16 @@ describe("useHvscLibrary edge cases", () => {
         expect.objectContaining({ error: "cache fetch error" }),
       ),
     );
+  });
+
+  it("skips cache-status probing when HVSC is uninstalled and no extraction cache exists", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 0, ingestionState: "idle" }));
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() => createSummary());
+
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(result.current.hvscInstalled).toBe(false));
+    expect(mocks.getHvscCacheStatusMock).not.toHaveBeenCalled();
   });
 
   it("progress error event with storage keywords resolves to storage failure category and label", async () => {
@@ -312,6 +336,11 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("handleHvscIngest reports non-cancel ingest failures via reportUserError", async () => {
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        extraction: { status: "success" },
+      }),
+    );
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
     mocks.ingestCachedHvscMock.mockRejectedValueOnce(new Error("ingest write failed"));
 
@@ -335,6 +364,11 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("handleHvscIngest toast includes ingestion summary when getHvscStatus returns summary", async () => {
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        extraction: { status: "success" },
+      }),
+    );
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
     mocks.getHvscStatusMock.mockResolvedValueOnce(createStatus()).mockResolvedValueOnce(
       createStatus({

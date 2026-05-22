@@ -218,6 +218,7 @@ export function useTelnetActions(): TelnetActionsState {
     const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
     const port = getStoredTelnetPort();
     const cacheKey = capabilityCacheKey;
+    const menuKey = capability.menuKey as NonNullable<typeof capability.menuKey>;
     const cachedSnapshot = getCachedTelnetCapabilities(cacheKey, stableDeviceInfo);
     if (cachedSnapshot) {
       return {
@@ -240,7 +241,7 @@ export function useTelnetActions(): TelnetActionsState {
           await discoverTelnetCapabilities({
             cacheKey,
             deviceInfo: stableDeviceInfo,
-            menuKey: capability.menuKey,
+            menuKey,
             runner: {
               withSession: async (callback) => {
                 const password = await getPassword();
@@ -282,7 +283,7 @@ export function useTelnetActions(): TelnetActionsState {
 
   const getActionSupport = useCallback(
     (actionId: string) =>
-      actionSupport[actionId] ?? {
+      actionSupport[actionId as keyof typeof actionSupport] ?? {
         actionId: actionId as never,
         status: "unknown",
         reason: "Unknown Telnet action.",

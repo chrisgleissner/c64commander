@@ -152,6 +152,48 @@ describe("compareTracesEssential", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("ignores volatile playlist item ids inside traced request payloads", () => {
+    const expected = buildRestTrace({
+      ids: ["EVT-0038", "EVT-0039", "EVT-0040", "EVT-0041"],
+      correlationId: "COR-0038",
+      actionName: "PlayFilesPage.anonymousAction",
+      method: "POST",
+      url: "http://127.0.0.1:5555/v1/ftp/read",
+      status: 200,
+      requestBody: {
+        host: "127.0.0.1",
+        port: 33025,
+        path: "/Usb0/Demos/demo.sid",
+        traceContext: {
+          correlationId: "COR-0038",
+          trackInstanceId: 1,
+          playlistItemId: "ultimate:TEST-123:/Usb0/Demos/demo.sid:2026-05-22T09:15:25.405Z",
+        },
+      },
+    });
+    const actual = buildRestTrace({
+      ids: ["EVT-0042", "EVT-0043", "EVT-0044", "EVT-0045"],
+      correlationId: "COR-0038",
+      actionName: "PlayFilesPage.anonymousAction",
+      method: "POST",
+      url: "http://127.0.0.1:6666/v1/ftp/read",
+      status: 200,
+      requestBody: {
+        host: "127.0.0.1",
+        port: 35253,
+        path: "/Usb0/Demos/demo.sid",
+        traceContext: {
+          correlationId: "COR-0038",
+          trackInstanceId: 1,
+          playlistItemId: "ultimate:TEST-123:/Usb0/Demos/demo.sid:2026-05-22T09:17:05.526Z",
+        },
+      },
+    });
+
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
+  });
+
   it("fails on semantic REST differences", () => {
     const expected = buildRestTrace({
       ids: ["EVT-0020", "EVT-0021", "EVT-0022", "EVT-0023"],

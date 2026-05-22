@@ -97,8 +97,8 @@ export const resolveLightingState = (input: LightingResolverInput): LightingReso
       owner = "connection-ambient";
       label = `Device status: ${input.connectionState}`;
       detail = `Ambient connection mapping from ${ambientConnectionProfile.name}`;
-      if (!activeAutomationChip) {
-        activeAutomationChip = `Auto: ${input.connectionState[0].toUpperCase()}${input.connectionState.slice(1)}`;
+      if (!activeAutomationChip && input.connectionState) {
+        activeAutomationChip = `Auto: ${input.connectionState[0]?.toUpperCase() ?? ""}${input.connectionState.slice(1)}`;
       }
     }
 

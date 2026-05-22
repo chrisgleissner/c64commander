@@ -27,6 +27,7 @@ import {
   promoteLibraryStagingDir,
   cleanupStaleStagingDir,
 } from "@/lib/hvsc/hvscFilesystem";
+import { saveHvscState } from "@/lib/hvsc/hvscStateStore";
 import * as logging from "@/lib/logging";
 
 type Entry = { type: "file" | "directory"; data?: string };
@@ -149,6 +150,16 @@ const writeSonglengthsMd5 = (md5: string) => {
 describe("hvscFilesystem", () => {
   beforeEach(() => {
     files.clear();
+    localStorage.clear();
+    saveHvscState({
+      installedBaselineVersion: 1,
+      installedVersion: 1,
+      ingestionState: "ready",
+      lastUpdateCheckUtcMs: null,
+      ingestionError: null,
+      ingestionSummary: null,
+      updates: {},
+    });
     resetSonglengthsCache();
   });
 

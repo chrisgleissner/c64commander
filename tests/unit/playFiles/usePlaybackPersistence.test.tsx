@@ -1115,6 +1115,60 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  it("falls back to currentIndex when currentItemId no longer matches restored playlist ids", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/demo.sid",
+            name: "demo.sid",
+            sourceId: "hvsc-library",
+            addedAt: "2026-05-21T10:00:00.000Z",
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/demo.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.currentIndex).toBe(0);
+    });
+
+    await waitFor(() => {
+      const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
+      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === "number");
+      expect(numericCalls.length).toBeGreaterThan(0);
+    });
+  });
+
   it("restores from default key when device-specific key is empty", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-2");
     const defaultKey = buildPlaylistStorageKey("default");

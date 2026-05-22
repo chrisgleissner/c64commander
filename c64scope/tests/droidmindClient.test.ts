@@ -39,6 +39,7 @@ describe("droidmind client", () => {
     connectMock.mockReset();
     closeMock.mockReset();
     callToolMock.mockReset();
+    delete process.env.DROIDMIND_ARGS;
   });
 
   it("lists devices and unwraps shell command text", async () => {
@@ -114,5 +115,20 @@ describe("droidmind client", () => {
       {},
     );
     expect(connectMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("honors custom droidmind args and treats close before connect as a no-op", async () => {
+    process.env.DROIDMIND_ARGS = "droidmind --transport stdio --debug";
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await client.close();
+
+    expect(closeMock).not.toHaveBeenCalled();
+    expect(transportCtorMock).toHaveBeenCalledWith({
+      command: "uvx",
+      args: ["droidmind", "--transport", "stdio", "--debug"],
+    });
   });
 });

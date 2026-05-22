@@ -152,7 +152,7 @@ export function useC64Connection() {
       return api.getInfo({
         timeoutMs: 3000,
         signal,
-        __c64uIntent: "user",
+        __c64uIntent: "background",
       });
     },
     enabled:
@@ -289,8 +289,8 @@ export function useC64Connection() {
     [queryClient, rateLimitedInfoRefetch],
   );
 
-  const effectiveDeviceInfo = hasDisplayableDeviceInfo(deviceInfo)
-    ? deviceInfo
+  const effectiveDeviceInfo: DeviceInfo | null = hasDisplayableDeviceInfo(deviceInfo)
+    ? (deviceInfo ?? null)
     : (connection.deviceInfo ?? deviceInfo ?? null);
 
   const status = useMemo<ConnectionStatus>(

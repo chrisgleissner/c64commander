@@ -58,7 +58,7 @@ export const installNavigationBlocker = (navigator: BlockableNavigator) => {
   unblock = navigator.block(handleTransition);
 
   if (pendingTransition) {
-    const transition = pendingTransition;
+    const transition: RetryTransition = pendingTransition;
     pendingTransition = null;
     unblock();
     transition.retry();

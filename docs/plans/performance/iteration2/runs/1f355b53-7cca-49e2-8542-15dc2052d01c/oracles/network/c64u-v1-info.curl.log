@@ -1,0 +1,12 @@
+* Host c64u:80 was resolved.
+* IPv6: (none)
+* IPv4: 192.168.1.167
+*   Trying 192.168.1.167:80...
+* Connected to c64u (192.168.1.167) port 80
+> GET /v1/info HTTP/1.1
+> Host: c64u
+> User-Agent: curl/8.5.0
+> Accept: */*
+> 
+* Recv failure: Connection reset by peer
+* Closing connection

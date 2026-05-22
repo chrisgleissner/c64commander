@@ -14,7 +14,7 @@ import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnostic
  * - 'header': opened from the unified header badge (Problems + Actions, All indicators)
  * - 'settings': opened from Settings (Problems + Actions, All indicators)
  */
-export type DiagnosticsEntryPreset = "header" | "settings";
+export type DiagnosticsEntryPreset = "header" | "settings" | "error-logs";
 export type DiagnosticsPanelKey =
   | "overview"
   | "latency"

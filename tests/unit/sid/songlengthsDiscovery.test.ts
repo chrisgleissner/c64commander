@@ -8,9 +8,11 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  buildSonglengthsSearchFolders,
   buildSonglengthsSearchPaths,
   collectSonglengthsSearchPaths,
   DOCUMENTS_FOLDER,
+  HVSC_FOLDER,
   isSonglengthsFileName,
   SONGLENGTHS_FILE_NAMES,
 } from "@/lib/sid/songlengthsDiscovery";
@@ -40,10 +42,16 @@ describe("songlengthsDiscovery", () => {
       SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
         expect(normalized).toContain(`/Music/DEMOS/${fileName}`);
         expect(normalized).toContain(`/Music/DEMOS/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/Music/DEMOS/${HVSC_FOLDER}/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/Music/DEMOS/${HVSC_FOLDER}/C64Music/${DOCUMENTS_FOLDER}/${fileName}`);
         expect(normalized).toContain(`/Music/${fileName}`);
         expect(normalized).toContain(`/Music/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/Music/${HVSC_FOLDER}/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/Music/${HVSC_FOLDER}/C64Music/${DOCUMENTS_FOLDER}/${fileName}`);
         expect(normalized).toContain(`/${fileName}`);
         expect(normalized).toContain(`/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/${HVSC_FOLDER}/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/${HVSC_FOLDER}/C64Music/${DOCUMENTS_FOLDER}/${fileName}`);
       });
     });
 
@@ -72,8 +80,25 @@ describe("songlengthsDiscovery", () => {
       SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
         expect(normalized).toContain(`/${fileName}`);
         expect(normalized).toContain(`/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/${HVSC_FOLDER}/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/${HVSC_FOLDER}/C64Music/${DOCUMENTS_FOLDER}/${fileName}`);
       });
-      expect(paths.length).toBe(SONGLENGTHS_FILE_NAMES.length * 2);
+      expect(paths.length).toBe(SONGLENGTHS_FILE_NAMES.length * 4);
+    });
+  });
+
+  describe("buildSonglengthsSearchFolders", () => {
+    it("adds sibling HVSC DOCUMENTS folders for non-HVSC paths without nesting HVSC twice", () => {
+      const folders = buildSonglengthsSearchFolders("/USB2/test-data/SID/10_Orbyte.sid");
+      expect(folders).toContain("/USB2/test-data/SID/");
+      expect(folders).toContain("/USB2/test-data/SID/DOCUMENTS/");
+      expect(folders).toContain("/USB2/test-data/SID/HVSC/DOCUMENTS/");
+      expect(folders).toContain("/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/");
+
+      const hvscFolders = buildSonglengthsSearchFolders("/USB2/test-data/SID/HVSC/DEMOS/0-9/10_Orbyte.sid");
+      expect(hvscFolders).toContain("/USB2/test-data/SID/HVSC/DOCUMENTS/");
+      expect(hvscFolders).toContain("/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/");
+      expect(hvscFolders.some((folder) => folder.includes("/HVSC/HVSC/"))).toBe(false);
     });
   });
 

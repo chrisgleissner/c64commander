@@ -158,7 +158,11 @@ const hasRequiredKeysAllowOptional = (
 const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => value === "kernal" || value === "dma";
 
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
-  value === "RELAXED" || value === "BALANCED" || value === "CONSERVATIVE" || value === "TROUBLESHOOTING";
+  value === "AUTO" ||
+  value === "RELAXED" ||
+  value === "BALANCED" ||
+  value === "CONSERVATIVE" ||
+  value === "TROUBLESHOOTING";
 
 export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> => {
   await featureFlagManager.load();

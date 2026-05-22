@@ -29,11 +29,11 @@ const richSummary: ActionSummary = {
       type: "REST",
       label: "Read info",
       method: "GET",
-      protocol: null,
-      hostname: null,
-      port: null,
+      protocol: "http",
+      hostname: "u64",
+      port: 80,
       path: "/v1/info",
-      query: null,
+      query: "?source=settings",
       normalizedPath: null,
       target: null,
       product: "C64U",
@@ -104,13 +104,14 @@ describe("ActionExpandedContent", () => {
     expect(screen.getByText("error: Action failed")).toBeInTheDocument();
 
     const restEffect = screen.getByTestId("action-rest-effect-corr-1-0");
-    expect(restEffect).toHaveTextContent("GET /v1/info");
+    expect(screen.getByText("User activity: Refresh diagnostics")).toBeInTheDocument();
+    expect(restEffect).toHaveTextContent("GET http://u64:80/v1/info?source=settings");
     expect(within(restEffect).getByText("Request headers")).toBeInTheDocument();
     expect(within(restEffect).getByText("Request payload")).toBeInTheDocument();
-    expect(within(restEffect).getByText("Request preview")).toBeInTheDocument();
     expect(within(restEffect).getByText("Response headers")).toBeInTheDocument();
     expect(within(restEffect).getByText("Response payload")).toBeInTheDocument();
-    expect(within(restEffect).getByText("Response preview")).toBeInTheDocument();
+    expect(within(restEffect).queryByText("Request preview")).not.toBeInTheDocument();
+    expect(within(restEffect).queryByText("Response preview")).not.toBeInTheDocument();
     expect(screen.getByText("error: Transient HTTP error")).toBeInTheDocument();
 
     const ftpEffect = screen.getByTestId("action-ftp-effect-corr-1-0");
@@ -231,7 +232,13 @@ describe("ActionExpandedContent", () => {
               durationMs: null,
               requestHeaders: {},
               requestBody: undefined,
-              requestPayloadPreview: null,
+              requestPayloadPreview: {
+                byteCount: 10,
+                previewByteCount: 10,
+                hex: "7b 7d",
+                ascii: "{}",
+                truncated: false,
+              },
               responseHeaders: {},
               responseBody: undefined,
               responsePayloadPreview: null,
@@ -260,6 +267,7 @@ describe("ActionExpandedContent", () => {
 
     expect(screen.getByTestId("action-rest-effect-corr-5-0")).toHaveTextContent("status: unknown");
     expect(screen.getByTestId("action-rest-effect-corr-5-0")).not.toHaveTextContent("ms");
+    expect(screen.getByTestId("action-rest-effect-corr-5-0")).toHaveTextContent("Request preview");
     expect(screen.getByTestId("action-ftp-effect-corr-5-0")).toHaveTextContent("result: unknown");
     expect(screen.queryByText("Request headers")).not.toBeInTheDocument();
     expect(screen.queryByText("Response headers")).not.toBeInTheDocument();

@@ -1323,4 +1323,19 @@ describe("buildActionSummaries", () => {
     expect(summary.originalOrigin).toBe("automatic");
     expect(summary.outcome).toBe("in_progress");
   });
+
+  it("drops synthetic success summaries that only contain an orphaned action-end", () => {
+    const traces: TraceEvent[] = [
+      buildTrace({
+        id: "E1",
+        type: "action-end",
+        correlationId: "COR-ORPHAN",
+        relativeMs: 100,
+        origin: "user",
+        data: { status: "success" },
+      }),
+    ];
+
+    expect(buildActionSummaries(traces)).toEqual([]);
+  });
 });

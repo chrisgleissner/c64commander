@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
@@ -56,6 +56,8 @@ const TRANSITION_DURATION_MS = 280;
 const TRANSITION_DURATION_COMPACT_MS = 220;
 const TRANSITION_DURATION_REDUCED_MS = 180;
 const TRANSITION_DURATION_TEST_MS = 1200;
+const TRANSITION_SETTLE_BUFFER_MS = 80;
+const DRAG_SETTLE_TIMEOUT_MS = 600;
 
 const HomeSlot = () => <HomePage />;
 const PlaySlot = () => <PlayFilesPage />;
@@ -161,6 +163,35 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   runwayRef.current = runway;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollResetFrameRef = useRef<number | null>(null);
+  const runtimeMotionMode = readRuntimeMotionMode();
+  const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
+  const resetContainerScroll = useCallback((reason: string) => {
+    const container = containerRef.current;
+    if (!container || container.scrollLeft === 0) return;
+    const offset = container.scrollLeft;
+    container.scrollLeft = 0;
+    addLog("debug", "[SwipeNav] reset-scroll-left", {
+      reason,
+      offset,
+    });
+  }, []);
+  const scheduleContainerScrollReset = useCallback(
+    (reason: string) => {
+      if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+        resetContainerScroll(reason);
+        return;
+      }
+      if (scrollResetFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollResetFrameRef.current);
+      }
+      scrollResetFrameRef.current = window.requestAnimationFrame(() => {
+        scrollResetFrameRef.current = null;
+        resetContainerScroll(reason);
+      });
+    },
+    [resetContainerScroll],
+  );
 
   useEffect(() => {
     const handleSettingsUpdate = (event: Event) => {
@@ -172,6 +203,29 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     window.addEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
     return () => window.removeEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
   }, []);
+
+  useLayoutEffect(() => {
+    resetContainerScroll("state-sync");
+    scheduleContainerScrollReset("state-sync-frame");
+  }, [resetContainerScroll, routeIndex, runway.phase, scheduleContainerScrollReset]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      resetContainerScroll("native-scroll");
+      scheduleContainerScrollReset("native-scroll-frame");
+    };
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      if (scrollResetFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollResetFrameRef.current);
+        scrollResetFrameRef.current = null;
+      }
+    };
+  }, [resetContainerScroll, scheduleContainerScrollReset]);
 
   useEffect(() => {
     const current = runwayRef.current;
@@ -196,7 +250,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       phase: "transitioning",
       centerIndex: current.centerIndex,
       panelIndexes: buildRunwayPanelIndexes(current.centerIndex, routeIndex),
-      dragOffsetPx: current.phase === "dragging" ? current.dragOffsetPx : 0,
+      dragOffsetPx: 0,
       targetIndex: routeIndex,
       transitionDirection: direction,
       lastVelocityX: current.lastVelocityX,
@@ -217,21 +271,38 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     setRunway(buildIdleState(current.targetIndex));
   }, []);
 
-  // Fallback: force idle if transitionend never fires (e.g. headless CSS engine
-  // on CI does not always deliver the event reliably). The timeout is generous
-  // enough to cover both normal (~280ms) and test-probe (1200ms) durations.
+  // Some WebView/CSS engines miss transitionend for transform animations. Settle
+  // the runway after the configured duration plus a small buffer so navigation
+  // never stays stuck in "transitioning" for seconds on real devices.
   useEffect(() => {
     if (runway.phase !== "transitioning") return;
+    const settleAfterMs = transitionConfig.durationMs + TRANSITION_SETTLE_BUFFER_MS;
     const timer = setTimeout(() => {
       const current = runwayRef.current;
       if (current.phase !== "transitioning") return;
-      addLog("warn", "[SwipeNav] transition-end-fallback", {
+      addLog("debug", "[SwipeNav] transition-end-synthesized", {
         to: TAB_ROUTES[current.targetIndex].label,
+        settleAfterMs,
       });
       setRunway(buildIdleState(current.targetIndex));
-    }, 3000);
+    }, settleAfterMs);
     return () => clearTimeout(timer);
-  }, [runway.phase, runway.targetIndex]);
+  }, [runway.phase, runway.targetIndex, transitionConfig.durationMs]);
+
+  useEffect(() => {
+    if (runway.phase !== "dragging") return;
+    const timer = setTimeout(() => {
+      const current = runwayRef.current;
+      if (current.phase !== "dragging") return;
+      addLog("debug", "[SwipeNav] drag-reset-synthesized", {
+        center: TAB_ROUTES[current.centerIndex].label,
+        settleAfterMs: DRAG_SETTLE_TIMEOUT_MS,
+        dragOffsetPx: current.dragOffsetPx,
+      });
+      setRunway(buildIdleState(current.centerIndex));
+    }, DRAG_SETTLE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [runway.centerIndex, runway.dragOffsetPx, runway.phase]);
 
   const onProgress = useCallback(
     (dx: number, velocityX: number) => {
@@ -312,9 +383,6 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     onCommit,
     onCancel,
   });
-
-  const runtimeMotionMode = readRuntimeMotionMode();
-  const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
 
   const transform = useMemo(() => {
     if (runway.phase === "dragging") {

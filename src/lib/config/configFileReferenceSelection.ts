@@ -44,7 +44,6 @@ export const buildConfigReferenceFromBrowserSelection = (
       sourceType: source.type,
       sourceId: source.type === "local" ? source.id : null,
       entry: {
-        type: "file",
         name: fileName,
         path: normalizeSourcePath(selection.path),
         modifiedAt: selection.modifiedAt ?? null,
