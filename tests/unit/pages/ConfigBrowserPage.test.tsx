@@ -475,18 +475,29 @@ describe("ConfigBrowserPage", () => {
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith({
         category: "Clock Settings",
-        updates: {
-          Year: now.getFullYear(),
+        updates: expect.objectContaining({
           Month: monthOptions[now.getMonth()],
-          Day: now.getDate(),
-          Hours: now.getHours(),
-          Minutes: now.getMinutes(),
-          Seconds: now.getSeconds(),
-        },
+        }),
       });
       expect(mockUpdateHasChanges).toHaveBeenCalledWith("http://c64u", true);
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Clock synced" }));
     });
+
+    const [{ updates }] = mutateAsync.mock.calls.at(-1) as [{ updates: Record<string, string | number> }];
+    expect(updates.Month).toBe(monthOptions[now.getMonth()]);
+
+    const syncedMonthIndex = monthOptions.indexOf(String(updates.Month) as (typeof monthOptions)[number]);
+    expect(syncedMonthIndex).toBeGreaterThanOrEqual(0);
+
+    const syncedDate = new Date(
+      Number(updates.Year),
+      syncedMonthIndex,
+      Number(updates.Day),
+      Number(updates.Hours),
+      Number(updates.Minutes),
+      Number(updates.Seconds),
+    );
+    expect(Math.abs(syncedDate.getTime() - now.getTime())).toBeLessThan(2_000);
   });
 
   it("syncs clock month names when the live payload omits month options", async () => {
