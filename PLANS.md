@@ -85,6 +85,7 @@
 - Archive-selection targeted Vitest passed after AbortSignal expectation update: `npm run test -- tests/unit/pages/playFiles/handlers/addFileSelectionsArchive.test.ts` (31 tests).
 - Final coverage passed: `npm run test:coverage` with 91.47% global branch coverage.
 - Final repository validation passed: `npm run lint`, `npm run build`, `npm run cap:build`, `cd android && ./gradlew test`, `cd android && ./gradlew assembleDebug`, and `git diff --check`.
+- PR #262 iOS Maestro CI follow-up: failing connectivity validation traced to the PH11 explicit smoke-config opt-in; fixed by rebuilding the Maestro simulator bundle with `VITE_ENABLE_TEST_PROBES=1` before seeded smoke config is read. Targeted validation passed: `npm run test -- tests/unit/ci/iosMaestroWorkflowContracts.test.ts tests/unit/smoke/smokeMode.test.ts`, `npm run format:check:yaml`, `npx prettier --check tests/unit/ci/iosMaestroWorkflowContracts.test.ts`, and `git diff --check`.
 
 ### Device Evidence
 
@@ -108,6 +109,7 @@
 - PH9 and PH10 prove cross-host FTP keys and queued scheduler reset behavior in unit coverage; live cross-device evidence is deferred because `c64u` was unavailable.
 - Required validation commands passed, including `npm run test:coverage` at 91.47% branch coverage and Android JVM tests.
 - Latest APK is built, installed on Pixel 4, launched, exercised against `u64`, and evidence files exist under the prod-hardening evidence directory.
+- PR #262 CI rerun is required after the iOS Maestro smoke-config opt-in workflow fix.
 
 ## Classification
 

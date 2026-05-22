@@ -191,6 +191,12 @@ jobs:
           name: ios-prepared-workspace
           path: .
 
+      - name: Rebuild Maestro web assets with test probes
+        run: |
+          set -euo pipefail
+          VITE_ENABLE_TEST_PROBES=1 npm run build
+          bash scripts/ci/cap-sync-ios-with-retry.sh
+
       - name: Resolve app version
         id: resolve_version
         run: |

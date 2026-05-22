@@ -1,3 +1,10 @@
+## [2026-05-22T23:45:00Z] PR #262 iOS Maestro CI convergence
+
+- Investigated failing PR check `iOS | Maestro` from run `26315982560`, job `77475408949`; downloaded `ios-maestro-evidence` and confirmed the connectivity gate failed because all Maestro flows sent REST traffic to real `http://c64u/...` after PH11 made filesystem smoke config probing explicit opt-in.
+- Fixed the workflow root cause without weakening production behavior: `.github/workflows/ios.yaml` now rebuilds/syncs the simulator web assets with `VITE_ENABLE_TEST_PROBES=1` before running Maestro so the already-seeded `c64u-smoke.json` is read only in the CI test bundle.
+- Added a workflow contract regression in `tests/unit/ci/iosMaestroWorkflowContracts.test.ts`.
+- Validation: targeted CI contract/smoke tests passed; YAML and touched TS formatting checks passed; `git diff --check` passed. Full local lint/coverage was attempted but the local shell output became unavailable after a stalled Prettier enumeration; PR CI remains the authoritative full gate for this workflow-only fix.
+
 ## [2026-05-22T19:36:00Z] Prod hardening 1 final convergence
 
 - Completed PH6/PH11/PH14/PH15 convergence: HVSC perf output now goes through diagnostics debug logging instead of default `console.info`, native startup skips remote Google Fonts, production-native smoke config filesystem probing requires explicit opt-in, duplicate FTP interaction-layer error logging was removed, recursive add/import work is abortable, and native disk reads now reject late aborted or oversized payloads.
