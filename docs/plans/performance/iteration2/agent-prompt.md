@@ -127,4 +127,4 @@ Exception: if the soak intentionally exercised a known error path (e.g. `S1` ent
 - Do not run two legs in parallel. Hardware is single-instance.
 - Do not delete artifacts from prior runs. Each run gets its own directory.
 - Do not edit application source code. You are a tester, not an implementer. If you find a bug, describe it in `summary.json` with enough detail (steps, screenshots, logcat slice) for a separate fix agent to act.
-- Do not amend `plan.md`, `auto-safety-mode-spec.md`, or any other spec. The specs are inputs. If they are wrong, raise that in `summary.json` under `spec_concerns`.
+- Do not amend `plan.md`, `auto-safety-mode-spec.md`, or any other spec. The specs are inputs. If they are wrong, raise that in `summary.json` under `specConcerns`.

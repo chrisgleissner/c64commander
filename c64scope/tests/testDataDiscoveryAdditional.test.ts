@@ -114,6 +114,23 @@ describe("test-data discovery additional branches", () => {
     );
   });
 
+  it("discovers playback SID fixtures directly from the SID root when test-data root listing is flaky", async () => {
+    execFileMock.mockImplementationOnce(
+      (_file: string, _args: string[], callback: (error: null, result: { stdout: string }) => void) => {
+        callback(null, { stdout: "Example.sid\nSecond.sid\nREADME\n" });
+      },
+    );
+
+    const { discoverPlaybackMirror } = await import("../src/testDataDiscovery.js");
+    const discovery = await discoverPlaybackMirror("c64u");
+
+    expect(discovery.rootPath).toBe("/USB2/test-data");
+    expect(discovery.sidPath).toBe("/USB2/test-data/SID");
+    expect(discovery.sidCandidates).toEqual(["Example.sid", "Second.sid"]);
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(execFileMock.mock.calls[0]?.[1]).toContain("/USB2/test-data/SID");
+  });
+
   it("logs unreadable device roots before continuing the mirrored corpus scan", async () => {
     execFileMock
       .mockImplementationOnce((_file: string, _args: string[], callback: (error: Error) => void) => {

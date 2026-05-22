@@ -15,7 +15,7 @@ import {
   hasContinuousAudioState,
   medianEnvelopeRms,
 } from "../../stream/index.js";
-import { discoverDeviceMirror } from "../../testDataDiscovery.js";
+import { discoverPlaybackMirror } from "../../testDataDiscovery.js";
 import { DroidmindClient } from "../droidmindClient.js";
 import { findVisibleTextContaining, parseBoundsCenter, parseUiNodes } from "../appFirstUi.js";
 import {
@@ -71,7 +71,7 @@ type PlaybackTargets = {
 };
 
 async function discoverPlaybackTargets(c64uHost: string): Promise<PlaybackTargets> {
-  const discovery = await discoverDeviceMirror(c64uHost);
+  const discovery = await discoverPlaybackMirror(c64uHost);
   if (discovery.sidCandidates.length < 2) {
     throw new Error(
       `Expected at least 2 SID candidates under ${discovery.sidPath}, found ${discovery.sidCandidates.length}.`,
@@ -87,10 +87,38 @@ async function discoverPlaybackTargets(c64uHost: string): Promise<PlaybackTarget
   };
 }
 
+function isStorageRootSegment(segment: string | undefined): boolean {
+  return Boolean(segment) && /^(USB\d+|SD)$/i.test(segment!);
+}
+
+export async function openPlaybackSourceSegments(
+  client: DroidmindClient,
+  serial: string,
+  sourceSegments: readonly string[],
+  openSegments: typeof openPathSegments = openPathSegments,
+): Promise<void> {
+  try {
+    await openSegments(client, serial, sourceSegments);
+  } catch (error) {
+    const [firstSegment, ...remainingSegments] = sourceSegments;
+    const message = error instanceof Error ? error.message : String(error);
+    const shouldRetryWithoutStorageRoot =
+      isStorageRootSegment(firstSegment) &&
+      remainingSegments.length > 0 &&
+      message.includes(`Could not open path segment '${firstSegment}'.`);
+
+    if (!shouldRetryWithoutStorageRoot) {
+      throw error;
+    }
+
+    await openSegments(client, serial, remainingSegments);
+  }
+}
+
 async function addSidPlaylist(client: DroidmindClient, serial: string, targets: PlaybackTargets): Promise<void> {
   await openAddItemsDialog(client, serial);
   await chooseSource(client, serial, C64U_SOURCE_LABELS);
-  await openPathSegments(client, serial, targets.sourceSegments);
+  await openPlaybackSourceSegments(client, serial, targets.sourceSegments);
   await tapCheckboxForText(client, serial, targets.sidCandidates[0]);
   await tapCheckboxForText(client, serial, targets.sidCandidates[1]);
   await confirmAddItems(client, serial);

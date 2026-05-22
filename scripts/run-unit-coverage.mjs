@@ -167,41 +167,11 @@ export function ensureReportsDirectory(reportsDirectory) {
   mkdirSync(path.join(reportsDirectory, ".tmp"), { recursive: true });
 }
 
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
-}
-
-export function wrapCommandWithDirectoryKeepalive(command, args, directory) {
-  const commandLine = [command, ...args].map((part) => shellQuote(part)).join(" ");
-  const keepaliveDirectory = shellQuote(directory);
-  const script = [
-    `keepalive_dir=${keepaliveDirectory}`,
-    'mkdir -p "$keepalive_dir"',
-    'keepalive() { while :; do mkdir -p "$keepalive_dir"; sleep 0.2; done; }',
-    "keepalive &",
-    "keepalive_pid=$!",
-    "trap 'kill \"$keepalive_pid\" >/dev/null 2>&1 || true' EXIT",
-    `${commandLine}`,
-    "status=$?",
-    'kill "$keepalive_pid" >/dev/null 2>&1 || true',
-    'wait "$keepalive_pid" 2>/dev/null || true',
-    "exit $status",
-  ].join("\n");
-  return {
-    command: "bash",
-    args: ["-lc", script],
-  };
-}
-
 export function runOrThrow(command, args, label, cwd, options = {}) {
-  const { maxAttempts = 1, spawn = spawnSync, onRetry, keepaliveDirectory } = options;
+  const { maxAttempts = 1, spawn = spawnSync, onRetry } = options;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const invocation = keepaliveDirectory
-      ? wrapCommandWithDirectoryKeepalive(command, args, keepaliveDirectory)
-      : { command, args };
-
-    const result = spawn(invocation.command, invocation.args, {
+    const result = spawn(command, args, {
       cwd,
       env: process.env,
       stdio: "inherit",
@@ -247,10 +217,15 @@ export function runCoverageShard(rootDir, runConfig, plan, options = {}) {
     ensureReportsDirectory(reportsDirectory);
 
     try {
-      executeRun(process.execPath, getVitestCoverageArgs(rootDir, runConfig, reportsDirectory), coverageLabel, rootDir, {
-        maxAttempts: 1,
-        keepaliveDirectory: path.join(reportsDirectory, ".tmp"),
-      });
+      executeRun(
+        process.execPath,
+        getVitestCoverageArgs(rootDir, runConfig, reportsDirectory),
+        coverageLabel,
+        rootDir,
+        {
+          maxAttempts: 1,
+        },
+      );
     } catch (error) {
       if (attempt < coverageRunMaxAttempts) {
         const exitDetail = typeof error?.exitCode === "number" ? ` with exit code ${error.exitCode}` : "";

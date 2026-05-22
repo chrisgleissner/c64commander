@@ -219,6 +219,27 @@ describe("playbackRouter", () => {
     );
   });
 
+  it("skips FTP + upload when direct Ultimate SID playback opts out of SSL propagation", async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({
+      source: "ultimate",
+      path: "/MUSIC/DEMO.SID",
+      durationMs: 120000,
+    });
+    await executePlayPlan(api as any, plan, { skipSidSslPropagation: true });
+    expect(readFtpFile).not.toHaveBeenCalled();
+    expect(api.playSidUpload).not.toHaveBeenCalled();
+    expect(api.playSid).toHaveBeenCalledWith("/MUSIC/DEMO.SID", undefined);
+    expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: "playback-no-duration",
+        level: "info",
+        reason: "ssl-propagation-skipped",
+      }),
+    );
+  });
+
   it("falls back to PUT when Ultimate SID FTP download fails", async () => {
     const api = createApiMock();
     vi.mocked(readFtpFile).mockRejectedValue(new Error("ftp failed"));

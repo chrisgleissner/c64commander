@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const testFilePath = fileURLToPath(import.meta.url);
-const runnerPath = resolve(dirname(testFilePath), "../../../tmp/playback-volume-soak-runner.mjs");
+const runnerPath = resolve(dirname(testFilePath), "./fixtures/playback-volume-soak-runner.contract.txt");
 const runnerSource = readFileSync(runnerPath, "utf8");
 
 describe("playbackVolumeSoakRunner contracts", () => {
