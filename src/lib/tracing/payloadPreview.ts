@@ -7,6 +7,7 @@
  */
 
 import type { PayloadPreview, TraceHeaders, TraceHeaderValue } from "@/lib/tracing/types";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 
 export const TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT = 256;
 
@@ -94,7 +95,8 @@ export const buildPayloadPreviewFromText = (value: string): PayloadPreview | nul
 export const buildPayloadPreviewFromJson = (value: unknown): PayloadPreview | null => {
   try {
     return buildPayloadPreviewFromText(JSON.stringify(value));
-  } catch {
+  } catch (error) {
+    addLog("debug", "Failed to build JSON payload preview", buildErrorLogDetails(error as Error));
     return null;
   }
 };
@@ -106,7 +108,8 @@ export const decodeBase64ToBytes = (value: string): Uint8Array | null => {
       return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
     }
     return Uint8Array.from(Buffer.from(value, "base64"));
-  } catch {
+  } catch (error) {
+    addLog("debug", "Failed to decode base64 payload preview", buildErrorLogDetails(error as Error));
     return null;
   }
 };

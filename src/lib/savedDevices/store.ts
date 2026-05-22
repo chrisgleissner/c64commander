@@ -18,6 +18,7 @@ import {
 import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
 import { TELNET_DEFAULT_PORT as DEFAULT_TELNET_PORT } from "@/lib/telnet/telnetTypes";
 import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 
 export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
 
@@ -311,7 +312,14 @@ const parseEnvelope = (raw: string | null): PersistedSavedDevicesEnvelope | null
         : [],
       hasEverHadMultipleDevices: Boolean(parsed.hasEverHadMultipleDevices) || devices.length > 1,
     };
-  } catch {
+  } catch (error) {
+    // Corrupted envelope is not normal operation; surface it before we silently
+    // drop user-curated saved devices and rebuild from legacy/localStorage scraps.
+    addLog(
+      "warn",
+      "Failed to parse persisted saved-devices envelope; falling back to legacy initialization.",
+      buildErrorLogDetails(error as Error, { storageKey: STORAGE_KEY }),
+    );
     return null;
   }
 };
@@ -352,7 +360,7 @@ const readDebugSavedDevicesEnv = (): string | undefined => {
     const value = import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON;
     return typeof value === "string" ? value : undefined;
   } catch (error) {
-    console.warn("Failed to read VITE_DEBUG_SAVED_DEVICES_JSON", { error });
+    addLog("debug", "Failed to read VITE_DEBUG_SAVED_DEVICES_JSON", buildErrorLogDetails(error as Error));
     return undefined;
   }
 };
@@ -407,7 +415,7 @@ const createDebugBootstrapDevices = (): SavedDevice[] | null => {
 
     return devices.length > 0 ? devices : null;
   } catch (error) {
-    console.warn("Failed to parse debug saved devices bootstrap.", error);
+    addLog("warn", "Failed to parse debug saved devices bootstrap", buildErrorLogDetails(error as Error));
     return null;
   }
 };

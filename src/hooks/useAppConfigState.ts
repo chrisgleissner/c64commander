@@ -27,8 +27,16 @@ import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const FULL_CONFIG_BACKGROUND_CONCURRENCY = 4;
+const IDLE_CONFIG_SNAPSHOT_DELAY_MS = 5000;
 
 type WritableConfigPayload = Record<string, Record<string, string | number>>;
+
+type FetchAllConfigMode = "user" | "background";
+
+type FetchAllConfigOptions = {
+  mode?: FetchAllConfigMode;
+  signal?: AbortSignal;
+};
 
 type ConfigRevertMismatch = {
   category: string;
@@ -85,6 +93,22 @@ const buildWritableConfigPayload = (data: Record<string, ConfigResponse>): Writa
 const valuesMatch = (expected: string | number, actual: string | number | null) =>
   actual !== null && (expected === actual || String(expected) === String(actual));
 
+const createAbortError = (message: string) => {
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+};
+
+const throwIfAborted = (signal?: AbortSignal) => {
+  if (signal?.aborted) {
+    throw createAbortError("Config snapshot capture was cancelled.");
+  }
+};
+
+const isAbortError = (error: unknown) => error instanceof Error && error.name === "AbortError";
+
+const isDocumentHidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+
 const collectConfigRevertMismatches = (
   expected: WritableConfigPayload,
   actual: WritableConfigPayload,
@@ -109,17 +133,20 @@ const collectConfigRevertMismatches = (
   return mismatches;
 };
 
-const fetchAllConfig = async () => {
+const fetchAllConfig = async ({ mode = "user", signal }: FetchAllConfigOptions = {}) => {
   const api = getC64API();
-  const cats = await api.getCategories();
+  const requestOptions = { __c64uIntent: mode, signal } as const;
+  throwIfAborted(signal);
+  const cats = await api.getCategories(requestOptions);
   const configs: Record<string, ConfigResponse> = {};
   const failedCategories: string[] = [];
   const readCategorySnapshot = async (category: string) => {
+    throwIfAborted(signal);
     const cached = api.getCachedCategory(category);
     if (cached) {
       return cached;
     }
-    return api.getCategory(category);
+    return api.getCategory(category, requestOptions);
   };
 
   for (let index = 0; index < cats.categories.length; index += FULL_CONFIG_BACKGROUND_CONCURRENCY) {
@@ -156,6 +183,8 @@ const fetchAllConfig = async () => {
       });
     }
   }
+
+  throwIfAborted(signal);
 
   const unresolvedFailures = failedCategories.filter(
     (category) => !Object.prototype.hasOwnProperty.call(configs, category),
@@ -194,6 +223,7 @@ export function useAppConfigState() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const captureInFlightRef = useRef(false);
   const idleCaptureTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleCaptureAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setInitialSnapshot(loadInitialSnapshot(resolvedBaseUrl));
@@ -228,7 +258,7 @@ export function useAppConfigState() {
     captureInFlightRef.current = true;
     setSnapshotLoading(true);
     try {
-      const data = await fetchAllConfig();
+      const data = await fetchAllConfig({ mode: "user" });
       const snapshot = { savedAt: new Date().toISOString(), data };
       saveInitialSnapshot(resolvedBaseUrl, snapshot);
       setInitialSnapshot(snapshot);
@@ -249,12 +279,63 @@ export function useAppConfigState() {
     }
   }, [initialSnapshot, resolvedBaseUrl, status.isConnected]);
 
+  const captureIdleInitialSnapshot = useCallback(
+    async (signal: AbortSignal): Promise<ConfigSnapshot | null> => {
+      if (
+        !status.isConnected ||
+        initialSnapshot ||
+        captureInFlightRef.current ||
+        signal.aborted ||
+        isDocumentHidden()
+      ) {
+        return initialSnapshot;
+      }
+
+      captureInFlightRef.current = true;
+      setSnapshotLoading(true);
+      try {
+        const data = await fetchAllConfig({ mode: "background", signal });
+        if (signal.aborted || isDocumentHidden()) {
+          throw createAbortError("Config snapshot capture was cancelled after the app left the foreground.");
+        }
+        const snapshot = { savedAt: new Date().toISOString(), data };
+        saveInitialSnapshot(resolvedBaseUrl, snapshot);
+        setInitialSnapshot(snapshot);
+        setFetchError(null);
+        updateHasChanges(resolvedBaseUrl, false);
+        return snapshot;
+      } catch (error) {
+        if (isAbortError(error)) {
+          addLog("debug", "Idle config snapshot capture cancelled", {
+            baseUrl: resolvedBaseUrl,
+            reason: signal.aborted ? "abort-signal" : "hidden",
+          });
+          return null;
+        }
+        const message = (error as Error).message ?? "Unknown error";
+        addErrorLog("Idle config snapshot capture failed", {
+          error: message,
+          baseUrl: resolvedBaseUrl,
+        });
+        setFetchError(message);
+        return null;
+      } finally {
+        captureInFlightRef.current = false;
+        idleCaptureAbortControllerRef.current = null;
+        setSnapshotLoading(false);
+      }
+    },
+    [initialSnapshot, resolvedBaseUrl, status.isConnected],
+  );
+
   useEffect(() => {
     if (!status.isConnected) {
       if (idleCaptureTimeoutRef.current !== null) {
         clearTimeout(idleCaptureTimeoutRef.current);
         idleCaptureTimeoutRef.current = null;
       }
+      idleCaptureAbortControllerRef.current?.abort();
+      idleCaptureAbortControllerRef.current = null;
       captureInFlightRef.current = false;
       setSnapshotLoading(false);
       return;
@@ -264,9 +345,30 @@ export function useAppConfigState() {
     }
 
     let cancelled = false;
+    const cancelIdleCapture = (reason: string) => {
+      if (idleCaptureTimeoutRef.current !== null) {
+        clearTimeout(idleCaptureTimeoutRef.current);
+        idleCaptureTimeoutRef.current = null;
+      }
+      if (idleCaptureAbortControllerRef.current) {
+        idleCaptureAbortControllerRef.current.abort();
+        idleCaptureAbortControllerRef.current = null;
+      }
+      addLog("debug", "Idle config snapshot deferred", {
+        baseUrl: resolvedBaseUrl,
+        reason,
+      });
+    };
     const scheduleIdleCapture = () => {
+      if (cancelled || initialSnapshot || isDocumentHidden()) {
+        return;
+      }
       idleCaptureTimeoutRef.current = globalThis.setTimeout(() => {
         if (cancelled) {
+          return;
+        }
+        if (isDocumentHidden()) {
+          cancelIdleCapture("hidden");
           return;
         }
         const api = getC64API();
@@ -274,20 +376,35 @@ export function useAppConfigState() {
           scheduleIdleCapture();
           return;
         }
-        void captureInitialSnapshot();
-      }, 5000);
+        const controller = new AbortController();
+        idleCaptureAbortControllerRef.current = controller;
+        void captureIdleInitialSnapshot(controller.signal);
+      }, IDLE_CONFIG_SNAPSHOT_DELAY_MS);
+    };
+    const handleVisibilityChange = () => {
+      if (isDocumentHidden()) {
+        cancelIdleCapture("hidden");
+        return;
+      }
+      if (!cancelled && !initialSnapshot && !captureInFlightRef.current) {
+        scheduleIdleCapture();
+      }
     };
 
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     scheduleIdleCapture();
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (idleCaptureTimeoutRef.current !== null) {
         clearTimeout(idleCaptureTimeoutRef.current);
         idleCaptureTimeoutRef.current = null;
       }
+      idleCaptureAbortControllerRef.current?.abort();
+      idleCaptureAbortControllerRef.current = null;
     };
-  }, [captureInitialSnapshot, initialSnapshot, status.isConnected]);
+  }, [captureIdleInitialSnapshot, initialSnapshot, resolvedBaseUrl, status.isConnected]);
 
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {
@@ -311,7 +428,7 @@ export function useAppConfigState() {
     try {
       await applyConfigData(initialSnapshot.data);
       const expectedPayload = buildWritableConfigPayload(initialSnapshot.data);
-      const currentConfig = await fetchAllConfig();
+      const currentConfig = await fetchAllConfig({ mode: "user" });
       const mismatches = collectConfigRevertMismatches(expectedPayload, buildWritableConfigPayload(currentConfig));
 
       if (mismatches.length > 0) {
@@ -346,7 +463,7 @@ export function useAppConfigState() {
         if (!initialSnapshot) {
           await captureInitialSnapshot();
         }
-        const data = await fetchAllConfig();
+        const data = await fetchAllConfig({ mode: "user" });
         const entry = createAppConfigEntry(resolvedBaseUrl, name, data);
         const next = [entry, ...loadAppConfigs().filter((cfg) => cfg.id !== entry.id)];
         saveAppConfigs(next);

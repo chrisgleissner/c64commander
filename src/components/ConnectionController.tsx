@@ -26,6 +26,9 @@ const allowBackgroundRediscovery = () => {
   return (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery === true;
 };
 
+const isAppVisibleForRediscovery = () =>
+  typeof document === "undefined" || (!document.hidden && document.visibilityState !== "hidden");
+
 export function ConnectionController() {
   const queryClient = useQueryClient();
   const { state } = useConnectionState();
@@ -72,8 +75,17 @@ export function ConnectionController() {
       return;
     }
 
+    if (!isAppVisibleForRediscovery()) {
+      clearTimer();
+      return;
+    }
+
     const intervalMs = loadBackgroundRediscoveryIntervalMs();
     const scheduleNextProbe = (failureCount: number) => {
+      if (!isAppVisibleForRediscovery()) {
+        clearTimer();
+        return;
+      }
       const delayMs = getBackgroundRediscoveryDelayMs(intervalMs, failureCount);
       clearTimer();
       backgroundTimerRef.current = window.setTimeout(() => {
@@ -82,6 +94,10 @@ export function ConnectionController() {
           return;
         }
         if (!allowBackgroundRediscovery()) {
+          clearTimer();
+          return;
+        }
+        if (!isAppVisibleForRediscovery()) {
           clearTimer();
           return;
         }
@@ -109,6 +125,26 @@ export function ConnectionController() {
 
     return clearTimer;
   }, [backgroundScheduleVersion, state]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!isAppVisibleForRediscovery()) {
+        backgroundScheduleTokenRef.current += 1;
+        if (backgroundTimerRef.current) {
+          window.clearTimeout(backgroundTimerRef.current);
+          backgroundTimerRef.current = null;
+        }
+        return;
+      }
+
+      if ((state === "DEMO_ACTIVE" || state === "OFFLINE_NO_DEMO") && allowBackgroundRediscovery()) {
+        setBackgroundScheduleVersion((current) => current + 1);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [state]);
 
   useEffect(() => {
     const handler = (event: Event) => {

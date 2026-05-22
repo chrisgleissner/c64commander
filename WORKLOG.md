@@ -1,3 +1,45 @@
+## [2026-05-22T19:36:00Z] Prod hardening 1 final convergence
+
+- Completed PH6/PH11/PH14/PH15 convergence: HVSC perf output now goes through diagnostics debug logging instead of default `console.info`, native startup skips remote Google Fonts, production-native smoke config filesystem probing requires explicit opt-in, duplicate FTP interaction-layer error logging was removed, recursive add/import work is abortable, and native disk reads now reject late aborted or oversized payloads.
+- Validation passed:
+  - `npm run test -- tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts tests/unit/lib/disks/diskMount.test.ts tests/unit/smoke/smokeMode.test.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts tests/unit/playFiles/playlistRepositorySync.test.ts` (117 tests)
+  - `npm run test -- tests/unit/startup/fontLoading.test.ts` (2 tests)
+  - `npm run test -- tests/unit/pages/playFiles/handlers/addFileSelectionsArchive.test.ts` (31 tests)
+  - `npm run test:coverage` (91.47% global branch coverage)
+  - `npm run lint`
+  - `npm run build`
+  - `npm run cap:build`
+  - `cd android && ./gradlew test`
+  - `cd android && ./gradlew assembleDebug`
+  - `git diff --check`
+- Installed and launched `android/app/build/outputs/apk/debug/c64commander-0.8.4-rc2-debug.apk` (`versionName=0.8.4-rc2`, `versionCode=1977`) on Pixel 4 `9B081FFAZ001WX`; final app evidence uses `u64` (`192.168.1.13`, firmware `3.14e`) because `c64u` returned `curl: (56) Recv failure: Connection reset by peer`.
+- Final evidence files: `docs/research/stabilization/prod-hardening-1-evidence/20260522T192943Z-final-device-evidence.txt`, `docs/research/stabilization/prod-hardening-1-evidence/20260522T193112Z-final-interactions-u64.txt`, `docs/research/stabilization/prod-hardening-1-evidence/final-current-screen.png`, and `docs/research/stabilization/prod-hardening-1-evidence/final-after-interactions.png`.
+- Residual risk documented in `PLANS.md`: live `c64u` switch-back/cross-host FTP proof is deferred due to device outage; already-running native bridge operations cannot be killed once dispatched, but JS callers now reject/ignore late aborted results.
+
+## [2026-05-22T17:51:36Z] Prod hardening 1 convergence startup
+
+- Read required execution docs and hardening prompts before production-code edits: `AGENTS.md`, `.github/copilot-instructions.md`, `docs/research/stabilization/prod-hardening-1/prompt.md`, responsiveness2/3 findings and handoff docs, `docs/ux-guidelines.md`, and `docs/testing/maestro.md`.
+- Captured startup diff state to `/tmp/c64commander-startup-diff.txt`: `git status --short`, `git diff --stat`, `git diff --check`, scoped source/test diffs, and `c64scope/package-lock.json` diff. `git diff --check` produced no whitespace errors.
+- Initial triage found `c64scope/package-lock.json` contains only peer-flag churn and is currently classified REVERT unless a required reason appears.
+- Initial triage found `src/pages/playFiles/playlistRepositorySync.ts` is reported as binary by `file`, contains 2 NUL bytes, and must be restored to readable UTF-8 before PH8 can continue.
+- Updated root `PLANS.md` with the required current-state summary, task table, Current Diff Triage, Validation Commands, Device Evidence, and Completion Gate sections.
+- Phase 0 baseline probes captured in `docs/research/stabilization/prod-hardening-1-evidence/20260522T175326Z-phase0-probes.txt`: Pixel 4 `9B081FFAZ001WX` attached; `u64` and `c64u` REST `/v1/info` reachable.
+- Reverted only `c64scope/package-lock.json`; the diff was unrelated package-lock peer-flag churn.
+- Restored `src/pages/playFiles/playlistRepositorySync.ts` to normal UTF-8 text by replacing two literal NUL bytes with escaped `\u0000`; `git diff` is readable again.
+- Converged focused PH8/PH9/PH10 gaps: snapshot keys now use canonical serialized playlist payloads; FTP diagnostics include device scope; tests now cover concurrent cross-host FTP, cooldown isolation, queued REST/FTP/Telnet reset cancellation, new-device work after reset, and same-device priority/concurrency.
+- Replaced the saved-device corrupted-envelope `console.warn` fallback with repository diagnostics logging and added a regression test.
+- Validation: `npx prettier --write ...` reported touched TS files formatted; targeted Vitest passed with 5 files and 108 tests.
+- Added PH5 catch guardrails in `tests/unit/quality/catchGuardrail.test.ts` and hardened additional low-noise fallback catches in health state, REST identity, Telnet, tracing payload previews, HVSC filesystem cleanup/promotion, diagnostics health attribution, health-check stale failures, and service-worker environment detection.
+- Phase A scan evidence saved to `docs/research/stabilization/prod-hardening-1-evidence/20260522T180545Z-phaseA-scan.txt`; remaining production `console.*` calls are documented there as PH6/console-policy backlog.
+- Validation: updated targeted Vitest command including the catch guardrail passed with 6 files and 110 tests; `git diff --check` passed.
+- Fresh APK evidence captured in `docs/research/stabilization/prod-hardening-1-evidence/20260522T184034Z-fresh-apk-install-launch.txt` and `docs/research/stabilization/prod-hardening-1-evidence/20260522T184034Z-fresh-apk-launch-logcat.txt`: installed `android/app/build/outputs/apk/debug/c64commander-0.8.4-rc2-debug.apk` on Pixel 4 `9B081FFAZ001WX`, launched versionCode `1977`, counted 17 REST requests and 3 Telnet activity lines in the first 12 seconds, and observed no fatal exceptions.
+- PH1 implementation avoids full React memory matcher work once repository-backed filtering is ready, and keeps stale results instead of synchronously filtering large playlists when a repository query fails. Validation: `npm run test -- tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx` passed with 16 tests.
+- PH12 query index now uses selective candidate ids ranked by persisted sort order for indexed text/category queries instead of scanning every ordered id. Validation: `npm run test -- tests/unit/lib/playlistRepository/queryIndex.test.ts tests/unit/playFiles/useQueryFilteredPlaylist.test.tsx tests/unit/playFiles/useQueryFilteredPlaylist.scale.test.tsx` passed with 18 tests.
+- PH13 duration edits now update immediate UI state while debouncing/committing accepted full-playlist duration overrides through one shared path instead of rewriting playlist items on every slider/input tick. Validation: duration contract, settings panel, and playFilesUtils tests passed with 39 tests.
+- PH2 idle config snapshots now use background REST intent, AbortSignal cancellation, hidden-state skip, and visibility cancellation while manual Save/Revert snapshot paths remain foreground/user intent. Validation: app-config hook tests passed with 28 tests.
+- PH3 background rediscovery now skips/cancels hidden-app timers and re-arms one rate-limited probe on foreground visibility. Validation: ConnectionController tests passed with 11 tests.
+- PH4 playback start now proves connection before unmute refresh/writes; failed connection reports `PLAYBACK_CONNECT` and does not call `ensureUnmuted`. Validation: playback controller targeted suites passed with 55 tests.
+
 ## [2026-05-12] PR convergence steering: implementation-focused PR summary
 
 - Appended and completed the active PLANS steering TODO to update PR metadata without changing the execution scope.

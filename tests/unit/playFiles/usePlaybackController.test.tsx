@@ -732,7 +732,7 @@ describe("usePlaybackController", () => {
     );
   });
 
-  it("refreshes playback mute state before starting playback and only then executes the play plan", async () => {
+  it("proves playback connection before refreshing mute state and executing the play plan", async () => {
     const playlist = [createPlaylistItem()];
     const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
     const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
@@ -744,10 +744,10 @@ describe("usePlaybackController", () => {
     expect(ensureUnmuted).toHaveBeenCalledWith({ refreshItems: true });
     expect(ensurePlaybackConnection).toHaveBeenCalledTimes(1);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
-    expect(ensureUnmuted.mock.invocationCallOrder[0]).toBeLessThan(
-      ensurePlaybackConnection.mock.invocationCallOrder[0],
-    );
     expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
+      ensureUnmuted.mock.invocationCallOrder[0],
+    );
+    expect(ensureUnmuted.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(executePlayPlan).mock.invocationCallOrder[0],
     );
   });
@@ -1449,12 +1449,14 @@ describe("usePlaybackController", () => {
   it("reports connection failures before playback starts", async () => {
     const item = createPlaylistItem();
     const ensurePlaybackConnection = vi.fn().mockRejectedValue(new Error("connect failed"));
-    const { result } = renderPlaybackController([item], { ensurePlaybackConnection });
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderPlaybackController([item], { ensurePlaybackConnection, ensureUnmuted });
 
     await expect(result.current.playItem(item, { playlistIndex: 0 })).rejects.toThrow("connect failed");
     expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "PLAYBACK_CONNECT", title: "Connection failed" }),
     );
+    expect(ensureUnmuted).not.toHaveBeenCalled();
   });
 
   it("starts the playlist from scratch when the current index is unset", async () => {

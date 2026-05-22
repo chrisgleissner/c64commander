@@ -7,9 +7,9 @@
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const status = { isConnected: true, isConnecting: false };
 
@@ -19,6 +19,7 @@ const getCategory = vi.fn(async () => ({
 }));
 const getCachedCategory = vi.fn(() => null);
 const updateConfigBatch = vi.fn(async () => undefined);
+const getInFlightReadRequestCount = vi.fn(() => 0);
 
 const loadInitialSnapshot = vi.fn(() => null);
 const loadHasChanges = vi.fn(() => false);
@@ -49,6 +50,7 @@ vi.mock("@/lib/c64api", () => ({
     getCachedCategory,
     getCategory,
     updateConfigBatch,
+    getInFlightReadRequestCount,
   }),
 }));
 
@@ -85,6 +87,8 @@ describe("useAppConfigState", () => {
     });
     getCachedCategory.mockReset();
     getCachedCategory.mockReturnValue(null);
+    getInFlightReadRequestCount.mockReset();
+    getInFlightReadRequestCount.mockReturnValue(0);
     updateConfigBatch.mockReset();
     updateConfigBatch.mockResolvedValue(undefined);
     loadInitialSnapshot.mockReset();
@@ -108,6 +112,18 @@ describe("useAppConfigState", () => {
     wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
   });
 
   it("supports manual initial snapshot capture and save/load app config", async () => {
@@ -245,6 +261,78 @@ describe("useAppConfigState", () => {
 
     getCategories.mockReset();
     getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
+  });
+
+  it("does not start idle initial snapshot capture while the app is hidden", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(getCategories).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("uses background intent for idle initial snapshot capture", async () => {
+    vi.useFakeTimers();
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getCategories).toHaveBeenCalledTimes(1);
+    expect(getCategories).toHaveBeenCalledWith(
+      expect.objectContaining({
+        __c64uIntent: "background",
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(getCategory).toHaveBeenCalledWith(
+      "Audio Mixer",
+      expect.objectContaining({
+        __c64uIntent: "background",
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    vi.useRealTimers();
+  });
+
+  it("cancels an in-flight idle snapshot when the app becomes hidden", async () => {
+    vi.useFakeTimers();
+    let idleSignal: AbortSignal | undefined;
+    getCategories.mockImplementation(
+      async (options?: { signal?: AbortSignal }) =>
+        new Promise<{ categories: string[] }>(() => {
+          idleSignal = options?.signal;
+        }),
+    );
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(idleSignal?.aborted).toBe(false);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(idleSignal?.aborted).toBe(true);
+    vi.useRealTimers();
   });
 
   it("recovers a failed initial snapshot after a retry", async () => {
@@ -562,6 +650,11 @@ describe("useAppConfigState", () => {
     expect(getCachedCategory).toHaveBeenCalledWith("LED Strip Settings");
     expect(getCachedCategory).toHaveBeenCalledWith("Audio Mixer");
     expect(getCategory).toHaveBeenCalledTimes(1);
-    expect(getCategory).toHaveBeenCalledWith("Audio Mixer");
+    expect(getCategory).toHaveBeenCalledWith(
+      "Audio Mixer",
+      expect.objectContaining({
+        __c64uIntent: "user",
+      }),
+    );
   });
 });

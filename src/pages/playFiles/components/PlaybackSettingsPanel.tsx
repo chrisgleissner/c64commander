@@ -17,6 +17,7 @@ export type PlaybackSettingsPanelProps = {
   durationSliderValue: number;
   durationInput: string;
   onDurationSliderChange: (value: number[]) => void;
+  onDurationSliderCommit: (value: number[]) => void;
   onDurationInputChange: (value: string) => void;
   onDurationInputBlur: () => void;
   onChooseSonglengthsFile: () => void;
@@ -40,6 +41,7 @@ export const PlaybackSettingsPanel = ({
   durationSliderValue,
   durationInput,
   onDurationSliderChange,
+  onDurationSliderCommit,
   onDurationInputChange,
   onDurationInputBlur,
   onChooseSonglengthsFile,
@@ -77,6 +79,7 @@ export const PlaybackSettingsPanel = ({
               step={1}
               value={[durationSliderValue]}
               onValueChange={onDurationSliderChange}
+              onValueCommit={onDurationSliderCommit}
               valueFormatter={(value) => formatDurationSeconds(sliderToDurationSeconds(value))}
               data-testid="duration-slider"
             />

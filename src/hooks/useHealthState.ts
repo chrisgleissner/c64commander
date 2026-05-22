@@ -33,6 +33,7 @@ import {
 } from "@/lib/diagnostics/healthModel";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 
 const contributorHealthFromProbe = (outcome: HealthCheckProbeOutcome, problemCount: number): ContributorHealth => ({
   state:
@@ -58,7 +59,12 @@ const resolveTraceTransportHost = (event: TraceEvent<Record<string, unknown>>) =
   try {
     const base = typeof window !== "undefined" ? window.location.origin : TRACE_URL_FALLBACK_BASE;
     return stripPortFromDeviceHost(new URL(url, base).host);
-  } catch {
+  } catch (error) {
+    addLog(
+      "debug",
+      "Failed to resolve diagnostics trace transport host from URL",
+      buildErrorLogDetails(error as Error, { url }),
+    );
     return null;
   }
 };

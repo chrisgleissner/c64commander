@@ -1,7 +1,7 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { ConnectionController } from "@/components/ConnectionController";
 
 const connectionState = {
@@ -15,6 +15,17 @@ const discoverConnectionMock = vi.fn();
 const initializeConnectionManagerMock = vi.fn(async () => {});
 const hasStoredPasswordFlagMock = vi.fn(() => false);
 const getPasswordMock = vi.fn(async () => "");
+
+const setDocumentVisibility = (hidden: boolean) => {
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    get: () => hidden,
+  });
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: hidden ? "hidden" : "visible",
+  });
+};
 
 vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: () => ({
@@ -75,6 +86,7 @@ describe("ConnectionController", () => {
     hasStoredPasswordFlagMock.mockReturnValue(false);
     getPasswordMock.mockReset();
     getPasswordMock.mockResolvedValue("");
+    setDocumentVisibility(false);
   });
 
   it("invalidates only on meaningful connection transitions", async () => {
@@ -203,6 +215,86 @@ describe("ConnectionController", () => {
       expect(discoverConnectionMock).toHaveBeenCalledWith("background");
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it("does not schedule background rediscovery while the app is hidden", async () => {
+    vi.useFakeTimers();
+    try {
+      setDocumentVisibility(true);
+      connectionState.value = "DEMO_ACTIVE";
+      const queryClient = new QueryClient();
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+    } finally {
+      vi.useRealTimers();
+      setDocumentVisibility(false);
+    }
+  });
+
+  it("cancels a scheduled background rediscovery timer when the app becomes hidden", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "DEMO_ACTIVE";
+      const queryClient = new QueryClient();
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+      setDocumentVisibility(true);
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+    } finally {
+      vi.useRealTimers();
+      setDocumentVisibility(false);
+    }
+  });
+
+  it("re-arms one rate-limited background rediscovery probe when the app becomes visible", async () => {
+    vi.useFakeTimers();
+    try {
+      setDocumentVisibility(true);
+      connectionState.value = "DEMO_ACTIVE";
+      const queryClient = new QueryClient();
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      await Promise.resolve();
+      await Promise.resolve();
+      discoverConnectionMock.mockClear();
+      setDocumentVisibility(false);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(discoverConnectionMock.mock.calls.filter((call) => call[0] === "background")).toHaveLength(1);
+      expect(discoverConnectionMock).toHaveBeenCalledWith("background");
+    } finally {
+      vi.useRealTimers();
+      setDocumentVisibility(false);
     }
   });
 

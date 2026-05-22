@@ -208,6 +208,8 @@ export default function PlayFilesPage() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+  const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
+  const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
   const [durationSeconds, setDurationSeconds] = useState(() => Math.round(DEFAULT_SONG_DURATION_MS / 1000));
   const [durationInput, setDurationInput] = useState(() =>
     formatDurationSeconds(Math.round(DEFAULT_SONG_DURATION_MS / 1000)),
@@ -308,6 +310,7 @@ export default function PlayFilesPage() {
   const trackStartedAtRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
   const addItemsStartedAtRef = useRef<number | null>(null);
+  const addItemsAbortControllerRef = useRef<AbortController | null>(null);
   const pendingLocalConfigItemIdRef = useRef<string | null>(null);
 
   const playTransitionQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1057,6 +1060,7 @@ export default function PlayFilesPage() {
         addItemsStartedAtRef,
         addItemsOverlayActiveRef,
         addItemsOverlayStartedAtRef,
+        addItemsAbortControllerRef,
         addItemsSurface,
         browserOpen,
         recurseFolders,
@@ -1092,6 +1096,10 @@ export default function PlayFilesPage() {
       archiveConfigs,
     ],
   );
+
+  const handleCancelAddItems = useCallback(() => {
+    addItemsAbortControllerRef.current?.abort();
+  }, []);
 
   const syncPlaybackTimeline = useCallback(
     (options?: { allowAutoAdvance?: boolean }) => {
@@ -1453,16 +1461,41 @@ export default function PlayFilesPage() {
     [],
   );
 
+  const persistDurationOverride = useCallback(
+    (durationOverrideMs: number) => {
+      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, durationOverrideMs));
+    },
+    [setPlaylist],
+  );
+
+  useEffect(() => {
+    if (debouncedDurationOverrideMs === undefined) return;
+    persistDurationOverride(debouncedDurationOverrideMs);
+  }, [debouncedDurationOverrideMs, persistDurationOverride]);
+
   const handleDurationSliderChange = useCallback(
     (value: number[]) => {
       const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
       const nextDurationMs = nextSeconds * 1000;
       setDurationSeconds(nextSeconds);
       setDurationMs(nextDurationMs);
-      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+      setPendingDurationOverrideMs(nextDurationMs);
       setDurationInput(formatDurationSeconds(nextSeconds));
     },
-    [setDurationMs, setPlaylist],
+    [setDurationMs],
+  );
+
+  const handleDurationSliderCommit = useCallback(
+    (value: number[]) => {
+      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
+      const nextDurationMs = nextSeconds * 1000;
+      setDurationSeconds(nextSeconds);
+      setDurationMs(nextDurationMs);
+      setPendingDurationOverrideMs(nextDurationMs);
+      setDurationInput(formatDurationSeconds(nextSeconds));
+      persistDurationOverride(nextDurationMs);
+    },
+    [persistDurationOverride, setDurationMs],
   );
 
   const handleDurationInputChange = useCallback(
@@ -1474,9 +1507,9 @@ export default function PlayFilesPage() {
       const nextDurationMs = nextSeconds * 1000;
       setDurationSeconds(nextSeconds);
       setDurationMs(nextDurationMs);
-      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+      setPendingDurationOverrideMs(nextDurationMs);
     },
-    [setDurationMs, setPlaylist],
+    [setDurationMs],
   );
 
   const handleDurationInputBlur = useCallback(() => {
@@ -1491,9 +1524,10 @@ export default function PlayFilesPage() {
       setDurationSeconds(nextSeconds);
     }
     setDurationMs(nextDurationMs);
-    setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, nextDurationMs));
+    setPendingDurationOverrideMs(nextDurationMs);
+    persistDurationOverride(nextDurationMs);
     setDurationInput(formatDurationSeconds(nextSeconds));
-  }, [durationInput, durationSeconds, setDurationMs, setPlaylist]);
+  }, [durationInput, durationSeconds, persistDurationOverride, setDurationMs]);
 
   const queryFilteredPlaylist = useQueryFilteredPlaylist({
     playlist,
@@ -1503,10 +1537,15 @@ export default function PlayFilesPage() {
     previewLimit: listPreviewLimit,
   });
 
+  const effectivePlaylistItemDuration = useCallback(
+    (item: PlaylistItem, index: number) => pendingDurationOverrideMs ?? playlistItemDuration(item, index),
+    [pendingDurationOverrideMs, playlistItemDuration],
+  );
+
   const playlistTotals = useMemo(() => {
-    const durations = playlist.map((item, index) => playlistItemDuration(item, index));
+    const durations = playlist.map((item, index) => effectivePlaylistItemDuration(item, index));
     return calculatePlaylistTotals(durations, playedMs);
-  }, [playlist, playedMs, playlistItemDuration]);
+  }, [playlist, playedMs, effectivePlaylistItemDuration]);
 
   const previewFilteredPlaylist = queryFilteredPlaylist.previewPlaylist;
   const filteredPlaylist = queryFilteredPlaylist.viewAllPlaylist;
@@ -1524,7 +1563,7 @@ export default function PlayFilesPage() {
     onOpenConfig: (item) => setActiveConfigItemId(item.id),
     onRemoveConfig: handleRemoveConfig,
     startPlaylist,
-    playlistItemDuration,
+    playlistItemDuration: effectivePlaylistItemDuration,
     formatTime,
     formatPlayCategory,
     formatBytes,
@@ -1544,7 +1583,7 @@ export default function PlayFilesPage() {
     onOpenConfig: (item) => setActiveConfigItemId(item.id),
     onRemoveConfig: handleRemoveConfig,
     startPlaylist,
-    playlistItemDuration,
+    playlistItemDuration: effectivePlaylistItemDuration,
     formatTime,
     formatPlayCategory,
     formatBytes,
@@ -1656,6 +1695,7 @@ export default function PlayFilesPage() {
                 durationSliderValue={durationSecondsToSlider(durationSeconds)}
                 durationInput={durationInput}
                 onDurationSliderChange={handleDurationSliderChange}
+                onDurationSliderCommit={handleDurationSliderCommit}
                 onDurationInputChange={handleDurationInputChange}
                 onDurationInputBlur={handleDurationInputBlur}
                 onChooseSonglengthsFile={async () => {
@@ -1796,6 +1836,7 @@ export default function PlayFilesPage() {
             isConfirming={isAddingItems}
             progress={addItemsProgress}
             showProgressFooter={addItemsSurface === "dialog"}
+            onCancelScan={handleCancelAddItems}
             autoConfirmCloseBefore={isAndroid}
             onAutoConfirmStart={handleAutoConfirmStart}
             autoConfirmLocalSource
@@ -1940,6 +1981,7 @@ export default function PlayFilesPage() {
               title="Adding items"
               testId="add-items-overlay"
               visible={showAddItemsOverlay || addItemsProgress.status === "scanning"}
+              onCancel={handleCancelAddItems}
             />
           ) : null}
 

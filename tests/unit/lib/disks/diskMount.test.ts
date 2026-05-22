@@ -157,6 +157,43 @@ describe("diskMount", () => {
       );
     });
 
+    it("rejects oversized runtime disk files before reading them into memory", async () => {
+      const oversizedFile = {
+        size: 64 * 1024 * 1024 + 1,
+        arrayBuffer: vi.fn(),
+      } as unknown as File;
+
+      await expect(
+        resolveLocalDiskBlob({ path: "/huge.d64", location: "local" } as any, oversizedFile),
+      ).rejects.toThrow("too large to mount");
+      expect(oversizedFile.arrayBuffer).not.toHaveBeenCalled();
+    });
+
+    it("cancels pending native localUri reads without returning late blobs", async () => {
+      const controller = new AbortController();
+      let resolveRead: ((value: { data: string }) => void) | null = null;
+      vi.mocked(FolderPicker.readFile).mockReturnValue(
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+      );
+
+      const pending = resolveLocalDiskBlob(
+        {
+          path: "/test.d64",
+          localUri: "content://uri",
+          location: "local",
+        } as any,
+        undefined,
+        { signal: controller.signal },
+      );
+
+      await vi.waitFor(() => expect(FolderPicker.readFile).toHaveBeenCalledWith({ uri: "content://uri" }));
+      controller.abort();
+      await expect(pending).rejects.toThrow(/cancelled|aborted/i);
+      resolveRead?.({ data: btoa("late data") });
+    });
+
     it("tries matching source by sourceId first", async () => {
       const runtimeFile = new File(["data"], "test.d64");
       vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any, { id: "src2" } as any]);

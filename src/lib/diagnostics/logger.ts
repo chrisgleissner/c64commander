@@ -127,8 +127,11 @@ const normalizeConsoleMessage = (args: unknown[]) => {
   if (first !== null && typeof first === "object") {
     try {
       return JSON.stringify(first);
-    } catch {
-      return String(first);
+    } catch (error) {
+      // We can't log from inside the logger without risking recursion, so we
+      // mark the fallback string so downstream consumers can tell serialization
+      // failed rather than treating the String(value) result as canonical.
+      return `[unserializable: ${(error as Error)?.message ?? "stringify failed"}] ${String(first)}`;
     }
   }
   return String(first);

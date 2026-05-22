@@ -6,7 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
+
 const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+const reportMalformedUrlFallback = (error: unknown, pathOrUrl: string, baseUrl?: string) =>
+  addLog(
+    "debug",
+    "Falling back to raw REST request path after URL parsing failed",
+    buildErrorLogDetails(error as Error, { pathOrUrl, baseUrl: baseUrl ?? null }),
+  );
 
 const tryBuildUrl = (pathOrUrl: string, baseUrl?: string) => {
   try {
@@ -14,7 +23,8 @@ const tryBuildUrl = (pathOrUrl: string, baseUrl?: string) => {
       return new URL(pathOrUrl);
     }
     return new URL(pathOrUrl, baseUrl ?? "http://c64u");
-  } catch {
+  } catch (error) {
+    reportMalformedUrlFallback(error, pathOrUrl, baseUrl);
     return null;
   }
 };

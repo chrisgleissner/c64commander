@@ -12,6 +12,7 @@ import { TelnetSocket } from "@/lib/native/telnetSocket";
 import { TelnetMock } from "@/lib/telnet/telnetMock";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 
 type CreateTelnetClientOptions = {
   connectTimeoutMs?: number;
@@ -31,7 +32,12 @@ const extractHost = (value?: string | null) => {
   try {
     const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
     return new URL(value, base).host || null;
-  } catch {
+  } catch (error) {
+    addLog(
+      "debug",
+      "Failed to parse Telnet test-probe host candidate",
+      buildErrorLogDetails(error as Error, { value }),
+    );
     return null;
   }
 };
@@ -90,7 +96,7 @@ export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetT
       try {
         await TelnetSocket.disconnect();
       } catch (error) {
-        console.warn("TelnetSocket.disconnect() failed", { error });
+        addLog("warn", "TelnetSocket.disconnect() failed", buildErrorLogDetails(error as Error));
       }
     },
 

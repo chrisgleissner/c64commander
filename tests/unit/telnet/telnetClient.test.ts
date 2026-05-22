@@ -9,12 +9,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 
-const { getConnectionSnapshotMock, mockConnect, mockDisconnect, mockSend, mockRead } = vi.hoisted(() => ({
+const { addLogMock, getConnectionSnapshotMock, mockConnect, mockDisconnect, mockSend, mockRead } = vi.hoisted(() => ({
+  addLogMock: vi.fn(),
   getConnectionSnapshotMock: vi.fn(() => ({ state: "REAL_CONNECTED" })),
   mockConnect: vi.fn(),
   mockDisconnect: vi.fn(),
   mockSend: vi.fn(),
   mockRead: vi.fn(),
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: addLogMock,
+  buildErrorLogDetails: (error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: {
+      name: error.name,
+      message: error.message,
+      stack: error.stack ?? null,
+    },
+    errorName: error.name,
+    errorStack: error.stack ?? null,
+  }),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -71,7 +86,6 @@ describe("createTelnetClient", () => {
 
     it("disconnects and logs warnings for disconnect failures without rethrowing", async () => {
       mockDisconnect.mockRejectedValue(new Error("already closed"));
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const client = createTelnetClient();
 
       await client.connect("localhost", 23);
@@ -79,10 +93,14 @@ describe("createTelnetClient", () => {
 
       expect(mockDisconnect).toHaveBeenCalled();
       expect(client.isConnected()).toBe(false);
-      expect(warnSpy).toHaveBeenCalledWith("TelnetSocket.disconnect() failed", {
-        error: expect.any(Error),
+      expect(addLogMock).toHaveBeenCalledWith("warn", "TelnetSocket.disconnect() failed", {
+        error: expect.objectContaining({
+          name: "Error",
+          message: "already closed",
+        }),
+        errorName: "Error",
+        errorStack: expect.any(String),
       });
-      warnSpy.mockRestore();
     });
 
     it("sends data as base64 via plugin", async () => {

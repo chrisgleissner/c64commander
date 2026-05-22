@@ -45,6 +45,7 @@ export type AddFileSelectionsDeps = {
   addItemsStartedAtRef: MutableRefObject<number | null>;
   addItemsOverlayActiveRef: MutableRefObject<boolean>;
   addItemsOverlayStartedAtRef: MutableRefObject<number | null>;
+  addItemsAbortControllerRef?: MutableRefObject<AbortController | null>;
   addItemsSurface: "dialog" | "page";
   browserOpen: boolean;
   recurseFolders: boolean;
@@ -90,6 +91,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     addItemsStartedAtRef,
     addItemsOverlayActiveRef,
     addItemsOverlayStartedAtRef,
+    addItemsAbortControllerRef,
     addItemsSurface,
     browserOpen,
     recurseFolders,
@@ -109,6 +111,24 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     collectSonglengthsCandidates,
     archiveConfigs,
   } = deps;
+
+  const createAbortError = () => {
+    if (typeof DOMException !== "undefined") {
+      return new DOMException("Add items scan cancelled", "AbortError");
+    }
+    const error = new Error("Add items scan cancelled");
+    error.name = "AbortError";
+    return error;
+  };
+
+  const isAbortError = (error: unknown) => {
+    if (!error || typeof error !== "object") return false;
+    const candidate = error as { message?: unknown; name?: unknown };
+    return (
+      candidate.name === "AbortError" ||
+      (typeof candidate.message === "string" && /cancelled|aborted/i.test(candidate.message))
+    );
+  };
 
   const parseArchiveSelectionPath = (path: string) => {
     const [resultId, rawCategory] = path.split("/");
@@ -250,6 +270,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       total: null,
       message: "Scanning…",
     });
+    addItemsAbortControllerRef?.current?.abort();
+    const abortController = new AbortController();
+    const abortSignal = abortController.signal;
+    if (addItemsAbortControllerRef) {
+      addItemsAbortControllerRef.current = abortController;
+    }
+    const throwIfAborted = () => {
+      if (abortSignal.aborted) {
+        throw createAbortError();
+      }
+    };
     markPlaylistRepositoryPhase(playlistStorageKey, "SCANNING", {
       expectedCount: playlistSnapshotRef.current.length,
     });
@@ -258,6 +289,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     let lastUpdate = 0;
 
     const updateProgress = (delta: number) => {
+      throwIfAborted();
       processed += delta;
       const now = Date.now();
       if (now - lastUpdate < 120) return;
@@ -280,6 +312,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       const pending = new Set<Promise<void>>();
 
       const flushDiscoveredFiles = async (force = false) => {
+        throwIfAborted();
         if (!onDiscoveredFiles) return;
         if (!pendingBatch.length || (!force && pendingBatch.length < PLAYLIST_APPEND_BATCH_SIZE)) return;
         const batch = pendingBatch;
@@ -288,9 +321,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       };
 
       const processPath = async (path: string) => {
+        throwIfAborted();
         if (!path || visited.has(path)) return;
         visited.add(path);
         const entries = await source.listEntries(path);
+        throwIfAborted();
         listingCache.set(path, entries);
         entries.forEach((entry) => {
           if (entry.type === "dir") {
@@ -308,6 +343,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       };
 
       while (queue.length || pending.size) {
+        throwIfAborted();
         while (queue.length && pending.size < maxConcurrent) {
           const nextPath = queue.shift();
           if (!nextPath) continue;
@@ -316,6 +352,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
         if (pending.size) {
           await Promise.race(pending);
+          throwIfAborted();
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
       }
@@ -505,7 +542,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       const appendPlaylistBatch = async (batch: PlaylistItem[]) => {
         if (!batch.length) return;
         const batchT0 = Date.now();
-        console.info(`[hvsc-perf] appendPlaylistBatch start count=${batch.length}`);
+        addLog("debug", "[hvsc-perf] appendPlaylistBatch start", { count: batch.length });
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "ingesting",
@@ -527,9 +564,10 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                       source.type === "ultimate" &&
                       (hasMd5SonglengthsFile(songlengthsFiles) || hasMd5SonglengthsFile(discoveredSonglengths)),
                   });
-            console.info(
-              `[hvsc-perf] applySonglengthsToItems done count=${resolvedItems.length} ms=${Date.now() - slT0}`,
-            );
+            addLog("debug", "[hvsc-perf] applySonglengthsToItems done", {
+              count: resolvedItems.length,
+              ms: Date.now() - slT0,
+            });
             appendedPlaylistItems += resolvedItems.length;
             const spT0 = Date.now();
             setPlaylist((prev) => {
@@ -537,9 +575,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               playlistSnapshotRef.current = next;
               return next;
             });
-            console.info(`[hvsc-perf] setPlaylist done ms=${Date.now() - spT0}`);
+            addLog("debug", "[hvsc-perf] setPlaylist done", { ms: Date.now() - spT0 });
             await new Promise((resolve) => setTimeout(resolve, 0));
-            console.info(`[hvsc-perf] appendPlaylistBatch done total_ms=${Date.now() - batchT0}`);
+            addLog("debug", "[hvsc-perf] appendPlaylistBatch done", { totalMs: Date.now() - batchT0 });
           },
           {
             sourceId: source.id,
@@ -621,17 +659,22 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       for (const selection of selections) {
         if (selection.type === "dir") {
           if (recurseFolders) {
+            throwIfAborted();
             if (source.type === "hvsc") {
               const streamed = await streamHvscSongsRecursive(selection.path, {
                 chunkSize: PLAYLIST_APPEND_BATCH_SIZE,
                 onChunk: async (songs) => {
+                  throwIfAborted();
                   updateProgress(songs.length);
                   for (const song of songs) {
+                    throwIfAborted();
                     await appendPlayableFile(mapHvscSongToEntry(song));
                   }
                   await new Promise((resolve) => setTimeout(resolve, 0));
+                  throwIfAborted();
                 },
               });
+              throwIfAborted();
               if (streamed) {
                 continue;
               }
@@ -647,9 +690,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 }
               });
             } else {
-              const nested = await source.listFilesRecursive(selection.path);
+              const nested = await source.listFilesRecursive(selection.path, { signal: abortSignal });
+              throwIfAborted();
               if (source.type === "hvsc") {
                 while (nested.length > 0) {
+                  throwIfAborted();
                   const chunk = nested.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
                   updateProgress(chunk.length);
                   for (const file of chunk) {
@@ -663,7 +708,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               }
             }
           } else {
+            throwIfAborted();
             const entries = await source.listEntries(selection.path);
+            throwIfAborted();
             const files = entries.filter((entry) => entry.type === "file");
             listingCache.set(selection.path, entries);
             files.forEach(registerSelectedFile);
@@ -671,6 +718,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             updateProgress(files.length);
           }
         } else {
+          throwIfAborted();
           const normalizedPath = normalizeSourcePath(selection.path);
           const meta = hasResolvedSelectionMetadata(selection)
             ? selection
@@ -690,7 +738,10 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         }
       }
 
-      console.info(`[hvsc-perf] scan done files=${selectedFiles.length} ms=${Date.now() - scanT0}`);
+      addLog("debug", "[hvsc-perf] scan done", {
+        files: selectedFiles.length,
+        ms: Date.now() - scanT0,
+      });
 
       if (source.type === "local" || source.type === "ultimate") {
         const treeUri = localSourceTreeUris.get(source.id);
@@ -736,7 +787,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           const directorySelections = selections.filter((selection) => selection.type === "dir");
           for (const selection of directorySelections) {
             try {
-              const recursiveEntries = await source.listFilesRecursive(selection.path);
+              throwIfAborted();
+              const recursiveEntries = await source.listFilesRecursive(selection.path, { signal: abortSignal });
+              throwIfAborted();
               recursiveEntries
                 .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
                 .forEach((entry) => {
@@ -767,7 +820,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             );
             for (const folder of foldersToScan) {
               try {
+                throwIfAborted();
                 const entries = await source.listEntries(folder);
+                throwIfAborted();
                 const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
                 if (!songEntry) continue;
                 const songPath = normalizeSourcePath(songEntry.path);
@@ -822,7 +877,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             );
             for (const folder of foldersToScan) {
               try {
+                throwIfAborted();
                 const entries = await source.listEntries(folder);
+                throwIfAborted();
                 const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
                 if (!songEntry) continue;
                 const songPath = normalizeSourcePath(songEntry.path);
@@ -863,16 +920,20 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const buildT0 = Date.now();
       while (selectedFiles.length > 0) {
+        throwIfAborted();
         const chunk = selectedFiles.splice(0, PLAYLIST_APPEND_BATCH_SIZE);
         for (const file of chunk) {
+          throwIfAborted();
           await appendPlayableFile(file);
         }
         // Yield to the event loop so progress updates render on-screen.
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
-      console.info(
-        `[hvsc-perf] build-items done pending=${pendingPlaylistBatch.length} appended=${appendedPlaylistItems} ms=${Date.now() - buildT0}`,
-      );
+      addLog("debug", "[hvsc-perf] build-items done", {
+        pending: pendingPlaylistBatch.length,
+        appended: appendedPlaylistItems,
+        ms: Date.now() - buildT0,
+      });
 
       if (buildItemsScope) {
         endHvscPerfScope(buildItemsScope, {
@@ -882,6 +943,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       }
 
       if (pendingPlaylistBatch.length) {
+        throwIfAborted();
         await appendPlaylistBatch(pendingPlaylistBatch);
         pendingPlaylistBatch = [];
       }
@@ -949,7 +1011,10 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         },
       });
-      console.info(`[hvsc-perf] pipeline done total_ms=${Date.now() - startedAt} items=${appendedPlaylistItems}`);
+      addLog("debug", "[hvsc-perf] pipeline done", {
+        totalMs: Date.now() - startedAt,
+        items: appendedPlaylistItems,
+      });
       setAddItemsProgress((prev) => ({
         ...prev,
         status: "ready",
@@ -973,6 +1038,22 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       return true;
     } catch (error) {
       const err = error as Error;
+      if (isAbortError(err)) {
+        addLog("debug", "Add items scan cancelled", {
+          sourceId: source.id,
+          sourceType: source.type,
+          selectionCount: selections.length,
+        });
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          status: "idle",
+          message: "Add cancelled",
+        }));
+        markPlaylistRepositoryPhase(playlistStorageKey, "IDLE", {
+          expectedCount: playlistSnapshotRef.current.length,
+        });
+        return false;
+      }
       const listingDetails = err instanceof LocalSourceListingError ? err.details : undefined;
       if (localTreeUri) {
         addLog("debug", "SAF scan failed", {
@@ -1004,6 +1085,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       });
       return false;
     } finally {
+      if (addItemsAbortControllerRef?.current === abortController) {
+        addItemsAbortControllerRef.current = null;
+      }
       setIsAddingItems(false);
       if (addItemsStartedAtRef.current) {
         setAddItemsProgress((prev) => ({

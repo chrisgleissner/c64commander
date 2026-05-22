@@ -7,9 +7,21 @@
  */
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
+import { addLog } from "@/lib/logging";
 import type { MediaIndexSnapshot, MediaIndexStorage } from "./mediaIndex";
 
 const STORAGE_PATH = "hvsc/index/media-index-v2.json";
+
+const isFileNotFoundError = (error: unknown) => {
+  const message = ((error as { message?: unknown })?.message ?? "").toString();
+  return /not found|ENOENT|does not exist|no such file|File does not exist/i.test(message);
+};
+
+const describeError = (error: unknown, extras: Record<string, unknown> = {}) => ({
+  ...extras,
+  error: (error as Error)?.message ?? String(error),
+  errorName: (error as Error)?.name,
+});
 
 const encodeUtf8Base64 = (value: string) => {
   if (typeof btoa === "function") {
@@ -34,7 +46,8 @@ const decodeUtf8Base64 = (value: string) => {
       return new TextDecoder().decode(bytes);
     }
     return Buffer.from(value, "base64").toString("utf-8");
-  } catch {
+  } catch (error) {
+    addLog("warn", "Failed to decode media-index base64 payload", describeError(error));
     return value;
   }
 };
@@ -43,7 +56,12 @@ const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as MediaIndexSnapshot;
-  } catch {
+  } catch (error) {
+    addLog(
+      "warn",
+      "Failed to parse persisted media index snapshot; will rebuild",
+      describeError(error, { storagePath: STORAGE_PATH }),
+    );
     return null;
   }
 };
@@ -55,9 +73,16 @@ export class FilesystemMediaIndexStorage implements MediaIndexStorage {
         directory: Directory.Data,
         path: STORAGE_PATH,
       });
-      const decoded = decodeUtf8Base64(result.data);
+      const decoded = typeof result.data === "string" ? decodeUtf8Base64(result.data) : null;
       return safeParse(decoded);
-    } catch {
+    } catch (error) {
+      if (!isFileNotFoundError(error)) {
+        addLog(
+          "warn",
+          "Failed to read media index snapshot from filesystem",
+          describeError(error, { storagePath: STORAGE_PATH }),
+        );
+      }
       return null;
     }
   }

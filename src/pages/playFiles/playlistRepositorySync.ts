@@ -79,20 +79,12 @@ const buildSnapshotKey = (playlistId: string, items: PlaylistItem[]) => {
       hash ^= value.charCodeAt(index);
       hash = Math.imul(hash, 16777619);
     }
+    // Unit separator prevents adjacent-field collisions such as "a"+"bc" vs "ab"+"c".
+    hash ^= 0x1f;
+    hash = Math.imul(hash, 16777619);
   };
 
-  write(playlistId);
-  write(String(items.length));
-  items.forEach((item, index) => {
-    write(item.id);
-    write(item.path);
-    write(item.request.source);
-    write(String(item.request.songNr ?? 1));
-    write(item.status ?? "ready");
-    write(item.addedAt ?? "");
-    write(String(index));
-  });
-
+  write(JSON.stringify(serializePlaylistToRepository(items, playlistId, "snapshot-key")));
   return `${items.length}:${hash >>> 0}`;
 };
 
@@ -143,8 +135,11 @@ export const usePlaylistRepositorySyncSnapshot = (playlistId: string) =>
     () => getSnapshot(playlistId),
   );
 
-export const serializePlaylistToRepository = (items: PlaylistItem[], playlistId: string) => {
-  const nowIso = new Date().toISOString();
+export const serializePlaylistToRepository = (
+  items: PlaylistItem[],
+  playlistId: string,
+  nowIso = new Date().toISOString(),
+) => {
   const tracksById = new Map<string, TrackRecord>();
   const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
     playlistItemId: item.id,
@@ -200,23 +195,27 @@ const persistSerializedPlaylist = async (
   if (typeof repository.replacePlaylistSnapshot === "function") {
     const commitT0 = Date.now();
     await repository.replacePlaylistSnapshot(playlistId, serialized);
-    console.info(
-      `[hvsc-perf] replacePlaylistSnapshot done tracks=${serialized.tracks.length} items=${serialized.playlistItems.length} ms=${Date.now() - commitT0}`,
-    );
+    addLog("debug", "[hvsc-perf] replacePlaylistSnapshot done", {
+      tracks: serialized.tracks.length,
+      items: serialized.playlistItems.length,
+      ms: Date.now() - commitT0,
+    });
     return;
   }
   const utT0 = Date.now();
   for (let index = 0; index < serialized.tracks.length; index += trackChunkSize) {
     await repository.upsertTracks(serialized.tracks.slice(index, index + trackChunkSize));
   }
-  console.info(
-    `[hvsc-perf] upsertTracks done chunks=${Math.ceil(serialized.tracks.length / trackChunkSize)} ms=${Date.now() - utT0}`,
-  );
+  addLog("debug", "[hvsc-perf] upsertTracks done", {
+    chunks: Math.ceil(serialized.tracks.length / trackChunkSize),
+    ms: Date.now() - utT0,
+  });
   const rpT0 = Date.now();
   await repository.replacePlaylistItems(playlistId, serialized.playlistItems);
-  console.info(
-    `[hvsc-perf] replacePlaylistItems done count=${serialized.playlistItems.length} ms=${Date.now() - rpT0}`,
-  );
+  addLog("debug", "[hvsc-perf] replacePlaylistItems done", {
+    count: serialized.playlistItems.length,
+    ms: Date.now() - rpT0,
+  });
 };
 
 export const commitPlaylistSnapshot = async ({
@@ -264,15 +263,20 @@ export const commitPlaylistSnapshot = async ({
   const promise = (async () => {
     const serT0 = Date.now();
     const serialized = serializePlaylistToRepository(items, playlistId);
-    console.info(
-      `[hvsc-perf] serialize done tracks=${serialized.tracks.length} items=${serialized.playlistItems.length} ms=${Date.now() - serT0}`,
-    );
+    addLog("debug", "[hvsc-perf] serialize done", {
+      tracks: serialized.tracks.length,
+      items: serialized.playlistItems.length,
+      ms: Date.now() - serT0,
+    });
     const persT0 = Date.now();
     await persistSerializedPlaylist(repository, playlistId, serialized, trackChunkSize);
-    console.info(`[hvsc-perf] persist done ms=${Date.now() - persT0}`);
+    addLog("debug", "[hvsc-perf] persist done", { ms: Date.now() - persT0 });
     const valT0 = Date.now();
     const committedCount = await repository.getPlaylistItemCount(playlistId);
-    console.info(`[hvsc-perf] validate done committed=${committedCount} ms=${Date.now() - valT0}`);
+    addLog("debug", "[hvsc-perf] validate done", {
+      committed: committedCount,
+      ms: Date.now() - valT0,
+    });
     if (committedCount !== expectedCount) {
       throw new Error(
         `Playlist repository validation failed for ${playlistId}: expected ${expectedCount}, got ${committedCount}`,

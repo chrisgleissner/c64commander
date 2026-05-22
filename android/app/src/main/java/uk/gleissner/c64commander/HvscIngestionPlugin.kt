@@ -615,10 +615,28 @@ open class HvscIngestionPlugin : Plugin() {
                 if (resetLibrary) {
                   try {
                     stagingRoot.deleteRecursively()
-                  } catch (_: Exception) {}
+                  } catch (cleanupError: Exception) {
+                    AppLogger.warn(
+                            pluginContextOrNull(),
+                            logTag,
+                            "Failed to clean up HVSC staging root after cancellation: ${stagingRoot.absolutePath}",
+                            "HvscIngestionPlugin",
+                            cleanupError,
+                            traceFields(call)
+                    )
+                  }
                   try {
                     oldRoot.deleteRecursively()
-                  } catch (_: Exception) {}
+                  } catch (cleanupError: Exception) {
+                    AppLogger.warn(
+                            pluginContextOrNull(),
+                            logTag,
+                            "Failed to clean up HVSC old root after cancellation: ${oldRoot.absolutePath}",
+                            "HvscIngestionPlugin",
+                            cleanupError,
+                            traceFields(call)
+                    )
+                  }
                 }
                 AppLogger.warn(
                         pluginContextOrNull(),
@@ -634,10 +652,28 @@ open class HvscIngestionPlugin : Plugin() {
                 if (resetLibrary) {
                   try {
                     stagingRoot.deleteRecursively()
-                  } catch (_: Exception) {}
+                  } catch (cleanupError: Exception) {
+                    AppLogger.warn(
+                            pluginContextOrNull(),
+                            logTag,
+                            "Failed to clean up HVSC staging root after failure: ${stagingRoot.absolutePath}",
+                            "HvscIngestionPlugin",
+                            cleanupError,
+                            traceFields(call)
+                    )
+                  }
                   try {
                     oldRoot.deleteRecursively()
-                  } catch (_: Exception) {}
+                  } catch (cleanupError: Exception) {
+                    AppLogger.warn(
+                            pluginContextOrNull(),
+                            logTag,
+                            "Failed to clean up HVSC old root after failure: ${oldRoot.absolutePath}",
+                            "HvscIngestionPlugin",
+                            cleanupError,
+                            traceFields(call)
+                    )
+                  }
                 }
                 AppLogger.error(
                         pluginContextOrNull(),
@@ -862,7 +898,15 @@ open class HvscIngestionPlugin : Plugin() {
     activeJob?.cancel(CancellationException("Plugin destroyed"))
     try {
       context.unregisterComponentCallbacks(trimMemoryCallbacks)
-    } catch (_: Exception) {}
+    } catch (error: Exception) {
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "Failed to unregister HVSC trim-memory component callbacks",
+              "HvscIngestionPlugin",
+              error,
+      )
+    }
     scope.cancel()
     super.handleOnDestroy()
   }

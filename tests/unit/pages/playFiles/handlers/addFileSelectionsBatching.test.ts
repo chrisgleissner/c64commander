@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
+import { addLog } from "@/lib/logging";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
@@ -158,6 +159,7 @@ const createDeps = () => {
     addItemsStartedAtRef: { current: null },
     addItemsOverlayActiveRef: { current: false },
     addItemsOverlayStartedAtRef: { current: null },
+    addItemsAbortControllerRef: { current: null },
     addItemsSurface: "dialog" as const,
     browserOpen: true,
     recurseFolders: false,
@@ -197,6 +199,7 @@ const createDeps = () => {
 
 describe("addFileSelections batching", () => {
   beforeEach(() => {
+    vi.mocked(addLog).mockClear();
     beginHvscPerfScope.mockClear();
     endHvscPerfScope.mockClear();
     streamHvscSongsRecursive.mockClear();
@@ -318,6 +321,27 @@ describe("addFileSelections batching", () => {
     expect(hvscSource.listFilesRecursive).not.toHaveBeenCalled();
     expect(deps.applySonglengthsToItems).not.toHaveBeenCalled();
     expect(deps._playlistItems).toHaveLength(2);
+  });
+
+  it("cancels a recursive local scan without mutating the playlist after abort", async () => {
+    const deps = createDeps();
+    const listEntries = vi.fn(async () => {
+      deps.addItemsAbortControllerRef.current?.abort();
+      throw new DOMException("User cancelled add-items scan", "AbortError");
+    });
+    const source = createLocalSource(listEntries);
+    const handler = createAddFileSelectionsHandler({ ...deps, recurseFolders: true } as any);
+
+    const result = await handler(source, [{ type: "dir", name: "root", path: "/music/root" }]);
+
+    expect(result).toBe(false);
+    expect(deps.setPlaylist).not.toHaveBeenCalled();
+    expect(commitPlaylistSnapshot).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Add items scan cancelled",
+      expect.objectContaining({ sourceId: "local-source-1", sourceType: "local" }),
+    );
   });
 
   it("returns a ready playlist before the background repository commit resolves", async () => {

@@ -101,6 +101,7 @@ docs/research/**/*meminfo*/
 docs/research/**/metrics/
 docs/research/**/post-fix/logs/
 docs/research/**/post-fix/screenshots/
+docs/research/**/prod-hardening-1-evidence/
 docs/research/**/rollout-artifacts/
 docs/research/**/rollout-artifacts/**
 docs/research/**/screenshots/
