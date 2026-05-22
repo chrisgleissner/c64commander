@@ -8,7 +8,7 @@ Conventions:
 - Each soak run produces exactly one closing entry with the run's verdict and a link to `runs/<runId>/summary.json`.
 - Specs are inputs; if a spec must change, log the change here and amend the spec in the same commit.
 
-## 2026-05-19
+## 2026-05-19 00:00 UTC
 
 - Iteration plan drafted under `docs/plans/performance/iteration2/`.
   - `plan.md` defines phases A-E and gates.

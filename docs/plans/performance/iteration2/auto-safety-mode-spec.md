@@ -148,7 +148,7 @@ Real-device (Phase D soak):
 
 - Existing installs: stored mode is unchanged. If a user has `BALANCED` saved, they keep `BALANCED`. They will only see `AUTO` if they pick it themselves.
 - Fresh installs: `DEFAULT_DEVICE_SAFETY_MODE` is `AUTO`. The Settings page renders `Auto` as the selected option and shows the resolved preset line.
-- Settings transfer JSON: a v(n) export carrying `BALANCED` imports as `BALANCED`. A v(n+1) export carrying `AUTO` imports as `AUTO` on a build that supports it, and falls back to `BALANCED` on older builds (importer rejects unknown values; we explicitly allow `AUTO`).
+- Settings transfer JSON: a v(n) export carrying `BALANCED` imports as `BALANCED`. A v(n+1) export carrying `AUTO` imports as `AUTO` on a build that supports it. Older builds reject `AUTO` as an unknown mode unless they also add explicit support for it.
 
 ## Out of scope
 

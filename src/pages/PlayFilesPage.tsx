@@ -359,6 +359,18 @@ export default function PlayFilesPage() {
   const queueBackgroundDueAtUpdate = useCallback(async (nextDueAtMs: number | null) => {
     await backgroundDueWriteLaneRef.current?.schedule(nextDueAtMs);
   }, []);
+  const queueBackgroundDueAtUpdateRef = useRef(queueBackgroundDueAtUpdate);
+  useEffect(() => {
+    queueBackgroundDueAtUpdateRef.current = queueBackgroundDueAtUpdate;
+  }, [queueBackgroundDueAtUpdate]);
+  const stopBackgroundExecutionRef = useRef(stopBackgroundExecution);
+  useEffect(() => {
+    stopBackgroundExecutionRef.current = stopBackgroundExecution;
+  }, [stopBackgroundExecution]);
+  const backgroundCleanupTrackInstanceIdRef = useRef(trackInstanceId);
+  useEffect(() => {
+    backgroundCleanupTrackInstanceIdRef.current = trackInstanceId;
+  }, [trackInstanceId]);
 
   const ensurePlaybackConnection = useCallback(async () => {
     if (status.isConnected) return;
@@ -531,22 +543,27 @@ export default function PlayFilesPage() {
     () => () => {
       if (!backgroundExecutionActiveRef.current) return;
       backgroundExecutionActiveRef.current = false;
-      void stopBackgroundExecution({
-        source: "playback-controller",
-        reason: "cleanup",
-        context: { trackInstanceId },
-      }).catch((error) => {
-        reportUserError({
-          operation: "stopBackgroundExecution",
-          title: "Background playback cleanup failed",
-          description: "Background playback guard could not be fully stopped.",
-          error,
-          context: { trackInstanceId, reason: "cleanup" },
+      void stopBackgroundExecutionRef
+        .current({
+          source: "playback-controller",
+          reason: "cleanup",
+          context: { trackInstanceId: backgroundCleanupTrackInstanceIdRef.current },
+        })
+        .catch((error) => {
+          reportUserError({
+            operation: "stopBackgroundExecution",
+            title: "Background playback cleanup failed",
+            description: "Background playback guard could not be fully stopped.",
+            error,
+            context: {
+              trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
+              reason: "cleanup",
+            },
+          });
         });
-      });
-      void queueBackgroundDueAtUpdate(null);
+      void queueBackgroundDueAtUpdateRef.current(null);
     },
-    [queueBackgroundDueAtUpdate, trackInstanceId],
+    [],
   );
 
   useEffect(() => {
@@ -1076,25 +1093,28 @@ export default function PlayFilesPage() {
     ],
   );
 
-  const syncPlaybackTimeline = useCallback((options?: { allowAutoAdvance?: boolean }) => {
-    const allowAutoAdvance = options?.allowAutoAdvance ?? true;
-    if (!isPlaying || isPaused || currentIndex < 0) return;
-    const now = Date.now();
-    if (trackStartedAtRef.current) {
-      setElapsedMs(now - trackStartedAtRef.current);
-    }
-    setPlayedMs(playedClockRef.current.current(now));
-    const guard = autoAdvanceGuardRef.current;
-    if (allowAutoAdvance && guard && !guard.autoFired && !guard.userCancelled && now >= guard.dueAtMs) {
-      addLog("debug", "Auto-advance due guard fired on timeline reconciliation", {
-        trackInstanceId: guard.trackInstanceId,
-        dueAtMs: guard.dueAtMs,
-        nowMs: now,
-        overdueMs: now - guard.dueAtMs,
-      });
-      void handleNext("auto", guard.trackInstanceId);
-    }
-  }, [currentIndex, handleNext, isPaused, isPlaying, playedClockRef]);
+  const syncPlaybackTimeline = useCallback(
+    (options?: { allowAutoAdvance?: boolean }) => {
+      const allowAutoAdvance = options?.allowAutoAdvance ?? true;
+      if (!isPlaying || isPaused || currentIndex < 0) return;
+      const now = Date.now();
+      if (trackStartedAtRef.current) {
+        setElapsedMs(now - trackStartedAtRef.current);
+      }
+      setPlayedMs(playedClockRef.current.current(now));
+      const guard = autoAdvanceGuardRef.current;
+      if (allowAutoAdvance && guard && !guard.autoFired && !guard.userCancelled && now >= guard.dueAtMs) {
+        addLog("debug", "Auto-advance due guard fired on timeline reconciliation", {
+          trackInstanceId: guard.trackInstanceId,
+          dueAtMs: guard.dueAtMs,
+          nowMs: now,
+          overdueMs: now - guard.dueAtMs,
+        });
+        void handleNext("auto", guard.trackInstanceId);
+      }
+    },
+    [currentIndex, handleNext, isPaused, isPlaying, playedClockRef],
+  );
 
   useEffect(() => {
     if (!isPlaying || isPaused || currentIndex < 0) return;
@@ -1286,7 +1306,7 @@ export default function PlayFilesPage() {
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
   const canPause = isPlaying;
-  const hasPrev = currentIndex > 0;
+  const hasPrev = hasPlaylist && (currentIndex > 0 || repeatEnabled);
   const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {

@@ -1051,7 +1051,8 @@ export function usePlaybackController({
       const activePlaylist = playlistRef.current;
       if (!activePlaylist.length) return;
       const activeIndex = currentIndexRef.current;
-      const prevIndex = Math.max(0, activeIndex - 1);
+      const prevIndex =
+        activeIndex > 0 ? activeIndex - 1 : repeatEnabled && activePlaylist.length > 1 ? activePlaylist.length - 1 : 0;
       cancelAutoAdvance();
       const now = Date.now();
       playedClockRef.current.pause(now);
@@ -1089,6 +1090,7 @@ export function usePlaybackController({
     cancelAutoAdvance,
     enqueueUserTransport,
     playItem,
+    repeatEnabled,
     playedClockRef,
     setAutoAdvanceDueAtMs,
     setPlayedMs,

@@ -346,8 +346,19 @@ const createLegacyDevice = (): SavedDevice => {
   };
 };
 
+const readDebugSavedDevicesEnv = (): string | undefined => {
+  try {
+    if (typeof import.meta === "undefined" || !import.meta.env) return undefined;
+    const value = import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON;
+    return typeof value === "string" ? value : undefined;
+  } catch (error) {
+    console.warn("Failed to read VITE_DEBUG_SAVED_DEVICES_JSON", { error });
+    return undefined;
+  }
+};
+
 const createDebugBootstrapDevices = (): SavedDevice[] | null => {
-  const raw = import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON;
+  const raw = readDebugSavedDevicesEnv();
   if (!raw?.trim()) return null;
 
   try {

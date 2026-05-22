@@ -44,6 +44,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Open and close the diagnostics dialog 10 times in rapid succession.
 - Measure open-to-first-visible. Must satisfy Iteration 1 Stage 3 budget (p50 < 250 ms, p95 < 400 ms).
 - Oracle: diagnostics open timing marker + screen recording.
+- Abort: any open exceeds the timing budget or leaves the dialog stuck open/closed.
 
 ### `N4` - Background / foreground (both)
 
@@ -53,6 +54,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Connection state must remain on the same active device, no error toast on resume.
 - Repeat 3 times.
 - Oracle: connection state log + foreground app state + screen recording.
+- Abort: app resume shows an error, loses the active device, or fails to foreground cleanly.
 
 ## Home scenarios
 
@@ -79,6 +81,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Save RAM. Wait for completion.
 - Load the just-saved RAM. Wait for completion.
 - Oracle: SAF file present after save + machine recovers after load.
+- Abort: save/load fails, the SAF artifact is missing, or the machine does not recover after load.
 - Safety: only U64. C64U is not asked to RAM-cycle in this soak; the c64u soak is read-mostly because of firmware risk.
 - Cleanup: delete the saved RAM file from the test-owned subdirectory.
 
@@ -88,6 +91,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Start the stream.
 - Stop the stream within 5 s.
 - Oracle: REST-visible stream state delta.
+- Abort: the stream never starts/stops cleanly or the REST-visible state does not converge within 2 s.
 - Safety: only U64.
 
 ## Play scenarios
@@ -107,6 +111,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Toggle view-all once.
 - Inter-action delay 200 ms.
 - Oracle: playlist row count + persistence (after navigation away and back, playlist matches).
+- Abort: the playlist count or persisted selection state diverges from the expected result for more than 2 s.
 
 ### `P3` - Transport soak (both, c64u read-only)
 
@@ -126,12 +131,14 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Pick a `Songlengths.md5` file from a known fixture path on device.
 - Verify durations apply to matching playlist items.
 - Oracle: per-item duration delta + persisted songlengths reference.
+- Abort: durations do not apply to matching rows or the persisted songlengths reference is invalid.
 
 ### `P5` - HVSC lifecycle (U64 only, optional)
 
 - If HVSC is not yet installed: download, then ingest. Cancel halfway through ingest at least once and resume to completion.
 - If HVSC is already installed: skip download, perform a browse and add 3 items to playlist.
 - Oracle: filesystem evidence of HVSC artifacts + ingestion status events + final ready state.
+- Abort: download/ingest fails, HVSC artifacts are missing, or ready state is never reached after resume.
 - Safety: long-running. Counts as 1 destructive budget per safety policy. Skip if hardware/time budget is tight.
 
 ## Disks scenarios
@@ -154,6 +161,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Rotate next/prev within the group.
 - Remove an entry that is *not* mounted.
 - Oracle: persisted library delta + REST drive state unchanged for non-mount steps.
+- Abort: the library state fails to persist or any non-mount step mutates live drive state.
 
 ## Config scenarios
 
@@ -163,6 +171,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Open / close at least 5 different category accordions.
 - For one accordion, change one value and refresh.
 - Oracle: REST-visible config value round-trip.
+- Abort: filtering or accordion state stops responding, or the config value fails to round-trip.
 
 ### `C2` - Audio Mixer + clock (both, c64u read-only Solo only)
 
@@ -170,6 +179,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Solo each SID channel once. Unsolo each.
 - Sync clock.
 - Oracle: per-channel mute state via REST + clock items REST round-trip.
+- Abort: reset/solo/clock sync does not match REST-visible state within 2 s.
 
 ## Settings scenarios
 
@@ -179,12 +189,14 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Correct the hostname, save again, verify connect.
 - Delete the throwaway device.
 - Oracle: saved-devices store transitions + UI error visibility for bad hostname.
+- Abort: the expected bad-host error does not appear, the corrected device never connects, or cleanup leaves the throwaway device behind.
 
 ### `S2` - Preferences sliders and inputs (both)
 
 - Change the list preview limit slider in 3 steps.
 - Change the discovery probe timeout via numeric input + Enter.
 - Oracle: persisted values + downstream behavior (preview list reflects new limit).
+- Abort: persisted values or downstream preview behavior fail to match the new settings.
 
 ### `S3` - Safety mode dialog gauntlet (both)
 
@@ -195,6 +207,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Pick `CONSERVATIVE`, `BALANCED`, `TROUBLESHOOTING` in turn; each persists, no dialog.
 - Return to `AUTO` and leave it there.
 - Oracle: persisted mode after each step + effective-preset diagnostics line.
+- Abort: any mode fails to persist, the confirmation dialog behavior is wrong, or the effective preset line is incorrect.
 
 ### `S4` - Device row switch (both)
 
@@ -203,6 +216,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Verify effective safety preset switched per Auto rules.
 - Repeat 5 alternating switches.
 - Oracle: as `N2` + active row visual state.
+- Abort: any switch misses the time budget, lands on the wrong device, or resolves the wrong effective preset.
 
 ### `S5` - Theme + developer mode (both)
 
@@ -210,6 +224,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Tap About card 7 times in 3 seconds.
 - Oracle: DOM theme attribute + developer-mode flag.
 - Cleanup: leave the system at its starting theme; disable developer mode if it was off at start.
+- Abort: theme/developer mode does not persist correctly or cleanup cannot restore the starting state.
 
 ### `S6` - Settings export / import (U64 only)
 
@@ -218,12 +233,14 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Import the exported file.
 - Verify the modified setting reverted.
 - Oracle: setting value pre/post + exported JSON parseable.
+- Abort: export is missing/unparseable or import does not restore the prior value.
 
 ### `S7` - Diagnostics share + clear (both)
 
 - Open diagnostics, share Logs tab, then clear it.
 - Verify the share artifact handle (cache path) was captured, even if the OS share sheet's final destination cannot be observed.
 - Oracle: cache-written ZIP path + post-clear empty logs.
+- Abort: the share artifact handle is not captured or clear leaves residual log rows behind.
 
 ### `S8` - Licenses overlay + back (both)
 
@@ -231,6 +248,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Press Android system back.
 - Verify return to Settings.
 - Oracle: route history + first paint of Settings.
+- Abort: back navigation does not return to Settings or the route stack becomes inconsistent.
 
 ## Docs scenarios
 
@@ -239,6 +257,7 @@ The agent must complete the preflight before any scenario runs. Failure means th
 - Open and close each accordion section.
 - Tap each external link once. Use a stub intent handler so the soak does not actually launch a browser away from the app. If a stub is not available, skip this sub-step and annotate.
 - Oracle: accordion state + intent fired (if testable).
+- Abort: any accordion fails to toggle or a testable link tap does not fire the expected intent callback.
 
 ## Stop conditions for the whole soak
 

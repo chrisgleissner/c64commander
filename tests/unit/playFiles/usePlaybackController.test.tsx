@@ -1679,4 +1679,23 @@ describe("usePlaybackController", () => {
     expect(setCurrentIndex).toHaveBeenCalledWith(0);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
   });
+
+  it("wraps previous to the last playlist item when repeat is enabled", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+    ];
+    const setCurrentIndex = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      repeatEnabled: true,
+      setCurrentIndex,
+    });
+
+    await result.current.handlePrevious();
+
+    expect(setCurrentIndex).toHaveBeenCalledWith(1);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
 });

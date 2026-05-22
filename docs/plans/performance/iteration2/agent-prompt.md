@@ -5,6 +5,7 @@
 This is the verbatim prompt for an autonomous coding agent (GitHub Copilot, OpenAI Codex, or any equivalent LLM-driven agent with shell and filesystem access) that will execute the Iteration 2 soak on the real Pixel 4 against real `u64` and `c64u`. Hand it to the agent unmodified, with only one substitution:
 
 - `${RUN_ID}` is replaced with a fresh UUIDv4 by the orchestrator (or by the agent itself if no orchestrator is present).
+- Every `runs/...` path below is repo-root-relative shorthand for `docs/plans/performance/iteration2/runs/...`; do not write artifacts anywhere else.
 
 The prompt is host-agnostic. It does not depend on any specific LLM host's task tracker, slash commands, skills, or scheduling features. The agent only needs:
 
@@ -60,7 +61,7 @@ Execute every check in `soak-scenarios.md#Pre-soak preflight`. Record results in
 
 Follow `parallelization.md`. Concretely:
 
-1. Read `docs/plans/performance/iteration2/runs/HARDWARE_LOCK.json` if it exists.
+1. Read `runs/HARDWARE_LOCK.json` if it exists.
 2. If it exists and its `expiresAt` is in the future, stop and emit `inconclusive` with reason `hardware-locked-by:<agentId>`.
 3. Write `runs/HARDWARE_LOCK.json` with your `runId`, `agentId`, `acquiredAt`, `expiresAt = acquiredAt + 90 minutes`, `pid` (if available), and `summary` (one sentence).
 4. Every 15 minutes while running, refresh `expiresAt`.
@@ -85,7 +86,7 @@ Follow `parallelization.md`. Concretely:
 7. For each scenario, do both `u64` and `c64u` legs when the scenario's target says `both`. For `U64 only` scenarios, run only the `u64` leg.
 8. Between legs, switch the active saved device via Settings -> device row (or via app bar long-press), then prove the effective safety preset followed (`CONSERVATIVE` after `c64u`, `BALANCED` after `u64`). Capture the diagnostics effective-preset log line.
 9. After every scenario, capture a screenshot, the relevant REST/state-ref snapshot if applicable, and a `steps.ndjson` row referencing the screenshot path.
-10. On completion, stop screen recording, stop logcat capture, write `runs/${RUN_ID}/summary.json` and append a single line to `worklog.md` summarizing the run.
+10. On completion, stop screen recording, stop logcat capture, write `runs/${RUN_ID}/summary.json` with the final verdict and required artifacts, and append a single line to `worklog.md` with that verdict and a link to `runs/${RUN_ID}/summary.json`.
 11. Release hardware lock.
 
 ## Pacing

@@ -479,3 +479,67 @@ All five open questions resolved. The implementation plan is upgraded from a sma
 - Full acceptance HIL with two healthy REST devices was blocked by the local `c64u` HTTP service resetting `/v1/info` despite ICMP reachability.
 - Visible LED/config pulse verification requires human observation of the physical C64 device. Automated tests prove the app calls CONFIG only for `switch-device-dialog`/manual contexts and skips it for background read-only context; this run could not physically confirm the visible light pulse.
 - A fresh post-run diagnostics ZIP was not exported from the device during this automated session. WebView-local logs were inspected through CDP and still contained expected warnings from the partially unhealthy hardware state, especially `c64u` HTTP failures; this is not a clean signal for duplicate-warning acceptance because the run was performed after app-data reseeding and against a failing `c64u` REST endpoint.
+
+## [2026-05-21] Iteration 3: Restore E2E Android pipeline after AUTO safety mode regression
+
+### Environment
+
+- Branch: `fix/performance-iteration-2`.
+- Concurrent uncommitted edits found in worktree (Play page background-cleanup stale-callback fix, previous-with-repeat wrap, volume guard tests, soak runner improvements). Per CLAUDE.md policy, left intact.
+
+### Repository Baseline
+
+- `npm run test` before edits: 6516/6516 passing in 237.93s.
+
+### Investigation Notes
+
+- CI error reported `TypeError: Cannot read properties of undefined (reading 'VITE_DEBUG_SAVED_DEVICES_JSON') at src/lib/savedDevices/store.ts:350` during `npx playwright test --list --project=android-phone`. The shard script then exits non-zero, failing all 12 Android shards.
+- Reproduced the exact failure mode with `tsx`: `fakeMeta.env.VITE_DEBUG_SAVED_DEVICES_JSON` where `fakeMeta.env = undefined` throws with the same message.
+- Eager module-init call chain (proof):
+  - `playwright/itemSelection.spec.ts` imports from `../src/pages/playFiles/playFilesUtils`.
+  - `playFilesUtils.ts` imports from `@/lib/playback/playbackRouter`.
+  - `playbackRouter.ts` imports from `@/lib/c64api`.
+  - `c64api.ts` imports `withRestInteraction` from `@/lib/deviceInteraction/deviceInteractionManager`.
+  - `deviceInteractionManager.ts:186` runs at module init: `let config: DeviceSafetyConfig = loadDeviceSafetyConfig();`.
+  - `loadDeviceSafetyConfig` (in `deviceSafetySettings.ts:274`) calls `getActiveAutoResolutionContext()`.
+  - `getActiveAutoResolutionContext` (line 215) calls `getSelectedSavedDeviceProductFamilySync()`.
+  - `getSelectedSavedDeviceProductFamilySync` (store.ts:676) calls `getSavedDevicesSnapshot()` -> `loadEnvelope()` -> `createInitialEnvelope()` -> `createDebugBootstrapDevices()` -> the unsafe `import.meta.env.X` access.
+- Commit blame: this chain was created by commit `6dc4813d Implement AUTO device safety mode` (2026-05-19). Before AUTO mode, `loadDeviceSafetyConfig` did not call into the saved-devices store.
+- Other safe pattern available in repo: `src/lib/fuzz/fuzzMode.ts:39` uses `typeof import.meta !== "undefined" && import.meta.env?.VITE_FUZZ_MODE === "1"`.
+
+### Bugs Found
+
+- **High priority production-release blocker**: E2E Android test pipeline non-functional because of the unsafe `import.meta.env.VITE_DEBUG_SAVED_DEVICES_JSON` access at `src/lib/savedDevices/store.ts:350`, triggered by the AUTO device safety mode chain executing at module init under non-Vite TypeScript loaders (playwright list, ts-node, tsx, etc.).
+
+### Fixes Applied
+
+- `src/lib/savedDevices/store.ts`: extracted the env read into `readDebugSavedDevicesEnv()` that:
+  1. defensively probes `typeof import.meta === "undefined" || !import.meta.env` before reading,
+  2. wraps the read in `try/catch` to log via `console.warn` rather than throw,
+  3. returns `undefined` for any non-string value, preserving the original "no bootstrap if unset" semantics.
+
+### Tests Added Or Updated
+
+- `tests/unit/lib/savedDevices/store.test.ts`:
+  - **Functional smoke regression**: "falls back to the legacy device when the debug bootstrap env is missing or empty (no import.meta.env crash)" - stubs the env to an empty string and asserts the legacy `c64u` device is created instead of throwing.
+  - **Contract regression**: "guards the debug bootstrap env read with a typeof check so module init survives non-Vite runners" - asserts the source contains the exact `typeof import.meta === "undefined" || !import.meta.env` guard and the renamed `readDebugSavedDevicesEnv()` call site, locking in the safe pattern so a future engineer cannot silently revert it.
+
+### Commands Run
+
+- `npm run test` (baseline): 6516/6516 passed.
+- `timeout 120 npx vitest run tests/unit/lib/savedDevices/store.test.ts`: 20/20 passed after fix.
+- `timeout 200 npx vitest run tests/unit/lib/savedDevices/ tests/unit/lib/config/ tests/unit/config/ tests/unit/lib/deviceInteraction/`: 487/487 passed.
+- `npx tsc -p tsconfig.app.json --noEmit`: no output (clean).
+- `npx eslint src/lib/savedDevices/store.ts tests/unit/lib/savedDevices/store.test.ts`: no output (clean).
+- `npx prettier --check src/lib/savedDevices/store.ts tests/unit/lib/savedDevices/store.test.ts`: "All matched files use Prettier code style!".
+- `npx tsx -e "import { getSavedDevicesSnapshot } from './src/lib/savedDevices/store.ts'; ..."`: succeeds after fix (would crash before).
+
+### Evidence
+
+- `tsx` reproduction emitted: `CRASH (matches reported error): Cannot read properties of undefined (reading 'VITE_DEBUG_SAVED_DEVICES_JSON')`.
+- `tsx` post-fix run emitted: `OK, devices= 1`.
+
+### Remaining Risks
+
+- Other module-init paths that touch `import.meta.env` may be added in the future. The contract test guards only the savedDevices store path. A broader lint rule (`no-unsafe-import-meta-env-access`) would be the durable defense but is out of scope for this iteration.
+- The lower-priority feature areas (RAM/REU, stream controls, Telnet) were not inspected in this iteration because the urgent E2E blocker took priority.

@@ -1262,6 +1262,69 @@ describe("useVolumeOverride", () => {
     expect(addLog).toHaveBeenCalledWith("info", "Play volume unmute sent", expect.objectContaining({ index: 1 }));
   });
 
+  it("does not snap back when the device confirms the committed index and then reverts within the guard window", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("0");
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+    expect(result.current.volumeState.index).toBe(1);
+
+    // Device confirms the write: reports the committed index
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    act(() => {
+      rerender();
+    });
+    expect(result.current.volumeState.index).toBe(1);
+
+    // Device reverts to its old value within the guard window
+    audioMixerItemsRef.current = defaultMixerItems("0");
+    act(() => {
+      rerender();
+    });
+
+    // Guard must block the rollback
+    expect(result.current.volumeState.index).toBe(1);
+  });
+
+  it("allows device sync to update volume after the guard window expires", async () => {
+    let nowMs = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+
+    audioMixerItemsRef.current = defaultMixerItems("0");
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+    expect(result.current.volumeState.index).toBe(1);
+
+    // Advance time beyond the 2500 ms guard window
+    nowMs += 2501;
+    audioMixerItemsRef.current = defaultMixerItems("0");
+    act(() => {
+      rerender();
+    });
+
+    // Guard has expired: device sync is now allowed to update the UI
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+    });
+  });
+
   it("short-circuits preview, commit, mute, and unmute helpers when writes are not applicable", async () => {
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),

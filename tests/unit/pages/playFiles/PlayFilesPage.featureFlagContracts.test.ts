@@ -51,9 +51,30 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain('addErrorLog("Failed to register background auto-advance listener"');
   });
 
+  it("stops background execution only on real cleanup, not on track instance churn", () => {
+    expect(playFilesPageSource).toContain("const stopBackgroundExecutionRef = useRef(stopBackgroundExecution);");
+    expect(playFilesPageSource).toContain("stopBackgroundExecutionRef.current = stopBackgroundExecution;");
+    expect(playFilesPageSource).toContain("const backgroundCleanupTrackInstanceIdRef = useRef(trackInstanceId);");
+    expect(playFilesPageSource).toContain("backgroundCleanupTrackInstanceIdRef.current = trackInstanceId;");
+    expect(playFilesPageSource).toMatch(/void stopBackgroundExecutionRef\s*\.current\(\{/);
+    expect(playFilesPageSource).toContain("trackInstanceId: backgroundCleanupTrackInstanceIdRef.current");
+    expect(playFilesPageSource).toContain("void queueBackgroundDueAtUpdateRef.current(null);");
+  });
+
   it("restores Play volume overrides on real navigation cleanup without firing on callback identity churn", () => {
-    expect(playFilesPageSource).toContain("const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);");
+    expect(playFilesPageSource).toContain(
+      "const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);",
+    );
     expect(playFilesPageSource).toContain("restoreVolumeOverridesOnNavigateRef.current = restoreVolumeOverrides;");
-    expect(playFilesPageSource).toContain('void restoreVolumeOverridesOnNavigateRef.current("navigate").catch((error) => {');
+    expect(playFilesPageSource).toContain(
+      'void restoreVolumeOverridesOnNavigateRef.current("navigate").catch((error) => {',
+    );
+  });
+
+  it("keeps previous enabled at the first track when repeat is active", () => {
+    expect(playFilesPageSource).toContain("const hasPrev = hasPlaylist && (currentIndex > 0 || repeatEnabled);");
+    expect(playFilesPageSource).toContain(
+      "const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);",
+    );
   });
 });
