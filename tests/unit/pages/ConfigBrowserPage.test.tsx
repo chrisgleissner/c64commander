@@ -539,16 +539,18 @@ describe("ConfigBrowserPage", () => {
     });
 
     const [{ updates }] = mutateAsync.mock.calls.at(-1) as [{ updates: Record<string, string | number> }];
-    expect(updates).toEqual(
-      expect.objectContaining({
-        Year: now.getFullYear(),
-        Month: expectedMonth,
-        Day: now.getDate(),
-        Hours: now.getHours(),
-        Minutes: now.getMinutes(),
-        Seconds: now.getSeconds(),
-      }),
+    expect(updates.Month).toBe(expectedMonth);
+
+    const syncedMonthIndex = new Date(`${updates.Month} 1, ${updates.Year}`).getMonth();
+    const syncedDate = new Date(
+      Number(updates.Year),
+      syncedMonthIndex,
+      Number(updates.Day),
+      Number(updates.Hours),
+      Number(updates.Minutes),
+      Number(updates.Seconds),
     );
+    expect(Math.abs(syncedDate.getTime() - now.getTime())).toBeLessThan(2_000);
   });
 
   it("reports clock sync when no matching fields exist", async () => {

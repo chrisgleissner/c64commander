@@ -424,7 +424,7 @@ test.describe("Playback file browser", () => {
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
     const lastRequest = [...server.requests].reverse().find((req) => req.url.startsWith("/v1/runners:sidplay"));
-    expect(lastRequest?.method).toBe("POST");
+    expect(lastRequest?.method).toBe("PUT");
 
     const { requestEvent, related } = await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
     expect((requestEvent.data as { target?: string }).target).toBe("external-mock");

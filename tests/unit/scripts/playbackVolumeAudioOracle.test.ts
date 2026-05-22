@@ -3,7 +3,7 @@ import {
   buildAudioEnvelope,
   buildAudioVolumeVerificationRow,
   medianEnvelopeRms,
-} from "../../../tmp/playbackVolumeAudioOracle.mjs";
+} from "../../fixtures/playbackVolumeAudioOracle";
 
 function createAudioPacket(samples: number[]): Buffer {
   const payload = Buffer.alloc(2 + samples.length * 2);
