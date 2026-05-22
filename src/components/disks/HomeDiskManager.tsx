@@ -85,6 +85,7 @@ import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
+import { HOME_SUMMARY_QUERY_OPTIONS } from "@/pages/home/constants";
 import {
   buildBusIdOptions,
   buildTypeOptions,
@@ -126,7 +127,6 @@ import {
   type DriveKey,
 } from "@/components/disks/HomeDiskManagerSupport";
 
-const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 const isTestEnvironment =
   typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
@@ -149,7 +149,7 @@ export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
   const screenActive = useScreenActivity();
   const { status } = useC64Connection();
-  const { data: drivesData } = useC64Drives(visibleQueryOptions);
+  const { data: drivesData } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
   const trace = useActionTrace("HomeDiskManager");
 
   const diskLibrary = useDiskLibrary(SHARED_DISK_LIBRARY_ID);
@@ -214,19 +214,19 @@ export const HomeDiskManager = () => {
     DRIVE_CONFIG_CATEGORY.a,
     [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
     status.isConnected || status.isConnecting,
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: driveBConfig } = useC64ConfigItems(
     DRIVE_CONFIG_CATEGORY.b,
     [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
     status.isConnected || status.isConnecting,
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: softIecConfig } = useC64ConfigItems(
     SOFT_IEC_CONTROL.category,
     [SOFT_IEC_CONTROL.busItem, SOFT_IEC_DEFAULT_PATH_ITEM],
     status.isConnected || status.isConnecting,
-    visibleQueryOptions,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);

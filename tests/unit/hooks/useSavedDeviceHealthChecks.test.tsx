@@ -359,6 +359,37 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
   });
 
+  it("does not restart background maintenance when verification-only device metadata changes", async () => {
+    const initialDevices = buildSavedDevices();
+    const { rerender } = renderHook(({ savedDevices }) => useSavedDeviceHealthChecks(savedDevices, true), {
+      initialProps: { savedDevices: initialDevices },
+    });
+
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+
+    const verifiedDevices = initialDevices.map((device, index) => ({
+      ...device,
+      lastKnownProduct: index === 0 ? "Ultimate 64 Elite" : "C64 Ultimate",
+      lastKnownHostname: `${device.host}-verified`,
+      lastKnownUniqueId: `verified-${device.id}`,
+      lastSuccessfulConnectionAt: `2026-01-01T12:00:0${index}.000Z`,
+    }));
+
+    rerender({ savedDevices: verifiedDevices });
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    await flushAsyncWork();
+
+    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+  });
+
   it("defers background refresh work while a foreground saved-device switch is active", async () => {
     const savedDevices = buildSavedDevices();
     const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));

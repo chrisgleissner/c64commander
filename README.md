@@ -299,6 +299,7 @@ C64 Commander includes **Device Safety** controls under **Settings > Device Safe
 ## For Developers
 
 - [Documentation index](docs/index.md)
+- [DeepWiki architecture and design guide](https://deepwiki.com/chrisgleissner/c64commander)
 - [Developer guide](docs/developer.md)
 - [Chaos/fuzz testing](docs/testing/chaos-fuzz.md)
 

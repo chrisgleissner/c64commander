@@ -10,7 +10,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw, Save, RefreshCw, Power, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
 import { variant } from "@/generated/variant";
-import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
+import { useC64ConfigItems, useC64Connection } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { AppBar } from "@/components/AppBar";
 import { QuickActionCard } from "@/components/QuickActionCard";
@@ -73,8 +73,10 @@ import { isReuSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
 import {
   C64_CARTRIDGE_HOME_ITEMS,
+  HOME_SUMMARY_QUERY_OPTIONS,
   KEYBOARD_LIGHTING_HOME_ITEMS,
   LED_STRIP_HOME_ITEMS,
+  resolveHomeConfigOptions,
   U64_HOME_ITEMS,
   USER_INTERFACE_HOME_ITEMS,
 } from "./home/constants";
@@ -98,11 +100,6 @@ import {
 } from "@/lib/deviceControl/deviceControl";
 import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
 
-const HOME_LIGHTING_QUERY_OPTIONS = {
-  ...VISIBLE_C64_QUERY_OPTIONS,
-  skipEnrichment: true,
-} as const;
-
 export default function HomePage() {
   return (
     <ConfigActionsProvider>
@@ -120,31 +117,31 @@ function HomePageContent() {
     "U64 Specific Settings",
     [...U64_HOME_ITEMS],
     isActive || status.isConnecting,
-    VISIBLE_C64_QUERY_OPTIONS,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: c64CartridgeCategory } = useC64ConfigItems(
     "C64 and Cartridge Settings",
     [...C64_CARTRIDGE_HOME_ITEMS],
     isActive || status.isConnecting,
-    VISIBLE_C64_QUERY_OPTIONS,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: ledStripCategory } = useC64ConfigItems(
     "LED Strip Settings",
     [...LED_STRIP_HOME_ITEMS],
     isActive || status.isConnecting,
-    HOME_LIGHTING_QUERY_OPTIONS,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: userInterfaceCategory } = useC64ConfigItems(
     "User Interface Settings",
     [...USER_INTERFACE_HOME_ITEMS],
     isActive || status.isConnecting,
-    VISIBLE_C64_QUERY_OPTIONS,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: keyboardLightingCategory } = useC64ConfigItems(
     "Keyboard Lighting",
     [...KEYBOARD_LIGHTING_HOME_ITEMS],
     (isActive || status.isConnecting) && keyboardLightingRequested,
-    VISIBLE_C64_QUERY_OPTIONS,
+    HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const {
@@ -183,6 +180,7 @@ function HomePageContent() {
     loadAppConfig,
     renameAppConfig,
     deleteAppConfig,
+    captureInitialSnapshot,
   } = useAppConfigState();
   const trace = useActionTrace("HomePage");
 
@@ -812,16 +810,54 @@ function HomePageContent() {
     }
   });
 
-  const effectiveVideoModeOptions = videoModeOptions.length ? videoModeOptions : [videoModeValue];
-  const effectiveAnalogVideoOptions = analogVideoOptions.length ? analogVideoOptions : [analogVideoValue];
-  const effectiveHdmiResolutionOptions = hdmiResolutionOptions.length ? hdmiResolutionOptions : [hdmiResolutionValue];
-  const effectiveDigitalVideoOptions = digitalVideoOptions.length ? digitalVideoOptions : [digitalVideoValue];
-  const effectiveHdmiScanOptions = hdmiScanOptions.length ? hdmiScanOptions : [hdmiScanValue];
-  const effectiveJoystickSwapOptions = joystickSwapOptions.length ? joystickSwapOptions : [joystickSwapValue];
-  const effectiveSerialBusModeOptions = serialBusModeOptions.length ? serialBusModeOptions : [serialBusModeValue];
-  const effectiveCartridgePreferenceOptions = cartridgePreferenceOptions.length
-    ? cartridgePreferenceOptions
-    : [cartridgePreferenceValue];
+  const effectiveVideoModeOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "System Mode",
+    videoModeOptions,
+    videoModeValue,
+  );
+  const effectiveAnalogVideoOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "Analog Video Mode",
+    analogVideoOptions,
+    analogVideoValue,
+  );
+  const effectiveHdmiResolutionOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "HDMI Scan Resolution",
+    hdmiResolutionOptions,
+    hdmiResolutionValue,
+  );
+  const effectiveDigitalVideoOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "Digital Video Mode",
+    digitalVideoOptions,
+    digitalVideoValue,
+  );
+  const effectiveHdmiScanOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "HDMI Scan lines",
+    hdmiScanOptions,
+    hdmiScanValue,
+  );
+  const effectiveJoystickSwapOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "Joystick Swapper",
+    joystickSwapOptions,
+    joystickSwapValue,
+  );
+  const effectiveSerialBusModeOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "Serial Bus Mode",
+    serialBusModeOptions,
+    serialBusModeValue,
+  );
+  const effectiveCartridgePreferenceOptions = resolveHomeConfigOptions(
+    "C64 and Cartridge Settings",
+    "Cartridge Preference",
+    cartridgePreferenceOptions,
+    cartridgePreferenceValue,
+  );
   const turboControlPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Turbo Control")]);
   const badlineTimingPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Badline Timing")]);
   const superCpuDetectPending = Boolean(
@@ -835,13 +871,48 @@ function HomePageContent() {
   const digitalVideoPending = Boolean(
     configWritePending[buildConfigKey("U64 Specific Settings", "Digital Video Mode")],
   );
-  const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
-  const effectiveTurboControlOptions = turboControlOptions.length ? turboControlOptions : [turboControlValue];
-  const effectiveBadlineTimingOptions = badlineTimingOptions.length ? badlineTimingOptions : [badlineTimingValue];
-  const effectiveSuperCpuDetectOptions = superCpuDetectOptions.length ? superCpuDetectOptions : [superCpuDetectValue];
-  const effectiveRamExpansionOptions = ramExpansionOptions.length ? ramExpansionOptions : [ramExpansionValue];
-  const effectiveReuSizeOptions = reuSizeOptions.length ? reuSizeOptions : [reuSizeValue];
-  const effectiveUserPortPowerOptions = userPortPowerOptions.length ? userPortPowerOptions : [userPortPowerValue];
+  const effectiveCpuSpeedOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "CPU Speed",
+    cpuSpeedOptions,
+    cpuSpeedValue,
+  );
+  const effectiveTurboControlOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "Turbo Control",
+    turboControlOptions,
+    turboControlValue,
+  );
+  const effectiveBadlineTimingOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "Badline Timing",
+    badlineTimingOptions,
+    badlineTimingValue,
+  );
+  const effectiveSuperCpuDetectOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "SuperCPU Detect (D0BC)",
+    superCpuDetectOptions,
+    superCpuDetectValue,
+  );
+  const effectiveRamExpansionOptions = resolveHomeConfigOptions(
+    "C64 and Cartridge Settings",
+    "RAM Expansion Unit",
+    ramExpansionOptions,
+    ramExpansionValue,
+  );
+  const effectiveReuSizeOptions = resolveHomeConfigOptions(
+    "C64 and Cartridge Settings",
+    "REU Size",
+    reuSizeOptions,
+    reuSizeValue,
+  );
+  const effectiveUserPortPowerOptions = resolveHomeConfigOptions(
+    "U64 Specific Settings",
+    "UserPort Power Enable",
+    userPortPowerOptions,
+    userPortPowerValue,
+  );
 
   const displayedVideoModeValue = isActive ? videoModeValue : unavailableLabel;
   const displayedAnalogVideoValue = isActive ? analogVideoValue : unavailableLabel;
@@ -909,9 +980,22 @@ function HomePageContent() {
       const result = await revertToInitial();
 
       if (result.status === "missing-snapshot") {
+        const shouldCaptureSnapshot =
+          typeof window !== "undefined" &&
+          window.confirm("No initial snapshot yet. Capture the current device config now?");
+        if (shouldCaptureSnapshot) {
+          const snapshot = await captureInitialSnapshot();
+          if (snapshot) {
+            toast({
+              title: "Initial snapshot captured",
+              description: "Run Revert again to restore this new baseline.",
+            });
+            return;
+          }
+        }
         toast({
           title: "Initial snapshot unavailable",
-          description: "Reconnect and wait for the initial config snapshot before reverting.",
+          description: "Capture the current device config first, then run Revert again.",
         });
         return;
       }

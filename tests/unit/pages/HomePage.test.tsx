@@ -149,6 +149,7 @@ const {
       hasChanges: false,
       isApplying: false,
       isSaving: false,
+      captureInitialSnapshot: vi.fn(),
       revertToInitial: vi.fn(),
       saveCurrentConfig: vi.fn(),
       loadAppConfig: vi.fn(),
@@ -713,6 +714,7 @@ beforeEach(() => {
     hasChanges: false,
     isApplying: false,
     isSaving: false,
+    captureInitialSnapshot: vi.fn().mockResolvedValue(null),
     revertToInitial: vi.fn().mockResolvedValue({ status: "reverted" }),
     saveCurrentConfig: vi.fn().mockResolvedValue(undefined),
     loadAppConfig: vi.fn().mockResolvedValue(undefined),
@@ -1334,6 +1336,32 @@ describe("HomePage SID status", () => {
         }),
       ),
     );
+  });
+
+  it("shows the unavailable toast when initial snapshot capture is requested but fails", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    appConfigStatePayloadRef.current = {
+      ...appConfigStatePayloadRef.current,
+      hasChanges: true,
+      revertToInitial: vi.fn().mockResolvedValue({
+        status: "missing-snapshot",
+      }),
+      captureInitialSnapshot: vi.fn().mockResolvedValue(null),
+    };
+
+    try {
+      renderHomePage();
+
+      fireEvent.click(screen.getByTestId("home-config-revert-changes"));
+
+      await waitFor(() => expect(appConfigStatePayloadRef.current.captureInitialSnapshot).toHaveBeenCalled());
+      expect(toastSpy).toHaveBeenCalledWith({
+        title: "Initial snapshot unavailable",
+        description: "Capture the current device config first, then run Revert again.",
+      });
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 
   it("renders CPU, Ports, and Video cards with the expected controls in page order", async () => {

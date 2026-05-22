@@ -11,8 +11,6 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const INITIAL_SNAPSHOT_SESSION_KEY = "c64u_initial_snapshot_session:http://c64u";
-
 const status = { isConnected: true, isConnecting: false };
 
 const getCategories = vi.fn(async () => ({ categories: ["Audio Mixer"] }));
@@ -112,11 +110,13 @@ describe("useAppConfigState", () => {
     );
   });
 
-  it("captures initial snapshot and supports save/load app config", async () => {
+  it("supports manual initial snapshot capture and save/load app config", async () => {
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
-    await waitFor(() => {
-      expect(getCategories).toHaveBeenCalledTimes(1);
+    expect(getCategories).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
     });
 
     await act(async () => {
@@ -184,7 +184,6 @@ describe("useAppConfigState", () => {
   });
 
   it("revertToInitial applies snapshot data and verifies the restored values", async () => {
-    sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",
       data: { Audio: { items: { Vol: { value: "7" } } } },
@@ -204,7 +203,6 @@ describe("useAppConfigState", () => {
   });
 
   it("revertToInitial reports verification mismatches after applying the snapshot", async () => {
-    sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",
       data: { Audio: { items: { Vol: { value: "7" } } } },
@@ -235,61 +233,61 @@ describe("useAppConfigState", () => {
     expect(updateHasChanges).not.toHaveBeenCalledWith(expect.any(String), false);
   });
 
-  it("sets fetchError state when initial snapshot capture always fails", async () => {
+  it("sets fetchError state when manual initial snapshot capture fails", async () => {
     getCategories.mockRejectedValue(new Error("network error"));
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
-    await waitFor(() => {
-      expect(result.current.fetchError).toBe("network error");
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
     });
+
+    expect(result.current.fetchError).toBe("network error");
 
     getCategories.mockReset();
     getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
   });
 
-  it("recovers a failed initial snapshot after disconnect and reconnect", async () => {
+  it("recovers a failed initial snapshot after a retry", async () => {
     getCategories.mockRejectedValueOnce(new Error("temporary config outage")).mockResolvedValue({
       categories: ["Audio Mixer"],
     });
 
-    const { result, rerender } = renderHook(() => useAppConfigState(), { wrapper });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
-    await waitFor(() => {
-      expect(result.current.fetchError).toBe("temporary config outage");
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
     });
+    expect(result.current.fetchError).toBe("temporary config outage");
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
 
-    status.isConnected = false;
-    rerender();
-    status.isConnected = true;
-    rerender();
-
-    await waitFor(() => {
-      expect(saveInitialSnapshot).toHaveBeenCalledWith(
-        "http://c64u",
-        expect.objectContaining({
-          data: expect.objectContaining({
-            "Audio Mixer": expect.any(Object),
-          }),
-        }),
-      );
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
     });
 
+    expect(saveInitialSnapshot).toHaveBeenCalledWith(
+      "http://c64u",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          "Audio Mixer": expect.any(Object),
+        }),
+      }),
+    );
     expect(result.current.fetchError).toBeNull();
-    expect(sessionStorage.getItem(INITIAL_SNAPSHOT_SESSION_KEY)).toBe("1");
   });
 
-  it("logs at error level when initial snapshot capture fails", async () => {
+  it("logs at error level when manual initial snapshot capture fails", async () => {
     const { addErrorLog } = await import("@/lib/logging");
     getCategories.mockRejectedValue(new Error("network error"));
-    renderHook(() => useAppConfigState(), { wrapper });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
-    await waitFor(() => {
-      expect(addErrorLog).toHaveBeenCalledWith(
-        expect.stringContaining("Initial config snapshot"),
-        expect.objectContaining({ error: "network error" }),
-      );
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
     });
+
+    expect(addErrorLog).toHaveBeenCalledWith(
+      expect.stringContaining("Initial config snapshot"),
+      expect.objectContaining({ error: "network error" }),
+    );
 
     getCategories.mockReset();
     getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
@@ -303,15 +301,17 @@ describe("useAppConfigState", () => {
       throw new Error("Video unavailable");
     });
 
-    renderHook(() => useAppConfigState(), { wrapper });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
-    await waitFor(() => {
-      expect(addLog).toHaveBeenCalledWith(
-        "debug",
-        expect.stringContaining("partially failed"),
-        expect.objectContaining({ failedCategories: ["Video"] }),
-      );
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
     });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      expect.stringContaining("partially failed"),
+      expect.objectContaining({ failedCategories: ["Video"] }),
+    );
   });
 
   it("extractValue normalizes null config to empty string via revertToInitial", async () => {
@@ -442,22 +442,22 @@ describe("useAppConfigState", () => {
     expect(Object.keys(batchPayload)).not.toContain("Audio");
   });
 
-  it("effect returns early and clears hasCaptured when disconnected (line 130)", async () => {
-    status.isConnected = false;
+  it("does not capture the initial snapshot on mount", async () => {
     renderHook(() => useAppConfigState(), { wrapper });
-    // Allow React to process effects
     await act(async () => {});
-    // When disconnected, effect returns early before fetching
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
-    status.isConnected = true;
   });
 
-  it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
-    sessionStorage.setItem(INITIAL_SNAPSHOT_SESSION_KEY, "1");
-    renderHook(() => useAppConfigState(), { wrapper });
+  it("does not recapture the initial snapshot when one is already stored", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: { Audio: { items: { Volume: { selected: "5" } } } },
+    });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
     await act(async () => {});
     expect(getCategories).not.toHaveBeenCalled();
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
+    expect(result.current.initialSnapshot).not.toBeNull();
   });
 
   it("extractItems uses categoryBlock when items field absent (line 49 fallback)", async () => {
@@ -503,18 +503,17 @@ describe("useAppConfigState", () => {
       .mockResolvedValueOnce({ items: { Volume: { selected: "5" } } })
       .mockRejectedValueOnce(new Error("timeout"))
       .mockRejectedValueOnce(new Error("timeout"));
-    renderHook(() => useAppConfigState(), { wrapper });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
-    await waitFor(
-      () => {
-        expect(getCategory).toHaveBeenCalledTimes(3);
-        expect(addLog).toHaveBeenCalledWith(
-          "debug",
-          expect.stringContaining("partially failed"),
-          expect.objectContaining({ failedCategories: ["Video"] }),
-        );
-      },
-      { timeout: 3000 },
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
+    });
+
+    expect(getCategory).toHaveBeenCalledTimes(3);
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      expect.stringContaining("partially failed"),
+      expect.objectContaining({ failedCategories: ["Video"] }),
     );
   });
 
@@ -539,26 +538,27 @@ describe("useAppConfigState", () => {
       },
     }));
 
-    renderHook(() => useAppConfigState(), { wrapper });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
-    await waitFor(() => {
-      expect(saveInitialSnapshot).toHaveBeenCalledWith(
-        "http://c64u",
-        expect.objectContaining({
-          data: expect.objectContaining({
-            "LED Strip Settings": expect.objectContaining({
-              "LED Strip Settings": expect.objectContaining({
-                items: expect.objectContaining({
-                  "LedStrip Mode": expect.any(Object),
-                }),
-              }),
-            }),
-            "Audio Mixer": expect.any(Object),
-          }),
-        }),
-      );
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
     });
 
+    expect(saveInitialSnapshot).toHaveBeenCalledWith(
+      "http://c64u",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          "LED Strip Settings": expect.objectContaining({
+            "LED Strip Settings": expect.objectContaining({
+              items: expect.objectContaining({
+                "LedStrip Mode": expect.any(Object),
+              }),
+            }),
+          }),
+          "Audio Mixer": expect.any(Object),
+        }),
+      }),
+    );
     expect(getCachedCategory).toHaveBeenCalledWith("LED Strip Settings");
     expect(getCachedCategory).toHaveBeenCalledWith("Audio Mixer");
     expect(getCategory).toHaveBeenCalledTimes(1);

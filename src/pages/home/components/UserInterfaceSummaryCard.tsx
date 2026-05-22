@@ -8,6 +8,7 @@
 
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { buildConfigKey, readItemOptions } from "../utils/HomeConfigUtils";
+import { resolveHomeConfigOptions } from "../constants";
 import { SummaryConfigCard, SummaryConfigControlRow } from "./SummaryConfigCard";
 
 type UserInterfaceSummaryCardProps = {
@@ -36,11 +37,24 @@ export function UserInterfaceSummaryCard({
   const navigationStyleValue = String(resolveConfigValue(config, category, "Navigation Style", unavailableLabel));
   const colorSchemeValue = String(resolveConfigValue(config, category, "Color Scheme", unavailableLabel));
 
-  const effectiveInterfaceTypeOptions = interfaceTypeOptions.length ? interfaceTypeOptions : [interfaceTypeValue];
-  const effectiveNavigationStyleOptions = navigationStyleOptions.length
-    ? navigationStyleOptions
-    : [navigationStyleValue];
-  const effectiveColorSchemeOptions = colorSchemeOptions.length ? colorSchemeOptions : [colorSchemeValue];
+  const effectiveInterfaceTypeOptions = resolveHomeConfigOptions(
+    category,
+    "Interface Type",
+    interfaceTypeOptions,
+    interfaceTypeValue,
+  );
+  const effectiveNavigationStyleOptions = resolveHomeConfigOptions(
+    category,
+    "Navigation Style",
+    navigationStyleOptions,
+    navigationStyleValue,
+  );
+  const effectiveColorSchemeOptions = resolveHomeConfigOptions(
+    category,
+    "Color Scheme",
+    colorSchemeOptions,
+    colorSchemeValue,
+  );
 
   const displayedInterfaceTypeValue = isActive ? interfaceTypeValue : unavailableLabel;
   const displayedNavigationStyleValue = isActive ? navigationStyleValue : unavailableLabel;
