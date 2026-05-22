@@ -119,6 +119,34 @@ describe("Slider value display", () => {
 });
 
 describe("Slider callbacks", () => {
+  it("commits the latest native draft on blur when change has not fired yet", () => {
+    const onValueCommit = vi.fn();
+
+    const Controlled = () => {
+      const [value, setValue] = React.useState(50);
+      return (
+        <Slider
+          value={[value]}
+          min={0}
+          max={100}
+          step={1}
+          nativeInputMode="overlay"
+          onValueChange={(values) => setValue(values[0] ?? 50)}
+          onValueCommit={onValueCommit}
+          nativeInputAriaLabel="Native slider"
+        />
+      );
+    };
+
+    render(<Controlled />);
+
+    const input = screen.getByLabelText("Native slider");
+    fireEvent.input(input, { target: { value: "60" } });
+    fireEvent.blur(input);
+
+    expect(onValueCommit).toHaveBeenCalledWith([60]);
+  });
+
   it("calls onPointerDown callback", () => {
     const onPointerDown = vi.fn();
     render(<Slider value={[50]} min={0} max={100} step={1} onPointerDown={onPointerDown} data-testid="test-slider" />);

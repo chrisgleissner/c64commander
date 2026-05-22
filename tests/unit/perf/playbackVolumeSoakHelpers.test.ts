@@ -6,7 +6,7 @@ import {
   hasPlaylistSelectionChanged,
   isActionableSoakTraceError,
   resolvePlaylistIndexFromState,
-} from "../../../tmp/playback-volume-soak-helpers.mjs";
+} from "@/lib/perf/playbackVolumeSoakHelpers";
 
 describe("playbackVolumeSoakHelpers", () => {
   it("treats wraparound next as a single-step advance", () => {

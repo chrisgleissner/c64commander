@@ -288,13 +288,16 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       },
       [handleValueCommit],
     );
-
     const fallbackValue = normalizedDefaultValue?.[0] ?? min;
     const currentValue = normalizedValue?.[0] ?? normalizeSliderValue(dragValue ?? fallbackValue, min, max);
     const displayValue = normalizeSliderValue(dragValue ?? currentValue, min, max);
     const formattedValue = valueFormatter ? valueFormatter(displayValue) : `${displayValue}`;
     const showValue = showValueOnDrag && popupState !== "Hidden";
     const midpointPercent = normalizedMidpoint ? resolveMidpointPercent(normalizedMidpoint.value, min, max) : null;
+    const handleNativeBlur = React.useCallback(() => {
+      if (dragValue === null) return;
+      handleValueCommit([displayValue]);
+    }, [displayValue, dragValue, handleValueCommit]);
 
     return (
       <SliderPrimitive.Root
@@ -334,6 +337,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
             value={displayValue}
             onInput={handleNativeInput}
             onChange={handleNativeChange}
+            onBlur={handleNativeBlur}
             aria-label={nativeInputAriaLabel}
             data-testid={nativeInputTestId}
             disabled={props.disabled}

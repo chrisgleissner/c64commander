@@ -103,6 +103,18 @@ test("verify comprehensive user tracing", async ({ page }) => {
       throw error;
     }
   }
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.waitForFunction(() =>
+    (window as any).__c64uTracing
+      ?.getTraces()
+      ?.some(
+        (trace: any) =>
+          trace?.origin === "user" &&
+          trace?.type === "action-start" &&
+          trace?.data?.component === "GlobalDiagnosticsOverlay" &&
+          trace?.data?.name === "diagnostics.open",
+      ),
+  );
 
   // Get traces
   const traces: any[] = await page.evaluate(() => (window as any).__c64uTracing?.getTraces());
@@ -121,12 +133,10 @@ test("verify comprehensive user tracing", async ({ page }) => {
   expect(configTabClick).toBeDefined();
   expect(configTabClick.data.component).toBe("Tab");
 
-  const connectivityClick = userActions.find(
+  const diagnosticsOpen = userActions.find(
     (t: any) =>
-      t.data?.component === "GlobalInteraction" &&
-      typeof t.data?.name === "string" &&
-      /click .*(c64u|demo mode|system unhealthy|offline|device not reachable)/i.test(t.data.name),
+      t.data?.component === "GlobalDiagnosticsOverlay" && t.data?.name === "diagnostics.open",
   );
-  expect(connectivityClick).toBeDefined();
-  expect(connectivityClick.data.component).toBe("GlobalInteraction");
+  expect(diagnosticsOpen).toBeDefined();
+  expect(diagnosticsOpen.data.component).toBe("GlobalDiagnosticsOverlay");
 });

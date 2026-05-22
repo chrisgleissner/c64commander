@@ -137,7 +137,10 @@ export const GlobalDiagnosticsOverlay = () => {
         if (!diagnosticsOpenActionRef.current) {
           const action = createActionContext("diagnostics.open", "user", "GlobalDiagnosticsOverlay");
           diagnosticsOpenActionRef.current = action;
-          recordActionStart(action);
+          void withDiagnosticsTraceOverride(() => {
+            recordActionStart(action);
+            return null;
+          });
         }
       } else {
         finishPendingDiagnosticsOpenAction(new Error("Diagnostics overlay closed before first visible paint"));

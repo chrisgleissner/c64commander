@@ -905,7 +905,9 @@ test.describe("HVSC Play page", () => {
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
     await snap(page, testInfo, "extract-failed");
 
-    await page.getByRole("button", { name: "Ingest HVSC", exact: true }).click();
+    const ingestButton = page.getByRole("button", { name: "Ingest HVSC", exact: true });
+    await expect(ingestButton).toBeEnabled({ timeout: 10000 });
+    await ingestButton.click();
     await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     const hvscDialog = await openHvscSourceBrowser(page);
     await expect(hvscDialog.getByTestId("source-entry-row").first()).toBeVisible();
