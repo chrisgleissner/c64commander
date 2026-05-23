@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { commitPlaylistSnapshot, resetPlaylistRepositorySyncForTests } from "@/pages/playFiles/playlistRepositorySync";
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -50,6 +50,10 @@ describe("playlistRepositorySync", () => {
     resetPlaylistRepositorySyncForTests();
     beginHvscPerfScope.mockClear();
     endHvscPerfScope.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("commits 10k playlist items and validates immediate repository visibility", async () => {
@@ -316,6 +320,36 @@ describe("playlistRepositorySync", () => {
       expect(repo.replacePlaylistSnapshot).not.toHaveBeenCalled();
       expect(repo.upsertTracks).not.toHaveBeenCalled();
       expect(repo.replacePlaylistItems).not.toHaveBeenCalled();
+    });
+
+    it("keeps snapshot keys stable while persisting real timestamps for missing item dates", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+      const itemWithoutDate: PlaylistItem = { ...buildPlaylistItem(7) };
+      delete itemWithoutDate.addedAt;
+      const items = [itemWithoutDate];
+      const firstRepo = buildRepo(items.length);
+
+      const first = await commitPlaylistSnapshot({ playlistId, items, repository: firstRepo });
+
+      expect(firstRepo.replacePlaylistSnapshot).toHaveBeenCalledWith(
+        playlistId,
+        expect.objectContaining({
+          playlistItems: [expect.objectContaining({ addedAt: "2026-05-22T12:00:00.000Z" })],
+          tracks: [expect.objectContaining({ updatedAt: "2026-05-22T12:00:00.000Z" })],
+        }),
+      );
+
+      vi.setSystemTime(new Date("2026-05-22T13:00:00.000Z"));
+      const secondRepo = buildRepo(items.length);
+      const second = await commitPlaylistSnapshot({
+        playlistId,
+        items: items.map((item) => ({ ...item })),
+        repository: secondRepo,
+      });
+
+      expect(second.snapshotKey).toEqual(first.snapshotKey);
+      expect(secondRepo.replacePlaylistSnapshot).not.toHaveBeenCalled();
     });
   });
 });

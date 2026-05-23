@@ -18,4 +18,24 @@ describe("PlayFilesPage duration contracts", () => {
     expect(pageSource).toContain("onDurationSliderCommit={handleDurationSliderCommit}");
     expect(pageSource).toContain("persistDurationOverride(debouncedDurationOverrideMs)");
   });
+
+  it("clears pending duration commits after immediate persist to avoid duplicate debounced commits", () => {
+    expect(pageSource.match(/setPendingDurationOverrideMs\(undefined\)/g)).toHaveLength(2);
+
+    const sliderCommit = pageSource.slice(
+      pageSource.indexOf("const handleDurationSliderCommit"),
+      pageSource.indexOf("const handleDurationInputChange"),
+    );
+    const inputBlur = pageSource.slice(
+      pageSource.indexOf("const handleDurationInputBlur"),
+      pageSource.indexOf("const queryFilteredPlaylist"),
+    );
+
+    expect(sliderCommit).toMatch(
+      /persistDurationOverride\(nextDurationMs\);\s*setPendingDurationOverrideMs\(undefined\);/,
+    );
+    expect(inputBlur).toMatch(
+      /persistDurationOverride\(nextDurationMs\);\s*setPendingDurationOverrideMs\(undefined\);/,
+    );
+  });
 });

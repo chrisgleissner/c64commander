@@ -1,3 +1,11 @@
+## [2026-05-23T00:49:00Z] PR #262 review-comment follow-up
+
+- Addressed the four unresolved Copilot review findings locally: immediate duration commit now clears pending debounce state; playlist repository snapshot sync now hashes one canonical serialized payload and reuses it for persistence timestamps without a second full serialization; query indexes no longer persist `rankBy`; the empty-catch guardrail no longer carries an unreachable allowlist.
+- Added focused regressions for duplicate duration commits, stable playlist snapshot keys with real persisted timestamps, non-persisted rank maps with selective sort preservation, and the production-only empty-catch guardrail.
+- Validation: `npm run test -- tests/unit/pages/playFiles/PlayFilesPage.durationContracts.test.ts tests/unit/playFiles/playlistRepositorySync.test.ts tests/unit/lib/playlistRepository/queryIndex.test.ts tests/unit/quality/catchGuardrail.test.ts` passed with 22 tests; touched TS files were formatted; `npm run test:coverage` passed with 91.49% global branch coverage; `npm run lint`, `npm run build`, `npm run cap:build`, `cd android && ./gradlew assembleDebug`, and `git diff --check` passed.
+- Installed and launched `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` on Pixel 4 `9B081FFAZ001WX`; evidence captured in `docs/research/stabilization/prod-hardening-1-evidence/20260523T000000Z-pr-review-deploy.txt`.
+- Remaining: push the follow-up commit and recheck PR #262 CI/review state.
+
 ## [2026-05-22T23:45:00Z] PR #262 iOS Maestro CI convergence
 
 - Investigated failing PR check `iOS | Maestro` from run `26315982560`, job `77475408949`; downloaded `ios-maestro-evidence` and confirmed the connectivity gate failed because all Maestro flows sent REST traffic to real `http://c64u/...` after PH11 made filesystem smoke config probing explicit opt-in.

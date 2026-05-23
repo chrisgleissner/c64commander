@@ -92,4 +92,26 @@ describe("playlist query index", () => {
       orderedIdsInspected: 0,
     });
   });
+
+  it("does not persist rank maps while preserving selective query sort order", () => {
+    const tracks: Record<string, TrackRecord> = {
+      "track-0": buildTrack(0, "Needle Zed"),
+      "track-1": buildTrack(1, "Needle Alpha"),
+      "track-2": buildTrack(2, "Needle Beta"),
+    };
+    const playlistItems = Object.keys(tracks).map((_, index) => buildPlaylistItem(index));
+    const index = buildPlaylistQueryIndex(playlistItems, tracks);
+
+    expect(JSON.stringify(index)).not.toContain("rankBy");
+
+    const result = queryPlaylistIndex(index, {
+      playlistId: "playlist",
+      query: "needle",
+      limit: 10,
+      offset: 0,
+      sort: "title",
+    });
+
+    expect(result.rows.map((row) => row.track.title)).toEqual(["Needle Alpha", "Needle Beta", "Needle Zed"]);
+  });
 });

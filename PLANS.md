@@ -9,6 +9,7 @@
 - Existing diff has been converged with targeted and full validation. PH5, PH8, PH9, PH10, PH1, PH12, PH13, PH2, PH3, PH4, PH14, PH6, PH11, and PH15 are complete in code/tests; PH7/c64u live switch-back is deferred because the `c64u` REST probe reset the connection during final evidence.
 - Resolved current diff blockers: `c64scope/package-lock.json` peer-flag churn was unrelated and reverted; `src/pages/playFiles/playlistRepositorySync.ts` no longer contains NUL bytes and now produces a readable text diff.
 - Focused regressions and full validation pass. PH5 guardrail coverage passes for empty production catches and silent fallback returns without diagnostic context. PH6 removed default HVSC perf `console.info` output and native startup Google Fonts requests; legacy console-policy cleanup outside this finding remains documented as residual risk.
+- PR #262 review follow-up is in progress: four Copilot review findings were addressed locally with focused regression tests, and CI must be rechecked after the follow-up commit is pushed.
 
 ### Task table
 
@@ -33,6 +34,7 @@
 | PH11  | Native smoke config probe              | DONE   | smoke mode and test setup                                                                  | production native mode skips smoke stat; explicit test mode reads it                                                                                   | smokeMode tests; final launch evidence                                                                                                                        | Smoke benchmark/status files may still be written when smoke mode is already enabled.                                            |
 | PH15  | FTP duplicate error logging            | DONE   | FTP client/interaction manager/tests                                                       | one canonical FTP client error per failure with host/path/context                                                                                      | device interaction tests                                                                                                                                      | Live FTP failure proof deferred with c64u outage.                                                                                |
 | PH7   | Switch-back evidence gap               | DEFERRED | evidence only                                                                              | none                                                                                                                                                   | final evidence shows `u64` reachable and `c64u` REST connection reset                                                                                        | `c64u` unavailable; per user guidance, continued against `u64`.                                                                  |
+| PRR   | PR #262 review comments                | DOING  | Play Files duration, playlist sync, query index, catch guardrail tests                      | focused review-comment Vitest; full coverage/lint/build after final patch set                                                                          | PR checks plus review-thread status                                                                                                                           | CI and review-thread resolution still pending until pushed rerun completes.                                                      |
 | FINAL | Completion gate                        | DONE   | final changed set                                                                          | `npm run test:coverage` 91.47% branch; `npm run lint`; `npm run build`; `npm run cap:build`; Android JVM; `assembleDebug`; `git diff --check`          | final evidence files under `docs/research/stabilization/prod-hardening-1-evidence/`                                                                           | Live c64u/saved-device switch and some UI interaction proofs deferred because c64u reset.                                       |
 
 ### Current Diff Triage
@@ -86,6 +88,8 @@
 - Final coverage passed: `npm run test:coverage` with 91.47% global branch coverage.
 - Final repository validation passed: `npm run lint`, `npm run build`, `npm run cap:build`, `cd android && ./gradlew test`, `cd android && ./gradlew assembleDebug`, and `git diff --check`.
 - PR #262 iOS Maestro CI follow-up: failing connectivity validation traced to the PH11 explicit smoke-config opt-in; fixed by rebuilding the Maestro simulator bundle with `VITE_ENABLE_TEST_PROBES=1` before seeded smoke config is read. Targeted validation passed: `npm run test -- tests/unit/ci/iosMaestroWorkflowContracts.test.ts tests/unit/smoke/smokeMode.test.ts`, `npm run format:check:yaml`, `npx prettier --check tests/unit/ci/iosMaestroWorkflowContracts.test.ts`, and `git diff --check`.
+- PR #262 review follow-up targeted Vitest passed: `npm run test -- tests/unit/pages/playFiles/PlayFilesPage.durationContracts.test.ts tests/unit/playFiles/playlistRepositorySync.test.ts tests/unit/lib/playlistRepository/queryIndex.test.ts tests/unit/quality/catchGuardrail.test.ts` (22 tests); touched TS files were formatted and `git diff --check` passed.
+- PR #262 review follow-up broader validation passed: `npm run test:coverage` with 91.49% global branch coverage, `npm run lint`, `npm run build`, `npm run cap:build`, `cd android && ./gradlew assembleDebug`, and final `git diff --check`.
 
 ### Device Evidence
 
@@ -97,6 +101,7 @@
 - Current evidence status: baseline adb/curl proof captured in `docs/research/stabilization/prod-hardening-1-evidence/20260522T175326Z-phase0-probes.txt`; fresh APK install and first-12-second launch/logcat counts captured in `docs/research/stabilization/prod-hardening-1-evidence/20260522T184034Z-fresh-apk-install-launch.txt` and `docs/research/stabilization/prod-hardening-1-evidence/20260522T184034Z-fresh-apk-launch-logcat.txt`; final install/launch and interaction evidence captured in `docs/research/stabilization/prod-hardening-1-evidence/20260522T192943Z-final-device-evidence.txt` and `docs/research/stabilization/prod-hardening-1-evidence/20260522T193112Z-final-interactions-u64.txt`.
 - Evidence screenshots: `docs/research/stabilization/prod-hardening-1-evidence/final-current-screen.png` and `docs/research/stabilization/prod-hardening-1-evidence/final-after-interactions.png`.
 - Final APK: `android/app/build/outputs/apk/debug/c64commander-0.8.4-rc2-debug.apk`, installed and launched on Pixel 4 `9B081FFAZ001WX`; app version `0.8.4-rc2` / versionCode `1977`.
+- PR #262 review-follow-up APK: `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`, installed and launched on Pixel 4 `9B081FFAZ001WX`; evidence captured in `docs/research/stabilization/prod-hardening-1-evidence/20260523T000000Z-pr-review-deploy.txt`.
 - Ultimate host used for final interaction proof: `u64`, firmware `3.14e`, shown healthy at `192.168.1.13`. `c64u` was probed and returned `curl: (56) Recv failure: Connection reset by peer`, so PH7/cross-host live proof is deferred.
 - Phase A scan evidence captured in `docs/research/stabilization/prod-hardening-1-evidence/20260522T180545Z-phaseA-scan.txt`; it records the remaining console-policy backlog and the lone test-only empty cancellation catch.
 
@@ -109,7 +114,7 @@
 - PH9 and PH10 prove cross-host FTP keys and queued scheduler reset behavior in unit coverage; live cross-device evidence is deferred because `c64u` was unavailable.
 - Required validation commands passed, including `npm run test:coverage` at 91.47% branch coverage and Android JVM tests.
 - Latest APK is built, installed on Pixel 4, launched, exercised against `u64`, and evidence files exist under the prod-hardening evidence directory.
-- PR #262 CI rerun is required after the iOS Maestro smoke-config opt-in workflow fix.
+- PR #262 CI rerun is required after the iOS Maestro smoke-config opt-in and review-follow-up fixes; local follow-up validation and Pixel 4 deploy evidence are complete.
 
 ## Classification
 

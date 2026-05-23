@@ -28,11 +28,6 @@ export type PersistedPlaylistQueryIndex = {
     title: string[];
     path: string[];
   };
-  rankBy?: {
-    "playlist-position": Record<string, number>;
-    title: Record<string, number>;
-    path: Record<string, number>;
-  };
   idsByCategory: Record<string, string[]>;
   idsBySearchGram: Record<string, string[]>;
 };
@@ -84,12 +79,6 @@ const sortRows = (rows: PersistedPlaylistQueryRow[], sort: PlaylistQueryOptions[
 
 const buildRank = (orderedIds: string[]) =>
   Object.fromEntries(orderedIds.map((rowId, index) => [rowId, index])) as Record<string, number>;
-
-const buildRankByOrder = (orderBy: PersistedPlaylistQueryIndex["orderBy"]) => ({
-  "playlist-position": buildRank(orderBy["playlist-position"]),
-  title: buildRank(orderBy.title),
-  path: buildRank(orderBy.path),
-});
 
 export const resetPlaylistQueryIndexDiagnosticsForTests = () => {
   queryDiagnosticsForTests = {
@@ -143,7 +132,6 @@ export const buildPlaylistQueryIndex = (
   return {
     rowsById,
     orderBy,
-    rankBy: buildRankByOrder(orderBy),
     idsByCategory,
     idsBySearchGram,
   };
@@ -157,9 +145,6 @@ const intersectInto = (current: Set<string> | null, values: string[]) => {
   });
   return next;
 };
-
-const getRankBySort = (index: PersistedPlaylistQueryIndex, sort: PlaylistQuerySort, orderedIds: string[]) =>
-  index.rankBy?.[sort] ?? buildRank(orderedIds);
 
 export const queryPlaylistIndex = (
   index: PersistedPlaylistQueryIndex,
@@ -189,7 +174,7 @@ export const queryPlaylistIndex = (
   let totalMatchCount = 0;
 
   const isSelectiveCandidateSet = candidateIds !== null && candidateIds.size < orderedIds.length;
-  const rankBySort = isSelectiveCandidateSet ? getRankBySort(index, sort, orderedIds) : null;
+  const rankBySort = isSelectiveCandidateSet ? buildRank(orderedIds) : null;
   const iterableIds = isSelectiveCandidateSet
     ? [...candidateIds].sort(
         (left, right) =>

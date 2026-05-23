@@ -42,6 +42,13 @@ type PlaylistCommitRequest = {
   initialPhase?: "COMMITTING" | "BACKGROUND_COMMITTING";
 };
 
+type SerializedPlaylistRepository = {
+  tracks: TrackRecord[];
+  playlistItems: PlaylistItemRecord[];
+};
+
+const SNAPSHOT_KEY_TIMESTAMP = "1970-01-01T00:00:00.000Z";
+
 const defaultSnapshot = (playlistId: string): PlaylistRepositorySyncSnapshot => ({
   playlistId,
   phase: "IDLE",
@@ -72,7 +79,7 @@ const buildTrackId = (
   originDeviceId?: string | null,
 ) => `${source}:${sourceId ?? originDeviceId ?? ""}:${normalizeSourcePath(path)}`;
 
-const buildSnapshotKey = (playlistId: string, items: PlaylistItem[]) => {
+const buildSnapshotKey = (serialized: SerializedPlaylistRepository) => {
   let hash = 2166136261;
   const write = (value: string) => {
     for (let index = 0; index < value.length; index += 1) {
@@ -84,8 +91,8 @@ const buildSnapshotKey = (playlistId: string, items: PlaylistItem[]) => {
     hash = Math.imul(hash, 16777619);
   };
 
-  write(JSON.stringify(serializePlaylistToRepository(items, playlistId, "snapshot-key")));
-  return `${items.length}:${hash >>> 0}`;
+  write(JSON.stringify(serialized));
+  return `${serialized.playlistItems.length}:${hash >>> 0}`;
 };
 
 const getSnapshot = (playlistId: string) => ensureSnapshot(playlistId);
@@ -139,7 +146,7 @@ export const serializePlaylistToRepository = (
   items: PlaylistItem[],
   playlistId: string,
   nowIso = new Date().toISOString(),
-) => {
+): SerializedPlaylistRepository => {
   const tracksById = new Map<string, TrackRecord>();
   const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
     playlistItemId: item.id,
@@ -186,10 +193,25 @@ export const serializePlaylistToRepository = (
   return { tracks: Array.from(tracksById.values()), playlistItems };
 };
 
+const withPersistenceTimestamp = (
+  serialized: SerializedPlaylistRepository,
+  nowIso: string,
+): SerializedPlaylistRepository => ({
+  tracks: serialized.tracks.map((track) => ({
+    ...track,
+    createdAt: track.createdAt === SNAPSHOT_KEY_TIMESTAMP ? nowIso : track.createdAt,
+    updatedAt: nowIso,
+  })),
+  playlistItems: serialized.playlistItems.map((playlistItem) => ({
+    ...playlistItem,
+    addedAt: playlistItem.addedAt === SNAPSHOT_KEY_TIMESTAMP ? nowIso : playlistItem.addedAt,
+  })),
+});
+
 const persistSerializedPlaylist = async (
   repository: PlaylistDataRepository,
   playlistId: string,
-  serialized: { tracks: TrackRecord[]; playlistItems: PlaylistItemRecord[] },
+  serialized: SerializedPlaylistRepository,
   trackChunkSize: number,
 ) => {
   if (typeof repository.replacePlaylistSnapshot === "function") {
@@ -225,7 +247,8 @@ export const commitPlaylistSnapshot = async ({
   trackChunkSize = 500,
   initialPhase = "COMMITTING",
 }: PlaylistCommitRequest): Promise<PlaylistCommitResult> => {
-  const snapshotKey = buildSnapshotKey(playlistId, items);
+  const canonicalSerialized = serializePlaylistToRepository(items, playlistId, SNAPSHOT_KEY_TIMESTAMP);
+  const snapshotKey = buildSnapshotKey(canonicalSerialized);
   const current = getSnapshot(playlistId);
   if (current.phase === "READY" && current.snapshotKey === snapshotKey && current.committedCount === items.length) {
     return {
@@ -262,7 +285,7 @@ export const commitPlaylistSnapshot = async ({
 
   const promise = (async () => {
     const serT0 = Date.now();
-    const serialized = serializePlaylistToRepository(items, playlistId);
+    const serialized = withPersistenceTimestamp(canonicalSerialized, new Date().toISOString());
     addLog("debug", "[hvsc-perf] serialize done", {
       tracks: serialized.tracks.length,
       items: serialized.playlistItems.length,

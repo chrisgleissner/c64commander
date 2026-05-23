@@ -4,11 +4,6 @@ import path from "node:path";
 
 const SCAN_ROOTS = ["src", "android/app/src/main/java", "tests", "android/app/src/test"] as const;
 
-const EMPTY_CATCH_ALLOWLIST = new Set([
-  "android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionServiceTest.kt:47",
-  "android/app/src/test/java/uk/gleissner/c64commander/HvscArchiveExtractorTest.kt:159",
-]);
-
 const TEXT_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".kt", ".java"]);
 const SILENT_FALLBACK_RETURN = /\breturn\s+(?:null|undefined|\[\]|\{\}|""|'')\s*;?/;
 const DIAGNOSTIC_OR_CONTEXT =
@@ -68,11 +63,10 @@ const findCatchBlocks = (file: string): CatchBlock[] => {
 const allCatchBlocks = () => SCAN_ROOTS.flatMap(walkFiles).flatMap(findCatchBlocks);
 
 describe("catch block guardrails", () => {
-  it("does not introduce empty catch blocks outside documented cancellation tests", () => {
+  it("does not introduce empty production catch blocks", () => {
     const emptyCatches = allCatchBlocks()
       .filter((block) => stripComments(block.text.replace(/\bcatch\b[^{]*\{/, "").replace(/\}\s*$/, "")) === "")
-      .filter((block) => block.file.startsWith("src/") || block.file.startsWith("android/app/src/main/java/"))
-      .filter((block) => !EMPTY_CATCH_ALLOWLIST.has(`${block.file}:${block.line}`));
+      .filter((block) => block.file.startsWith("src/") || block.file.startsWith("android/app/src/main/java/"));
 
     expect(emptyCatches).toEqual([]);
   });

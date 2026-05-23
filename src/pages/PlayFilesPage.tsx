@@ -1494,6 +1494,7 @@ export default function PlayFilesPage() {
       setPendingDurationOverrideMs(nextDurationMs);
       setDurationInput(formatDurationSeconds(nextSeconds));
       persistDurationOverride(nextDurationMs);
+      setPendingDurationOverrideMs(undefined);
     },
     [persistDurationOverride, setDurationMs],
   );
@@ -1526,6 +1527,7 @@ export default function PlayFilesPage() {
     setDurationMs(nextDurationMs);
     setPendingDurationOverrideMs(nextDurationMs);
     persistDurationOverride(nextDurationMs);
+    setPendingDurationOverrideMs(undefined);
     setDurationInput(formatDurationSeconds(nextSeconds));
   }, [durationInput, durationSeconds, persistDurationOverride, setDurationMs]);
 
