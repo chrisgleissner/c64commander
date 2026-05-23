@@ -4,7 +4,8 @@
 - Added focused regressions for duplicate duration commits, stable playlist snapshot keys with real persisted timestamps, non-persisted rank maps with selective sort preservation, and the production-only empty-catch guardrail.
 - Validation: `npm run test -- tests/unit/pages/playFiles/PlayFilesPage.durationContracts.test.ts tests/unit/playFiles/playlistRepositorySync.test.ts tests/unit/lib/playlistRepository/queryIndex.test.ts tests/unit/quality/catchGuardrail.test.ts` passed with 22 tests; touched TS files were formatted; `npm run test:coverage` passed with 91.49% global branch coverage; `npm run lint`, `npm run build`, `npm run cap:build`, `cd android && ./gradlew assembleDebug`, and `git diff --check` passed.
 - Installed and launched `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` on Pixel 4 `9B081FFAZ001WX`; evidence captured in `docs/research/stabilization/prod-hardening-1-evidence/20260523T000000Z-pr-review-deploy.txt`.
-- Remaining: push the follow-up commit and recheck PR #262 CI/review state.
+- Resolved the four addressed Copilot review threads on GitHub.
+- Remaining: push the review-thread status note and recheck PR #262 CI state.
 
 ## [2026-05-22T23:45:00Z] PR #262 iOS Maestro CI convergence
 
