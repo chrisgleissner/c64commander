@@ -48,6 +48,7 @@ import {
   getLocalSourceRuntimeFile,
   requireLocalSourceEntries,
 } from "@/lib/sourceNavigation/localSourcesStore";
+import { addErrorLog } from "@/lib/logging";
 import { buildDiskMountType, resolveLocalDiskBlob, mountDiskToDrive } from "@/lib/disks/diskMount";
 
 describe("diskMount", () => {
@@ -157,6 +158,129 @@ describe("diskMount", () => {
       );
     });
 
+    it("rejects oversized runtime disk files before reading them into memory", async () => {
+      const oversizedFile = {
+        size: 64 * 1024 * 1024 + 1,
+        arrayBuffer: vi.fn(),
+      } as unknown as File;
+
+      await expect(
+        resolveLocalDiskBlob({ path: "/huge.d64", location: "local" } as any, oversizedFile),
+      ).rejects.toThrow("too large to mount");
+      expect(oversizedFile.arrayBuffer).not.toHaveBeenCalled();
+    });
+
+    it("rejects oversized localUri payloads before decoding them", async () => {
+      vi.mocked(FolderPicker.readFile).mockResolvedValue({
+        data: "A".repeat(90 * 1024 * 1024),
+      });
+
+      await expect(
+        resolveLocalDiskBlob({
+          path: "/huge.d64",
+          localUri: "content://huge",
+          location: "local",
+        } as any),
+      ).rejects.toThrow("too large to mount");
+    });
+
+    it("uses an Error abort fallback when DOMException is unavailable", async () => {
+      const previousDomException = globalThis.DOMException;
+      vi.stubGlobal("DOMException", undefined);
+      const controller = new AbortController();
+      controller.abort();
+
+      try {
+        await expect(
+          resolveLocalDiskBlob(
+            {
+              path: "/test.d64",
+              localUri: "content://uri",
+              location: "local",
+            } as any,
+            undefined,
+            { signal: controller.signal },
+          ),
+        ).rejects.toMatchObject({
+          name: "AbortError",
+          message: "Local disk file read cancelled",
+        });
+      } finally {
+        vi.stubGlobal("DOMException", previousDomException);
+      }
+    });
+
+    it("cancels before reading runtime disk file bytes", async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const file = {
+        size: 4,
+        arrayBuffer: vi.fn(),
+      } as unknown as File;
+
+      await expect(
+        resolveLocalDiskBlob({ path: "/test.d64", location: "local" } as any, file, {
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow(/cancelled|aborted/i);
+      expect(file.arrayBuffer).not.toHaveBeenCalled();
+    });
+
+    it("cancels pending native localUri reads without returning late blobs", async () => {
+      const controller = new AbortController();
+      let resolveRead: ((value: { data: string }) => void) | null = null;
+      vi.mocked(FolderPicker.readFile).mockReturnValue(
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+      );
+
+      const pending = resolveLocalDiskBlob(
+        {
+          path: "/test.d64",
+          localUri: "content://uri",
+          location: "local",
+        } as any,
+        undefined,
+        { signal: controller.signal },
+      );
+
+      await vi.waitFor(() => expect(FolderPicker.readFile).toHaveBeenCalledWith({ uri: "content://uri" }));
+      controller.abort();
+      await expect(pending).rejects.toThrow(/cancelled|aborted/i);
+      resolveRead?.({ data: btoa("late data") });
+    });
+
+    it("cancels pending native localTreeUri reads without decoding late payloads", async () => {
+      const controller = new AbortController();
+      let resolveRead: ((value: { data: string }) => void) | null = null;
+      vi.mocked(FolderPicker.readFileFromTree).mockReturnValue(
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+      );
+
+      const pending = resolveLocalDiskBlob(
+        {
+          path: "/test.d64",
+          localTreeUri: "tree://uri",
+          location: "local",
+        } as any,
+        undefined,
+        { signal: controller.signal },
+      );
+
+      await vi.waitFor(() =>
+        expect(FolderPicker.readFileFromTree).toHaveBeenCalledWith({
+          treeUri: "tree://uri",
+          path: "/test.d64",
+        }),
+      );
+      controller.abort();
+      await expect(pending).rejects.toThrow(/cancelled|aborted/i);
+      resolveRead?.({ data: btoa("late tree data") });
+    });
+
     it("tries matching source by sourceId first", async () => {
       const runtimeFile = new File(["data"], "test.d64");
       vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any, { id: "src2" } as any]);
@@ -218,6 +342,55 @@ describe("diskMount", () => {
         sourceId: "src1",
       } as any);
       expect(blob).toBe(runtimeFile);
+    });
+
+    it("logs source entry resolution failures before trying other sources", async () => {
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any]);
+      vi.mocked(getLocalSourceRuntimeFile).mockReturnValue(null);
+      vi.mocked(getLocalSourceListingMode).mockReturnValue("entries" as any);
+      vi.mocked(requireLocalSourceEntries).mockImplementation(() => {
+        throw new Error("entries unavailable");
+      });
+
+      await expect(resolveLocalDiskBlob({ path: "/test.d64", location: "local" } as any)).rejects.toThrow(
+        "Local disk access is missing",
+      );
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "Local source entries resolve failed",
+        expect.objectContaining({
+          sourceId: "src1",
+          normalizedPath: "/test.d64",
+          error: "entries unavailable",
+        }),
+      );
+    });
+
+    it("cancels after resolving a matching source entry but before decoding the file payload", async () => {
+      const controller = new AbortController();
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any]);
+      vi.mocked(getLocalSourceRuntimeFile).mockReturnValue(null);
+      vi.mocked(getLocalSourceListingMode).mockReturnValue("entries" as any);
+      vi.mocked(requireLocalSourceEntries).mockReturnValue([
+        { relativePath: "/test.d64", uri: "content://entry-uri" } as any,
+      ]);
+      vi.mocked(FolderPicker.readFile).mockImplementation(async () => {
+        controller.abort();
+        return { data: btoa("entry data") };
+      });
+
+      await expect(
+        resolveLocalDiskBlob({ path: "/test.d64", location: "local" } as any, undefined, {
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow("Local disk access is missing");
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "Local source entries resolve failed",
+        expect.objectContaining({
+          sourceId: "src1",
+          normalizedPath: "/test.d64",
+          error: expect.stringMatching(/cancelled|aborted/i),
+        }),
+      );
     });
   });
 

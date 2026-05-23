@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as hvscFS from "@/lib/hvsc/hvscFilesystem";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
+import { addLog } from "@/lib/logging";
 
 // Mock dependencies
 vi.mock("@capacitor/filesystem", () => ({
@@ -21,8 +22,13 @@ vi.mock("@capacitor/filesystem", () => ({
     deleteFile: vi.fn(),
     mkdir: vi.fn(),
     rmdir: vi.fn(),
+    rename: vi.fn(),
   },
   Directory: { Data: "DATA" },
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
 }));
 
 vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
@@ -322,6 +328,78 @@ describe("hvscFilesystem", () => {
 
       expect(Filesystem.rmdir).toHaveBeenCalled(); // Tried fallback
       // No throw
+    });
+  });
+
+  describe("staging directory promotion and cleanup", () => {
+    it("ignores missing staging and old library directories during cleanup", async () => {
+      // @ts-expect-error - mock typing
+      vi.mocked(Filesystem.rmdir).mockRejectedValue(new Error("ENOENT: no such file or directory"));
+
+      await hvscFS.cleanupStaleStagingDir();
+
+      expect(addLog).not.toHaveBeenCalledWith(
+        "debug",
+        "HVSC filesystem: Failed to remove directory",
+        expect.anything(),
+      );
+    });
+
+    it("logs non-missing directory removal failures during cleanup", async () => {
+      // @ts-expect-error - mock typing
+      vi.mocked(Filesystem.rmdir).mockRejectedValueOnce(new Error("Permission denied")).mockResolvedValue(undefined);
+
+      await hvscFS.cleanupStaleStagingDir();
+
+      expect(addLog).toHaveBeenCalledWith(
+        "debug",
+        "HVSC filesystem: Failed to remove directory",
+        expect.objectContaining({
+          path: expect.stringContaining("library-staging"),
+          error: expect.any(Error),
+        }),
+      );
+    });
+
+    it("logs failure to move the existing library aside but still promotes staging", async () => {
+      // @ts-expect-error - mock typing
+      vi.mocked(Filesystem.rmdir).mockResolvedValue(undefined);
+      // @ts-expect-error - mock typing
+      vi.mocked(Filesystem.rename)
+        .mockRejectedValueOnce(new Error("Permission denied"))
+        .mockResolvedValueOnce(undefined);
+
+      await hvscFS.promoteLibraryStagingDir();
+
+      expect(addLog).toHaveBeenCalledWith(
+        "debug",
+        "HVSC filesystem: Failed to move existing HVSC library aside before promotion",
+        expect.objectContaining({
+          from: "hvsc/library",
+          to: "hvsc/library-old",
+          error: expect.any(Error),
+        }),
+      );
+      expect(Filesystem.rename).toHaveBeenLastCalledWith({
+        directory: Directory.Data,
+        from: "hvsc/library-staging",
+        to: "hvsc/library",
+      });
+    });
+
+    it("does not log when the existing library is already absent during promotion", async () => {
+      // @ts-expect-error - mock typing
+      vi.mocked(Filesystem.rmdir).mockResolvedValue(undefined);
+      // @ts-expect-error - mock typing
+      vi.mocked(Filesystem.rename).mockRejectedValueOnce(new Error("does not exist")).mockResolvedValueOnce(undefined);
+
+      await hvscFS.promoteLibraryStagingDir();
+
+      expect(addLog).not.toHaveBeenCalledWith(
+        "debug",
+        "HVSC filesystem: Failed to move existing HVSC library aside before promotion",
+        expect.anything(),
+      );
     });
   });
 });

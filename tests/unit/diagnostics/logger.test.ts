@@ -299,7 +299,7 @@ describe("logger", () => {
       }
     });
 
-    it("catches JSON.stringify errors for circular objects in console.error", () => {
+    it("catches JSON.stringify errors for circular objects in console.error and marks the fallback string (PH5)", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
         const circular: Record<string, unknown> = {};
@@ -307,8 +307,9 @@ describe("logger", () => {
         console.error(circular);
         const calls = addLog.mock.calls.filter((c) => c[0] === "error");
         expect(calls.length).toBeGreaterThan(0);
-        // String(circularObj) = '[object Object]'
-        expect(calls[0][1]).toBe("[object Object]");
+        // PH5: stringification failure must be visible to downstream log consumers,
+        // not silently fall back to the unhelpful '[object Object]'.
+        expect(calls[0][1]).toMatch(/^\[unserializable: [\s\S]+\] \[object Object\]$/);
       } finally {
         uninstall();
       }

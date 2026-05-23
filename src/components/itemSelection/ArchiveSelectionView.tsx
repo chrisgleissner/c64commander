@@ -19,6 +19,7 @@ import type { ArchivePreset, ArchivePresetType, ArchiveSearchParams, ArchiveSear
 import { useOnlineArchive } from "@/hooks/useOnlineArchive";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { reportUserError } from "@/lib/uiErrors";
+import { addLog } from "@/lib/logging";
 
 const EMPTY_SEARCH: ArchiveSearchParams = {
   name: "",
@@ -92,7 +93,12 @@ export const ArchiveSelectionView = ({
   const queryPreview = useMemo(() => {
     try {
       return buildArchiveQuery(form);
-    } catch {
+    } catch (error) {
+      // Form is intentionally invalid until the user fills enough fields;
+      // log at debug (gated off by default) so unexpected errors are still diagnosable.
+      addLog("debug", "Archive query preview build failed", {
+        error: (error as Error)?.message ?? String(error),
+      });
       return "";
     }
   }, [form]);

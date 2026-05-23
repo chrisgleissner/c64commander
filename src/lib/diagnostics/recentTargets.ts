@@ -8,8 +8,16 @@
 
 // §8.2 — Recent successful switch-device targets (up to 3).
 
+import { addLog } from "@/lib/logging";
+
 const MAX_RECENT = 3;
 const STORAGE_KEY = "c64u_recent_switch_targets";
+
+const describeError = (error: unknown, extras: Record<string, unknown> = {}) => ({
+  ...extras,
+  error: (error as Error)?.message ?? String(error),
+  errorName: (error as Error)?.name,
+});
 
 export type RecentTarget = {
   host: string;
@@ -26,7 +34,13 @@ const read = (): RecentTarget[] => {
     return (parsed as RecentTarget[]).filter(
       (t) => t && typeof t === "object" && typeof t.host === "string" && t.host.length > 0,
     );
-  } catch {
+  } catch (error) {
+    // Corrupted sessionStorage entry — surface so we know it happened, then reset.
+    addLog(
+      "warn",
+      "Failed to parse recent switch-device targets from sessionStorage; resetting",
+      describeError(error, { storageKey: STORAGE_KEY }),
+    );
     return [];
   }
 };
@@ -36,8 +50,14 @@ const write = (targets: RecentTarget[]): void => {
     if (typeof sessionStorage !== "undefined") {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(targets));
     }
-  } catch {
-    // storage unavailable — ignore
+  } catch (error) {
+    // sessionStorage can throw (private browsing, quota). Single warn per call
+    // is fine — this writer is called only on successful device switch.
+    addLog(
+      "warn",
+      "Failed to persist recent switch-device targets to sessionStorage",
+      describeError(error, { storageKey: STORAGE_KEY, targetCount: targets.length }),
+    );
   }
 };
 

@@ -6,13 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 
 const isVitestEnvironment = () => {
   try {
     return typeof process !== "undefined" && process.env.VITEST === "true";
-  } catch {
+  } catch (error) {
+    addLog("debug", "Failed to inspect Vitest service-worker environment", buildErrorLogDetails(error as Error));
     return false;
   }
 };
@@ -20,13 +21,21 @@ const isVitestEnvironment = () => {
 const isTestProbeEnvironment = () => {
   try {
     if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
-  } catch {
-    // Ignore env access failures and fall through to process/window checks.
+  } catch (error) {
+    addLog(
+      "debug",
+      "Failed to inspect service-worker test-probe import metadata",
+      buildErrorLogDetails(error as Error),
+    );
   }
   try {
     if (typeof process !== "undefined" && process.env?.VITE_ENABLE_TEST_PROBES === "1") return true;
-  } catch {
-    // Ignore process access failures.
+  } catch (error) {
+    addLog(
+      "debug",
+      "Failed to inspect service-worker test-probe process metadata",
+      buildErrorLogDetails(error as Error),
+    );
   }
   return (
     typeof window !== "undefined" &&

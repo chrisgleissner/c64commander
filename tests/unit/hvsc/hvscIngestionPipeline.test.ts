@@ -41,6 +41,10 @@ vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
+  buildErrorLogDetails: vi.fn((error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: { name: error.name, message: error.message, stack: error.stack },
+  })),
 }));
 
 import {

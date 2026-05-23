@@ -9,6 +9,7 @@
 import type { HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 
 // §7.1 — Health states (fixed labels, must not be paraphrased)
 export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unavailable";
@@ -293,8 +294,12 @@ const readEventTransportHost = (event: TraceEvent): string | null => {
     try {
       const parsed = new URL(data.url, "http://localhost");
       if (parsed.host) return stripHostPort(parsed.host);
-    } catch {
-      // ignore malformed URL — fall through to device attribution
+    } catch (error) {
+      addLog(
+        "debug",
+        "Failed to parse diagnostics event URL for transport host attribution",
+        buildErrorLogDetails(error as Error, { url: data.url }),
+      );
     }
   }
   return null;

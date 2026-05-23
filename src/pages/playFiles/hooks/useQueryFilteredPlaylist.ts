@@ -15,7 +15,11 @@ import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { usePlaylistRepositorySyncSnapshot } from "@/pages/playFiles/playlistRepositorySync";
 
+const MEMORY_FALLBACK_MAX_ITEMS = 1_000;
+let memoryMatcherEvaluationCountForTests = 0;
+
 const matchesPlaylistQuery = (item: PlaylistItem, query: string) => {
+  memoryMatcherEvaluationCountForTests += 1;
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return true;
   const haystack = [item.label, item.path, item.request.path, item.request.source, item.category]
@@ -23,6 +27,14 @@ const matchesPlaylistQuery = (item: PlaylistItem, query: string) => {
     .toLowerCase();
   return haystack.includes(trimmed);
 };
+
+export const resetPlaylistFilterDiagnosticsForTests = () => {
+  memoryMatcherEvaluationCountForTests = 0;
+};
+
+export const getPlaylistFilterDiagnosticsForTests = () => ({
+  memoryMatcherEvaluationCount: memoryMatcherEvaluationCountForTests,
+});
 
 const resolvePlaylistFilterScenario = (totalMatchCount: number) => {
   if (totalMatchCount <= 0) return "playlist-filter-zero";
@@ -53,12 +65,18 @@ export const useQueryFilteredPlaylist = ({
   const [viewAllLimit, setViewAllLimit] = useState(initialViewAllLimit);
   const playlistRef = useRef(playlist);
   const queryRef = useRef(query);
+  const queryFilteredPlaylistRef = useRef(queryFilteredPlaylist);
+  const totalMatchCountRef = useRef(totalMatchCount);
   const playlistItemsById = useMemo(() => new Map(playlist.map((item) => [item.id, item])), [playlist]);
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const repositoryReady = repositorySnapshot.phase === "READY" && repositorySnapshot.committedCount === playlist.length;
+  const shouldUseMemoryFiltering = !repositoryReady;
   const memoryFilteredPlaylist = useMemo(
-    () => playlist.filter((item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, query)),
-    [playlist, playlistTypeFilters, query],
+    () =>
+      shouldUseMemoryFiltering
+        ? playlist.filter((item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, query))
+        : [],
+    [playlist, playlistTypeFilters, query, shouldUseMemoryFiltering],
   );
   const memoryViewAllPlaylist = useMemo(
     () => memoryFilteredPlaylist.slice(0, viewAllLimit),
@@ -67,6 +85,8 @@ export const useQueryFilteredPlaylist = ({
 
   playlistRef.current = playlist;
   queryRef.current = query;
+  queryFilteredPlaylistRef.current = queryFilteredPlaylist;
+  totalMatchCountRef.current = totalMatchCount;
 
   useEffect(() => {
     setViewAllLimit(initialViewAllLimit);
@@ -175,6 +195,27 @@ export const useQueryFilteredPlaylist = ({
         error: (error as Error).message,
       });
       if (!cancelled) {
+        if (playlistRef.current.length > MEMORY_FALLBACK_MAX_ITEMS) {
+          const staleFiltered = queryFilteredPlaylistRef.current;
+          const staleTotalMatchCount = totalMatchCountRef.current;
+          const fallbackScope = beginHvscPerfScope("playlist:filter", {
+            playlistId: playlistStorageKey,
+            query,
+            viewAllLimit,
+            playlistSize: playlistRef.current.length,
+            categoryFilters: playlistTypeFilters,
+          });
+          endHvscPerfScope(fallbackScope, {
+            outcome: "repository-error-stale-results",
+            source: "repository",
+            feedbackKind: "stale-result",
+            resultCount: staleFiltered.length,
+            totalMatchCount: staleTotalMatchCount,
+            errorName: (error as Error).name,
+            errorMessage: (error as Error).message,
+          });
+          return;
+        }
         const nextFiltered = playlistRef.current.filter(
           (item) => playlistTypeFilters.includes(item.category) && matchesPlaylistQuery(item, queryRef.current),
         );

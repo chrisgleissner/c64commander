@@ -72,6 +72,8 @@ const getErrorMessage = (error: unknown) => {
 };
 
 const isExistsError = (error: unknown) => /exists|already exists/i.test(getErrorMessage(error));
+const isMissingPathError = (error: unknown) =>
+  /not\s+exist|does\s+not\s+exist|not\s+found|enoent/i.test(getErrorMessage(error));
 
 const encodeText = (value: string) => {
   const bytes = new TextEncoder().encode(value);
@@ -377,8 +379,13 @@ const removeDirSilently = async (path: string) => {
       path,
       recursive: true,
     });
-  } catch {
-    // Directory may not exist; ignore
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      logFilesystemWarning("Failed to remove directory", {
+        path,
+        error,
+      });
+    }
   }
 };
 
@@ -411,8 +418,14 @@ export const promoteLibraryStagingDir = async () => {
       from: HVSC_LIBRARY_DIR,
       to: HVSC_LIBRARY_OLD_DIR,
     });
-  } catch {
-    // Old library may not exist (first install)
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      logFilesystemWarning("Failed to move existing HVSC library aside before promotion", {
+        from: HVSC_LIBRARY_DIR,
+        to: HVSC_LIBRARY_OLD_DIR,
+        error,
+      });
+    }
   }
   await Filesystem.rename({
     directory: Directory.Data,

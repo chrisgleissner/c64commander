@@ -1834,6 +1834,11 @@ export const runHealthCheck = async (
     return result;
   } catch (error) {
     if (!isCurrentRun(token)) {
+      addLog("debug", "Ignored stale health check failure after a newer run became active", {
+        runId,
+        error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+        stack: error instanceof Error ? (error.stack ?? null) : null,
+      });
       return null;
     }
     const message = error instanceof Error ? error.message : String(error ?? "Health check failed");

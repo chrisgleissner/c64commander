@@ -10,6 +10,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadStore = async () => import("@/lib/savedDevices/store");
 
+const { addLog, buildErrorLogDetails } = vi.hoisted(() => ({
+  addLog: vi.fn(),
+  buildErrorLogDetails: vi.fn((error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: { name: error.name, message: error.message, stack: error.stack },
+    errorName: error.name,
+    errorStack: error.stack ?? null,
+  })),
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog,
+  buildErrorLogDetails,
+}));
+
 const seedLegacyStorage = () => {
   localStorage.setItem("c64u_device_host", "backup-c64:8080");
   localStorage.setItem("c64u_ftp_port", "2021");
@@ -24,6 +39,8 @@ describe("savedDevices store", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-09T12:00:00.000Z"));
     localStorage.clear();
+    addLog.mockClear();
+    buildErrorLogDetails.mockClear();
   });
 
   afterEach(() => {
@@ -85,6 +102,28 @@ describe("savedDevices store", () => {
       host: "c64u",
       telnetPort: 23,
     });
+  });
+
+  it("logs corrupted saved-device envelopes before falling back to legacy initialization", async () => {
+    localStorage.setItem("c64u_saved_devices:v1", "{");
+    seedLegacyStorage();
+
+    const store = await loadStore();
+    const snapshot = store.getSavedDevicesSnapshot();
+
+    expect(snapshot.devices[0]).toMatchObject({ host: "backup-c64" });
+    expect(buildErrorLogDetails).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({ storageKey: "c64u_saved_devices:v1" }),
+    );
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse persisted saved-devices envelope; falling back to legacy initialization.",
+      expect.objectContaining({
+        storageKey: "c64u_saved_devices:v1",
+        error: expect.objectContaining({ name: "SyntaxError" }),
+      }),
+    );
   });
 
   it("uses the debug bootstrap devices for a fresh install when configured", async () => {
@@ -158,6 +197,23 @@ describe("savedDevices store", () => {
 
     expect(snapshot.devices).toHaveLength(1);
     expect(snapshot.devices[0]).toMatchObject({ host: "c64u" });
+  });
+
+  it("logs malformed debug bootstrap JSON and falls back to the default device", async () => {
+    vi.stubEnv("VITE_DEBUG_SAVED_DEVICES_JSON", "{");
+
+    const store = await loadStore();
+    const snapshot = store.getSavedDevicesSnapshot();
+
+    expect(snapshot.devices).toHaveLength(1);
+    expect(snapshot.devices[0]).toMatchObject({ host: "c64u" });
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse debug saved devices bootstrap",
+      expect.objectContaining({
+        error: expect.objectContaining({ name: "SyntaxError" }),
+      }),
+    );
   });
 
   it("guards the debug bootstrap env read with a typeof check so module init survives non-Vite runners", async () => {

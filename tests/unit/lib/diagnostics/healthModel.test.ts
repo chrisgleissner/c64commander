@@ -9,6 +9,7 @@ import {
   derivePrimaryProblem,
   deriveRestContributorHealth,
   deriveTelnetContributorHealth,
+  eventMatchesDeviceScope,
   getBadgeAriaLabel,
   getBadgeLabel,
   getBadgeTextContract,
@@ -403,6 +404,19 @@ describe("device-scoped contributor health (F-DIAG-1)", () => {
     expect(deriveAppContributorHealth([errorWithU64Attr], u64Scope)).toMatchObject({
       state: "Degraded",
     });
+  });
+
+  it("eventMatchesDeviceScope: invalid transport URLs are logged and do not match unrelated scopes", () => {
+    const event = makeEvent("rest-response", 1_000, {
+      url: "http://[",
+      device: {
+        savedDeviceId: "u64-saved-id",
+        savedDeviceHostSnapshot: "u64:80",
+        verifiedHostname: "u64",
+      },
+    });
+
+    expect(eventMatchesDeviceScope(event, { deviceId: "c64u-saved-id", host: "c64u:80" })).toBe(false);
   });
 });
 

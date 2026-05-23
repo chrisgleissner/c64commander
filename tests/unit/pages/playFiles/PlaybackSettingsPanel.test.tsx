@@ -15,6 +15,7 @@ const baseProps = {
   durationSliderValue: 120,
   durationInput: "02:00",
   onDurationSliderChange: vi.fn(),
+  onDurationSliderCommit: vi.fn(),
   onDurationInputChange: vi.fn(),
   onDurationInputBlur: vi.fn(),
   onChooseSonglengthsFile: vi.fn(),

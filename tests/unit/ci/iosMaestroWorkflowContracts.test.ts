@@ -22,6 +22,13 @@ describe("iOS Maestro CI contracts", () => {
     expect(workflow).not.toContain('bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${flow}" || true');
   });
 
+  it("rebuilds Maestro simulator assets with test probes before seeding smoke config", () => {
+    const workflow = readRepoFile(".github", "workflows", "ios.yaml");
+    expect(workflow).toContain("- name: Rebuild Maestro web assets with test probes");
+    expect(workflow).toContain("VITE_ENABLE_TEST_PROBES=1 npm run build");
+    expect(workflow).toContain("bash scripts/ci/cap-sync-ios-with-retry.sh");
+  });
+
   it("guarantees fallback JUnit and non-empty fallback debug payloads in the iOS runner", () => {
     const runner = readRepoFile("scripts", "ci", "ios-maestro-run-flow.sh");
     expect(runner).toContain("write_fallback_junit_report");

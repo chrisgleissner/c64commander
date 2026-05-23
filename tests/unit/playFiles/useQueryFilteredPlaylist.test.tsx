@@ -9,7 +9,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
+import {
+  getPlaylistFilterDiagnosticsForTests,
+  resetPlaylistFilterDiagnosticsForTests,
+  useQueryFilteredPlaylist,
+} from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
 import {
   markPlaylistRepositoryPhase,
   resetPlaylistRepositorySyncForTests,
@@ -204,6 +208,7 @@ describe("useQueryFilteredPlaylist", () => {
     beginHvscPerfScope.mockClear();
     endHvscPerfScope.mockClear();
     recordSmokeBenchmarkSnapshot.mockClear();
+    resetPlaylistFilterDiagnosticsForTests();
     repository.queryPlaylist.mockImplementation(
       async ({ categoryFilter, limit }: { categoryFilter?: string[]; limit: number }) => {
         const rows =
@@ -304,6 +309,29 @@ describe("useQueryFilteredPlaylist", () => {
         }),
       }),
     );
+  });
+
+  it("does not run memory query matching when repository-backed filtering is ready", async () => {
+    markReady();
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => {
+      expect(repository.queryPlaylist).toHaveBeenCalledTimes(1);
+      expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+    });
+
+    expect(getPlaylistFilterDiagnosticsForTests().memoryMatcherEvaluationCount).toBe(0);
+    repository.queryPlaylist.mockClear();
+
+    act(() => {
+      result.current.setQuery("demo");
+    });
+
+    await waitFor(() => {
+      expect(repository.queryPlaylist).toHaveBeenCalledWith(expect.objectContaining({ query: "demo" }));
+    });
+
+    expect(getPlaylistFilterDiagnosticsForTests().memoryMatcherEvaluationCount).toBe(0);
   });
 
   it("loads additional view-all pages from the repository when more results are available", async () => {
@@ -444,6 +472,40 @@ describe("useQueryFilteredPlaylist", () => {
     expect(endHvscPerfScope).toHaveBeenCalledWith(
       expect.objectContaining({ scope: "playlist:filter" }),
       expect.objectContaining({ outcome: "fallback-after-error", source: "memory", errorMessage: "query failed" }),
+    );
+  });
+
+  it("keeps stale results instead of synchronously filtering large playlists after repository query failure", async () => {
+    const largePlaylist = Array.from({ length: 1_001 }, (_, index) =>
+      buildPlaylistItem({
+        id: `sid-${index}`,
+        name: `Large ${index}.sid`,
+        path: `/MUSICIANS/Large/${index}.sid`,
+        category: "sid",
+      }),
+    );
+    markReady(largePlaylist.length);
+    repository.queryPlaylist.mockRejectedValueOnce(new Error("query failed"));
+
+    const { result } = renderHook(() => useHarness(largePlaylist));
+
+    await waitFor(() => {
+      expect(repository.queryPlaylist).toHaveBeenCalledTimes(1);
+    });
+
+    expect(result.current.queryFilteredPlaylist.viewAllPlaylist).toEqual([]);
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(0);
+    expect(getPlaylistFilterDiagnosticsForTests().memoryMatcherEvaluationCount).toBe(0);
+    expect(endHvscPerfScope).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "playlist:filter" }),
+      expect.objectContaining({
+        outcome: "repository-error-stale-results",
+        source: "repository",
+        feedbackKind: "stale-result",
+        resultCount: 0,
+        totalMatchCount: 0,
+        errorMessage: "query failed",
+      }),
     );
   });
 

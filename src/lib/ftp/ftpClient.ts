@@ -45,6 +45,8 @@ const executeFtpList = async (
       operation: "list",
       path: normalizedPath,
       intent,
+      host: ftpOptions.host,
+      port: ftpOptions.port,
     },
     async () => {
       try {
@@ -145,6 +147,8 @@ const executeFtpRead = async (
       operation: "read",
       path,
       intent,
+      host: ftpOptions.host,
+      port: ftpOptions.port,
     },
     async () => {
       try {
@@ -244,6 +248,8 @@ const executeFtpWrite = async (
       operation: "write",
       path,
       intent,
+      host: ftpOptions.host,
+      port: ftpOptions.port,
     },
     async () => {
       try {

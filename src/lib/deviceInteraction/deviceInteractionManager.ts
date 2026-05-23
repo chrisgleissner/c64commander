@@ -52,6 +52,14 @@ type FtpRequestMeta = {
   operation: string;
   path: string;
   intent: InteractionIntent;
+  // PH9: device scope is part of the coalescing/cooldown key so that
+  // identical operations against different hosts (u64 vs c64u, or a saved
+  // device reconfigured to a new host) don't share in-flight or cooldown
+  // state. Optional for backward compatibility with legacy callers that
+  // only ever talked to a single host; in that case the key falls back to
+  // "any" scope and behaves like the pre-PH9 implementation.
+  host?: string;
+  port?: number;
 };
 
 type TelnetRequestMeta = {
@@ -101,6 +109,20 @@ const isTestEnv = () => {
   return false;
 };
 
+// PH10: thrown when queued interaction tasks are cancelled by a device-state
+// reset (e.g. saved-device switch). Classified as cancellation, not failure,
+// so callers and diagnostics can distinguish "stale, ignored" from "broken".
+export class InteractionCancelledError extends Error {
+  readonly isCancellation = true as const;
+  constructor(
+    message: string,
+    readonly reason: string,
+  ) {
+    super(message);
+    this.name = "InteractionCancelledError";
+  }
+}
+
 class InteractionScheduler {
   private running = 0;
   private deferredDrainTimer: ReturnType<typeof setTimeout> | null = null;
@@ -110,7 +132,10 @@ class InteractionScheduler {
     background: [],
   };
 
-  constructor(private readonly maxConcurrency: () => number) {}
+  constructor(
+    private readonly maxConcurrency: () => number,
+    private readonly label: string = "scheduler",
+  ) {}
 
   schedule<T>(task: QueueTask<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -122,6 +147,28 @@ class InteractionScheduler {
       this.queues[task.intent].push(entry);
       this.drain();
     });
+  }
+
+  // PH10: reject every queued (not-yet-running) task with a cancellation
+  // error so a saved-device switch doesn't leak old-host work into the new
+  // device's context. Running tasks cannot be revoked here — they complete
+  // or fail naturally; their late results are handled by the caller (or
+  // simply ignored when state has moved on).
+  cancelAll(reason: string): number {
+    this.clearDeferredDrainTimer();
+    let cancelled = 0;
+    for (const intent of ["user", "system", "background"] as const) {
+      const queue = this.queues[intent];
+      while (queue.length > 0) {
+        const task = queue.shift();
+        if (!task) continue;
+        cancelled += 1;
+        const error = new InteractionCancelledError(`${this.label} queued task cancelled: ${reason}`, reason);
+        // Promise reject cannot throw synchronously, so no try/catch is needed.
+        task.reject?.(error);
+      }
+    }
+    return cancelled;
   }
 
   private clearDeferredDrainTimer() {
@@ -246,7 +293,19 @@ export const resetInteractionState = (reason: string) => {
   telnetBackoffUntilMs = 0;
   telnetCircuitUntilMs = 0;
   setCircuitOpenUntil(null);
-  addLog("info", "Device interaction state reset", { reason });
+  // PH10: reject everything still queued so old-device REST/FTP/Telnet
+  // work cannot land against the new device's context. Already-running
+  // tasks complete naturally; their late results are stale and ignored
+  // by their callers because device-state has moved on.
+  const restCancelled = restScheduler.cancelAll(reason);
+  const ftpCancelled = ftpScheduler.cancelAll(reason);
+  const telnetCancelled = telnetScheduler.cancelAll(reason);
+  addLog("info", "Device interaction state reset", {
+    reason,
+    cancelledQueuedRest: restCancelled,
+    cancelledQueuedFtp: ftpCancelled,
+    cancelledQueuedTelnet: telnetCancelled,
+  });
 };
 
 subscribeDeviceSafetyUpdates(updateConfig);
@@ -256,9 +315,9 @@ const TELNET_MAX_CONCURRENCY = 1;
 const MACHINE_CONTROL_COOLDOWN_MS = 250;
 const CONFIG_MUTATION_COOLDOWN_MS = 120;
 
-const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY);
-const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency);
-const telnetScheduler = new InteractionScheduler(() => TELNET_MAX_CONCURRENCY);
+const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY, "rest");
+const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency, "ftp");
+const telnetScheduler = new InteractionScheduler(() => TELNET_MAX_CONCURRENCY, "telnet");
 
 const restCache = new Map<string, CacheEntry<unknown>>();
 const restInflight = new Map<string, Promise<unknown>>();
@@ -669,7 +728,10 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
     });
   }
 
-  const key = `${meta.operation}:${meta.path}`;
+  // PH9: scope keys per device (host:port) so cross-device traffic does not
+  // share inflight/cooldown state. Falls back to "any" when host is missing.
+  const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 21}`;
+  const key = `${hostScope}|${meta.operation}:${meta.path}`;
   const inflight = ftpInflight.get(key);
   if (inflight) {
     recordDeviceGuard(meta.action, {
@@ -716,11 +778,6 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
       const err = error as Error;
       updateFtpFailure(err);
       markDeviceRequestEnd({ success: false, errorMessage: err.message });
-      addErrorLog("FTP request failed", {
-        error: err.message,
-        operation: meta.operation,
-        path: meta.path,
-      });
       throw error;
     } finally {
       ftpInflight.delete(key);

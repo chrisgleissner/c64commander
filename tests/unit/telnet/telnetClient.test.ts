@@ -9,12 +9,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 
-const { getConnectionSnapshotMock, mockConnect, mockDisconnect, mockSend, mockRead } = vi.hoisted(() => ({
+const { addLogMock, getConnectionSnapshotMock, mockConnect, mockDisconnect, mockSend, mockRead } = vi.hoisted(() => ({
+  addLogMock: vi.fn(),
   getConnectionSnapshotMock: vi.fn(() => ({ state: "REAL_CONNECTED" })),
   mockConnect: vi.fn(),
   mockDisconnect: vi.fn(),
   mockSend: vi.fn(),
   mockRead: vi.fn(),
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: addLogMock,
+  buildErrorLogDetails: (error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: {
+      name: error.name,
+      message: error.message,
+      stack: error.stack ?? null,
+    },
+    errorName: error.name,
+    errorStack: error.stack ?? null,
+  }),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -71,7 +86,6 @@ describe("createTelnetClient", () => {
 
     it("disconnects and logs warnings for disconnect failures without rethrowing", async () => {
       mockDisconnect.mockRejectedValue(new Error("already closed"));
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const client = createTelnetClient();
 
       await client.connect("localhost", 23);
@@ -79,10 +93,14 @@ describe("createTelnetClient", () => {
 
       expect(mockDisconnect).toHaveBeenCalled();
       expect(client.isConnected()).toBe(false);
-      expect(warnSpy).toHaveBeenCalledWith("TelnetSocket.disconnect() failed", {
-        error: expect.any(Error),
+      expect(addLogMock).toHaveBeenCalledWith("warn", "TelnetSocket.disconnect() failed", {
+        error: expect.objectContaining({
+          name: "Error",
+          message: "already closed",
+        }),
+        errorName: "Error",
+        errorStack: expect.any(String),
       });
-      warnSpy.mockRestore();
     });
 
     it("sends data as base64 via plugin", async () => {
@@ -146,6 +164,23 @@ describe("createTelnetClient", () => {
       expect(mockConnect).not.toHaveBeenCalled();
       expect(initData.length).toBeGreaterThan(0);
       expect(client.isConnected()).toBe(true);
+    });
+
+    it("logs malformed test-probe host candidates while still matching valid candidates", () => {
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://[";
+      (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = "http://127.0.0.1:8080";
+      localStorage.setItem("c64u_device_host", "127.0.0.1:8080");
+
+      expect(shouldUseMockTelnetTransport()).toBe(true);
+      expect(addLogMock).toHaveBeenCalledWith(
+        "debug",
+        "Failed to parse Telnet test-probe host candidate",
+        expect.objectContaining({
+          value: "http://[",
+          error: expect.objectContaining({ name: "TypeError" }),
+        }),
+      );
     });
 
     it("uses the telnet mock transport for internal demo targets", async () => {

@@ -20,7 +20,12 @@ vi.mock("@capacitor/filesystem", () => ({
   },
 }));
 
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
+}));
+
 import { Filesystem } from "@capacitor/filesystem";
+import { addLog } from "@/lib/logging";
 import {
   buildHvscBrowseIndexFromSonglengthSnapshot,
   buildHvscBrowseIndexFromEntries,
@@ -358,6 +363,31 @@ describe("hvscBrowseIndexStore", () => {
     });
   });
 
+  it("logs stale full snapshot deletion failures when compact media index persistence succeeds", async () => {
+    const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const entries = Array.from({ length: 10001 }, (_, index) => ({
+      path: `/HVSC/${index.toString().padStart(5, "0")}/Track_${index}.sid`,
+      name: `Track_${index}.sid`,
+      type: "sid" as const,
+    }));
+
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.deleteFile).mockRejectedValue(new Error("Permission denied") as any);
+
+    await saveHvscBrowseIndexSnapshot(build(entries));
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to delete stale HVSC full snapshot",
+      expect.objectContaining({
+        storagePath: "hvsc/index/hvsc-browse-index-v1.json",
+        error: "Permission denied",
+      }),
+    );
+  });
+
   it("rebuilds the browse snapshot from the compact media index when the full snapshot is absent", async () => {
     const { loadHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
       await import("@/lib/hvsc/hvscBrowseIndexStore");
@@ -394,6 +424,73 @@ describe("hvscBrowseIndexStore", () => {
       metadataStatus: "seeded",
     });
     expect(loaded?.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain("/MUSICIANS/H/Hubbard_Rob/Commando.sid");
+  });
+
+  it("does not warn when filesystem browse snapshots are simply absent", async () => {
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("ENOENT: no such file"));
+
+    const loaded = await loadHvscBrowseIndexSnapshot();
+
+    expect(loaded).toBeNull();
+    expect(addLog).not.toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("Failed to read HVSC browse snapshot"),
+      expect.anything(),
+    );
+  });
+
+  it("logs real filesystem read failures before falling back", async () => {
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.mocked(Filesystem.readFile)
+      .mockRejectedValueOnce(new Error("Permission denied"))
+      .mockRejectedValueOnce(new Error("ENOENT: no such file"));
+
+    await loadHvscBrowseIndexSnapshot();
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to read HVSC browse snapshot from filesystem",
+      expect.objectContaining({
+        storagePath: "hvsc/index/hvsc-browse-index-v1.json",
+        error: "Permission denied",
+      }),
+    );
+  });
+
+  it("logs invalid compact media index JSON from filesystem", async () => {
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.mocked(Filesystem.readFile)
+      .mockRejectedValueOnce(new Error("ENOENT: no such file"))
+      .mockResolvedValueOnce({ data: btoa("{ invalid json") } as never);
+
+    const loaded = await loadHvscBrowseIndexSnapshot();
+
+    expect(loaded).toBeNull();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse persisted HVSC media index snapshot; will rebuild",
+      expect.objectContaining({ storagePath: "hvsc/index/media-index-v2.json" }),
+    );
+  });
+
+  it("logs base64 decode failures for filesystem browse snapshots", async () => {
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.stubGlobal("atob", () => {
+      throw new Error("atob unavailable");
+    });
+    vi.mocked(Filesystem.readFile)
+      .mockResolvedValueOnce({ data: "not-base64" } as never)
+      .mockRejectedValueOnce(new Error("ENOENT: no such file"));
+
+    const loaded = await loadHvscBrowseIndexSnapshot();
+
+    expect(loaded).toBeNull();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to decode HVSC snapshot base64 payload",
+      expect.objectContaining({ error: "atob unavailable" }),
+    );
   });
 
   it("normalizeFolderPath treats empty string as root", () => {

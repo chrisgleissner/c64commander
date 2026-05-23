@@ -261,6 +261,9 @@ test.describe("launch sequence", () => {
     const launchSequence = page.getByTestId("startup-launch-sequence");
     const appShell = page.getByTestId("app-shell");
     await expect(launchSequence).toBeVisible();
+    await expect(launchSequence).toHaveAttribute("data-profile", "medium");
+    await expect(page.getByTestId("startup-launch-sequence-title")).toBeVisible();
+    await expect(page.getByTestId("startup-launch-sequence-description")).toBeVisible();
     const resolvedTimings = await readResolvedLaunchTimings(page);
 
     await waitForAnyLaunchPhase(page, ["hold", "fade-out"]);
@@ -274,9 +277,6 @@ test.describe("launch sequence", () => {
     await expect(appShell).toHaveCSS("opacity", "0");
 
     await waitForHoldSample(page, resolvedTimings);
-    await expect(launchSequence).toHaveAttribute("data-profile", "medium");
-    await expect(page.getByTestId("startup-launch-sequence-title")).toBeVisible();
-    await expect(page.getByTestId("startup-launch-sequence-description")).toBeVisible();
 
     await waitForFadeOutSampleOrCompletion(page);
 

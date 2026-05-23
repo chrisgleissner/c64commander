@@ -18,16 +18,8 @@ import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { addErrorLog } from "./lib/logging";
 import { installNativeSafeAreaSync } from "./lib/native/safeArea";
+import { loadRemoteFonts } from "./lib/startup/fontLoading";
 import "./index.css";
-
-const loadFonts = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href =
-    "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap";
-  document.head.appendChild(link);
-};
 
 const scheduleAfterFirstPaint = (work: () => void) => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") {
@@ -56,7 +48,7 @@ const scheduleAfterFirstPaint = (work: () => void) => {
 };
 
 const startDeferredStartupBootstrap = () => {
-  loadFonts();
+  loadRemoteFonts();
   // Async context propagation must be installed before trace hooks.
   installAsyncContextPropagation();
   registerTraceBridge();

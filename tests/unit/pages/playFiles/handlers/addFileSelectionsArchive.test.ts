@@ -701,7 +701,10 @@ describe("addFileSelections archive source handler", () => {
     const result = await promise;
 
     expect(result).toBe(true);
-    expect(localSource.listFilesRecursive).toHaveBeenCalledWith("/folder");
+    expect(localSource.listFilesRecursive).toHaveBeenCalledWith(
+      "/folder",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(deps.buildPlaylistItem).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "local",
@@ -912,7 +915,10 @@ describe("addFileSelections archive source handler", () => {
     const result = await promise;
 
     expect(result).toBe(true);
-    expect((hvscSource as any).listFilesRecursive).toHaveBeenCalledWith("/HVSC/DEMOS");
+    expect((hvscSource as any).listFilesRecursive).toHaveBeenCalledWith(
+      "/HVSC/DEMOS",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(deps._playlistItems).toHaveLength(1);
     vi.useRealTimers();
   });

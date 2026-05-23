@@ -440,6 +440,16 @@ describe("smokeMode", () => {
     expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringContaining("smoke"), expect.any(Object));
   });
 
+  it("does not probe filesystem for smoke config in native production mode without explicit opt-in", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+    const config = await initializeSmokeMode();
+
+    expect(config).toBeNull();
+    expect(Filesystem.stat).not.toHaveBeenCalled();
+    expect(Filesystem.readFile).not.toHaveBeenCalled();
+  });
+
   it("logs a warning when stat fails for a non-missing reason", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;

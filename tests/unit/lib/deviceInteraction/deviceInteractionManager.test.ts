@@ -428,7 +428,7 @@ describe("deviceInteractionManager", () => {
     expect(setCircuitOpenUntil).toHaveBeenCalled();
   });
 
-  it("logs FTP failures and coalesces inflight operations", async () => {
+  it("tracks FTP failures and coalesces inflight operations without duplicate canonical logging", async () => {
     const { withFtpInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");
     resetInteractionState("test");
@@ -459,10 +459,133 @@ describe("deviceInteractionManager", () => {
 
     const failingHandler = vi.fn().mockRejectedValue(new Error("FTP failed"));
     await expect(withFtpInteraction(meta, failingHandler)).rejects.toThrow("FTP failed");
-    expect(addErrorLog).toHaveBeenCalledWith(
-      "FTP request failed",
-      expect.objectContaining({ operation: "list", path: "/root" }),
+    expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: false, errorMessage: "FTP failed" });
+    expect(addErrorLog).not.toHaveBeenCalledWith("FTP request failed", expect.any(Object));
+  });
+
+  it("PH9: does not coalesce concurrent same-path FTP operations across different hosts", async () => {
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const baseMeta = {
+      action: makeAction("ftp-list-multi-host"),
+      operation: "list" as const,
+      path: "/root",
+      intent: "system" as const,
+    };
+
+    // Pre-PH9 the in-flight key was operation+path only, so the c64u call
+    // would have piggybacked the u64 promise and resolved with "u64". With
+    // PH9 the key includes host, so the c64u call gets its own handler
+    // invocation and resolves with "c64u".
+    let releaseU64: (() => void) | null = null;
+    let releaseC64u: (() => void) | null = null;
+    const handlerU64 = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseU64 = () => resolve("u64");
+        }),
     );
+    const handlerC64u = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseC64u = () => resolve("c64u");
+        }),
+    );
+
+    const u64Result = withFtpInteraction({ ...baseMeta, host: "u64" }, handlerU64);
+    const c64uResult = withFtpInteraction({ ...baseMeta, host: "c64u" }, handlerC64u);
+
+    await expect.poll(() => handlerU64.mock.calls.length).toBe(1);
+    expect(handlerC64u).not.toHaveBeenCalled();
+    releaseU64?.();
+    await expect.poll(() => handlerC64u.mock.calls.length).toBe(1);
+    releaseC64u?.();
+
+    await expect(u64Result).resolves.toBe("u64");
+    await expect(c64uResult).resolves.toBe("c64u");
+    expect(handlerU64).toHaveBeenCalledTimes(1);
+    expect(handlerC64u).toHaveBeenCalledTimes(1);
+  });
+
+  it("PH9: still coalesces concurrent same-path FTP operations against the same host", async () => {
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("ftp-list-same-host"),
+      operation: "list" as const,
+      path: "/root",
+      intent: "system" as const,
+      host: "u64",
+    };
+
+    let release: (() => void) | null = null;
+    const handler = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve("ok");
+        }),
+    );
+
+    const first = withFtpInteraction(meta, handler);
+    const second = withFtpInteraction(meta, handler);
+
+    // Inflight coalescing: second call returns the first promise without re-invoking
+    expect(handler).toHaveBeenCalledTimes(1);
+    release?.();
+    await expect(first).resolves.toBe("ok");
+    await expect(second).resolves.toBe("ok");
+  });
+
+  it("PH9: same host with different ports remain isolated", async () => {
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const baseMeta = {
+      action: makeAction("ftp-list-multi-port"),
+      operation: "list" as const,
+      path: "/root",
+      intent: "system" as const,
+      host: "u64",
+    };
+
+    const handlerDefault = vi.fn().mockResolvedValue("21");
+    const handlerAlternate = vi.fn().mockResolvedValue("2121");
+
+    const defaultResult = await withFtpInteraction({ ...baseMeta, port: 21 }, handlerDefault);
+    const alternateResult = await withFtpInteraction({ ...baseMeta, port: 2121 }, handlerAlternate);
+
+    expect(defaultResult).toBe("21");
+    expect(alternateResult).toBe("2121");
+    expect(handlerDefault).toHaveBeenCalledTimes(1);
+    expect(handlerAlternate).toHaveBeenCalledTimes(1);
+  });
+
+  it("PH9: cooldowns are isolated across hosts", async () => {
+    config = { ...createConfig(), ftpListCooldownMs: 60_000 };
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const baseMeta = {
+      action: makeAction("ftp-list-cooldown-isolation"),
+      operation: "list" as const,
+      path: "/root",
+      intent: "system" as const,
+    };
+
+    const u64Handler = vi.fn().mockResolvedValue("u64");
+    const c64uHandler = vi.fn().mockResolvedValue("c64u");
+
+    await expect(withFtpInteraction({ ...baseMeta, host: "u64" }, u64Handler)).resolves.toBe("u64");
+    const c64uResult = withFtpInteraction({ ...baseMeta, host: "c64u" }, c64uHandler);
+
+    await expect.poll(() => c64uHandler.mock.calls.length).toBe(1);
+    await expect(c64uResult).resolves.toBe("c64u");
   });
 
   it("allows user intent to override circuit breaker when configured", async () => {
@@ -1108,5 +1231,254 @@ describe("deviceInteractionManager", () => {
       expect.anything(),
       expect.objectContaining({ decision: "override", reason: "circuit-open" }),
     );
+  });
+
+  it("PH10: resetInteractionState rejects queued REST work as cancellation and allows new work after reset", async () => {
+    const { InteractionCancelledError, withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    let releaseRunning: (() => void) | null = null;
+    const runningHandler = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseRunning = () => resolve("old-running");
+        }),
+    );
+    const queuedHandler = vi.fn().mockResolvedValue("stale");
+
+    const running = withRestInteraction(
+      {
+        action: makeAction("rest-running"),
+        method: "GET",
+        path: "/v1/info",
+        normalizedUrl: "http://u64/v1/info",
+        intent: "system" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      runningHandler,
+    );
+    await expect.poll(() => runningHandler.mock.calls.length).toBe(1);
+
+    const queued = withRestInteraction(
+      {
+        action: makeAction("rest-queued"),
+        method: "GET",
+        path: "/v1/drives",
+        normalizedUrl: "http://u64/v1/drives",
+        intent: "system" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      queuedHandler,
+    );
+    const queuedExpectation = expect(queued).rejects.toMatchObject({
+      name: "InteractionCancelledError",
+      reason: "saved-device-switch",
+      isCancellation: true,
+    });
+
+    resetInteractionState("saved-device-switch");
+    await queuedExpectation;
+    await expect(queued).rejects.toBeInstanceOf(InteractionCancelledError);
+    expect(queuedHandler).not.toHaveBeenCalled();
+
+    releaseRunning?.();
+    await expect(running).resolves.toBe("old-running");
+
+    const newHandler = vi.fn().mockResolvedValue("new-device");
+    await expect(
+      withRestInteraction(
+        {
+          action: makeAction("rest-new-device"),
+          method: "GET",
+          path: "/v1/info",
+          normalizedUrl: "http://c64u/v1/info",
+          intent: "system" as const,
+          baseUrl: "http://c64u",
+          bypassCache: true,
+        },
+        newHandler,
+      ),
+    ).resolves.toBe("new-device");
+  });
+
+  it("PH10: resetInteractionState rejects queued FTP and Telnet work as cancellation", async () => {
+    const { withFtpInteraction, withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    let releaseFtpRunning: (() => void) | null = null;
+    const ftpRunning = withFtpInteraction(
+      {
+        action: makeAction("ftp-running"),
+        operation: "list",
+        path: "/old",
+        intent: "system" as const,
+        host: "u64",
+      },
+      () =>
+        new Promise<string>((resolve) => {
+          releaseFtpRunning = () => resolve("ftp-running");
+        }),
+    );
+    const ftpQueuedHandler = vi.fn().mockResolvedValue("ftp-stale");
+    await expect.poll(() => markDeviceRequestStart.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const ftpQueued = withFtpInteraction(
+      {
+        action: makeAction("ftp-queued"),
+        operation: "list",
+        path: "/queued",
+        intent: "system" as const,
+        host: "c64u",
+      },
+      ftpQueuedHandler,
+    );
+    const ftpQueuedExpectation = expect(ftpQueued).rejects.toMatchObject({
+      name: "InteractionCancelledError",
+      reason: "saved-device-switch",
+      isCancellation: true,
+    });
+
+    let releaseTelnetRunning: (() => void) | null = null;
+    const telnetRunning = withTelnetInteraction(
+      { action: makeAction("telnet-running"), actionId: "telnet-running", intent: "system" as const },
+      () =>
+        new Promise<string>((resolve) => {
+          releaseTelnetRunning = () => resolve("telnet-running");
+        }),
+    );
+    const telnetQueuedHandler = vi.fn().mockResolvedValue("telnet-stale");
+    await expect.poll(() => markDeviceRequestStart.mock.calls.length).toBeGreaterThanOrEqual(2);
+    const telnetQueued = withTelnetInteraction(
+      { action: makeAction("telnet-queued"), actionId: "telnet-queued", intent: "system" as const },
+      telnetQueuedHandler,
+    );
+    const telnetQueuedExpectation = expect(telnetQueued).rejects.toMatchObject({
+      name: "InteractionCancelledError",
+      reason: "saved-device-switch",
+      isCancellation: true,
+    });
+
+    resetInteractionState("saved-device-switch");
+
+    await ftpQueuedExpectation;
+    await telnetQueuedExpectation;
+    expect(ftpQueuedHandler).not.toHaveBeenCalled();
+    expect(telnetQueuedHandler).not.toHaveBeenCalled();
+
+    releaseFtpRunning?.();
+    releaseTelnetRunning?.();
+    await expect(ftpRunning).resolves.toBe("ftp-running");
+    await expect(telnetRunning).resolves.toBe("telnet-running");
+  });
+
+  it("PH10: same-device queued REST work preserves priority ordering", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const callOrder: string[] = [];
+    let releaseRunning: (() => void) | null = null;
+    const running = withRestInteraction(
+      {
+        action: makeAction("priority-running"),
+        method: "GET",
+        path: "/v1/running",
+        normalizedUrl: "http://u64/v1/running",
+        intent: "system" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      () =>
+        new Promise<string>((resolve) => {
+          callOrder.push("running");
+          releaseRunning = () => resolve("running");
+        }),
+    );
+    await expect.poll(() => callOrder).toEqual(["running"]);
+
+    const background = withRestInteraction(
+      {
+        action: makeAction("priority-background"),
+        method: "GET",
+        path: "/v1/background",
+        normalizedUrl: "http://u64/v1/background",
+        intent: "background" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      async () => {
+        callOrder.push("background");
+        return "background";
+      },
+    );
+    const user = withRestInteraction(
+      {
+        action: makeAction("priority-user"),
+        method: "GET",
+        path: "/v1/user",
+        normalizedUrl: "http://u64/v1/user",
+        intent: "user" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      async () => {
+        callOrder.push("user");
+        return "user";
+      },
+    );
+
+    releaseRunning?.();
+    await expect(running).resolves.toBe("running");
+    await expect(user).resolves.toBe("user");
+    await expect(background).resolves.toBe("background");
+    expect(callOrder).toEqual(["running", "user", "background"]);
+  });
+
+  it("PH10: same-device FTP work still respects configured concurrency", async () => {
+    config = { ...createConfig(), ftpMaxConcurrency: 2 };
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const started: string[] = [];
+    let releaseFirst: (() => void) | null = null;
+    let releaseSecond: (() => void) | null = null;
+    const first = withFtpInteraction(
+      {
+        action: makeAction("ftp-concurrency-1"),
+        operation: "list",
+        path: "/one",
+        intent: "system" as const,
+        host: "u64",
+      },
+      () =>
+        new Promise<string>((resolve) => {
+          started.push("first");
+          releaseFirst = () => resolve("first");
+        }),
+    );
+    const second = withFtpInteraction(
+      {
+        action: makeAction("ftp-concurrency-2"),
+        operation: "list",
+        path: "/two",
+        intent: "system" as const,
+        host: "u64",
+      },
+      () =>
+        new Promise<string>((resolve) => {
+          started.push("second");
+          releaseSecond = () => resolve("second");
+        }),
+    );
+
+    await expect.poll(() => started).toEqual(["first", "second"]);
+    releaseFirst?.();
+    releaseSecond?.();
+    await expect(first).resolves.toBe("first");
+    await expect(second).resolves.toBe("second");
   });
 });

@@ -9,6 +9,7 @@
 import type {
   PlaylistItemRecord,
   PlaylistQueryOptions,
+  PlaylistQuerySort,
   PlaylistQueryResult,
   PlaylistQueryRow,
   TrackRecord,
@@ -29,6 +30,11 @@ export type PersistedPlaylistQueryIndex = {
   };
   idsByCategory: Record<string, string[]>;
   idsBySearchGram: Record<string, string[]>;
+};
+
+let queryDiagnosticsForTests = {
+  candidateIdsInspected: 0,
+  orderedIdsInspected: 0,
 };
 
 const normalizeQuery = (value?: string) => value?.trim().toLowerCase() ?? "";
@@ -71,6 +77,18 @@ const sortRows = (rows: PersistedPlaylistQueryRow[], sort: PlaylistQueryOptions[
   return next;
 };
 
+const buildRank = (orderedIds: string[]) =>
+  Object.fromEntries(orderedIds.map((rowId, index) => [rowId, index])) as Record<string, number>;
+
+export const resetPlaylistQueryIndexDiagnosticsForTests = () => {
+  queryDiagnosticsForTests = {
+    candidateIdsInspected: 0,
+    orderedIdsInspected: 0,
+  };
+};
+
+export const getPlaylistQueryIndexDiagnosticsForTests = () => ({ ...queryDiagnosticsForTests });
+
 export const buildPlaylistQueryIndex = (
   playlistItems: PlaylistItemRecord[],
   tracksById: Record<string, TrackRecord>,
@@ -105,13 +123,15 @@ export const buildPlaylistQueryIndex = (
     });
   });
 
+  const orderBy = {
+    "playlist-position": sortRows(rows, "playlist-position").map((row) => row.playlistItem.playlistItemId),
+    title: sortRows(rows, "title").map((row) => row.playlistItem.playlistItemId),
+    path: sortRows(rows, "path").map((row) => row.playlistItem.playlistItemId),
+  };
+
   return {
     rowsById,
-    orderBy: {
-      "playlist-position": sortRows(rows, "playlist-position").map((row) => row.playlistItem.playlistItemId),
-      title: sortRows(rows, "title").map((row) => row.playlistItem.playlistItemId),
-      path: sortRows(rows, "path").map((row) => row.playlistItem.playlistItemId),
-    },
+    orderBy,
     idsByCategory,
     idsBySearchGram,
   };
@@ -153,7 +173,21 @@ export const queryPlaylistIndex = (
   const rows: PlaylistQueryRow[] = [];
   let totalMatchCount = 0;
 
-  orderedIds.forEach((rowId) => {
+  const isSelectiveCandidateSet = candidateIds !== null && candidateIds.size < orderedIds.length;
+  const rankBySort = isSelectiveCandidateSet ? buildRank(orderedIds) : null;
+  const iterableIds = isSelectiveCandidateSet
+    ? [...candidateIds].sort(
+        (left, right) =>
+          (rankBySort?.[left] ?? Number.MAX_SAFE_INTEGER) - (rankBySort?.[right] ?? Number.MAX_SAFE_INTEGER),
+      )
+    : orderedIds;
+
+  iterableIds.forEach((rowId) => {
+    if (isSelectiveCandidateSet) {
+      queryDiagnosticsForTests.candidateIdsInspected += 1;
+    } else {
+      queryDiagnosticsForTests.orderedIdsInspected += 1;
+    }
     if (candidateIds && !candidateIds.has(rowId)) return;
     const row = index.rowsById[rowId];
     if (!row) return;

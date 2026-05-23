@@ -331,7 +331,12 @@ const probeWithFetch = async (
     const host = (() => {
       try {
         return new URL(baseUrl).hostname;
-      } catch {
+      } catch (hostError) {
+        addLog("debug", "Failed to parse discovery probe base URL host", {
+          baseUrl,
+          error: (hostError as Error).message,
+          stack: (hostError as Error).stack ?? null,
+        });
         return undefined;
       }
     })();

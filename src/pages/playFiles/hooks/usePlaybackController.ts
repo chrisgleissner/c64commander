@@ -513,7 +513,6 @@ export function usePlaybackController({
             });
           }
         }
-        await ensureUnmuted({ refreshItems: true });
         try {
           await ensurePlaybackConnection();
         } catch (error) {
@@ -528,6 +527,7 @@ export function usePlaybackController({
           });
           throw error;
         }
+        await ensureUnmuted({ refreshItems: true });
         const api = getC64API();
         if (isSongCategory(item.category)) {
           setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);

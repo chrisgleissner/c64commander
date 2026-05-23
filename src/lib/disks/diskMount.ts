@@ -31,6 +31,46 @@ const base64ToUint8 = (base64: string) => {
   return bytes;
 };
 
+const MAX_LOCAL_DISK_IMAGE_BYTES = 64 * 1024 * 1024;
+
+type ResolveLocalDiskBlobOptions = {
+  signal?: AbortSignal;
+};
+
+const createAbortError = (context: string) => {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException(`${context} cancelled`, "AbortError");
+  }
+  const error = new Error(`${context} cancelled`);
+  error.name = "AbortError";
+  return error;
+};
+
+const throwIfAborted = (signal: AbortSignal | undefined, context: string) => {
+  if (signal?.aborted) {
+    throw createAbortError(context);
+  }
+};
+
+const validateLocalDiskPayloadSize = (base64: string, context: string) => {
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  const estimatedBytes = Math.floor((base64.length * 3) / 4) - padding;
+  if (estimatedBytes > MAX_LOCAL_DISK_IMAGE_BYTES) {
+    throw new Error(`${context} is too large to mount (${estimatedBytes} bytes).`);
+  }
+};
+
+const decodeLocalDiskPayload = (base64: string, context: string, signal?: AbortSignal) => {
+  validateLocalDiskPayloadSize(base64, context);
+  throwIfAborted(signal, context);
+  const bytes = base64ToUint8(base64);
+  if (bytes.byteLength > MAX_LOCAL_DISK_IMAGE_BYTES) {
+    throw new Error(`${context} is too large to mount (${bytes.byteLength} bytes).`);
+  }
+  throwIfAborted(signal, context);
+  return bytes;
+};
+
 export const buildDiskMountType = (path: string) => {
   const ext = getFileExtension(path);
   return ext || undefined;
@@ -48,27 +88,51 @@ const logResolvedLocalDiskBytes = (disk: DiskEntry, source: string, bytes: Uint8
   });
 };
 
-export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File): Promise<Blob> => {
+export const resolveLocalDiskBlob = async (
+  disk: DiskEntry,
+  runtimeFile?: File,
+  options: ResolveLocalDiskBlobOptions = {},
+): Promise<Blob> => {
+  const { signal } = options;
   const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, context: string) => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let abortHandler: (() => void) | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(() => reject(new Error(`${context} timed out`)), timeoutMs);
     });
+    const abortPromise = signal
+      ? new Promise<never>((_, reject) => {
+          abortHandler = () => reject(createAbortError(context));
+          signal.addEventListener("abort", abortHandler, { once: true });
+        })
+      : null;
     try {
-      return await Promise.race([promise, timeoutPromise]);
+      throwIfAborted(signal, context);
+      const raced = abortPromise
+        ? Promise.race([promise, timeoutPromise, abortPromise])
+        : Promise.race([promise, timeoutPromise]);
+      const result = await raced;
+      throwIfAborted(signal, context);
+      return result;
     } finally {
       if (timeoutId !== null) clearTimeout(timeoutId);
+      if (abortHandler) signal?.removeEventListener("abort", abortHandler);
     }
   };
 
   if (runtimeFile) {
+    throwIfAborted(signal, "Local disk runtime file read");
+    if (runtimeFile.size > MAX_LOCAL_DISK_IMAGE_BYTES) {
+      throw new Error(`Local disk runtime file is too large to mount (${runtimeFile.size} bytes).`);
+    }
     const bytes = new Uint8Array(await runtimeFile.arrayBuffer());
+    throwIfAborted(signal, "Local disk runtime file read");
     logResolvedLocalDiskBytes(disk, "runtime-file", bytes);
     return runtimeFile;
   }
   if (disk.localUri) {
     const data = await withTimeout(FolderPicker.readFile({ uri: disk.localUri }), 2000, "Local disk file read");
-    const bytes = base64ToUint8(data.data);
+    const bytes = decodeLocalDiskPayload(data.data, "Local disk file read", signal);
     logResolvedLocalDiskBytes(disk, "local-uri", bytes);
     return new Blob([bytes], {
       type: "application/octet-stream",
@@ -83,7 +147,7 @@ export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File):
       2000,
       "Local disk tree read",
     );
-    const bytes = base64ToUint8(data.data);
+    const bytes = decodeLocalDiskPayload(data.data, "Local disk tree read", signal);
     logResolvedLocalDiskBytes(disk, "disk.localTreeUri", bytes);
     return new Blob([bytes], {
       type: "application/octet-stream",
@@ -105,7 +169,7 @@ export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File):
           2000,
           "Local disk tree read",
         );
-        const bytes = base64ToUint8(data.data);
+        const bytes = decodeLocalDiskPayload(data.data, "Local disk tree read", signal);
         logResolvedLocalDiskBytes(disk, `source-tree:${source.id}`, bytes);
         return new Blob([bytes], {
           type: "application/octet-stream",
@@ -125,7 +189,7 @@ export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File):
         const match = entries.find((entry) => normalizeSourcePath(entry.relativePath) === normalizedPath);
         if (match?.uri) {
           const data = await withTimeout(FolderPicker.readFile({ uri: match.uri }), 2000, "Local disk file read");
-          const bytes = base64ToUint8(data.data);
+          const bytes = decodeLocalDiskPayload(data.data, "Local disk file read", signal);
           logResolvedLocalDiskBytes(disk, `source-uri:${source.id}`, bytes);
           return new Blob([bytes], {
             type: "application/octet-stream",

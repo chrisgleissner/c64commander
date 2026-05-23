@@ -6,7 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
+  buildErrorLogDetails: (error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: { name: error.name, message: error.message, stack: error.stack ?? null },
+    errorName: error.name,
+    errorStack: error.stack ?? null,
+  }),
+}));
+
+import { addLog } from "@/lib/logging";
 import {
   buildRestRequestIdentity,
   canonicalizeRestPath,
@@ -74,5 +86,20 @@ describe("restRequestIdentity", () => {
 
   it("sorts by value when two params share the same key", () => {
     expect(canonicalizeRestPath("/v1/configs?a=2&a=1")).toBe("/v1/configs?a=1&a=2");
+  });
+
+  it("logs malformed base URLs and falls back to the raw request path", () => {
+    expect(canonicalizeRestPath("/v1/configs?b=2&a=1", "http://[bad-host")).toBe("/v1/configs?b=2&a=1");
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Falling back to raw REST request path after URL parsing failed",
+      expect.objectContaining({
+        pathOrUrl: "/v1/configs?b=2&a=1",
+        baseUrl: "http://[bad-host",
+        error: expect.objectContaining({
+          message: expect.any(String),
+        }),
+      }),
+    );
   });
 });

@@ -14,6 +14,19 @@ import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
 import { resolveLibraryPath } from "./hvscFilesystem";
 import { runWithHvscPerfScope } from "./hvscPerformance";
 
+// Treat file-not-found errors as expected absence (first launch, after a wipe)
+// so they don't generate cold-boot warning noise; only real I/O errors log.
+const isFileNotFoundError = (error: unknown) => {
+  const message = ((error as { message?: unknown })?.message ?? "").toString();
+  return /not found|ENOENT|does not exist|no such file|File does not exist/i.test(message);
+};
+
+const describeError = (error: unknown, extras: Record<string, unknown> = {}) => ({
+  ...extras,
+  error: (error as Error)?.message ?? String(error),
+  errorName: (error as Error)?.name,
+});
+
 const STORAGE_PATH = "hvsc/index/hvsc-browse-index-v1.json";
 const STORAGE_KEY = "c64u_hvsc_browse_index:v1";
 const MEDIA_INDEX_STORAGE_PATH = "hvsc/index/media-index-v2.json";
@@ -195,7 +208,8 @@ const decodeUtf8Base64 = (value: string) => {
       return new TextDecoder().decode(bytes);
     }
     return Buffer.from(value, "base64").toString("utf-8");
-  } catch {
+  } catch (error) {
+    addLog("warn", "Failed to decode HVSC snapshot base64 payload", describeError(error));
     return value;
   }
 };
@@ -345,7 +359,12 @@ const parseSnapshot = (raw: string | null) => {
   if (!raw) return null;
   try {
     return normalizeSnapshot(JSON.parse(raw) as HvscBrowseIndexSnapshot);
-  } catch {
+  } catch (error) {
+    addLog(
+      "warn",
+      "Failed to parse persisted HVSC browse snapshot; will fall back to compact media index or rebuild",
+      describeError(error, { storagePath: STORAGE_PATH }),
+    );
     return null;
   }
 };
@@ -365,7 +384,12 @@ const parseMediaIndexSnapshot = (raw: string | null) => {
           durationSeconds: entry.durationSeconds ?? null,
         })),
     );
-  } catch {
+  } catch (error) {
+    addLog(
+      "warn",
+      "Failed to parse persisted HVSC media index snapshot; will rebuild",
+      describeError(error, { storagePath: MEDIA_INDEX_STORAGE_PATH }),
+    );
     return null;
   }
 };
@@ -390,8 +414,15 @@ const readFilesystemSnapshot = async () => {
       directory: Directory.Data,
       path: STORAGE_PATH,
     });
-    return parseSnapshot(decodeUtf8Base64(result.data));
-  } catch {
+    return parseSnapshot(typeof result.data === "string" ? decodeUtf8Base64(result.data) : null);
+  } catch (error) {
+    if (!isFileNotFoundError(error)) {
+      addLog(
+        "warn",
+        "Failed to read HVSC browse snapshot from filesystem",
+        describeError(error, { storagePath: STORAGE_PATH }),
+      );
+    }
     return null;
   }
 };
@@ -402,8 +433,15 @@ const readFilesystemMediaIndexSnapshot = async () => {
       directory: Directory.Data,
       path: MEDIA_INDEX_STORAGE_PATH,
     });
-    return parseMediaIndexSnapshot(decodeUtf8Base64(result.data));
-  } catch {
+    return parseMediaIndexSnapshot(typeof result.data === "string" ? decodeUtf8Base64(result.data) : null);
+  } catch (error) {
+    if (!isFileNotFoundError(error)) {
+      addLog(
+        "warn",
+        "Failed to read HVSC media index snapshot from filesystem",
+        describeError(error, { storagePath: MEDIA_INDEX_STORAGE_PATH }),
+      );
+    }
     return null;
   }
 };
@@ -414,8 +452,10 @@ const deleteFilesystemFullSnapshot = async () => {
       directory: Directory.Data,
       path: STORAGE_PATH,
     });
-  } catch {
-    // Best effort cleanup of stale full snapshots.
+  } catch (error) {
+    if (!isFileNotFoundError(error)) {
+      addLog("warn", "Failed to delete stale HVSC full snapshot", describeError(error, { storagePath: STORAGE_PATH }));
+    }
   }
 };
 
@@ -543,7 +583,16 @@ export const saveHvscBrowseIndexSnapshot = async (snapshot: HvscBrowseIndexSnaps
         });
       }
       return;
-    } catch {
+    } catch (error) {
+      addLog(
+        "warn",
+        "HVSC browse snapshot filesystem persistence failed; falling back to localStorage",
+        describeError(error, {
+          storagePath: STORAGE_PATH,
+          mediaIndexPath: MEDIA_INDEX_STORAGE_PATH,
+          songCount: Object.keys(normalized.songs).length,
+        }),
+      );
       writeLocalStorageMediaIndexSnapshot(normalized);
       if (persistFullSnapshot) {
         writeLocalStorageSnapshot(normalized);
