@@ -279,6 +279,58 @@ describe("useAppConfigState", () => {
     vi.useRealTimers();
   });
 
+  it("schedules idle initial snapshot capture after the app becomes visible again", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(getCategories).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getCategories).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it("defers idle initial snapshot capture while foreground reads are still active", async () => {
+    vi.useFakeTimers();
+    getInFlightReadRequestCount.mockReturnValueOnce(2).mockReturnValue(0);
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+    });
+    expect(getCategories).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getCategories).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it("uses background intent for idle initial snapshot capture", async () => {
     vi.useFakeTimers();
     renderHook(() => useAppConfigState(), { wrapper });
@@ -332,6 +384,64 @@ describe("useAppConfigState", () => {
     });
 
     expect(idleSignal?.aborted).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("logs a hidden-state cancellation when idle capture finishes after the app leaves the foreground", async () => {
+    const { addLog } = await import("@/lib/logging");
+    vi.useFakeTimers();
+    let resolveCategories: ((value: { categories: string[] }) => void) | null = null;
+    getCategories.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCategories = resolve;
+        }),
+    );
+
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+    });
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+
+    await act(async () => {
+      resolveCategories?.({ categories: [] });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Idle config snapshot capture cancelled",
+      expect.objectContaining({ baseUrl: "http://c64u", reason: "hidden" }),
+    );
+    expect(saveInitialSnapshot).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("logs idle initial snapshot capture failures at error level", async () => {
+    const { addErrorLog } = await import("@/lib/logging");
+    vi.useFakeTimers();
+    getCategories.mockRejectedValueOnce(new Error("device timeout"));
+
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Idle config snapshot capture failed",
+      expect.objectContaining({ baseUrl: "http://c64u", error: "device timeout" }),
+    );
     vi.useRealTimers();
   });
 

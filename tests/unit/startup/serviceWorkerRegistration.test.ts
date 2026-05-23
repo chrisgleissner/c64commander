@@ -6,7 +6,7 @@ import {
   shouldRegisterServiceWorker,
   shouldRegisterServiceWorkerForEnvironment,
 } from "@/lib/startup/serviceWorkerRegistration";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 const appVersion = (globalThis as { __APP_VERSION__?: string }).__APP_VERSION__ ?? "0.0.0";
 const swBuildId = (globalThis as { __SW_BUILD_ID__?: string }).__SW_BUILD_ID__ ?? `${appVersion}-test-build`;
@@ -18,7 +18,14 @@ vi.mock("@/lib/native/platform", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
   addErrorLog: vi.fn(),
+  buildErrorLogDetails: (error: Error, details: Record<string, unknown> = {}) => ({
+    ...details,
+    error: { name: error.name, message: error.message, stack: error.stack ?? null },
+    errorName: error.name,
+    errorStack: error.stack ?? null,
+  }),
 }));
 
 describe("serviceWorkerRegistration", () => {
@@ -48,6 +55,21 @@ describe("serviceWorkerRegistration", () => {
 
     expect(shouldRegisterServiceWorkerForEnvironment(false)).toBe(false);
     expect(registerServiceWorkerForEnvironment(false)).toBe(false);
+  });
+
+  it("skips registration when test probes are enabled through process env", () => {
+    const previous = process.env.VITE_ENABLE_TEST_PROBES;
+    process.env.VITE_ENABLE_TEST_PROBES = "1";
+
+    expect(shouldRegisterServiceWorkerForEnvironment(false)).toBe(false);
+    expect(registerServiceWorkerForEnvironment(false)).toBe(false);
+    expect(addLog).not.toHaveBeenCalled();
+
+    if (previous === undefined) {
+      delete process.env.VITE_ENABLE_TEST_PROBES;
+    } else {
+      process.env.VITE_ENABLE_TEST_PROBES = previous;
+    }
   });
 
   it("registers on web platforms and logs failures", async () => {

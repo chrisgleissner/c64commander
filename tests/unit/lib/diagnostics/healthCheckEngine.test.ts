@@ -124,6 +124,7 @@ vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
 
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { addLog } from "@/lib/logging";
 import {
   cancelHealthCheck,
   isHealthCheckRunning,
@@ -1486,6 +1487,23 @@ describe("runHealthCheck — outer catch block", () => {
     setupAllProbesSuccess();
 
     await expect(runHealthCheck()).rejects.toThrow("ring buffer exploded");
+  });
+
+  it("logs and ignores stale outer failures after the active run is cancelled", async () => {
+    const { pushHealthHistoryEntry } = await import("@/lib/diagnostics/healthHistory");
+    vi.mocked(pushHealthHistoryEntry).mockImplementationOnce(() => {
+      cancelHealthCheck("superseded");
+      throw new Error("late stale failure");
+    });
+    setupAllProbesSuccess();
+
+    await expect(runHealthCheck()).resolves.toBeNull();
+
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Ignored stale health check failure after a newer run became active",
+      expect.objectContaining({ error: "late stale failure" }),
+    );
   });
 });
 

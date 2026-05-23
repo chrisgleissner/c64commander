@@ -166,6 +166,23 @@ describe("createTelnetClient", () => {
       expect(client.isConnected()).toBe(true);
     });
 
+    it("logs malformed test-probe host candidates while still matching valid candidates", () => {
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://[";
+      (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = "http://127.0.0.1:8080";
+      localStorage.setItem("c64u_device_host", "127.0.0.1:8080");
+
+      expect(shouldUseMockTelnetTransport()).toBe(true);
+      expect(addLogMock).toHaveBeenCalledWith(
+        "debug",
+        "Failed to parse Telnet test-probe host candidate",
+        expect.objectContaining({
+          value: "http://[",
+          error: expect.objectContaining({ name: "TypeError" }),
+        }),
+      );
+    });
+
     it("uses the telnet mock transport for internal demo targets", async () => {
       getConnectionSnapshotMock.mockReturnValue({ state: "DEMO_ACTIVE" });
       const client = createTelnetClient();

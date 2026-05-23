@@ -199,6 +199,23 @@ describe("savedDevices store", () => {
     expect(snapshot.devices[0]).toMatchObject({ host: "c64u" });
   });
 
+  it("logs malformed debug bootstrap JSON and falls back to the default device", async () => {
+    vi.stubEnv("VITE_DEBUG_SAVED_DEVICES_JSON", "{");
+
+    const store = await loadStore();
+    const snapshot = store.getSavedDevicesSnapshot();
+
+    expect(snapshot.devices).toHaveLength(1);
+    expect(snapshot.devices[0]).toMatchObject({ host: "c64u" });
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse debug saved devices bootstrap",
+      expect.objectContaining({
+        error: expect.objectContaining({ name: "SyntaxError" }),
+      }),
+    );
+  });
+
   it("guards the debug bootstrap env read with a typeof check so module init survives non-Vite runners", async () => {
     // Contract: the readDebugSavedDevicesEnv helper must defensively probe
     // import.meta before reading .env, matching the safe pattern used by

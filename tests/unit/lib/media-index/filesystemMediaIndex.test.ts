@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { addLog } from "@/lib/logging";
 
 // Mock Capacitor Filesystem
 const mockReadFile = vi.fn();
@@ -22,6 +23,10 @@ vi.mock("@capacitor/filesystem", () => ({
   Directory: {
     Data: "Data",
   },
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
 }));
 
 describe("filesystemMediaIndex", () => {
@@ -42,6 +47,29 @@ describe("filesystemMediaIndex", () => {
       const result = await storage.read();
 
       expect(result).toBeNull();
+      expect(addLog).not.toHaveBeenCalledWith(
+        "warn",
+        "Failed to read media index snapshot from filesystem",
+        expect.anything(),
+      );
+    });
+
+    it("logs non-missing read failures", async () => {
+      mockReadFile.mockRejectedValue(new Error("Permission denied"));
+
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
+      const storage = new FilesystemMediaIndexStorage();
+      const result = await storage.read();
+
+      expect(result).toBeNull();
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Failed to read media index snapshot from filesystem",
+        expect.objectContaining({
+          storagePath: "hvsc/index/media-index-v2.json",
+          error: "Permission denied",
+        }),
+      );
     });
 
     it("reads and parses valid snapshot", async () => {
@@ -70,6 +98,11 @@ describe("filesystemMediaIndex", () => {
       const result = await storage.read();
 
       expect(result).toBeNull();
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Failed to parse persisted media index snapshot; will rebuild",
+        expect.objectContaining({ storagePath: "hvsc/index/media-index-v2.json" }),
+      );
     });
 
     it("writes snapshot to filesystem", async () => {
@@ -96,6 +129,17 @@ describe("filesystemMediaIndex", () => {
       const result = await storage.read();
 
       expect(result).toBeNull();
+    });
+
+    it("returns null when filesystem data is not a base64 string", async () => {
+      mockReadFile.mockResolvedValue({ data: new Uint8Array([1, 2, 3]) });
+
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
+      const storage = new FilesystemMediaIndexStorage();
+      const result = await storage.read();
+
+      expect(result).toBeNull();
+      expect(addLog).not.toHaveBeenCalled();
     });
 
     it("encodes using Buffer when btoa is unavailable", async () => {
@@ -151,6 +195,11 @@ describe("filesystemMediaIndex", () => {
       const result = await storage.read();
 
       expect(result).toBeNull();
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Failed to decode media-index base64 payload",
+        expect.objectContaining({ error: "atob failed" }),
+      );
 
       vi.unstubAllGlobals();
     });
