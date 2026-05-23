@@ -72,6 +72,71 @@ describe("serviceWorkerRegistration", () => {
     }
   });
 
+  it("logs and continues when service-worker process metadata cannot be inspected", () => {
+    const originalProcess = globalThis.process;
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      value: new Proxy(originalProcess, {
+        get(target, property, receiver) {
+          if (property === "env") {
+            throw new Error("process env unavailable");
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      }),
+    });
+
+    try {
+      expect(shouldRegisterServiceWorkerForEnvironment(false)).toBe(true);
+      expect(addLog).toHaveBeenCalledWith(
+        "debug",
+        "Failed to inspect service-worker test-probe process metadata",
+        expect.objectContaining({
+          error: expect.objectContaining({ message: "process env unavailable" }),
+        }),
+      );
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        value: originalProcess,
+      });
+    }
+  });
+
+  it("logs and falls back to an unversioned script URL when Vitest metadata cannot be inspected", () => {
+    const originalProcess = globalThis.process;
+    vi.stubGlobal("__SW_BUILD_ID__", "");
+    vi.stubGlobal("__APP_VERSION__", "0.7.9-test");
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      value: new Proxy(originalProcess, {
+        get(target, property, receiver) {
+          if (property === "env") {
+            throw new Error("vitest env unavailable");
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      }),
+    });
+
+    try {
+      expect(getServiceWorkerScriptUrl()).toBe("/sw.js");
+      expect(addLog).toHaveBeenCalledWith(
+        "debug",
+        "Failed to inspect Vitest service-worker environment",
+        expect.objectContaining({
+          error: expect.objectContaining({ message: "vitest env unavailable" }),
+        }),
+      );
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        value: originalProcess,
+      });
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("registers on web platforms and logs failures", async () => {
     const registerMock = vi.fn().mockRejectedValue(new Error("registration failed"));
     Object.defineProperty(window, "navigator", {

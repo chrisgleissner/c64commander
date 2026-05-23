@@ -344,6 +344,39 @@ describe("addFileSelections batching", () => {
     );
   });
 
+  it("uses an Error abort fallback and resets progress when cancellation is detected after listing", async () => {
+    const previousDomException = globalThis.DOMException;
+    vi.stubGlobal("DOMException", undefined);
+    const deps = createDeps();
+    const listEntries = vi.fn(async () => {
+      deps.addItemsAbortControllerRef.current?.abort();
+      return [{ type: "file" as const, name: "cancelled.sid", path: "/music/root/cancelled.sid" }];
+    });
+    const source = createLocalSource(listEntries);
+    const handler = createAddFileSelectionsHandler({ ...deps, recurseFolders: true } as any);
+
+    try {
+      const result = await handler(source, [{ type: "dir", name: "root", path: "/music/root" }]);
+
+      expect(result).toBe(false);
+      expect(deps.setPlaylist).not.toHaveBeenCalled();
+      expect(deps.setAddItemsProgress).toHaveBeenCalledWith(expect.any(Function));
+      const abortProgressUpdate = deps.setAddItemsProgress.mock.calls
+        .map(([updater]: [unknown]) =>
+          typeof updater === "function" ? updater({ status: "scanning", message: "Scanning..." } as any) : null,
+        )
+        .find((value: unknown) => (value as { message?: string } | null)?.message === "Add cancelled");
+      expect(abortProgressUpdate).toMatchObject({ status: "idle", message: "Add cancelled" });
+      expect(addLog).toHaveBeenCalledWith(
+        "debug",
+        "Add items scan cancelled",
+        expect.objectContaining({ selectionCount: 1 }),
+      );
+    } finally {
+      vi.stubGlobal("DOMException", previousDomException);
+    }
+  });
+
   it("returns a ready playlist before the background repository commit resolves", async () => {
     const deps = createDeps();
     let resolveCommit: ((value: unknown) => void) | null = null;

@@ -426,4 +426,67 @@ describe("ConnectionController", () => {
       vi.useRealTimers();
     }
   });
+
+  it("aborts scheduled timer callback when the app becomes hidden before callback executes", async () => {
+    vi.useFakeTimers();
+    const callbacks: Array<() => void> = [];
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation(((cb: TimerHandler) => {
+      callbacks.push(cb as () => void);
+      return callbacks.length as unknown as number;
+    }) as typeof window.setTimeout);
+    const clearTimeoutSpy = vi.spyOn(window, "clearTimeout").mockImplementation(() => undefined);
+
+    try {
+      connectionState.value = "DEMO_ACTIVE";
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+      expect(callbacks.length).toBeGreaterThan(0);
+
+      setDocumentVisibility(true);
+      callbacks[0]();
+
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    } finally {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+      setDocumentVisibility(false);
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not reschedule after background rediscovery when the app becomes hidden during the probe", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "DEMO_ACTIVE";
+      discoverConnectionMock.mockImplementation(async (trigger: string) => {
+        if (trigger === "background") {
+          setDocumentVisibility(true);
+        }
+      });
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(discoverConnectionMock).toHaveBeenCalledWith("background");
+      discoverConnectionMock.mockClear();
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+    } finally {
+      setDocumentVisibility(false);
+      vi.useRealTimers();
+    }
+  });
 });
