@@ -10,7 +10,7 @@ const pageSource = readFileSync(pagePath, "utf8");
 describe("PlayFilesPage duration contracts", () => {
   it("does not rewrite the full playlist on every duration input tick", () => {
     expect(pageSource).not.toContain("applyDurationOverrideToPlaylist(prev, nextDurationMs)");
-    expect(pageSource.match(/setPendingDurationOverrideMs\(nextDurationMs\)/g)).toHaveLength(4);
+    expect(pageSource.match(/setPendingDurationOverrideMs\(nextDurationMs\)/g)).toHaveLength(2);
   });
 
   it("persists accepted duration overrides through a shared commit path", () => {
@@ -34,8 +34,10 @@ describe("PlayFilesPage duration contracts", () => {
     expect(sliderCommit).toMatch(
       /persistDurationOverride\(nextDurationMs\);\s*setPendingDurationOverrideMs\(undefined\);/,
     );
+    expect(sliderCommit).not.toContain("setPendingDurationOverrideMs(nextDurationMs)");
     expect(inputBlur).toMatch(
       /persistDurationOverride\(nextDurationMs\);\s*setPendingDurationOverrideMs\(undefined\);/,
     );
+    expect(inputBlur).not.toContain("setPendingDurationOverrideMs(nextDurationMs)");
   });
 });

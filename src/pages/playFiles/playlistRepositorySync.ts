@@ -90,8 +90,50 @@ const buildSnapshotKey = (serialized: SerializedPlaylistRepository) => {
     hash ^= 0x1f;
     hash = Math.imul(hash, 16777619);
   };
+  const writeNullable = (value: string | number | null | undefined) => {
+    write(value === null ? "<null>" : value === undefined ? "<undefined>" : String(value));
+  };
+  const writeJson = (value: unknown) => {
+    write(JSON.stringify(value) ?? "<undefined>");
+  };
 
-  write(JSON.stringify(serialized));
+  writeNullable(serialized.tracks.length);
+  serialized.tracks.forEach((track) => {
+    writeNullable(track.trackId);
+    writeNullable(track.sourceKind);
+    writeNullable(track.sourceLocator);
+    writeNullable(track.sourceId);
+    writeJson(track.origin ?? null);
+    writeNullable(track.category);
+    writeNullable(track.title);
+    writeNullable(track.author);
+    writeNullable(track.released);
+    writeNullable(track.path);
+    writeJson(track.configRef ?? null);
+    writeJson(track.archiveRef ?? null);
+    writeNullable(track.sizeBytes);
+    writeNullable(track.modifiedAt);
+    writeNullable(track.defaultDurationMs);
+    writeNullable(track.subsongCount);
+    writeNullable(track.createdAt);
+    writeNullable(track.updatedAt);
+  });
+
+  writeNullable(serialized.playlistItems.length);
+  serialized.playlistItems.forEach((playlistItem) => {
+    writeNullable(playlistItem.playlistItemId);
+    writeNullable(playlistItem.playlistId);
+    writeNullable(playlistItem.trackId);
+    writeJson(playlistItem.configRef ?? null);
+    writeNullable(playlistItem.configOrigin);
+    writeJson(playlistItem.configOverrides ?? null);
+    writeNullable(playlistItem.songNr);
+    writeNullable(playlistItem.sortKey);
+    writeNullable(playlistItem.durationOverrideMs);
+    writeNullable(playlistItem.status);
+    writeNullable(playlistItem.unavailableReason);
+    writeNullable(playlistItem.addedAt);
+  });
   return `${serialized.playlistItems.length}:${hash >>> 0}`;
 };
 

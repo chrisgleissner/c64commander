@@ -351,5 +351,25 @@ describe("playlistRepositorySync", () => {
       expect(second.snapshotKey).toEqual(first.snapshotKey);
       expect(secondRepo.replacePlaylistSnapshot).not.toHaveBeenCalled();
     });
+
+    it("does not stringify the full serialized snapshot while deriving snapshot keys", async () => {
+      const items = [buildPlaylistItem(8)];
+      const repo = buildRepo(items.length);
+      const originalStringify = JSON.stringify;
+      const stringifySpy = vi.spyOn(JSON, "stringify").mockImplementation((value, replacer, space) => {
+        if (value && typeof value === "object" && "tracks" in value && "playlistItems" in value) {
+          throw new Error("full snapshot stringify is not allowed for snapshot keys");
+        }
+        return originalStringify(value, replacer as never, space);
+      });
+
+      try {
+        await expect(commitPlaylistSnapshot({ playlistId, items, repository: repo })).resolves.toEqual(
+          expect.objectContaining({ committedCount: items.length }),
+        );
+      } finally {
+        stringifySpy.mockRestore();
+      }
+    });
   });
 });

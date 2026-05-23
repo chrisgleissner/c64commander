@@ -1491,7 +1491,6 @@ export default function PlayFilesPage() {
       const nextDurationMs = nextSeconds * 1000;
       setDurationSeconds(nextSeconds);
       setDurationMs(nextDurationMs);
-      setPendingDurationOverrideMs(nextDurationMs);
       setDurationInput(formatDurationSeconds(nextSeconds));
       persistDurationOverride(nextDurationMs);
       setPendingDurationOverrideMs(undefined);
@@ -1525,7 +1524,6 @@ export default function PlayFilesPage() {
       setDurationSeconds(nextSeconds);
     }
     setDurationMs(nextDurationMs);
-    setPendingDurationOverrideMs(nextDurationMs);
     persistDurationOverride(nextDurationMs);
     setPendingDurationOverrideMs(undefined);
     setDurationInput(formatDurationSeconds(nextSeconds));
