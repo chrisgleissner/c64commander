@@ -273,21 +273,21 @@ describe("hvscStatusStore", () => {
       expect(done.metadata.finishedAt).toBeTruthy();
     });
 
-    it("infers metadata completion state and percent when the event omits them", () => {
+    it("keeps metadata in progress at 100 percent until a done token arrives", () => {
       const initial = getDefaultHvscStatusSummary();
 
-      const done = applyHvscProgressEventToSummary(initial, {
+      const progress = applyHvscProgressEventToSummary(initial, {
         ingestionId: "meta-implicit",
         stage: "sid_metadata_hydration",
-        message: "HVSC META 60/60 done",
+        message: "HVSC META 60/60 running",
         processedCount: 60,
         totalCount: 60,
       });
 
-      expect(done.metadata.status).toBe("success");
-      expect(done.metadata.stateToken).toBe("done");
-      expect(done.metadata.percent).toBe(100);
-      expect(done.metadata.finishedAt).toBeTruthy();
+      expect(progress.metadata.status).toBe("in-progress");
+      expect(progress.metadata.stateToken).toBe("running");
+      expect(progress.metadata.percent).toBe(100);
+      expect(progress.metadata.finishedAt).toBeNull();
     });
 
     it("infers running metadata state and percent for partial progress events", () => {

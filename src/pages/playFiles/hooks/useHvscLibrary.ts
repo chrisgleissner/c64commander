@@ -1216,6 +1216,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
       : hvscStage && HVSC_EXTRACTION_STAGES.has(hvscStage)
         ? hvscProgress
         : null;
+  const capActivePreparationProgress = (value: number | null | undefined) =>
+    typeof value === "number" ? Math.min(99, Math.max(0, value)) : value;
   const hvscReadySongCount = hvscIngestionIngestedSongs || hvscIngestionTotalSongs;
   const hvscPreparationSnapshot: HvscPreparationSnapshot = useMemo(
     () =>
@@ -1256,11 +1258,13 @@ export const useHvscLibrary = (): HvscLibraryState => {
   );
   const hvscPreparationProgressPercent =
     hvscPreparationSnapshot.state === "DOWNLOADING"
-      ? hvscDownloadPercent
+      ? capActivePreparationProgress(hvscDownloadPercent)
       : hvscPreparationSnapshot.state === "INGESTING"
-        ? hvscStatusSummary.metadata.status === "in-progress"
-          ? (hvscStatusSummary.metadata.percent ?? hvscExtractionPercent)
-          : hvscExtractionPercent
+        ? capActivePreparationProgress(
+            hvscStatusSummary.metadata.status === "in-progress"
+              ? (hvscStatusSummary.metadata.percent ?? hvscExtractionPercent)
+              : hvscExtractionPercent,
+          )
         : null;
   const hvscPreparationThroughputLabel = (() => {
     if (hvscPreparationSnapshot.state === "DOWNLOADING" && hvscDownloadBytes && hvscDownloadElapsedMs) {

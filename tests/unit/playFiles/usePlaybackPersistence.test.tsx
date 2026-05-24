@@ -160,6 +160,46 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  it("hydrates persisted HVSC playlist items with runtime files for playback after restart", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/demo.sid",
+            name: "demo.sid",
+            sourceId: "hvsc-library",
+            durationMs: 12_000,
+            addedAt: new Date(0).toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    expect(result.current.playlist[0].request.source).toBe("hvsc");
+    expect(result.current.playlist[0].request.file).toEqual(
+      expect.objectContaining({
+        name: "demo.sid",
+        webkitRelativePath: "/MUSICIANS/Test/demo.sid",
+      }),
+    );
+  });
+
   it("hydrates persisted playlist items during the initial render before repository migration finishes", () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
@@ -355,7 +395,12 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
-      expect(result.current.playlist[0].request.file).toBeUndefined();
+      expect(result.current.playlist[0].request.file).toEqual(
+        expect.objectContaining({
+          name: "demo.sid",
+          webkitRelativePath: "/MUSICIANS/Test/demo.sid",
+        }),
+      );
       expect(result.current.playlist[0].subsongCount).toBe(4);
     });
   });
@@ -512,7 +557,12 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("repo.sid");
       expect(result.current.playlist[0].request.source).toBe("hvsc");
-      expect(result.current.playlist[0].request.file).toBeUndefined();
+      expect(result.current.playlist[0].request.file).toEqual(
+        expect.objectContaining({
+          name: "repo.sid",
+          webkitRelativePath: "/MUSICIANS/Test/repo.sid",
+        }),
+      );
       expect(result.current.playlist[0].subsongCount).toBe(1);
     });
   });

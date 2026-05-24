@@ -854,19 +854,24 @@ describe("usePlaybackController", () => {
     expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 
-  it("resumes paused playback without replaying SID mixer writes", async () => {
+  it("resumes paused playback before restoring the pre-pause SID mixer volume", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
     ];
+    const callOrder: string[] = [];
     const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
     const pauseMuteSnapshotRef = {
       current: {
-        volumes: { "SID 1": "-42 dB" },
+        volumes: { "SID 1": "0 dB" },
         enablement: {},
       },
     };
+    const resolveEnabledSidVolumeItems = vi.fn().mockResolvedValue([{ name: "SID 1", value: "-42 dB" }]);
+    const snapshotToUpdates = vi.fn().mockReturnValue({ "SID 1": "0 dB" });
     vi.mocked(getC64API).mockReturnValue({
-      machineResume: vi.fn().mockResolvedValue(undefined),
+      machineResume: vi.fn(async () => {
+        callOrder.push("resume");
+      }),
     } as any);
 
     const { result } = renderPlaybackController(playlist, {
@@ -874,35 +879,57 @@ describe("usePlaybackController", () => {
       isPaused: true,
       applyAudioMixerUpdates,
       pauseMuteSnapshotRef,
+      resolveEnabledSidVolumeItems,
+      snapshotToUpdates,
+    });
+
+    applyAudioMixerUpdates.mockImplementation(async () => {
+      callOrder.push("unmute");
     });
 
     await result.current.handlePauseResume();
 
-    expect(applyAudioMixerUpdates).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(["resume", "unmute"]);
+    expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "SID 1": "0 dB" }, "Resume unmute");
     expect(pauseMuteSnapshotRef.current).toBeNull();
   });
 
-  it("pauses active playback without issuing SID mixer writes", async () => {
+  it("mutes enabled SID mixer volume before pausing active playback", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
     ];
+    const callOrder: string[] = [];
     const dispatchVolume = vi.fn();
     const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
-    const machinePause = vi.fn().mockResolvedValue(undefined);
+    const machinePause = vi.fn(async () => {
+      callOrder.push("pause");
+    });
     vi.mocked(getC64API).mockReturnValue({ machinePause } as any);
+    const pauseMuteSnapshotRef = { current: null };
+    applyAudioMixerUpdates.mockImplementation(async () => {
+      callOrder.push("mute");
+    });
 
     const { result } = renderPlaybackController(playlist, {
       isPlaying: true,
       isPaused: false,
       dispatchVolume,
       applyAudioMixerUpdates,
+      pauseMuteSnapshotRef,
+      resolveEnabledSidVolumeItems: vi
+        .fn()
+        .mockResolvedValue([{ name: "SID 1", value: "0 dB", options: ["-42 dB", "0 dB"] }]),
+      buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({ "SID 1": "-42 dB" }),
+      captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: { "SID 1": "0 dB" }, enablement: {} }),
     });
 
     await result.current.handlePauseResume();
 
+    expect(callOrder).toEqual(["mute", "pause"]);
     expect(machinePause).toHaveBeenCalled();
-    expect(applyAudioMixerUpdates).not.toHaveBeenCalled();
-    expect(dispatchVolume).not.toHaveBeenCalled();
+    expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "SID 1": "-42 dB" }, "Pause mute");
+    expect(dispatchVolume).toHaveBeenCalledWith({ type: "mute", reason: "pause" });
+    expect(pauseMuteSnapshotRef.current).toEqual({ volumes: { "SID 1": "0 dB" }, enablement: {} });
   });
 
   it("pauses without mixer writes when no enabled SID outputs are active", async () => {
@@ -1446,6 +1473,46 @@ describe("usePlaybackController", () => {
     );
   });
 
+  it("resolves HVSC runtime files when top-level playlist play starts from an unset current index", async () => {
+    const hvscFile = {
+      name: "demo.sid",
+      webkitRelativePath: "/MUSICIANS/Test/demo.sid",
+      lastModified: 0,
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(8)),
+    };
+    const buildHvscLocalPlayFile = vi.fn(() => hvscFile as any);
+    const hvscItem = createPlaylistItem({
+      category: "sid",
+      label: "demo.sid",
+      path: "/MUSICIANS/Test/demo.sid",
+      request: { source: "hvsc", path: "/MUSICIANS/Test/demo.sid" },
+      sourceId: "hvsc-library",
+      durationMs: 1_000,
+      subsongCount: 1,
+    });
+    const setIsPlaylistLoading = vi.fn();
+    const { result } = renderPlaybackController([hvscItem], {
+      currentIndex: -1,
+      buildHvscLocalPlayFile,
+      setIsPlaylistLoading,
+    });
+
+    await result.current.handlePlay();
+
+    expect(buildHvscLocalPlayFile).toHaveBeenCalledWith("/MUSICIANS/Test/demo.sid", "demo.sid");
+    expect(hvscItem.request.file).toBe(hvscFile);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: "hvsc",
+        path: "/MUSICIANS/Test/demo.sid",
+        file: hvscFile,
+      }),
+      expect.anything(),
+    );
+    expect(setIsPlaylistLoading).toHaveBeenLastCalledWith(false);
+  });
+
   it("reports connection failures before playback starts", async () => {
     const item = createPlaylistItem();
     const ensurePlaybackConnection = vi.fn().mockRejectedValue(new Error("connect failed"));
@@ -1554,12 +1621,12 @@ describe("usePlaybackController", () => {
     }
   });
 
-  it("retries resume without replaying mixer writes when resuming paused playback", async () => {
+  it("retries resume before unmuting paused playback", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
     ];
     const machineResume = vi.fn().mockRejectedValueOnce(new Error("resume once")).mockResolvedValueOnce(undefined);
-    const applyAudioMixerUpdates = vi.fn().mockRejectedValue(new Error("mixer failed"));
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
     const pauseMuteSnapshotRef = {
       current: {
         volumes: { "SID 1": "5 dB" },
@@ -1599,7 +1666,9 @@ describe("usePlaybackController", () => {
       "Machine resume first attempt failed",
       expect.objectContaining({ error: "resume once" }),
     );
-    expect(applyAudioMixerUpdates).not.toHaveBeenCalled();
+    expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "SID 1": "5 dB" }, "Resume unmute");
+    const lastResumeOrder = machineResume.mock.invocationCallOrder[machineResume.mock.invocationCallOrder.length - 1];
+    expect(lastResumeOrder).toBeLessThan(applyAudioMixerUpdates.mock.invocationCallOrder[0]);
     expect(setAutoAdvanceDueAtMs).toHaveBeenCalled();
   });
 

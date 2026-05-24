@@ -36,7 +36,7 @@ declare module "@capacitor/filesystem" {
     uri?: string;
   };
 
-  export type ProgressStatus = { loaded: number; total?: number };
+  export type ProgressStatus = { loaded?: number; total?: number; bytes?: number; contentLength?: number };
 
   export const Filesystem: {
     mkdir: (options: { directory: Directory; path: string; recursive?: boolean }) => Promise<void>;
@@ -59,6 +59,10 @@ declare module "@capacitor/filesystem" {
       path: string;
       progress?: (status: ProgressStatus) => void;
     }) => Promise<{ path?: string }>;
+    addListener?: (
+      eventName: "progress",
+      listenerFunc: (status: ProgressStatus & { url?: string }) => void,
+    ) => Promise<{ remove: () => Promise<void> }>;
     getUri: (options: { directory: Directory; path: string }) => Promise<{ uri: string }>;
   };
 }
