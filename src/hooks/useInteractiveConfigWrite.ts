@@ -12,12 +12,20 @@ import {
   beginInteractiveWriteBurst,
   waitForMachineTransitionsToSettle,
 } from "@/lib/deviceInteraction/deviceActivityGate";
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { createLatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { getSelectedSavedDeviceProductFamilySync } from "@/lib/savedDevices/store";
 import { reportUserError } from "@/lib/uiErrors";
 import { addLog } from "@/lib/logging";
+
+const INTERACTIVE_WRITE_QUIET_MS = 400;
+
+const waitForInteractiveWriteQuietWindow = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, INTERACTIVE_WRITE_QUIET_MS);
+  });
 
 export interface InteractiveWriteOptions {
   /** Config category name, e.g. "Audio Mixer", "LED Strip Settings". */
@@ -43,8 +51,8 @@ export interface InteractiveWriteResult {
  * responsive while routing device traffic through the safety queue:
  * - `skipInvalidation: true` — no React Query refetch per write; a single
  *   debounced reconciliation refetch fires after the last write settles.
- * - `LatestIntentWriteLane` — coalesces rapid writes; only the latest intent
- *   is sent to the device.
+ * - `LatestIntentWriteLane` plus a short quiet window — coalesces rapid
+ *   writes before the first device call; only the latest intent is sent.
  * - `waitForMachineTransitionsToSettle` — gates writes during resets/reboots.
  */
 export function useInteractiveConfigWrite({
@@ -84,9 +92,13 @@ export function useInteractiveConfigWrite({
 
   if (!laneRef.current) {
     laneRef.current = createLatestIntentWriteLane<Record<string, string | number>>({
-      beforeRun: () => waitForMachineTransitionsToSettle(),
+      beforeRun: async () => {
+        await waitForMachineTransitionsToSettle();
+        await waitForInteractiveWriteQuietWindow();
+      },
       run: async (updates) => {
-        const endBurst = beginInteractiveWriteBurst();
+        const safety = loadDeviceSafetyConfig();
+        const endBurst = beginInteractiveWriteBurst(safety.configsCooldownMs);
         try {
           const productFamily = getSelectedSavedDeviceProductFamilySync();
           addLog("debug", "Interactive config write sending latest intent", {
@@ -95,6 +107,8 @@ export function useInteractiveConfigWrite({
             productFamily,
             immediate: false,
             skipInvalidation: true,
+            quietMs: INTERACTIVE_WRITE_QUIET_MS,
+            backgroundReadCooldownMs: safety.configsCooldownMs,
           });
           await mutateRef.current({
             category: categoryRef.current,

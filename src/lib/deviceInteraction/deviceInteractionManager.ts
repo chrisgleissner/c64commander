@@ -426,7 +426,7 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
     return {
       key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
       cacheMs: config.infoCacheMs,
-      cooldownMs: 0,
+      cooldownMs: config.infoCacheMs,
     };
   }
   if (method === "GET" && normalizedPath === "/v1/configs") {
@@ -578,18 +578,20 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
         reason: "device-busy",
       });
     }
-    if (meta.intent === "system" && areBackgroundReadsSuspended()) {
-      recordDeviceGuard(meta.action, {
-        decision: "defer",
-        reason: "user-write-priority",
-      });
-      addLog("debug", "System REST read yielding to user device activity", {
-        method: meta.method,
-        path: meta.path,
-        intent: meta.intent,
-      });
+    if (meta.intent === "background" || areBackgroundReadsSuspended()) {
+      if (meta.intent === "system") {
+        recordDeviceGuard(meta.action, {
+          decision: "defer",
+          reason: "user-write-priority",
+        });
+        addLog("debug", "System REST read yielding to user device activity", {
+          method: meta.method,
+          path: meta.path,
+          intent: meta.intent,
+        });
+      }
+      await waitForBackgroundReadsToResume();
     }
-    await waitForBackgroundReadsToResume();
   }
 
   const now = Date.now();

@@ -22,7 +22,15 @@ const mockWaitForMachineTransitionsToSettle = vi.fn(() => Promise.resolve());
 const mockBeginInteractiveWriteBurst = vi.fn(() => vi.fn());
 vi.mock("@/lib/deviceInteraction/deviceActivityGate", () => ({
   waitForMachineTransitionsToSettle: () => mockWaitForMachineTransitionsToSettle(),
-  beginInteractiveWriteBurst: () => mockBeginInteractiveWriteBurst(),
+  beginInteractiveWriteBurst: (cooldownMs?: number) => mockBeginInteractiveWriteBurst(cooldownMs),
+}));
+
+const mockLoadDeviceSafetyConfig = vi.fn(() => ({
+  mode: "CUSTOM",
+  configsCooldownMs: 1200,
+}));
+vi.mock("@/lib/config/deviceSafetySettings", () => ({
+  loadDeviceSafetyConfig: () => mockLoadDeviceSafetyConfig(),
 }));
 
 const selectedProductFamilyRef = vi.hoisted(() => ({ current: null as string | null }));
@@ -56,6 +64,10 @@ describe("useInteractiveConfigWrite", () => {
     mockWaitForMachineTransitionsToSettle.mockResolvedValue(undefined);
     const endBurst = vi.fn();
     mockBeginInteractiveWriteBurst.mockReturnValue(endBurst);
+    mockLoadDeviceSafetyConfig.mockReturnValue({
+      mode: "CUSTOM",
+      configsCooldownMs: 1200,
+    });
     selectedProductFamilyRef.current = null;
   });
 
@@ -102,14 +114,6 @@ describe("useInteractiveConfigWrite", () => {
   });
 
   it("coalesces rapid writes — only the last payload reaches mutateAsync", async () => {
-    let releaseGate!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      releaseGate = resolve;
-    });
-
-    // Block the beforeRun gate so intermediate writes queue up.
-    mockWaitForMachineTransitionsToSettle.mockImplementation(() => gate);
-
     const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
       wrapper: createWrapper(),
     });
@@ -120,15 +124,37 @@ describe("useInteractiveConfigWrite", () => {
       result.current.write({ "SID1 Volume": "12" });
     });
 
-    // Unblock the gate so the lane runs.
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+
     await act(async () => {
-      releaseGate();
       await vi.runAllTimersAsync();
     });
 
     // Only the last write should have been sent.
     expect(mockMutateAsync).toHaveBeenCalledTimes(1);
     expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "SID1 Volume": "12" } }));
+  });
+
+  it("waits for an input-quiet window before the first device write", async () => {
+    const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.write({ "SID1 Volume": "4" });
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(399);
+    });
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "SID1 Volume": "4" } }));
   });
 
   it("schedules reconciliation 250 ms after the last write", async () => {
@@ -223,6 +249,7 @@ describe("useInteractiveConfigWrite", () => {
     });
 
     expect(mockBeginInteractiveWriteBurst).toHaveBeenCalledTimes(1);
+    expect(mockBeginInteractiveWriteBurst).toHaveBeenCalledWith(1200);
     expect(endBurst).toHaveBeenCalledTimes(1);
   });
 
@@ -235,11 +262,17 @@ describe("useInteractiveConfigWrite", () => {
       wrapper: createWrapper(),
     });
 
+    let writePromise!: Promise<void>;
+    act(() => {
+      writePromise = result.current.write({ "SID1 Volume": "3" });
+    });
+    void writePromise.catch(() => undefined);
+
     await act(async () => {
-      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toThrow("network failure");
       await vi.runAllTimersAsync();
     });
 
+    await expect(writePromise).rejects.toThrow("network failure");
     expect(endBurst).toHaveBeenCalledTimes(1);
   });
 
@@ -289,11 +322,17 @@ describe("useInteractiveConfigWrite", () => {
       wrapper: createWrapper(),
     });
 
+    let writePromise!: Promise<void>;
+    act(() => {
+      writePromise = result.current.write({ "SID1 Volume": "3" });
+    });
+    void writePromise.catch(() => undefined);
+
     await act(async () => {
-      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toThrow("network failure");
       await vi.runAllTimersAsync();
     });
 
+    await expect(writePromise).rejects.toThrow("network failure");
     expect(mockReportUserError).toHaveBeenCalledTimes(1);
     expect(mockReportUserError).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -355,11 +394,17 @@ describe("useInteractiveConfigWrite", () => {
       wrapper: createWrapper(),
     });
 
+    let writePromise!: Promise<void>;
+    act(() => {
+      writePromise = result.current.write({ "SID1 Volume": "2" });
+    });
+    void writePromise.catch(() => undefined);
+
     await act(async () => {
-      await expect(result.current.write({ "SID1 Volume": "2" })).rejects.toThrow("oops");
       await vi.runAllTimersAsync();
     });
 
+    await expect(writePromise).rejects.toThrow("oops");
     expect(result.current.isPending).toBe(false);
   });
 
@@ -370,11 +415,17 @@ describe("useInteractiveConfigWrite", () => {
       wrapper: createWrapper(),
     });
 
+    let writePromise!: Promise<void>;
+    act(() => {
+      writePromise = result.current.write({ "SID1 Volume": "3" });
+    });
+    void writePromise.catch(() => undefined);
+
     await act(async () => {
-      await expect(result.current.write({ "SID1 Volume": "3" })).rejects.toBe("network failure string");
       await vi.runAllTimersAsync();
     });
 
+    await expect(writePromise).rejects.toBe("network failure string");
     expect(mockReportUserError).toHaveBeenCalledWith(
       expect.objectContaining({
         description: "network failure string",

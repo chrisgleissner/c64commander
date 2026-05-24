@@ -529,8 +529,6 @@ const probeRest = async (
         __c64uIntent: "system",
         __c64uAllowDuringError: true,
         __c64uBypassCache: true,
-        __c64uBypassCooldown: true,
-        __c64uBypassBackoff: true,
         __c64uBypassCircuit: true,
       }),
     );

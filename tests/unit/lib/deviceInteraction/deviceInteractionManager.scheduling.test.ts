@@ -203,4 +203,62 @@ describe("withRestInteraction", () => {
       vi.useRealTimers();
     }
   });
+
+  it("applies Device Safety info cooldown to failed system probes", async () => {
+    vi.useFakeTimers();
+    const events: Array<{ label: string; at: number }> = [];
+
+    try {
+      const first = withRestInteraction(
+        {
+          action,
+          method: "GET",
+          path: "/v1/info",
+          normalizedUrl: "/v1/info",
+          intent: "system",
+          baseUrl: "http://c64u",
+          bypassCache: true,
+          allowDuringError: true,
+          bypassCircuit: true,
+        },
+        async () => {
+          events.push({ label: "first", at: Date.now() });
+          throw new Error("Host unreachable");
+        },
+      );
+      void first.catch(() => undefined);
+
+      await vi.runOnlyPendingTimersAsync();
+      await expect(first).rejects.toThrow("Host unreachable");
+
+      const second = withRestInteraction(
+        {
+          action,
+          method: "GET",
+          path: "/v1/info",
+          normalizedUrl: "/v1/info",
+          intent: "system",
+          baseUrl: "http://c64u",
+          bypassCache: true,
+          allowDuringError: true,
+          bypassCircuit: true,
+        },
+        async () => {
+          events.push({ label: "second", at: Date.now() });
+          return "second";
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(599);
+      expect(events.map((event) => event.label)).toEqual(["first"]);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await second;
+
+      expect(events.map((event) => event.label)).toEqual(["first", "second"]);
+      expect(events[1].at - events[0].at).toBeGreaterThanOrEqual(600);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

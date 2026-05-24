@@ -239,8 +239,6 @@ const probeInfoWithConnectionConfig = async (
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
-      __c64uBypassCooldown: true,
-      __c64uBypassBackoff: true,
       __c64uBypassCircuit: true,
     });
     return {
@@ -380,8 +378,6 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
-      __c64uBypassCooldown: true,
-      __c64uBypassBackoff: true,
       __c64uBypassCircuit: true,
     });
     return isProbePayloadHealthy(response);
@@ -472,8 +468,6 @@ export async function probeInfoOnce(
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
-      __c64uBypassCooldown: true,
-      __c64uBypassBackoff: true,
       __c64uBypassCircuit: true,
     });
     return {
