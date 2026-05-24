@@ -19,6 +19,7 @@ import { createConfigWorkflow } from "@/lib/config/configWorkflow";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { getPassword } from "@/lib/secureStorage";
@@ -29,6 +30,7 @@ import { createTelnetClient } from "@/lib/telnet/telnetClient";
 import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { createTelnetSession } from "@/lib/telnet/telnetSession";
 import { resolveTelnetMenuKey } from "@/lib/telnet/telnetTypes";
+import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 
 type LocalEntry = {
   uri?: string | null;
@@ -175,6 +177,22 @@ export const applyConfigFileReference = async ({
     password: password ?? "",
   };
   const menuKey = resolveTelnetMenuKey(deviceProduct) ?? "F5";
+  const runTelnetWorkflow = async (
+    actionId: string,
+    callback: (session: ReturnType<typeof createTelnetSession>) => Promise<void>,
+  ) =>
+    runWithImplicitAction(`config-reference.${actionId}`, (action) =>
+      withTelnetInteraction({ action, actionId, intent: "user" }, async () => {
+        const transport = createTelnetClient();
+        const session = createTelnetSession(transport);
+        await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+        try {
+          await callback(session);
+        } finally {
+          await session.disconnect();
+        }
+      }),
+    );
   const workflow = createConfigWorkflow({
     listRemoteTempFiles: async () => {
       const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
@@ -195,34 +213,17 @@ export const applyConfigFileReference = async ({
       await writeFtpFile({ ...ftpOptions, path, data: uint8ToBase64(bytes) });
     },
     runSaveRemoteConfig: async () => {
-      const transport = createTelnetClient();
-      const session = createTelnetSession(transport);
-      await session.connect(host, getStoredTelnetPort(), password ?? undefined);
-      try {
-        await saveRemoteConfigFromTemp(session, menuKey);
-      } finally {
-        await session.disconnect();
-      }
+      await runTelnetWorkflow("config-reference-save-remote", (session) => saveRemoteConfigFromTemp(session, menuKey));
     },
     runApplyRemoteConfig: async (fileName) => {
-      const transport = createTelnetClient();
-      const session = createTelnetSession(transport);
-      await session.connect(host, getStoredTelnetPort(), password ?? undefined);
-      try {
-        await applyRemoteConfigFromTemp(session, menuKey, fileName);
-      } finally {
-        await session.disconnect();
-      }
+      await runTelnetWorkflow("config-reference-apply-temp", (session) =>
+        applyRemoteConfigFromTemp(session, menuKey, fileName),
+      );
     },
     runApplyRemoteConfigByPath: async (path) => {
-      const transport = createTelnetClient();
-      const session = createTelnetSession(transport);
-      await session.connect(host, getStoredTelnetPort(), password ?? undefined);
-      try {
-        await applyRemoteConfigFromPath(session, menuKey, path);
-      } finally {
-        await session.disconnect();
-      }
+      await runTelnetWorkflow("config-reference-apply-path", (session) =>
+        applyRemoteConfigFromPath(session, menuKey, path),
+      );
     },
   });
 

@@ -21,7 +21,10 @@ import {
   markDeviceRequestStart,
   setCircuitOpenUntil,
 } from "@/lib/deviceInteraction/deviceStateStore";
-import { waitForBackgroundReadsToResume } from "@/lib/deviceInteraction/deviceActivityGate";
+import {
+  areBackgroundReadsSuspended,
+  waitForBackgroundReadsToResume,
+} from "@/lib/deviceInteraction/deviceActivityGate";
 import {
   buildRestRequestIdentity,
   canonicalizeRestPath,
@@ -313,7 +316,6 @@ subscribeDeviceSafetyUpdates(updateConfig);
 const REST_MAX_CONCURRENCY = 1;
 const TELNET_MAX_CONCURRENCY = 1;
 const MACHINE_CONTROL_COOLDOWN_MS = 250;
-const CONFIG_MUTATION_COOLDOWN_MS = 120;
 
 const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY, "rest");
 const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency, "ftp");
@@ -452,7 +454,7 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
     return {
       key: `${baseUrl}:rest-config-mutation`,
       cacheMs: 0,
-      cooldownMs: CONFIG_MUTATION_COOLDOWN_MS,
+      cooldownMs: config.configsCooldownMs,
     };
   }
   return { key: null, cacheMs: 0, cooldownMs: 0 };
@@ -489,6 +491,15 @@ const applyCooldown = async (
     decision: "defer",
     reason: "cooldown",
     waitMs,
+  });
+  addLog("debug", "Device safety cooldown delay applied", {
+    transport: "rest",
+    key,
+    intent,
+    waitMs,
+    cooldownMs,
+    deviceSafetyMode: config.mode,
+    effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
   });
   await sleep(waitMs);
 };
@@ -560,11 +571,22 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     throw error;
   }
 
-  if (meta.intent === "background" && isReadOnlyRestMethod(meta.method)) {
+  if (meta.intent !== "user" && isReadOnlyRestMethod(meta.method)) {
     if (getDeviceStateSnapshot().state === "BUSY") {
       recordDeviceGuard(meta.action, {
         decision: "defer",
         reason: "device-busy",
+      });
+    }
+    if (meta.intent === "system" && areBackgroundReadsSuspended()) {
+      recordDeviceGuard(meta.action, {
+        decision: "defer",
+        reason: "user-write-priority",
+      });
+      addLog("debug", "System REST read yielding to user device activity", {
+        method: meta.method,
+        path: meta.path,
+        intent: meta.intent,
       });
     }
     await waitForBackgroundReadsToResume();
@@ -628,6 +650,15 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
         reason: "backoff",
         waitMs,
       });
+      addLog("debug", "Device safety backoff delay applied", {
+        transport: "rest",
+        method: meta.method,
+        path: canonicalPath,
+        intent: meta.intent,
+        waitMs,
+        deviceSafetyMode: config.mode,
+        effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
+      });
       await sleep(waitMs);
     }
 
@@ -640,6 +671,16 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     }
 
     markDeviceRequestStart();
+    addLog("debug", "Device request started", {
+      transport: "rest",
+      method: meta.method,
+      path: canonicalPath,
+      intent: meta.intent,
+      priority: meta.intent,
+      cooldownMs: policy.cooldownMs,
+      deviceSafetyMode: config.mode,
+      effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
+    });
     try {
       const result = await handler();
       if (usesSharedReadState && policy.key && policy.cacheMs > 0) {
@@ -651,11 +692,28 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       invalidateRestReadStateForWrite(meta.method, canonicalPath, meta.baseUrl);
       resetRestFailure();
       markDeviceRequestEnd({ success: true });
+      addLog("debug", "Device request finished", {
+        transport: "rest",
+        method: meta.method,
+        path: canonicalPath,
+        intent: meta.intent,
+        priority: meta.intent,
+        success: true,
+      });
       return result;
     } catch (error) {
       const err = error as Error;
       updateRestFailure(err);
       markDeviceRequestEnd({ success: false, errorMessage: err.message });
+      addLog("debug", "Device request finished", {
+        transport: "rest",
+        method: meta.method,
+        path: canonicalPath,
+        intent: meta.intent,
+        priority: meta.intent,
+        success: false,
+        error: err.message,
+      });
       throw error;
     } finally {
       if (usesSharedReadState && policy.key) {

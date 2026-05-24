@@ -186,6 +186,7 @@ export function LightingSummaryCard({
     });
   };
   const fixedColorSlider = useDeviceBoundSlider({
+    debugName: `${testIdPrefix}-color-slider`,
     deviceValue: fixedColorValue,
     domain: fixedColorDomain,
     previewMode: "throttled",
@@ -193,6 +194,7 @@ export function LightingSummaryCard({
     commit: (nextColor) => writeLightingSliderValue("Fixed Color", nextColor),
   });
   const intensitySlider = useDeviceBoundSlider({
+    debugName: `${testIdPrefix}-intensity-slider`,
     deviceValue: intensityNumber,
     domain: intensityDomain,
     previewMode: "throttled",

@@ -92,6 +92,8 @@ import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
+import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import {
   isDeviceControlError,
   useDeviceControl,
@@ -290,12 +292,21 @@ function HomePageContent() {
     const session = createTelnetSession(transport);
     const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
 
-    await session.connect(host, getStoredTelnetPort(), password ?? undefined);
-    try {
-      return await callback(session, menuKey);
-    } finally {
-      await session.disconnect();
+    const runSession = async () => {
+      await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+      try {
+        return await callback(session, menuKey);
+      } finally {
+        await session.disconnect();
+      }
+    };
+    const activeAction = getActiveAction();
+    if (activeAction) {
+      return withTelnetInteraction({ action: activeAction, actionId: "home-reu-workflow", intent: "user" }, runSession);
     }
+    return runWithImplicitAction("home.reu.telnet", (action) =>
+      withTelnetInteraction({ action, actionId: "home-reu-workflow", intent: "user" }, runSession),
+    );
   };
 
   const createHomeReuWorkflow = () =>
@@ -353,12 +364,24 @@ function HomePageContent() {
     const session = createTelnetSession(transport);
     const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
 
-    await session.connect(host, getStoredTelnetPort(), password ?? undefined);
-    try {
-      return await callback(session, menuKey);
-    } finally {
-      await session.disconnect();
+    const runSession = async () => {
+      await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+      try {
+        return await callback(session, menuKey);
+      } finally {
+        await session.disconnect();
+      }
+    };
+    const activeAction = getActiveAction();
+    if (activeAction) {
+      return withTelnetInteraction(
+        { action: activeAction, actionId: "home-config-file-workflow", intent: "user" },
+        runSession,
+      );
     }
+    return runWithImplicitAction("home.config-file.telnet", (action) =>
+      withTelnetInteraction({ action, actionId: "home-config-file-workflow", intent: "user" }, runSession),
+    );
   };
 
   const createHomeConfigFileWorkflow = () =>

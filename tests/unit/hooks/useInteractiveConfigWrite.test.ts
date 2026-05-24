@@ -64,7 +64,7 @@ describe("useInteractiveConfigWrite", () => {
     vi.clearAllMocks();
   });
 
-  it("calls mutateAsync with immediate:true and skipInvalidation:true on a single write", async () => {
+  it("routes interactive writes through the serialized config write path", async () => {
     const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
       wrapper: createWrapper(),
     });
@@ -77,7 +77,7 @@ describe("useInteractiveConfigWrite", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       category: "Audio Mixer",
       updates: { "SID1 Volume": "12" },
-      immediate: true,
+      immediate: false,
       skipInvalidation: true,
     });
   });
@@ -276,7 +276,7 @@ describe("useInteractiveConfigWrite", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       category: "Audio Mixer",
       updates: { "SID1 Volume": "15" },
-      immediate: true,
+      immediate: false,
       skipInvalidation: true,
     });
   });

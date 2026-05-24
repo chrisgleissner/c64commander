@@ -1592,7 +1592,12 @@ export class C64API {
         method: "POST",
         body: JSON.stringify(resolvedPayload),
       });
-    const response = options.immediate ? await run() : await scheduleConfigWrite(run);
+    if (options.immediate) {
+      addLog("debug", "Config batch immediate option routed through Device Safety queue", {
+        categories: Object.keys(resolvedPayload),
+      });
+    }
+    const response = await scheduleConfigWrite(run);
     this.assertConfigWriteAccepted(response, { payload: resolvedPayload });
     Object.entries(resolvedPayload).forEach(([category, updates]) => {
       Object.entries(updates).forEach(([item, value]) => {
