@@ -15,6 +15,7 @@ import {
 import { createLatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
+import { getSelectedSavedDeviceProductFamilySync } from "@/lib/savedDevices/store";
 import { reportUserError } from "@/lib/uiErrors";
 
 export interface InteractiveWriteOptions {
@@ -87,10 +88,11 @@ export function useInteractiveConfigWrite({
       run: async (updates) => {
         const endBurst = beginInteractiveWriteBurst();
         try {
+          const useImmediateWrite = getSelectedSavedDeviceProductFamilySync() !== "C64U";
           await mutateRef.current({
             category: categoryRef.current,
             updates,
-            immediate: true,
+            immediate: useImmediateWrite,
             skipInvalidation: true,
           });
         } finally {

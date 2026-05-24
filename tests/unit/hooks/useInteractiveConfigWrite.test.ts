@@ -25,6 +25,11 @@ vi.mock("@/lib/deviceInteraction/deviceActivityGate", () => ({
   beginInteractiveWriteBurst: () => mockBeginInteractiveWriteBurst(),
 }));
 
+const selectedProductFamilyRef = vi.hoisted(() => ({ current: null as string | null }));
+vi.mock("@/lib/savedDevices/store", () => ({
+  getSelectedSavedDeviceProductFamilySync: () => selectedProductFamilyRef.current,
+}));
+
 const mockReportUserError = vi.fn();
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: (report: unknown) => mockReportUserError(report),
@@ -51,6 +56,7 @@ describe("useInteractiveConfigWrite", () => {
     mockWaitForMachineTransitionsToSettle.mockResolvedValue(undefined);
     const endBurst = vi.fn();
     mockBeginInteractiveWriteBurst.mockReturnValue(endBurst);
+    selectedProductFamilyRef.current = null;
   });
 
   afterEach(() => {
@@ -72,6 +78,25 @@ describe("useInteractiveConfigWrite", () => {
       category: "Audio Mixer",
       updates: { "SID1 Volume": "12" },
       immediate: true,
+      skipInvalidation: true,
+    });
+  });
+
+  it("routes C64U interactive writes through the serialized config write path", async () => {
+    selectedProductFamilyRef.current = "C64U";
+    const { result } = renderHook(() => useInteractiveConfigWrite({ category: "U64 Specific Settings" }), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      result.current.write({ "CPU Speed": " 4", "Turbo Control": "Manual" });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(mockMutateAsync).toHaveBeenCalledWith({
+      category: "U64 Specific Settings",
+      updates: { "CPU Speed": " 4", "Turbo Control": "Manual" },
+      immediate: false,
       skipInvalidation: true,
     });
   });

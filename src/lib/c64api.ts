@@ -14,7 +14,7 @@ import {
   hasStoredPasswordFlag,
   setPassword as storePassword,
 } from "@/lib/secureStorage";
-import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
+import { getSelectedSavedDeviceProductFamilySync, updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
@@ -27,6 +27,7 @@ import {
   validateConfigBatchWrite,
   validateConfigWrite,
 } from "@/lib/config/validateConfigWrite";
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -100,6 +101,44 @@ const buildHttpErrorMessage = (status: number, statusText: string): string => {
   const text = statusText?.trim();
   return text ? `HTTP ${status}: ${text}` : `HTTP ${status}`;
 };
+
+const normalizeConfigWriteToken = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+
+const resolveDeclaredConfigWriteValue = (
+  category: string,
+  item: string,
+  value: string | number,
+  categoryPayload: unknown,
+) => {
+  if (typeof value !== "string") return value;
+  const itemConfig = getConfigCategoryItems(categoryPayload, category)[item];
+  if (itemConfig === undefined) return value;
+  const options = normalizeConfigItem(itemConfig).options;
+  if (!Array.isArray(options) || options.length === 0 || options.includes(value)) return value;
+  const normalizedValue = normalizeConfigWriteToken(value);
+  const matches = options.filter((option) => normalizeConfigWriteToken(option) === normalizedValue);
+  return matches.length === 1 ? matches[0] : value;
+};
+
+const resolveLegacyC64uConfigWriteValue = (category: string, item: string, value: string | number) => {
+  if (
+    getSelectedSavedDeviceProductFamilySync() !== "C64U" ||
+    category !== "U64 Specific Settings" ||
+    item !== "CPU Speed" ||
+    typeof value !== "string"
+  ) {
+    return value;
+  }
+  const trimmedValue = value.trim();
+  return /^[1-9]$/.test(trimmedValue) ? ` ${trimmedValue}` : value;
+};
+
+const resolveConfigWriteValue = (category: string, item: string, value: string | number, categoryPayload: unknown) =>
+  resolveLegacyC64uConfigWriteValue(
+    category,
+    item,
+    resolveDeclaredConfigWriteValue(category, item, value, categoryPayload),
+  );
 
 const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
@@ -1485,16 +1524,17 @@ export class C64API {
   ): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
-    const valEncoded = encodeURIComponent(String(value));
     const categoryPayload = {
       [category]: {
         items: await this.ensureConfigCategoryItems(category, [item]),
       },
     };
+    const resolvedValue = resolveConfigWriteValue(category, item, value, categoryPayload);
+    const valEncoded = encodeURIComponent(String(resolvedValue));
     validateConfigWrite({
       category,
       item,
-      value,
+      value: resolvedValue,
       categoryPayload,
     });
     const response = await scheduleConfigWrite(() =>
@@ -1503,8 +1543,8 @@ export class C64API {
         ...options,
       }),
     );
-    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value });
-    this.setCachedConfigValue(category, item, value);
+    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value: resolvedValue });
+    this.setCachedConfigValue(category, item, resolvedValue);
     return response;
   }
 
@@ -1525,6 +1565,7 @@ export class C64API {
     options: { immediate?: boolean } = {},
   ): Promise<{ errors: string[] }> {
     const categories = Object.entries(payload);
+    const resolvedPayload: Record<string, Record<string, string | number>> = {};
     await Promise.all(
       categories.map(async ([category, updates]) => {
         const categoryPayload = {
@@ -1532,9 +1573,16 @@ export class C64API {
             items: await this.ensureConfigCategoryItems(category, Object.keys(updates)),
           },
         };
+        const resolvedUpdates = Object.fromEntries(
+          Object.entries(updates).map(([item, value]) => [
+            item,
+            resolveConfigWriteValue(category, item, value, categoryPayload),
+          ]),
+        );
+        resolvedPayload[category] = resolvedUpdates;
         validateConfigBatchWrite({
           category,
-          updates,
+          updates: resolvedUpdates,
           categoryPayload,
         });
       }),
@@ -1542,11 +1590,11 @@ export class C64API {
     const run = (): Promise<{ errors: string[] }> =>
       this.request("/v1/configs", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(resolvedPayload),
       });
     const response = options.immediate ? await run() : await scheduleConfigWrite(run);
-    this.assertConfigWriteAccepted(response, { payload });
-    categories.forEach(([category, updates]) => {
+    this.assertConfigWriteAccepted(response, { payload: resolvedPayload });
+    Object.entries(resolvedPayload).forEach(([category, updates]) => {
       Object.entries(updates).forEach(([item, value]) => {
         this.setCachedConfigValue(category, item, value);
       });

@@ -21,6 +21,7 @@ import {
   BACKGROUND_REQUEST_TIMEOUT_MS,
 } from "@/lib/c64api";
 import { clearPassword as clearStoredPassword, setPassword as storePassword } from "@/lib/secureStorage";
+import { completeSavedDeviceVerification, getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
@@ -1138,28 +1139,71 @@ describe("c64api", () => {
     });
   });
 
-  it("rejects invalid enum writes before sending the config PUT", async () => {
+  it("canonicalizes padded enum writes before sending the config PUT", async () => {
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValueOnce(
-      categoryConfigResponse("U64 Specific Settings", {
-        "CPU Speed": {
-          selected: " 1",
-          options: [" 1", " 2", " 4"],
-        },
-      }),
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        categoryConfigResponse("U64 Specific Settings", {
+          "CPU Speed": {
+            selected: " 1",
+            options: [" 1", " 2", " 4"],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(okJsonResponse());
 
     const api = new C64API("http://c64u");
 
-    await expect(api.setConfigValue("U64 Specific Settings", "CPU Speed", "4")).rejects.toMatchObject({
-      name: "ConfigWriteValidationError",
-      code: "INVALID_ENUM_VALUE",
-      category: "U64 Specific Settings",
-      item: "CPU Speed",
-      value: "4",
+    await api.setConfigValue("U64 Specific Settings", "CPU Speed", "4");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://c64u/v1/configs/U64%20Specific%20Settings/CPU%20Speed?value=%204",
+      expect.objectContaining({ method: "PUT" }),
+    );
+  });
+
+  it("pads legacy C64U CPU speed batch writes when live config lacks option metadata", async () => {
+    const fetchMock = getFetchMock();
+    const selectedDevice = getSelectedSavedDevice();
+    if (!selectedDevice) throw new Error("Expected a saved device test fixture");
+    completeSavedDeviceVerification(selectedDevice.id, {
+      product: "C64 Ultimate",
+      hostname: "c64u",
+      unique_id: "5D4E12",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v1/configs/U64%20Specific%20Settings");
+    fetchMock
+      .mockResolvedValueOnce(
+        okJsonResponse({
+          "U64 Specific Settings": {
+            "CPU Speed": "40",
+            "Turbo Control": "Manual",
+          },
+          errors: [],
+        }),
+      )
+      .mockResolvedValueOnce(okJsonResponse());
+
+    const api = new C64API("http://c64u");
+
+    try {
+      await api.updateConfigBatch(
+        { "U64 Specific Settings": { "CPU Speed": "4", "Turbo Control": "Manual" } },
+        { immediate: true },
+      );
+
+      expect(JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))).toEqual({
+        "U64 Specific Settings": {
+          "CPU Speed": " 4",
+          "Turbo Control": "Manual",
+        },
+      });
+    } finally {
+      completeSavedDeviceVerification(selectedDevice.id, {
+        product: null,
+        hostname: null,
+        unique_id: null,
+      });
+    }
   });
 
   it("rejects out-of-range numeric batch writes before sending the config POST", async () => {
