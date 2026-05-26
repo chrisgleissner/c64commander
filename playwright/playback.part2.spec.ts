@@ -497,6 +497,58 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "resume-restored-mixer");
   });
 
+  test("touch taps drive play, pause, mute, resume, and stop controls on mobile", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
+        durationMs: 8000,
+      },
+    ]);
+
+    await page.goto("/play");
+    await waitForRealConnectionBadge(page);
+
+    const playButton = page.getByTestId("playlist-play");
+    const pauseButton = page.getByTestId("playlist-pause");
+    const muteButton = page.getByTestId("volume-mute");
+
+    await playButton.tap();
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/runners:sidplay"))).toBe(true);
+    await snap(page, testInfo, "touch-play-started");
+
+    await muteButton.tap();
+    await expect(muteButton).toContainText("Unmute");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value, { timeout: 4000 }).toBe("-42 dB");
+    await snap(page, testInfo, "touch-mute-applied");
+
+    await muteButton.tap();
+    await expect(muteButton).toContainText("Mute");
+    await expect
+      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value, { timeout: 4000 })
+      .not.toBe("-42 dB");
+    await snap(page, testInfo, "touch-unmute-applied");
+
+    await pauseButton.tap();
+    await expect(muteButton).toContainText("Unmute");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:pause"))).toBe(true);
+    await snap(page, testInfo, "touch-pause-applied");
+
+    await pauseButton.tap();
+    await expect(muteButton).toContainText("Mute");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:resume"))).toBe(true);
+    await snap(page, testInfo, "touch-resume-applied");
+
+    await playButton.tap();
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:reset"))).toBe(true);
+    await snap(page, testInfo, "touch-stop-applied");
+  });
+
   test("native folder picker adds local files to playlist", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;

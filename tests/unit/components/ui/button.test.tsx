@@ -8,7 +8,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { StatefulButton } from "@/components/ui/button";
+import { StatefulButton, StatelessButton } from "@/components/ui/button";
 
 describe("StatefulButton", () => {
   it("renders a native button and forwards clicks", () => {
@@ -32,5 +32,29 @@ describe("StatefulButton", () => {
 
     expect(link).toHaveAttribute("href", "/docs");
     expect(link.className).toContain("underline-offset-4");
+  });
+});
+
+describe("StatelessButton", () => {
+  it("activates on touch pointer up and suppresses the follow-up click", () => {
+    const onClick = vi.fn();
+
+    render(<StatelessButton onClick={onClick}>Pause</StatelessButton>);
+
+    const button = screen.getByRole("button", { name: "Pause" });
+    fireEvent.pointerUp(button, { pointerType: "touch" });
+    fireEvent.click(button);
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps mouse clicks single-fired", () => {
+    const onClick = vi.fn();
+
+    render(<StatelessButton onClick={onClick}>Stop</StatelessButton>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
