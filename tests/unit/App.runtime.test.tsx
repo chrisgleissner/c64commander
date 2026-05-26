@@ -621,6 +621,36 @@ describe("App runtime wiring", () => {
     );
   });
 
+  it("ignores abort-like unhandled rejections", async () => {
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    const rejection = new Event("unhandledrejection", { cancelable: true });
+    Object.defineProperty(rejection, "reason", {
+      configurable: true,
+      value: new Error("signal is aborted without reason"),
+    });
+
+    act(() => {
+      window.dispatchEvent(rejection);
+    });
+
+    expect(rejection.defaultPrevented).toBe(true);
+    expect(mocks.recordTraceError).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ message: "signal is aborted without reason" }),
+    );
+    expect(mocks.addErrorLog).not.toHaveBeenCalledWith(
+      "Unhandled promise rejection",
+      expect.objectContaining({ reason: expect.objectContaining({ message: "signal is aborted without reason" }) }),
+    );
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "debug",
+      "Ignored abort-like unhandled rejection",
+      expect.objectContaining({ reason: "signal is aborted without reason" }),
+    );
+  });
+
   it("records window errors against the current active action when one exists", async () => {
     const activeAction = { id: "active-action" };
     mocks.getActiveAction.mockReturnValue(activeAction);
